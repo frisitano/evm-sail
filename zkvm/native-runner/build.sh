@@ -65,12 +65,17 @@ fi
 # sail256: GMP-free fixed-width Sail runtime, host-optimized (SF_RUNTIME overrides).
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 RT="$ROOT/zkvm/runtime"
-FFI="$ROOT/ffi"
+FFI_ROOT="$ROOT/ffi"
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  MODEL_FFI="$FFI_ROOT/spec"
+else
+  MODEL_FFI="$FFI_ROOT/optimized"
+fi
 
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
-  region_access.h hash_glue.h precompiles.h output.h scratch.h memory.h
+  region_access.h hash.h precompiles.h output.h scratch.h memory.h
   transient_storage.h stack.h frame_stack.h code_db.h kernel_state.h trie_node_db.h
   state_db.h
 )
@@ -78,7 +83,8 @@ if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
 fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  MODEL_HEADERS+=(word_bytes_glue.h preimage_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h blob_fee_glue.h)
+  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h
+    blob_fee.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -102,9 +108,7 @@ case "$(uname -s)" in
 esac
 
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
-STATE_ACCESS_AGGREGATE_GLUE_FLAG=""
 if [ "$EVM_BUILD_MODE" = standard ]; then
-  CFLAGS+=(-DEVMSAIL_STANDARD_ABI)
   GMP_CFLAGS=()
   GMP_LINK_FLAGS=(-lgmp)
   if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists gmp; then
@@ -113,8 +117,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
   fi
   CFLAGS+=("${GMP_CFLAGS[@]}")
 else
-  STATE_ACCESS_AGGREGATE_GLUE_FLAG="-DEVMSAIL_NO_STATE_ACCESS_AGGREGATE_GLUE"
-  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATE_GLUE -DEVMSAIL_OPTIMIZED_ABI)
+  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATES)
   if [ "$EVM_CAPACITY_MODE" = fixed ]; then
     CFLAGS+=(-DEVMSAIL_POINTER_ABI -DEVMSAIL_CAPACITY_FIXED)
   else
@@ -150,7 +153,6 @@ PRESERVE_FLAGS=(
   --c-preserve leaf_child_ref
   --c-preserve resume_frame
   --c-preserve debug_account_storage_root
-  --c-preserve debug_rebuild_state_root
 )
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 SAIL_CMD=(
@@ -180,78 +182,79 @@ SAIL_CMD+=(
 # MUST precede -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
-# --- 4b. state aggregate glue: account/storage rows use generated layouts;
-#     the rollback journal itself is C-private.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+# --- 4b. Selected model backend. The spec and optimized builds each own their
+#     complete FFI implementation; only standardized platform headers are shared.
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    ${STATE_ACCESS_AGGREGATE_GLUE_FLAG:+"$STATE_ACCESS_AGGREGATE_GLUE_FLAG"} \
-    -c "$FFI/journal_glue.c" -o "$BUILD/journal_glue.o"
+    -c "$MODEL_FFI/state.c" -o "$BUILD/model_state.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$FFI/hash_glue.c" -o "$BUILD/hash_glue.o"
+    -c "$MODEL_FFI/hash.c" -o "$BUILD/hash.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$FFI/code_glue.c" -o "$BUILD/code_glue.o"
+    -c "$MODEL_FFI/code.c" -o "$BUILD/model_code.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$FFI/region_access.c" -o "$BUILD/region_access.o"
+    -c "$MODEL_FFI/region_access.c" -o "$BUILD/region_access.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$FFI/address_result_glue.c" -o "$BUILD/address_result_glue.o"
+    -c "$MODEL_FFI/address_result.c" -o "$BUILD/model_address_result.o"
 
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$FFI/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
+    -c "$MODEL_FFI/frame_stack.c" -o "$BUILD/model_frame_stack.o"
 
-HTR_GLUE_OBJ=""
-PREIMAGE_GLUE_OBJ=""
-MPT_GLUE_OBJ=""
-INTERPRETER_GLUE_OBJ=""
-BLOB_FEE_GLUE_OBJ=""
+HTR_OBJ=""
+PREIMAGE_OBJ=""
+MPT_OBJ=""
+INTERPRETER_OBJ=""
+BLOB_FEE_OBJ=""
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$FFI/preimage_glue.c" -o "$BUILD/preimage_glue.o"
-  PREIMAGE_GLUE_OBJ="$BUILD/preimage_glue.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -c "$MODEL_FFI/preimage.c" -o "$BUILD/preimage.o"
+  PREIMAGE_OBJ="$BUILD/preimage.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$FFI/htr_glue.c" -o "$BUILD/htr_glue.o"
-  HTR_GLUE_OBJ="$BUILD/htr_glue.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -c "$MODEL_FFI/htr.c" -o "$BUILD/htr.o"
+  HTR_OBJ="$BUILD/htr.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$FFI/mpt_glue.c" -o "$BUILD/mpt_glue.o"
-  MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -c "$MODEL_FFI/mpt.c" -o "$BUILD/mpt.o"
+  MPT_OBJ="$BUILD/mpt.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$FFI/interpreter_glue.c" -o "$BUILD/interpreter_glue.o"
-  INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+      -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
+  INTERPRETER_OBJ="$BUILD/interpreter.o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$FFI/blob_fee_glue.c" -o "$BUILD/blob_fee_glue.o"
-  BLOB_FEE_GLUE_OBJ="$BUILD/blob_fee_glue.o"
+      -c "$MODEL_FFI/blob_fee.c" -o "$BUILD/blob_fee.o"
+  BLOB_FEE_OBJ="$BUILD/blob_fee.o"
 fi
 
-# --- 5. shared harness I/O + CLI main ---------------------------------------
-#   test_utils.c supplies the native standard I/O implementation, large-stack
-#   run, and clear-memory hooks shared by this executable and build_lib.sh.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$FFI" \
+# --- 5. backend-specific native harness + CLI main ---------------------------
+#   Each backend owns its lifecycle and debug bridge so generated-model ABI
+#   details do not leak back into a shared native utility.
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$HERE/test_utils.c" -o "$BUILD/test_utils.o"
+    -c "$MODEL_FFI/native_test.c" -o "$BUILD/native_test.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
 # --- 6. C host backends + direct precompile adapter -------------------------
 HOST_OBJS=()
 for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
   o="$BUILD/$hc.o"
-  "$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$FFI" -c "$FFI/$hc.c" -o "$o"
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$MODEL_FFI" -I"$FFI_ROOT" \
+      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -c "$MODEL_FFI/$hc.c" -o "$o"
   HOST_OBJS+=("$o")
 done
 if [ "$EVM_PROFILE" = on ]; then
@@ -263,12 +266,12 @@ fi
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" "$BUILD/test_utils.o" "$BUILD/main.o"
-    ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"}
-    ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"}
-    ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"}
-    ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"}
-    ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"}
+    "$BUILD/zkvm_block.o" "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" "$BUILD/native_test.o" "$BUILD/main.o"
+    ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"}
+    ${HTR_OBJ:+"$HTR_OBJ"}
+    ${MPT_OBJ:+"$MPT_OBJ"}
+    ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
+    ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
 if [ "$EVM_BUILD_MODE" = standard ]; then

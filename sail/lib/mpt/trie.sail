@@ -389,7 +389,7 @@ function witness_subtree(node, prefix, updates, cursor) = {
 termination_measure witness_subtree(node, prefix, updates, cursor) = 64 - cursor
 
 /*md
-## The trie entry point
+## Merkle Patricia Trie entry point
 */
 /*! The root of the trie anchored at `base_root` after applying the
     ordered update stream. This is the only public root computation:

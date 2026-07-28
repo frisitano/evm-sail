@@ -77,7 +77,12 @@ type linear_gas_product = nat
     regular-gas pool. */
 type transaction_execution_gas_limit_value : Int = 2 ^ 24
 
-let TRANSACTION_EXECUTION_GAS_LIMIT : transaction_gas = sizeof(transaction_execution_gas_limit_value)
+/*! Gas admitted to Amsterdam's regular execution pool after applying the
+    EIP-7825 per-transaction cap. */
+type transaction_execution_gas = range(0, transaction_execution_gas_limit_value)
+
+let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value) =
+    sizeof(transaction_execution_gas_limit_value)
 
 /*! Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
     draws spill only from the regular-gas pool, which is capped by EIP-7825. */
@@ -99,7 +104,7 @@ let GAS_ZERO : gas = 0
 
 /*! The execution-gas allowance of each protocol system call (EIP-4788,
     EIP-2935, EIP-7002, EIP-7251, and EIP-8282). */
-let SYSTEM_CALL_GAS_LIMIT : transaction_gas = 30000000
+let SYSTEM_CALL_GAS_LIMIT : int(30000000) = 30000000
 
 /* Schedule constants are bounded independently from live gas. Arithmetic with
  * transaction-controlled multipliers produces exact natural intermediates. */
@@ -140,6 +145,8 @@ let STATE_GAS_DELTA_ZERO : state_gas_delta = 0
     block-level non-negative/u64 checks. */
 type transaction_state_gas_delta = int
 
-/* Every protocol gas quotient uses a small positive schedule divisor. */
-/*! A small positive divisor used by the gas schedule. */
-type gas_divisor = range(1, 2000)
+/* The transaction refund cap is `gas_used / 2` before London and
+ * `gas_used / 5` from London onward.  Keep the exact protocol alternatives
+ * in the type instead of a generic implementation-sized divisor range. */
+/*! The fork-selected transaction-refund divisor: 2 before London, 5 after. */
+type transaction_refund_divisor = {2, 5}

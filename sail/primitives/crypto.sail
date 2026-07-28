@@ -9,9 +9,10 @@ well-known digests of fixed inputs. Loaded before the account types:
 before `lib/mpt/primitives.sail` loads.
 
 The `c:`-bound `val`s in this module form the accelerator interface:
-hash/signature primitives with no pure Sail body (`ffi/hash_glue.c`,
-`ffi/precompiles.c` — direct callers of the eth-act zkvm-standards surface).
-Proof targets see them as bodyless axioms.
+hash/signature primitives with no pure Sail body (the `hash.c` and
+`precompiles.c` implementations in `ffi/spec/` and `ffi/optimized/` call the
+eth-act zkvm-standards surface directly). Proof targets see them as bodyless
+axioms.
 
 | Name | Value | Description |
 | ---- | ----- | ----------- |
@@ -34,8 +35,8 @@ let EMPTY_TRIE_ROOT : hash = word_to_hash(
 )
 
 /* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
- * hash/signature primitives with NO pure Sail body (ffi/hash_glue.c,
- * ffi/precompiles.c -- direct users of the eth-act zkvm-standards surface); proof
+ * hash/signature primitives with NO pure Sail body (each C backend's hash.c and
+ * precompiles.c directly use the eth-act zkvm-standards surface); proof
  * targets see them as bodyless axioms (the c: key binds only C). keccak256 and
  * sha256 are the axiomatic hash core. All shared consensus hashing is
  * written against these two. The

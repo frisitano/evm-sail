@@ -68,13 +68,20 @@ if [ "$PLATFORM" = zisk ]; then
 else
   ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
 fi
+FFI_ROOT="$ROOT/ffi"
+if [ -z "${GUEST:-}" ]; then
+  MODEL_FFI="$FFI_ROOT/optimized"
+else
+  MODEL_FFI="$FFI_ROOT/spec"
+fi
 # Freestanding includes FIRST so <stdio.h>/<stdlib.h>/<string.h>/<gmp.h> resolve
 # to our shims + vendored mini-gmp instead of newlib / libgmp.
 CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
         -fno-stack-protector -fno-pic -mno-relax -DNDEBUG
         -ffunction-sections -fdata-sections
         -I"$RT/sail256" -I"$RT/freestanding" -I"$RT"
-        -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device" -I"$ROOT/ffi")
+        -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device"
+        -I"$MODEL_FFI" -I"$FFI_ROOT")
 if [ "$PLATFORM" = zisk ]; then
   CFLAGS+=(
     -DEVMSAIL_EXTERNAL_HEAP
@@ -87,7 +94,6 @@ if [ "$PLATFORM" = zisk ]; then
 fi
 if [ -z "${GUEST:-}" ]; then
   CFLAGS+=(
-    -DEVMSAIL_OPTIMIZED_ABI
     -DEVMSAIL_POINTER_ABI
     -DEVMSAIL_CAPACITY_FIXED
   )
@@ -112,7 +118,7 @@ SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEV
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 MODEL_HEADERS=(
-  region_access.h hash_glue.h precompiles.h output.h scratch.h memory.h
+  region_access.h hash.h precompiles.h output.h scratch.h memory.h
   frame_stack.h
   transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
   state_db.h
@@ -121,7 +127,8 @@ if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
 fi
 if [ -z "${GUEST:-}" ]; then
-  MODEL_HEADERS+=(word_bytes_glue.h preimage_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h blob_fee_glue.h)
+  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h
+    blob_fee.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -153,14 +160,6 @@ resolve_sail() {
 
 compile_common() {
   local lib; lib="$(sail_lib)"
-  local trie_aggregate_glue_flags=()
-  local state_access_aggregate_glue_flags=()
-  if [ -z "${GUEST:-}" ] && [ "$EVM_DEBUG" = off ]; then
-    trie_aggregate_glue_flags=(-DEVMSAIL_NO_TRIE_AGGREGATE_GLUE)
-  fi
-  if [ -z "${GUEST:-}" ]; then
-    state_access_aggregate_glue_flags=(-DEVMSAIL_NO_STATE_ACCESS_AGGREGATE_GLUE)
-  fi
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   if [ -n "${GUEST:-}" ]; then
     "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
@@ -177,7 +176,7 @@ compile_common() {
         --c-specialize --c-require-bounded-int \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         --splice "$C_SPLICE" \
-        "${profile_splice_flags[@]}" \
+        ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" \
         -o "$BUILD/zkvm_block" )
@@ -190,54 +189,52 @@ compile_common() {
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
-  # 2b. state aggregate glue: account/storage rows cross the extern boundary
-  #     using generated layouts; the rollback journal itself is C-private.
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+  # 2b. Selected model backend. The spec and optimized builds each own their
+  #     complete FFI implementation; only standardized platform headers are shared.
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      "${trie_aggregate_glue_flags[@]}" \
-      "${state_access_aggregate_glue_flags[@]}" \
-      -c "$ROOT/ffi/journal_glue.c" -o "$BUILD/journal_glue.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -c "$MODEL_FFI/state.c" -o "$BUILD/model_state.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/hash_glue.c" -o "$BUILD/hash_glue.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -c "$MODEL_FFI/hash.c" -o "$BUILD/hash.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/code_glue.c" -o "$BUILD/code_glue.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -c "$MODEL_FFI/code.c" -o "$BUILD/model_code.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/region_access.c" -o "$BUILD/region_access.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -c "$MODEL_FFI/region_access.c" -o "$BUILD/region_access.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/address_result_glue.c" -o "$BUILD/address_result_glue.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+      -c "$MODEL_FFI/address_result.c" -o "$BUILD/model_address_result.o"
+  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
       -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$ROOT/ffi/frame_stack_glue.c" -o "$BUILD/frame_stack_glue.o"
-  HTR_GLUE_OBJ=""
-  PREIMAGE_GLUE_OBJ=""
-  MPT_GLUE_OBJ=""
-  INTERPRETER_GLUE_OBJ=""
-  BLOB_FEE_GLUE_OBJ=""
+      -c "$MODEL_FFI/frame_stack.c" -o "$BUILD/model_frame_stack.o"
+  HTR_OBJ=""
+  PREIMAGE_OBJ=""
+  MPT_OBJ=""
+  INTERPRETER_OBJ=""
+  BLOB_FEE_OBJ=""
   if [ -z "${GUEST:-}" ]; then
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$ROOT/ffi/preimage_glue.c" -o "$BUILD/preimage_glue.o"
-    PREIMAGE_GLUE_OBJ="$BUILD/preimage_glue.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -c "$MODEL_FFI/preimage.c" -o "$BUILD/preimage.o"
+    PREIMAGE_OBJ="$BUILD/preimage.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$ROOT/ffi/htr_glue.c" -o "$BUILD/htr_glue.o"
-    HTR_GLUE_OBJ="$BUILD/htr_glue.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -c "$MODEL_FFI/htr.c" -o "$BUILD/htr.o"
+    HTR_OBJ="$BUILD/htr.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$ROOT/ffi/mpt_glue.c" -o "$BUILD/mpt_glue.o"
-    MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -c "$MODEL_FFI/mpt.c" -o "$BUILD/mpt.o"
+    MPT_OBJ="$BUILD/mpt.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$ROOT/ffi/interpreter_glue.c" -o "$BUILD/interpreter_glue.o"
-    INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" -I"$ROOT/ffi" \
+        -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
+    INTERPRETER_OBJ="$BUILD/interpreter.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$ROOT/ffi/blob_fee_glue.c" -o "$BUILD/blob_fee_glue.o"
-    BLOB_FEE_GLUE_OBJ="$BUILD/blob_fee_glue.o"
+        -c "$MODEL_FFI/blob_fee.c" -o "$BUILD/blob_fee.o"
+    BLOB_FEE_OBJ="$BUILD/blob_fee.o"
   fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -245,14 +242,16 @@ compile_common() {
       -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
   # 3b. The precompile adapter is platform-neutral and calls only the standard
   #     zkvm_accelerators.h interface.
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -I"$ROOT/ffi" \
-      -Wno-unused -c "$ROOT/ffi/precompiles.c" -o "$BUILD/precompiles.o"
+  "$GCC" "${CFLAGS[@]}" -I"$lib" \
+      -I"$BUILD" -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+      -Wno-unused -c "$MODEL_FFI/precompiles.c" -o "$BUILD/precompiles.o"
   # 3c. C host backends: nominal region access, transient storage,
   #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
   #     databases.
   for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db output; do
     "$GCC" "${CFLAGS[@]}" -I"$lib" \
-        -Wno-unused -c "$ROOT/ffi/$hc.c" -o "$BUILD/$hc.o"
+        -I"$BUILD" -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -Wno-unused -c "$MODEL_FFI/$hc.c" -o "$BUILD/$hc.o"
   done
 }
 
@@ -310,18 +309,18 @@ cmd_zisk_lib() {
       -c "$HERE/zisk/platform.c" -o "$BUILD/zisk_platform.o"
   compile_profile_scope
   # `ar crs` updates an existing archive without removing members that are no
-  # longer named. Recreate it so renamed/deleted glue objects cannot survive a
+  # longer named. Recreate it so renamed/deleted backend objects cannot survive a
   # rebuild and contribute stale symbols to the final guest.
   rm -f "$BUILD/libevmsail_zisk.a"
   "$AR" crs "$BUILD/libevmsail_zisk.a" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
       "$BUILD/precompiles.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
-      ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"} \
-      ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
-      ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
-      ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
-      ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"} \
+      "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" \
+      ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"} \
+      ${HTR_OBJ:+"$HTR_OBJ"} \
+      ${MPT_OBJ:+"$MPT_OBJ"} \
+      ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
+      ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
@@ -333,12 +332,12 @@ link_guest() {
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
-      "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" \
-      ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"} \
-      ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"} \
-      ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"} \
-      ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"} \
-      ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"} \
+      "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" \
+      ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"} \
+      ${HTR_OBJ:+"$HTR_OBJ"} \
+      ${MPT_OBJ:+"$MPT_OBJ"} \
+      ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
+      ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \

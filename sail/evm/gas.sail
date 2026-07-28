@@ -32,98 +32,165 @@ The cost groups, with their governing specifications:
 BLOB_BASE_FEE_UPDATE_FRACTION)`. The active target, maximum, and update
 fraction come from the validated SSZ chain config, including BPO1/BPO2.
 */
-let MIN_BLOB_BASE_FEE : word = WORD_ONE
+let MIN_BLOB_BASE_FEE : int(1) = 1
 let GAS_PER_BLOB : range(gas_per_blob_value, gas_per_blob_value) = sizeof(gas_per_blob_value)
-let BLOB_RESERVE_PRICE_SHIFT_LIMIT : word = U256(2 ^ 252)
 
-/*! Adds two EVM words, failing instead of applying EVM modular overflow. */
-val blob_word_add : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
-        int('left),
-        int('right),
-    ) -> word
-function blob_word_add(left, right) =
-    if word_ule(right, word_sub(WORD_ALL_ONES, left)) then {
-        word_add(left, right)
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+/*! Narrows a protocol natural to an EVM word at the single boundary where
+    word overflow changes validity. Intermediate arithmetic remains
+    mathematical rather than acquiring modular EVM semantics. */
+val protocol_word : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
+function protocol_word(value) = U256(value)
 
-/*! Multiplies two EVM words, failing instead of applying EVM modular overflow. */
-val blob_word_mul : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
-        int('left),
-        int('right),
-    ) -> word
-function blob_word_mul(left, right) =
-    if word_is_zero(left) then {
-        WORD_ZERO
-    } else {
-        if word_ule(right, word_div(WORD_ALL_ONES, left)) then {
-            word_mul(left, right)
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        }
-    }
+/*! Adds one exact term to the EIP-4844 fake-exponential accumulator.
+    The singleton result retains the recurrence equation for extraction and
+    proof, rather than weakening the value to an arbitrary implementation
+    bound. */
+val blob_fee_accumulate : forall 'output 'term,
+    0 <= 'output & 0 <= 'term.
+    (int('output), int('term)) -> int('output + 'term)
+function blob_fee_accumulate(output, term) =
+    output + term
 
-/*! The EIP-4844 `fake_exponential` used for the blob base fee.
+/*! Computes the next exact EIP-4844 fake-exponential numerator term.
+    Every operand carries its protocol-derived bound: excess blob gas is a
+    header `uint64`, the denominator comes from the supported schedules, and
+    `term_index + 1` is positive by construction. The result type records the
+    recurrence formula itself; it does not introduce an unrelated cap. */
+val blob_fee_next_term : forall 'term 'excess 'denominator 'term_index,
+    0 <= 'term
+    & 0 <= 'excess
+    & 'excess <= excess_blob_gas_bound
+    & 'denominator in {1, 3338477, 5007716, 8346193, 11684671}
+    & 0 <= 'term_index.
+    (
+        int('term),
+        int('excess),
+        int('denominator),
+        int('term_index),
+    ) -> int(div('term * 'excess, 'denominator * ('term_index + 1)))
+function blob_fee_next_term(term, excess, denominator, term_index) =
+    tdiv_nat(term * excess, denominator * (term_index + 1))
+
+/*! The exact EIP-4844 `fake_exponential` used for one blob-fee schedule.
 
     This is the protocol equation over mathematical non-negative integers.
     The intermediate numerator remains scaled by `denominator`, exactly as in
-    the EIP pseudocode. Once the accumulated scaled output reaches
-    `2^256 * denominator`, the final fee cannot fit an EVM word; fail closed
-    without evaluating terms that cannot affect that conclusion. */
-function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word = {
-    let denominator = k_blob_schedule.base_fee_update_fraction;
-    let output_limit = sizeof(word_modulus) * denominator;
-    var i : int = 1;
-    var output : int = 0;
-    var numerator_accum : int = MIN_BLOB_BASE_FEE * denominator;
-    while numerator_accum > 0 do {
-        output = output + numerator_accum;
-        if output_limit <= output then {
-            throw InvalidBlock(ExecutionInvalid)
-        };
-        numerator_accum = ediv_int(numerator_accum * excess_blob_gas, denominator * i);
-        i = i + 1
+    the EIP pseudocode. The two loops are consecutive phases of the same
+    recurrence: while the ratio can be at least one, increasing `i` proves
+    progress; afterward every non-zero term is strictly smaller than its
+    predecessor. Neither the recurrence nor its result is capped. */
+function blob_base_fee_for_denominator(
+    excess_blob_gas : excess_blob_gas,
+    denominator : blob_schedule_fee_update_fraction,
+) -> nat = {
+    /* Store the zero-based term index so the divisor's positive `i` is
+       represented structurally as `term_index + 1`. */
+    var term_index : nat = 0;
+    var output : nat = 0;
+    var numerator_accum : nat = MIN_BLOB_BASE_FEE * denominator;
+    while
+        (numerator_accum > 0) & (denominator * (term_index + 1) <= excess_blob_gas)
+        termination_measure(excess_blob_gas - denominator * (term_index + 1) + 1)
+    do {
+        output = blob_fee_accumulate(output, numerator_accum);
+        numerator_accum = blob_fee_next_term(
+            numerator_accum,
+            excess_blob_gas,
+            denominator,
+            term_index,
+        );
+        term_index = term_index + 1
     };
-    let fee = ediv_int(output, denominator);
-    if 0 <= fee & fee < sizeof(word_modulus) then {
-        U256(fee)
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+    while numerator_accum > 0 termination_measure(numerator_accum) do {
+        output = blob_fee_accumulate(output, numerator_accum);
+        numerator_accum = blob_fee_next_term(
+            numerator_accum,
+            excess_blob_gas,
+            denominator,
+            term_index,
+        );
+        term_index = term_index + 1
+    };
+    tdiv_nat(output, denominator)
+}
+
+/*! Computes the exact blob base fee using the denominator carried by the
+    validated protocol profile. */
+function blob_base_fee(excess_blob_gas : excess_blob_gas) -> nat =
+{
+    let profile = k_protocol_profile;
+    blob_base_fee_for_denominator(
+        excess_blob_gas,
+        profile.blob_schedule.base_fee_update_fraction,
+    )
 }
 
 /* EIP-7918 compares BLOB_BASE_COST*base_fee with GAS_PER_BLOB*blob_fee.
  * Their ratio is exactly 16, so compare base_fee with 16*blob_fee instead of
  * forming either potentially 257+-bit product. */
-/*! Tests the EIP-7918 reserve-price condition without overflowing a word. */
-function blob_reserve_price_active(base_fee : word, price : word) -> bool =
-    if word_ult(price, BLOB_RESERVE_PRICE_SHIFT_LIMIT) then {
-        word_ult(word_shift_left(price, 4), base_fee)
-    } else {
-        false
-    }
+/*! Retains the exact EIP-7918 reserve-price scaling formula. */
+val blob_reserve_scaled_price : forall 'price, 0 <= 'price. int('price) -> int(16 * 'price)
+function blob_reserve_scaled_price(blob_price) =
+    16 * blob_price
 
-function blob_schedule_target() -> blob_target_count = k_blob_schedule.target
+/*! Tests the EIP-7918 reserve-price condition over an already-computed exact
+    blob price. The multiplication remains mathematical; `base_fee` supplies
+    the only bound used by the comparison. */
+function blob_reserve_price_active(base_fee : word, blob_price : nat) -> bool =
+    blob_reserve_scaled_price(blob_price) < base_fee
 
-function blob_schedule_max() -> blob_count = k_blob_schedule.max
+/*! Computes the exact blob price before applying the EIP-7918 comparison.
+    This separate observation boundary lets an executable backend decide the
+    comparison without changing the mathematical result type of
+    `blob_base_fee`. */
+function blob_reserve_price_for_excess(
+    base_fee : word,
+    excess_blob_gas : excess_blob_gas,
+) -> bool =
+    blob_reserve_price_active(base_fee, blob_base_fee(excess_blob_gas))
 
 /*! Converts a blob count to blob gas and rejects an invalid schedule. */
-function blob_gas_for_count(count : blob_count) -> blob_gas_used =
+val blob_gas_for_count : forall 'count,
+    0 <= 'count & 'count <= 21.
+    int('count) -> int(gas_per_blob_value * 'count)
+function blob_gas_for_count(count) =
     GAS_PER_BLOB * count
 
-function blob_target_gas_per_block() -> blob_gas_used =
-    blob_gas_for_count(blob_schedule_target())
-
-function blob_max_gas_per_block() -> blob_gas_used =
-    blob_gas_for_count(blob_schedule_max())
+/*! Computes the EIP-7918 share using one dependent schedule value. The
+    admitted-profile relation proves that every active schedule has
+    `target <= maximum`; only the explicitly inactive schedule needs a
+    runtime rejection before division. */
+val blob_schedule_excess_share : forall 'target 'maximum 'denominator,
+    blob_schedule_parameters('target, 'maximum, 'denominator).
+    (
+        BlobScheduleFields('target, 'maximum, 'denominator),
+        blob_gas_used,
+    ) -> nat
+function blob_schedule_excess_share(schedule, parent_blob_gas_used) = {
+    if schedule.max == 0 then {
+        throw InvalidBlock(InvalidConfig)
+    };
+    (parent_blob_gas_used * (schedule.max - schedule.target)) / schedule.max
+}
 
 /* Add transaction blob gas under the active block-wide schedule bound.  The
  * nested guards make the range proof available at the addition itself. */
 /*! Adds transaction blob gas to the block total, rejecting the active
-    schedule limit. */
-function checked_block_blob_gas_add(accumulated : blob_gas_used, transaction : transaction_blob_gas) -> blob_gas_used = {
-    let maximum = blob_max_gas_per_block();
+    schedule limit. A successful result is the exact sum, not merely a value
+    somewhere inside the block blob-gas range. */
+val checked_block_blob_gas_add : forall 'accumulated 'transaction,
+    0 <= 'accumulated
+    & 'accumulated <= 21 * gas_per_blob_value
+    & 0 <= 'transaction
+    & 'transaction <= 9 * gas_per_blob_value.
+    (int('accumulated), int('transaction)) -> {'result,
+        'result == 'accumulated + 'transaction
+        & 0 <= 'result
+        & 'result <= 21 * gas_per_blob_value.
+        int('result)}
+function checked_block_blob_gas_add(accumulated, transaction) = {
+    let profile = k_protocol_profile;
+    let maximum = blob_gas_for_count(profile.blob_schedule.max);
     if accumulated <= maximum then {
         if transaction <= maximum - accumulated then {
             accumulated + transaction
@@ -146,21 +213,23 @@ function next_excess_blob_gas(
 ) -> (
     excess_blob_gas
 ) = {
+    let profile = k_protocol_profile;
     let parent_blob_gas = parent_excess_blob_gas + parent_blob_gas_used;
-    let target_blob_gas = blob_target_gas_per_block();
+    let target_blob_gas = blob_gas_for_count(profile.blob_schedule.target);
     if parent_blob_gas < target_blob_gas then {
         0
     } else {
-        let price = blob_base_fee(parent_excess_blob_gas);
-        if (k_fork >= Osaka) & blob_reserve_price_active(parent_base_fee_per_gas, price) then {
-            let target = blob_schedule_target();
-            let maximum = blob_schedule_max();
-            if (maximum == 0) | (maximum < target) then {
-                throw InvalidBlock(InvalidConfig)
-            };
-            let schedule_delta = maximum - target;
-            let scaled = parent_blob_gas_used * schedule_delta;
-            let share = scaled / maximum;
+        if
+            (profile.fork >= Osaka)
+            & blob_reserve_price_for_excess(
+                parent_base_fee_per_gas,
+                parent_excess_blob_gas,
+            )
+        then {
+            let share = blob_schedule_excess_share(
+                profile.blob_schedule,
+                parent_blob_gas_used,
+            );
             let next = parent_excess_blob_gas + share;
             if next <= sizeof(excess_blob_gas_bound) then {
                 next
@@ -270,48 +339,32 @@ let G_sstore_sentry : gas_cost = 2301
 /*md
 ## The code-size limits
 */
-/*! EIP-170's deployed-code limit, active from Spurious Dragon. Byzantium is
-    the first post-Spurious-Dragon fork represented by this model. */
-let EIP170_DEPLOYED_CODE_SIZE_LIMIT : int(24576) = 24576
-/*! EIP-3860's initcode limit, active from Shanghai. */
-let EIP3860_INITCODE_SIZE_LIMIT : int(49152) = 49152
-/*! EIP-7954's Amsterdam deployed-code limit. */
-let EIP7954_DEPLOYED_CODE_SIZE_LIMIT : int(65536) = 65536
-/*! EIP-7954's Amsterdam initcode limit. */
-let EIP7954_INITCODE_SIZE_LIMIT : int(131072) = 131072
-
-/*! Whether returned runtime code may be deployed at the active fork.
-    Frontier and Homestead have no fixed deployed-code limit. */
+/*! Whether returned runtime code may be deployed at the active fork. Every
+    represented protocol profile has a deployed-code limit. */
 val deployed_code_size_allowed : forall 'size, 0 <= 'size. int('size) -> bool
 function deployed_code_size_allowed(size) =
-    if k_fork < Byzantium then {
-        true
-    } else {
-        if k_fork < Amsterdam then {
-            size <= EIP170_DEPLOYED_CODE_SIZE_LIMIT
-        } else {
-            size <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT
-        }
-    }
+{
+    let profile = k_protocol_profile;
+    size <= profile.deployed_code_size_limit
+}
 
 /*! Whether creation initcode may enter a frame at the active fork. EIP-3860
-    activates at Shanghai and EIP-7954 raises its limit at Amsterdam. */
+    activates at Shanghai and EIP-7954 raises its limit at Amsterdam. A zero
+    profile value denotes that the rule is inactive. */
 val initcode_size_allowed : forall 'size, 0 <= 'size. int('size) -> bool
-function initcode_size_allowed(size) =
-    if k_fork < Shanghai then {
-        true
-    } else {
-        if k_fork < Amsterdam then {
-            size <= EIP3860_INITCODE_SIZE_LIMIT
-        } else {
-            size <= EIP7954_INITCODE_SIZE_LIMIT
-        }
-    }
+function initcode_size_allowed(size) = {
+    let profile = k_protocol_profile;
+    let limit = profile.initcode_size_limit;
+    (limit == 0) | (size <= limit)
+}
 
 /*! The `SSTORE`-clears refund: 4800 from London (EIP-3529), 15000
     before. */
 function sstore_clear_refund() -> gas_constant =
-    if k_fork >= London then { R_sclear_london } else { R_sclear_pre_london }
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= London then { R_sclear_london } else { R_sclear_pre_london }
+}
 
 /* --------------------------- charging hook ------------------------------ */
 /* Debit `amount` from the frame's gas counter. A debit that cannot be       */
@@ -651,42 +704,59 @@ cost policy, no state mutation.
 */
 /*! The account-access cost for a prior warm bit. */
 function account_cost(warm : bool) -> gas_constant =
+{
+    let profile = k_protocol_profile;
     if warm then {
         G_warm_access
     } else {
-        if k_fork >= Amsterdam then { G_amsterdam_cold_account_access } else { G_cold_account }
+        if profile.fork >= Amsterdam then { G_amsterdam_cold_account_access } else { G_cold_account }
     }
+}
 
 /*! The second database read performed by `EXTCODESIZE` and `EXTCODECOPY`.
     EIP-8038 prices the code-store read as one warm access at Amsterdam. */
 function external_code_read_cost() -> gas_constant =
-    if k_fork >= Amsterdam then { G_warm_access } else { G_zero }
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= Amsterdam then { G_warm_access } else { G_zero }
+}
 
 /*! The `SLOAD` cost for a prior warm bit (cold = 2100, EIP-2929). */
 function sload_cost(warm : bool) -> gas_constant =
+{
+    let profile = k_protocol_profile;
     if warm then {
         G_warm_access
     } else {
-        if k_fork >= Amsterdam then { G_amsterdam_cold_storage_access } else { G_cold_sload }
+        if profile.fork >= Amsterdam then { G_amsterdam_cold_storage_access } else { G_cold_sload }
     }
+}
 
 /*! The execution-gas component of a value-bearing CALL/CALLCODE. Amsterdam
     reprices the account write while retaining the 2300 child stipend. */
 function call_value_cost() -> gas_constant =
-    if k_fork >= Amsterdam then { G_amsterdam_call_value } else { G_callvalue }
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= Amsterdam then { G_amsterdam_call_value } else { G_callvalue }
+}
 
 /*! The CREATE/CREATE2 execution-access charge. Persistent account growth is
     charged separately as state gas at Amsterdam. */
 function create_access_cost() -> gas_constant =
-    if k_fork >= Amsterdam then { G_amsterdam_create_access } else { G_create }
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= Amsterdam then { G_amsterdam_create_access } else { G_create }
+}
 
 /*! Returns the affordable execution-gas charge after successful initcode.
     Legacy forks charge per byte; Amsterdam charges the keccak word cost. The
     affordability guard bounds the native product without imposing a protocol
     code-size limit on Frontier or Homestead. */
 function code_deployment_execution_cost(byte_len : code_length, available : gas) -> option(gas_cost) =
-    if k_fork >= Amsterdam then {
-        if byte_len <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT then {
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= Amsterdam then {
+        if byte_len <= profile.deployed_code_size_limit then {
             let words = memory_word_count(byte_len);
             if words <= available / G_keccak_word then {
                 let cost : gas_cost = G_keccak_word * words;
@@ -705,11 +775,14 @@ function code_deployment_execution_cost(byte_len : code_length, available : gas)
             None()
         }
     }
+}
 
 /*! Amsterdam state gas charged for each byte of newly deployed code. */
 function code_deployment_state_cost(byte_len : code_length) -> gas_cost =
-    if k_fork >= Amsterdam then {
-        if byte_len <= EIP7954_DEPLOYED_CODE_SIZE_LIMIT then {
+{
+    let profile = k_protocol_profile;
+    if profile.fork >= Amsterdam then {
+        if byte_len <= profile.deployed_code_size_limit then {
             G_amsterdam_state_byte * byte_len
         } else {
             throw InvalidBlock(ExecutionInvalid)
@@ -717,6 +790,7 @@ function code_deployment_state_cost(byte_len : code_length) -> gas_cost =
     } else {
         GAS_COST_ZERO
     }
+}
 
 /* At most 32 big-endian bytes from precompile input. The bounded construction
  * stays in the EVM word algebra; out-of-range input bytes are zero. */
@@ -802,13 +876,14 @@ function pc_blake2_rounds(input : CalldataSlice) -> blake2_rounds =
     its available gas. The staged affordability checks below therefore keep
     every materialized intermediate at most 256 bits in optimized builds. */
 function modexp_gas(input : CalldataSlice, available : gas) -> option(gas_cost) = {
+    let profile = k_protocol_profile;
     let bl_word = pc_word(input, 0, 32);
     let el_word = pc_word(input, 32, 32);
     let ml_word = pc_word(input, 64, 32);
     let bl : word = bl_word;
     let el : word = el_word;
     let ml : word = ml_word;
-    let osaka = k_fork >= Osaka;
+    let osaka = profile.fork >= Osaka;
 
     /* EIP-7823 rejects the call before charging or executing MODEXP when any
      * length exceeds 1024. This is structural invalidity, distinct from an
@@ -1443,7 +1518,7 @@ function amsterdam_sstore_costs(original : word, current : word, new : word, col
 /*! Computes the fork-specific effects of one `SSTORE`. The refund delta is
     accumulated and capped at transaction settlement, not here. */
 function sstore_costs(original : word, current : word, new : word, cold : bool) -> SstoreCosts = {
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         amsterdam_sstore_costs(original, current, new, cold)
     } else {
         legacy_sstore_costs(original, current, new, cold)
@@ -1511,7 +1586,7 @@ function exp_gas(exponent : word) -> gas_cost = {
 /*! The EIP-3860 per-word initcode cost, charged by `CREATE`/`CREATE2`
     and create transactions from Shanghai. */
 function initcode_gas(byte_len : nat) -> nat =
-    if k_fork >= Shanghai then {
+    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
         let words = memory_word_count(byte_len);
         words + words
     } else {
@@ -1521,7 +1596,7 @@ function initcode_gas(byte_len : nat) -> nat =
 /*! The EIP-3860 charge for transaction-backed initcode, retaining the SSZ
     transaction-envelope ceiling for native cost aggregation. */
 function transaction_initcode_gas(byte_len : transaction_byte_length) -> transaction_initcode_cost =
-    if k_fork >= Shanghai then {
+    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
         let words = memory_word_count(byte_len);
         words + words
     } else {

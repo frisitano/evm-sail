@@ -30,7 +30,7 @@ function k_tx_reset() -> unit = {
     (EIP-6780). Amsterdam preserves any balance left by a self-beneficiary
     `SELFDESTRUCT` (EIP-8246). */
 function account_deleted_at_tx_end(acc : Account) -> bool =
-    acc.selfdestructed & ((k_fork < Cancun) | acc.created)
+    acc.selfdestructed & ((protocol_profile_fork(k_protocol_profile) < Cancun) | acc.created)
 
 /*! The transaction-end merge: drains the transaction overlays into the
     block layer, applying the fork-specific selfdestruct clearing rule,
@@ -47,7 +47,7 @@ function k_tx_merge() -> unit = {
                 var curr : Account = e.value.curr;
                 let deleted = account_deleted_at_tx_end(curr);
                 if deleted then {
-                    if k_fork >= Amsterdam then {
+                    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
                         curr = account_clear_preserving_balance(curr)
                     } else {
                         curr = account_delete(curr)

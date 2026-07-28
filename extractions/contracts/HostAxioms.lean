@@ -11,7 +11,8 @@ The declarations in `Evm.Functions` below are the raw symbols imported by the
 generated Sail model.  This namespace gives those account, persistent-storage,
 and transient-storage symbols an implementation-independent meaning.
 
-Nothing here describes the layout of `ffi/state_db.c` or `ffi/kernel_state.c`:
+Nothing here describes the layout of either C backend's `state_db.c` or
+`kernel_state.c`:
 there are no table rows, generations, undo cursors, physical deletions, or
 first-write/copy-on-write rules.  Such devices are permitted only through a
 refinement from a backend state to the total maps and logical snapshots below.

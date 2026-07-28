@@ -85,7 +85,7 @@ function decode_simple(opcode : opcode) -> ast =
                     27 => SHL(),
                     28 => SHR(),
                     29 => SAR(),
-                    30 => if k_fork >= Osaka then {
+                    30 => if protocol_profile_fork(k_protocol_profile) >= Osaka then {
                         CLZ()
                     } else {
                         INVALID()
@@ -115,22 +115,22 @@ function decode_simple(opcode : opcode) -> ast =
                     69 => GASLIMIT(),
                     70 => CHAINID(),
                     71 => SELFBALANCE(),
-                    72 => if k_fork >= London then {
+                    72 => if protocol_profile_fork(k_protocol_profile) >= London then {
                         BASEFEE()
                     } else {
                         INVALID()
                     },
-                    73 => if k_fork >= Cancun then {
+                    73 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
                         BLOBHASH()
                     } else {
                         INVALID()
                     },
-                    74 => if k_fork >= Cancun then {
+                    74 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
                         BLOBBASEFEE()
                     } else {
                         INVALID()
                     },
-                    75 => if k_fork >= Amsterdam then {
+                    75 => if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
                         SLOTNUM()
                     } else {
                         INVALID()
@@ -147,17 +147,17 @@ function decode_simple(opcode : opcode) -> ast =
                     89 => MSIZE(),
                     90 => GAS(),
                     91 => JUMPDEST(),
-                    92 => if k_fork >= Cancun then {
+                    92 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
                         TLOAD()
                     } else {
                         INVALID()
                     },
-                    93 => if k_fork >= Cancun then {
+                    93 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
                         TSTORE()
                     } else {
                         INVALID()
                     },
-                    94 => if k_fork >= Cancun then {
+                    94 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
                         MCOPY()
                     } else {
                         INVALID()
@@ -192,7 +192,7 @@ function fetch() -> ast = {
     } else {
         let opcode : opcode = unsigned(slice_byte(code, current));
         let immediate_offset = current + 1;
-        let decoded : (code_pointer, ast) = if (opcode == 95) & (k_fork < Shanghai) then {
+        let decoded : (code_pointer, ast) = if (opcode == 95) & (protocol_profile_fork(k_protocol_profile) < Shanghai) then {
                 (immediate_offset, INVALID())
             } else {
                 if 95 <= opcode & opcode <= 127 then {
@@ -201,7 +201,7 @@ function fetch() -> ast = {
                     let after_immediate : code_pointer = current + 1 + size;
                     (after_immediate, PUSH(size, value))
                 } else {
-                    if (k_fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
+                    if (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
                         let immediate = slice_byte(code, immediate_offset);
                         let immediate_valid : bool = match opcode {
                             230 => deep_stack_immediate_valid(immediate),
@@ -436,12 +436,12 @@ function run_call(kind : CallKind) -> unit = {
         } else {
             GAS_CONSTANT_ZERO
         };
-    let new_account_charged =    k_fork
+    let new_account_charged =    protocol_profile_fork(k_protocol_profile)
                               >= Amsterdam
                               &  word_nonzero(value)
                               &  call_transfers_value(kind)
                               &  k_account_is_empty(target);
-    let create_cost : gas_constant = if   k_fork
+    let create_cost : gas_constant = if   protocol_profile_fork(k_protocol_profile)
                                         < Amsterdam
                                         & word_nonzero(value)
                                         & call_transfers_value(kind)
@@ -481,7 +481,7 @@ function run_call(kind : CallKind) -> unit = {
        Otherwise the EIP-150 63/64ths cap applies to the gas left after
        subtracting the memory and extra costs. */
     var base_child : gas = GAS_ZERO;
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         /* Amsterdam charges execution work, then state growth, before
            applying EIP-150 to the execution gas left for the child. */
         charge(required);
@@ -708,7 +708,7 @@ function run_create(is2 : bool) -> unit = {
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
     charge(create_access_cost());
-    if k_fork >= Shanghai then {
+    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
         charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
     };
     if is2 then {
@@ -740,7 +740,7 @@ function run_create(is2 : bool) -> unit = {
            any account-growth state gas, because a spill reduces the execution
            gas to which the EIP-150 cap applies. */
         var child_gas : gas = GAS_ZERO;
-        if k_fork < Amsterdam then {
+        if protocol_profile_fork(k_protocol_profile) < Amsterdam then {
             let avail = gas_remaining;
             let retained_gas : gas = avail / 64;
             child_gas = gas_sub_or_oog(avail, retained_gas);
@@ -769,7 +769,7 @@ function run_create(is2 : bool) -> unit = {
            | (nonce == sizeof(account_nonce_bound)) /* EIP-2681 */
         then {
             returndata_clear();
-            if k_fork < Amsterdam then {
+            if protocol_profile_fork(k_protocol_profile) < Amsterdam then {
                 refund_gas(child_gas)
             };
             push(WORD_ZERO)
@@ -779,14 +779,14 @@ function run_create(is2 : bool) -> unit = {
              * the protocol runs them in the parent, before
              * process_create_message). */
             let _ = k_access_account(new_addr);
-            let new_account_charged = (k_fork >= Amsterdam) & k_account_is_empty(new_addr);
+            let new_account_charged = (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & k_account_is_empty(new_addr);
             if new_account_charged then {
                 charge_state_gas(G_amsterdam_state_new_account)
             };
             if not_bool(is_running()) then {
                 return ()
             };
-            if k_fork >= Amsterdam then {
+            if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
                 let avail = gas_remaining;
                 let retained_gas : gas = avail / 64;
                 child_gas = gas_sub_or_oog(avail, retained_gas);
@@ -815,7 +815,7 @@ function run_create(is2 : bool) -> unit = {
                     } else {
                         EMPTY_CODE_SLICE
                     };
-                let child_code = code_db_resolve(code_db_insert(initcode, k_fork));
+                let child_code = code_db_resolve(code_db_insert(initcode, protocol_profile_fork(k_protocol_profile)));
                 let child_state_gas = state_gas_remaining;
                 let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
                 frame_stack_push(
@@ -897,7 +897,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
 
     if initcode_succeeded then {
         if not_bool(deployed_code_size_allowed(deployed_size)) |
-            ((k_fork >= London) & (deployed_size != 0) & (slice_byte(returndata, 0) == 0xef)) then {
+            ((protocol_profile_fork(k_protocol_profile) >= London) & (deployed_size != 0) & (slice_byte(returndata, 0) == 0xef)) then {
             /* EIP-170 and EIP-3541 failures use the post-Homestead
              * exceptional creation path. Neither rule is active on
              * Frontier/Homestead in a way that reaches this branch. */
@@ -909,7 +909,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
                     charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
                 },
                 None() => {
-                    if k_fork < Homestead then {
+                    if protocol_profile_fork(k_protocol_profile) < Homestead then {
                         /* Frontier consumed the remaining child gas but kept the
                          * creation successful with empty deployed code. EIP-2
                          * changed this to exceptional failure at Homestead. */

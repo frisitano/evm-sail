@@ -325,7 +325,7 @@ function input_field_to_ref forall 'source_off 'source_len 'content_len,
         }
     } else {
         if f.content_len == MPT_HASH_LENGTH then {
-            HashRef(word_to_hash(rlp_ref_word(f)))
+            HashRef(word_to_hash(rlp_decode_word(f)))
         } else {
             EmptyRef()
         }
@@ -340,7 +340,7 @@ function scratch_field_to_ref forall 'source_off 'source_len 'content_len,
         ScratchInlineRef(inline_node_from_slice(f.source))
     } else {
         if f.content_len == MPT_HASH_LENGTH then {
-            HashRef(word_to_hash(scratch_rlp_ref_word(f)))
+            HashRef(word_to_hash(scratch_rlp_decode_word(f)))
         } else {
             EmptyRef()
         }
@@ -355,14 +355,16 @@ function decode_input_branch_node forall 'source_off 'source_len, source_valid_r
     InputTrieNode
 ) =
     if index < 16 then {
-        let (child, next) = rlp_cursor_pop(cursor);
+        let child = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, child.source.len);
         var updated = children;
         updated[index] = input_field_to_ref(child);
         decode_input_branch_node(next, index + 1, updated)
     } else {
-        let (value, cursor) = rlp_cursor_pop(cursor);
-        rlp_cursor_expect_end(cursor);
-        InputBranchNode(children, rlp_ref_content(value))
+        let value = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, value.source.len);
+        rlp_cursor_expect_end(next);
+        InputBranchNode(children, rlp_item_content(value))
     }
 termination_measure decode_input_branch_node(cursor, index, children) = 16 - index
 
@@ -374,14 +376,16 @@ function decode_scratch_branch_node forall 'source_off 'source_len, source_valid
     ScratchTrieNode
 ) =
     if index < 16 then {
-        let (child, next) = scratch_rlp_cursor_pop(cursor);
+        let child = scratch_rlp_decode_item(cursor);
+        let next = scratch_rlp_cursor_advance(cursor, child.source.len);
         var updated = children;
         updated[index] = scratch_field_to_ref(child);
         decode_scratch_branch_node(next, index + 1, updated)
     } else {
-        let (value, cursor) = scratch_rlp_cursor_pop(cursor);
-        scratch_rlp_cursor_expect_end(cursor);
-        ScratchBranchNode(children, scratch_rlp_ref_content(value))
+        let value = scratch_rlp_decode_item(cursor);
+        let next = scratch_rlp_cursor_advance(cursor, value.source.len);
+        scratch_rlp_cursor_expect_end(next);
+        ScratchBranchNode(children, scratch_rlp_item_content(value))
     }
 termination_measure decode_scratch_branch_node(cursor, index, children) = 16 - index
 
@@ -392,12 +396,14 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
         throw InvalidBlock(RlpDecode)
     };
     let fields = rlp_node_cursor(node);
-    let (first, fields) = rlp_cursor_pop(fields);
-    let (second, fields) = rlp_cursor_pop(fields);
+    let first = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, first.source.len);
+    let second = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, second.source.len);
     if fields.len == 0 then {
         let (is_leaf, path) = hex_prefix_decode_ref(first);
         if is_leaf then {
-            InputLeafNode(path, rlp_ref_content(second))
+            InputLeafNode(path, rlp_item_content(second))
         } else {
             if path_len(path) == 0 then {
                 throw InvalidBlock(RlpDecode)
@@ -415,12 +421,14 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
 
 function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
     let fields = scratch_rlp_node_cursor(node);
-    let (first, fields) = scratch_rlp_cursor_pop(fields);
-    let (second, fields) = scratch_rlp_cursor_pop(fields);
+    let first = scratch_rlp_decode_item(fields);
+    let fields = scratch_rlp_cursor_advance(fields, first.source.len);
+    let second = scratch_rlp_decode_item(fields);
+    let fields = scratch_rlp_cursor_advance(fields, second.source.len);
     if fields.len == 0 then {
         let (is_leaf, path) = scratch_hex_prefix_decode_ref(first);
         if is_leaf then {
-            ScratchLeafNode(path, scratch_rlp_ref_content(second))
+            ScratchLeafNode(path, scratch_rlp_item_content(second))
         } else {
             if path_len(path) == 0 then {
                 throw InvalidBlock(RlpDecode)

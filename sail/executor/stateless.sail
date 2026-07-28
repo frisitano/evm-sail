@@ -14,7 +14,7 @@ list.
     size (Amsterdam+). */
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
     let header = block.header;
-    if k_fork >= Prague then {
+    if protocol_profile_fork(k_protocol_profile) >= Prague then {
         if   not_bool(region_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
            | not_bool(region_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
            | not_bool(region_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
@@ -25,7 +25,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
-    if (k_fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
+    if (protocol_profile_fork(k_protocol_profile) >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
     let poststate = compute_state_root();
@@ -38,7 +38,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if not_bool(logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         let maximum_items : item_count = header.gas_limit / 2000;
         validate_block_access_list(block.body.block_access_list, maximum_items)
     }
@@ -76,7 +76,6 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
     try {
         scratch_reset();
         let input = decode_stateless_input(input_ref);
-        k_fork = input_ref.protocol.fork;
 
         active_stage = VALIDATION_STAGE_INDEX_WITNESS;
         let witness = index_execution_witness(input_ref);

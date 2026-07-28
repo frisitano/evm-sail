@@ -24,12 +24,9 @@ enum TxType = {
 /*md
 ## Constants
 
-The Osaka execution-gas limit aliases the shared transaction bound.
 The empty source-backed collection constants initialize transactions without
 blob hashes, access-list entries, or authorization tuples.
 */
-let OSAKA_TRANSACTION_GAS_LIMIT_VALUE : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
-let OSAKA_TRANSACTION_GAS_LIMIT : transaction_gas = TRANSACTION_EXECUTION_GAS_LIMIT
 
 /*! An EIP-7702 set-code authorization tuple. RLP decoding recovers the
     authority and validates the signature (`s <= n/2`, `y_parity`, `r`);

@@ -25,7 +25,7 @@ function transaction_rlp_content forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     StatelessInputSlice
 ) = {
-    let content = rlp_ref_content(f);
+    let content = rlp_item_content(f);
     stateless_input_slice(content.off, content.len)
 }
 
@@ -49,8 +49,9 @@ function decode_access_list_keys(cursor, addr, tail) =
     if cursor.len == 0 then {
         struct { address_count = tail.address_count, slot_count = tail.slot_count }
     } else {
-        let (key, next) = rlp_cursor_pop(cursor);
-        let _ : StorageKey = struct { addr = addr, slot = rlp_ref_word(key) };
+        let key = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, key.source.len);
+        let _ : StorageKey = struct { addr = addr, slot = rlp_decode_word(key) };
         let result = decode_access_list_keys(next, addr, tail);
         struct { address_count = result.address_count, slot_count = rlp_item_count_increment(result.slot_count) }
     }
@@ -68,14 +69,18 @@ function decode_access_list_entries(cursor) =
     if cursor.len == 0 then {
         EMPTY_ACCESS_LIST_DECODE
     } else {
-        let (entry, next) = rlp_cursor_pop(cursor);
-        let (addr_f, entry_fields) = rlp_cursor_pop(rlp_ref_cursor(entry));
-        let (keys_f, entry_fields) = rlp_cursor_pop(entry_fields);
+        let entry = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, entry.source.len);
+        let entry_fields = rlp_decode_list(entry);
+        let addr_f = rlp_decode_item(entry_fields);
+        let entry_fields = rlp_cursor_advance(entry_fields, addr_f.source.len);
+        let keys_f = rlp_decode_item(entry_fields);
+        let entry_fields = rlp_cursor_advance(entry_fields, keys_f.source.len);
         rlp_cursor_expect_end(entry_fields);
 
-        let addr = word_to_address(rlp_ref_word(addr_f));
+        let addr = word_to_address(rlp_decode_word(addr_f));
         let tail = decode_access_list_entries(next);
-        let result = decode_access_list_keys(rlp_ref_cursor(keys_f), addr, tail);
+        let result = decode_access_list_keys(rlp_decode_list(keys_f), addr, tail);
         struct { address_count = rlp_item_count_increment(result.address_count), slot_count = result.slot_count }
     }
 termination_measure decode_access_list_entries(cursor) =
@@ -89,7 +94,7 @@ function decode_access_list forall 'source_off 'source_len 'content_len,
     AccessListRef
 ) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
-        let decoded = decode_access_list_entries(rlp_ref_cursor(f));
+        let decoded = decode_access_list_entries(rlp_decode_list(f));
         struct {
             encoded = transaction_rlp_content(f),
             address_count = decoded.address_count,
@@ -123,7 +128,8 @@ function decode_blob_hash_items forall 'source_off 'source_len, source_valid_ran
     if cursor.len == 0 then {
         count
     } else {
-        let (item, next) = rlp_cursor_pop(cursor);
+        let item = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, item.source.len);
         if    item.is_list
            |  item.source.len
            != BLOB_HASH_RLP_LENGTH
@@ -133,7 +139,7 @@ function decode_blob_hash_items forall 'source_off 'source_len, source_valid_ran
            != 0xa0 then {
             throw InvalidBlock(RlpDecode)
         };
-        if count < sizeof(transaction_blob_count_bound) then {
+        if count < 9 then {
             decode_blob_hash_items(next, count + 1)
         } else {
             throw InvalidBlock(RlpDecode)
@@ -152,7 +158,7 @@ function decode_blob_hashes forall 'source_off 'source_len 'content_len,
     BlobHashes
 ) = {
     let bytes = transaction_rlp_content(f);
-    struct { bytes = bytes, count = decode_blob_hash_items(rlp_ref_cursor(f), 0) }
+    struct { bytes = bytes, count = decode_blob_hash_items(rlp_decode_list(f), 0) }
 }
 
 /* ---- EIP-7702 authorization-tuple recovery ---------------------------------
@@ -176,19 +182,28 @@ function validate_auth_tuples(cursor, count) =
     if cursor.len == 0 then {
         count
     } else {
-        let (tuple, next) = rlp_cursor_pop(cursor);
-        let (chain_f, fields) = rlp_cursor_pop(rlp_ref_cursor(tuple));
-        let (addr_f, fields) = rlp_cursor_pop(fields);
-        let (nonce_f, fields) = rlp_cursor_pop(fields);
-        let (_, fields) = rlp_pop_bool(fields);
-        let (r_f, fields) = rlp_cursor_pop(fields);
-        let (s_f, fields) = rlp_cursor_pop(fields);
+        let tuple = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, tuple.source.len);
+        let fields = rlp_decode_list(tuple);
+        let chain_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, chain_f.source.len);
+        let addr_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, addr_f.source.len);
+        let nonce_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+        let y_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, y_f.source.len);
+        let _ = rlp_decode_bool(y_f);
+        let r_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, r_f.source.len);
+        let s_f = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, s_f.source.len);
         rlp_cursor_expect_end(fields);
-        let _ = rlp_ref_uint_word(chain_f);
-        let _ = word_to_address(rlp_ref_word(addr_f));
-        let _ = rlp_ref_uint64(nonce_f);
-        let _ = rlp_ref_uint_word(r_f);
-        let _ = rlp_ref_uint_word(s_f);
+        let _ = rlp_decode_u256(chain_f);
+        let _ = word_to_address(rlp_decode_word(addr_f));
+        let _ = rlp_decode_uint64(nonce_f);
+        let _ = rlp_decode_u256(r_f);
+        let _ = rlp_decode_u256(s_f);
         if count < sizeof(transaction_length_bound) then {
             validate_auth_tuples(next, count + 1)
         } else {
@@ -206,7 +221,7 @@ function decode_auth_list forall 'source_off 'source_len 'content_len,
     AuthorizationListRef
 ) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
-        struct { encoded = transaction_rlp_content(f), count = validate_auth_tuples(rlp_ref_cursor(f), 0) }
+        struct { encoded = transaction_rlp_content(f), count = validate_auth_tuples(rlp_decode_list(f), 0) }
     } else {
         throw InvalidBlock(RlpDecode)
     }
@@ -220,19 +235,27 @@ val decode_authorization : forall 'source_off 'source_len 'content_len,
         'content_len,
     ) -> Authorization
 function decode_authorization(tuple) = {
-    let (chain_f, fields) = rlp_cursor_pop(rlp_ref_cursor(tuple));
-    let (addr_f, fields) = rlp_cursor_pop(fields);
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (y, fields) = rlp_pop_bool(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let fields = rlp_decode_list(tuple);
+    let chain_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, chain_f.source.len);
+    let addr_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, addr_f.source.len);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let y_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, y_f.source.len);
+    let y = rlp_decode_bool(y_f);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
 
-    let chain_id = rlp_ref_uint_word(chain_f);
-    let auth_nonce : account_nonce = rlp_ref_uint64(nonce_f);
-    let r = rlp_ref_uint_word(r_f);
-    let s = rlp_ref_uint_word(s_f);
-    let auth_addr = word_to_address(rlp_ref_word(addr_f));
+    let chain_id = rlp_decode_u256(chain_f);
+    let auth_nonce : account_nonce = rlp_decode_uint64(nonce_f);
+    let r = rlp_decode_u256(r_f);
+    let s = rlp_decode_u256(s_f);
+    let auth_addr = word_to_address(rlp_decode_word(addr_f));
     let (ok, authority) : (bool, address) = match y {
         RlpOk(false) => ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), 0, r, s),
         RlpOk(true) => ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), 1, r, s),
@@ -293,15 +316,15 @@ function tx_sig_span(first, signature) = {
 
 /*! Decodes transaction gas and enforces the protocol and fork-specific
     transaction bounds. */
-function rlp_ref_gas forall 'source_off 'source_len 'content_len,
+function rlp_decode_gas forall 'source_off 'source_len 'content_len,
                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (
     f : RlpFieldRef('source_off, 'source_len, 'content_len),
-    fork : Fork,
+    limit : protocol_transaction_gas_limit,
 ) -> (
     transaction_gas
 ) = {
-    let value = rlp_ref_uint(f);
-    if (fork >= Osaka) & (fork < Amsterdam) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
+    let value = rlp_decode_nat(f);
+    if (limit != 0) & (limit < value) then {
         throw InvalidBlock(GasUsedExceedsLimit)
     } else {
         value
@@ -314,34 +337,43 @@ function rlp_ref_gas forall 'source_off 'source_len 'content_len,
 function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    fork : Fork,
+    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     Transaction
 ) = {
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (gp_f, fields) = rlp_cursor_pop(fields);
-    let (gas_f, fields) = rlp_cursor_pop(fields);
-    let (to_f, fields) = rlp_cursor_pop(fields);
-    let (value_f, fields) = rlp_cursor_pop(fields);
-    let (data_f, fields) = rlp_cursor_pop(fields);
-    let (v_f, fields) = rlp_cursor_pop(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let gp_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gp_f.source.len);
+    let gas_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gas_f.source.len);
+    let to_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, to_f.source.len);
+    let value_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_f.source.len);
+    let data_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, data_f.source.len);
+    let v_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, v_f.source.len);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
-    let v = rlp_ref_word(v_f);
-    let gp = rlp_ref_uint_word(gp_f);
+    let v = rlp_decode_word(v_f);
+    let gp = rlp_decode_u256(gp_f);
     struct {
         tx_type = LegacyTx,
         sender = sender,
         raw = tx,
-        nonce = rlp_ref_uint_word(nonce_f),
+        nonce = rlp_decode_u256(nonce_f),
         chain_id = 0,
-        gas_limit = rlp_ref_gas(gas_f, fork),
+        gas_limit = rlp_decode_gas(gas_f, gas_limit),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_ref_word(to_f)),
-        value = rlp_ref_uint_word(value_f),
+        recipient = word_to_address(rlp_decode_word(to_f)),
+        value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = EMPTY_ACCESS_LIST_REF,
         max_fee = gp,
@@ -352,8 +384,8 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
         pubkey = pubkey,
         signing_hash = tx_signing_hash(LegacyTx, tx_sig_span(nonce_f, v_f), v),
         sig_v = v,
-        sig_r = rlp_ref_uint_word(r_f),
-        sig_s = rlp_ref_uint_word(s_f),
+        sig_r = rlp_decode_u256(r_f),
+        sig_s = rlp_decode_u256(s_f),
     }
 }
 
@@ -361,37 +393,48 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
 function decode_access_list_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    fork : Fork,
+    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     Transaction
 ) = {
-    let (chain_f, fields) = rlp_cursor_pop(fields);
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (gp_f, fields) = rlp_cursor_pop(fields);
-    let (gas_f, fields) = rlp_cursor_pop(fields);
-    let (to_f, fields) = rlp_cursor_pop(fields);
-    let (value_f, fields) = rlp_cursor_pop(fields);
-    let (data_f, fields) = rlp_cursor_pop(fields);
-    let (al_f, fields) = rlp_cursor_pop(fields);
-    let (v_f, fields) = rlp_cursor_pop(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let chain_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, chain_f.source.len);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let gp_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gp_f.source.len);
+    let gas_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gas_f.source.len);
+    let to_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, to_f.source.len);
+    let value_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_f.source.len);
+    let data_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, data_f.source.len);
+    let al_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, al_f.source.len);
+    let v_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, v_f.source.len);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
-    let v = rlp_ref_word(v_f);
-    let gp = rlp_ref_uint_word(gp_f);
+    let v = rlp_decode_word(v_f);
+    let gp = rlp_decode_u256(gp_f);
     let access_list = decode_access_list(al_f);
     struct {
         tx_type = AccessListTx,
         sender = sender,
         raw = tx,
-        nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_uint64(chain_f),
-        gas_limit = rlp_ref_gas(gas_f, fork),
+        nonce = rlp_decode_u256(nonce_f),
+        chain_id = rlp_decode_uint64(chain_f),
+        gas_limit = rlp_decode_gas(gas_f, gas_limit),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_ref_word(to_f)),
-        value = rlp_ref_uint_word(value_f),
+        recipient = word_to_address(rlp_decode_word(to_f)),
+        value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
         max_fee = gp,
@@ -402,8 +445,8 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
         pubkey = pubkey,
         signing_hash = tx_signing_hash(AccessListTx, tx_sig_span(chain_f, v_f), v),
         sig_v = v,
-        sig_r = rlp_ref_uint_word(r_f),
-        sig_s = rlp_ref_uint_word(s_f),
+        sig_r = rlp_decode_u256(r_f),
+        sig_s = rlp_decode_u256(s_f),
     }
 }
 
@@ -411,49 +454,61 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
 function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    fork : Fork,
+    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     Transaction
 ) = {
-    let (chain_f, fields) = rlp_cursor_pop(fields);
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (mp_f, fields) = rlp_cursor_pop(fields);
-    let (mf_f, fields) = rlp_cursor_pop(fields);
-    let (gas_f, fields) = rlp_cursor_pop(fields);
-    let (to_f, fields) = rlp_cursor_pop(fields);
-    let (value_f, fields) = rlp_cursor_pop(fields);
-    let (data_f, fields) = rlp_cursor_pop(fields);
-    let (al_f, fields) = rlp_cursor_pop(fields);
-    let (v_f, fields) = rlp_cursor_pop(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let chain_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, chain_f.source.len);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let mp_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mp_f.source.len);
+    let mf_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mf_f.source.len);
+    let gas_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gas_f.source.len);
+    let to_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, to_f.source.len);
+    let value_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_f.source.len);
+    let data_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, data_f.source.len);
+    let al_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, al_f.source.len);
+    let v_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, v_f.source.len);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
-    let v = rlp_ref_word(v_f);
+    let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
     struct {
         tx_type = FeeMarketTx,
         sender = sender,
         raw = tx,
-        nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_uint64(chain_f),
-        gas_limit = rlp_ref_gas(gas_f, fork),
+        nonce = rlp_decode_u256(nonce_f),
+        chain_id = rlp_decode_uint64(chain_f),
+        gas_limit = rlp_decode_gas(gas_f, gas_limit),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_ref_word(to_f)),
-        value = rlp_ref_uint_word(value_f),
+        recipient = word_to_address(rlp_decode_word(to_f)),
+        value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
-        max_fee = rlp_ref_uint_word(mf_f),
+        max_fee = rlp_decode_u256(mf_f),
         max_blob_fee = ZERO_WORD,
-        max_priority_fee = rlp_ref_uint_word(mp_f),
+        max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
         signing_hash = tx_signing_hash(FeeMarketTx, tx_sig_span(chain_f, v_f), v),
         sig_v = v,
-        sig_r = rlp_ref_uint_word(r_f),
-        sig_s = rlp_ref_uint_word(s_f),
+        sig_r = rlp_decode_u256(r_f),
+        sig_s = rlp_decode_u256(s_f),
     }
 }
 
@@ -461,52 +516,66 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
 function decode_blob_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    fork : Fork,
+    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     Transaction
 ) = {
-    let (chain_f, fields) = rlp_cursor_pop(fields);
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (mp_f, fields) = rlp_cursor_pop(fields);
-    let (mf_f, fields) = rlp_cursor_pop(fields);
-    let (gas_f, fields) = rlp_cursor_pop(fields);
-    let (to_f, fields) = rlp_cursor_pop(fields);
-    let (value_f, fields) = rlp_cursor_pop(fields);
-    let (data_f, fields) = rlp_cursor_pop(fields);
-    let (al_f, fields) = rlp_cursor_pop(fields);
-    let (mbf_f, fields) = rlp_cursor_pop(fields);
-    let (bh_f, fields) = rlp_cursor_pop(fields);
-    let (v_f, fields) = rlp_cursor_pop(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let chain_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, chain_f.source.len);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let mp_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mp_f.source.len);
+    let mf_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mf_f.source.len);
+    let gas_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gas_f.source.len);
+    let to_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, to_f.source.len);
+    let value_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_f.source.len);
+    let data_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, data_f.source.len);
+    let al_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, al_f.source.len);
+    let mbf_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mbf_f.source.len);
+    let bh_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, bh_f.source.len);
+    let v_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, v_f.source.len);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
-    let v = rlp_ref_word(v_f);
+    let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
     let blob_hashes = decode_blob_hashes(bh_f);
     struct {
         tx_type = BlobTx,
         sender = sender,
         raw = tx,
-        nonce = rlp_ref_uint_word(nonce_f),
-        chain_id = rlp_ref_uint64(chain_f),
-        gas_limit = rlp_ref_gas(gas_f, fork),
+        nonce = rlp_decode_u256(nonce_f),
+        chain_id = rlp_decode_uint64(chain_f),
+        gas_limit = rlp_decode_gas(gas_f, gas_limit),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_ref_word(to_f)),
-        value = rlp_ref_uint_word(value_f),
+        recipient = word_to_address(rlp_decode_word(to_f)),
+        value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
-        max_fee = rlp_ref_uint_word(mf_f),
-        max_blob_fee = rlp_ref_uint_word(mbf_f),
-        max_priority_fee = rlp_ref_uint_word(mp_f),
+        max_fee = rlp_decode_u256(mf_f),
+        max_blob_fee = rlp_decode_u256(mbf_f),
+        max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = blob_hashes,
         pubkey = pubkey,
         signing_hash = tx_signing_hash(BlobTx, tx_sig_span(chain_f, v_f), v),
         sig_v = v,
-        sig_r = rlp_ref_uint_word(r_f),
-        sig_s = rlp_ref_uint_word(s_f),
+        sig_r = rlp_decode_u256(r_f),
+        sig_s = rlp_decode_u256(s_f),
     }
 }
 
@@ -514,51 +583,64 @@ function decode_blob_tx forall 'source_off 'source_len, source_valid_range('sour
 function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    fork : Fork,
+    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     Transaction
 ) = {
-    let (chain_f, fields) = rlp_cursor_pop(fields);
-    let (nonce_f, fields) = rlp_cursor_pop(fields);
-    let (mp_f, fields) = rlp_cursor_pop(fields);
-    let (mf_f, fields) = rlp_cursor_pop(fields);
-    let (gas_f, fields) = rlp_cursor_pop(fields);
-    let (to_f, fields) = rlp_cursor_pop(fields);
-    let (value_f, fields) = rlp_cursor_pop(fields);
-    let (data_f, fields) = rlp_cursor_pop(fields);
-    let (al_f, fields) = rlp_cursor_pop(fields);
-    let (auth_f, fields) = rlp_cursor_pop(fields);
-    let (v_f, fields) = rlp_cursor_pop(fields);
-    let (r_f, fields) = rlp_cursor_pop(fields);
-    let (s_f, fields) = rlp_cursor_pop(fields);
+    let chain_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, chain_f.source.len);
+    let nonce_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce_f.source.len);
+    let mp_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mp_f.source.len);
+    let mf_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, mf_f.source.len);
+    let gas_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, gas_f.source.len);
+    let to_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, to_f.source.len);
+    let value_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_f.source.len);
+    let data_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, data_f.source.len);
+    let al_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, al_f.source.len);
+    let auth_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, auth_f.source.len);
+    let v_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, v_f.source.len);
+    let r_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, r_f.source.len);
+    let s_f = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, s_f.source.len);
     rlp_cursor_expect_end(fields);
-    let v = rlp_ref_word(v_f);
+    let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
     let authorizations = decode_auth_list(auth_f);
     struct {
         tx_type = SetCodeTx,
         sender = sender,
         raw = tx,
-        nonce = word_of_account_nonce(rlp_ref_uint64(nonce_f)),
-        chain_id = rlp_ref_uint64(chain_f),
-        gas_limit = rlp_ref_gas(gas_f, fork),
+        nonce = word_of_account_nonce(rlp_decode_uint64(nonce_f)),
+        chain_id = rlp_decode_uint64(chain_f),
+        gas_limit = rlp_decode_gas(gas_f, gas_limit),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_ref_word(to_f)),
-        value = rlp_ref_uint_word(value_f),
+        recipient = word_to_address(rlp_decode_word(to_f)),
+        value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
-        max_fee = rlp_ref_uint_word(mf_f),
+        max_fee = rlp_decode_u256(mf_f),
         max_blob_fee = ZERO_WORD,
-        max_priority_fee = rlp_ref_uint_word(mp_f),
+        max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = authorizations,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
         signing_hash = tx_signing_hash(SetCodeTx, tx_sig_span(chain_f, v_f), v),
         sig_v = v,
-        sig_r = rlp_ref_uint_word(r_f),
-        sig_s = rlp_ref_uint_word(s_f),
+        sig_r = rlp_decode_u256(r_f),
+        sig_s = rlp_decode_u256(s_f),
     }
 }
 
@@ -587,9 +669,9 @@ val rlp_decode_tx : forall 'tx_off 'tx_len 'public_key_off,
                       &  source_valid_range('public_key_off, 65). (
         StatelessInputSliceFields('tx_off, 'tx_len),
         StatelessInputSliceFields('public_key_off, 65),
-        Fork,
+        protocol_transaction_gas_limit,
     ) -> Transaction
-function rlp_decode_tx(tx, pubkey, fork) = {
+function rlp_decode_tx(tx, pubkey, gas_limit) = {
     let sender = word_to_address(hash_to_word(keccak256(sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH))));
     let tx_length = tx.len;
     let b0 : byte = if tx_length == 0 then {
@@ -612,11 +694,11 @@ function rlp_decode_tx(tx, pubkey, fork) = {
     let fields = rlp_node_cursor(payload_input);
 
     match ttype {
-        0x00 => decode_legacy_tx(tx, pubkey, fork, sender, fields),
-        0x01 => decode_access_list_tx(tx, pubkey, fork, sender, fields),
-        0x02 => decode_fee_market_tx(tx, pubkey, fork, sender, fields),
-        0x03 => decode_blob_tx(tx, pubkey, fork, sender, fields),
-        0x04 => decode_set_code_tx(tx, pubkey, fork, sender, fields),
+        0x00 => decode_legacy_tx(tx, pubkey, gas_limit, sender, fields),
+        0x01 => decode_access_list_tx(tx, pubkey, gas_limit, sender, fields),
+        0x02 => decode_fee_market_tx(tx, pubkey, gas_limit, sender, fields),
+        0x03 => decode_blob_tx(tx, pubkey, gas_limit, sender, fields),
+        0x04 => decode_set_code_tx(tx, pubkey, gas_limit, sender, fields),
         _ => throw InvalidBlock(RlpDecode), /* unknown envelope type or wrong arity */
     }
 }

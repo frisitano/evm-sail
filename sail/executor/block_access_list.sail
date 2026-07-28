@@ -26,7 +26,7 @@ val bal_ref_cursor : forall 'source_off 'source_len 'content_len,
     ) -> RlpCursor('source_off + ('source_len - 'content_len), 'content_len)
 function bal_ref_cursor(f) =
     if f.is_list & rlp_ref_framing_canonical(f) then {
-        rlp_ref_cursor(f)
+        rlp_decode_list(f)
     } else {
         throw InvalidBlock(InvalidBlockAccessList)
     }
@@ -38,7 +38,7 @@ function bal_ref_bytes forall 'source_off 'source_len 'content_len,
     StatelessInputSlice
 ) =
     if rlp_ref_bytes_canonical(f) then {
-        rlp_ref_content(f)
+        rlp_item_content(f)
     } else {
         throw InvalidBlock(InvalidBlockAccessList)
     }
@@ -49,8 +49,8 @@ function bal_ref_word forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     word
 ) =
-    if rlp_ref_uint_canonical(f) & (f.content_len <= 32) then {
-        rlp_ref_word(f)
+    if rlp_item_uint_canonical(f) & (f.content_len <= 32) then {
+        rlp_decode_word(f)
     } else {
         throw InvalidBlock(InvalidBlockAccessList)
     }
@@ -61,8 +61,8 @@ function bal_ref_uint64 forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     ssz_uint
 ) =
-    if rlp_ref_uint_canonical(f) & (f.content_len <= 8) then {
-        rlp_ref_uint64(f)
+    if rlp_item_uint_canonical(f) & (f.content_len <= 8) then {
+        rlp_decode_uint64(f)
     } else {
         throw InvalidBlock(InvalidBlockAccessList)
     }
@@ -88,8 +88,10 @@ function bal_compare_index_word forall 'source_off 'source_len 'content_len,
     unit
 ) = {
     let fields = bal_ref_cursor(pair);
-    let (index_field, fields) = rlp_cursor_pop(fields);
-    let (value_field, fields) = rlp_cursor_pop(fields);
+    let index_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, index_field.source.len);
+    let value_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_field.source.len);
     bal_expect_end(fields);
     if (bal_ref_uint64(index_field) != index) | (bal_ref_word(value_field) != value) then {
         throw InvalidBlock(InvalidBlockAccessList)
@@ -106,8 +108,10 @@ function bal_compare_index_nonce forall 'source_off 'source_len 'content_len,
     unit
 ) = {
     let fields = bal_ref_cursor(pair);
-    let (index_field, fields) = rlp_cursor_pop(fields);
-    let (value_field, fields) = rlp_cursor_pop(fields);
+    let index_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, index_field.source.len);
+    let value_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, value_field.source.len);
     bal_expect_end(fields);
     if (bal_ref_uint64(index_field) != index) | (bal_ref_uint64(value_field) != value) then {
         throw InvalidBlock(InvalidBlockAccessList)
@@ -125,8 +129,10 @@ function bal_compare_index_code forall 'source_off 'source_len 'content_len,
     unit
 ) = {
     let fields = bal_ref_cursor(pair);
-    let (index_field, fields) = rlp_cursor_pop(fields);
-    let (code_field, fields) = rlp_cursor_pop(fields);
+    let index_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, index_field.source.len);
+    let code_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, code_field.source.len);
     bal_expect_end(fields);
     let code = code_db_resolve(code_hash);
     if (bal_ref_uint64(index_field) != index) | not_bool(region_slices_equal(bal_ref_bytes(code_field), code.bytes)) then {
@@ -146,7 +152,8 @@ function bal_validate_storage_change_values forall 'source_off 'source_len,
     if cursor.len == 0 then {
         ()
     } else {
-        let (pair, next) = rlp_cursor_pop(cursor);
+        let pair = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, pair.source.len);
         match bal_iter_next() {
             BalStorageChange(change) => {
                 if change.slot != slot then {
@@ -172,10 +179,13 @@ function bal_validate_storage_changes forall 'source_off 'source_len, source_val
     if cursor.len == 0 then {
         count
     } else {
-        let (slot_field, next) = rlp_cursor_pop(cursor);
+        let slot_field = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, slot_field.source.len);
         let fields = bal_ref_cursor(slot_field);
-        let (slot_value, fields) = rlp_cursor_pop(fields);
-        let (changes_value, fields) = rlp_cursor_pop(fields);
+        let slot_value = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, slot_value.source.len);
+        let changes_value = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, changes_value.source.len);
         bal_expect_end(fields);
         let changes = bal_ref_cursor(changes_value);
         if changes.len == 0 then {
@@ -200,7 +210,8 @@ function bal_validate_storage_reads forall 'source_off 'source_len, source_valid
     if cursor.len == 0 then {
         count
     } else {
-        let (slot_field, next) = rlp_cursor_pop(cursor);
+        let slot_field = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, slot_field.source.len);
         let slot = bal_ref_word(slot_field);
         match bal_iter_next() {
             BalStorageRead(recorded) => {
@@ -224,7 +235,8 @@ function bal_validate_balance_changes forall 'source_off 'source_len, source_val
     if cursor.len == 0 then {
         ()
     } else {
-        let (pair, next) = rlp_cursor_pop(cursor);
+        let pair = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, pair.source.len);
         match bal_iter_next() {
             BalBalanceChange(change) => bal_compare_index_word(pair, change.index, change.value),
             _ => throw InvalidBlock(InvalidBlockAccessList),
@@ -242,7 +254,8 @@ function bal_validate_nonce_changes forall 'source_off 'source_len, source_valid
     if cursor.len == 0 then {
         ()
     } else {
-        let (pair, next) = rlp_cursor_pop(cursor);
+        let pair = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, pair.source.len);
         match bal_iter_next() {
             BalNonceChange(change) => bal_compare_index_nonce(pair, change.index, change.value),
             _ => throw InvalidBlock(InvalidBlockAccessList),
@@ -260,7 +273,8 @@ function bal_validate_code_changes forall 'source_off 'source_len, source_valid_
     if cursor.len == 0 then {
         ()
     } else {
-        let (pair, next) = rlp_cursor_pop(cursor);
+        let pair = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, pair.source.len);
         match bal_iter_next() {
             BalCodeChange(change) => bal_compare_index_code(pair, change.index, change.code_hash),
             _ => throw InvalidBlock(InvalidBlockAccessList),
@@ -283,18 +297,25 @@ function bal_validate_accounts forall 'source_off 'source_len, source_valid_rang
     if cursor.len == 0 then {
         count
     } else {
-        let (account_field, next) = rlp_cursor_pop(cursor);
+        let account_field = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, account_field.source.len);
         let fields = bal_ref_cursor(account_field);
-        let (address_field, fields) = rlp_cursor_pop(fields);
-        let (storage_changes_field, fields) = rlp_cursor_pop(fields);
-        let (storage_reads_field, fields) = rlp_cursor_pop(fields);
-        let (balance_changes_field, fields) = rlp_cursor_pop(fields);
-        let (nonce_changes_field, fields) = rlp_cursor_pop(fields);
-        let (code_changes_field, fields) = rlp_cursor_pop(fields);
+        let address_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, address_field.source.len);
+        let storage_changes_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, storage_changes_field.source.len);
+        let storage_reads_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, storage_reads_field.source.len);
+        let balance_changes_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, balance_changes_field.source.len);
+        let nonce_changes_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, nonce_changes_field.source.len);
+        let code_changes_field = rlp_decode_item(fields);
+        let fields = rlp_cursor_advance(fields, code_changes_field.source.len);
         bal_expect_end(fields);
 
         let address_bytes = bal_ref_bytes(address_field);
-        let account = word_to_address(rlp_ref_word(address_field));
+        let account = word_to_address(rlp_decode_word(address_field));
         if address_bytes.len != 20 then {
             throw InvalidBlock(InvalidBlockAccessList)
         };

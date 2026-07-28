@@ -12,10 +12,9 @@ register k_parent_state_root : hash = ZERO_HASH
 register k_n_headers : item_count = 0
 /*! The chain id (`CHAINID`, EIP-155 domains). */
 register k_chain_id : chain_identifier = 1
-/*! The active fork; every fork-gated rule compares against it. */
-register k_fork : Fork = Amsterdam
-/*! The active blob schedule (EIP-4844/EIP-7691). */
-register k_blob_schedule : BlobSchedule = struct { target = 14, max = 21, base_fee_update_fraction = 11684671 }
+/*! The active fork identity, protocol limits, and blob schedule, selected
+    together while decoding the stateless-input schema fork. */
+register k_protocol_profile : ProtocolProfile = DEFAULT_PROTOCOL_PROFILE
 
 /*! The executing payload's header. */
 register k_header : BlockHeader =

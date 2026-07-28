@@ -442,32 +442,31 @@ function rlp_ref_hdr(b : StatelessInputSlice) -> (bool, source_pointer, range(0,
 
 /*! A cursor over a decoded field's children; throws if the field is not
     a list. */
-val rlp_ref_cursor : forall 'source_off 'source_len 'content_len,
+val rlp_decode_list : forall 'source_off 'source_len 'content_len,
                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). RlpFieldRef(
         'source_off,
         'source_len,
         'content_len,
     ) -> RlpCursor('source_off + ('source_len - 'content_len), 'content_len)
 
-function rlp_ref_cursor(f) =
+function rlp_decode_list(f) =
     if f.is_list then {
         sub_slice(f.source, f.source.len - f.content_len, f.content_len)
     } else {
         throw InvalidBlock(RlpDecode)
     }
 
-/*! Decodes the next child and advances; throws on truncated input. */
-val rlp_cursor_pop : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+/*! Decodes the item at the head of a cursor without advancing it. The
+    resulting field's complete source length witnesses a valid subsequent
+    `rlp_cursor_advance`. */
+val rlp_decode_item : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
         'source_off,
         'source_len,
     ) -> {'content_len 'full_len,
-          rlp_cursor_pop_valid('source_off, 'source_len, 'full_len, 'content_len).
-          (
-              RlpFieldRef('source_off, 'full_len, 'content_len),
-              RlpCursor('source_off + 'full_len, 'source_len - 'full_len),
-          )}
+          rlp_decoded_item_valid('source_off, 'source_len, 'full_len, 'content_len).
+          RlpFieldRef('source_off, 'full_len, 'content_len)}
 
-function rlp_cursor_pop(cursor) = {
+function rlp_decode_item(cursor) = {
     if cursor.len == 0 then {
         throw InvalidBlock(RlpDecode)
     };
@@ -487,12 +486,21 @@ function rlp_cursor_pop(cursor) = {
                 is_list = is_list,
                 content_len = content_len,
             };
-        let advanced = sub_slice(cursor, full_len, cursor.len - full_len);
-        (field, advanced)
+        field
     } else {
         throw InvalidBlock(RlpDecode)
     }
 }
+
+/*! Consumes a decoded item's proven complete length from a cursor. */
+val rlp_cursor_advance : forall 'source_off 'source_len 'consumed,
+                          source_valid_range('source_off, 'source_len)
+                        & rlp_cursor_advance_valid('source_len, 'consumed). (
+        RlpCursor('source_off, 'source_len),
+        int('consumed),
+    ) -> RlpCursor('source_off + 'consumed, 'source_len - 'consumed)
+function rlp_cursor_advance(cursor, consumed) =
+    slice_suffix(cursor, consumed)
 
 /*! Asserts the cursor is exhausted — trailing bytes are a decode
     error. */
@@ -546,12 +554,12 @@ function rlp_node_cursor(node : StatelessInputSlice) -> (
     if node.len == 0 then {
         throw InvalidBlock(RlpDecode)
     } else {
-        rlp_ref_cursor(rlp_single_ref(node))
+        rlp_decode_list(rlp_single_ref(node))
     }
 }
 
 /*! The content span of a field. */
-function rlp_ref_content forall 'source_off 'source_len 'content_len,
+function rlp_item_content forall 'source_off 'source_len 'content_len,
                            rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     StatelessInputSlice
@@ -613,29 +621,26 @@ function scratch_rlp_ref_hdr(b : ScratchSlice) -> (bool, source_pointer, range(0
     }
 }
 
-val scratch_rlp_ref_cursor : forall 'source_off 'source_len 'content_len,
+val scratch_rlp_decode_list : forall 'source_off 'source_len 'content_len,
                                rlp_field_ref_valid('source_off, 'source_len, 'content_len). ScratchRlpFieldRef(
         'source_off,
         'source_len,
         'content_len,
     ) -> ScratchRlpCursor('source_off + ('source_len - 'content_len), 'content_len)
-function scratch_rlp_ref_cursor(f) =
+function scratch_rlp_decode_list(f) =
     if f.is_list then {
         sub_slice(f.source, f.source.len - f.content_len, f.content_len)
     } else {
         throw InvalidBlock(RlpDecode)
     }
 
-val scratch_rlp_cursor_pop : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
+val scratch_rlp_decode_item : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
         'source_off,
         'source_len,
     ) -> {'content_len 'full_len,
-          rlp_cursor_pop_valid('source_off, 'source_len, 'full_len, 'content_len).
-          (
-              ScratchRlpFieldRef('source_off, 'full_len, 'content_len),
-              ScratchRlpCursor('source_off + 'full_len, 'source_len - 'full_len),
-          )}
-function scratch_rlp_cursor_pop(cursor) = {
+          rlp_decoded_item_valid('source_off, 'source_len, 'full_len, 'content_len).
+          ScratchRlpFieldRef('source_off, 'full_len, 'content_len)}
+function scratch_rlp_decode_item(cursor) = {
     if cursor.len == 0 then {
         throw InvalidBlock(RlpDecode)
     };
@@ -655,12 +660,20 @@ function scratch_rlp_cursor_pop(cursor) = {
                 is_list = is_list,
                 content_len = content_len,
             };
-        let advanced = sub_slice(cursor, full_len, cursor.len - full_len);
-        (field, advanced)
+        field
     } else {
         throw InvalidBlock(RlpDecode)
     }
 }
+
+val scratch_rlp_cursor_advance : forall 'source_off 'source_len 'consumed,
+                                  source_valid_range('source_off, 'source_len)
+                                & rlp_cursor_advance_valid('source_len, 'consumed). (
+        ScratchRlpCursor('source_off, 'source_len),
+        int('consumed),
+    ) -> ScratchRlpCursor('source_off + 'consumed, 'source_len - 'consumed)
+function scratch_rlp_cursor_advance(cursor, consumed) =
+    slice_suffix(cursor, consumed)
 
 val scratch_rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
         'source_off,
@@ -706,16 +719,16 @@ function scratch_rlp_node_cursor(node : ScratchSlice) -> (
      source_valid_range('source_off, 'source_len).
      ScratchRlpCursor('source_off, 'source_len)}
 ) =
-    scratch_rlp_ref_cursor(scratch_rlp_single_ref(node))
+    scratch_rlp_decode_list(scratch_rlp_single_ref(node))
 
-function scratch_rlp_ref_content forall 'source_off 'source_len 'content_len,
+function scratch_rlp_item_content forall 'source_off 'source_len 'content_len,
                                    rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     ScratchSlice
 ) =
     sub_slice(f.source, f.source.len - f.content_len, f.content_len)
 
-function scratch_rlp_ref_word forall 'source_off 'source_len 'content_len,
+function scratch_rlp_decode_word forall 'source_off 'source_len 'content_len,
                                 rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     word
@@ -797,7 +810,7 @@ function rlp_ref_bytes_canonical forall 'source_off 'source_len 'content_len,
 /*! Whether a field is the canonical RLP encoding of a non-negative
     integer: minimal big-endian content with no leading zeros and the
     exact matching prefix. */
-function rlp_ref_uint_canonical forall 'source_off 'source_len 'content_len,
+function rlp_item_uint_canonical forall 'source_off 'source_len 'content_len,
                                   rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     bool
@@ -809,7 +822,7 @@ function rlp_ref_uint_canonical forall 'source_off 'source_len 'content_len,
     }
 
 /*! Decodes a string field of at most 32 bytes into a word. */
-function rlp_ref_word forall 'source_off 'source_len 'content_len,
+function rlp_decode_word forall 'source_off 'source_len 'content_len,
                         rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     word
@@ -824,29 +837,29 @@ function rlp_ref_word forall 'source_off 'source_len 'content_len,
 
 /*! Decodes a canonical unsigned integer field into a word; throws
     otherwise. */
-function rlp_ref_uint_word forall 'source_off 'source_len 'content_len,
+function rlp_decode_u256 forall 'source_off 'source_len 'content_len,
                              rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     word
 ) =
-    if rlp_ref_uint_canonical(f) then {
-        rlp_ref_word(f)
+    if rlp_item_uint_canonical(f) then {
+        rlp_decode_word(f)
     } else {
         throw InvalidBlock(RlpDecode)
     }
 
 /*! Decodes a canonical unsigned integer into the uint64 wire domain used by
     EIP-2681 account nonces and EIP-4844 excess blob gas. */
-function rlp_ref_uint64 forall 'source_off 'source_len 'content_len,
+function rlp_decode_uint64 forall 'source_off 'source_len 'content_len,
                           rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     ssz_uint
 ) = {
-    if not_bool(rlp_ref_uint_canonical(f)) | (RLP_UINT64_LENGTH_LIMIT < f.content_len) then {
+    if not_bool(rlp_item_uint_canonical(f)) | (RLP_UINT64_LENGTH_LIMIT < f.content_len) then {
         throw InvalidBlock(RlpDecode)
     };
     let content_length = f.content_len;
-    let content = rlp_ref_content(f);
+    let content = rlp_item_content(f);
 
     /* The semantic check above establishes content_length <= 8.  Modulo nine
      * only exposes that already-proven bound to Sail's dependent type system. */
@@ -854,25 +867,23 @@ function rlp_ref_uint64 forall 'source_off 'source_len 'content_len,
     rlp_uint64_width(content, width)
 }
 
-/*! Pops one canonical RLP integer and interprets `0`/`1` as a Boolean.
-    Other canonical integers return `RlpInvalidValue` rather than throwing so
-    callers such as EIP-7702 can reject only the containing authorization
-    tuple. */
-val rlp_pop_bool : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). RlpCursor(
+/*! Interprets one canonical RLP integer as `0`/`1`. Other canonical integers
+    return `RlpInvalidValue` rather than throwing so callers such as EIP-7702
+    can reject only the containing authorization tuple. */
+val rlp_decode_bool : forall 'source_off 'source_len 'content_len,
+                       rlp_field_ref_valid('source_off, 'source_len, 'content_len). RlpFieldRef(
         'source_off,
         'source_len,
-    ) -> (RlpResult(bool), StatelessInputSlice)
+        'content_len,
+    ) -> RlpResult(bool)
 
-function rlp_pop_bool(cursor) = match rlp_cursor_pop(cursor) {
-    (field, next) => {
-        let value = rlp_ref_uint64(field);
-        let decoded : RlpResult(bool) = match value {
-            0 => RlpOk(false),
-            1 => RlpOk(true),
-            _ => RlpInvalidValue(),
-        };
-        (decoded, next)
-    },
+function rlp_decode_bool(field) = {
+    let value = rlp_decode_uint64(field);
+    match value {
+        0 => RlpOk(false),
+        1 => RlpOk(true),
+        _ => RlpInvalidValue(),
+    }
 }
 
 /*! Decodes an arbitrary-width big-endian natural. */
@@ -889,13 +900,13 @@ function rlp_uint_content(content : StatelessInputSlice) -> nat = {
 termination_measure rlp_uint_content(content) = content.len
 
 /*! Decodes an arbitrary-width canonical RLP unsigned integer. */
-function rlp_ref_uint forall 'source_off 'source_len 'content_len,
+function rlp_decode_nat forall 'source_off 'source_len 'content_len,
                         rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     nat
 ) =
-    if rlp_ref_uint_canonical(f) then {
-        rlp_uint_content(rlp_ref_content(f))
+    if rlp_item_uint_canonical(f) then {
+        rlp_uint_content(rlp_item_content(f))
     } else {
         throw InvalidBlock(RlpDecode)
     }

@@ -5,7 +5,8 @@
 #   make lint           sail --all-warnings on the program roots
 #   make fmt            format every *.sail in place with `sail --fmt`
 #   make fmt-check      verify every *.sail matches `sail --fmt`
-#   make extract-c      generate and compile-check the optimized C model
+#   make c-spec         generate and compile-check the specification C model
+#   make c-optimised    generate and compile-check the optimized C model
 #   make eest-smoke     run one embedded v0.6.2 stateless fixture
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
@@ -23,6 +24,7 @@ LAKE ?= lake
 COQC ?= opam exec -- rocq c
 PYTHON ?= python3
 UV ?= uv
+GMP_CFLAGS ?= $(shell pkg-config --cflags gmp 2>/dev/null)
 DOCS_VENV ?= .venv-docs
 DOCS_VENV_ABS := $(abspath $(DOCS_VENV))
 DOCS_BIN := $(DOCS_VENV_ABS)/bin
@@ -33,27 +35,27 @@ MODEL               := $(PROJECT) evm
 EEST_CORPUS         ?= zkvm/.fixtures/current-v062-full
 EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 CONTRACTS_DIR       := extractions/contracts
-C_DIR               := extractions/c
-C_MODEL_DIR         := $(C_DIR)/evm
-C_MODEL             := $(C_MODEL_DIR)/evm
-C_BUILD_DIR         := build/extract-c
-C_EXTRACTOR         := tools/extract_c.py
-C_GENERATOR_DIR     := $(C_BUILD_DIR)/generate
+C_SPEC_BUILD_DIR    := build/c-spec
+C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
+C_OPT_BUILD_DIR     := build/c-optimised
+C_OPT_MODEL         := $(C_OPT_BUILD_DIR)/evm
 C_OPTIMIZED_SPLICE  := sail/splices/c_optimized.sail
 COQ_DIR             := extractions/coq
 COQ_CONTRACTS_DIR   := $(COQ_DIR)/contracts
 COQ_MODEL_DIR       := $(COQ_DIR)/model
+COQ_PROOFS_DIR      := $(COQ_DIR)/proofs
 LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
+LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
 LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-C_MODEL_HEADERS     := sail_failure.h region_access.h hash_glue.h precompiles.h output.h \
+C_MODEL_HEADERS     := sail_failure.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
-C_OPTIMIZED_HEADERS := word_bytes_glue.h htr_glue.h mpt_glue.h journal_glue.h interpreter_glue.h \
-                       blob_fee_glue.h
+C_OPTIMIZED_HEADERS := word_bytes.h preimage.h htr.h mpt.h state.h \
+                       interpreter.h blob_fee.h
 C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
 C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
 C_PRESERVE_FLAGS    := --c-preserve main \
@@ -63,16 +65,13 @@ C_PRESERVE_FLAGS    := --c-preserve main \
                        --c-preserve compute_state_root \
                        --c-preserve trie_root \
                        --c-preserve decode_stateless_input_ref
-C_EDITOR_FLAGS      := -w -DEVMSAIL_MODEL_H=\"evm.h\" -I$(C_MODEL_DIR) \
-                       -Izkvm/runtime/sail256 -Izkvm/runtime -Iffi
-C_EDITOR_ARGS       := $(foreach flag,$(C_EDITOR_FLAGS),--compile-flag=$(flag))
 SAIL_CONTRACTS      :=
 EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # Every Sail source owned by this repository, discovered rather than listed by
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all check check-contracts clean docs-env docs-site eest-smoke extract extract-c extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
+.PHONY: all c-optimised c-spec check check-contracts clean docs-env docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -82,7 +81,8 @@ help:
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
-	@echo "  make extract-c      - generate source-aligned optimized C and compile-check it"
+	@echo "  make c-spec         - generate and compile-check the specification C model"
+	@echo "  make c-optimised    - generate and compile-check the optimized C model"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
@@ -170,53 +170,42 @@ extract-coq: check-contracts
 	grep -q "Axiom frame_stack_pop " $(COQ_MODEL_DIR)/evm.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
+	cd $(COQ_MODEL_DIR) && $(COQC) $(abspath $(COQ_PROOFS_DIR))/RlpCursor.v
 
-# Sail emits one C translation unit. The extraction generator uses temporary
-# marker builds to identify source boundaries, mirrors each active sail/ source
-# as a unity fragment, and verifies that recombining the fragments reconstructs
-# the unmodified optimized C output byte-for-byte. Default Sail name mangling is
-# retained. Compile the unity source into the ignored build directory; the
-# tracked extraction contains sources only.
-extract-c:
-	mkdir -p $(C_BUILD_DIR)
-	$(PYTHON) $(C_EXTRACTOR) \
-		--sail-command "$(SAIL)" \
-		--cc "$(CC)" $(C_EDITOR_ARGS) \
-		--project $(PROJECT) --module evm --source-root sail \
-		--output-dir $(C_MODEL_DIR) --work-dir $(C_GENERATOR_DIR) \
-		--variable EVM_DEBUG=off -- \
-		-c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) $(C_OPTIMIZED_INCLUDES) \
-		--c-specialize --c-require-bounded-int --splice $(C_OPTIMIZED_SPLICE)
-	test -s $(C_MODEL).c
-	test -s $(C_MODEL).h
-	test -s $(C_MODEL_DIR)/evm_internal.h
-	test -s $(C_MODEL_DIR)/compile_commands.json
-	test -s $(C_MODEL_DIR)/prelude.c
-	test -s $(C_MODEL_DIR)/primitives/quantities.c
-	test -s $(C_MODEL_DIR)/main.c
-	@source_count="$$($(SAIL) --list-files $(MODEL) --variable EVM_DEBUG=off | wc -w | tr -d ' ')"; \
-		c_count="$$(find $(C_MODEL_DIR) -name '*.c' | wc -l | tr -d ' ')"; \
-		h_count="$$(find $(C_MODEL_DIR) -name '*.h' | wc -l | tr -d ' ')"; \
-		expected_count="$$((source_count + 1))"; \
-		test "$$c_count" = "$$expected_count" || { echo "extract-c: expected $$expected_count C files, found $$c_count"; exit 1; }; \
-		test "$$h_count" = "2" || { echo "extract-c: expected public and internal headers, found $$h_count"; exit 1; }
-	grep -Fq "zprocess_transaction(" $(C_MODEL).h
-	grep -Fq "zcompute_state_root(" $(C_MODEL).h
-	grep -Fq "ztrie_root(" $(C_MODEL).h
-	grep -Fq "zdecode_stateless_input_ref(" $(C_MODEL).h
-	grep -Fq "zmain(" $(C_MODEL).h
-	grep -Fq "typedef struct { uint64_t limbs[4]; } sail_u256;" $(C_MODEL).h
-	grep -Fq "typedef struct { uint8_t bytes[20]; } sail_fixed_bytes_20;" $(C_MODEL).h
-	grep -Fq "typedef struct { uint8_t bytes[32]; } sail_fixed_bytes_32;" $(C_MODEL).h
+# Sail emits one C translation unit. Both targets keep that generated output in
+# ignored build directories and compile-check it against the matching complete
+# backend. The Sail model, not generated C, is the readable source of truth.
+c-spec:
+	mkdir -p $(C_SPEC_BUILD_DIR)
+	$(SAIL) -c -O --Oconstant-fold --c-no-main --c-no-rts \
+		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) --c-specialize \
+		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
+	test -s $(C_SPEC_MODEL).c
+	test -s $(C_SPEC_MODEL).h
 	@sail_lib="$$($(SAIL) --dir)/lib"; \
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
-		fragment_sources="$$(find $(C_MODEL_DIR) -name '*.c' ! -name 'evm.c' | sort)"; \
-		test -n "$$fragment_sources" || { echo "extract-c: no source fragments found"; exit 1; }; \
-		$(CC) $(C_EDITOR_FLAGS) -I"$$sail_lib" -fsyntax-only $$fragment_sources; \
-		$(CC) -O2 $(C_EDITOR_FLAGS) -I"$$sail_lib" \
-			-c $(C_MODEL).c -o $(C_BUILD_DIR)/evm.o
-	test -s $(C_BUILD_DIR)/evm.o
+		$(CC) -O2 -w -Wno-error=implicit-function-declaration \
+			-DEVMSAIL_MODEL_H=\"evm.h\" \
+			$(GMP_CFLAGS) -I$(C_SPEC_BUILD_DIR) -I"$$sail_lib" -Iffi/spec -Iffi \
+			-c $(C_SPEC_MODEL).c -o $(C_SPEC_BUILD_DIR)/evm.o
+	test -s $(C_SPEC_BUILD_DIR)/evm.o
+
+c-optimised:
+	mkdir -p $(C_OPT_BUILD_DIR)
+	$(SAIL) -c -O --Oconstant-fold --c-no-main --c-no-rts \
+		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) $(C_OPTIMIZED_INCLUDES) \
+		--c-specialize --c-specialize-log --c-require-bounded-int \
+		--splice $(C_OPTIMIZED_SPLICE) \
+		$(MODEL) --variable EVM_DEBUG=off -o $(C_OPT_MODEL)
+	test -s $(C_OPT_MODEL).c
+	test -s $(C_OPT_MODEL).h
+	@sail_lib="$$($(SAIL) --dir)/lib"; \
+		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
+		$(CC) -O2 -w -DEVMSAIL_MODEL_H=\"evm.h\" \
+			-I$(C_OPT_BUILD_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
+			-I"$$sail_lib" -Iffi/optimized -Iffi \
+			-c $(C_OPT_MODEL).c -o $(C_OPT_BUILD_DIR)/evm.o
+	test -s $(C_OPT_BUILD_DIR)/evm.o
 
 extract-lean:
 	mkdir -p $(LEAN_MODEL_DIR)
@@ -244,7 +233,7 @@ extract-lean:
 	cd $(LEAN_MODEL_DIR) && $(LAKE) update Sail
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
-extract: extract-coq extract-lean extract-c
+extract: extract-coq extract-lean
 
 all: check lint fmt-check
 
@@ -282,4 +271,4 @@ lean-harness:
 
 clean:
 	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
-	rm -rf sail_smt_cache sail/sail_smt_cache $(C_BUILD_DIR) $(C_MODEL_DIR)/compile_commands.json $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+	rm -rf sail_smt_cache sail/sail_smt_cache $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated

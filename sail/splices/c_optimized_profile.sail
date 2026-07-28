@@ -117,14 +117,14 @@ function collect_execution_requests(deposits : StatelessInputSlice) -> Execution
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
     cycle_scope_end(42);
     cycle_scope_start(43);
-    let builder_deposits : ScratchSlice = if k_fork >= Amsterdam then {
+    let builder_deposits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
         };
     cycle_scope_end(43);
     cycle_scope_start(44);
-    let builder_exits : ScratchSlice = if k_fork >= Amsterdam then {
+    let builder_exits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
@@ -141,7 +141,7 @@ function collect_execution_requests(deposits : StatelessInputSlice) -> Execution
 
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
     let header = block.header;
-    if k_fork >= Prague then {
+    if protocol_profile_fork(k_protocol_profile) >= Prague then {
         if   not_bool(region_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
            | not_bool(region_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
            | not_bool(region_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
@@ -152,7 +152,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
-    if (k_fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
+    if (protocol_profile_fork(k_protocol_profile) >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
     cycle_scope_start(19);
@@ -167,7 +167,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if not_bool(logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         let maximum_items : item_count = header.gas_limit / 2000;
         cycle_scope_start(20);
         validate_block_access_list(block.body.block_access_list, maximum_items);
@@ -181,7 +181,6 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
     try {
         scratch_reset();
         let input = decode_stateless_input(input_ref);
-        k_fork = input_ref.protocol.fork;
 
         cycle_scope_end(active_stage);
         active_stage = VALIDATION_STAGE_INDEX_WITNESS;
@@ -284,13 +283,9 @@ function execute_block_transactions(
         };
         let available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc);
         let available_state_gas = remaining_block_gas(gas_limit, state_gas_acc);
-        let transaction_execution_limit : transaction_gas = if AMSTERDAM_TX_MAX_GAS < tx.gas_limit then {
-                AMSTERDAM_TX_MAX_GAS
-            } else {
-                tx.gas_limit
-            };
-        let transaction_fits : bool = if k_fork >= Amsterdam then {
-                (transaction_execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
+        let execution_limit = transaction_execution_limit(tx.gas_limit);
+        let transaction_fits : bool = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+                (execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
             } else {
                 tx.gas_limit <= available_execution_gas
             };
@@ -298,7 +293,7 @@ function execute_block_transactions(
             throw InvalidBlock(GasUsedExceedsLimit)
         } else {
             let tx_blob_gas = transaction_blob_gas_for_count(tx.blob_hashes.count);
-            let next_blob_gas : blob_gas_used = if k_fork < Cancun then {
+            let next_blob_gas : blob_gas_used = if protocol_profile_fork(k_protocol_profile) < Cancun then {
                     blob_gas_acc
                 } else {
                     checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
@@ -310,16 +305,16 @@ function execute_block_transactions(
                 throw InvalidBlock(GasUsedExceedsLimit)
             };
             receipts = receipt_accumulator_push(receipts, receipt, next.index);
-            if k_fork >= Prague then {
+            if protocol_profile_fork(k_protocol_profile) >= Prague then {
                 remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
             };
             blob_gas_acc = next_blob_gas
         }
     };
-    if (k_fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
+    if (protocol_profile_fork(k_protocol_profile) >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    let header_gas_used = if (k_fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
+    let header_gas_used = if (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
             state_gas_acc
         } else {
             execution_gas_acc
@@ -361,7 +356,7 @@ function execute_block_body(
     apply_block_end_state(body);
     cycle_scope_end(17);
     cycle_scope_start(18);
-    let requests = if k_fork >= Prague then {
+    let requests = if protocol_profile_fork(k_protocol_profile) >= Prague then {
             collect_execution_requests(expected_deposits)
         } else {
             EMPTY_EXECUTION_REQUESTS
@@ -392,6 +387,6 @@ function process_transaction(tx : Transaction) -> Receipt = {
 
 function k_tx_merge() -> unit = {
     cycle_scope_start(47);
-    optimized_tx_merge(k_fork >= Cancun, k_fork >= Amsterdam, k_block_access_index);
+    optimized_tx_merge(protocol_profile_fork(k_protocol_profile) >= Cancun, protocol_profile_fork(k_protocol_profile) >= Amsterdam, k_block_access_index);
     cycle_scope_end(47)
 }

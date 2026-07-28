@@ -16,9 +16,9 @@ zkvm/build-zisk/
 # harness caches
 harness/.rtcache/
 
-# Maintained C extraction scratch and machine-local editor metadata
-/build/extract-c/
-/extractions/c/evm/compile_commands.json
+# Generated C compile checks
+/build/c-spec/
+/build/c-optimised/
 
 # theorem-prover build artifacts (generated sources and manifests are tracked)
 **/.lake/

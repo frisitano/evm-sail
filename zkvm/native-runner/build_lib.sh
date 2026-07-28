@@ -47,39 +47,39 @@ else
   RUNTIME_LINK_FLAGS=()
 fi
 
-# 2. link a shared library: build.sh's objects (incl. test_utils.o), minus main.o
+# 2. link a shared library: build.sh's objects (incl. native_test.o), minus main.o
 HOST_OBJS=()
 for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
   HOST_OBJS+=("$BUILD/$hc.o")
 done
 if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
-HTR_GLUE_OBJ=""
-PREIMAGE_GLUE_OBJ=""
-MPT_GLUE_OBJ=""
-INTERPRETER_GLUE_OBJ=""
-BLOB_FEE_GLUE_OBJ=""
+HTR_OBJ=""
+PREIMAGE_OBJ=""
+MPT_OBJ=""
+INTERPRETER_OBJ=""
+BLOB_FEE_OBJ=""
 if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
-  PREIMAGE_GLUE_OBJ="$BUILD/preimage_glue.o"
-  HTR_GLUE_OBJ="$BUILD/htr_glue.o"
-  MPT_GLUE_OBJ="$BUILD/mpt_glue.o"
-  INTERPRETER_GLUE_OBJ="$BUILD/interpreter_glue.o"
-  BLOB_FEE_GLUE_OBJ="$BUILD/blob_fee_glue.o"
+  PREIMAGE_OBJ="$BUILD/preimage.o"
+  HTR_OBJ="$BUILD/htr.o"
+  MPT_OBJ="$BUILD/mpt.o"
+  INTERPRETER_OBJ="$BUILD/interpreter.o"
+  BLOB_FEE_OBJ="$BUILD/blob_fee.o"
 fi
 case "$(uname -s)" in
   Darwin) SHFLAG=(-dynamiclib -install_name "@rpath/libevmsail_guest.dylib"); EXT=dylib ;;
   *)      SHFLAG=(-shared); EXT=so ;;
 esac
 OUT="$BUILD/libevmsail_guest.$EXT"
-# test_utils.o is the self-contained native I/O harness: it owns set_input,
+# native_test.o is the self-contained native I/O harness: it owns set_input,
 # read_input, write_output, the output buffer, and run_once. The real guest's
 # Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/journal_glue.o" "$BUILD/hash_glue.o" "$BUILD/code_glue.o" "$BUILD/region_access.o" "$BUILD/address_result_glue.o" "$BUILD/frame_stack_glue.o" "$BUILD/test_utils.o"
-    ${PREIMAGE_GLUE_OBJ:+"$PREIMAGE_GLUE_OBJ"}
-    ${HTR_GLUE_OBJ:+"$HTR_GLUE_OBJ"}
-    ${MPT_GLUE_OBJ:+"$MPT_GLUE_OBJ"}
-    ${INTERPRETER_GLUE_OBJ:+"$INTERPRETER_GLUE_OBJ"}
-    ${BLOB_FEE_GLUE_OBJ:+"$BLOB_FEE_GLUE_OBJ"}
+    "$BUILD/zkvm_block.o" "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" "$BUILD/native_test.o"
+    ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"}
+    ${HTR_OBJ:+"$HTR_OBJ"}
+    ${MPT_OBJ:+"$MPT_OBJ"}
+    ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
+    ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then

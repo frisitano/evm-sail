@@ -70,24 +70,26 @@ symbolic engines (the world is an explicit, finite interface).
 
 ### Native execution: C FFI backends
 
-To *run* the model — the generated C compiled against `sail256` —
-the host's mechanism is backed by C FFI; the Sail definitions stay the
-specification while these provide the data structures underneath it.
-Performance-critical state lives behind C FFI with O(1) operations — EVM
-memory, nominal byte regions, and the output arena (`ffi/memory.c`,
-`ffi/output.c`), direct accelerator-backed hash and precompile adapters
-(`ffi/hash_glue.c`, `ffi/htr_glue.c`, `ffi/precompiles.c`), the operand stack
-(`ffi/stack.c`), and the content-addressed code arena plus packed JUMPDEST tables
-(`ffi/code_db.c`). Sail performs PUSH-aware code analysis before insertion;
+To *run* the model, generated C links exactly one complete host backend.
+`ffi/spec/` implements the generated GMP-backed specification ABI;
+`ffi/optimized/` implements the production fixed-layout ABI and owns
+optimized-only high-level replacements. They independently provide EVM memory,
+nominal byte regions, output and scratch arenas, hashing and precompiles, the
+operand stack, account/storage state, and the content-addressed code arena plus
+packed JUMPDEST tables. Sail performs PUSH-aware code analysis before insertion;
 each active frame holds one `Code` pairing the code slice with its
 resolved table reference. Transient
-storage (`ffi/transient_storage.c`, with frame rollback driven by the Sail
-journal), and account plus persistent storage state (`ffi/state_db.c`, sorted
-cache/update backends keyed by keccak(address) and keccak(slot)). In-memory representations keep raw keys
+storage rollback remains driven by the Sail journal, while each backend owns
+its own transient and persistent stores. In-memory representations keep raw keys
 alongside secure trie keys; hashing happens at state access setup, the write
 boundary (the account's cached codeHash), and the commitment boundary (state
-root, witness authentication). The Sail semantics is unchanged by these
-backends.
+root, witness authentication).
+
+No private C implementation is shared between these models. Only the
+standardized `ffi/zkvm_accelerators.h` and `ffi/zkvm_io.h` platform contracts
+remain at the `ffi/` root. Shared protocol behavior belongs in Sail; the
+backend representations and useful optimization boundaries may diverge. See
+[`ffi/README.md`](ffi/README.md).
 
 ## Performance
 
@@ -149,9 +151,10 @@ ffi/         C backends: memory.c (memory/nominal region access), scratch.c
              cache/update maps plus distinct keyed EIP-7928 read/change tables
              exposed as one sorted event stream), stack.c (operand stack), code_db.c
              (content-addressed code + packed JUMPDEST arenas), trie_node_db.c
-             (witness node-db), hash_glue.c + precompiles.c +
-             zkvm_accelerators.h (eth-act zkvm-standards crypto), and the
-             optimized-C-only htr_glue.c whole-request refinement
+             (witness node-db), hash.c + precompiles.c +
+             zkvm_accelerators.h (eth-act zkvm-standards crypto), plus
+             spec/ generated-ABI adapters and optimized/ fixed-layout and
+             whole-operation refinements
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
@@ -192,26 +195,22 @@ and the zkVM guest, below):
 make check                                  # type-check sail/evm.sail_project
 make lint                                   # sail --all-warnings + source hygiene
 make fmt-check                              # verify sail --fmt formatting
-make extract-c                              # generate + compile-check optimized C
+make c-spec                                 # generate + compile-check specification C
+make c-optimised                            # generate + compile-check optimized C
 make extract-coq                            # generate the complete Coq model
 make extract-lean                           # generate and compile the Lean model
-make extract                                # run all maintained extractions
+make extract                                # run maintained proof extractions
 ```
 
-`make extract-c` owns the tracked source-aligned model under
-`extractions/c/evm/`. Every active file below `sail/` has a corresponding C
-unity fragment, while `evm.c` remains the compilation entry point and `evm.h`
-the complete generated interface. The extraction retains Sail's default C
-name mangling and uses the same specialization and `c_optimized.sail` splice as
-the optimized native and zkVM builds. That splice lowers the complete
-`htr_new_payload_request` operation to `ffi/htr_glue.c`, allowing production C
-to hash the already validated `StatelessInputRef` slices without constructing
-the intermediate Sail values. Standard native C and Lean/Coq extraction do not
-load this C-only replacement and retain the explicit, readable equations in
-`sail/lib/htr.sail`; the refinement therefore does not add a proof axiom.
-Machine-local generator scratch, editor metadata, and object files remain
-untracked. See
-[`extractions/README.md`](extractions/README.md) for the ownership contract.
+`make c-spec` and `make c-optimised` generate Sail's monolithic C output into
+separate ignored directories under `build/` and compile-check it against
+`ffi/spec` and `ffi/optimized`, respectively. Generated C is not retained as a
+readable source mirror: the Sail model is the source of truth. The optimized
+target uses the same specialization and `c_optimized.sail` splice as optimized
+native and zkVM builds. Spec C and proof extraction retain the explicit,
+readable Sail equations. See
+[`extractions/README.md`](extractions/README.md) for the maintained proof
+extractions.
 
 `make all` runs `check` + `lint` + `fmt-check`. `make lint`
 enforces a warning-clean model and basic `*.sail` hygiene (no trailing

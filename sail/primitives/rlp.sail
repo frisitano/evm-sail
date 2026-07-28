@@ -17,10 +17,11 @@ type rlp_field_ref_valid(
     &  0 <= 'content_len
     &  'content_len <= 'source_len
 
-/*! The result of popping one complete field from a cursor. In addition to
-    the field's own validity, the complete encoding is non-empty and contained
-    by the cursor being consumed. */
-type rlp_cursor_pop_valid(
+/*! The result of decoding one complete field at the head of a cursor. In
+    addition to the field's own validity, the complete encoding is non-empty
+    and contained by the cursor. The field's `source.len` is therefore a
+    witness for the amount a caller may subsequently advance. */
+type rlp_decoded_item_valid(
     'source_off : Int,
     'source_len : Int,
     'full_len : Int,
@@ -29,6 +30,14 @@ type rlp_cursor_pop_valid(
        rlp_field_ref_valid('source_off, 'full_len, 'content_len)
     &  0 < 'full_len
     &  'full_len <= 'source_len
+
+/*! A positive amount proven to be contained by the cursor it consumes. */
+type rlp_cursor_advance_valid(
+    'source_len : Int,
+    'consumed : Int,
+) -> Bool =
+       0 < 'consumed
+    &  'consumed <= 'source_len
 
 /*! The witness-carrying fields of a decoded RLP reference. Both the complete
     encoding and its content are statically contained by the source slice. */
@@ -47,9 +56,9 @@ struct RlpFieldRef(
     content_len : int('content_len),
 }
 
-/*! A one-pass RLP cursor is the unconsumed suffix of its source. Popping an
-    item advances both its offset and its decreasing remaining length without
-    carrying a second position field. */
+/*! A one-pass RLP cursor is the unconsumed suffix of its source. Decoding
+    yields a field whose length witnesses a valid advance; the caller owns the
+    corresponding cursor transition. */
 type RlpCursor('source_off : Int, 'source_len : Int),
     source_valid_range('source_off, 'source_len) =
     StatelessInputSliceFields('source_off, 'source_len)

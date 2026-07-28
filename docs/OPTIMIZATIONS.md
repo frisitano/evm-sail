@@ -303,7 +303,7 @@ operation may grow the arena while an optimized C writer holds its pointer.
 
 The readable Sail specification remains the normative state-root equation. The
 optimized build alone replaces `compute_state_root` at the whole-operation
-boundary and links `ffi/mpt_glue.c`, which consumes the same account,
+boundary and links `ffi/optimized/mpt.c`, which consumes the same account,
 storage, and authenticated witness-node host contracts.
 
 The implementation uses one statically allocated workspace containing at most
@@ -472,8 +472,9 @@ follow-ups rather than the next default optimization:
    compare a cached compact code index, an optimized C `fetch` returning the
    existing AST, and compiler specialization of the opcode match. Choose the
    smallest boundary that removes repeated decode/source work.
-4. Measure frame pushes and resumes before changing `frame_stack_glue.c`. The
-   optimized ABI already uses one lazily allocated fixed-capacity array and
+4. Measure frame pushes and resumes before changing
+   `ffi/optimized/frame_stack.c`. The optimized ABI already uses one lazily
+   allocated fixed-capacity array and
    structure assignment; it does not perform a heap allocation per frame.
    Change continuation storage only if counters show copying is material.
 5. Attribute the provenance-specific slice loads, `memcpy`, and `copy_zast` to
@@ -592,12 +593,12 @@ byte-exact in both standard and optimised native builds. The direct
 2026-07-28. The high-level C
 interpreter override, raw-opcode leaf dispatch, and direct word/fixed-byte
 conversion refinement subsequently passed the same 26,104/26,104 standard and
-26,104/26,104 optimized runs. The standard build retains the Sail interpreter
+26,104/26,104 optimized runs. The spec build retains the Sail interpreter
 and direct endian equations; only the optimized build links
-`interpreter_glue.c` and injects `word_bytes_glue.h`.
-Inspection confirmed that the standard generated C retains the explicit Sail
+`ffi/optimized/interpreter.c` and injects `ffi/optimized/word_bytes.h`.
+Inspection confirmed that the spec generated C retains the explicit Sail
 HTR and state-root implementations and does not link either optimized glue
-object. The optimized generated C makes one replacement call at each
+implementation. The optimized generated C makes one replacement call at each
 whole-operation boundary.
 
 The current production ZisK ELF was rebuilt with `EVM_PROFILE=off` and

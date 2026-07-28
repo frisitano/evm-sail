@@ -160,7 +160,7 @@ zkvm/
   accel-device/         spike MMIO device dispatching 1:1 into accel-host
   io-device/            spike runtime-input device (host file -> guest buffer)
   native-runner/        host builds: zkvm_native exe + the ctypes libs
-                        (libevmsail_guest) over test_utils.c
+                        (libevmsail_guest) over backend-local native_test.c
   runtime/
     link.ld             vendor linker script (null trap + stack guard regions)
     start.S             machine-mode crt0 + trap vector (platform glue; uses Zicsr)
@@ -207,10 +207,10 @@ VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
   accelerator device (`accel-device/accel_device.cc`, linked against the Rust lib), so no
   crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
   been removed.) Sail calls focused C adapters directly against that interface:
-  `../ffi/hash_glue.c` for segmented hash axioms,
-  `../ffi/htr_glue.c` for the optimized whole-request HTR refinement,
-  `../ffi/precompiles.c` for EVM precompile execution, and `../ffi/output.c`
-  for output ownership.
+  `../ffi/optimized/hash.c` for segmented hash axioms,
+  `../ffi/optimized/htr.c` for the optimized whole-request HTR refinement,
+  `../ffi/optimized/precompiles.c` for EVM precompile execution, and
+  `../ffi/optimized/output.c` for output ownership.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which
   stays pure `rv64im_zicclsm`.

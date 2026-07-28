@@ -25,14 +25,10 @@ union TrieUpdateSource = {
     StorageTrieUpdates : address,
     /* block-final account update candidates, net-filtered in Sail */
     ChangedAccountTrieUpdates : unit,
-    /* all cached accounts, used only by debug reconstruction */
-    CachedAccountTrieUpdates : unit,
 }
 
 /*! Pulls the next update from a source's non-destructive host iterator. */
 val trie_update_source_next : TrieUpdateSource -> option(TrieUpdate)
-/*! Debug-build producer for the all-cached-account source. */
-val cached_account_trie_update_next : unit -> option(TrieUpdate)
 
 /*! The active update's position relative to the subtree currently consuming
     it. An under-prefix state carries only the unconsumed key suffix. A

@@ -1,6 +1,6 @@
 
 /*md
-# The state trie
+# State trie
 
 Ethereum account and storage tries over the generic MPT core: secure-trie
 reads for stateless execution, and the post-state root computation
@@ -10,24 +10,29 @@ reads for stateless execution, and the post-state root computation
     code_hash])` — into an [AccountInfo][type-AccountInfo]; empty
     root/hash fields decode to their empty-sentinel digests. */
 function decode_state_account(value : StatelessInputSlice) -> AccountInfo = {
-    let (nonce, fields) = rlp_cursor_pop(rlp_node_cursor(value));
-    let (balance, fields) = rlp_cursor_pop(fields);
-    let (storage, fields) = rlp_cursor_pop(fields);
-    let (code, fields) = rlp_cursor_pop(fields);
+    let fields = rlp_node_cursor(value);
+    let nonce = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonce.source.len);
+    let balance = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, balance.source.len);
+    let storage = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, storage.source.len);
+    let code = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, code.source.len);
     rlp_cursor_expect_end(fields);
     let storage_root = if storage.content_len == 0 then {
             EMPTY_TRIE_ROOT
         } else {
-            word_to_hash(rlp_ref_word(storage))
+            word_to_hash(rlp_decode_word(storage))
         };
     let code_hash = if code.content_len == 0 then {
             KECCAK_EMPTY
         } else {
-            word_to_hash(rlp_ref_word(code))
+            word_to_hash(rlp_decode_word(code))
         };
     struct {
-        nonce = rlp_ref_uint64(nonce),
-        balance = rlp_ref_uint_word(balance),
+        nonce = rlp_decode_uint64(nonce),
+        balance = rlp_decode_u256(balance),
         storage_root = storage_root,
         code_hash = code_hash,
     }
@@ -52,7 +57,7 @@ function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
     if value.len == 0 then {
         ZERO_WORD
     } else {
-        rlp_ref_uint_word(rlp_single_ref(value))
+        rlp_decode_u256(rlp_single_ref(value))
     }
 }
 
@@ -210,7 +215,6 @@ function trie_update_source_next(source : TrieUpdateSource) -> option(TrieUpdate
     match source {
         StorageTrieUpdates(addr) => next_storage_trie_update(addr),
         ChangedAccountTrieUpdates() => next_changed_account_trie_update(),
-        CachedAccountTrieUpdates() => cached_account_trie_update_next(),
     }
 
 /*! The post-state root: traverses every changed account in the kernel's

@@ -12,7 +12,7 @@ commits to.
 - [SSZ](ssz/index.md) — decoding the witness envelope.
 - [SSZ hash_tree_root](htr.md) — the Merkleization of the stateless
   input.
-- [The trie](mpt/index.md) — paths, nodes, updates, and the
+- [Merkle Patricia Trie](mpt/index.md) — paths, nodes, updates, and the
   witness-native walker.
-- [The state trie](state_trie.md) — accounts and storage over the trie,
+- [State trie](state_trie.md) — accounts and storage over the trie,
   producing the post-state root.

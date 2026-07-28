@@ -48,14 +48,14 @@
         - [SSZ](reference/sail/lib/ssz/index.md)
         - reference/sail/lib/ssz/*.md
     - [SSZ hash_tree_root](reference/sail/lib/htr.md)
-    - The trie
-        - [The trie](reference/sail/lib/mpt/index.md)
+    - Merkle Patricia Trie
+        - [Merkle Patricia Trie](reference/sail/lib/mpt/index.md)
         - [Ordered trie indices](reference/sail/lib/mpt/indexed.md)
         - [Trie paths and hex-prefix encoding](reference/sail/lib/mpt/primitives.md)
         - [Trie nodes](reference/sail/lib/mpt/nodes.md)
         - [Trie updates and the canonical builder](reference/sail/lib/mpt/updates.md)
         - [The witness-native trie](reference/sail/lib/mpt/trie.md)
-    - [The state trie](reference/sail/lib/state_trie.md)
+    - [State trie](reference/sail/lib/state_trie.md)
 - State kernel
     - [The state kernel](reference/sail/kernel/index.md)
     - reference/sail/kernel/*.md

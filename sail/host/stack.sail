@@ -7,8 +7,8 @@ The EVM layer ([push_word][] / [pop][] in the machine module) enforces the
 depth bounds and charges nothing here — this is pure mechanism. Frames
 form a stack of stacks: [stack_enter_frame][] on a sub-call,
 [stack_leave_frame][] on return, [stack_reset][] per transaction. The
-words live behind the host interface (`ffi/stack.c`) as per-frame flat
-arrays for O(1) access;
+words live behind the host interface (the corresponding `stack.c` in
+`ffi/spec/` or `ffi/optimized/`) as per-frame flat arrays for O(1) access;
 proof targets see the `val`s as bodyless axioms over an abstract per-frame
 list-of-words model.
 

@@ -1,4 +1,4 @@
-# The trie
+# Merkle Patricia Trie
 
 The Merkle-Patricia trie (YP Appendix D): the authenticated radix-16
 structure behind the state root, storage roots, and the transaction,

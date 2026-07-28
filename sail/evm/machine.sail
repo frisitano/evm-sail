@@ -102,7 +102,7 @@ function conserved_gas_add(left, right) = left + right
 /*! Returns any Amsterdam state-gas spill to the execution-gas pool and
     restores the frame's state-gas reservoir. */
 function refill_frame_state_gas() -> unit = {
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         gas_remaining = conserved_gas_add(gas_remaining, state_gas_spilled);
         state_gas_remaining = message.state_gas_reservoir;
         state_gas_spilled = STATE_GAS_SPILL_ZERO

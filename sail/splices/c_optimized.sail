@@ -327,20 +327,6 @@ function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) 
     optimized_logs_bloom_matches_ref(computed, reference)
 
 /*
- * The standard model states EIP-4844 fake_exponential directly over
- * mathematical integers. Optimized C follows the u128 block-context
- * representation used by Reth/Revm and widens the result once at this
- * boundary. It raises `InvalidBlock(ExecutionInvalid)` if the exact result
- * exceeds that optimized domain, matching the standard equation.
- */
-type optimized_blob_base_fee_value = range(0, 2 ^ 128 - 1)
-$[c_throws]
-val optimized_blob_base_fee = impure { c: "evmsail_blob_base_fee" } : excess_blob_gas -> optimized_blob_base_fee_value
-
-function blob_base_fee(excess_blob_gas : excess_blob_gas) -> word =
-    U256(optimized_blob_base_fee(excess_blob_gas))
-
-/*
  * Optimized state-root refinement. The standard model keeps the explicit
  * witness walker and canonical MPT builder; optimized C links an equivalent
  * fixed-stack implementation over the same host iterators and node database.
@@ -409,7 +395,7 @@ function store_account_info(a : address, account : Account, info : AccountInfo) 
 val optimized_tx_merge = impure { c: "evmsail_tx_merge" } : (bool, bool, block_access_index) -> unit
 
 function k_tx_merge() -> unit =
-    optimized_tx_merge(k_fork >= Cancun, k_fork >= Amsterdam, k_block_access_index)
+    optimized_tx_merge(protocol_profile_fork(k_protocol_profile) >= Cancun, protocol_profile_fork(k_protocol_profile) >= Amsterdam, k_block_access_index)
 
 /*
  * Index source-backed witness nodes in one operation. The standard model
@@ -430,7 +416,7 @@ $[c_throws]
 val optimized_index_witness_codes = impure { c: "evmsail_index_witness_codes" } : (WitnessCodeListRef, bool) -> unit
 
 function index_witness_codes(codes : WitnessCodeListRef) -> unit =
-    optimized_index_witness_codes(codes, k_fork >= Amsterdam)
+    optimized_index_witness_codes(codes, protocol_profile_fork(k_protocol_profile) >= Amsterdam)
 
 /*
  * The standard model retains execution-ordered, length-prefixed receipt bytes
@@ -504,9 +490,9 @@ function conserved_gas_add(left, right) =
         throw InvalidBlock(ExecutionInvalid)
     }
 
-function rlp_ref_gas(f, fork) = {
-    let value = rlp_ref_uint64(f);
-    if (fork >= Osaka) & (fork < Amsterdam) & (OSAKA_TRANSACTION_GAS_LIMIT_VALUE < value) then {
+function rlp_decode_gas(f, limit) = {
+    let value = rlp_decode_uint64(f);
+    if (limit != 0) & (limit < value) then {
         throw InvalidBlock(GasUsedExceedsLimit)
     } else {
         value

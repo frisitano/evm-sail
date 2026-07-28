@@ -36,30 +36,39 @@ type block_number = nat
     the input boundary rather than becoming the protocol type. */
 type block_timestamp = nat
 
-/*! Largest per-block blob count among the supported schedules: BPO2's
-    `MAX_BLOBS_PER_BLOCK = 21` (EIP-8135). */
-type blob_count_bound : Int = 21
-/*! Largest per-transaction blob count among supported forks: Prague's
-    `MAX_BLOB_GAS_PER_BLOCK / GAS_PER_BLOB = 9` (EIP-7691). */
-type transaction_blob_count_bound : Int = 9
-/*! Largest target blob count among supported schedules: BPO2's target of 14
-    blobs (EIP-8135). */
-type blob_target_count_bound : Int = 14
 /*! Blob gas charged per blob, `2^17` (EIP-4844). */
 type gas_per_blob_value : Int = 2 ^ 17
 
-/*! A blob count in any block schedule supported by this model. */
-type blob_count = range(0, blob_count_bound)
-/*! A target blob count in a supported block schedule. */
-type blob_target_count = range(0, blob_target_count_bound)
-/*! A blob count carried by one EIP-4844 transaction. */
-type transaction_blob_count = range(0, transaction_blob_count_bound)
-/*! Blob gas used by one supported block. EIP-4844 requires this to be a
-    multiple of `GAS_PER_BLOB`; the fork-specific maximum is checked against
-    the active schedule. */
-type blob_gas_used = range(0, blob_count_bound * gas_per_blob_value)
-/*! Blob gas contributed by one transaction. */
-type transaction_blob_gas = range(0, transaction_blob_count_bound * gas_per_blob_value)
+/*! A blob count admitted by the largest supported block schedule. The active
+    schedule selects a tighter maximum below. */
+type blob_count = range(0, 21)
+/*! A blob count carried by one EIP-4844 transaction. The active protocol
+    profile restricts this further to zero, six, or nine blobs. */
+type transaction_blob_count = range(0, 9)
+/*! A target selected by one of the blob schedules supported by the schema.
+    This is distinct from an observed blob count, which may be any value in
+    its contiguous range. */
+type blob_schedule_target_count = {0, 3, 6, 10, 14}
+/*! A maximum selected by one of the blob schedules supported by the schema. */
+type blob_schedule_max_count = {0, 6, 9, 15, 21}
+/*! The fork-selected maximum number of blobs carried by one transaction.
+    Zero denotes a profile before blob transactions activate. */
+type transaction_blob_limit = {0, 6, 9}
+/*! Blob gas used by one supported block. The existential count records that
+    every inhabitant is exactly a multiple of `GAS_PER_BLOB`; the active
+    schedule selects a tighter maximum below. */
+type blob_gas_used = {
+    'count,
+    0 <= 'count & 'count <= 21.
+    int(gas_per_blob_value * 'count)
+}
+/*! Blob gas contributed by one transaction, retaining the exact blob count
+    from which it was derived. */
+type transaction_blob_gas = {
+    'count,
+    0 <= 'count & 'count <= 9.
+    int(gas_per_blob_value * 'count)
+}
 /*! The accumulating EIP-4844 `excess_blob_gas` header field, encoded as
     `uint64` and not bounded by a single block's blob count. */
 type excess_blob_gas_bound : Int = 2 ^ 64 - 1
@@ -71,6 +80,17 @@ type excess_blob_gas = range(0, excess_blob_gas_bound)
 type blob_fee_update_fraction_bound : Int = 11684671
 /*! The positive denominator governing excess-blob-gas fee adjustment. */
 type blob_fee_update_fraction = range(1, blob_fee_update_fraction_bound)
+/*! A fee-update denominator selected by one of the supported blob schedules.
+    Observed arithmetic still uses the broader positive denominator domain;
+    configuration itself can only choose these protocol constants. */
+type blob_schedule_fee_update_fraction = {1, 3338477, 5007716, 8346193, 11684671}
+
+/*! Fork-selected limits retained in the validated protocol profile. Zero is
+    used only where the corresponding rule is not active. */
+type protocol_deployed_code_size_limit = {24576, 65536}
+type protocol_initcode_size_limit = {0, 49152, 131072}
+type protocol_transaction_gas_limit = {0, 16777216}
+type protocol_transaction_execution_gas_limit = {0, 16777216}
 
 /*! Largest chain identifier admitted by the typed-transaction wire decoder. */
 type chain_identifier_bound : Int = 2 ^ 64 - 1
@@ -78,10 +98,6 @@ type chain_identifier_bound : Int = 2 ^ 64 - 1
 /*! A chain identifier. Typed-transaction chain identifiers and the stateless
     chain configuration are decoded as unsigned 64-bit integers. */
 type chain_identifier = range(0, chain_identifier_bound)
-
-/*! The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
-    enumeration. This is a model structural bound, not a wire constraint. */
-type protocol_fork_index = range(0, 12)
 
 /*! A beacon-chain slot number, explicitly a `uint64` in EIP-7843. */
 type slot_number = range(0, 2 ^ 64 - 1)
@@ -153,11 +169,6 @@ type bloom_u64_index = range(0, 31)
 type bloom_u64_bit = range(0, 63)
 /*! An index into the 256 most recent ancestor block hashes. */
 type ancestor_index = range(0, 255)
-
-/* Exact division of bounded protocol quantities is only used with small,
- * positive structural divisors. */
-/*! A small positive divisor used for exact protocol arithmetic. */
-type protocol_divisor = range(1, 256)
 
 /*! Converts a word to an account nonce when it fits the protocol field. */
 function word_to_account_nonce(value : word) -> option(account_nonce) = {

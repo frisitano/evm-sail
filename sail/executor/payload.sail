@@ -208,24 +208,24 @@ function block_header_hash(
     content_length = rlp_scratch_length_add(content_length, timestamp_length);
     content_length = rlp_scratch_length_add(content_length, extra_data_length);
     content_length = rlp_scratch_length_add(content_length, nonce_length);
-    if k_fork >= London then {
+    if protocol_profile_fork(k_protocol_profile) >= London then {
         let field_length = rlp_uint_word_size(header.base_fee);
         content_length = rlp_scratch_length_add(content_length, field_length)
     };
-    if k_fork >= Shanghai then {
+    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
         content_length = rlp_scratch_length_add(content_length, word_length)
     };
-    if k_fork >= Cancun then {
+    if protocol_profile_fork(k_protocol_profile) >= Cancun then {
         let blob_gas_used_length = rlp_uint_size(header.blob_gas_used);
         let excess_blob_gas_length = rlp_uint_size(header.excess_blob_gas);
         content_length = rlp_scratch_length_add(content_length, blob_gas_used_length);
         content_length = rlp_scratch_length_add(content_length, excess_blob_gas_length);
         content_length = rlp_scratch_length_add(content_length, word_length)
     };
-    if k_fork >= Prague then {
+    if protocol_profile_fork(k_protocol_profile) >= Prague then {
         content_length = rlp_scratch_length_add(content_length, word_length)
     };
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         let slot_number_length = rlp_uint_size(header.slot_number);
         content_length = rlp_scratch_length_add(content_length, word_length);
         content_length = rlp_scratch_length_add(content_length, slot_number_length)
@@ -257,22 +257,22 @@ function block_header_hash(
     rlp_write_word(header.prev_randao);
     rlp_write_string_prefix(EIGHT_BYTE_LENGTH, 0x00);
     scratch_push_word_be(ZERO_WORD, EIGHT_BYTE_LENGTH);
-    if k_fork >= London then {
+    if protocol_profile_fork(k_protocol_profile) >= London then {
         rlp_write_uint_word(header.base_fee)
     };
-    if k_fork >= Shanghai then {
+    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
         rlp_write_word(hash_to_word(withdrawals_root))
     };
 
-    if k_fork >= Cancun then {
+    if protocol_profile_fork(k_protocol_profile) >= Cancun then {
         rlp_write_uint(header.blob_gas_used);
         rlp_write_uint(header.excess_blob_gas);
         rlp_write_word(hash_to_word(header.parent_beacon_block_root))
     };
-    if k_fork >= Prague then {
+    if protocol_profile_fork(k_protocol_profile) >= Prague then {
         rlp_write_word(hash_to_word(requests_hash))
     };
-    if k_fork >= Amsterdam then {
+    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
         rlp_write_word(hash_to_word(block_access_list_hash));
         rlp_write_uint(header.slot_number)
     };
@@ -381,22 +381,22 @@ function validate_execution_payload(
     if witness.parent_hash != header.parent_hash then {
         throw InvalidBlock(InvalidParentHash)
     };
-    if (k_fork >= Cancun) & (header.excess_blob_gas != expected_payload_excess_blob_gas(witness)) then {
+    if (protocol_profile_fork(k_protocol_profile) >= Cancun) & (header.excess_blob_gas != expected_payload_excess_blob_gas(witness)) then {
         throw InvalidBlock(InvalidExcessBlobGas)
     };
-    if k_fork >= Paris then {
+    if protocol_profile_fork(k_protocol_profile) >= Paris then {
         let transactions_root = transaction_trie_root(body.transactions);
-        let withdrawals_root = if k_fork >= Shanghai then {
+        let withdrawals_root = if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
                 withdrawals_trie_root(body.withdrawals)
             } else {
                 EMPTY_TRIE_ROOT
             };
-        let requests_hash = if k_fork >= Prague then {
+        let requests_hash = if protocol_profile_fork(k_protocol_profile) >= Prague then {
                 execution_requests_hash(input_ref)
             } else {
                 ZERO_HASH
             };
-        let block_access_list_hash = if k_fork >= Amsterdam then {
+        let block_access_list_hash = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
                 keccak256(body.block_access_list)
             } else {
                 ZERO_HASH

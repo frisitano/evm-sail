@@ -523,7 +523,12 @@ function execute_basefee() -> unit = {
 /*! Implements `BLOBBASEFEE`. */
 function execute_blobbasefee() -> unit = {
     charge(G_base);
-    push(blob_base_fee(k_header.excess_blob_gas))
+    let price = blob_base_fee(k_header.excess_blob_gas);
+    if price < sizeof(word_modulus) then {
+        push(protocol_word(price))
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
 
 /*! Implements `BLOBHASH`. */
@@ -611,7 +616,7 @@ function execute_sstore() -> unit = {
     if guard_static() then {
         ()
     } else {
-        if (k_fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
+        if (protocol_profile_fork(k_protocol_profile) < Amsterdam) & (gas_remaining <= G_callstipend) then {
             exc_halt(OutOfGas)
         } else {
             let s = pop();
@@ -619,7 +624,7 @@ function execute_sstore() -> unit = {
             if is_running() then {
                 let warm = k_slot_is_warm(self_addr(), s);
                 let cold = not_bool(warm);
-                if k_fork >= Amsterdam then {
+                if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
                     let access_cost = amsterdam_storage_access_cost(cold);
                     let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
                     check_execution_gas(sentry_cost)
@@ -844,7 +849,7 @@ function execute_selfdestruct() -> unit = {
         ()
     } else {
         let beneficiary = word_to_address(pop());
-        if k_fork >= Amsterdam then {
+        if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
             let warm = k_access_account(beneficiary);
             let access_cost = 0 + G_selfdestruct + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
             check_execution_gas(access_cost);
@@ -880,11 +885,11 @@ function execute_selfdestruct() -> unit = {
             };
             if is_running() then {
                 let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
-                if (k_fork < London) & first_selfdestruct then {
+                if (protocol_profile_fork(k_protocol_profile) < London) & first_selfdestruct then {
                     record_refund(R_selfdestruct_pre_london)
                 };
                 k_transfer(self_addr(), beneficiary, bal);
-                if k_fork < Cancun then {
+                if protocol_profile_fork(k_protocol_profile) < Cancun then {
                     k_zero_balance(self_addr());
                     k_selfdestruct(self_addr())
                 } else {

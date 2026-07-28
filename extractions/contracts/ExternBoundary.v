@@ -190,8 +190,8 @@ Record MemoryStackContract := {
 (* Extensional world-state reference model                                   *)
 (* ------------------------------------------------------------------------- *)
 
-(* This is deliberately not the layout used by ffi/state_db.c or
-   ffi/kernel_state.c.  In particular, there are no cache-presence bits,
+(* This is deliberately not the layout used by either C backend's state_db.c or
+   kernel_state.c. In particular, there are no cache-presence bits,
    copy-on-write rows, clear generations, undo cursors, physical deletions, or
    first-write rules.  A backend may use any of those devices, but it refines
    the total maps and snapshots below. *)

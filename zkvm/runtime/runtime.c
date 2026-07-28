@@ -10,8 +10,8 @@
  *   - a heap allocator (malloc/free/realloc/calloc) over the linker-defined
  *     heap region, with a first-fit free list + coalescing,
  *   - the mem-copy/compare family + strlen (gcc emits calls to these for
- *     struct copies even under -ffreestanding) and qsort (ffi/state_db.c BAL
- *     sorting),
+ *     struct copies even under -ffreestanding) and qsort
+ *     (ffi/optimized/state_db.c BAL sorting),
  *   - the standardized termination mapping: abort()/exit, the Sail failure
  *     contract (sail_assert / sail_failure / sail_match_failure), and the
  *     trap-vector handler all halt the machine and report ABNORMAL termination
@@ -425,7 +425,7 @@ void cleanup_rts(void) {}
 
 /* qsort: heapsort -- in-place, no recursion, no allocation, O(n log n) worst
  * case, fully deterministic for a total-order comparator (the BAL builder in
- * ffi/state_db.c sorts consensus-critical row arrays through this). */
+ * ffi/optimized/state_db.c sorts consensus-critical row arrays through this). */
 static void qsort_swap(char *a, char *b, size_t sz)
 {
     while (sz--) {

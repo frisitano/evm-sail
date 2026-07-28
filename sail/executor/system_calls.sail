@@ -240,12 +240,12 @@ function authenticate_deposit_logs(logs : LogSeriesRef, expected : StatelessInpu
 function collect_execution_requests(deposits : StatelessInputSlice) -> ExecutionRequests = {
     let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
-    let builder_deposits : ScratchSlice = if k_fork >= Amsterdam then {
+    let builder_deposits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
         };
-    let builder_exits : ScratchSlice = if k_fork >= Amsterdam then {
+    let builder_exits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE

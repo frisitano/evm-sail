@@ -421,7 +421,11 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     if slice_byte(input_fields, 1) != 0x01 then {
         throw InvalidBlock(InvalidConfig)
     };
-    let protocol = protocol_profile(slice_byte(input_fields, 0));
+    let schema_fork = slice_byte(input_fields, 0);
+    if not_bool(schema_protocol_profile_forwards_matches(schema_fork)) then {
+        throw InvalidBlock(InvalidConfig)
+    };
+    let protocol : ProtocolProfile = schema_protocol_profile(schema_fork);
     let body_bytes = slice_suffix(input_fields, body_offset_value);
     let body = ssz_container_bytes(body_bytes, STATELESS_INPUT_BODY_FIXED_LENGTH);
     let container_start : int(0) = 0;
@@ -618,7 +622,7 @@ function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit =
             throw InvalidBlock(InvalidConfig)
         };
         let executable = code_db_intern_input(code);
-        let _ = code_db_insert(executable, k_fork);
+        let _ = code_db_insert(executable, protocol_profile_fork(k_protocol_profile));
         index_witness_codes_cursor(next)
     }
 
@@ -685,31 +689,37 @@ function decode_parent_header_fields forall 'source_off 'source_len, source_vali
     if cursor.len == 0 then {
         fields
     } else {
-        let (field, next) = rlp_cursor_pop(cursor);
+        let field = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, field.source.len);
         var decoded = fields;
         if field_index == 0 then {
-            decoded.parent_hash = word_to_hash(rlp_ref_word(field));
+            decoded.parent_hash = word_to_hash(rlp_decode_word(field));
             decoded.have_parent = true
         } else {
             if field_index == 3 then {
-                decoded.state_root = word_to_hash(rlp_ref_word(field));
+                decoded.state_root = word_to_hash(rlp_decode_word(field));
                 decoded.have_state = true
             } else {
                 if field_index == 15 then {
-                    decoded.base_fee = rlp_ref_uint_word(field);
+                    decoded.base_fee = rlp_decode_u256(field);
                     decoded.have_base_fee = true
                 } else {
                     if field_index == 17 then {
-                        let value = rlp_ref_uint64(field);
-                        if value <= sizeof(blob_count_bound * gas_per_blob_value) then {
-                            decoded.blob_gas_used = value;
+                        let value = rlp_decode_uint64(field);
+                        let count = value / sizeof(gas_per_blob_value);
+                        if
+                            (count <= 21)
+                            & (value == sizeof(gas_per_blob_value) * count)
+                        then {
+                            decoded.blob_gas_used =
+                                sizeof(gas_per_blob_value) * count;
                             decoded.have_blob_gas = true
                         } else {
                             throw InvalidBlock(RlpDecode)
                         }
                     } else {
                         if field_index == 18 then {
-                            decoded.excess_blob_gas = rlp_ref_uint64(field);
+                            decoded.excess_blob_gas = rlp_decode_uint64(field);
                             decoded.have_excess_blob_gas = true
                         }
                     }
@@ -757,8 +767,8 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
                 result.parent_excess_blob_gas = decoded.excess_blob_gas;
                 result.parent_fields_valid =
                       decoded.have_state
-                    & ((k_fork < Cancun) | decoded.have_base_fee)
-                    & ((k_fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
+                    & ((protocol_profile_fork(k_protocol_profile) < Cancun) | decoded.have_base_fee)
+                    & ((protocol_profile_fork(k_protocol_profile) < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
             }
         };
         let current_hash = keccak256(header);
@@ -822,8 +832,12 @@ function decode_payload_blob_gas_used(payload : StatelessInputSlice) -> blob_gas
 
     /* EIP-4844 makes this field GAS_PER_BLOB times the number of blobs.
      * EIP-8135 BPO2 caps the supported block schedule at 21 blobs. */
-    if value <= sizeof(blob_count_bound * gas_per_blob_value) then {
-        value
+    let count = value / sizeof(gas_per_blob_value);
+    if
+        (count <= 21)
+        & (value == sizeof(gas_per_blob_value) * count)
+    then {
+        sizeof(gas_per_blob_value) * count
     } else {
         throw InvalidBlock(InvalidBlobGasUsed)
     }
@@ -938,7 +952,7 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     let chain_config = decode_chain_config(input_ref.chain_config, header.number, header.timestamp);
     k_set_header(header);
     k_chain_id = chain_config.chain_id;
-    k_blob_schedule = input_ref.protocol.blob_schedule;
+    k_protocol_profile = input_ref.protocol;
     struct {
         payload =
             struct {
@@ -979,7 +993,11 @@ val decode_transaction : forall 'transaction_off 'transaction_len 'public_key_of
     ) -> Transaction
 function decode_transaction(transaction, public_key) =
     if transaction.len <= sizeof(transaction_length_bound) then {
-        rlp_decode_tx(transaction, public_key, k_fork)
+        rlp_decode_tx(
+            transaction,
+            public_key,
+            protocol_profile_transaction_gas_limit(k_protocol_profile),
+        )
     } else {
         throw InvalidBlock(InvalidConfig)
     }

@@ -121,7 +121,7 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
             EVM_CAPACITY_MODE="fixed",
             EVM_PROFILE=wanted,
             NATIVE_BUILD=build_dir,
-            EXTRA_PRESERVE="debug_account_storage_root debug_rebuild_state_root",
+            EXTRA_PRESERVE="debug_account_storage_root",
         )
         subprocess.check_call([os.path.join(_NR, "build_lib.sh")], env=env)
         with open(profile_marker, "w") as f:
@@ -218,8 +218,7 @@ def _parse_result(b, p=0):
         loc = b[p:p + n].decode(errors="replace"); p += n
         name = BLOCK_ERRORS[err] if err < len(BLOCK_ERRORS) else f"?{err}"
         exc = f"InvalidBlock({name})" + (f" @ {loc}" if loc else "")
-    rebuilt_root, p = _w(b, p)
-    return (ok, root, rebuilt_root, exc), p
+    return (ok, root, exc), p
 
 def snapshot():
     """Decode an on-demand dump of the live post-run native state."""
@@ -236,7 +235,7 @@ def decode_snapshot(b):
                                chash, storage:{slot:val}}}
     (materialized state = what execution touched; unchanged witness-base values are not
     enumerable here -- that is what the state root commits to). stack: [word,...] top-first."""
-    (ok, root, rebuilt_root, exc), p = _parse_result(b)
+    (ok, root, exc), p = _parse_result(b)
     assert b[p:p + 1] == b"O", "bad snapshot: missing output section"; p += 1
     output_len, p = _u32(b, p)
     output = b[p:p + output_len]; p += output_len
@@ -280,8 +279,7 @@ def decode_snapshot(b):
     assert b[p:p + 1] == b"M", "bad snapshot: missing memory section"; p += 1
     md, p = _u32(b, p)
     assert b[p:p + 1] == b"E", "bad snapshot: missing end marker"
-    return {"ok": ok, "root": root, "rebuilt_root": rebuilt_root,
-            "exc": exc, "output": output,
+    return {"ok": ok, "root": root, "exc": exc, "output": output,
             "validation_failure": validation_failure,
             "accounts": accounts, "stack": stack, "mem_frame_depth": md}
 
@@ -295,7 +293,6 @@ def format_snapshot(snap, limit=0):
         f" at {rejected['location']}]"
     )
     lines = [f"state_root={snap['root']:#066x} "
-             f"rebuilt_root={snap['rebuilt_root']:#066x} "
              f"validation={valid}{failure}{exc}",
              f"accounts (materialized): {len(snap['accounts'])}"]
     for i, (hk, a) in enumerate(snap["accounts"].items()):

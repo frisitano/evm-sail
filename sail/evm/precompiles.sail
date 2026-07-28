@@ -113,11 +113,11 @@ function boolean_result(value : bool) -> PrecompileResult =
     (EIP-7951). */
 function precompile_active_at_fork(n : precompile_id) -> bool = {
     let base = n <= 4;
-    let byzantium = (5 <= n) & (n <= 8) & (k_fork >= Byzantium);
-    let istanbul = (n == 9) & (k_fork >= Istanbul);
-    let kzg = (n == 10) & (k_fork >= Cancun);
-    let bls = (11 <= n) & (n <= 17) & (k_fork >= Prague);
-    let p256 = (n == 256) & (k_fork >= Osaka);
+    let byzantium = (5 <= n) & (n <= 8) & (protocol_profile_fork(k_protocol_profile) >= Byzantium);
+    let istanbul = (n == 9) & (protocol_profile_fork(k_protocol_profile) >= Istanbul);
+    let kzg = (n == 10) & (protocol_profile_fork(k_protocol_profile) >= Cancun);
+    let bls = (11 <= n) & (n <= 17) & (protocol_profile_fork(k_protocol_profile) >= Prague);
+    let p256 = (n == 256) & (protocol_profile_fork(k_protocol_profile) >= Osaka);
     base | byzantium | istanbul | kzg | bls | p256
 }
 
