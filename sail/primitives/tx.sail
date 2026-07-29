@@ -37,13 +37,17 @@ struct Authorization = {
     nonce : account_nonce, chain_id : word,
 }
 
-/*! The source-backed EIP-4844 versioned blob hashes of a transaction. */
-struct BlobHashes = {
+/*! The source-backed EIP-4844 versioned blob hashes of a transaction. The
+    limit index records which fork-selected transaction range admitted the
+    observed count. It is carried by the enclosing transaction rather than
+    hidden in a nested existential, so consumers retain `count <= limit`. */
+struct BlobHashesFields('limit : Int), transaction_blob_limit_value('limit) = {
     bytes : StatelessInputSlice,
-    count : transaction_blob_count,
+    count : transaction_blob_count('limit),
 }
 
-let EMPTY_BLOB_HASHES : BlobHashes = struct { bytes = EMPTY_STATELESS_INPUT_SLICE, count = 0 }
+let EMPTY_BLOB_HASHES : BlobHashesFields(blob_schedule_inactive_count) =
+    (struct { bytes = EMPTY_STATELESS_INPUT_SLICE, count = 0 } : BlobHashesFields(blob_schedule_inactive_count))
 
 /*! A byte span contained by one SSZ transaction envelope. This structural
     bound is independent of fork-specific calldata and initcode limits. */
@@ -95,7 +99,7 @@ type transaction_initcode_cost = range(0, 2 * div(transaction_length_bound + 31,
     legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
     (blob), and EIP-7702 (set code); the type-specific fields are
     validity-relevant per their EIP. */
-struct Transaction = {
+struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
   /* EIP-2718 envelope type (the discriminant) */
   tx_type : TxType,
   sender : address, nonce : word,
@@ -119,7 +123,7 @@ struct Transaction = {
   /* source-backed EIP-7702 set-code authorization tuples */
   authorizations : AuthorizationListRef,
   /* source-backed EIP-4844 BLOBHASH operands */
-  blob_hashes : BlobHashes,
+  blob_hashes : BlobHashesFields('blob_limit),
   /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
      derived address must equal the signer recovered at execution */
   pubkey : StatelessInputSlice,
@@ -130,6 +134,15 @@ struct Transaction = {
   sig_v : word,
   sig_r : word,
   sig_s : word
+}
+
+/*! A decoded transaction retains the fork-selected blob-count limit that was
+    applied while decoding its envelope. Non-blob transactions carry the
+    inactive zero limit. */
+type Transaction = {
+    'blob_limit,
+    transaction_blob_limit_value('blob_limit).
+    TransactionFields('blob_limit)
 }
 
 /*! The bounded topic operands of one `LOG0`–`LOG4` instruction. Keeping the

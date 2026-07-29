@@ -48,7 +48,9 @@ function read_push(code : CodeSlice, offset : code_pointer, n : push_width) -> w
     (0x80–0x8f), `SWAP1`–`SWAP16` (0x90–0x9f), `LOG0`–`LOG4` (0xa0–0xa4)
     — and the remainder is a flat table. Any byte with no defined opcode
     decodes to `INVALID`. */
-function decode_simple(opcode : opcode) -> ast =
+function decode_simple(opcode : opcode) -> ast = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if 128 <= opcode & opcode <= 143 then {
         DUP(opcode - 127)
     } else {
@@ -85,7 +87,7 @@ function decode_simple(opcode : opcode) -> ast =
                     27 => SHL(),
                     28 => SHR(),
                     29 => SAR(),
-                    30 => if protocol_profile_fork(k_protocol_profile) >= Osaka then {
+                    30 => if profile.fork >= Osaka then {
                         CLZ()
                     } else {
                         INVALID()
@@ -115,22 +117,22 @@ function decode_simple(opcode : opcode) -> ast =
                     69 => GASLIMIT(),
                     70 => CHAINID(),
                     71 => SELFBALANCE(),
-                    72 => if protocol_profile_fork(k_protocol_profile) >= London then {
+                    72 => if profile.fork >= London then {
                         BASEFEE()
                     } else {
                         INVALID()
                     },
-                    73 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+                    73 => if profile.fork >= Cancun then {
                         BLOBHASH()
                     } else {
                         INVALID()
                     },
-                    74 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+                    74 => if profile.fork >= Cancun then {
                         BLOBBASEFEE()
                     } else {
                         INVALID()
                     },
-                    75 => if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+                    75 => if profile.fork >= Amsterdam then {
                         SLOTNUM()
                     } else {
                         INVALID()
@@ -147,17 +149,17 @@ function decode_simple(opcode : opcode) -> ast =
                     89 => MSIZE(),
                     90 => GAS(),
                     91 => JUMPDEST(),
-                    92 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+                    92 => if profile.fork >= Cancun then {
                         TLOAD()
                     } else {
                         INVALID()
                     },
-                    93 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+                    93 => if profile.fork >= Cancun then {
                         TSTORE()
                     } else {
                         INVALID()
                     },
-                    94 => if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+                    94 => if profile.fork >= Cancun then {
                         MCOPY()
                     } else {
                         INVALID()
@@ -176,6 +178,7 @@ function decode_simple(opcode : opcode) -> ast =
             }
         }
     }
+}
 
 /*! Fetches and decodes the opcode at `pc`, advancing `pc` past the
     opcode and any immediate. Past the end of code the frame implicitly
@@ -184,6 +187,8 @@ function decode_simple(opcode : opcode) -> ast =
     zero-padded at end of code. Every other byte decodes via
     [decode_simple][]. */
 function fetch() -> ast = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     let current = pc;
     let code = frame_code.bytes;
     let code_length = code.len;
@@ -192,7 +197,7 @@ function fetch() -> ast = {
     } else {
         let opcode : opcode = unsigned(slice_byte(code, current));
         let immediate_offset = current + 1;
-        let decoded : (code_pointer, ast) = if (opcode == 95) & (protocol_profile_fork(k_protocol_profile) < Shanghai) then {
+        let decoded : (code_pointer, ast) = if (opcode == 95) & (profile.fork < Shanghai) then {
                 (immediate_offset, INVALID())
             } else {
                 if 95 <= opcode & opcode <= 127 then {
@@ -201,7 +206,7 @@ function fetch() -> ast = {
                     let after_immediate : code_pointer = current + 1 + size;
                     (after_immediate, PUSH(size, value))
                 } else {
-                    if (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
+                    if (profile.fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
                         let immediate = slice_byte(code, immediate_offset);
                         let immediate_valid : bool = match opcode {
                             230 => deep_stack_immediate_valid(immediate),
@@ -358,6 +363,9 @@ function call_is_static(kind : CallKind) -> bool =
     `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
     Pushes 1 on success, 0 on failure. */
 function run_call(kind : CallKind) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    let current_depth = call_depth;
     let caller = self_addr();
     let gas_request = pop();
     let target_word = pop();
@@ -403,7 +411,15 @@ function run_call(kind : CallKind) -> unit = {
        sequenced. The planner itself halts if the requested high-water mark is
        outside the executable memory domain. */
     let available = gas_remaining;
-    let memory = memory_pair_expansion(args_off_word, args_len_word, ret_off_word, ret_len_word, available);
+    let args_access = memory_access(args_off_word, args_len_word);
+    let ret_access = memory_access(ret_off_word, ret_len_word);
+    let required_size =
+        if args_access.required_size < ret_access.required_size then {
+            ret_access.required_size
+        } else {
+            args_access.required_size
+        };
+    let memory = memory_expansion(required_size, available);
     if not_bool(is_running()) then {
         return ()
     };
@@ -436,12 +452,12 @@ function run_call(kind : CallKind) -> unit = {
         } else {
             GAS_CONSTANT_ZERO
         };
-    let new_account_charged =    protocol_profile_fork(k_protocol_profile)
+    let new_account_charged =    profile.fork
                               >= Amsterdam
                               &  word_nonzero(value)
                               &  call_transfers_value(kind)
                               &  k_account_is_empty(target);
-    let create_cost : gas_constant = if   protocol_profile_fork(k_protocol_profile)
+    let create_cost : gas_constant = if   profile.fork
                                         < Amsterdam
                                         & word_nonzero(value)
                                         & call_transfers_value(kind)
@@ -481,7 +497,7 @@ function run_call(kind : CallKind) -> unit = {
        Otherwise the EIP-150 63/64ths cap applies to the gas left after
        subtracting the memory and extra costs. */
     var base_child : gas = GAS_ZERO;
-    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    if profile.fork >= Amsterdam then {
         /* Amsterdam charges execution work, then state growth, before
            applying EIP-150 to the execution gas left for the child. */
         charge(required);
@@ -525,7 +541,9 @@ function run_call(kind : CallKind) -> unit = {
            delegate is touched (kept in the BAL account set). */
         let _ = k_aload(tg_target)
     };
-    let (args, ret) = apply_memory_pair_expansion(memory);
+    apply_memory_expansion(memory);
+    let args = args_access.range;
+    let ret = ret_access.range;
     let child_gas : gas = conserved_gas_add(base_child, stipend);
 
     /* The target's code hash is read for every call once gas is
@@ -537,8 +555,16 @@ function run_call(kind : CallKind) -> unit = {
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
        caller's balance covering the transfer. */
-    if (call_depth >= DEPTH_LIMIT) |
-        (call_takes_value(kind) & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller)))) then {
+    if call_takes_value(kind) & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller))) then {
+        returndata_clear();
+        refund_gas(child_gas);
+        if new_account_charged then {
+            credit_state_gas_refund(G_amsterdam_state_new_account)
+        };
+        push(WORD_ZERO)
+    } else if current_depth >= sizeof(call_depth_limit) then {
+        /* Keeping the successful child arm immediately under this guard
+           retains the proof that `call_depth + 1` is representable. */
         /* the call does not happen: the child gas (including stipend) is
            refunded to the caller and CALL pushes 0. */
         returndata_clear();
@@ -597,6 +623,7 @@ function run_call(kind : CallKind) -> unit = {
         } else {
             /* CODE call. Snapshot the world (so a reverting child can be rolled
                back), then perform the CALL value transfer up front. */
+            let child_depth : frame_depth = current_depth + 1;
             let child_code = executable_code(target, tg_deleg, tg_target);
 
             /* the child message context, by call mode:
@@ -654,7 +681,7 @@ function run_call(kind : CallKind) -> unit = {
                     value = child_value,
                     state_gas_reservoir = child_state_gas,
                     is_static = child_static,
-                    depth = frame_depth_increment(checkpoint.call_depth),
+                    depth = child_depth,
                 };
             calldata_install(child_calldata);
             pc = 0;
@@ -664,7 +691,7 @@ function run_call(kind : CallKind) -> unit = {
             frame_status = Running();
             returndata_clear();
             frame_code = child_code;
-            call_depth = frame_depth_increment(checkpoint.call_depth);
+            call_depth = child_depth;
             frame_refund = GAS_REFUND_ZERO
         }
     }
@@ -677,6 +704,9 @@ function run_call(kind : CallKind) -> unit = {
     layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
     the new address on success, 0 on failure. */
 function run_create(is2 : bool) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    let current_depth = call_depth;
     let creator = self_addr();
     let value = pop();
     let off_word = pop();
@@ -708,7 +738,7 @@ function run_create(is2 : bool) -> unit = {
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
     charge(create_access_cost());
-    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
+    if profile.fork >= Shanghai then {
         charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
     };
     if is2 then {
@@ -740,7 +770,7 @@ function run_create(is2 : bool) -> unit = {
            any account-growth state gas, because a spill reduces the execution
            gas to which the EIP-150 cap applies. */
         var child_gas : gas = GAS_ZERO;
-        if protocol_profile_fork(k_protocol_profile) < Amsterdam then {
+        if profile.fork < Amsterdam then {
             let avail = gas_remaining;
             let retained_gas : gas = avail / 64;
             child_gas = gas_sub_or_oog(avail, retained_gas);
@@ -764,12 +794,17 @@ function run_create(is2 : bool) -> unit = {
            depth ceiling, the creator's balance covering the endowment, and the
            creator nonce not already at the 2^64-1 ceiling (it must be
            incrementable). */
-        if   (call_depth >= DEPTH_LIMIT)
-           | not_bool(word_ule(value, k_get_balance(creator)))
+        if   not_bool(word_ule(value, k_get_balance(creator)))
            | (nonce == sizeof(account_nonce_bound)) /* EIP-2681 */
         then {
             returndata_clear();
-            if protocol_profile_fork(k_protocol_profile) < Amsterdam then {
+            if profile.fork < Amsterdam then {
+                refund_gas(child_gas)
+            };
+            push(WORD_ZERO)
+        } else if current_depth >= sizeof(call_depth_limit) then {
+            returndata_clear();
+            if profile.fork < Amsterdam then {
                 refund_gas(child_gas)
             };
             push(WORD_ZERO)
@@ -778,15 +813,16 @@ function run_create(is2 : bool) -> unit = {
              * snapshot: both persist even if the initcode reverts (the
              * the protocol runs them in the parent, before
              * process_create_message). */
+            let child_depth : frame_depth = current_depth + 1;
             let _ = k_access_account(new_addr);
-            let new_account_charged = (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & k_account_is_empty(new_addr);
+            let new_account_charged = (profile.fork >= Amsterdam) & k_account_is_empty(new_addr);
             if new_account_charged then {
                 charge_state_gas(G_amsterdam_state_new_account)
             };
             if not_bool(is_running()) then {
                 return ()
             };
-            if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+            if profile.fork >= Amsterdam then {
                 let avail = gas_remaining;
                 let retained_gas : gas = avail / 64;
                 child_gas = gas_sub_or_oog(avail, retained_gas);
@@ -815,7 +851,7 @@ function run_create(is2 : bool) -> unit = {
                     } else {
                         EMPTY_CODE_SLICE
                     };
-                let child_code = code_db_resolve(code_db_insert(initcode, protocol_profile_fork(k_protocol_profile)));
+                let child_code = code_db_resolve(code_db_insert(initcode, profile.fork));
                 let child_state_gas = state_gas_remaining;
                 let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
                 frame_stack_push(
@@ -839,7 +875,7 @@ function run_create(is2 : bool) -> unit = {
                         value = value,
                         state_gas_reservoir = child_state_gas,
                         is_static = checkpoint.message.is_static,
-                        depth = frame_depth_increment(checkpoint.call_depth),
+                        depth = child_depth,
                     };
                 calldata_install(EMPTY_CALLDATA);
                 pc = 0;
@@ -849,7 +885,7 @@ function run_create(is2 : bool) -> unit = {
                 frame_status = Running();
                 returndata_clear();
                 frame_code = child_code;
-                call_depth = frame_depth_increment(checkpoint.call_depth);
+                call_depth = child_depth;
                 frame_refund = GAS_REFUND_ZERO
             }
         }
@@ -888,6 +924,8 @@ function resume_call(continuation : CallContinuation, output : OutputSlice) -> u
 
 /*! Restores a create parent and either deploys or rolls back the child. */
 function resume_create(continuation : CreateContinuation, output : OutputSlice) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     returndata = output;
     let checkpoint = continuation.checkpoint;
     let initcode_succeeded = frame_succeeded();
@@ -897,7 +935,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
 
     if initcode_succeeded then {
         if not_bool(deployed_code_size_allowed(deployed_size)) |
-            ((protocol_profile_fork(k_protocol_profile) >= London) & (deployed_size != 0) & (slice_byte(returndata, 0) == 0xef)) then {
+            ((profile.fork >= London) & (deployed_size != 0) & (slice_byte(returndata, 0) == 0xef)) then {
             /* EIP-170 and EIP-3541 failures use the post-Homestead
              * exceptional creation path. Neither rule is active on
              * Frontier/Homestead in a way that reaches this branch. */
@@ -909,7 +947,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
                     charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
                 },
                 None() => {
-                    if protocol_profile_fork(k_protocol_profile) < Homestead then {
+                    if profile.fork < Homestead then {
                         /* Frontier consumed the remaining child gas but kept the
                          * creation successful with empty deployed code. EIP-2
                          * changed this to exceptional failure at Homestead. */

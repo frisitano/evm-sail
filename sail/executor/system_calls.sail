@@ -62,11 +62,13 @@ let DEPOSIT_REQUEST_INDEX : int(184) = 184
     made a fresh memory frame and, for a word input, frozen the
     parent-memory span that `input` references. */
 function enter_system_call_frame(tgt : address, input : CalldataSlice) -> journal_checkpoint = {
+    let execution_profile = k_execution_profile;
+    let gas_limits = execution_profile.gas;
     let checkpoint = k_state_checkpoint();
     pc = 0;
     call_depth = 0;
-    gas_remaining = SYSTEM_CALL_GAS_LIMIT;
-    state_gas_remaining = GAS_ZERO;
+    gas_remaining = gas_limits.system_regular_limit;
+    state_gas_remaining = gas_limits.system_state_limit;
     state_gas_spilled = STATE_GAS_SPILL_ZERO;
     frame_refund = GAS_REFUND_ZERO;
     stack_reset();
@@ -79,7 +81,7 @@ function enter_system_call_frame(tgt : address, input : CalldataSlice) -> journa
             address = tgt,
             code_address = tgt,
             value = ZERO_WORD,
-            state_gas_reservoir = GAS_ZERO,
+            state_gas_reservoir = gas_limits.system_state_limit,
             is_static = false,
             depth = 0,
         };
@@ -238,14 +240,16 @@ function authenticate_deposit_logs(logs : LogSeriesRef, expected : StatelessInpu
     consolidation (EIP-7251), and, from Amsterdam, builder deposit and
     builder exit (EIP-8282). */
 function collect_execution_requests(deposits : StatelessInputSlice) -> ExecutionRequests = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
-    let builder_deposits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    let builder_deposits : ScratchSlice = if profile.fork >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
         };
-    let builder_exits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    let builder_exits : ScratchSlice = if profile.fork >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE

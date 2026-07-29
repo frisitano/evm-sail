@@ -21,8 +21,10 @@ function k_get_codehash(a : address) -> hash = {
 
 /*! Deploys code to an account: analyzes, stores, and binds its hash. */
 function k_deploy_code(a : address, code : CodeSlice) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     let cur = k_aload(a);
-    let h : hash = code_db_insert(code, protocol_profile_fork(k_protocol_profile));
+    let h : hash = code_db_insert(code, profile.fork);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 

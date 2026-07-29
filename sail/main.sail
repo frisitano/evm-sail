@@ -35,6 +35,7 @@ function main() -> unit = {
             validation_debug_record(VALIDATION_STAGE_DECODE_INPUT, reason);
             None()
         },
+        Overflow() => None(),
     };
     match result {
         Some(result) => write_validation_result(result.input_ref, result.valid),

@@ -13,8 +13,10 @@ list.
     execution-request bytes (Prague+), and block-access-list bytes and
     size (Amsterdam+). */
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     let header = block.header;
-    if protocol_profile_fork(k_protocol_profile) >= Prague then {
+    if profile.fork >= Prague then {
         if   not_bool(region_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
            | not_bool(region_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
            | not_bool(region_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
@@ -25,7 +27,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
-    if (protocol_profile_fork(k_protocol_profile) >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
+    if (profile.fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
     let poststate = compute_state_root();
@@ -38,8 +40,9 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if not_bool(logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
-    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
-        let maximum_items : item_count = header.gas_limit / 2000;
+    if profile.fork >= Amsterdam then {
+        let maximum_items : item_count =
+            execution_profile.gas.block_limit / 2000;
         validate_block_access_list(block.body.block_access_list, maximum_items)
     }
 }
@@ -85,7 +88,11 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
 
         active_stage = VALIDATION_STAGE_EXECUTE_BLOCK;
         let block = input.payload.block;
-        let result = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit, input_ref.deposits);
+        let result = execute_block_body(
+            block.body,
+            input_ref.public_keys,
+            input_ref.deposits,
+        );
 
         active_stage = VALIDATION_STAGE_VALIDATE_RESULT;
         validate_executed_block(block, input_ref, result);

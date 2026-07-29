@@ -88,7 +88,7 @@ function receipt_write_logs_bloom(_receipt : Receipt, bloom : LogsBloom) -> unit
     rlp_write_logs_bloom(bloom)
 
 /*! Sizes a receipt payload from status, gas, bloom, and logs. */
-function receipt_payload_content_size(r : Receipt, cumulative_gas_used : block_gas) -> rlp_scratch_length = {
+function receipt_payload_content_size(r : Receipt, cumulative_gas_used : receipt_cumulative_gas) -> rlp_scratch_length = {
     let status : range(0, 1) = if r.success then { 1 } else { 0 };
     let status_length = rlp_scratch_small_length(rlp_uint_size(status));
     let gas_word = word_of_nat_byte_count(cumulative_gas_used);
@@ -105,7 +105,7 @@ function receipt_payload_content_size(r : Receipt, cumulative_gas_used : block_g
 /*! The receipt as stored in the receipts trie: the RLP payload,
     prefixed by the envelope type byte for typed transactions
     (EIP-2718). */
-function receipt_encoded_length(r : Receipt, cumulative_gas_used : block_gas) -> rlp_scratch_length = {
+function receipt_encoded_length(r : Receipt, cumulative_gas_used : receipt_cumulative_gas) -> rlp_scratch_length = {
     let content_len = receipt_payload_content_size(r, cumulative_gas_used);
     let typed = tx_type_byte(r.tx_type) != 0x00;
     let payload_len = rlp_scratch_list_size(content_len);
@@ -118,7 +118,7 @@ function receipt_encoded_length(r : Receipt, cumulative_gas_used : block_gas) ->
 
 /*! Writes one already-sized receipt and its precomputed bloom at the current
     scratch cursor. */
-function receipt_write_encoded(r : Receipt, cumulative_gas_used : block_gas, bloom : LogsBloom) -> unit = {
+function receipt_write_encoded(r : Receipt, cumulative_gas_used : receipt_cumulative_gas, bloom : LogsBloom) -> unit = {
     let status : range(0, 1) = if r.success then { 1 } else { 0 };
     let content_len = receipt_payload_content_size(r, cumulative_gas_used);
     let typed = tx_type_byte(r.tx_type) != 0x00;
@@ -132,7 +132,7 @@ function receipt_write_encoded(r : Receipt, cumulative_gas_used : block_gas, blo
     rlp_write_logs(r.logs)
 }
 
-function receipt_encoded(r : Receipt, cumulative_gas_used : block_gas, bloom : LogsBloom) -> ScratchSlice = {
+function receipt_encoded(r : Receipt, cumulative_gas_used : receipt_cumulative_gas, bloom : LogsBloom) -> ScratchSlice = {
     let encoded_len = receipt_encoded_length(r, cumulative_gas_used);
     let start = scratch_reserve(encoded_len);
     receipt_write_encoded(r, cumulative_gas_used, bloom);
@@ -157,7 +157,7 @@ val indexed_receipt_trie_root : ReceiptRecordsRef -> hash
 struct ReceiptAccumulator = {
     records_start : source_pointer,
     count : transaction_count,
-    cumulative_gas_used : block_gas,
+    cumulative_gas_used : receipt_cumulative_gas,
     bloom : LogsBloom,
 }
 
@@ -201,7 +201,12 @@ function receipt_accumulator_push(
     if next_count != acc.count + 1 then {
         throw InvalidBlock(WitnessDeficient)
     };
-    let cumulative : block_gas = conserved_gas_add(acc.cumulative_gas_used, receipt.gas_used);
+    let cumulative_value = acc.cumulative_gas_used + receipt.gas_used;
+    let execution_profile = k_execution_profile;
+    if execution_profile.gas.receipt_cumulative_limit < cumulative_value then {
+        throw InvalidBlock(InvalidGasUsed)
+    };
+    let cumulative : receipt_cumulative_gas = cumulative_value;
     let receipt_bloom = logs_bloom_for_logs(receipt.logs);
     let encoded_length = receipt_encoded_length(receipt, cumulative);
     if 2 ^ 64 - 1 < encoded_length then {

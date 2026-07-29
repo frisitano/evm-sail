@@ -183,14 +183,6 @@ function htr_leaf_capacity(depth : htr_depth) -> htr_leaf_count = match depth {
     25 => 33554432,
 }
 
-/*! Advances within the supported execution-layer SSZ depth range. */
-function htr_depth_increment(depth : htr_depth) -> htr_depth =
-    if depth < 25 then {
-        depth + 1
-    } else {
-        throw InvalidBlock(WitnessDeficient)
-    }
-
 /*! Recursively merkleizes the live prefix of a fixed leaf vector. */
 val merkleize_vector_subtree : forall 'n 'start, 1 <= 'n & 'n <= 32 & 0 <= 'start. (
         vector('n, dec, hash),
@@ -342,7 +334,12 @@ function clog2(n : htr_leaf_count) -> htr_depth = {
     var depth : htr_depth = 0;
     foreach (_step from 0 to 24) {
         if remaining != 0 then {
-            depth = htr_depth_increment(depth);
+            let current_depth = depth;
+            depth = if current_depth < 25 then {
+                    current_depth + 1
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                };
             remaining = tdiv_nat(remaining, 2)
         }
     };

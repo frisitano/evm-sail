@@ -40,7 +40,11 @@ function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) 
     logs_bloom_equal(computed, logs_bloom_from_ref(reference))
 
 /*! The execution-payload header fields the model reads and validates
-    (YP §4.4). `extra_data` stays a reference into the payload — it is
+    (YP §4.4). Scalar wire bounds come from the consensus/Amsterdam SSZ
+    `ExecutionPayload` schema. `gas_used <= gas_limit` and the active
+    blob-schedule rules are execution-protocol constraints checked when the
+    payload is admitted. `extra_data` retains the schema's
+    `ByteList[MAX_EXTRA_DATA_BYTES]` bound while staying source-backed; it is
     RLP-encoded whole for the header hash and never inspected. The fixed
     `logs_bloom` commitment likewise stays source-backed until a semantic
     consumer explicitly decodes it. */
@@ -53,7 +57,8 @@ struct BlockHeader = {
     base_fee : word,
     /* EIP-4844: a multiple of GAS_PER_BLOB within the active schedule. */
     blob_gas_used : blob_gas_used,
-    /* EIP-4844: the accumulating uint64 excess-blob-gas field. */
+    /* EIP-4844 uint64 on the wire; narrowed to the documented reachable-chain
+       invariant at the authenticated input boundary. */
     excess_blob_gas : excess_blob_gas,
     state_root : hash,
     receipts_root : hash,
@@ -61,9 +66,9 @@ struct BlockHeader = {
     fee_recipient : address,
     parent_hash : hash,
     parent_beacon_block_root : hash,
-    /* uint64 (EIP-7843) */
+    /* uint64 (EIP-7843 and the Amsterdam stateless SSZ schema). */
     slot_number : slot_number,
-    extra_data : StatelessInputSlice,
+    extra_data : StatelessInputSliceAtMost(extra_data_length_bound),
 }
 
 /*! `keccak256(rlp([]))` — the ommers hash of every post-merge block

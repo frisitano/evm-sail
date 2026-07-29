@@ -8,9 +8,13 @@ elements only when a consumer reaches them.
 /* The SSZ schema bounds are powers of two because these fields are List
  * capacities, not largest valid indices. A list may contain exactly its
  * declared maximum number of elements. */
-/*! Maximum transactions in the execution-payload SSZ list. */
+/*! Maximum transactions in the execution-payload SSZ list. Provenance:
+    Bellatrix `MAX_TRANSACTIONS_PER_PAYLOAD` and Amsterdam
+    `SszExecutionPayload.transactions`. */
 type transaction_count_bound : Int = 2 ^ 20
-/*! Maximum withdrawals in the execution-payload SSZ list. */
+/*! Maximum withdrawals in the execution-payload SSZ list. Provenance:
+    Capella `MAX_WITHDRAWALS_PER_PAYLOAD` and Amsterdam
+    `SszExecutionPayload.withdrawals`. */
 type withdrawal_count_bound : Int = 2 ^ 4
 /*! Maximum blob commitments in the stateless-input SSZ list. */
 type blob_commitment_count_bound : Int = 2 ^ 12
@@ -33,11 +37,17 @@ type builder_deposit_request_count_bound : Int = 2 ^ 6
 /*! Maximum builder exit requests in their stateless-input SSZ list. */
 type builder_exit_request_count_bound : Int = 2 ^ 4
 
-/*! Maximum byte length of execution-payload extra data. */
+/*! Maximum byte length of execution-payload extra data. Provenance:
+    consensus `MAX_EXTRA_DATA_BYTES` and Amsterdam
+    `SszExecutionPayload.extra_data`. */
 type extra_data_length_bound : Int = 2 ^ 5
-/*! Maximum byte length of one encoded transaction envelope. */
+/*! Maximum byte length of one encoded transaction envelope. Provenance:
+    Amsterdam `MAX_BYTES_PER_TRANSACTION` in
+    `SszExecutionPayload.transactions`. */
 type transaction_length_bound : Int = 2 ^ 30
-/*! Maximum byte length of the block access list. */
+/*! Maximum byte length of the block access list. Provenance: Amsterdam
+    `SszExecutionPayload.block_access_list` uses
+    `ByteList[MAX_BYTES_PER_TRANSACTION]`. */
 type block_access_list_length_bound : Int = 2 ^ 30
 /*! Maximum byte length of one witnessed trie node. */
 type witness_node_length_bound : Int = 2 ^ 10

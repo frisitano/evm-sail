@@ -37,10 +37,12 @@ function remaining_block_gas(limit, used) =
 /*! The block-start writes: beacon root (Cancun+, EIP-4788) and parent
     hash history (Prague+, EIP-2935). */
 function run_block_start_system_calls() -> unit = {
-    if protocol_profile_fork(k_protocol_profile) >= Cancun then {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if profile.fork >= Cancun then {
         system_call(BEACON_ROOTS_ADDR, k_header.parent_beacon_block_root)
     };
-    if protocol_profile_fork(k_protocol_profile) >= Prague then {
+    if profile.fork >= Prague then {
         system_call(HISTORY_STORAGE_ADDR, k_header.parent_hash)
     }
 }
@@ -51,11 +53,13 @@ function run_block_start_system_calls() -> unit = {
 function execute_block_transactions(
     transactions : TransactionListRef,
     public_keys : StatelessInputSlice,
-    header_gas_limit : block_gas_limit,
     expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    let gas_limits = execution_profile.gas;
     let public_keys_length = public_keys.len;
     let public_key_length = PUBLIC_KEY_LENGTH;
     let public_key_count_value = public_keys_length / public_key_length;
@@ -63,7 +67,7 @@ function execute_block_transactions(
         (public_keys_length != public_key_count_value * public_key_length) then {
         throw InvalidBlock(WitnessDeficient)
     };
-    let gas_limit = header_gas_limit;
+    let gas_limit = gas_limits.block_limit;
     var execution_gas_acc : gas = GAS_ZERO;
     var state_gas_acc : gas = GAS_ZERO;
     var blob_gas_acc : blob_gas_used = 0;
@@ -90,38 +94,48 @@ function execute_block_transactions(
         };
         let available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc);
         let available_state_gas = remaining_block_gas(gas_limit, state_gas_acc);
-        let execution_limit = transaction_execution_limit(tx.gas_limit);
-        let transaction_fits : bool = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
-                (execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
+        let allowance = transaction_gas_allowance(
+            tx.gas_limit,
+            gas_limits.transaction_total_limit,
+            gas_limits.transaction_regular_limit,
+        );
+        let transaction_fits : bool = if profile.fork >= Amsterdam then {
+                (allowance.regular <= available_execution_gas) &
+                (allowance.total <= available_state_gas)
             } else {
-                tx.gas_limit <= available_execution_gas
+                allowance.total <= available_execution_gas
             };
         if not_bool(transaction_fits) then {
             throw InvalidBlock(GasUsedExceedsLimit)
         } else {
-            let tx_blob_gas = transaction_blob_gas_for_count(tx.blob_hashes.count);
-            let next_blob_gas : blob_gas_used = if protocol_profile_fork(k_protocol_profile) < Cancun then {
+            let tx_blob_gas : transaction_blob_gas =
+                sizeof(gas_per_blob_value) * tx.blob_hashes.count;
+            let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
                     blob_gas_acc
                 } else {
-                    checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
+                    block_blob_gas_add(
+                        profile.blob_schedule.max,
+                        blob_gas_acc,
+                        tx_blob_gas,
+                    )
                 };
-            let receipt = process_transaction(tx);
+            let receipt = process_transaction(tx, allowance);
             execution_gas_acc = conserved_gas_add(execution_gas_acc, receipt.execution_gas);
             state_gas_acc = conserved_gas_add(state_gas_acc, receipt.state_gas);
             if (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc) then {
                 throw InvalidBlock(GasUsedExceedsLimit)
             };
             receipts = receipt_accumulator_push(receipts, receipt, next.index);
-            if protocol_profile_fork(k_protocol_profile) >= Prague then {
+            if profile.fork >= Prague then {
                 remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
             };
             blob_gas_acc = next_blob_gas
         }
     };
-    if (protocol_profile_fork(k_protocol_profile) >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
+    if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    let header_gas_used = if (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
+    let header_gas_used = if (profile.fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
             state_gas_acc
         } else {
             execution_gas_acc
@@ -155,10 +169,12 @@ function apply_withdrawals(withdrawals : WithdrawalListRef) -> unit = {
     pre-merge static block reward before Paris, and the final merge into
     the block layer. */
 function apply_block_end_state(body : BlockBody) -> unit = {
-    if protocol_profile_fork(k_protocol_profile) >= Shanghai then {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if profile.fork >= Shanghai then {
         apply_withdrawals(body.withdrawals)
     };
-    if protocol_profile_fork(k_protocol_profile) < Paris then {
+    if profile.fork < Paris then {
         k_add_balance(k_coinbase(), PRE_MERGE_BLOCK_REWARD)
     };
     k_tx_merge()
@@ -171,19 +187,24 @@ function apply_block_end_state(body : BlockBody) -> unit = {
 function execute_block_body(
     body : BlockBody,
     public_keys : StatelessInputSlice,
-    header_gas_limit : block_gas_limit,
     expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     bal_reset();
     k_block_access_index = 0;
     run_block_start_system_calls();
-    let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit, expected_deposits);
+    let result = execute_block_transactions(
+        body.transactions,
+        public_keys,
+        expected_deposits,
+    );
     let post_tx_index = body.transactions.count + 1;
     k_block_access_index = post_tx_index;
     apply_block_end_state(body);
-    let requests = if protocol_profile_fork(k_protocol_profile) >= Prague then {
+    let requests = if profile.fork >= Prague then {
             collect_execution_requests(expected_deposits)
         } else {
             EMPTY_EXECUTION_REQUESTS

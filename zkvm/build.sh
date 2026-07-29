@@ -127,8 +127,7 @@ if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
 fi
 if [ -z "${GUEST:-}" ]; then
-  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h
-    blob_fee.h)
+  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -213,7 +212,6 @@ compile_common() {
   PREIMAGE_OBJ=""
   MPT_OBJ=""
   INTERPRETER_OBJ=""
-  BLOB_FEE_OBJ=""
   if [ -z "${GUEST:-}" ]; then
     "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
@@ -231,10 +229,6 @@ compile_common() {
         -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
         -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
     INTERPRETER_OBJ="$BUILD/interpreter.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$MODEL_FFI/blob_fee.c" -o "$BUILD/blob_fee.o"
-    BLOB_FEE_OBJ="$BUILD/blob_fee.o"
   fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
@@ -320,7 +314,6 @@ cmd_zisk_lib() {
       ${HTR_OBJ:+"$HTR_OBJ"} \
       ${MPT_OBJ:+"$MPT_OBJ"} \
       ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
-      ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
@@ -337,7 +330,6 @@ link_guest() {
       ${HTR_OBJ:+"$HTR_OBJ"} \
       ${MPT_OBJ:+"$MPT_OBJ"} \
       ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
-      ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"} \
       "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
       "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \

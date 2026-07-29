@@ -42,7 +42,7 @@ function decode_state_account(value : StatelessInputSlice) -> AccountInfo = {
     reading the secure trie at `keccak256(a)`; `None` when the walk
     proves absence. */
 function stateless_account_by_key(root : hash, address_hash : hash) -> option(AccountInfo) = {
-    let value = trie_lookup(root, path_from_hash(address_hash));
+    let value = trie_lookup(root, path_new(address_hash, 64));
     if value.len == 0 then {
         None()
     } else {
@@ -53,7 +53,7 @@ function stateless_account_by_key(root : hash, address_hash : hash) -> option(Ac
 /*! The witnessed storage value of `slot` under a storage root, reading
     the secure trie at `keccak256(slot)`; absent slots are zero. */
 function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
-    let value = trie_lookup(root, path_from_hash(slot_hash));
+    let value = trie_lookup(root, path_new(slot_hash, 64));
     if value.len == 0 then {
         ZERO_WORD
     } else {
@@ -100,7 +100,7 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> Scratc
 /*! Converts one changed storage row into a secure-trie update. */
 function storage_update(trie_entry : StorageTrieEntry) -> TrieUpdate = {
     let entry = trie_entry.entry;
-    let key = path_from_hash(trie_entry.slot_hash);
+    let key = path_new(trie_entry.slot_hash, 64);
     let change = if word_is_zero(entry.value.curr) then {
             TrieDelete()
         } else {
@@ -114,7 +114,7 @@ function storage_update(trie_entry : StorageTrieEntry) -> TrieUpdate = {
 function account_update(trie_entry : AcctTrieEntry, storage_root : hash) -> TrieUpdate = {
     let entry = trie_entry.entry;
     let current = entry.value.curr;
-    let key = path_from_hash(trie_entry.address_hash);
+    let key = path_new(trie_entry.address_hash, 64);
     if not_bool(current.present) | account_info_empty(current.info) then {
         struct { key = key, change = TrieDelete() }
     } else {

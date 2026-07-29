@@ -8,7 +8,45 @@ registers, no externs.
 */
 /*! The per-transaction environment: `ORIGIN`/`GASPRICE` (YP I_o, I_p)
     plus the EIP-4844 blob versioned hashes the `BLOBHASH` opcode reads. */
-struct TxEnv = { origin : address, gas_price : word, blob_hashes : BlobHashes }
+struct TxEnvFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
+    origin : address,
+    gas_price : word,
+    blob_hashes : BlobHashesFields('blob_limit),
+}
+
+type TxEnv = {
+    'blob_limit,
+    transaction_blob_limit_value('blob_limit).
+    TxEnvFields('blob_limit)
+}
+
+/*! Constructs a transaction environment without hiding the decoder-proven
+    blob-count limit before it reaches the environment register. */
+val tx_env : forall 'blob_limit, transaction_blob_limit_value('blob_limit). (
+        address,
+        word,
+        BlobHashesFields('blob_limit),
+    ) -> TxEnvFields('blob_limit)
+function tx_env(origin, gas_price, blob_hashes) =
+    struct { origin = origin, gas_price = gas_price, blob_hashes = blob_hashes }
+
+/*! The header/profile-bounded gas allowance attached to one decoded
+    transaction before stateful validation. The total allowance funds both
+    gas dimensions; the regular allowance is the portion available to
+    ordinary EVM execution. */
+struct TransactionGasAllowanceFields(
+    'total : Int,
+    'regular : Int,
+), 0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound = {
+    total : int('total),
+    regular : int('regular),
+}
+
+type TransactionGasAllowance = {
+    'total 'regular,
+    0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound.
+    TransactionGasAllowanceFields('total, 'regular)
+}
 
 /*! The values established by successful up-front transaction validation
     (YP §6.2): sender, pre-state nonce, intrinsic gas, blob fee, and the
@@ -18,6 +56,8 @@ struct TxValidity = {
     sender : address,
     nonce_before : account_nonce,
     gas_limit : block_gas_limit,
+    initial_execution_gas : gas,
+    initial_state_gas : gas,
     intrinsic_execution_gas : gas_cost,
     intrinsic_state_gas : gas_cost,
     calldata_floor : gas_cost,
@@ -61,7 +101,7 @@ struct Message = {
     state_gas_reservoir : gas,
     /* inside a STATICCALL frame (EIP-214) */
     is_static : bool,
-    /* call depth (YP I_e), bounded by DEPTH_LIMIT */
+    /* call depth (YP I_e), bounded by call_depth_limit */
     depth : frame_depth,
 }
 

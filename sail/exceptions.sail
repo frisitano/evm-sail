@@ -96,11 +96,15 @@ enum BlockError = {
 type validation_stage = range(0, 255)
 
 /*! The single Sail exception type. Block validation throws
-    `InvalidBlock(reason)` at the failure point, and `main` catches it
-    once — any failure yields an unsuccessful validation. Sail's C backend
-    unwinds via `have_exception` return-checks (no `longjmp`), so it is
-    zkVM-guest safe. */
+    `InvalidBlock(reason)` at the failure point. A checked narrowing from a
+    protocol integer raises `Overflow()` when the exact value cannot be
+    represented at its required execution boundary, matching EELS' checked
+    numeric constructors. Both propagate to `main`, where any failure yields
+    an unsuccessful validation. Sail's C backend unwinds via `have_exception`
+    return-checks (no `longjmp`), so it is zkVM-guest safe. */
 union exception = {
     /* the block is invalid, with the failing rule */
     InvalidBlock : BlockError,
+    /* an exact protocol integer exceeds the required bounded representation */
+    Overflow : unit,
 }

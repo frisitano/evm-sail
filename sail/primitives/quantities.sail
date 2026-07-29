@@ -27,70 +27,193 @@ type account_nonce_bound : Int = 2 ^ 64 - 1
 /*! An account transaction-count nonce (EIP-2681). */
 type account_nonce = range(0, account_nonce_bound)
 
-/*! An execution block number. The Yellow Paper header scalar and EIP-1559
-    arithmetic impose no fixed-width semantic bound; the stateless-input SSZ
-    transport performs its own `uint64` decoding. */
-type block_number = nat
-/*! An execution block timestamp in seconds. As with the Yellow Paper header
-    scalar, the canonical semantic value is a natural; SSZ width is checked at
-    the input boundary rather than becoming the protocol type. */
-type block_timestamp = nat
+/*! Largest value represented by an SSZ `uint64`. This is a wire-schema
+    constraint, sourced from the consensus `ExecutionPayload` container and
+    the Amsterdam `SszExecutionPayload`, rather than an implementation word
+    size. */
+type ssz_uint_bound : Int = 2 ^ 64 - 1
+
+/*! An execution block number. Provenance: the execution-payload SSZ schema
+    declares `block_number: uint64`. The execution rules do not impose a
+    tighter supported-fork bound. */
+type block_number = range(0, ssz_uint_bound)
+/*! An execution block timestamp in seconds. Provenance: the
+    execution-payload SSZ schema declares `timestamp: uint64`; no tighter
+    supported-fork protocol bound is applied. */
+type block_timestamp = range(0, ssz_uint_bound)
 
 /*! Blob gas charged per blob, `2^17` (EIP-4844). */
 type gas_per_blob_value : Int = 2 ^ 17
-
-/*! A blob count admitted by the largest supported block schedule. The active
-    schedule selects a tighter maximum below. */
-type blob_count = range(0, 21)
-/*! A blob count carried by one EIP-4844 transaction. The active protocol
-    profile restricts this further to zero, six, or nine blobs. */
-type transaction_blob_count = range(0, 9)
-/*! A target selected by one of the blob schedules supported by the schema.
-    This is distinct from an observed blob count, which may be any value in
-    its contiguous range. */
-type blob_schedule_target_count = {0, 3, 6, 10, 14}
-/*! A maximum selected by one of the blob schedules supported by the schema. */
-type blob_schedule_max_count = {0, 6, 9, 15, 21}
-/*! The fork-selected maximum number of blobs carried by one transaction.
-    Zero denotes a profile before blob transactions activate. */
-type transaction_blob_limit = {0, 6, 9}
-/*! Blob gas used by one supported block. The existential count records that
-    every inhabitant is exactly a multiple of `GAS_PER_BLOB`; the active
-    schedule selects a tighter maximum below. */
-type blob_gas_used = {
-    'count,
-    0 <= 'count & 'count <= 21.
-    int(gas_per_blob_value * 'count)
-}
-/*! Blob gas contributed by one transaction, retaining the exact blob count
-    from which it was derived. */
-type transaction_blob_gas = {
-    'count,
-    0 <= 'count & 'count <= 9.
-    int(gas_per_blob_value * 'count)
-}
-/*! The accumulating EIP-4844 `excess_blob_gas` header field, encoded as
-    `uint64` and not bounded by a single block's blob count. */
-type excess_blob_gas_bound : Int = 2 ^ 64 - 1
-/*! An accumulated excess-blob-gas value carried by a block header. */
-type excess_blob_gas = range(0, excess_blob_gas_bound)
+/*! Named blob-schedule constants retained by the profile domains below. */
+type blob_schedule_inactive_count : Int = 0
+type cancun_blob_target_count : Int = 3
+type prague_blob_target_count : Int = 6
+type bpo1_blob_target_count : Int = 10
+type bpo2_blob_target_count : Int = 14
+type cancun_blob_max_count : Int = 6
+type prague_blob_max_count : Int = 9
+type bpo1_blob_max_count : Int = 15
+type bpo2_blob_max_count : Int = 21
 
 /*! Largest fee-update fraction in the supported blob schedules: BPO2's
     `BLOB_BASE_FEE_UPDATE_FRACTION = 11684671` (EIP-8135). */
 type blob_fee_update_fraction_bound : Int = 11684671
+/*! A conservative exponent at which an EIP-4844 blob base fee can no longer
+    fit in the EVM's 256-bit word domain: `e^256 > 2^256`. */
+type blob_fee_word_exponent_limit : Int = 256
+
+type blob_schedule_target_value('value : Int) -> Bool =
+       'value == blob_schedule_inactive_count
+    |  'value == cancun_blob_target_count
+    |  'value == prague_blob_target_count
+    |  'value == bpo1_blob_target_count
+    |  'value == bpo2_blob_target_count
+
+type blob_schedule_max_value('value : Int) -> Bool =
+       'value == blob_schedule_inactive_count
+    |  'value == cancun_blob_max_count
+    |  'value == prague_blob_max_count
+    |  'value == bpo1_blob_max_count
+    |  'value == bpo2_blob_max_count
+
+/*! A target selected by one of the blob schedules supported by the schema.
+    This is distinct from an observed blob count, which may be any value in
+    its contiguous range. */
+type blob_schedule_target_count = {
+    'value,
+    blob_schedule_target_value('value).
+    int('value)
+}
+/*! A maximum selected by one of the blob schedules supported by the schema. */
+type blob_schedule_max_count = {
+    'value,
+    blob_schedule_max_value('value).
+    int('value)
+}
+/*! The fork-selected maximum number of blobs carried by one transaction.
+    Zero denotes a profile before blob transactions activate. */
+type transaction_blob_limit_value('value : Int) -> Bool =
+       'value == blob_schedule_inactive_count
+    |  'value == cancun_blob_max_count
+    |  'value == prague_blob_max_count
+type transaction_blob_limit = {
+    'value,
+    transaction_blob_limit_value('value).
+    int('value)
+}
+
+/*! A transaction blob count under one fork-selected transaction limit.
+    The limit is a finite-set profile parameter; the observed count occupies
+    the complete contiguous range beneath that selected limit. */
+type transaction_blob_count('limit : Int) = range(0, 'limit)
+
+/*! Blob gas used by one supported block. The existential count retains that
+    every value is exactly a multiple of `GAS_PER_BLOB`; profile-indexed
+    decoding applies the selected schedule's tighter range before values enter
+    this heterogeneous header domain. */
+type blob_gas_used = {
+    'count,
+       0 <= 'count
+    &  'count <= bpo2_blob_max_count.
+    int(gas_per_blob_value * 'count)
+}
+
+/*! Blob gas contributed by one transaction. Profile-indexed blob-hash
+    decoding establishes the selected limit before this derived quantity is
+    widened to the common transaction-cost domain. */
+type transaction_blob_gas = {
+    'count,
+       0 <= 'count
+    &  'count <= prague_blob_max_count.
+    int(gas_per_blob_value * 'count)
+}
+/*! Wire ceiling for the EIP-4844 `excess_blob_gas` header field.
+    Provenance: both the Deneb consensus `ExecutionPayload` and Amsterdam's
+    stateless SSZ payload encode the field as `uint64`. */
+type excess_blob_gas_wire_bound : Int = ssz_uint_bound
+
+/* Union ceiling of the fork-indexed inductive equations retained by
+ * `ProtocolProfile`. The expression deliberately uses the largest admitted
+ * denominator and block growth rather than embedding a precomputed result. */
+type excess_blob_gas_reachable_bound : Int =
+    blob_fee_word_exponent_limit * blob_fee_update_fraction_bound
+    + bpo2_blob_max_count * gas_per_blob_value
+/*! The supported-fork reachable accumulated excess-blob-gas value. */
+type excess_blob_gas_bound : Int = excess_blob_gas_reachable_bound
+type excess_blob_gas = range(0, excess_blob_gas_bound)
+
 /*! The positive denominator governing excess-blob-gas fee adjustment. */
 type blob_fee_update_fraction = range(1, blob_fee_update_fraction_bound)
+
+/*! Named EIP-4844/BPO fee-update fractions. */
+type inactive_blob_fee_update_fraction : Int = 1
+type cancun_blob_fee_update_fraction : Int = 3338477
+type prague_blob_fee_update_fraction : Int = 5007716
+type bpo1_blob_fee_update_fraction : Int = 8346193
+type bpo2_blob_fee_update_fraction : Int = 11684671
+
+type blob_schedule_fee_update_fraction_value('value : Int) -> Bool =
+       'value == inactive_blob_fee_update_fraction
+    |  'value == cancun_blob_fee_update_fraction
+    |  'value == prague_blob_fee_update_fraction
+    |  'value == bpo1_blob_fee_update_fraction
+    |  'value == bpo2_blob_fee_update_fraction
+
 /*! A fee-update denominator selected by one of the supported blob schedules.
     Observed arithmetic still uses the broader positive denominator domain;
     configuration itself can only choose these protocol constants. */
-type blob_schedule_fee_update_fraction = {1, 3338477, 5007716, 8346193, 11684671}
+type blob_schedule_fee_update_fraction = {
+    'value,
+    blob_schedule_fee_update_fraction_value('value).
+    int('value)
+}
 
-/*! Fork-selected limits retained in the validated protocol profile. Zero is
-    used only where the corresponding rule is not active. */
-type protocol_deployed_code_size_limit = {24576, 65536}
-type protocol_initcode_size_limit = {0, 49152, 131072}
-type protocol_transaction_gas_limit = {0, 16777216}
-type protocol_transaction_execution_gas_limit = {0, 16777216}
+/*! Fork-selected limits retained in the validated protocol profile. A fork
+    without a stricter transaction-gas cap admits the complete SSZ `uint64`
+    block-gas domain; the concrete header limit is applied separately. */
+type pre_amsterdam_deployed_code_size_limit : Int = 24576
+type amsterdam_deployed_code_size_limit : Int = 65536
+type inactive_initcode_size_limit : Int = 0
+type pre_amsterdam_initcode_size_limit : Int = 49152
+type amsterdam_initcode_size_limit : Int = 131072
+type eip7825_transaction_gas_limit : Int = 2 ^ 24
+
+type protocol_deployed_code_size_limit_value('value : Int) -> Bool =
+       'value == pre_amsterdam_deployed_code_size_limit
+    |  'value == amsterdam_deployed_code_size_limit
+type protocol_deployed_code_size_limit = {
+    'value,
+    protocol_deployed_code_size_limit_value('value).
+    int('value)
+}
+
+type protocol_initcode_size_limit_value('value : Int) -> Bool =
+       'value == inactive_initcode_size_limit
+    |  'value == pre_amsterdam_initcode_size_limit
+    |  'value == amsterdam_initcode_size_limit
+type protocol_initcode_size_limit = {
+    'value,
+    protocol_initcode_size_limit_value('value).
+    int('value)
+}
+
+type protocol_transaction_total_gas_limit_value('value : Int) -> Bool =
+       'value == eip7825_transaction_gas_limit
+    |  'value == ssz_uint_bound
+type protocol_transaction_total_gas_limit = {
+    'value,
+    protocol_transaction_total_gas_limit_value('value).
+    int('value)
+}
+
+type protocol_transaction_regular_gas_limit_value('value : Int) -> Bool =
+       'value == eip7825_transaction_gas_limit
+    |  'value == ssz_uint_bound
+type protocol_transaction_regular_gas_limit = {
+    'value,
+    protocol_transaction_regular_gas_limit_value('value).
+    int('value)
+}
 
 /*! Largest chain identifier admitted by the typed-transaction wire decoder. */
 type chain_identifier_bound : Int = 2 ^ 64 - 1
@@ -99,14 +222,15 @@ type chain_identifier_bound : Int = 2 ^ 64 - 1
     chain configuration are decoded as unsigned 64-bit integers. */
 type chain_identifier = range(0, chain_identifier_bound)
 
-/*! A beacon-chain slot number, explicitly a `uint64` in EIP-7843. */
-type slot_number = range(0, 2 ^ 64 - 1)
+/*! A beacon-chain slot number. Provenance: EIP-7843 and Amsterdam's
+    stateless SSZ payload declare this field as `uint64`. */
+type slot_number = range(0, ssz_uint_bound)
 /*! An EIP-4895 withdrawal index, encoded as SSZ `uint64`. */
-type withdrawal_index = range(0, 2 ^ 64 - 1)
+type withdrawal_index = range(0, ssz_uint_bound)
 /*! An EIP-4895 validator index, encoded as SSZ `uint64`. */
-type validator_index = range(0, 2 ^ 64 - 1)
+type validator_index = range(0, ssz_uint_bound)
 /*! An EIP-4895 withdrawal amount in gwei, encoded as SSZ `uint64`. */
-type withdrawal_amount = range(0, 2 ^ 64 - 1)
+type withdrawal_amount = range(0, ssz_uint_bound)
 
 /*! An eight-byte unsigned integer read from the stateless-input SSZ schema.
     This is a transport type; decoders widen or validate it into the semantic
@@ -131,8 +255,10 @@ type item_count = range(0, 2 ^ 64 - 1)
 type item_index = range(0, 2 ^ 64 - 1)
 
 /* Small structural domains carry their protocol bounds directly. */
+/*! The EVM call-frame depth ceiling (Yellow Paper `I_e`). */
+type call_depth_limit : Int = 1024
 /*! The nesting depth of an execution frame. */
-type frame_depth = range(0, 1024)
+type frame_depth = range(0, call_depth_limit)
 /*! The immediate-byte width of a PUSH instruction. */
 type push_width = range(0, 32)
 /*! The number of words on an operand stack. */
@@ -188,39 +314,13 @@ function word_of_withdrawal_amount(value : withdrawal_amount) -> withdrawal_amou
 /*! Embeds an EIP-7843 slot number in the EVM word domain. */
 function word_of_slot_number(value : slot_number) -> slot_number = value
 
-/*! Converts a semantic block number to the 256-bit value exposed by NUMBER. */
-val word_of_block_number : forall 'value, 0 <= 'value. int('value) -> {'result,
-                                                                          0
-                                                                       <= 'result
-                                                                       &  'result
-                                                                       <= 'value
-                                                                       &  'result
-                                                                       <  2 ^ 256.
-                                                                       int('result)}
-function word_of_block_number(value) =
-    if value < sizeof(word_modulus) then {
-        value
-    } else {
-        assert(false);
-        WORD_ZERO
-    }
+/*! Embeds the SSZ-bounded block number in the EVM word domain. The uint64
+    schema proof makes a runtime 256-bit range check unnecessary. */
+function word_of_block_number(value : block_number) -> block_number = value
 
-/*! Converts a semantic timestamp to the 256-bit value exposed by TIMESTAMP. */
-val word_of_block_timestamp : forall 'value, 0 <= 'value. int('value) -> {'result,
-                                                                             0
-                                                                          <= 'result
-                                                                          &  'result
-                                                                          <= 'value
-                                                                          &  'result
-                                                                          <  2 ^ 256.
-                                                                          int('result)}
-function word_of_block_timestamp(value) =
-    if value < sizeof(word_modulus) then {
-        value
-    } else {
-        assert(false);
-        WORD_ZERO
-    }
+/*! Embeds the SSZ-bounded block timestamp in the EVM word domain. The uint64
+    schema proof makes a runtime 256-bit range check unnecessary. */
+function word_of_block_timestamp(value : block_timestamp) -> block_timestamp = value
 
 /*! Converts a chain identifier to the value exposed by CHAINID. */
 function word_of_chain_identifier(value : chain_identifier) -> chain_identifier = value
@@ -233,41 +333,6 @@ function precompile_id_to_address(value : precompile_id) -> address = {
     result[19] = get_slice_int(8, value, 0);
     result[18] = get_slice_int(8, value, 8);
     result
-}
-
-/*! Increments an account nonce after establishing that it is not maximal. */
-function account_nonce_increment(value : account_nonce) -> account_nonce = {
-    assert(value < sizeof(account_nonce_bound));
-    value + 1
-}
-
-/*! Advances the call depth and rejects an attempt to exceed its bound. */
-function frame_depth_increment(value : frame_depth) -> frame_depth =
-    if value < 1024 then {
-        value + 1
-    } else {
-        assert(false);
-        0
-    }
-
-/*! Consumes one validated EIP-4844 transaction blob hash. */
-function transaction_blob_count_decrement(value : transaction_blob_count) -> transaction_blob_count =
-    if value != 0 then {
-        value - 1
-    } else {
-        0
-    }
-
-/*! Descends by one level in a bounded Merkle tree. */
-function merkle_depth_increment(value : merkle_depth) -> merkle_depth = {
-    assert(value < 64);
-    value + 1
-}
-
-/*! Ascends by one level in a bounded Merkle tree. */
-function merkle_depth_decrement(value : merkle_depth) -> merkle_depth = {
-    assert(0 < value);
-    value - 1
 }
 
 /* Source, memory, and code positions are transparent mathematical naturals in
@@ -311,12 +376,53 @@ type memory_pointer = nat
 /*! A length or allocated size in EVM memory. */
 type memory_length = nat
 
+/*! Largest possible initial/live gas value from the SSZ-backed block-gas
+    domain. Fork and header limits may make this ceiling smaller; this union
+    ceiling is sufficient to prove one representation valid for every
+    supported profile. Runtime affordability continues to use remaining gas. */
+type memory_expansion_proof_gas_ceiling : Int = ssz_uint_bound
+/*! First memory word count whose quadratic Yellow Paper charge alone exceeds
+    `memory_expansion_proof_gas_ceiling`:
+    `(2^37)^2 / 512 = 2^65 > 2^64 - 1`. This is a derived proof threshold,
+    not a runtime memory or host-allocation limit. */
+type memory_unaffordable_word_threshold : Int = 2 ^ 37
+/*! Largest whole-word endpoint which can precede that threshold. */
+type memory_affordable_word_bound : Int =
+    memory_unaffordable_word_threshold - 1
+/*! Largest byte endpoint retained by optimized expansion planning after the
+    maximum-gas proof. Each attempted expansion is still checked against its
+    exact live `gas_remaining`. */
+type memory_affordable_byte_bound : Int =
+    32 * memory_affordable_word_bound
+
 /* A range describes the mathematical EVM address selected by an opcode.  Its
  * materializability is established separately by the memory-expansion cost:
  * an unaffordable range halts before it reaches the host byte store. */
 /*! The invariant carried by every canonical EVM memory range. */
 type memory_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len
+
+/*! A memory endpoint which may be presented to the expansion-cost equation.
+    The canonical specification admits every mathematical byte position;
+    executable splices may strengthen this representation boundary after
+    proving that every excluded endpoint is unaffordable. */
+type memory_expansion_endpoint('required : Int) -> Bool =
+    0 <= 'required
+
+/*! Relates a canonical memory operand to its exclusive endpoint. A zero-size
+    operand accesses no memory, so both its retained range and endpoint are
+    canonicalized to zero. */
+type memory_access_relation(
+    'off : Int,
+    'len : Int,
+    'required : Int,
+) -> Bool =
+    memory_valid_range('off, 'len)
+    & memory_expansion_endpoint('required)
+    & (
+          ('len == 0 & 'off == 0 & 'required == 0)
+        | (0 < 'len & 'required == 'off + 'len)
+    )
 
 /*! The indexed fields of an EVM memory range. */
 struct MemoryRangeFields('off : Int, 'len : Int), memory_valid_range('off, 'len) = {
@@ -330,6 +436,21 @@ type MemoryRange = {
     memory_valid_range('off, 'len). MemoryRangeFields('off, 'len)
 }
 
+/*! One logical EVM memory operand together with the exact endpoint which
+    contributes to the shared expansion plan. */
+struct MemoryAccessFields('off : Int, 'len : Int, 'required : Int),
+    memory_access_relation('off, 'len, 'required) = {
+    range : MemoryRangeFields('off, 'len),
+    required_size : int('required),
+}
+
+/*! A memory operand retaining its range/endpoint relationship existentially. */
+type MemoryAccess = {
+    'off 'len 'required,
+    memory_access_relation('off, 'len, 'required).
+    MemoryAccessFields('off, 'len, 'required)
+}
+
 /*! Constructs a memory range whose validity is established by its caller. */
 val memory_range : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> MemoryRangeFields(
         'off,
@@ -339,6 +460,10 @@ function memory_range(off, len) = struct { off = off, len = len }
 
 /*! The canonical inactive range used for a zero-sized operand or halt. */
 let EMPTY_MEMORY_RANGE : MemoryRangeFields(0, 0) = memory_range(0, 0)
+
+/*! The canonical inactive memory operand. */
+let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) =
+    struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
 
 /*! An absolute byte position in the code arena. */
 type code_pointer = nat

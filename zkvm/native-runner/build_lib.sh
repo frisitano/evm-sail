@@ -57,13 +57,11 @@ HTR_OBJ=""
 PREIMAGE_OBJ=""
 MPT_OBJ=""
 INTERPRETER_OBJ=""
-BLOB_FEE_OBJ=""
 if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
   PREIMAGE_OBJ="$BUILD/preimage.o"
   HTR_OBJ="$BUILD/htr.o"
   MPT_OBJ="$BUILD/mpt.o"
   INTERPRETER_OBJ="$BUILD/interpreter.o"
-  BLOB_FEE_OBJ="$BUILD/blob_fee.o"
 fi
 case "$(uname -s)" in
   Darwin) SHFLAG=(-dynamiclib -install_name "@rpath/libevmsail_guest.dylib"); EXT=dylib ;;
@@ -79,7 +77,6 @@ LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
     ${HTR_OBJ:+"$HTR_OBJ"}
     ${MPT_OBJ:+"$MPT_OBJ"}
     ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
-    ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then

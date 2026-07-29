@@ -158,10 +158,6 @@ function word_to_hash(value : word) -> hash = {
     result
 }
 
-/*! Compares two digests as unsigned big-endian integers. */
-function hash_lt(left : hash, right : hash) -> bool =
-    hash_to_word(left) < hash_to_word(right)
-
 /*! Converts a word to its low 160-bit address in canonical byte order. */
 function word_to_address(value : word) -> address = {
     var result : address = Address(vector_init(20, 0x00));
@@ -213,7 +209,12 @@ val word_sub_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'ri
         int('right),
     ) -> word
 function word_sub_word(left, right) =
-    U256(emod_positive(left - right, sizeof(word_modulus)))
+    if right <= left then {
+        left - right
+    } else {
+        let maximum : int(2 ^ 256 - 1) = sizeof(word_modulus) - 1;
+        (maximum - (right - left)) + 1
+    }
 
 function word_and(left : word, right : word) -> word =
     U256(unsigned(and_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))

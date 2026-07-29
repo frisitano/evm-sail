@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MEMORY_MAXDEPTH 1100 /* DEPTH_LIMIT(1024) + tx frame + slack */
+#define MEMORY_MAXDEPTH 1100 /* call_depth_limit (1024) + tx frame + slack */
 
 static uint8_t *arena;
 static size_t arena_cap;

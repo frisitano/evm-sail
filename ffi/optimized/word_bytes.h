@@ -67,23 +67,6 @@ static inline sail_fixed_bytes_32 evmsail_word_to_hash(sail_u256 value) {
   return result;
 }
 
-static inline bool evmsail_hash_lt(sail_fixed_bytes_32 left, sail_fixed_bytes_32 right) {
-  uint64_t left_chunk = evmsail_load_be64(&left.bytes[0]);
-  uint64_t right_chunk = evmsail_load_be64(&right.bytes[0]);
-  if (left_chunk != right_chunk) return left_chunk < right_chunk;
-
-  left_chunk = evmsail_load_be64(&left.bytes[8]);
-  right_chunk = evmsail_load_be64(&right.bytes[8]);
-  if (left_chunk != right_chunk) return left_chunk < right_chunk;
-
-  left_chunk = evmsail_load_be64(&left.bytes[16]);
-  right_chunk = evmsail_load_be64(&right.bytes[16]);
-  if (left_chunk != right_chunk) return left_chunk < right_chunk;
-
-  return evmsail_load_be64(&left.bytes[24]) <
-         evmsail_load_be64(&right.bytes[24]);
-}
-
 static inline sail_fixed_bytes_20 evmsail_word_to_address(sail_u256 value) {
   sail_fixed_bytes_20 result;
   evmsail_store_be32(&result.bytes[0], (uint32_t)value.limbs[2]);

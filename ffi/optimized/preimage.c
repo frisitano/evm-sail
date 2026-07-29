@@ -9,6 +9,7 @@
 #include EVMSAIL_MODEL_H
 
 #include "preimage.h"
+#include "protocol_profile.h"
 #include "region_access.h"
 #include "scratch.h"
 #include "value_convert.h"
@@ -346,19 +347,20 @@ static uint64_t block_header_content_size(const struct zBlockHeader *header,
   const uint64_t extra_size = rlp_string_size(extra_len, extra_first);
   if (extra_size == UINT64_MAX || !add_length(&len, extra_size))
     return UINT64_MAX;
-  if (zk_fork >= zLondon &&
+  const uint64_t fork = evmsail_active_fork();
+  if (fork >= EVMSAIL_FORK_LONDON &&
       !add_length(&len, rlp_quantity_size_u256(header->zbase_fee)))
     return UINT64_MAX;
-  if (zk_fork >= zShanghai && !add_length(&len, 33))
+  if (fork >= EVMSAIL_FORK_SHANGHAI && !add_length(&len, 33))
     return UINT64_MAX;
-  if (zk_fork >= zCancun &&
+  if (fork >= EVMSAIL_FORK_CANCUN &&
       (!add_length(&len, rlp_quantity_size_u64(header->zblob_gas_used)) ||
        !add_length(&len, rlp_quantity_size_u64(header->zexcess_blob_gas)) ||
        !add_length(&len, 33)))
     return UINT64_MAX;
-  if (zk_fork >= zPrague && !add_length(&len, 33))
+  if (fork >= EVMSAIL_FORK_PRAGUE && !add_length(&len, 33))
     return UINT64_MAX;
-  if (zk_fork >= zAmsterdam &&
+  if (fork >= EVMSAIL_FORK_AMSTERDAM &&
       (!add_length(&len, 33) ||
        !add_length(&len, rlp_quantity_size_u64(header->zslot_number))))
     return UINT64_MAX;
@@ -399,6 +401,7 @@ sail_fixed_bytes_32 evmsail_optimized_block_header_hash(
   if (!preimage)
     return (zero_hash());
   uint8_t prev_randao[32];
+  const uint64_t fork = evmsail_active_fork();
   sail_word_to_be_bytes(prev_randao, header.zprev_randao);
   uint8_t *cursor = write_rlp_list_prefix(preimage, content_len);
   cursor = write_rlp_fixed(cursor, header.zparent_hash.bytes, 32);
@@ -421,19 +424,19 @@ sail_fixed_bytes_32 evmsail_optimized_block_header_hash(
   *cursor++ = 0x88;
   memset(cursor, 0, 8);
   cursor += 8;
-  if (zk_fork >= zLondon)
+  if (fork >= EVMSAIL_FORK_LONDON)
     cursor = write_rlp_u256(cursor, header.zbase_fee);
-  if (zk_fork >= zShanghai)
+  if (fork >= EVMSAIL_FORK_SHANGHAI)
     cursor = write_rlp_fixed(cursor, withdrawals_root.bytes, 32);
-  if (zk_fork >= zCancun) {
+  if (fork >= EVMSAIL_FORK_CANCUN) {
     cursor = write_rlp_u64(cursor, header.zblob_gas_used);
     cursor = write_rlp_u64(cursor, header.zexcess_blob_gas);
     cursor =
         write_rlp_fixed(cursor, header.zparent_beacon_block_root.bytes, 32);
   }
-  if (zk_fork >= zPrague)
+  if (fork >= EVMSAIL_FORK_PRAGUE)
     cursor = write_rlp_fixed(cursor, requests_hash.bytes, 32);
-  if (zk_fork >= zAmsterdam) {
+  if (fork >= EVMSAIL_FORK_AMSTERDAM) {
     cursor = write_rlp_fixed(cursor, block_access_list_hash.bytes, 32);
     cursor = write_rlp_u64(cursor, header.zslot_number);
   }

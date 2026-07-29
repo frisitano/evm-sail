@@ -32,6 +32,7 @@ function main() -> unit = {
             validation_debug_record(VALIDATION_STAGE_DECODE_INPUT, reason);
             None()
         },
+        Overflow() => None(),
     };
     match result {
         Some(result) => write_validation_result(result.input_ref, result.valid),
@@ -110,6 +111,8 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
 }
 
 function collect_execution_requests(deposits : StatelessInputSlice) -> ExecutionRequests = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     cycle_scope_start(41);
     let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
     cycle_scope_end(41);
@@ -117,14 +120,14 @@ function collect_execution_requests(deposits : StatelessInputSlice) -> Execution
     let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
     cycle_scope_end(42);
     cycle_scope_start(43);
-    let builder_deposits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    let builder_deposits : ScratchSlice = if profile.fork >= Amsterdam then {
             system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
         };
     cycle_scope_end(43);
     cycle_scope_start(44);
-    let builder_exits : ScratchSlice = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    let builder_exits : ScratchSlice = if profile.fork >= Amsterdam then {
             system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
         } else {
             EMPTY_SCRATCH_SLICE
@@ -140,8 +143,10 @@ function collect_execution_requests(deposits : StatelessInputSlice) -> Execution
 }
 
 function validate_executed_block(block : Block, input_ref : StatelessInputRef, result : BlockExecutionResult) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     let header = block.header;
-    if protocol_profile_fork(k_protocol_profile) >= Prague then {
+    if profile.fork >= Prague then {
         if   not_bool(region_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests))
            | not_bool(region_slices_equal(result.requests.consolidations, input_ref.consolidation_requests))
            | not_bool(region_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests))
@@ -152,7 +157,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
-    if (protocol_profile_fork(k_protocol_profile) >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
+    if (profile.fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         throw InvalidBlock(InvalidBlobGasUsed)
     };
     cycle_scope_start(19);
@@ -167,7 +172,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
     if not_bool(logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom)) then {
         throw InvalidBlock(InvalidLogsBloom)
     };
-    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    if profile.fork >= Amsterdam then {
         let maximum_items : item_count = header.gas_limit / 2000;
         cycle_scope_start(20);
         validate_block_access_list(block.body.block_access_list, maximum_items);
@@ -196,7 +201,11 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
         active_stage = VALIDATION_STAGE_EXECUTE_BLOCK;
         cycle_scope_start(active_stage);
         let block = input.payload.block;
-        let result = execute_block_body(block.body, input_ref.public_keys, block.header.gas_limit, input_ref.deposits);
+        let result = execute_block_body(
+            block.body,
+            input_ref.public_keys,
+            input_ref.deposits,
+        );
 
         cycle_scope_end(active_stage);
         active_stage = VALIDATION_STAGE_VALIDATE_RESULT;
@@ -208,6 +217,10 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> StatelessVal
         InvalidBlock(reason) => {
             cycle_scope_end(active_stage);
             StatelessPayloadInvalid(struct { stage = active_stage, reason = reason })
+        },
+        Overflow() => {
+            cycle_scope_end(active_stage);
+            throw Overflow()
         },
     }
 }
@@ -242,11 +255,13 @@ function write_invalid_result() -> unit = {
 function execute_block_transactions(
     transactions : TransactionListRef,
     public_keys : StatelessInputSlice,
-    header_gas_limit : block_gas_limit,
     expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    let gas_limits = execution_profile.gas;
     let public_keys_length = public_keys.len;
     let public_key_length = PUBLIC_KEY_LENGTH;
     let public_key_count_value = public_keys_length / public_key_length;
@@ -254,7 +269,7 @@ function execute_block_transactions(
         (public_keys_length != public_key_count_value * public_key_length) then {
         throw InvalidBlock(WitnessDeficient)
     };
-    let gas_limit = header_gas_limit;
+    let gas_limit = gas_limits.block_limit;
     var execution_gas_acc : gas = GAS_ZERO;
     var state_gas_acc : gas = GAS_ZERO;
     var blob_gas_acc : blob_gas_used = 0;
@@ -283,38 +298,48 @@ function execute_block_transactions(
         };
         let available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc);
         let available_state_gas = remaining_block_gas(gas_limit, state_gas_acc);
-        let execution_limit = transaction_execution_limit(tx.gas_limit);
-        let transaction_fits : bool = if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
-                (execution_limit <= available_execution_gas) & (tx.gas_limit <= available_state_gas)
+        let allowance = transaction_gas_allowance(
+            tx.gas_limit,
+            gas_limits.transaction_total_limit,
+            gas_limits.transaction_regular_limit,
+        );
+        let transaction_fits : bool = if profile.fork >= Amsterdam then {
+                (allowance.regular <= available_execution_gas) &
+                (allowance.total <= available_state_gas)
             } else {
-                tx.gas_limit <= available_execution_gas
+                allowance.total <= available_execution_gas
             };
         if not_bool(transaction_fits) then {
             throw InvalidBlock(GasUsedExceedsLimit)
         } else {
-            let tx_blob_gas = transaction_blob_gas_for_count(tx.blob_hashes.count);
-            let next_blob_gas : blob_gas_used = if protocol_profile_fork(k_protocol_profile) < Cancun then {
+            let tx_blob_gas : transaction_blob_gas =
+                sizeof(gas_per_blob_value) * tx.blob_hashes.count;
+            let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
                     blob_gas_acc
                 } else {
-                    checked_block_blob_gas_add(blob_gas_acc, tx_blob_gas)
+                    block_blob_gas_add(
+                        profile.blob_schedule.max,
+                        blob_gas_acc,
+                        tx_blob_gas,
+                    )
                 };
-            let receipt = process_transaction(tx);
+            let receipt = process_transaction(tx, allowance);
             execution_gas_acc = conserved_gas_add(execution_gas_acc, receipt.execution_gas);
             state_gas_acc = conserved_gas_add(state_gas_acc, receipt.state_gas);
             if (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc) then {
                 throw InvalidBlock(GasUsedExceedsLimit)
             };
             receipts = receipt_accumulator_push(receipts, receipt, next.index);
-            if protocol_profile_fork(k_protocol_profile) >= Prague then {
+            if profile.fork >= Prague then {
                 remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
             };
             blob_gas_acc = next_blob_gas
         }
     };
-    if (protocol_profile_fork(k_protocol_profile) >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
+    if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    let header_gas_used = if (protocol_profile_fork(k_protocol_profile) >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
+    let header_gas_used = if (profile.fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
             state_gas_acc
         } else {
             execution_gas_acc
@@ -337,18 +362,23 @@ function execute_block_transactions(
 function execute_block_body(
     body : BlockBody,
     public_keys : StatelessInputSlice,
-    header_gas_limit : block_gas_limit,
     expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     bal_reset();
     k_block_access_index = 0;
     cycle_scope_start(8);
     run_block_start_system_calls();
     cycle_scope_end(8);
     cycle_scope_start(9);
-    let result = execute_block_transactions(body.transactions, public_keys, header_gas_limit, expected_deposits);
+    let result = execute_block_transactions(
+        body.transactions,
+        public_keys,
+        expected_deposits,
+    );
     cycle_scope_end(9);
     let post_tx_index = body.transactions.count + 1;
     k_block_access_index = post_tx_index;
@@ -356,7 +386,7 @@ function execute_block_body(
     apply_block_end_state(body);
     cycle_scope_end(17);
     cycle_scope_start(18);
-    let requests = if protocol_profile_fork(k_protocol_profile) >= Prague then {
+    let requests = if profile.fork >= Prague then {
             collect_execution_requests(expected_deposits)
         } else {
             EMPTY_EXECUTION_REQUESTS
@@ -365,14 +395,17 @@ function execute_block_body(
     { result with requests = requests }
 }
 
-function process_transaction(tx : Transaction) -> Receipt = {
+function process_transaction(
+    tx : Transaction,
+    allowance : TransactionGasAllowance,
+) -> Receipt = {
     cycle_scope_start(11);
     k_tx_reset();
     cycle_scope_end(11);
     cycle_scope_start(12);
-    let validity = check_transaction_validity(tx);
+    let validity = check_transaction_validity(tx, allowance);
     cycle_scope_end(12);
-    k_set_tx(struct { origin = tx.sender, gas_price = validity.gas_price, blob_hashes = tx.blob_hashes });
+    k_set_tx(tx_env(tx.sender, validity.gas_price, tx.blob_hashes));
     cycle_scope_start(13);
     let upfront = apply_transaction_upfront_effects(tx, validity);
     cycle_scope_end(13);
@@ -386,7 +419,9 @@ function process_transaction(tx : Transaction) -> Receipt = {
 }
 
 function k_tx_merge() -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     cycle_scope_start(47);
-    optimized_tx_merge(protocol_profile_fork(k_protocol_profile) >= Cancun, protocol_profile_fork(k_protocol_profile) >= Amsterdam, k_block_access_index);
+    optimized_tx_merge(profile.fork >= Cancun, profile.fork >= Amsterdam, k_block_access_index);
     cycle_scope_end(47)
 }

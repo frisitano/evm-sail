@@ -27,33 +27,13 @@ let HEX_PREFIX_MAX_LENGTH : int(33) = 33
 /*! The path length in nibbles. */
 function path_len(path : TriePath) -> trie_path_len = path.len
 
-/*! Increments a path length, rejecting a value already at the key bound. */
-function trie_path_len_increment(value : trie_path_len) -> trie_path_len =
-    if value < 64 then {
-        value + 1
-    } else {
-        throw InvalidBlock(WitnessDeficient)
-    }
-
 /*! Constructs a path from high-aligned data and a nibble length. */
 function path_new(data : b256, len : trie_path_len) -> TriePath =
     struct { data = data, len = len }
 
-/*! Narrows a nonterminal path position to a branch depth. */
-function to_trie_depth(value : trie_path_len) -> trie_depth =
-    if 64 <= value then {
-        throw InvalidBlock(WitnessDeficient)
-    } else {
-        value
-    }
-
 /*! The empty path. */
 function path_empty() -> TriePath =
     path_new(ZERO_HASH, 0)
-
-/*! The 64-nibble path of a 32-byte hash — the secure-trie key form. */
-function path_from_hash(h : hash) -> TriePath =
-    path_new(h, 64)
 
 /*! Maps a nibble cursor to the corresponding canonical-order path byte. */
 function path_byte_index(i : trie_path_cursor) -> b256_index = {
@@ -95,7 +75,7 @@ function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
     } else {
         bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
     };
-    path_new(B256(bytes), trie_path_len_increment(length))
+    path_new(B256(bytes), length + 1)
 }
 
 function path_append_byte(path : TriePath, value : byte) -> TriePath =
@@ -115,7 +95,12 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
         var index : trie_path_len = 0;
         while index < blen termination_measure(blen - index) do {
             result = path_append_nibble(result, path_nibble(b, index));
-            index = trie_path_len_increment(index)
+            let current_index = index;
+            index = if current_index < 64 then {
+                    current_index + 1
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
         };
         result
     } else {
@@ -135,7 +120,12 @@ function path_take(path : TriePath, n : trie_path_len) -> TriePath =
             var index : trie_path_len = 0;
             while index < n termination_measure(n - index) do {
                 result = path_append_nibble(result, path_nibble(path, index));
-                index = trie_path_len_increment(index)
+            let current_index = index;
+            index = if current_index < 64 then {
+                    current_index + 1
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
             };
             result
         }
@@ -162,7 +152,12 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
                         0
                     };
                 result = path_append_nibble(result, path_nibble(path, source_index));
-                offset = trie_path_len_increment(offset)
+                let current_offset = offset;
+                offset = if current_offset < 64 then {
+                        current_offset + 1
+                    } else {
+                        throw InvalidBlock(WitnessDeficient)
+                    }
             };
             result
         }
@@ -172,14 +167,6 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
 /*! Path equality. */
 function path_eq(a : TriePath, b : TriePath) -> bool =
     (a.len == b.len) & (a.data == b.data)
-
-/*! Lexicographic path order (data, then length). */
-function path_lt(a : TriePath, b : TriePath) -> bool =
-    if a.data == b.data then {
-        path_len(a) < path_len(b)
-    } else {
-        hash_lt(a.data, b.data)
-    }
 
 /*! Whether `seg` occurs in `key` at nibble position `pos`. */
 function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) -> bool = {
@@ -198,7 +185,12 @@ function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) ->
             } else {
                 ok = false
             };
-            offset = trie_path_len_increment(offset)
+            let current_offset = offset;
+            offset = if current_offset < 64 then {
+                    current_offset + 1
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
         };
         ok
     }
@@ -217,7 +209,12 @@ function common_prefix_length(a : TriePath, b : TriePath) -> trie_path_len = {
     var matching : bool = true;
     while matching & length < stop termination_measure(stop - length) do {
         if path_nibble(a, length) == path_nibble(b, length) then {
-            length = trie_path_len_increment(length)
+            let current_length = length;
+            length = if current_length < 64 then {
+                    current_length + 1
+                } else {
+                    throw InvalidBlock(WitnessDeficient)
+                }
         } else {
             matching = false
         }

@@ -55,7 +55,7 @@ C_MODEL_HEADERS     := sail_failure.h region_access.h hash.h precompiles.h outpu
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
 C_OPTIMIZED_HEADERS := word_bytes.h preimage.h htr.h mpt.h state.h \
-                       interpreter.h blob_fee.h
+                       interpreter.h
 C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
 C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
 C_PRESERVE_FLAGS    := --c-preserve main \

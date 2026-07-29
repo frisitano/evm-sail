@@ -169,7 +169,12 @@ function k_transfer(src : address, dst : address, v : word) -> unit = {
     EIP-2681 guards every path that reaches a bump. */
 function k_bump_nonce(a : address) -> unit = {
     let cur = k_aload(a);
-    store_account_info(a, cur, { cur.info with nonce = account_nonce_increment(cur.info.nonce) })
+    let nonce = cur.info.nonce;
+    if nonce < sizeof(account_nonce_bound) then {
+        store_account_info(a, cur, { cur.info with nonce = nonce + 1 })
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
 }
 
 /*! Credits `v` wei (no-op when zero). */

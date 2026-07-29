@@ -14,37 +14,63 @@ Pure data — no registers, no externs.
     constant retains its precise singleton type for dependent profile typing. */
 type Fork = range(0, 16)
 
+/*! Singleton indices for the supported fork sequence. Keeping the numeric
+    identities named lets dependent profile constraints refer to protocol
+    forks without repeating their wire-order integers. */
+type frontier_fork_value : Int = 0
+type homestead_fork_value : Int = 1
+type byzantium_fork_value : Int = 2
+type constantinople_fork_value : Int = 3
+type istanbul_fork_value : Int = 4
+type berlin_fork_value : Int = 5
+type london_fork_value : Int = 6
+type arrow_glacier_fork_value : Int = 7
+type gray_glacier_fork_value : Int = 8
+type paris_fork_value : Int = 9
+type shanghai_fork_value : Int = 10
+/*! First fork at which blob gas is active. Kept as a type-level singleton so
+    profile equations and the runtime `Cancun` value share one boundary. */
+type first_blob_fork_value : Int = 11
+type prague_fork_value : Int = 12
+type osaka_fork_value : Int = 13
+type bpo1_fork_value : Int = 14
+type bpo2_fork_value : Int = 15
+type amsterdam_fork_value : Int = 16
+
 /*! Launch protocol. */
-let Frontier : int(0) = 0
+let Frontier : int(frontier_fork_value) = sizeof(frontier_fork_value)
 /*! EIP-2 create rules, EIP-7 DELEGATECALL. */
-let Homestead : int(1) = 1
+let Homestead : int(homestead_fork_value) = sizeof(homestead_fork_value)
 /*! EIP-140 REVERT, EIP-211 returndata; precompiles 0x05-0x08. */
-let Byzantium : int(2) = 2
+let Byzantium : int(byzantium_fork_value) = sizeof(byzantium_fork_value)
 /*! EIP-145 shifts, EIP-1014 CREATE2, EIP-1052 EXTCODEHASH. */
-let Constantinople : int(3) = 3
+let Constantinople : int(constantinople_fork_value) =
+    sizeof(constantinople_fork_value)
 /*! EIP-1344 CHAINID, EIP-2200 SSTORE metering. */
-let Istanbul : int(4) = 4
+let Istanbul : int(istanbul_fork_value) = sizeof(istanbul_fork_value)
 /*! EIP-2929/2930 access lists and warm/cold access costs. */
-let Berlin : int(5) = 5
+let Berlin : int(berlin_fork_value) = sizeof(berlin_fork_value)
 /*! EIP-1559 fee market and EIP-3529 refund reduction. */
-let London : int(6) = 6
+let London : int(london_fork_value) = sizeof(london_fork_value)
 /*! Difficulty-bomb-only schema fork; execution rules remain London. */
-let ArrowGlacier : int(7) = 7
+let ArrowGlacier : int(arrow_glacier_fork_value) =
+    sizeof(arrow_glacier_fork_value)
 /*! Difficulty-bomb-only schema fork; execution rules remain London. */
-let GrayGlacier : int(8) = 8
+let GrayGlacier : int(gray_glacier_fork_value) =
+    sizeof(gray_glacier_fork_value)
 /*! EIP-4399 PREVRANDAO replaces DIFFICULTY. */
-let Paris : int(9) = 9
+let Paris : int(paris_fork_value) = sizeof(paris_fork_value)
 /*! EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode. */
-let Shanghai : int(10) = 10
+let Shanghai : int(shanghai_fork_value) = sizeof(shanghai_fork_value)
 /*! EIP-1153/4844; precompiles 0x01-0x0a. */
-let Cancun : int(11) = 11
+let Cancun : int(first_blob_fork_value) = sizeof(first_blob_fork_value)
 /*! EIP-7623 calldata floor; BLS precompiles 0x0b-0x11. */
-let Prague : int(12) = 12
+let Prague : int(prague_fork_value) = sizeof(prague_fork_value)
 /*! EIP-7883 modexp gas, EIP-7825 cap; precompile 0x100. */
-let Osaka : int(13) = 13
+let Osaka : int(osaka_fork_value) = sizeof(osaka_fork_value)
 /*! First blob-parameter-only fork; execution rules remain Osaka. */
-let BPO1 : int(14) = 14
+let BPO1 : int(bpo1_fork_value) = sizeof(bpo1_fork_value)
 /*! Second blob-parameter-only fork; execution rules remain Osaka. */
-let BPO2 : int(15) = 15
+let BPO2 : int(bpo2_fork_value) = sizeof(bpo2_fork_value)
 /*! EIP-7954 code/initcode size bump (65536/131072). */
-let Amsterdam : int(16) = 16
+let Amsterdam : int(amsterdam_fork_value) = sizeof(amsterdam_fork_value)

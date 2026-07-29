@@ -12,9 +12,9 @@ register k_parent_state_root : hash = ZERO_HASH
 register k_n_headers : item_count = 0
 /*! The chain id (`CHAINID`, EIP-155 domains). */
 register k_chain_id : chain_identifier = 1
-/*! The active fork identity, protocol limits, and blob schedule, selected
-    together while decoding the stateless-input schema fork. */
-register k_protocol_profile : ProtocolProfile = DEFAULT_PROTOCOL_PROFILE
+/*! The active protocol policy and all gas limits derived from the executing
+    header, selected together while decoding the stateless input. */
+register k_execution_profile : ExecutionProfile = DEFAULT_EXECUTION_PROFILE
 
 /*! The executing payload's header. */
 register k_header : BlockHeader =
@@ -39,7 +39,12 @@ register k_header : BlockHeader =
 
 /*! The per-transaction environment (`ORIGIN`, `GASPRICE`,
     `BLOBHASH`). */
-register k_tx : TxEnv = struct { origin = ZERO_ADDRESS, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES }
+register k_tx : TxEnv =
+    (struct {
+        origin = ZERO_ADDRESS,
+        gas_price = ZERO_WORD,
+        blob_hashes = EMPTY_BLOB_HASHES,
+    } : TxEnvFields(blob_schedule_inactive_count))
 /*! The EIP-7928 position stamped on committed state changes in the current
     execution phase. */
 register k_block_access_index : block_access_index = 0
@@ -70,6 +75,7 @@ enum EnvField = {
 
 /*! An environment field as the word its opcode pushes. */
 function k_env(f : EnvField) -> word = {
+    let active_tx = k_tx;
     match f {
         F_Number => U256(word_of_block_number(k_header.number)),
         F_Timestamp => U256(word_of_block_timestamp(k_header.timestamp)),
@@ -78,8 +84,8 @@ function k_env(f : EnvField) -> word = {
         F_ChainId => U256(word_of_chain_identifier(k_chain_id)),
         F_GasLimit => U256(k_header.gas_limit),
         F_PrevRandao => k_header.prev_randao,
-        F_Origin => address_to_word(k_tx.origin),
-        F_GasPrice => k_tx.gas_price,
+        F_Origin => address_to_word(active_tx.origin),
+        F_GasPrice => active_tx.gas_price,
         F_SlotNumber => U256(word_of_slot_number(k_header.slot_number)),
     }
 }
@@ -121,11 +127,12 @@ function k_blockhash(number_word : word) -> hash = {
 /*! `BLOBHASH` (EIP-4844): the `i`-th versioned hash, zero out of
     range. */
 function k_blobhash(index_word : word) -> word = {
-    let count = k_tx.blob_hashes.count;
+    let active_tx = k_tx;
+    let count = active_tx.blob_hashes.count;
     if index_word < count then {
-        let index : transaction_blob_count = index_word;
+        let index = index_word;
         let offset : source_pointer = 33 * index + 1;
-        slice_load_n(k_tx.blob_hashes.bytes, offset, WORD_BYTE_LENGTH)
+        slice_load_n(active_tx.blob_hashes.bytes, offset, WORD_BYTE_LENGTH)
     } else {
         ZERO_WORD
     }

@@ -29,12 +29,8 @@ register frame_refund : gas_refund = GAS_REFUND_ZERO
 register frame_status : FrameStatus = Running()
 /*! The frame's call message. */
 register message : Message = DEFAULT_MESSAGE
-/*! The call depth (YP I_e), bounded by `DEPTH_LIMIT`. */
+/*! The call depth (YP I_e), bounded by `call_depth_limit`. */
 register call_depth : frame_depth = 0
-
-/* EIP-150 / YP: a message call may nest at most 1024 frames deep. */
-/*! A message call may nest at most 1024 frames deep (EIP-150 / YP). */
-let DEPTH_LIMIT : frame_depth = 1024
 
 /*! Adds two semantically bounded refund quantities and narrows their exact sum
     back to the accumulator range. The dependent signature preserves the input
@@ -102,7 +98,9 @@ function conserved_gas_add(left, right) = left + right
 /*! Returns any Amsterdam state-gas spill to the execution-gas pool and
     restores the frame's state-gas reservoir. */
 function refill_frame_state_gas() -> unit = {
-    if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if profile.fork >= Amsterdam then {
         gas_remaining = conserved_gas_add(gas_remaining, state_gas_spilled);
         state_gas_remaining = message.state_gas_reservoir;
         state_gas_spilled = STATE_GAS_SPILL_ZERO

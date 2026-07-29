@@ -83,8 +83,7 @@ if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
 fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h
-    blob_fee.h)
+  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -216,7 +215,6 @@ HTR_OBJ=""
 PREIMAGE_OBJ=""
 MPT_OBJ=""
 INTERPRETER_OBJ=""
-BLOB_FEE_OBJ=""
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
@@ -234,10 +232,6 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
   INTERPRETER_OBJ="$BUILD/interpreter.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/blob_fee.c" -o "$BUILD/blob_fee.o"
-  BLOB_FEE_OBJ="$BUILD/blob_fee.o"
 fi
 
 # --- 5. backend-specific native harness + CLI main ---------------------------
@@ -271,7 +265,6 @@ LINK_CMD=("$CC" "${CFLAGS[@]}"
     ${HTR_OBJ:+"$HTR_OBJ"}
     ${MPT_OBJ:+"$MPT_OBJ"}
     ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
-    ${BLOB_FEE_OBJ:+"$BLOB_FEE_OBJ"}
     "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
 if [ "$EVM_BUILD_MODE" = standard ]; then

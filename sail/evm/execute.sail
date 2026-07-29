@@ -523,12 +523,8 @@ function execute_basefee() -> unit = {
 /*! Implements `BLOBBASEFEE`. */
 function execute_blobbasefee() -> unit = {
     charge(G_base);
-    let price = blob_base_fee(k_header.excess_blob_gas);
-    if price < sizeof(word_modulus) then {
-        push(protocol_word(price))
-    } else {
-        throw InvalidBlock(ExecutionInvalid)
-    }
+    let execution_profile = k_execution_profile;
+    push(blob_base_fee(execution_profile.protocol, k_header.excess_blob_gas))
 }
 
 /*! Implements `BLOBHASH`. */
@@ -591,11 +587,23 @@ function execute_mcopy() -> unit = {
     charge_copy_gas(length_word);
     if is_running() then {
         let available = gas_remaining;
-        let expansion = memory_pair_expansion(destination_word, length_word, source_word, length_word, available);
+        let destination = memory_access(destination_word, length_word);
+        let source = memory_access(source_word, length_word);
+        let required_size =
+            if destination.required_size < source.required_size then {
+                source.required_size
+            } else {
+                destination.required_size
+            };
+        let expansion = memory_expansion(required_size, available);
         charge(expansion.cost);
         if is_running() then {
-            let (destination, source) = apply_memory_pair_expansion(expansion);
-            mem_mcopy(destination.off, source.off, destination.len)
+            apply_memory_expansion(expansion);
+            mem_mcopy(
+                destination.range.off,
+                source.range.off,
+                destination.range.len,
+            )
         }
     }
 }
@@ -613,10 +621,12 @@ function execute_sload() -> unit = {
 
 /*! Implements `SSTORE`, including fork-specific gas and refunds. */
 function execute_sstore() -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if guard_static() then {
         ()
     } else {
-        if (protocol_profile_fork(k_protocol_profile) < Amsterdam) & (gas_remaining <= G_callstipend) then {
+        if (profile.fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
             exc_halt(OutOfGas)
         } else {
             let s = pop();
@@ -624,7 +634,7 @@ function execute_sstore() -> unit = {
             if is_running() then {
                 let warm = k_slot_is_warm(self_addr(), s);
                 let cold = not_bool(warm);
-                if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+                if profile.fork >= Amsterdam then {
                     let access_cost = amsterdam_storage_access_cost(cold);
                     let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
                     check_execution_gas(sentry_cost)
@@ -845,11 +855,13 @@ function execute_invalid() -> unit = {
 
 /*! Implements `SELFDESTRUCT` with fork-specific semantics. */
 function execute_selfdestruct() -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if guard_static() then {
         ()
     } else {
         let beneficiary = word_to_address(pop());
-        if protocol_profile_fork(k_protocol_profile) >= Amsterdam then {
+        if profile.fork >= Amsterdam then {
             let warm = k_access_account(beneficiary);
             let access_cost = 0 + G_selfdestruct + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
             check_execution_gas(access_cost);
@@ -885,11 +897,11 @@ function execute_selfdestruct() -> unit = {
             };
             if is_running() then {
                 let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
-                if (protocol_profile_fork(k_protocol_profile) < London) & first_selfdestruct then {
+                if (profile.fork < London) & first_selfdestruct then {
                     record_refund(R_selfdestruct_pre_london)
                 };
                 k_transfer(self_addr(), beneficiary, bal);
-                if protocol_profile_fork(k_protocol_profile) < Cancun then {
+                if profile.fork < Cancun then {
                     k_zero_balance(self_addr());
                     k_selfdestruct(self_addr())
                 } else {

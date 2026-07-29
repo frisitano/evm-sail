@@ -68,20 +68,17 @@ function updates_empty(updates : TrieUpdateCursor) -> bool =
         Some(_) => false,
     }
 
-/*! Consumes the active update and pulls its successor. Strict ordering rules
-    out duplicate keys. The successor starts beyond the consumed key's full
-    prefix, carrying the one common-prefix depth computed for this adjacent key
-    pair; parents rebase it to `UpdateUnderPrefix(path_postfix)` when that depth
-    reaches their subtree. */
+/*! Consumes the active update and pulls its successor. Sources establish strict
+    ascending order and unique keys before opening the cursor. The successor
+    starts beyond the consumed key's full prefix, carrying the one common-prefix
+    depth computed for this adjacent key pair; parents rebase it to
+    `UpdateUnderPrefix(path_postfix)` when that depth reaches their subtree. */
 function trie_updates_pop(updates : TrieUpdateCursor) -> (TrieUpdate, TrieUpdateCursor) =
     match updates.current {
         Some(current) => {
             let successor = trie_update_source_next(updates.source);
             let next : TrieUpdateCursor = match successor {
                 Some(update) => {
-                    if not_bool(path_lt(current.key, update.key)) then {
-                        throw InvalidBlock(WitnessDeficient)
-                    };
                     struct {
                         source = updates.source,
                         current = successor,
@@ -226,14 +223,6 @@ struct TrieChildren = {
     count : range(0, 16),
 }
 
-/*! Increments the number of populated branch children within its radix bound. */
-function trie_child_count_increment(count : range(0, 16)) -> range(0, 16) =
-    if count < 16 then {
-        count + 1
-    } else {
-        throw InvalidBlock(WitnessDeficient)
-    }
-
 /*! Constructs an empty child accumulator. */
 function trie_children_empty() -> TrieChildren =
     struct { mask = 0x0000, children = vector_init(16, EmptyRef()), only = None(), count = 0 }
@@ -251,7 +240,8 @@ function trie_children_add(
         None() => children,
         Some(item) => {
             let depth = path_len(prefix);
-            if 64 <= depth | children.count == 16 then {
+            let child_count = children.count;
+            if 64 <= depth | child_count == 16 then {
                 throw InvalidBlock(WitnessDeficient)
             };
             let child_prefix = path_concat(prefix, path_single(index));
@@ -265,7 +255,7 @@ function trie_children_add(
             updated.mask = branch_mask_set(updated.mask, index);
             updated.children[unsigned(index)] = item_ref(item, depth + 1);
             updated.only = Some(item);
-            updated.count = trie_child_count_increment(children.count);
+            updated.count = child_count + 1;
             updated
         },
     }

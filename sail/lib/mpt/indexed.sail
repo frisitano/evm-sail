@@ -29,12 +29,6 @@ struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
 /*! The minimal nonzero byte width of a supported RLP list index. */
 type rlp_index_byte_width = range(1, 8)
 
-/*! Decrements a positive RLP index byte width. */
-function rlp_index_byte_width_decrement(value : range(0, 8)) -> range(0, 7) = {
-    assert(0 < value);
-    value - 1
-}
-
 /*! Returns the minimal byte width of an indexed-trie position. */
 function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
     if value < 256 then {
@@ -76,7 +70,12 @@ function trie_index_key(index : item_index) -> TriePath =
             var path = path_append_byte(path_empty(), get_slice_int(8, 128 + width, 0));
             var remaining : range(0, 8) = width;
             while remaining != 0 termination_measure(remaining) do {
-                let byte_offset = rlp_index_byte_width_decrement(remaining);
+                let current_remaining = remaining;
+                let byte_offset : range(0, 7) = if 0 < current_remaining then {
+                        current_remaining - 1
+                    } else {
+                        throw InvalidBlock(WitnessDeficient)
+                    };
                 let shift : range(0, 56) = byte_offset * 8;
                 path = path_append_byte(path, get_slice_int(8, index, shift));
                 remaining = byte_offset

@@ -130,7 +130,9 @@ function logs_bloom_or(left : LogsBloom, right : LogsBloom) -> LogsBloom = {
 /*! Emits the EIP-7708 transfer log for a nonzero, non-self value
     transfer (Amsterdam onward). */
 function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
-    if (protocol_profile_fork(k_protocol_profile) < Amsterdam) | word_is_zero(v) | (src == dst) then {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if (profile.fork < Amsterdam) | word_is_zero(v) | (src == dst) then {
         ()
     } else {
         k_log(
@@ -144,7 +146,9 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
 /*! Emits the EIP-7708 burn log when a selfdestruct deletion burns a
     nonzero balance (Amsterdam onward). */
 function k_emit_burn_log(a : address, v : word) -> unit = {
-    if (protocol_profile_fork(k_protocol_profile) < Amsterdam) | word_is_zero(v) then {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if (profile.fork < Amsterdam) | word_is_zero(v) then {
         ()
     } else {
         k_log(EIP7708_SYSTEM_ADDRESS, LogTopics2((EIP7708_BURN_TOPIC, address_to_word(a))), LogDataWord(v))

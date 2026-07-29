@@ -23,8 +23,9 @@ ceiling.
 */
 
 /*! The maximum block gas limit admitted by the execution-payload SSZ
-    `uint64` field. */
-type block_gas_limit_bound : Int = 2 ^ 64 - 1
+    `uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
+    Amsterdam `SszExecutionPayload.gas_limit`. */
+type block_gas_limit_bound : Int = ssz_uint_bound
 
 /*! Available gas in a running EVM frame. */
 type gas = nat
@@ -75,7 +76,7 @@ type linear_gas_product = nat
 
 /*! The EIP-7825 per-transaction execution-gas limit reused by EIP-8037's
     regular-gas pool. */
-type transaction_execution_gas_limit_value : Int = 2 ^ 24
+type transaction_execution_gas_limit_value : Int = eip7825_transaction_gas_limit
 
 /*! Gas admitted to Amsterdam's regular execution pool after applying the
     EIP-7825 per-transaction cap. */
@@ -96,9 +97,16 @@ let STATE_GAS_SPILL_LIMIT : state_gas_spill = sizeof(transaction_execution_gas_l
     value onto the stack (Yellow Paper equation 147). */
 type block_gas_limit = range(0, block_gas_limit_bound)
 
-/*! Gas consumed by a block. It remains an exact natural during execution and
-    is subsequently checked against the word-bounded header gas limit. */
-type block_gas = nat
+/*! Gas consumed by a block header. Provenance: the execution-payload SSZ
+    schema declares `gas_used: uint64`. The separate payload-validity rule
+    `gas_used <= gas_limit` is checked when the header is admitted. */
+type block_gas = range(0, block_gas_limit_bound)
+
+/*! Gas accumulated in execution-order receipts. Before Amsterdam this is
+    bounded by the block gas limit. Amsterdam receipts account for regular and
+    state gas together, so the execution profile supplies the tighter
+    header-dependent bound. */
+type receipt_cumulative_gas = nat
 
 let GAS_ZERO : gas = 0
 
@@ -148,5 +156,14 @@ type transaction_state_gas_delta = int
 /* The transaction refund cap is `gas_used / 2` before London and
  * `gas_used / 5` from London onward.  Keep the exact protocol alternatives
  * in the type instead of a generic implementation-sized divisor range. */
+type pre_london_refund_divisor : Int = 2
+type post_london_refund_divisor : Int = 5
+type transaction_refund_divisor_value('value : Int) -> Bool =
+       'value == pre_london_refund_divisor
+    |  'value == post_london_refund_divisor
 /*! The fork-selected transaction-refund divisor: 2 before London, 5 after. */
-type transaction_refund_divisor = {2, 5}
+type transaction_refund_divisor = {
+    'value,
+    transaction_refund_divisor_value('value).
+    int('value)
+}

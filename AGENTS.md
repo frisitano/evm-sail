@@ -196,6 +196,14 @@ retain the mathematical representation. `make c-optimised` enables
 `--c-specialize-log` by default so its output records the inferred argument
 bounds, representation demands, and specialization worklist.
 
+When arithmetic depends on fork-selected bounds, pass the `ProtocolProfile`
+(or the smallest correlated profile subrecord) as an explicit argument. Do not
+read `k_protocol_profile` inside the helper being constrained. Keeping the
+finite profile combinations in the function signature lets optimized C
+specialization propagate the selected fields through arguments, results, and
+body intermediates. Read the register at the outer execution boundary and pass
+the profile inward.
+
 The custom compiler also recognizes `$[c_throws]` on impure externs and
 propagates the `Throw` effect to generated C call sites. These features are
 C-backend concerns: the model never carries C-representation or

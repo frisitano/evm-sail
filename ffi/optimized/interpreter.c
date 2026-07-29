@@ -10,6 +10,7 @@
 #include EVMSAIL_MODEL_H
 
 #include "interpreter.h"
+#include "protocol_profile.h"
 
 #include "region_access.h"
 #include "frame_stack.h"
@@ -305,7 +306,7 @@ static void execute_simple(uint8_t opcode) {
       execute_binary(GAS_VERYLOW, zalu_sar);
       return;
     case 0x1e:
-      if (zk_fork >= zOsaka)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_OSAKA)
         execute_unary(GAS_LOW, zalu_clzz);
       else
         execute_invalid();
@@ -386,25 +387,25 @@ static void execute_simple(uint8_t opcode) {
       EXECUTE(selfbalance);
       return;
     case 0x48:
-      if (zk_fork >= zLondon)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_LONDON)
         EXECUTE(basefee);
       else
         execute_invalid();
       return;
     case 0x49:
-      if (zk_fork >= zCancun)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_CANCUN)
         EXECUTE(blobhash);
       else
         execute_invalid();
       return;
     case 0x4a:
-      if (zk_fork >= zCancun)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_CANCUN)
         EXECUTE(blobbasefee);
       else
         execute_invalid();
       return;
     case 0x4b:
-      if (zk_fork >= zAmsterdam)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_AMSTERDAM)
         EXECUTE(slotnum);
       else
         execute_invalid();
@@ -446,19 +447,19 @@ static void execute_simple(uint8_t opcode) {
       EXECUTE(jumpdest);
       return;
     case 0x5c:
-      if (zk_fork >= zCancun)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_CANCUN)
         EXECUTE(tload);
       else
         execute_invalid();
       return;
     case 0x5d:
-      if (zk_fork >= zCancun)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_CANCUN)
         EXECUTE(tstore);
       else
         execute_invalid();
       return;
     case 0x5e:
-      if (zk_fork >= zCancun)
+      if (evmsail_active_fork() >= EVMSAIL_FORK_CANCUN)
         EXECUTE(mcopy);
       else
         execute_invalid();
@@ -531,7 +532,8 @@ struct zOutputSliceFields evmsail_interpret(unit u) {
       zpc = immediate_offset;
 
       if (opcode >= 0x5f && opcode <= 0x7f) {
-        if (opcode == 0x5f && zk_fork < zShanghai) {
+        if (opcode == 0x5f &&
+            evmsail_active_fork() < EVMSAIL_FORK_SHANGHAI) {
           execute_invalid();
         } else {
           uint64_t width = (uint64_t)opcode - 0x5f;
@@ -541,7 +543,8 @@ struct zOutputSliceFields evmsail_interpret(unit u) {
         continue;
       }
 
-      if (zk_fork >= zAmsterdam && opcode >= 0xe6 && opcode <= 0xe8) {
+      if (evmsail_active_fork() >= EVMSAIL_FORK_AMSTERDAM &&
+          opcode >= 0xe6 && opcode <= 0xe8) {
         uint64_t immediate =
             immediate_offset < code.len ? code.bytes[immediate_offset] : 0;
         bool valid = opcode == 0xe8

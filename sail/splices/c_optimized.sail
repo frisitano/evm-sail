@@ -23,11 +23,71 @@ val hash_to_word = pure { c: "evmsail_hash_to_word" } : hash -> word
 
 val word_to_hash = pure { c: "evmsail_word_to_hash" } : word -> hash
 
-val hash_lt = pure { c: "evmsail_hash_lt" } : (hash, hash) -> bool
-
 val word_to_address = pure { c: "evmsail_word_to_address" } : word -> address
 
 val address_to_word = pure { c: "evmsail_address_to_word" } : address -> word
+
+/*
+ * Successful transaction products are exact word-valued protocol quantities,
+ * not modular EVM arithmetic. Keep the semantic helper but refine its
+ * optimized implementation to test overflow entirely in the native word
+ * domain.
+ */
+function validated_word_product(value, factor) = {
+    if word_is_zero(value) | word_is_zero(factor) then {
+        WORD_ZERO
+    } else if word_ule(value, word_div(WORD_ALL_ONES, factor)) then {
+        word_mul(value, factor)
+    } else {
+        throw InvalidBlock(ExecutionInvalid)
+    }
+}
+
+/*
+ * Transaction cost validation is another word-valued observation of the
+ * exact blob fee. Evaluate the two admitted products and additions only after
+ * their overflow guards, retaining the standard TransactionCosts boundary.
+ */
+function transaction_costs(
+    profile : ProtocolProfile,
+    tx : Transaction,
+    gas_limit : block_gas_limit,
+    excess_blob_gas : excess_blob_gas,
+) -> TransactionCosts = {
+    let intrinsic = intrinsic_gas(tx);
+    let blob_gas : transaction_blob_gas =
+        sizeof(gas_per_blob_value) * tx.blob_hashes.count;
+    let blob_fee : word = if blob_gas == 0 then {
+            WORD_ZERO
+        } else {
+            let blob_price = blob_base_fee(profile, excess_blob_gas);
+            if word_ule(blob_price, tx.max_blob_fee) then {
+                validated_word_product(blob_price, blob_gas)
+            } else {
+                throw InvalidBlock(ExecutionInvalid)
+            }
+        };
+    let execution_cap = validated_word_product(tx.max_fee, gas_limit);
+    let blob_cap = validated_word_product(tx.max_blob_fee, blob_gas);
+    let execution_and_value : word = if word_ule(tx.value, word_sub(WORD_ALL_ONES, execution_cap)) then {
+            word_add(execution_cap, tx.value)
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+    let upfront : word = if word_ule(blob_cap, word_sub(WORD_ALL_ONES, execution_and_value)) then {
+            word_add(execution_and_value, blob_cap)
+        } else {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+    struct {
+        intrinsic_execution = intrinsic.execution,
+        intrinsic_state = intrinsic.state,
+        calldata_floor = intrinsic.calldata_floor,
+        blob_gas = blob_gas,
+        blob_fee = blob_fee,
+        upfront = upfront,
+    }
+}
 
 /* Valid execution gas is bounded by the greatest value reachable in the live
  * frame counter. Costs outside the same domain are rejected as unaffordable
@@ -35,6 +95,7 @@ val address_to_word = pure { c: "evmsail_address_to_word" } : address -> word
 type gas = range(0, 2 ^ 64 - 1)
 type transaction_gas = range(0, 2 ^ 64 - 1)
 type gas_cost = range(0, 2 ^ 64 - 1)
+type receipt_cumulative_gas = range(0, 2 * (2 ^ 64 - 1))
 type modexp_factor = range(0, 3 * (2 ^ 64 - 1) + 257)
 type modexp_product = range(
     0,
@@ -75,21 +136,6 @@ type transaction_state_gas_delta = range(
     3 * (2 ^ 64 - 1) + 2 * transaction_execution_gas_limit_value,
 )
 
-/* The stateless-input ABI carries header quantities as SSZ uint64 values.
- * Collection counts and indices cannot exceed the enclosing 64-bit-addressed
- * byte source. */
-type block_number = range(0, 2 ^ 64 - 1)
-type block_timestamp = range(0, 2 ^ 64 - 1)
-type block_gas = range(0, 2 ^ 64 - 1)
-
-/* These values enter the optimized model through SSZ uint64 fields.  Keep
- * that proven lifecycle representation until an opcode explicitly
- * materializes an EVM word with `U256`. */
-val word_of_block_number : block_number -> block_number
-function word_of_block_number(value : block_number) -> block_number = value
-val word_of_block_timestamp : block_timestamp -> block_timestamp
-function word_of_block_timestamp(value : block_timestamp) -> block_timestamp = value
-
 /* The production host exposes byte arenas through 64-bit positions and
  * lengths.  These aliases remain semantically distinct at function
  * boundaries while sharing the same finite optimized representation. */
@@ -114,11 +160,31 @@ function scratch_length_add(left, right) =
         0
     }
 
-/* Successful memory plans are bounded by their exact expansion cost and the
- * live gas value. Host-sized offsets are introduced only after that semantic
- * check; there is no precomputed memory ceiling in the production model. */
+/* The maximum admitted live-gas value proves that every endpoint above
+ * memory_affordable_byte_bound is unaffordable, giving production memory
+ * positions a finite native representation. This proof ceiling is not the
+ * runtime rule: successful plans remain bounded by their exact expansion cost
+ * and the current live gas value. */
 type memory_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len + 32 <= 2 ^ 64 - 1
+/* If a new memory word count reaches
+ * memory_unaffordable_word_threshold, the quadratic term alone exceeds
+ * memory_expansion_proof_gas_ceiling. Retaining the largest preceding
+ * whole-word endpoint gives the backend a finite representation without
+ * imposing a host-specific semantic cap. */
+type memory_expansion_endpoint('required : Int) -> Bool =
+    0 <= 'required & 'required <= memory_affordable_byte_bound
+type memory_access_relation(
+    'off : Int,
+    'len : Int,
+    'required : Int,
+) -> Bool =
+    memory_valid_range('off, 'len)
+    & memory_expansion_endpoint('required)
+    & (
+          ('len == 0 & 'off == 0 & 'required == 0)
+        | (0 < 'len & 'required == 'off + 'len)
+    )
 type memory_pointer = range(0, 2 ^ 64 - 1)
 type memory_length = range(0, 2 ^ 64 - 1)
 type code_pointer = range(0, 2 ^ 64 - 1)
@@ -150,8 +216,12 @@ function output_buffer_slice(len) =
  * boundary. */
 type rlp_scratch_length = range(0, 2 ^ 64 - 1)
 
+/* The widest protocol natural encoded through this path is Amsterdam's
+ * cumulative receipt gas: two independently header-bounded gas dimensions.
+ * It needs 65 bits in the maximal SSZ-header case, while still fitting
+ * directly in the native U256 conversion used below. */
 type rlp_natural_valid('value : Int) -> Bool =
-    0 <= 'value & 'value <= 2 ^ 64 - 1
+    0 <= 'value & 'value <= 2 * (2 ^ 64 - 1)
 
 type rlp_natural_increment_valid('value : Int) -> Bool =
     0 <= 'value & 'value < 2 ^ 64 - 1
@@ -394,8 +464,11 @@ function store_account_info(a : address, account : Account, info : AccountInfo) 
  */
 val optimized_tx_merge = impure { c: "evmsail_tx_merge" } : (bool, bool, block_access_index) -> unit
 
-function k_tx_merge() -> unit =
-    optimized_tx_merge(protocol_profile_fork(k_protocol_profile) >= Cancun, protocol_profile_fork(k_protocol_profile) >= Amsterdam, k_block_access_index)
+function k_tx_merge() -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    optimized_tx_merge(profile.fork >= Cancun, profile.fork >= Amsterdam, k_block_access_index)
+}
 
 /*
  * Index source-backed witness nodes in one operation. The standard model
@@ -415,8 +488,11 @@ function index_witness_nodes(nodes : WitnessNodeListRef) -> unit =
 $[c_throws]
 val optimized_index_witness_codes = impure { c: "evmsail_index_witness_codes" } : (WitnessCodeListRef, bool) -> unit
 
-function index_witness_codes(codes : WitnessCodeListRef) -> unit =
-    optimized_index_witness_codes(codes, protocol_profile_fork(k_protocol_profile) >= Amsterdam)
+function index_witness_codes(codes : WitnessCodeListRef) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    optimized_index_witness_codes(codes, profile.fork >= Amsterdam)
+}
 
 /*
  * The standard model retains execution-ordered, length-prefixed receipt bytes
@@ -447,7 +523,12 @@ function receipt_accumulator_push(
 ) -> (
     ReceiptAccumulator
 ) = {
-    let cumulative : block_gas = conserved_gas_add(acc.cumulative_gas_used, receipt.gas_used);
+    let cumulative_value = acc.cumulative_gas_used + receipt.gas_used;
+    let execution_profile = k_execution_profile;
+    if execution_profile.gas.receipt_cumulative_limit < cumulative_value then {
+        throw InvalidBlock(InvalidGasUsed)
+    };
+    let cumulative : receipt_cumulative_gas = cumulative_value;
     let mark = scratch_begin();
     let value = receipt_encoded(receipt, cumulative, EMPTY_LOGS_BLOOM);
     optimized_receipt_table_push(acc.count, value);
@@ -490,21 +571,77 @@ function conserved_gas_add(left, right) =
         throw InvalidBlock(ExecutionInvalid)
     }
 
-function rlp_decode_gas(f, limit) = {
-    let value = rlp_decode_uint64(f);
-    if (limit != 0) & (limit < value) then {
-        throw InvalidBlock(GasUsedExceedsLimit)
+function rlp_decode_gas(f) =
+    rlp_decode_uint64(f)
+
+/* Narrow a transaction-controlled word range only after the Yellow Paper
+ * memory-cost equation proves that a larger endpoint is unaffordable. */
+val memory_access : forall 'start 'size,
+    0 <= 'start
+    & 'start < 2 ^ 256
+    & 0 <= 'size
+    & 'size < 2 ^ 256.
+    (
+        int('start),
+        int('size),
+    ) -> MemoryAccess
+function memory_access(start, size) = {
+    if size == 0 then {
+        EMPTY_MEMORY_ACCESS
+    } else if start <= sizeof(memory_affordable_byte_bound) then {
+        let (bounded_start as 'bounded_start) :
+                {'bounded_start,
+                 'bounded_start == 'start
+                 & 0 <= 'bounded_start
+                 & 'bounded_start <= memory_affordable_byte_bound.
+                 int('bounded_start)} = start;
+        if size <= sizeof(memory_affordable_byte_bound) - bounded_start then {
+            let (bounded_size as 'bounded_size) :
+                    {'bounded_size,
+                     'bounded_size == 'size
+                     & 0 < 'bounded_size
+                     & 'bounded_size <= memory_affordable_byte_bound - 'bounded_start.
+                     int('bounded_size)} = size;
+            (struct {
+                range = memory_range(bounded_start, bounded_size),
+                required_size = bounded_start + bounded_size,
+            } : MemoryAccessFields(
+                'bounded_start,
+                'bounded_size,
+                'bounded_start + 'bounded_size,
+            ))
+        } else {
+            exc_halt(OutOfGas);
+            EMPTY_MEMORY_ACCESS
+        }
     } else {
-        value
+        exc_halt(OutOfGas);
+        EMPTY_MEMORY_ACCESS
     }
 }
 
-/* Narrow a transaction-controlled word range into the host domain through
- * the Yellow Paper memory-cost equation. If cumulative C_mem exceeds every
- * representable live-gas value, no production frame can afford the range.
- * The dependent mem_cost result lets the solver derive the host-sized byte
- * range without a separately maintained memory ceiling. */
-val memory_expansion_cost : forall 'required 'available, source_valid_length('required) & live_gas_valid('available). (
+/* Every endpoint admitted by the optimized memory-access proof has at most
+ * memory_affordable_word_bound words. Retain the exact intermediate types so
+ * specialization can select the U128 carrier required by the square without
+ * changing the canonical unbounded equation. */
+val mem_cost : forall 'words,
+    0 <= 'words
+    & 'words <= memory_affordable_word_bound.
+    int('words) -> {
+        'cost,
+        memory_cost_relation('words, 'cost).
+        int('cost)
+    }
+function mem_cost(words) = {
+    let square : int('words * 'words) = words * words;
+    let quadratic : int(div('words * 'words, 512)) = square / 512;
+    G_memory * words + quadratic
+}
+
+val memory_expansion_cost : forall 'required 'available,
+    memory_expansion_endpoint('required)
+    & live_gas_valid('available).
+    (
         int('required),
         int('available),
     ) -> range(0, 'available)
@@ -515,8 +652,8 @@ function memory_expansion_cost(required_size, available) = {
     if new_words <= old_words then {
         0
     } else {
-        let old_cost = bounded_mem_cost(old_words);
-        let new_cost = bounded_mem_cost(new_words);
+        let old_cost = mem_cost(old_words);
+        let new_cost = mem_cost(new_words);
         if old_cost <= new_cost & new_cost <= old_cost + available then {
             let cost : range(0, 'available) = new_cost - old_cost;
             cost
@@ -524,128 +661,5 @@ function memory_expansion_cost(required_size, available) = {
             exc_halt(OutOfGas);
             0
         }
-    }
-}
-
-val memory_expansion : forall 'size 'available, 0 <= 'size & 'size < 2 ^ 256 & live_gas_valid('available). (
-        word,
-        int('size),
-        int('available),
-    ) -> MemoryExpansion('available)
-
-function memory_expansion(start, size, available) = {
-    if size == 0 then {
-        struct { range = EMPTY_MEMORY_RANGE, required_size = 0, cost = 0 }
-    } else {
-        if start <= sizeof(2 ^ 64 - 1) & size <= sizeof(2 ^ 64 - 1) then {
-            let (bounded_start as 'bounded_start) :
-                    {'bounded_start,
-                     0 <= 'bounded_start & 'bounded_start <= 2 ^ 64 - 1.
-                     int('bounded_start)} = start;
-            let (bounded_size as 'bounded_size) :
-                    {'bounded_size,
-                     'bounded_size == 'size & 0 <= 'bounded_size & 'bounded_size <= 2 ^ 64 - 1.
-                     int('bounded_size)} = size;
-            let required = bounded_start + bounded_size;
-            let (words as 'words) = memory_word_count(required);
-            let (bounded_words as 'bounded_words) :
-                    {'bounded_words,
-                     'bounded_words == 'words & 0 <= 'bounded_words & 'bounded_words <= block_gas_limit_bound.
-                     int('bounded_words)} = words;
-            let expansion_cost : int(3 * 'bounded_words + div('bounded_words * 'bounded_words, 512)) = bounded_mem_cost(
-                bounded_words,
-            );
-            if expansion_cost <= sizeof(block_gas_limit_bound) then {
-                let required_size : memory_length = required;
-                struct {
-                    range = memory_range(bounded_start, bounded_size),
-                    required_size = required_size,
-                    cost = memory_expansion_cost(required_size, available),
-                }
-            } else {
-                exc_halt(OutOfGas);
-                struct { range = EMPTY_MEMORY_RANGE, required_size = 0, cost = 0 }
-            }
-        } else {
-            exc_halt(OutOfGas);
-            struct { range = EMPTY_MEMORY_RANGE, required_size = 0, cost = 0 }
-        }
-    }
-}
-
-val memory_pair_expansion : forall 'left_start 'left_size 'right_start 'right_size 'available,
-                                 0
-                              <= 'left_start
-                              &  'left_start
-                              <  2 ^ 256
-                              &  0
-                              <= 'left_size
-                              &  'left_size
-                              <  2 ^ 256
-                              &  0
-                              <= 'right_start
-                              &  'right_start
-                              <  2 ^ 256
-                              &  0
-                              <= 'right_size
-                              &  'right_size
-                              <  2 ^ 256
-                              &  live_gas_valid('available). (
-        int('left_start),
-        int('left_size),
-        int('right_start),
-        int('right_size),
-        int('available),
-    ) -> MemoryPairExpansion('available)
-
-function memory_pair_expansion(left_start, left_size, right_start, right_size, available) = {
-    let left_live = left_size != 0;
-    let right_live = right_size != 0;
-    let left_fits = not_bool(left_live) | (left_start <= sizeof(2 ^ 64 - 1) & left_size <= sizeof(2 ^ 64 - 1));
-    let right_fits = not_bool(right_live) | (right_start <= sizeof(2 ^ 64 - 1) & right_size <= sizeof(2 ^ 64 - 1));
-    if left_fits & right_fits then {
-        /* Narrow only live operands. A zero-sized range ignores its offset, so
-         * binding both components to zero also prevents an unused 256-bit
-         * offset from entering native cursor arithmetic. */
-        let bounded_left_start : host_access = if left_live then { left_start } else { 0 };
-        let bounded_left_size : host_access = if left_live then { left_size } else { 0 };
-        let bounded_right_start : host_access = if right_live then { right_start } else { 0 };
-        let bounded_right_size : host_access = if right_live then { right_size } else { 0 };
-        let left_end = bounded_left_start + bounded_left_size;
-        let right_end = bounded_right_start + bounded_right_size;
-        let required = if left_end < right_end then { right_end } else { left_end };
-        let (words as 'words) = memory_word_count(required);
-        let (bounded_words as 'bounded_words) :
-                {'bounded_words,
-                 'bounded_words == 'words & 0 <= 'bounded_words & 'bounded_words <= block_gas_limit_bound.
-                 int('bounded_words)} = words;
-        let expansion_cost : int(3 * 'bounded_words + div('bounded_words * 'bounded_words, 512)) = bounded_mem_cost(
-            bounded_words,
-        );
-        if expansion_cost <= sizeof(block_gas_limit_bound) then {
-            let required_size : memory_length = required;
-            struct {
-                left =
-                    if left_live then {
-                        memory_range(bounded_left_start, bounded_left_size)
-                    } else {
-                        EMPTY_MEMORY_RANGE
-                    },
-                right =
-                    if right_live then {
-                        memory_range(bounded_right_start, bounded_right_size)
-                    } else {
-                        EMPTY_MEMORY_RANGE
-                    },
-                required_size = required_size,
-                cost = memory_expansion_cost(required_size, available),
-            }
-        } else {
-            exc_halt(OutOfGas);
-            struct { left = EMPTY_MEMORY_RANGE, right = EMPTY_MEMORY_RANGE, required_size = 0, cost = 0 }
-        }
-    } else {
-        exc_halt(OutOfGas);
-        struct { left = EMPTY_MEMORY_RANGE, right = EMPTY_MEMORY_RANGE, required_size = 0, cost = 0 }
     }
 }

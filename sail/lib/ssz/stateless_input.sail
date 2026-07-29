@@ -279,7 +279,7 @@ struct StatelessInputRef = {
     consolidation_requests : StatelessInputSlice,
     builder_deposit_requests : StatelessInputSlice,
     builder_exit_requests : StatelessInputSlice,
-    extra_data : StatelessInputSlice,
+    extra_data : StatelessInputSliceAtMost(extra_data_length_bound),
     transactions : TransactionListRef,
     withdrawals : WithdrawalListRef,
     block_access_list : StatelessInputSlice,
@@ -471,7 +471,7 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
         throw InvalidBlock(InvalidConfig)
     };
     let payload_cursor = ssz_container_cursor(execution_payload, EXECUTION_PAYLOAD_FIXED_LENGTH);
-    let (extra_data, payload_after_extra_data) = ssz_take(payload_cursor, transactions_offset);
+    let (extra_data_bytes, payload_after_extra_data) = ssz_take(payload_cursor, transactions_offset);
     let (transaction_bytes, payload_after_transactions) = ssz_take(payload_after_extra_data, withdrawals_offset);
     let transactions = ssz_bounded_variable_list_ref(
         transaction_bytes,
@@ -481,9 +481,12 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let (withdrawal_bytes, payload_after_withdrawals) = ssz_take(payload_after_transactions, block_access_list_offset);
     let withdrawals = ssz_bounded_fixed_list_ref(withdrawal_bytes, WD_SIZE, MAX_WITHDRAWALS_PER_PAYLOAD);
     let block_access_list = ssz_finish(payload_after_withdrawals);
-    if MAX_EXTRA_DATA_LENGTH < extra_data.len then {
-        throw InvalidBlock(InvalidConfig)
-    };
+    let extra_data : StatelessInputSliceAtMost(extra_data_length_bound) =
+        if extra_data_bytes.len <= MAX_EXTRA_DATA_LENGTH then {
+            extra_data_bytes
+        } else {
+            throw InvalidBlock(InvalidConfig)
+        };
     if MAX_BLOCK_ACCESS_LIST_LENGTH < block_access_list.len then {
         throw InvalidBlock(InvalidConfig)
     };
@@ -609,7 +612,9 @@ function index_witness_nodes(nodes : WitnessNodeListRef) -> unit =
 
 /*! Analyzes and indexes every remaining witness code body from its source
     slice. */
-function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit =
+function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if ssz_list_cursor_empty(cursor) then {
         ()
     } else {
@@ -622,9 +627,10 @@ function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit =
             throw InvalidBlock(InvalidConfig)
         };
         let executable = code_db_intern_input(code);
-        let _ = code_db_insert(executable, protocol_profile_fork(k_protocol_profile));
+        let _ = code_db_insert(executable, profile.fork);
         index_witness_codes_cursor(next)
     }
+}
 
 /* Proof-only: one collection cursor position is consumed per recursive call. */
 termination_measure index_witness_codes_cursor(cursor) =
@@ -707,8 +713,10 @@ function decode_parent_header_fields forall 'source_off 'source_len, source_vali
                     if field_index == 17 then {
                         let value = rlp_decode_uint64(field);
                         let count = value / sizeof(gas_per_blob_value);
+                        let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
                         if
-                            (count <= 21)
+                            (count <= profile.blob_schedule.max)
                             & (value == sizeof(gas_per_blob_value) * count)
                         then {
                             decoded.blob_gas_used =
@@ -719,8 +727,16 @@ function decode_parent_header_fields forall 'source_off 'source_len, source_vali
                         }
                     } else {
                         if field_index == 18 then {
-                            decoded.excess_blob_gas = rlp_decode_uint64(field);
-                            decoded.have_excess_blob_gas = true
+                            let value = rlp_decode_uint64(field);
+                            let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+                            let limit = profile.excess_blob_gas_limit;
+                            if value <= limit then {
+                                decoded.excess_blob_gas = value;
+                                decoded.have_excess_blob_gas = true
+                            } else {
+                                throw InvalidBlock(RlpDecode)
+                            }
                         }
                     }
                 }
@@ -745,7 +761,9 @@ struct WitnessHeaderIndex = {
 }
 
 /*! Authenticates and indexes each remaining ancestor header in chain order. */
-function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeaderIndex =
+function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeaderIndex = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if ssz_list_cursor_empty(state.cursor) then {
         state
     } else {
@@ -767,8 +785,8 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
                 result.parent_excess_blob_gas = decoded.excess_blob_gas;
                 result.parent_fields_valid =
                       decoded.have_state
-                    & ((protocol_profile_fork(k_protocol_profile) < Cancun) | decoded.have_base_fee)
-                    & ((protocol_profile_fork(k_protocol_profile) < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
+                    & ((profile.fork < Cancun) | decoded.have_base_fee)
+                    & ((profile.fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
             }
         };
         let current_hash = keccak256(header);
@@ -786,6 +804,7 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         };
         index_witness_header_cursor(result)
     }
+}
 
 /* Proof-only: one collection cursor position is consumed per recursive call. */
 termination_measure index_witness_header_cursor(state) =
@@ -827,19 +846,39 @@ function index_witness_headers(headers : WitnessHeaderListRef) -> WitnessContext
 
 /*! Decodes the execution-payload header fields from their fixed SSZ
     offsets. */
-function decode_payload_blob_gas_used(payload : StatelessInputSlice) -> blob_gas_used = {
+function decode_payload_blob_gas_used(
+    payload : StatelessInputSlice,
+    profile : ProtocolProfile,
+) -> blob_gas_used = {
     let value = decode_ssz_uint(payload, PL_BLOB_GAS_USED);
 
     /* EIP-4844 makes this field GAS_PER_BLOB times the number of blobs.
-     * EIP-8135 BPO2 caps the supported block schedule at 21 blobs. */
+     * The decoded profile supplies the active schedule maximum. */
     let count = value / sizeof(gas_per_blob_value);
     if
-        (count <= 21)
+        (count <= profile.blob_schedule.max)
         & (value == sizeof(gas_per_blob_value) * count)
     then {
         sizeof(gas_per_blob_value) * count
     } else {
         throw InvalidBlock(InvalidBlobGasUsed)
+    }
+}
+
+/*! Narrows the SSZ `uint64` excess field to the supported-fork
+    reachable-chain invariant. The wider wire value remains explicit in
+    `excess_blob_gas_wire_bound`; this check relies on an authenticated,
+    previously valid parent chain, not on SSZ alone. */
+function decode_payload_excess_blob_gas(
+    payload : StatelessInputSlice,
+    profile : ProtocolProfile,
+) -> excess_blob_gas = {
+    let value = decode_ssz_uint(payload, PL_EXCESS_BLOB_GAS);
+    let limit = profile.excess_blob_gas_limit;
+    if value <= limit then {
+        value
+    } else {
+        throw InvalidBlock(InvalidExcessBlobGas)
     }
 }
 
@@ -856,8 +895,8 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
         gas_used = gas_used_value,
         prev_randao = hash_to_word(ssz_bytes32(payload, PL_PREV_RANDAO)),
         base_fee = ssz_u256(payload, PL_BASE_FEE),
-        blob_gas_used = decode_payload_blob_gas_used(payload),
-        excess_blob_gas = decode_ssz_uint(payload, PL_EXCESS_BLOB_GAS),
+        blob_gas_used = decode_payload_blob_gas_used(payload, input_ref.protocol),
+        excess_blob_gas = decode_payload_excess_blob_gas(payload, input_ref.protocol),
         state_root = ssz_bytes32(payload, PL_STATE_ROOT),
         receipts_root = ssz_bytes32(payload, PL_RECEIPTS_ROOT),
         logs_bloom = sub_slice(payload, PL_LOGS_BLOOM, 256),
@@ -952,7 +991,7 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
     let chain_config = decode_chain_config(input_ref.chain_config, header.number, header.timestamp);
     k_set_header(header);
     k_chain_id = chain_config.chain_id;
-    k_protocol_profile = input_ref.protocol;
+    k_execution_profile = execution_profile_for(input_ref.protocol, header.gas_limit);
     struct {
         payload =
             struct {
@@ -991,13 +1030,16 @@ val decode_transaction : forall 'transaction_off 'transaction_len 'public_key_of
         StatelessInputSliceFields('transaction_off, 'transaction_len),
         StatelessInputSliceFields('public_key_off, 65),
     ) -> Transaction
-function decode_transaction(transaction, public_key) =
+function decode_transaction(transaction, public_key) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
     if transaction.len <= sizeof(transaction_length_bound) then {
         rlp_decode_tx(
             transaction,
             public_key,
-            protocol_profile_transaction_gas_limit(k_protocol_profile),
+            profile.transaction_blob_limit,
         )
     } else {
         throw InvalidBlock(InvalidConfig)
     }
+}

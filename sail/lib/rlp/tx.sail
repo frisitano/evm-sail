@@ -29,10 +29,6 @@ function transaction_rlp_content forall 'source_off 'source_len 'content_len,
     stateless_input_slice(content.off, content.len)
 }
 
-/*! Advances a structurally bounded decoded-item count. */
-val rlp_item_count_increment : forall 'value, source_valid_length('value + 1). int('value) -> int('value + 1)
-function rlp_item_count_increment(value) = value + 1
-
 /* The unconsumed key-list content span strictly decreases on every call. */
 /*! Validates and counts the storage keys of one access-list entry. */
 val decode_access_list_keys : forall 'source_off 'source_len 'address_bound 'slot_bound,
@@ -53,7 +49,7 @@ function decode_access_list_keys(cursor, addr, tail) =
         let next = rlp_cursor_advance(cursor, key.source.len);
         let _ : StorageKey = struct { addr = addr, slot = rlp_decode_word(key) };
         let result = decode_access_list_keys(next, addr, tail);
-        struct { address_count = result.address_count, slot_count = rlp_item_count_increment(result.slot_count) }
+        struct { address_count = result.address_count, slot_count = result.slot_count + 1 }
     }
 termination_measure decode_access_list_keys(cursor, addr, tail) =
     cursor.len
@@ -81,7 +77,7 @@ function decode_access_list_entries(cursor) =
         let addr = word_to_address(rlp_decode_word(addr_f));
         let tail = decode_access_list_entries(next);
         let result = decode_access_list_keys(rlp_decode_list(keys_f), addr, tail);
-        struct { address_count = rlp_item_count_increment(result.address_count), slot_count = result.slot_count }
+        struct { address_count = result.address_count + 1, slot_count = result.slot_count }
     }
 termination_measure decode_access_list_entries(cursor) =
     cursor.len
@@ -118,12 +114,17 @@ let BLOB_HASH_RLP_LENGTH : int(33) = 33
 let BLOB_HASH_LENGTH : int(32) = WORD_BYTE_LENGTH
 
 /* The unconsumed hash-list content span strictly decreases on every call. */
-/*! Validates every fixed-width versioned-hash item and returns their count. */
-function decode_blob_hash_items forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+/*! Validates every fixed-width versioned-hash item and returns their count.
+    The cursor exits immediately for an empty list and checks the version byte
+    while each item is already live, avoiding a second fixed-width pass. */
+function decode_blob_hash_items forall 'source_off 'source_len 'limit,
+                                      source_valid_range('source_off, 'source_len)
+                                   &  transaction_blob_limit_value('limit). (
     cursor : RlpCursor('source_off, 'source_len),
-    count : transaction_blob_count,
+    limit : int('limit),
+    count : transaction_blob_count('limit),
 ) -> (
-    transaction_blob_count
+    transaction_blob_count('limit)
 ) =
     if cursor.len == 0 then {
         count
@@ -139,26 +140,32 @@ function decode_blob_hash_items forall 'source_off 'source_len, source_valid_ran
            != 0xa0 then {
             throw InvalidBlock(RlpDecode)
         };
-        if count < 9 then {
-            decode_blob_hash_items(next, count + 1)
+        if slice_byte(item.source, 1) != 0x01 then {
+            throw InvalidBlock(ExecutionInvalid)
+        };
+        if count < limit then {
+            decode_blob_hash_items(next, limit, count + 1)
         } else {
             throw InvalidBlock(RlpDecode)
         }
     }
-termination_measure decode_blob_hash_items(cursor, count) =
+termination_measure decode_blob_hash_items(cursor, limit, count) =
     cursor.len
 
 /*! Validates the canonical RLP list of `bytes32` blob versioned hashes
     once, then retains its encoded content as a fixed-stride source view:
     each element is exactly `0xa0` followed by 32 bytes, so `BLOBHASH` can
     load item `i` at `33·i + 1`. */
-function decode_blob_hashes forall 'source_off 'source_len 'content_len,
-                              rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
-    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    BlobHashes
+function decode_blob_hashes forall 'source_off 'source_len 'content_len 'limit,
+                                  rlp_field_ref_valid('source_off, 'source_len, 'content_len)
+                               &  transaction_blob_limit_value('limit). (
+    f : RlpFieldRef('source_off, 'source_len, 'content_len),
+    limit : int('limit),
+) -> (
+    BlobHashesFields('limit)
 ) = {
     let bytes = transaction_rlp_content(f);
-    struct { bytes = bytes, count = decode_blob_hash_items(rlp_decode_list(f), 0) }
+    struct { bytes = bytes, count = decode_blob_hash_items(rlp_decode_list(f), limit, 0) }
 }
 
 /* ---- EIP-7702 authorization-tuple recovery ---------------------------------
@@ -314,22 +321,16 @@ function tx_sig_span(first, signature) = {
     }
 }
 
-/*! Decodes transaction gas and enforces the protocol and fork-specific
-    transaction bounds. */
+/*! Decodes transaction gas structurally. Admission against the executing
+    block's correlated gas limits belongs to transaction validation, after the
+    envelope has been decoded. */
 function rlp_decode_gas forall 'source_off 'source_len 'content_len,
                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (
-    f : RlpFieldRef('source_off, 'source_len, 'content_len),
-    limit : protocol_transaction_gas_limit,
+    f : RlpFieldRef('source_off, 'source_len, 'content_len)
 ) -> (
     transaction_gas
-) = {
-    let value = rlp_decode_nat(f);
-    if (limit != 0) & (limit < value) then {
-        throw InvalidBlock(GasUsedExceedsLimit)
-    } else {
-        value
-    }
-}
+) =
+    rlp_decode_nat(f)
 
 /*! Decodes the payload fields of a legacy transaction. Kept separate from
     the envelope dispatcher so extraction backends compile each transaction
@@ -337,11 +338,10 @@ function rlp_decode_gas forall 'source_off 'source_len 'content_len,
 function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    Transaction
+    TransactionFields(blob_schedule_inactive_count)
 ) = {
     let nonce_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, nonce_f.source.len);
@@ -370,7 +370,7 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = 0,
-        gas_limit = rlp_decode_gas(gas_f, gas_limit),
+        gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_decode_word(to_f)),
         value = rlp_decode_u256(value_f),
@@ -393,11 +393,10 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
 function decode_access_list_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    Transaction
+    TransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -431,7 +430,7 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
-        gas_limit = rlp_decode_gas(gas_f, gas_limit),
+        gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_decode_word(to_f)),
         value = rlp_decode_u256(value_f),
@@ -454,11 +453,10 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
 function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    Transaction
+    TransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -493,7 +491,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
-        gas_limit = rlp_decode_gas(gas_f, gas_limit),
+        gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_decode_word(to_f)),
         value = rlp_decode_u256(value_f),
@@ -513,14 +511,16 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
 }
 
 /*! Decodes the payload fields of an EIP-4844 transaction. */
-function decode_blob_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
+                               source_valid_range('source_off, 'source_len)
+                            &  transaction_blob_limit_value('blob_limit). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    gas_limit : protocol_transaction_gas_limit,
+    blob_limit : int('blob_limit),
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    Transaction
+    TransactionFields('blob_limit)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -553,14 +553,14 @@ function decode_blob_tx forall 'source_off 'source_len, source_valid_range('sour
     rlp_cursor_expect_end(fields);
     let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
-    let blob_hashes = decode_blob_hashes(bh_f);
+    let blob_hashes = decode_blob_hashes(bh_f, blob_limit);
     struct {
         tx_type = BlobTx,
         sender = sender,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
-        gas_limit = rlp_decode_gas(gas_f, gas_limit),
+        gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_decode_word(to_f)),
         value = rlp_decode_u256(value_f),
@@ -583,11 +583,10 @@ function decode_blob_tx forall 'source_off 'source_len, source_valid_range('sour
 function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
     pubkey : StatelessInputSlice,
-    gas_limit : protocol_transaction_gas_limit,
     sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    Transaction
+    TransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -625,7 +624,7 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
         raw = tx,
         nonce = word_of_account_nonce(rlp_decode_uint64(nonce_f)),
         chain_id = rlp_decode_uint64(chain_f),
-        gas_limit = rlp_decode_gas(gas_f, gas_limit),
+        gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
         recipient = word_to_address(rlp_decode_word(to_f)),
         value = rlp_decode_u256(value_f),
@@ -660,18 +659,19 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     unknown type byte or wrong arity is undecodable. The data field is
     never materialized: `input_src` carries its (source, offset, length)
     span, bound as the transaction input only when the tx runs. */
-val rlp_decode_tx : forall 'tx_off 'tx_len 'public_key_off,
+val rlp_decode_tx : forall 'tx_off 'tx_len 'public_key_off 'blob_limit,
                          source_valid_range('tx_off, 'tx_len)
                       &  0
                       <= 'tx_len
                       &  'tx_len
                       <= transaction_length_bound
-                      &  source_valid_range('public_key_off, 65). (
+                      &  source_valid_range('public_key_off, 65)
+                      &  transaction_blob_limit_value('blob_limit). (
         StatelessInputSliceFields('tx_off, 'tx_len),
         StatelessInputSliceFields('public_key_off, 65),
-        protocol_transaction_gas_limit,
+        int('blob_limit),
     ) -> Transaction
-function rlp_decode_tx(tx, pubkey, gas_limit) = {
+function rlp_decode_tx(tx, pubkey, blob_limit) = {
     let sender = word_to_address(hash_to_word(keccak256(sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH))));
     let tx_length = tx.len;
     let b0 : byte = if tx_length == 0 then {
@@ -694,11 +694,11 @@ function rlp_decode_tx(tx, pubkey, gas_limit) = {
     let fields = rlp_node_cursor(payload_input);
 
     match ttype {
-        0x00 => decode_legacy_tx(tx, pubkey, gas_limit, sender, fields),
-        0x01 => decode_access_list_tx(tx, pubkey, gas_limit, sender, fields),
-        0x02 => decode_fee_market_tx(tx, pubkey, gas_limit, sender, fields),
-        0x03 => decode_blob_tx(tx, pubkey, gas_limit, sender, fields),
-        0x04 => decode_set_code_tx(tx, pubkey, gas_limit, sender, fields),
+        0x00 => decode_legacy_tx(tx, pubkey, sender, fields),
+        0x01 => decode_access_list_tx(tx, pubkey, sender, fields),
+        0x02 => decode_fee_market_tx(tx, pubkey, sender, fields),
+        0x03 => decode_blob_tx(tx, pubkey, blob_limit, sender, fields),
+        0x04 => decode_set_code_tx(tx, pubkey, sender, fields),
         _ => throw InvalidBlock(RlpDecode), /* unknown envelope type or wrong arity */
     }
 }
