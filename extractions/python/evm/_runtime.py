@@ -574,4 +574,3 @@ def sail_print_int(prefix: Any, value: Any) -> None:
 
 def sail_prerr_int(prefix: Any, value: Any) -> None:
     print(f"{prefix}{_integer(value)}", file=sys.stderr)
-
