@@ -12,20 +12,21 @@ sources, auto-detected per fixture file:
     reference guest's expected SszStatelessValidationResult bytes;
   - blockchain/stateless fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
-Three execution vehicles: the native in-process ctypes lib (default), the REAL
-RISC-V guest ELF on Spike (--spike), or the production ZisK ELF on ziskemu
-(--zisk). Both ELF vehicles build once and then provide each case through the
-runtime read_input ABI to the unchanged ELF. This subsumes the old
+Four execution vehicles: the native in-process ctypes lib (default), the
+generated Python extraction (--python), the REAL RISC-V guest ELF on Spike
+(--spike), or the production ZisK ELF on ziskemu (--zisk). Both ELF vehicles
+build once and then provide each case through the runtime read_input ABI to the
+unchanged ELF. This subsumes the old
 zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 
 Usage:
     python3 harness/run.py <test.json|dir> [...] [--fork F] [--limit N]
-            [--build standard|optimized] [--spike|--zisk] [--rebuild]
+            [--build standard|optimized] [--python|--spike|--zisk] [--rebuild]
             [--verbose] [--debug]
 Requires `sail` on PATH and a C compiler; ssz_builder.py runs under the
 execution-specs venv (EXECSPECS_PY).
 """
-import argparse, json, os, re, subprocess, sys, tempfile
+import argparse, json, os, re, subprocess, sys, tempfile, traceback
 import dump_state
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -300,6 +301,34 @@ class ZiskGuest:
                 return f.read()
 
 
+class PythonGuest:
+    """Run the generated, typed Python extraction against the guest ABI."""
+
+    def __init__(self):
+        extraction_root = os.path.join(ELDIR, "extractions", "python")
+        if extraction_root not in sys.path:
+            sys.path.insert(0, extraction_root)
+        try:
+            import evm
+            from evm import HostContract
+        except ImportError as exc:
+            raise RuntimeError(
+                "cannot import the generated Python extraction; run "
+                "`make extract-python` with its Python dependencies installed"
+            ) from exc
+        self.evm = evm
+        self.host = HostContract
+
+    def run_once(self, inp):
+        # Reset Sail registers first; reset() also replaces the current host
+        # state, so install this case's explicit input state afterwards.
+        self.evm.reset()
+        state = self.host.HostState(stateless_input_bytes=bytes(inp))
+        self.host.set_state(state)
+        self.evm.main()
+        return bytes(state.public_output)
+
+
 def output_matches(got, expected, zisk=False):
     """Compare one public result without discarding meaningful zero bytes."""
     if expected is None:
@@ -314,8 +343,9 @@ def run_fixtures(files, args):
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
     mode. Pass criterion: the guest's output bytes EQUAL the reference's.
-    Backend: native in-process ctypes, executable Lean extraction, the real
-    RISC-V ELF on Spike, or the production ZisK ELF on ziskemu."""
+    Backend: native in-process ctypes, the generated Python extraction,
+    executable Lean extraction, the real RISC-V ELF on Spike, or the production
+    ZisK ELF on ziskemu."""
     if args.spike:
         run_once = SpikeGuest(
             args.timeout or 900.0,
@@ -331,6 +361,8 @@ def run_fixtures(files, args):
     elif args.lean:
         dump_state.load_lean_guest(rebuild=args.rebuild)
         run_once = dump_state.run_once_guest
+    elif args.python:
+        run_once = PythonGuest().run_once
     else:
         dump_state.load_guest(
             rebuild=args.rebuild,
@@ -372,7 +404,11 @@ def run_fixtures(files, args):
                 if args.fail_limit <= 0 or printed_fails < args.fail_limit:
                     printed_fails += 1
                     print(f"FAIL {cid} [{f}]")
-                    if args.verbose: print(f"      {e}")
+                    if args.verbose:
+                        detail = "".join(
+                            traceback.format_exception(type(e), e, e.__traceback__)
+                        ).rstrip()
+                        print("\n".join(f"      {line}" for line in detail.splitlines()))
                 else:
                     suppressed_fails += 1
                 continue
@@ -402,6 +438,8 @@ def run_fixtures(files, args):
         vehicle = "ZisK guest"
     elif args.lean:
         vehicle = "Lean extraction"
+    elif args.python:
+        vehicle = "Python extraction"
     else:
         vehicle = f"{args.build_mode} guest"
     print(f"\n=== {npass}/{ntotal} passed ({vehicle}, byte-exact) ===")
@@ -428,6 +466,7 @@ def run_sharded(files, args):
     if args.verbose: flags.append("--verbose")
     if args.profile: flags.append("--profile")
     if args.lean: flags.append("--lean")
+    if args.python: flags.append("--python")
     flags += ["--build", args.build_mode]
     if args.fork: flags += ["--fork", args.fork]
     if args.limit: flags += ["--limit", str(args.limit)]
@@ -473,7 +512,7 @@ def run_sharded(files, args):
                     cats[k] = cats.get(k, 0) + v
     print(
         f"\n=== {npass}/{ntotal} passed "
-        f"({'Lean extraction' if args.lean else args.build_mode + ' guest'}, "
+        f"({'Lean extraction' if args.lean else 'Python extraction' if args.python else args.build_mode + ' guest'}, "
         f"byte-exact) === [{n} jobs]"
     )
     if cats: print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
@@ -509,6 +548,9 @@ def main():
     ap.add_argument("--lean", action="store_true",
                     help="run the executable Lean extraction in process through "
                          "the shared fixture-harness ABI")
+    ap.add_argument("--python", action="store_true",
+                    help="run the generated typed Python extraction in process "
+                         "through the shared fixture-harness ABI")
     ap.add_argument("--profile", action="store_true",
                     help="build with optional zkVM cycle-scope markers")
     ap.add_argument("--fail-limit", type=int, default=0,
@@ -523,14 +565,14 @@ def main():
     ap.add_argument("--_trace-files", dest="_trace_files", action="store_true",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
-    if sum((args.spike, args.zisk, args.lean)) > 1:
-        ap.error("--spike, --zisk, and --lean are mutually exclusive")
+    if sum((args.spike, args.zisk, args.lean, args.python)) > 1:
+        ap.error("--python, --spike, --zisk, and --lean are mutually exclusive")
     if (args.spike or args.zisk) and args.build_mode != "optimized":
         ap.error("--spike and --zisk support only --build optimized")
     if args.lean and args.profile:
         ap.error("--profile is not available for the Lean extraction")
-    if args.debug and (args.spike or args.zisk):
-        ap.error("--debug is available only for native runs")
+    if args.debug and (args.spike or args.zisk or args.python):
+        ap.error("--debug is available only for native and Lean runs")
 
     # Expand regular fixtures and EEST worker-shard JSONL files recursively.
     import glob as _glob
@@ -548,6 +590,8 @@ def main():
         if len(files) > 1:
             if args.lean:
                 dump_state.load_lean_guest()
+            elif args.python:
+                PythonGuest()
             else:
                 dump_state.load_guest(
                     profile=args.profile, build_mode=args.build_mode)
