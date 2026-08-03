@@ -2,14 +2,14 @@
 
 /*
  * Preserve the specification's canonical byte-index semantics while storing
- * addresses and digests in native 64-bit lanes. Transparent aliases are
+ * addresses and digests in packed fixed-width byte arrays. Transparent aliases are
  * erased before C lowering, so these annotations select the representation
  * structurally for 20-byte and 32-byte vectors in the optimized compilation.
  */
-$[c_repr fixed_bytes_u64_lanes]
+$[c_repr fixed_bytes]
 type address = vector(20, inc, byte)
 
-$[c_repr fixed_bytes_u64_lanes]
+$[c_repr fixed_bytes]
 type b256 = vector(32, inc, byte)
 
 /*

@@ -10,18 +10,18 @@
  * its implementation are injected only into optimized C builds; standard C
  * and proof extraction continue to use the Sail bodies.
  */
-struct zBoundedSszzListRef;
-struct zAccountInfo;
-struct zTriePath;
+struct BoundedSszListRef;
+struct AccountInfo;
+struct TriePath;
 
 /*
  * Whole-operation ordered payload tries. C owns SSZ item navigation,
  * RLP(index) ordering, leaf framing, and use of the shared MPT workspace.
  */
 Hash32
-mpt_transaction_trie_root(struct zBoundedSszzListRef transactions);
+mpt_transaction_trie_root(struct BoundedSszListRef transactions);
 Hash32
-mpt_withdrawals_trie_root(struct zBoundedSszzListRef withdrawals);
+mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals);
 
 /*
  * Internal authenticated point readers used by the complete optimized state
@@ -29,7 +29,7 @@ mpt_withdrawals_trie_root(struct zBoundedSszzListRef withdrawals);
  */
 uint64_t stateless_account_read(
     Hash32 root,
-    Hash32 address_hash, struct zAccountInfo *info,
+    Hash32 address_hash, struct AccountInfo *info,
     bool *found, NodeId *terminal_node, NodeId *storage_root_node);
 uint64_t stateless_storage_read(
     NodeId root_node, Hash32 slot_hash,
@@ -46,8 +46,8 @@ uint32_t mpt_storage_updates_prepare(Address address);
 StorageId mpt_storage_update_id_at(uint32_t index);
 
 /* One-call optimized indexing of the source-backed SSZ witness-node list. */
-unit mpt_index_witness_nodes(struct zBoundedSszzListRef nodes);
-unit mpt_index_witness_codes(struct zBoundedSszzListRef codes,
+unit mpt_index_witness_nodes(struct BoundedSszListRef nodes);
+unit mpt_index_witness_codes(struct BoundedSszListRef codes,
                                      bool amsterdam_or_later);
 
 /* Reset the reusable ordered-trie builder before a new independent root. */

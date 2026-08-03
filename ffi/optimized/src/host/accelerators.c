@@ -11,14 +11,13 @@
 
 /* Construct the generated Sail aggregate at the accelerator boundary.  The
  * lower-level ecrecover adapter intentionally remains layout-independent. */
-struct zAddressResult precompile_ecrecover_hash_sig(
-    Hash32 hash, uint64_t yparity, const U256 r,
-    const U256 s) {
-  struct zAddressResult result = {0};
+struct AddressResult precompile_ecrecover_hash_sig(
+    Hash32 hash, uint8_t yparity, U256 r, U256 s) {
+  struct AddressResult result = {0};
   uint8_t address[20];
-  result.zsuccess = precompile_ecrecover_hash_sig_address(
+  result.success = precompile_ecrecover_hash_sig_address(
       address, hash, yparity, r, s);
-  result.zaddress = address_from_be_bytes(address);
+  result.address = address_from_be_bytes(address);
   return result;
 }
 

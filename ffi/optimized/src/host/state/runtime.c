@@ -26,7 +26,7 @@ typedef Address address160;
  * sentinel without conflating it with the pre-execution system-call phase. */
 uint32_t current_warm_epoch;
 
-unit warm_reset(uint64_t current_transaction_epoch) {
+unit warm_reset(uint32_t current_transaction_epoch) {
   if (current_transaction_epoch >= UINT32_MAX) GUEST_ABORT();
   current_warm_epoch = (uint32_t)current_transaction_epoch + 1;
   return UNIT;
@@ -45,12 +45,10 @@ static uint32_t auth_tracker_limit;
 
 static uint64_t auth_tracker_hash(const address160 *a) {
   uint64_t h = UINT64_C(1469598103934665603);
-  for (unsigned i = 0; i < 2; ++i) {
-    h ^= a->lanes[i];
+  for (unsigned i = 0; i < 20; ++i) {
+    h ^= a->bytes[i];
     h *= UINT64_C(1099511628211);
   }
-  h ^= a->lanes[2] & UINT64_C(0xffffffff);
-  h *= UINT64_C(1099511628211);
   h ^= h >> 32;
   h *= UINT64_C(0xd6e8feb86659fd93);
   h ^= h >> 32;
@@ -77,7 +75,7 @@ static auth_tracker_entry *auth_tracker_find(const address160 *key,
   return NULL;
 }
 
-unit authorization_tracker_reset(uint64_t count_hint) {
+unit authorization_tracker_reset(uint32_t count_hint) {
   uint64_t need = count_hint < 8 ? 16 : count_hint * 2;
   uint32_t cap = 16;
   while ((uint64_t)cap < need && cap <= UINT32_MAX / 2) cap *= 2;

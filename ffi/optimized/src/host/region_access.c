@@ -38,8 +38,8 @@ static bool private_input_ready;
 static const uint8_t empty_region;
 
 
-#define SLICE_OFF(slice) ((slice).zoff)
-#define SLICE_LEN(slice) ((slice).zlen)
+#define SLICE_OFF(slice) ((slice).off)
+#define SLICE_LEN(slice) ((slice).len)
 
 static void acquire_private_input(void) {
   if (!private_input_ready) {
@@ -148,17 +148,17 @@ static const uint8_t *resolve_region(enum RegionKind kind, uint64_t off,
 
 #define DEFINE_SLICE_VALUE(name, type)                                       \
   static void name(struct type *out, uint64_t off, uint64_t len) {            \
-    out->zoff = off;                                                          \
-    out->zlen = len;                                                          \
+    out->off = off;                                                          \
+    out->len = len;                                                          \
   }
 
-DEFINE_SLICE_VALUE(stateless_input_value, zStatelessInputSliceFields)
-DEFINE_SLICE_VALUE(memory_slice_value, zEvmMemorySliceFields)
-DEFINE_SLICE_VALUE(scratch_slice_value, zScratchSliceFields)
+DEFINE_SLICE_VALUE(stateless_input_value, StatelessInputSliceFields)
+DEFINE_SLICE_VALUE(memory_slice_value, EvmMemorySliceFields)
+DEFINE_SLICE_VALUE(scratch_slice_value, ScratchSliceFields)
 
 #undef DEFINE_SLICE_VALUE
 
-static void full_input_value(struct zStatelessInputSliceFields *out) {
+static void full_input_value(struct StatelessInputSliceFields *out) {
   acquire_private_input();
   stateless_input_value(
       out,
@@ -166,12 +166,12 @@ static void full_input_value(struct zStatelessInputSliceFields *out) {
       (uint64_t)private_input_size);
 }
 
-static void expanded_memory_value(struct zEvmMemorySliceFields *out,
+static void expanded_memory_value(struct EvmMemorySliceFields *out,
                                   uint64_t len) {
   memory_slice_value(out, evm_memory_expand(len), len);
 }
 
-static void node_lookup_value(struct zStatelessInputSliceFields *out,
+static void node_lookup_value(struct StatelessInputSliceFields *out,
                               Hash32 hash) {
   uint64_t off = 0;
   uint64_t len = 0;
@@ -179,32 +179,32 @@ static void node_lookup_value(struct zStatelessInputSliceFields *out,
   stateless_input_value(out, off, len);
 }
 
-struct zStatelessInputSliceFields stateless_input(unit u) {
-  struct zStatelessInputSliceFields out;
+struct StatelessInputSliceFields stateless_input(unit u) {
+  struct StatelessInputSliceFields out;
   (void)u;
   full_input_value(&out);
   return out;
 }
 
-struct zEvmMemorySliceFields mem_expand(uint64_t len) {
-  struct zEvmMemorySliceFields out;
+struct EvmMemorySliceFields mem_expand(uint32_t len) {
+  struct EvmMemorySliceFields out;
   expanded_memory_value(&out, len);
   return out;
 }
 
-struct zStatelessInputSliceFields nodedb_lookup(Hash32 hash) {
-  struct zStatelessInputSliceFields out;
+struct StatelessInputSliceFields nodedb_lookup(Hash32 hash) {
+  struct StatelessInputSliceFields out;
   node_lookup_value(&out, hash);
   return out;
 }
 
-struct zOutputSliceFields region_output_buffer_slice(uint64_t len) {
-  struct zOutputSliceFields out;
+struct OutputSliceFields region_output_buffer_slice(uint64_t len) {
+  struct OutputSliceFields out;
   const uint8_t *bytes = NULL;
   uint64_t total = 0;
   if (!output_buffer_span(&bytes, &total) || len > total) GUEST_ABORT();
-  out.zoff = 0;
-  out.zlen = len;
+  out.off = 0;
+  out.len = len;
   return out;
 }
 
@@ -297,80 +297,80 @@ static unit region_copy_to_memory(enum RegionKind kind, uint64_t off,
 }
 
 #define DEFINE_SLICE_BYTE(prefix, type, kind)                                 \
-  uint64_t prefix##_byte_at(struct type slice, uint64_t index) {              \
+  uint64_t prefix##_byte_at(struct type slice, uint32_t index) {              \
     return region_byte_at(kind, SLICE_OFF(slice), SLICE_LEN(slice),            \
                           index);                                              \
   }
 
 #define DEFINE_SLICE_LOAD(prefix, type, kind)                                 \
-  U256 prefix##_load_word(struct type slice, uint64_t index) {            \
+  U256 prefix##_load_word(struct type slice, uint32_t index) {            \
     return region_load_word(kind, SLICE_OFF(slice), SLICE_LEN(slice),          \
                             index);                                             \
   }
 
 #define DEFINE_SLICE_LOAD_N(prefix, type, kind)                               \
-  U256 prefix##_load_n_word(struct type slice, uint64_t index,            \
-                                 uint64_t len) {                               \
+  U256 prefix##_load_n_word(struct type slice, uint32_t index,            \
+                                 uint8_t len) {                                \
     return region_load_n_word(kind, SLICE_OFF(slice), SLICE_LEN(slice),        \
                               index, len);                                      \
   }
 
 #define DEFINE_SLICE_COPY(prefix, type, kind)                                 \
-  unit prefix##_copy_to_memory(struct type slice, uint64_t dst,                \
-                               uint64_t index, uint64_t len) {                 \
+  unit prefix##_copy_to_memory(struct type slice, uint32_t dst,                \
+                               uint32_t index, uint32_t len) {                 \
     return region_copy_to_memory(                                              \
         kind, SLICE_OFF(slice), SLICE_LEN(slice), dst, index, len);            \
   }
 
-DEFINE_SLICE_BYTE(stateless_input, zStatelessInputSliceFields,
+DEFINE_SLICE_BYTE(stateless_input, StatelessInputSliceFields,
                   REGION_STATELESS_INPUT)
-DEFINE_SLICE_BYTE(memory_slice, zEvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_BYTE(code_region, zCodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_BYTE(scratch_slice, zScratchSliceFields, REGION_SCRATCH)
-DEFINE_SLICE_BYTE(log_data_slice, zLogDataSliceFields, REGION_LOG_DATA)
-DEFINE_SLICE_BYTE(output_slice, zOutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_BYTE(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
+DEFINE_SLICE_BYTE(code_region, CodeRegionSliceFields, REGION_CODE)
+DEFINE_SLICE_BYTE(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
+DEFINE_SLICE_BYTE(log_data_slice, LogDataSliceFields, REGION_LOG_DATA)
+DEFINE_SLICE_BYTE(output_slice, OutputSliceFields, REGION_OUTPUT)
 
-DEFINE_SLICE_LOAD(stateless_input, zStatelessInputSliceFields,
+DEFINE_SLICE_LOAD(stateless_input, StatelessInputSliceFields,
                   REGION_STATELESS_INPUT)
-DEFINE_SLICE_LOAD(memory_slice, zEvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_LOAD(code_region, zCodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_LOAD(scratch_slice, zScratchSliceFields, REGION_SCRATCH)
-DEFINE_SLICE_LOAD(log_data_slice, zLogDataSliceFields, REGION_LOG_DATA)
-DEFINE_SLICE_LOAD(output_slice, zOutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_LOAD(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
+DEFINE_SLICE_LOAD(code_region, CodeRegionSliceFields, REGION_CODE)
+DEFINE_SLICE_LOAD(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
+DEFINE_SLICE_LOAD(log_data_slice, LogDataSliceFields, REGION_LOG_DATA)
+DEFINE_SLICE_LOAD(output_slice, OutputSliceFields, REGION_OUTPUT)
 
-DEFINE_SLICE_LOAD_N(stateless_input, zStatelessInputSliceFields,
+DEFINE_SLICE_LOAD_N(stateless_input, StatelessInputSliceFields,
                     REGION_STATELESS_INPUT)
-DEFINE_SLICE_LOAD_N(code_region, zCodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_LOAD_N(scratch_slice, zScratchSliceFields, REGION_SCRATCH)
+DEFINE_SLICE_LOAD_N(code_region, CodeRegionSliceFields, REGION_CODE)
+DEFINE_SLICE_LOAD_N(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
 
-DEFINE_SLICE_COPY(stateless_input, zStatelessInputSliceFields,
+DEFINE_SLICE_COPY(stateless_input, StatelessInputSliceFields,
                   REGION_STATELESS_INPUT)
-DEFINE_SLICE_COPY(memory_slice, zEvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_COPY(code_region, zCodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_COPY(output_slice, zOutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_COPY(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
+DEFINE_SLICE_COPY(code_region, CodeRegionSliceFields, REGION_CODE)
+DEFINE_SLICE_COPY(output_slice, OutputSliceFields, REGION_OUTPUT)
 
 #undef DEFINE_SLICE_BYTE
 #undef DEFINE_SLICE_LOAD
 #undef DEFINE_SLICE_LOAD_N
 #undef DEFINE_SLICE_COPY
 
-uint64_t stateless_input_count_nonzero(
-    struct zStatelessInputSliceFields slice) {
-  return region_count_nonzero(REGION_STATELESS_INPUT, SLICE_OFF(slice),
-                              SLICE_LEN(slice));
+uint32_t stateless_input_count_nonzero(
+    struct StatelessInputSliceFields slice) {
+  return (uint32_t)region_count_nonzero(
+      REGION_STATELESS_INPUT, SLICE_OFF(slice), SLICE_LEN(slice));
 }
 
 bool stateless_input_strided_zero(
-    struct zStatelessInputSliceFields slice,
-    uint64_t start, uint64_t stride, uint64_t width, uint64_t count) {
+    struct StatelessInputSliceFields slice,
+    uint32_t start, uint32_t stride, uint32_t width, uint32_t count) {
   return region_strided_zero(
       REGION_STATELESS_INPUT, SLICE_OFF(slice), SLICE_LEN(slice),
       start, stride, width, count);
 }
 
 bool memory_slice_strided_zero(
-    struct zEvmMemorySliceFields slice, uint64_t start, uint64_t stride,
-    uint64_t width, uint64_t count) {
+    struct EvmMemorySliceFields slice, uint32_t start, uint32_t stride,
+    uint32_t width, uint32_t count) {
   return region_strided_zero(
       REGION_MEMORY, SLICE_OFF(slice), SLICE_LEN(slice),
       start, stride, width, count);
@@ -385,29 +385,29 @@ static bool regions_equal(enum RegionKind left_kind, uint64_t left_off,
   return left && right && memcmp(left, right, (size_t)left_len) == 0;
 }
 
-bool scratch_input_slices_equal(struct zScratchSliceFields left,
-                                struct zStatelessInputSliceFields right) {
+bool scratch_input_slices_equal(struct ScratchSliceFields left,
+                                struct StatelessInputSliceFields right) {
   return regions_equal(REGION_SCRATCH, SLICE_OFF(left), SLICE_LEN(left),
                        REGION_STATELESS_INPUT, SLICE_OFF(right),
                        SLICE_LEN(right));
 }
 
-bool log_input_slices_equal(struct zLogDataSliceFields left,
-                            struct zStatelessInputSliceFields right) {
+bool log_input_slices_equal(struct LogDataSliceFields left,
+                            struct StatelessInputSliceFields right) {
   return regions_equal(REGION_LOG_DATA, SLICE_OFF(left), SLICE_LEN(left),
                        REGION_STATELESS_INPUT, SLICE_OFF(right),
                        SLICE_LEN(right));
 }
 
-bool input_code_slices_equal(struct zStatelessInputSliceFields left,
-                             struct zCodeRegionSliceFields right) {
+bool input_code_slices_equal(struct StatelessInputSliceFields left,
+                             struct CodeRegionSliceFields right) {
   return regions_equal(REGION_STATELESS_INPUT, SLICE_OFF(left),
                        SLICE_LEN(left), REGION_CODE, SLICE_OFF(right),
                        SLICE_LEN(right));
 }
 
 bool region_logs_bloom_matches_ref(
-    LogsBloom computed, struct zStatelessInputSliceFields reference) {
+    LogsBloom computed, struct StatelessInputSliceFields reference) {
   const uint64_t reference_len = SLICE_LEN(reference);
   const uint8_t *reference_bytes =
       stateless_input_ptr(SLICE_OFF(reference), reference_len);
@@ -428,144 +428,128 @@ bool region_logs_bloom_matches_ref(
   return true;
 }
 
-static void scratch_result_value(struct zScratchRegionResult *result,
-                                 bool accepted, uint64_t end) {
+static struct ScratchRegionResult scratch_result_value(bool accepted,
+                                                        uint64_t end) {
+  struct ScratchRegionResult result = {0};
   if (!accepted) {
-    result->kind = Kind_zScratchRegionFailed;
-    result->variants.zScratchRegionFailed = UNIT;
-    return;
+    result.kind = Kind_ScratchRegionFailed;
+    result.variants.ScratchRegionFailed = UNIT;
+    return result;
   }
-  result->kind = Kind_zScratchRegionReady;
+  result.kind = Kind_ScratchRegionReady;
   scratch_slice_value(
-      &result->variants.zScratchRegionReady,
+      &result.variants.ScratchRegionReady,
       0,
       end);
+  return result;
 }
 
-void scratch_store_byte(struct zScratchRegionResult *result, uint64_t off,
-                        uint64_t data) {
+struct ScratchRegionResult scratch_store_byte(uint32_t off, uint64_t data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 1);
-  if (!out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!out) return scratch_result_value(false, 0);
   out[0] = (uint8_t)data;
   const bool accepted = scratch_commit(dst, 1);
-  scratch_result_value(result, accepted, accepted ? dst + 1 : 0);
+  return scratch_result_value(accepted, accepted ? dst + 1 : 0);
 }
 
-static void scratch_store_region(struct zScratchRegionResult *result,
-                                 uint64_t dst, enum RegionKind kind,
-                                 uint64_t off, uint64_t len) {
+static struct ScratchRegionResult scratch_store_region(
+    uint64_t dst, enum RegionKind kind, uint64_t off, uint64_t len) {
   if (len > UINT64_MAX - dst) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   const uint8_t *source = resolve_region(kind, off, len);
   if (!source) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   if (len != 0) memmove(out, source, (size_t)len);
   const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  return scratch_result_value(accepted, accepted ? dst + len : 0);
 }
 
 #define DEFINE_SCRATCH_STORE(name, type, kind)                                \
-  void name(struct zScratchRegionResult *result,                              \
-            uint64_t off, struct type slice) {                                \
-    scratch_store_region(result, off, kind,                                   \
-                         SLICE_OFF(slice), SLICE_LEN(slice));                  \
+  struct ScratchRegionResult name(uint32_t off, struct type slice) {          \
+    return scratch_store_region(off, kind, SLICE_OFF(slice),                  \
+                                SLICE_LEN(slice));                            \
   }
 
 DEFINE_SCRATCH_STORE(scratch_store_stateless_input,
-                     zStatelessInputSliceFields, REGION_STATELESS_INPUT)
-DEFINE_SCRATCH_STORE(scratch_store_scratch, zScratchSliceFields,
+                     StatelessInputSliceFields, REGION_STATELESS_INPUT)
+DEFINE_SCRATCH_STORE(scratch_store_scratch, ScratchSliceFields,
                      REGION_SCRATCH)
-DEFINE_SCRATCH_STORE(scratch_store_log_data, zLogDataSliceFields,
+DEFINE_SCRATCH_STORE(scratch_store_log_data, LogDataSliceFields,
                      REGION_LOG_DATA)
-DEFINE_SCRATCH_STORE(scratch_store_output, zOutputSliceFields,
+DEFINE_SCRATCH_STORE(scratch_store_output, OutputSliceFields,
                      REGION_OUTPUT)
 
 #undef DEFINE_SCRATCH_STORE
 
-void scratch_store_address(struct zScratchRegionResult *result,
-                           uint64_t off, Address data) {
+struct ScratchRegionResult scratch_store_address(uint32_t off, Address data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
-  if (!out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!out) return scratch_result_value(false, 0);
   memcpy(out, address_bytes_const(&data), 20);
   const bool accepted = scratch_commit(dst, 20);
-  scratch_result_value(result, accepted, accepted ? dst + 20 : 0);
+  return scratch_result_value(accepted, accepted ? dst + 20 : 0);
 }
 
-void scratch_store_b256(struct zScratchRegionResult *result,
-                        uint64_t off, Hash32 data,
-                        uint64_t len) {
+struct ScratchRegionResult scratch_store_b256(uint32_t off, Hash32 data,
+                                               uint8_t len) {
   const uint64_t dst = off;
   if (len > 32) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   if (len != 0)
     memcpy(out, hash_bytes_const(&data), (size_t)len);
   const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  return scratch_result_value(accepted, accepted ? dst + len : 0);
 }
 
-void scratch_store_fixed_bytes_256(struct zScratchRegionResult *result,
+void scratch_store_fixed_bytes_256(struct ScratchRegionResult *result,
                                    uint64_t off,
                                    LogsBloom data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out) {
-    scratch_result_value(result, false, 0);
+    *result = scratch_result_value(false, 0);
     return;
   }
   for (size_t i = 0; i < 256; ++i) out[i] = data.bytes[255 - i];
   const bool accepted = scratch_commit(dst, 256);
-  scratch_result_value(result, accepted, accepted ? dst + 256 : 0);
+  *result = scratch_result_value(accepted, accepted ? dst + 256 : 0);
 }
 
 void region_scratch_store_receipt_logs_bloom(
-    struct zScratchRegionResult *result,
+    struct ScratchRegionResult *result,
     uint64_t off, uint64_t start, uint64_t count) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out || !receipt_runtime_bloom_write(start, count, out)) {
-    scratch_result_value(result, false, 0);
+    *result = scratch_result_value(false, 0);
     return;
   }
   const bool accepted = scratch_commit(dst, 256);
-  scratch_result_value(result, accepted, accepted ? dst + 256 : 0);
+  *result = scratch_result_value(accepted, accepted ? dst + 256 : 0);
 }
 
-void scratch_store_word(struct zScratchRegionResult *result,
-                        uint64_t off,
-                        const U256 data, uint64_t len) {
+struct ScratchRegionResult scratch_store_word(uint32_t off,
+                                               const U256 data,
+                                               uint8_t len) {
   const uint64_t dst = off;
   if (len > 32) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
+    return scratch_result_value(false, 0);
   }
   for (uint64_t i = 0; i < len; ++i) {
     const uint64_t byte_from_low = len - 1 - i;
@@ -573,10 +557,10 @@ void scratch_store_word(struct zScratchRegionResult *result,
                        (8 * (byte_from_low % 8)));
   }
   const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  return scratch_result_value(accepted, accepted ? dst + len : 0);
 }
 
-bool public_output_write(struct zScratchSliceFields output) {
+bool public_output_write(struct ScratchSliceFields output) {
   const uint64_t len = SLICE_LEN(output);
   const uint8_t *bytes = scratch_ptr(SLICE_OFF(output), len);
   if (!bytes || len > SIZE_MAX) return false;
@@ -584,35 +568,35 @@ bool public_output_write(struct zScratchSliceFields output) {
   return true;
 }
 
-bool output_buffer_store_memory(struct zEvmMemorySliceFields slice) {
+bool output_buffer_store_memory(struct EvmMemorySliceFields slice) {
   return output_buffer_store_bytes(
       memory_ptr(SLICE_OFF(slice), SLICE_LEN(slice)),
       SLICE_LEN(slice));
 }
 
-bool output_buffer_store_input(struct zStatelessInputSliceFields slice) {
+bool output_buffer_store_input(struct StatelessInputSliceFields slice) {
   return output_buffer_store_bytes(
       stateless_input_ptr(SLICE_OFF(slice), SLICE_LEN(slice)),
       SLICE_LEN(slice));
 }
 
 Hash32 code_db_store_indexed(
-    struct zCodeRegionSliceFields code, uint64_t jumpdest_ref) {
+    struct CodeRegionSliceFields code, uint64_t jumpdest_ref) {
   return code_db_store_row(SLICE_OFF(code), jumpdest_ref);
 }
 
-static bool calldata_span(struct zCalldataSlice input,
+static bool calldata_span(struct CalldataSlice input,
                           const uint8_t **bytes, uint64_t *len) {
   switch (input.kind) {
-    case Kind_zInputCalldata:
-      *len = SLICE_LEN(input.variants.zInputCalldata);
+    case Kind_InputCalldata:
+      *len = SLICE_LEN(input.variants.InputCalldata);
       *bytes = stateless_input_ptr(
-          SLICE_OFF(input.variants.zInputCalldata), *len);
+          SLICE_OFF(input.variants.InputCalldata), *len);
       return *bytes != NULL;
-    case Kind_zMemoryCalldata:
-      *len = SLICE_LEN(input.variants.zMemoryCalldata);
+    case Kind_MemoryCalldata:
+      *len = SLICE_LEN(input.variants.MemoryCalldata);
       *bytes =
-          memory_ptr(SLICE_OFF(input.variants.zMemoryCalldata), *len);
+          memory_ptr(SLICE_OFF(input.variants.MemoryCalldata), *len);
       return *bytes != NULL;
   }
   return false;
@@ -626,80 +610,80 @@ static bool calldata_span(struct zCalldataSlice input,
     return call;                                                               \
   } while (0)
 
-bool accelerator_ripemd160(struct zCalldataSlice input) {
+bool accelerator_ripemd160(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_ripemd160_bytes(bytes, len));
 }
 
-bool accelerator_modexp(struct zCalldataSlice input,
-                        uint64_t base_len, uint64_t exponent_len,
-                        uint64_t modulus_len) {
+bool accelerator_modexp(struct CalldataSlice input,
+                        uint32_t base_len, uint32_t exponent_len,
+                        uint32_t modulus_len) {
   CALL_ACCELERATOR(
       input,
       accelerator_modexp_bytes(
           bytes, len, base_len, exponent_len, modulus_len));
 }
 
-bool accelerator_bn254_add(struct zCalldataSlice input) {
+bool accelerator_bn254_add(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bn254_add_bytes(bytes, len));
 }
 
-bool accelerator_bn254_mul(struct zCalldataSlice input) {
+bool accelerator_bn254_mul(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bn254_mul_bytes(bytes, len));
 }
 
-uint64_t accelerator_bn254_pairing(struct zCalldataSlice input) {
+uint8_t accelerator_bn254_pairing(struct CalldataSlice input) {
   const uint8_t *bytes = NULL;
   uint64_t len = 0;
   if (!calldata_span(input, &bytes, &len)) return 0;
   return accelerator_bn254_pairing_bytes(bytes, len);
 }
 
-bool accelerator_blake2f(struct zCalldataSlice input, uint64_t rounds,
-                         uint64_t final_block) {
+bool accelerator_blake2f(struct CalldataSlice input, uint32_t rounds,
+                         uint8_t final_block) {
   CALL_ACCELERATOR(
       input,
       accelerator_blake2f_bytes(bytes, len, rounds, final_block));
 }
 
-bool accelerator_kzg_point_evaluation(struct zCalldataSlice input) {
+bool accelerator_kzg_point_evaluation(struct CalldataSlice input) {
   CALL_ACCELERATOR(
       input, accelerator_kzg_point_evaluation_bytes(bytes, len));
 }
 
-bool accelerator_bls_g1_add(struct zCalldataSlice input) {
+bool accelerator_bls_g1_add(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bls_g1_add_bytes(bytes, len));
 }
 
-bool accelerator_bls_g1_msm(struct zCalldataSlice input) {
+bool accelerator_bls_g1_msm(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bls_g1_msm_bytes(bytes, len));
 }
 
-bool accelerator_bls_g2_add(struct zCalldataSlice input) {
+bool accelerator_bls_g2_add(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bls_g2_add_bytes(bytes, len));
 }
 
-bool accelerator_bls_g2_msm(struct zCalldataSlice input) {
+bool accelerator_bls_g2_msm(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_bls_g2_msm_bytes(bytes, len));
 }
 
-uint64_t accelerator_bls_pairing(struct zCalldataSlice input) {
+uint8_t accelerator_bls_pairing(struct CalldataSlice input) {
   const uint8_t *bytes = NULL;
   uint64_t len = 0;
   if (!calldata_span(input, &bytes, &len)) return 0;
   return accelerator_bls_pairing_bytes(bytes, len);
 }
 
-bool accelerator_bls_map_fp_to_g1(struct zCalldataSlice input) {
+bool accelerator_bls_map_fp_to_g1(struct CalldataSlice input) {
   CALL_ACCELERATOR(
       input, accelerator_bls_map_fp_to_g1_bytes(bytes, len));
 }
 
-bool accelerator_bls_map_fp2_to_g2(struct zCalldataSlice input) {
+bool accelerator_bls_map_fp2_to_g2(struct CalldataSlice input) {
   CALL_ACCELERATOR(
       input, accelerator_bls_map_fp2_to_g2_bytes(bytes, len));
 }
 
-bool accelerator_p256_verify(struct zCalldataSlice input) {
+bool accelerator_p256_verify(struct CalldataSlice input) {
   CALL_ACCELERATOR(input, accelerator_p256_verify_bytes(bytes, len));
 }
 

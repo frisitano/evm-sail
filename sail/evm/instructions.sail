@@ -61,7 +61,7 @@ union ast = {
   DUPN : byte, SWAPN : byte, EXCHANGE : byte,
 
   /* 0xf0, 0xff: system */
-  CREATE : unit, CALL : unit, CALLCODE : unit, RETURN : unit,
+  opcode_CREATE : unit, CALL : unit, CALLCODE : unit, RETURN : unit,
   DELEGATECALL : unit, CREATE2 : unit, STATICCALL : unit,
   REVERT : unit, INVALID : unit, SELFDESTRUCT : unit
 }

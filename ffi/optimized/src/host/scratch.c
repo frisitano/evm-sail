@@ -36,7 +36,7 @@ uint8_t *scratch_borrow(uint64_t len) {
   return scratch_bytes + scratch_top;
 }
 
-bool scratch_reserve_at(uint64_t off, uint64_t len) {
+bool scratch_reserve_at(uint32_t off, uint32_t len) {
   uint64_t off_value = off;
   uint64_t len_value = len;
   if (off_value != scratch_top || len_value > UINT64_MAX - off_value)
@@ -44,7 +44,7 @@ bool scratch_reserve_at(uint64_t off, uint64_t len) {
   return off_value + len_value <= GUEST_SCRATCH_BYTES;
 }
 
-unit scratch_truncate(uint64_t len) {
+unit scratch_truncate(uint32_t len) {
   uint64_t len_value = len;
   if (len_value <= scratch_top) scratch_top = len_value;
   return UNIT;
@@ -57,4 +57,3 @@ const uint8_t *scratch_region(uint64_t off, uint64_t len) {
 }
 
 const uint8_t *scratch_base(void) { return scratch_bytes; }
-uint64_t scratch_length(void) { return scratch_top; }

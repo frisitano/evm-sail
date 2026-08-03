@@ -48,25 +48,22 @@ static inline U256 word_from_hash(
   return (U256){
       .limbs =
           {
-              __builtin_bswap64(bytes.lanes[3]),
-              __builtin_bswap64(bytes.lanes[2]),
-              __builtin_bswap64(bytes.lanes[1]),
-              __builtin_bswap64(bytes.lanes[0]),
+              load_be64(bytes.bytes + 24),
+              load_be64(bytes.bytes + 16),
+              load_be64(bytes.bytes + 8),
+              load_be64(bytes.bytes),
           },
   };
 }
 
 static inline Hash32 hash_from_word(
     U256 value) {
-  return (Hash32){
-      .lanes =
-          {
-              __builtin_bswap64(value.limbs[3]),
-              __builtin_bswap64(value.limbs[2]),
-              __builtin_bswap64(value.limbs[1]),
-              __builtin_bswap64(value.limbs[0]),
-          },
-  };
+  Hash32 result;
+  store_be64(result.bytes, value.limbs[3]);
+  store_be64(result.bytes + 8, value.limbs[2]);
+  store_be64(result.bytes + 16, value.limbs[1]);
+  store_be64(result.bytes + 24, value.limbs[0]);
+  return result;
 }
 
 static inline uint64_t bit_length_u64(uint64_t value) {
@@ -77,17 +74,11 @@ static inline uint64_t bit_length_u64(uint64_t value) {
 
 static inline Address address_from_word(
     U256 value) {
-  return (Address){
-      .lanes = {
-          (uint64_t)__builtin_bswap32((uint32_t)value.limbs[2]) |
-              ((uint64_t)__builtin_bswap32((uint32_t)(value.limbs[1] >> 32))
-               << 32),
-          (uint64_t)__builtin_bswap32((uint32_t)value.limbs[1]) |
-              ((uint64_t)__builtin_bswap32((uint32_t)(value.limbs[0] >> 32))
-               << 32),
-          (uint64_t)__builtin_bswap32((uint32_t)value.limbs[0]),
-      },
-  };
+  Address result;
+  store_be32(result.bytes, (uint32_t)value.limbs[2]);
+  store_be64(result.bytes + 4, value.limbs[1]);
+  store_be64(result.bytes + 12, value.limbs[0]);
+  return result;
 }
 
 static inline U256 word_from_address(
@@ -95,13 +86,9 @@ static inline U256 word_from_address(
   return (U256){
       .limbs =
           {
-              ((uint64_t)__builtin_bswap32((uint32_t)(bytes.lanes[1] >> 32))
-               << 32) |
-                  __builtin_bswap32((uint32_t)bytes.lanes[2]),
-              ((uint64_t)__builtin_bswap32((uint32_t)(bytes.lanes[0] >> 32))
-               << 32) |
-                  __builtin_bswap32((uint32_t)bytes.lanes[1]),
-              __builtin_bswap32((uint32_t)bytes.lanes[0]),
+              load_be64(bytes.bytes + 12),
+              load_be64(bytes.bytes + 4),
+              load_be32(bytes.bytes),
               0,
           },
   };

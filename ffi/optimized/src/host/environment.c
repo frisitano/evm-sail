@@ -24,13 +24,11 @@ unit environment_reset(const unit u) {
   return UNIT;
 }
 
-unit ancestor_hash_write(uint64_t index, Hash32 hash) {
-  if (index >= GUEST_ANCESTOR_HASHES) GUEST_ABORT();
+unit ancestor_hash_write(uint8_t index, Hash32 hash) {
   ancestor_hashes[index] = hash;
   return UNIT;
 }
 
-Hash32 ancestor_hash_read(uint64_t index) {
-  if (index >= GUEST_ANCESTOR_HASHES) GUEST_ABORT();
+Hash32 ancestor_hash_read(uint8_t index) {
   return ancestor_hashes[index];
 }

@@ -42,9 +42,8 @@ The two directories are mutually exclusive implementations of the same Sail
 host contracts. A source or header in one backend must not include a private
 source or header from the other backend. Builds put the selected backend first
 on the include path and compile implementation files only from that directory.
-`optimized/include/evmsail/model.h` selects the generated model header because
-Sail emits implementation includes before its own model-header include. The
-optimized host prelude then gives the selected fixed representations their
+`EVMSAIL_MODEL_H` selects the generated model umbrella header. The optimized
+host prelude then gives the selected fixed representations their
 semantic names (`Address`, `Hash32`, `LogsBloom`, and `U256`). Raw generated
 representation names must not leak into subsystem headers or implementations.
 This is a naming boundary only: the aliases preserve the exact generated ABI

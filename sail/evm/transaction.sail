@@ -1243,7 +1243,13 @@ function run_transaction_frame(tx, v, upfront) = {
     admitted limit in the result type makes the post-refund conservation proof
     available to settlement and to bounded-integer specialization. */
 val remaining_gas_after_refund : forall 'limit 'total 'remaining 'cap,
-                                      0
+                                      -gas_refund_bound
+                                   <= 'total
+                                   &  'total
+                                   <= gas_refund_bound
+                                      + authorization_refund_per_item
+                                        * transaction_length_bound
+                                   &  0
                                    <= 'remaining
                                    &  'remaining
                                    <= 'limit

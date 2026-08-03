@@ -48,7 +48,12 @@ CONTRACTS_DIR       := extractions/contracts
 C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
 C_OPT_BUILD_DIR     := build/c-optimised
-C_OPT_MODEL         := $(C_OPT_BUILD_DIR)/evm
+C_OPT_GENERATED_DIR := $(C_OPT_BUILD_DIR)/generated
+C_OPT_GENERATED_INCLUDE_DIR := $(C_OPT_GENERATED_DIR)/include
+C_OPT_GENERATED_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/spec
+C_OPT_GENERATED_MANIFEST := $(C_OPT_GENERATED_SOURCE_DIR)/sources.list
+C_OPT_GENERATED_OBJECT_DIR := $(C_OPT_BUILD_DIR)/model
+C_OPT_PACKAGE       := evmsail
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
 C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
@@ -81,17 +86,27 @@ C_SPEC_HEADERS      := sail_failure.h region_access.h hash.h precompiles.h outpu
                        code_db.h kernel_state.h trie_node_db.h state_db.h
 C_OPTIMIZED_INCLUDE_DIR := ffi/optimized/include
 C_OPTIMIZED_SOURCE_DIR  := ffi/optimized/src
-C_OPTIMIZED_HEADERS     := sail_failure.h \
-                           $(patsubst $(C_OPTIMIZED_INCLUDE_DIR)/%,%,$(shell find $(C_OPTIMIZED_INCLUDE_DIR)/evmsail -type f -name '*.h' ! -name model.h | sort))
+C_OPTIMIZED_EXTERNAL_TYPES_HEADER := evmsail/host/types.h
+C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
+                              ScratchSliceFields \
+                              EvmMemorySliceFields \
+                              CodeRegionSliceFields \
+                              LogDataSliceFields \
+                              OutputSliceFields
+C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := $(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER))
 C_SPEC_INCLUDES     := $(foreach header,$(C_SPEC_HEADERS),--c-include $(header))
-C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
-C_PRESERVE_FLAGS    := --c-preserve main \
+C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve leaf_child_ref \
                        --c-preserve resume_frame \
                        --c-preserve process_transaction \
                        --c-preserve compute_state_root \
                        --c-preserve trie_root \
                        --c-preserve decode_stateless_input_ref
+C_OPT_PRESERVE_FLAGS := --c-preserve main \
+                        --c-preserve resume_frame \
+                        --c-preserve process_transaction \
+                        --c-preserve compute_state_root \
+                        --c-preserve decode_stateless_input_ref
 SAIL_CONTRACTS      :=
 EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
 # Installed Sail Python plugins are discovered automatically. Set this to the
@@ -230,13 +245,14 @@ extract-coq: check-contracts
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 	cd $(COQ_MODEL_DIR) && $(COQC) $(abspath $(COQ_PROOFS_DIR))/RlpCursor.v
 
-# Sail emits one C translation unit. Both targets keep that generated output in
-# ignored build directories and compile-check it against the matching complete
-# backend. The Sail model, not generated C, is the readable source of truth.
+# Both targets keep generated output in ignored build directories and
+# compile-check it against the matching complete backend. The optimized model
+# uses Sail's package/module layout; handwritten FFI remains under ffi/.
+# The Sail model, not generated C, is the readable source of truth.
 c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
+		$(C_SPEC_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
 	test -s $(C_SPEC_MODEL).c
 	test -s $(C_SPEC_MODEL).h
@@ -249,21 +265,35 @@ c-spec:
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
 
 c-optimised: check-optimized-ffi
-	mkdir -p $(C_OPT_BUILD_DIR)
-	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_OPTIMIZED_INCLUDES) \
-		--c-specialize --c-specialize-log --c-require-bounded-int \
+	mkdir -p $(C_OPT_GENERATED_DIR)
+	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
+		--c-optimized-model --c-package $(C_OPT_PACKAGE) \
+		--c-output-dir $(C_OPT_GENERATED_DIR) \
+		--c-optimized-source-root sail \
+		--c-optimized-include-dir $(C_OPTIMIZED_INCLUDE_DIR) \
+		$(C_OPTIMIZED_EXTERNAL_TYPE_FLAGS) \
+		$(C_OPT_PRESERVE_FLAGS) --c-specialize-log \
 		$(C_OPTIMISED_SPLICE_FLAGS) \
-		$(MODEL) --variable EVM_DEBUG=off -o $(C_OPT_MODEL)
-	test -s $(C_OPT_MODEL).c
-	test -s $(C_OPT_MODEL).h
+		$(MODEL) --variable EVM_DEBUG=off
+	test -s $(C_OPT_GENERATED_MANIFEST)
+	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
 	@sail_lib="$$($(SAIL) --dir)/lib"; \
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
-		$(CC) -O2 -w -DEVMSAIL_MODEL_H=\"evm.h\" \
-			-I$(C_OPT_BUILD_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
-			-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
-			-c $(C_OPT_MODEL).c -o $(C_OPT_BUILD_DIR)/evm.o
-	test -s $(C_OPT_BUILD_DIR)/evm.o
+		mkdir -p $(C_OPT_GENERATED_OBJECT_DIR); \
+		count=0; \
+		while IFS= read -r relative || [ -n "$$relative" ]; do \
+			[ -z "$$relative" ] && continue; \
+			source="$(C_OPT_GENERATED_SOURCE_DIR)/$$relative"; \
+			test -s "$$source" || { echo "missing generated optimized source: $$relative"; exit 1; }; \
+			object_name=$$(printf '%s' "$${relative%.c}" | tr '/' '_'); \
+			$(CC) -O2 -w -Wno-error=implicit-function-declaration \
+				-DEVMSAIL_MODEL_H=\"$(C_OPT_PACKAGE)/spec.h\" \
+				-I$(C_OPT_GENERATED_INCLUDE_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
+				-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
+				-c "$$source" -o "$(C_OPT_GENERATED_OBJECT_DIR)/$$object_name.o"; \
+			count=$$((count + 1)); \
+		done < $(C_OPT_GENERATED_MANIFEST); \
+		test "$$count" -gt 0
 
 extract-lean:
 	mkdir -p $(LEAN_MODEL_DIR)

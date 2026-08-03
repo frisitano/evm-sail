@@ -42,16 +42,16 @@ unit receipt_table_reset(unit ignored) {
   return UNIT;
 }
 
-unit receipt_table_push(uint64_t index, struct zScratchSliceFields value) {
-  const uint64_t offset = value.zoff;
-  const uint64_t length = value.zlen;
+unit receipt_table_push(uint32_t index, struct ScratchSliceFields value) {
+  const uint64_t offset = value.off;
+  const uint64_t length = value.len;
   const uint8_t *source = NULL;
   if (index != receipt_table.count || length > SIZE_MAX ||
       !(source = scratch_region(offset, length)) ||
       receipt_table.bytes_length > SIZE_MAX - (size_t)length ||
       receipt_table.count == GUEST_RECEIPT_RECORDS ||
       (size_t)length > GUEST_RECEIPT_BYTES - receipt_table.bytes_length) {
-    throw_invalid_block(zWitnessDeficient,
+    throw_invalid_block(WitnessDeficient,
                         "optimized receipt accumulator push");
     return UNIT;
   }
@@ -80,7 +80,7 @@ bool receipt_record_span(uint64_t index, const uint8_t **bytes,
   return true;
 }
 
-Hash32 receipt_table_root(uint64_t count) {
+Hash32 receipt_table_root(uint32_t count) {
   return mpt_receipt_table_root(count);
 }
 

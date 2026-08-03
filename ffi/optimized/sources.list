@@ -18,7 +18,6 @@ host/output.c
 host/region_access.c
 host/scratch.c
 host/stack.c
-host/state.c
 host/state/journal.c
 host/state/logs.c
 host/state/runtime.c

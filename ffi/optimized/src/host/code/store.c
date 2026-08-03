@@ -27,7 +27,7 @@
  * start at one. Sail's single frame_code Code register is the complete active
  * executable state, and the Sail account store remains the authoritative
  * account-code value; this is the execution mirror. */
-#include "sail.h"
+#include "evmsail/prelude.h"
 #include "host/code/store.h"
 #include "evmsail/host/region_access.h"
 #include "primitives/hash.h"
@@ -97,8 +97,8 @@ static const JumpdestEntry *jumpdest_row(uint64_t ref, uint64_t code_len) {
 /* Reserve the exact table size before Sail starts analysis. The word span is
  * zeroed so chunks without JUMPDESTs need no writes. Exhaustion returns the
  * empty sentinel; Sail asserts on it. */
-uint64_t jumpdest_table_alloc(uint64_t code_len) {
-  if (!code_len || code_len > UINT32_MAX) return 0;
+uint64_t jumpdest_table_alloc(uint32_t code_len) {
+  if (!code_len) return 0;
   const uint64_t nwords = jumpdest_word_count(code_len);
   if (jumpdest_table.count >= jumpdest_table.capacity) return 0;
   if (nwords > GUEST_JUMPDEST_WORDS - jumpdest_table.words_len) return 0;
@@ -116,11 +116,10 @@ uint64_t jumpdest_table_alloc(uint64_t code_len) {
 /* Store one completed Sail chunk. Chunk bit zero describes the first byte in
  * the corresponding 256-byte code span, hence little-endian limb order. Bits
  * at or beyond code_len are rejected to preserve the zero-tail invariant. */
-bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
-                                uint64_t chunk_index,
-                                const U256 chunk) {
+bool jumpdest_table_store_chunk(uint64_t ref, uint32_t code_len,
+                                uint32_t chunk_index, U256 chunk) {
   const JumpdestEntry *row = jumpdest_row(ref, code_len);
-  if (!row || chunk_index > UINT64_MAX / 4) return false;
+  if (!row) return false;
   const uint64_t nwords = jumpdest_word_count(row->code_len);
   const uint64_t first = chunk_index * 4;
   if (first >= nwords) return false;
@@ -139,7 +138,7 @@ bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
   return true;
 }
 
-bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
+bool jumpdest_ref_contains(uint64_t ref, uint32_t code_len, uint32_t i) {
   if (i >= code_len) return false;
   const JumpdestEntry *row = jumpdest_row(ref, code_len);
   if (!row) return false;
@@ -284,8 +283,8 @@ int code_db_resolve_code(uint64_t off, uint64_t len,
 
 static uint64_t code_db_hash(const Hash32 *key) {
   uint64_t h = 0xcbf29ce484222325ull;
-  for (int i = 0; i < 4; i++) {
-    h ^= key->lanes[i];
+  for (size_t i = 0; i < sizeof(key->bytes); ++i) {
+    h ^= key->bytes[i];
     h *= 0x100000001b3ull;
   }
   return h;
@@ -332,7 +331,9 @@ unit code_db_reset(const unit u) {
 }
 
 static bool hash32_is_zero(const Hash32 *h) {
-  return (h->lanes[0] | h->lanes[1] | h->lanes[2] | h->lanes[3]) == 0;
+  uint8_t combined = 0;
+  for (size_t i = 0; i < sizeof(h->bytes); ++i) combined |= h->bytes[i];
+  return combined == 0;
 }
 
 static bool keccak_bytes(const uint8_t *src, size_t len, Hash32 *key) {

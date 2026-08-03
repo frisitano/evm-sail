@@ -206,14 +206,21 @@ make extract-lean                           # generate and compile the Lean mode
 make extract                                # run maintained proof extractions
 ```
 
-`make c-spec` and `make c-optimised` generate Sail's monolithic C output into
-separate ignored directories under `build/` and compile-check it against
-`ffi/spec` and `ffi/optimized`, respectively. Generated C is not retained as a
-readable source mirror: the Sail model is the source of truth. The optimized
-target uses the same ordered `sail/optimised/manifest` module overrides as
-optimized native and zkVM builds. The override tree mirrors `sail/`, so each
-replacement remains next to the corresponding canonical module path. Spec C
-and proof extraction retain the explicit, readable Sail equations. See
+`make c-spec` generates the specification backend's monolithic C output, while
+`make c-optimised` uses Sail's optimized package/source-tree layout under
+`build/c-optimised/generated/`. Both are compile-checked against their matching
+complete backend. The optimized model is emitted without Sail name mangling,
+keeps generated headers and sources separate from `ffi/optimized/`, and maps
+the host slice records to the handwritten `evmsail/host/types.h` contract.
+Generated translation units mirror their paths below `sail/` and are compiled
+in the order recorded by the compiler in `src/spec/sources.list`; the single
+semantic `evm` project module is unchanged.
+Generated C is not retained as a readable source mirror: the Sail model is the
+source of truth. The optimized target uses the same ordered
+`sail/optimised/manifest` module overrides as optimized native and zkVM builds.
+The override tree mirrors `sail/`, so each replacement remains next to the
+corresponding canonical module path. Spec C and proof extraction retain the
+explicit, readable Sail equations. See
 [`extractions/README.md`](extractions/README.md) for the maintained proof
 extractions.
 

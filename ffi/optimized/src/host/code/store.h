@@ -7,22 +7,20 @@
 #include "evmsail/prelude.h"
 #include <stdbool.h>
 
-struct zoptionzIRCodezK;
-struct zStatelessInputSliceFields;
-struct zEvmMemorySliceFields;
-struct zOutputSliceFields;
-struct zCodeRegionSliceFields;
-void code_db_lookup(struct zoptionzIRCodezK *rop, Hash32 h);
-struct zCodeRegionSliceFields code_region_from_input(
-    struct zStatelessInputSliceFields input);
-struct zCodeRegionSliceFields code_region_from_memory(
-    struct zEvmMemorySliceFields input);
-struct zCodeRegionSliceFields code_region_from_output(
-    struct zOutputSliceFields input);
-uint64_t jumpdest_table_alloc(uint64_t code_len);
-bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
-                                uint64_t chunk_index,
-                                const U256 chunk);
+struct StatelessInputSliceFields;
+struct EvmMemorySliceFields;
+struct OutputSliceFields;
+struct CodeRegionSliceFields;
+struct zoptionzIRCodezK code_db_lookup(Hash32 h);
+struct CodeRegionSliceFields code_region_from_input(
+    struct StatelessInputSliceFields input);
+struct CodeRegionSliceFields code_region_from_memory(
+    struct EvmMemorySliceFields input);
+struct CodeRegionSliceFields code_region_from_output(
+    struct OutputSliceFields input);
+uint64_t jumpdest_table_alloc(uint32_t code_len);
+bool jumpdest_table_store_chunk(uint64_t ref, uint32_t code_len,
+                                uint32_t chunk_index, U256 chunk);
 
 /* A code-region reference is an opaque one-based CodeId naming a table row
  * whose byte pointer was resolved when the row was created; zero is the
@@ -40,7 +38,7 @@ uint64_t code_db_analyze_bytes(const uint8_t *src, uint64_t len,
                                bool amsterdam_or_later);
 Hash32 code_intern_indexed_delegation(
     Address addr, uint64_t jumpdest_ref);
-struct zAddressResult code_db_read_delegation(
+struct AddressResult code_db_read_delegation(
      Hash32 h);
 bool code_db_read_delegation_address(
     Address *address,
@@ -48,5 +46,5 @@ bool code_db_read_delegation_address(
 
 /* JumpdestRef is an opaque table handle: the one-based JumpdestId of the
  * bitmap row. Zero is the empty analysis. */
-bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i);
+bool jumpdest_ref_contains(uint64_t ref, uint32_t code_len, uint32_t i);
 #endif

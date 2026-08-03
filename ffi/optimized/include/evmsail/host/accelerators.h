@@ -30,9 +30,9 @@ bool accelerator_bls_map_fp2_to_g2_bytes(const uint8_t *bytes, uint64_t len);
 bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len);
 
 /* Fixed-width signature primitive shared by transaction execution. */
-struct zAddressResult precompile_ecrecover_hash_sig(
+struct AddressResult precompile_ecrecover_hash_sig(
      Hash32 h,
-    uint64_t yparity, const U256 r, const U256 s);
+    uint8_t yparity, U256 r, U256 s);
 bool precompile_ecrecover_hash_sig_address(uint8_t address[20], Hash32 h,
                                            uint64_t yparity, U256 r,
                                            U256 s);

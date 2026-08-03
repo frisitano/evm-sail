@@ -15,7 +15,7 @@
 
 /* Merge the active transaction into cumulative block state, emit its BAL
  * history, and discard the transaction overlays. */
-unit state_store_tx_merge(struct zTransactionMergeSemantics semantics,
+unit state_store_tx_merge(struct TransactionMergeSemantics semantics,
                           uint64_t current_transaction_epoch);
 
 #endif

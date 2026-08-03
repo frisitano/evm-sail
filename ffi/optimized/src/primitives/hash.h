@@ -10,71 +10,45 @@
 #include <string.h>
 
 static const Hash32 EVMSAIL_EMPTY_TRIE_ROOT = {{
-    UINT64_C(0xa655cc1b171fe856),
-    UINT64_C(0x6ef8c092e64583ff),
-    UINT64_C(0xc0ad6c991be0485b),
-    UINT64_C(0x21b463e3b52f6201),
+    0x56, 0xe8, 0x1f, 0x17, 0x1b, 0xcc, 0x55, 0xa6,
+    0xff, 0x83, 0x45, 0xe6, 0x92, 0xc0, 0xf8, 0x6e,
+    0x5b, 0x48, 0xe0, 0x1b, 0x99, 0x6c, 0xad, 0xc0,
+    0x01, 0x62, 0x2f, 0xb5, 0xe3, 0x63, 0xb4, 0x21,
 }};
 
 static const Hash32 EVMSAIL_KECCAK_EMPTY = {{
-    UINT64_C(0x3c23f7860146d2c5),
-    UINT64_C(0xc003c7dcb27d7e92),
-    UINT64_C(0x3b2782ca53b600e5),
-    UINT64_C(0x70a4855d04d8fa7b),
+    0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23, 0x3c,
+    0x92, 0x7e, 0x7d, 0xb2, 0xdc, 0xc7, 0x03, 0xc0,
+    0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82, 0x27, 0x3b,
+    0x7b, 0xfa, 0xd8, 0x04, 0x5d, 0x85, 0xa4, 0x70,
 }};
 
 static inline int hash_compare(const Hash32 *a,
                                        const Hash32 *b) {
-  int order = canonical_lane_compare(a->lanes[0], b->lanes[0]);
-  if (order != 0) return order;
-  order = canonical_lane_compare(a->lanes[1], b->lanes[1]);
-  if (order != 0) return order;
-  order = canonical_lane_compare(a->lanes[2], b->lanes[2]);
-  if (order != 0) return order;
-  return canonical_lane_compare(a->lanes[3], b->lanes[3]);
+  return memcmp(a->bytes, b->bytes, sizeof(a->bytes));
 }
 
 static inline int hash_equal(const Hash32 *a,
                                      const Hash32 *b) {
-  return a->lanes[0] == b->lanes[0] && a->lanes[1] == b->lanes[1] &&
-         a->lanes[2] == b->lanes[2] && a->lanes[3] == b->lanes[3];
+  return memcmp(a->bytes, b->bytes, sizeof(a->bytes)) == 0;
 }
 
 static inline Hash32 hash_from_sail_word(U256 value) {
-  return (Hash32){
-      .lanes =
-          {
-              __builtin_bswap64(value.limbs[3]),
-              __builtin_bswap64(value.limbs[2]),
-              __builtin_bswap64(value.limbs[1]),
-              __builtin_bswap64(value.limbs[0]),
-          },
-  };
+  Hash32 result;
+  sail_word_to_be_bytes(result.bytes, value);
+  return result;
 }
 
 static inline U256 hash_to_sail_word(const Hash32 *value) {
-  return (U256){
-      .limbs =
-          {
-              __builtin_bswap64(value->lanes[3]),
-              __builtin_bswap64(value->lanes[2]),
-              __builtin_bswap64(value->lanes[1]),
-              __builtin_bswap64(value->lanes[0]),
-          },
-  };
+  return be_bytes_to_sail_word(value->bytes);
 }
 
 /* The low 160 bits of the digest, retaining canonical Ethereum byte order. */
 static inline Address hash_low_address(
     const Hash32 *value) {
-  return (Address){
-      .lanes =
-          {
-              (value->lanes[1] >> 32) | (value->lanes[2] << 32),
-              (value->lanes[2] >> 32) | (value->lanes[3] << 32),
-              value->lanes[3] >> 32,
-          },
-  };
+  Address result;
+  memcpy(result.bytes, value->bytes + 12, sizeof(result.bytes));
+  return result;
 }
 
 #endif

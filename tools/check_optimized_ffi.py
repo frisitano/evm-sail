@@ -28,6 +28,7 @@ FORBIDDEN_MODULE_BACKING_ARRAY = re.compile(
     re.DOTALL,
 )
 FORBIDDEN_HOST_PREFIX = re.compile(r"\b(?:evmsail|optimized)_[A-Za-z0-9_]*")
+GENERATED_PACKAGE_SYMBOLS = {"evmsail_model_init"}
 FORBIDDEN_INDIRECT_FUNCTION = re.compile(
     r"\(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*\s*\)\s*\("
 )
@@ -193,6 +194,8 @@ def main() -> int:
             source = strip_comments_and_literals(path.read_text(errors="replace"))
             relative = path.relative_to(ROOT)
             for match in FORBIDDEN_HOST_PREFIX.finditer(source):
+                if match.group(0) in GENERATED_PACKAGE_SYMBOLS:
+                    continue
                 line = source.count("\n", 0, match.start()) + 1
                 errors.append(
                     f"{relative}:{line}: redundant optimized-host prefix: "

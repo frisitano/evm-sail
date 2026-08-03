@@ -160,7 +160,7 @@ function decode_simple(opcode : opcode) -> ast = {
                     } else {
                         INVALID()
                     },
-                    240 => CREATE(),
+                    240 => opcode_CREATE(),
                     241 => CALL(),
                     242 => CALLCODE(),
                     243 => RETURN(),

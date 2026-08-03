@@ -11,7 +11,7 @@ void state_store_workspace_bind(void) {
   block_access_list_workspace_bind();
 }
 
-unit state_store_tx_merge(struct zTransactionMergeSemantics semantics,
+unit state_store_tx_merge(struct TransactionMergeSemantics semantics,
                           uint64_t current_transaction_epoch) {
   account_transaction_merge(semantics, current_transaction_epoch);
   storage_transaction_merge(current_transaction_epoch);

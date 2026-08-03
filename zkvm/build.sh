@@ -40,6 +40,9 @@ C_OPTIMISED_DIR="$ROOT/sail/optimised"
 C_OPTIMISED_MANIFEST="$C_OPTIMISED_DIR/manifest"
 C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
 C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
+OPTIMIZED_PACKAGE="evmsail"
+OPTIMIZED_GENERATED="$BUILD/generated"
+OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -75,11 +78,15 @@ fi
 FFI_ROOT="$ROOT/ffi"
 if [ -z "${GUEST:-}" ]; then
   MODEL_FFI="$FFI_ROOT/optimized"
-  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
+  MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
+  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
 else
   MODEL_FFI="$FFI_ROOT/spec"
+  MODEL_SOURCE="$BUILD/zkvm_block.c"
+  MODEL_HEADER="zkvm_block.h"
   MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI")
 fi
+MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 # Freestanding includes FIRST so <stdio.h>/<stdlib.h>/<string.h>/<gmp.h> resolve
 # to our shims + vendored mini-gmp instead of newlib / libgmp.
 CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
@@ -121,10 +128,7 @@ SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEV
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 if [ -z "${GUEST:-}" ]; then
-  MODEL_HEADERS=(sail_failure.h)
-  while IFS= read -r path; do
-    MODEL_HEADERS+=("${path#"$MODEL_FFI/include/"}")
-  done < <(find "$MODEL_FFI/include/evmsail" -type f -name '*.h' ! -name model.h | LC_ALL=C sort)
+  MODEL_HEADERS=()
 else
   MODEL_HEADERS=(
     sail_failure.h region_access.h hash.h precompiles.h output.h scratch.h
@@ -186,25 +190,53 @@ compile_common() {
       done < "$C_PROFILE_MANIFEST"
     fi
     ( cd "$ROOT" && "$SAIL" "${SAIL_Z3_FLAGS[@]}" \
-        -c -O --Oconstant-fold --c-no-main --c-no-rts \
-        --c-preserve main --c-preserve leaf_child_ref \
-        --c-preserve resume_frame \
-        --c-specialize --c-specialize-log --c-require-bounded-int \
-        "${MODEL_INCLUDE_FLAGS[@]}" \
+        -c -O --Oconstant-fold --all-modules \
+        --c-optimized-model --c-package "$OPTIMIZED_PACKAGE" \
+        --c-output-dir "$OPTIMIZED_GENERATED" \
+        --c-optimized-source-root sail \
+        --c-optimized-include-dir "$MODEL_FFI/include" \
+        --c-optimized-external-type StatelessInputSliceFields=evmsail/host/types.h \
+        --c-optimized-external-type ScratchSliceFields=evmsail/host/types.h \
+        --c-optimized-external-type EvmMemorySliceFields=evmsail/host/types.h \
+        --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h \
+        --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h \
+        --c-optimized-external-type OutputSliceFields=evmsail/host/types.h \
+        --c-preserve main --c-preserve resume_frame \
+        --c-specialize-log "${MODEL_INCLUDE_FLAGS[@]}" \
         "${optimized_splice_flags[@]}" \
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
-        --variable EVM_DEBUG="$EVM_DEBUG" \
-        -o "$BUILD/zkvm_block" )
+        --variable EVM_DEBUG="$EVM_DEBUG" )
   fi
   # 2. Compile the generated model.  Proven small ranges lower to native
   #    integers; mathematical int/nat values use sail256's exact bounded ABI.
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -Wno-unused -Wno-error=implicit-function-declaration \
-      -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
+  MODEL_OBJS=()
+  if [ -z "${GUEST:-}" ]; then
+    [ -s "$OPTIMIZED_MODEL_MANIFEST" ] || { echo "error: missing generated model manifest" >&2; exit 2; }
+    while IFS= read -r relative || [ -n "$relative" ]; do
+      [ -z "$relative" ] && continue
+      local source="$OPTIMIZED_GENERATED/src/spec/$relative"
+      [ -f "$source" ] || { echo "error: missing generated model source: $relative" >&2; exit 2; }
+      local object_name="${relative%.c}"
+      object_name="${object_name//\//__}"
+      local object="$BUILD/model__${object_name}.o"
+      "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+          "$MODEL_HEADER_FLAG" \
+          -Wno-unused -Wno-error=implicit-function-declaration \
+          -c "$source" -o "$object"
+      MODEL_OBJS+=("$object")
+    done < "$OPTIMIZED_MODEL_MANIFEST"
+    [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
+  else
+    local object="$BUILD/zkvm_block.o"
+    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+        "$MODEL_HEADER_FLAG" \
+        -Wno-unused -Wno-error=implicit-function-declaration \
+        -c "$MODEL_SOURCE" -o "$object"
+    MODEL_OBJS+=("$object")
+  fi
   # 2b. Selected model backend. Optimized bindings follow the Sail module
   #     tree and are compiled from one deterministic manifest. The spec backend
   #     retains its independent GMP ABI and flat implementation.
@@ -218,7 +250,7 @@ compile_common() {
       object_name="${object_name//\//__}"
       local object="$BUILD/optimized__${object_name}.o"
       "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-          -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+          -Wno-unused "$MODEL_HEADER_FLAG" \
           -c "$source" -o "$object"
       MODEL_BACKEND_OBJS+=("$object")
     done < "$MODEL_FFI/sources.list"
@@ -247,7 +279,7 @@ compile_common() {
       source="${source_and_name%:*}"
       object="$BUILD/${source_and_name##*:}.o"
       "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-          -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+          -Wno-unused "$MODEL_HEADER_FLAG" \
           -c "$MODEL_FFI/$source" -o "$object"
       MODEL_BACKEND_OBJS+=("$object")
     done
@@ -318,7 +350,7 @@ cmd_zisk_lib() {
   "$AR" crs "$BUILD/libevmsail_zisk.a" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
       "${MODEL_BACKEND_OBJS[@]}" \
-      ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
+      ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}"
   echo "built $BUILD/libevmsail_zisk.a"
 }
 
@@ -328,7 +360,7 @@ link_guest() {
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
       "$BUILD/accel_guest.o" "${MODEL_BACKEND_OBJS[@]}" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \
-      "$BUILD/zkvm_block.o" \
+      "${MODEL_OBJS[@]}" \
       -o "$BUILD/zkvm_guest.elf"
   echo "built $BUILD/zkvm_guest.elf"
   riscv64-unknown-elf-size "$BUILD/zkvm_guest.elf" 2>/dev/null || true

@@ -2,6 +2,7 @@
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
 #include "evmsail/host/region_access.h"
 #include "evmsail/host/frame_stack.h"
+#include "evmsail/exceptions.h"
 #include "evmsail/prelude.h"
 #include "lib/mpt/trie.h"
 #include "host/state/store.h"
@@ -58,7 +59,7 @@ void write_output(const uint8_t *output, size_t size)
 extern unit acct_db_reset(unit);             /* transaction + block account state */
 extern unit storage_db_reset(unit);          /* transaction + block storage state */
 extern unit bal_reset(unit);                 /* EIP-7928 block-access-list accumulator */
-extern unit warm_reset(uint64_t);            /* EIP-2929 warm sets */
+extern unit warm_reset(uint32_t);            /* EIP-2929 warm sets */
 extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
 extern unit state_journal_reset(unit);
@@ -92,6 +93,7 @@ static void reset_world(void)
      * poison the next run: generated code short-circuits every call while
      * have_exception is true. */
     have_exception = false;
+    exception_location = NULL;
 }
 
 void guest_reset(void)
@@ -101,14 +103,13 @@ void guest_reset(void)
 }
 
 /* --------------------------- lifecycle + run ---------------------------- */
-extern void model_init(void);
-extern void model_fini(void);
+extern void evmsail_model_init(void);
 
 void guest_init(void) {
     workspace_init();
-    model_init();
+    evmsail_model_init();
 }
-void guest_fini(void) { model_fini(); }
+void guest_fini(void) {}
 
 /* Big stack: the guest recurses over multi-MB SSZ lists; the exe pins a 512 MB
  * main-thread stack (build.sh). In-process the ctypes caller's thread stack is
@@ -228,8 +229,8 @@ extern U256 acct_dump_code_hash(uint64_t);
 extern uint64_t storage_dump_count(U256);
 extern U256 storage_dump_slot(U256, uint64_t);
 extern U256 storage_dump_value(U256, uint64_t);
-extern uint64_t stack_depth(unit);
-extern U256 stack_peek_word(uint64_t);
+extern uint16_t stack_depth(unit);
+extern U256 stack_peek_word(uint16_t);
 extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
@@ -240,7 +241,7 @@ unit validation_debug_capture_location(unit u)
 {
     (void)u;
     const char *loc =
-        (throw_location && *throw_location) ? *throw_location : "";
+        exception_location ? exception_location : "";
     size_t len = 0;
     while (loc[len] && len < sizeof g_validation_location - 1) {
         g_validation_location[len] = loc[len];
@@ -277,7 +278,7 @@ static void d_hash(Hash32 value)
 
 static Hash32 model_state_root(void)
 {
-    return zcompute_state_root(UNIT);
+    return compute_state_root(UNIT);
 }
 
 static void dispose_hash(Hash32 *value)
@@ -289,7 +290,7 @@ unsigned long guest_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
     Hash32 root = {0};
-    bool validation_failed = zvalidation_failure_present;
+    bool validation_failed = validation_failure_present;
     /*
      * Fixed-capacity optimized execution consumes its ordered account,
      * storage, and witness streams while computing the root.  A validation
@@ -310,14 +311,14 @@ unsigned long guest_debug_dump(const unsigned char **out)
     d_byte(state_available ? 1 : 0);
     if (!state_available) {
         for (int i = 0; i < 32; i++) d_byte(0);
-        d_byte(have_exception && current_exception
-                   ? (unsigned char)current_exception->variants.zInvalidBlock
+        d_byte(have_exception
+                   ? (unsigned char)current_exception.variants.InvalidBlock
                    : validation_failed
-                         ? (unsigned char)zvalidation_failure_reason
+                         ? (unsigned char)validation_failure_reason
                          : 0xff);
         const char *loc =
-            (have_exception && throw_location && *throw_location)
-                ? *throw_location
+            (have_exception && exception_location)
+                ? exception_location
                 : "";
         size_t ln = 0;
         while (loc[ln] && ln < 512) ln++;
@@ -334,10 +335,10 @@ unsigned long guest_debug_dump(const unsigned char **out)
     for (size_t i = 0; i < g_out_len; i++) d_byte(g_out[i]);
 
     d_byte('V');
-    d_byte(zvalidation_failure_present ? 1 : 0);
-    if (zvalidation_failure_present) {
-        d_byte((unsigned char)zvalidation_failure_scope);
-        d_byte((unsigned char)zvalidation_failure_reason);
+    d_byte(validation_failure_present ? 1 : 0);
+    if (validation_failure_present) {
+        d_byte((unsigned char)validation_failure_scope);
+        d_byte((unsigned char)validation_failure_reason);
         size_t ln = 0;
         while (validation_loc[ln] && ln < 512) ln++;
         d_byte((unsigned char)(ln >> 8));
@@ -347,12 +348,12 @@ unsigned long guest_debug_dump(const unsigned char **out)
     }
 
     d_byte('B');
-    d_byte(zvalidation_debug_gas_present ? 1 : 0);
-    if (zvalidation_debug_gas_present) {
-        d_u64(zvalidation_debug_header_gas_actual);
-        d_u64(zvalidation_debug_header_gas_expected);
-        d_u64(zvalidation_debug_execution_gas);
-        d_u64(zvalidation_debug_state_gas);
+    d_byte(validation_debug_gas_present ? 1 : 0);
+    if (validation_debug_gas_present) {
+        d_u64(validation_debug_header_gas_actual);
+        d_u64(validation_debug_header_gas_expected);
+        d_u64(validation_debug_execution_gas);
+        d_u64(validation_debug_state_gas);
     }
 
     d_byte('A');

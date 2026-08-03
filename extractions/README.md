@@ -83,12 +83,16 @@ rtk make extract
 
 All full-model backends use `sail/evm.sail_project` directly and are generated
 by the same custom Sail compiler selected by
-`zkvm/resolve_optimized_sail.sh`. Both C targets retain Sail's default name
-mangling and enable `--c-specialize`. Only `c-optimised` also requires bounded
-integers and loads the ordered modules in `sail/optimised/manifest`, matching
-the optimized native and zkVM data representations; `c-spec` retains the
-generated GMP-backed ABI and explicit Sail operations. Coq and Lean use the
-compiler's standard proof backends and do not load the C-only overrides, so semantic quantity types
+`zkvm/resolve_optimized_sail.sh`. `c-spec` retains Sail's default name mangling,
+the generated GMP-backed ABI, and explicit Sail operations. `c-optimised` uses
+the optimized package/source-tree emitter, fixed-width specialization, unmangled
+source names, external handwritten host-slice types, and the ordered modules in
+`sail/optimised/manifest`, matching the optimized native and zkVM data
+representations. Its generated package stays under the ignored build tree,
+separate from `ffi/optimized/`. Its translation units mirror paths below
+`sail/` and are consumed through the compiler-written `src/spec/sources.list`;
+this does not split the semantic `evm` project module. Coq and Lean use the compiler's standard proof
+backends and do not load the C-only overrides, so semantic quantity types
 remain visible in the proof models: byte and protocol quantities, gas, gas
 costs, and gas constants are distinct wrappers over natural numbers, while gas
 refunds retain their signed-integer semantics. Upstream Sail is not a supported

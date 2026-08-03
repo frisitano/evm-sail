@@ -133,7 +133,7 @@ void account_state_workspace_bind(void);
 void storage_state_workspace_bind(void);
 void block_access_list_workspace_bind(void);
 
-void account_transaction_merge(struct zTransactionMergeSemantics semantics,
+void account_transaction_merge(struct TransactionMergeSemantics semantics,
                                uint64_t current_transaction_epoch);
 void storage_transaction_merge(uint64_t current_transaction_epoch);
 

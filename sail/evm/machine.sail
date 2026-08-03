@@ -167,7 +167,7 @@ function push_word(w : word) -> unit =
     modulus; the total canonical definition retains modular behavior outside
     that invariant. */
 function push_gas(value : gas) -> unit =
-    push_word(U256(tmod_nat(value, sizeof(word_modulus))))
+    push_word(u256(tmod_nat(value, sizeof(word_modulus))))
 
 overload push = {push_word, push_gas}
 

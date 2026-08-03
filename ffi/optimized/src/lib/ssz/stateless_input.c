@@ -13,26 +13,26 @@
 #include <stdint.h>
 #include <string.h>
 
-unit index_witness_nodes(struct zBoundedSszzListRef nodes) {
+unit index_witness_nodes(struct BoundedSszListRef nodes) {
   return mpt_index_witness_nodes(nodes);
 }
 
-unit index_witness_codes(struct zBoundedSszzListRef codes,
+unit index_witness_codes(struct BoundedSszListRef codes,
                                  bool amsterdam_or_later) {
   return mpt_index_witness_codes(codes, amsterdam_or_later);
 }
 
-static struct zStatelessInputRef ssz_input_failure(const char *location) {
-  struct zStatelessInputRef result;
+static struct StatelessInputRef ssz_input_failure(const char *location) {
+  struct StatelessInputRef result;
   memset(&result, 0, sizeof(result));
-  throw_invalid_block(zInvalidConfig, location);
+  throw_invalid_block(InvalidConfig, location);
   return result;
 }
 
-static struct zWithdrawal ssz_withdrawal_failure(const char *location) {
-  struct zWithdrawal result;
+static struct Withdrawal ssz_withdrawal_failure(const char *location) {
+  struct Withdrawal result;
   memset(&result, 0, sizeof(result));
-  throw_invalid_block(zInvalidConfig, location);
+  throw_invalid_block(InvalidConfig, location);
   return result;
 }
 
@@ -48,12 +48,12 @@ static uint64_t load_le_u64(const uint8_t *bytes) {
   return result;
 }
 
-U256 ssz_u256(struct zStatelessInputSliceFields input,
-                           uint64_t offset) {
+U256 ssz_u256(struct StatelessInputSliceFields input,
+                   uint32_t offset) {
   const uint8_t *source =
-      stateless_input_ptr(input.zoff + offset, UINT64_C(32));
+      stateless_input_ptr(input.off + offset, UINT64_C(32));
   if (!source) {
-    throw_invalid_block(zInvalidConfig, "optimized SSZ uint256");
+    throw_invalid_block(InvalidConfig, "optimized SSZ uint256");
     return (U256){.limbs = {0, 0, 0, 0}};
   }
   return (U256){
@@ -66,12 +66,12 @@ U256 ssz_u256(struct zStatelessInputSliceFields input,
   };
 }
 
-static struct zStatelessInputSliceFields source_span(
-    struct zStatelessInputSliceFields container, uint64_t start,
+static struct StatelessInputSliceFields source_span(
+    struct StatelessInputSliceFields container, uint64_t start,
     uint64_t stop) {
-  struct zStatelessInputSliceFields result = {
-      .zoff = container.zoff + start,
-      .zlen = stop - start,
+  struct StatelessInputSliceFields result = {
+      .off = container.off + start,
+      .len = stop - start,
   };
   return result;
 }
@@ -89,44 +89,44 @@ static bool offsets_ordered(const uint32_t *offsets, uint64_t count,
   return true;
 }
 
-static bool variable_list_ref(struct zStatelessInputSliceFields bytes,
+static bool variable_list_ref(struct StatelessInputSliceFields bytes,
                               const uint8_t *source, uint64_t maximum_count,
                               uint64_t maximum_item_length,
-                              struct zBoundedSszzListRef *result) {
+                              struct BoundedSszListRef *result) {
   uint64_t count = 0;
-  if (bytes.zlen != 0) {
-    if (bytes.zlen < 4)
+  if (bytes.len != 0) {
+    if (bytes.len < 4)
       return false;
     const uint64_t first_offset = load_le_u32(source);
     if (first_offset == 0 || (first_offset & 3) != 0 ||
-        first_offset > bytes.zlen)
+        first_offset > bytes.len)
       return false;
     count = first_offset / 4;
   }
   if (count > maximum_count)
     return false;
-  result->zbytes = bytes;
-  result->zcount = count;
-  result->zmax_item_length = maximum_item_length;
+  result->bytes = bytes;
+  result->count = count;
+  result->max_item_length = maximum_item_length;
   return true;
 }
 
-static bool fixed_list_ref(struct zStatelessInputSliceFields bytes,
+static bool fixed_list_ref(struct StatelessInputSliceFields bytes,
                            uint64_t width, uint64_t maximum_count,
-                           struct zBoundedSszzListRef *result) {
-  if (width == 0 || bytes.zlen % width != 0)
+                           struct BoundedSszListRef *result) {
+  if (width == 0 || bytes.len % width != 0)
     return false;
-  const uint64_t count = bytes.zlen / width;
+  const uint64_t count = bytes.len / width;
   if (count > maximum_count)
     return false;
-  result->zbytes = bytes;
-  result->zcount = count;
-  result->zmax_item_length = width;
+  result->bytes = bytes;
+  result->count = count;
+  result->max_item_length = width;
   return true;
 }
 
-struct zStatelessInputRef decode_stateless_input_ref(
-    struct zStatelessInputSliceFields input) {
+struct StatelessInputRef decode_stateless_input_ref(
+    struct StatelessInputSliceFields input) {
   enum {
     STATELESS_INPUT_FIXED_LENGTH = 18,
     SSZ_BODY = 2,
@@ -152,35 +152,35 @@ struct zStatelessInputRef decode_stateless_input_ref(
   const uint64_t MAX_WITNESS_HEADER_LENGTH = UINT64_C(1) << 10;
   const uint64_t MAX_PUBLIC_KEYS = UINT64_C(1) << 15;
 
-  struct zStatelessInputRef result;
+  struct StatelessInputRef result;
   memset(&result, 0, sizeof(result));
   const uint8_t *source =
-      stateless_input_ptr(input.zoff, input.zlen);
-  if (!source || input.zlen < STATELESS_INPUT_FIXED_LENGTH ||
+      stateless_input_ptr(input.off, input.len);
+  if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH ||
       source[1] != 0x01 || source[0] < 0x0a || source[0] > 0x15)
     return ssz_input_failure("optimized stateless input header");
-  result.zprotocol = zschema_protocol_profile_forwards(source[0]);
+  result.protocol = schema_protocol_profile_forwards(source[0]);
 
-  const struct zStatelessInputSliceFields body =
-      source_span(input, SSZ_BODY, input.zlen);
+  const struct StatelessInputSliceFields body =
+      source_span(input, SSZ_BODY, input.len);
   const uint8_t *body_source = source + SSZ_BODY;
-  const uint64_t body_length = body.zlen;
+  const uint64_t body_length = body.len;
   const uint32_t body_offsets[4] = {
       load_le_u32(body_source), load_le_u32(body_source + 4),
       load_le_u32(body_source + 8), load_le_u32(body_source + 12)};
   if (!offsets_ordered(body_offsets, 4, BODY_FIXED_LENGTH, body_length))
     return ssz_input_failure("optimized stateless input offsets");
 
-  result.znew_payload_request =
+  result.new_payload_request =
       source_span(body, body_offsets[0], body_offsets[1]);
-  const struct zStatelessInputSliceFields witness =
+  const struct StatelessInputSliceFields witness =
       source_span(body, body_offsets[1], body_offsets[2]);
-  result.zchain_config =
+  result.chain_config =
       source_span(body, body_offsets[2], body_offsets[3]);
-  result.zpublic_keys =
+  result.public_keys =
       source_span(body, body_offsets[3], body_length);
 
-  if (result.znew_payload_request.zlen <
+  if (result.new_payload_request.len <
       NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
     return ssz_input_failure("optimized new payload request");
   const uint8_t *npr_source = body_source + body_offsets[0];
@@ -188,19 +188,19 @@ struct zStatelessInputRef decode_stateless_input_ref(
       load_le_u32(npr_source), load_le_u32(npr_source + 4),
       load_le_u32(npr_source + 40)};
   if (!offsets_ordered(npr_offsets, 3, NEW_PAYLOAD_REQUEST_FIXED_LENGTH,
-                       result.znew_payload_request.zlen))
+                       result.new_payload_request.len))
     return ssz_input_failure("optimized new payload request offsets");
-  result.zexecution_payload =
-      source_span(result.znew_payload_request, npr_offsets[0],
+  result.execution_payload =
+      source_span(result.new_payload_request, npr_offsets[0],
                   npr_offsets[1]);
-  result.zversioned_hashes =
-      source_span(result.znew_payload_request, npr_offsets[1],
+  result.versioned_hashes =
+      source_span(result.new_payload_request, npr_offsets[1],
                   npr_offsets[2]);
-  const struct zStatelessInputSliceFields requests =
-      source_span(result.znew_payload_request, npr_offsets[2],
-                  result.znew_payload_request.zlen);
+  const struct StatelessInputSliceFields requests =
+      source_span(result.new_payload_request, npr_offsets[2],
+                  result.new_payload_request.len);
 
-  if (result.zexecution_payload.zlen < EXECUTION_PAYLOAD_FIXED_LENGTH)
+  if (result.execution_payload.len < EXECUTION_PAYLOAD_FIXED_LENGTH)
     return ssz_input_failure("optimized execution payload");
   const uint8_t *payload_source = npr_source + npr_offsets[0];
   const uint32_t payload_offsets[4] = {
@@ -209,31 +209,31 @@ struct zStatelessInputRef decode_stateless_input_ref(
       load_le_u32(payload_source + 508),
       load_le_u32(payload_source + 528)};
   if (!offsets_ordered(payload_offsets, 4, EXECUTION_PAYLOAD_FIXED_LENGTH,
-                       result.zexecution_payload.zlen))
+                       result.execution_payload.len))
     return ssz_input_failure("optimized execution payload offsets");
-  result.zextra_data =
-      source_span(result.zexecution_payload, payload_offsets[0],
+  result.extra_data =
+      source_span(result.execution_payload, payload_offsets[0],
                   payload_offsets[1]);
-  const struct zStatelessInputSliceFields transactions =
-      source_span(result.zexecution_payload, payload_offsets[1],
+  const struct StatelessInputSliceFields transactions =
+      source_span(result.execution_payload, payload_offsets[1],
                   payload_offsets[2]);
-  const struct zStatelessInputSliceFields withdrawals =
-      source_span(result.zexecution_payload, payload_offsets[2],
+  const struct StatelessInputSliceFields withdrawals =
+      source_span(result.execution_payload, payload_offsets[2],
                   payload_offsets[3]);
-  result.zblock_access_list =
-      source_span(result.zexecution_payload, payload_offsets[3],
-                  result.zexecution_payload.zlen);
-  if (result.zextra_data.zlen > MAX_EXTRA_DATA_LENGTH ||
-      result.zblock_access_list.zlen > MAX_BLOCK_ACCESS_LIST_LENGTH ||
+  result.block_access_list =
+      source_span(result.execution_payload, payload_offsets[3],
+                  result.execution_payload.len);
+  if (result.extra_data.len > MAX_EXTRA_DATA_LENGTH ||
+      result.block_access_list.len > MAX_BLOCK_ACCESS_LIST_LENGTH ||
       !variable_list_ref(transactions,
                          payload_source + payload_offsets[1],
                          MAX_TRANSACTIONS, MAX_TRANSACTION_LENGTH,
-                         &result.ztransactions) ||
+                         &result.transactions) ||
       !fixed_list_ref(withdrawals, WITHDRAWAL_LENGTH, MAX_WITHDRAWALS,
-                      &result.zwithdrawals))
+                      &result.withdrawals))
     return ssz_input_failure("optimized execution payload collections");
 
-  if (requests.zlen < EXECUTION_REQUESTS_FIXED_LENGTH)
+  if (requests.len < EXECUTION_REQUESTS_FIXED_LENGTH)
     return ssz_input_failure("optimized execution requests");
   const uint8_t *requests_source =
       npr_source + npr_offsets[2];
@@ -243,84 +243,84 @@ struct zStatelessInputRef decode_stateless_input_ref(
       load_le_u32(requests_source + 12),
       load_le_u32(requests_source + 16)};
   if (!offsets_ordered(request_offsets, 5, EXECUTION_REQUESTS_FIXED_LENGTH,
-                       requests.zlen))
+                       requests.len))
     return ssz_input_failure("optimized execution request offsets");
-  result.zdeposits =
+  result.deposits =
       source_span(requests, request_offsets[0], request_offsets[1]);
-  result.zwithdrawal_requests =
+  result.withdrawal_requests =
       source_span(requests, request_offsets[1], request_offsets[2]);
-  result.zconsolidation_requests =
+  result.consolidation_requests =
       source_span(requests, request_offsets[2], request_offsets[3]);
-  result.zbuilder_deposit_requests =
+  result.builder_deposit_requests =
       source_span(requests, request_offsets[3], request_offsets[4]);
-  result.zbuilder_exit_requests =
-      source_span(requests, request_offsets[4], requests.zlen);
+  result.builder_exit_requests =
+      source_span(requests, request_offsets[4], requests.len);
 
-  if (witness.zlen < EXECUTION_WITNESS_FIXED_LENGTH)
+  if (witness.len < EXECUTION_WITNESS_FIXED_LENGTH)
     return ssz_input_failure("optimized execution witness");
   const uint8_t *witness_source = body_source + body_offsets[1];
   const uint32_t witness_offsets[3] = {
       load_le_u32(witness_source), load_le_u32(witness_source + 4),
       load_le_u32(witness_source + 8)};
   if (!offsets_ordered(witness_offsets, 3, EXECUTION_WITNESS_FIXED_LENGTH,
-                       witness.zlen))
+                       witness.len))
     return ssz_input_failure("optimized execution witness offsets");
-  const struct zStatelessInputSliceFields witness_state =
+  const struct StatelessInputSliceFields witness_state =
       source_span(witness, witness_offsets[0], witness_offsets[1]);
-  const struct zStatelessInputSliceFields witness_codes =
+  const struct StatelessInputSliceFields witness_codes =
       source_span(witness, witness_offsets[1], witness_offsets[2]);
-  const struct zStatelessInputSliceFields witness_headers =
-      source_span(witness, witness_offsets[2], witness.zlen);
+  const struct StatelessInputSliceFields witness_headers =
+      source_span(witness, witness_offsets[2], witness.len);
   if (!variable_list_ref(witness_state,
                          witness_source + witness_offsets[0],
                          MAX_WITNESS_NODES, MAX_WITNESS_NODE_LENGTH,
-                         &result.zwitness_state) ||
+                         &result.witness_state) ||
       !variable_list_ref(witness_codes,
                          witness_source + witness_offsets[1],
                          MAX_WITNESS_CODES, MAX_WITNESS_CODE_LENGTH,
-                         &result.zwitness_codes) ||
+                         &result.witness_codes) ||
       !variable_list_ref(witness_headers,
                          witness_source + witness_offsets[2],
                          MAX_WITNESS_HEADERS, MAX_WITNESS_HEADER_LENGTH,
-                         &result.zwitness_headers))
+                         &result.witness_headers))
     return ssz_input_failure("optimized execution witness collections");
 
-  if (result.zpublic_keys.zlen % PUBLIC_KEY_LENGTH != 0 ||
-      result.zpublic_keys.zlen / PUBLIC_KEY_LENGTH > MAX_PUBLIC_KEYS) {
+  if (result.public_keys.len % PUBLIC_KEY_LENGTH != 0 ||
+      result.public_keys.len / PUBLIC_KEY_LENGTH > MAX_PUBLIC_KEYS) {
     return ssz_input_failure("optimized public keys");
   }
-  struct zBoundedSszzListRef ignored;
-  if (!fixed_list_ref(result.zversioned_hashes, 32,
+  struct BoundedSszListRef ignored;
+  if (!fixed_list_ref(result.versioned_hashes, 32,
                       MAX_BLOB_COMMITMENTS, &ignored))
     return ssz_input_failure("optimized versioned hashes");
   return result;
 }
 
-struct zWithdrawal decode_withdrawal(
-    struct zStatelessInputSliceFields withdrawal) {
-  struct zWithdrawal result;
+struct Withdrawal decode_withdrawal(
+    struct StatelessInputSliceFields withdrawal) {
+  struct Withdrawal result;
   memset(&result, 0, sizeof(result));
   const uint8_t *source =
-      stateless_input_ptr(withdrawal.zoff, withdrawal.zlen);
-  if (!source || withdrawal.zlen != 44)
+      stateless_input_ptr(withdrawal.off, withdrawal.len);
+  if (!source || withdrawal.len != 44)
     return ssz_withdrawal_failure("optimized withdrawal");
-  result.zindex = load_le_u64(source);
-  result.zvalidator_index = load_le_u64(source + 8);
-  result.zaddress = address_from_be_bytes(source + 16);
-  result.zamount = load_le_u64(source + 36);
+  result.index = load_le_u64(source);
+  result.validator_index = load_le_u64(source + 8);
+  result.address = address_from_be_bytes(source + 16);
+  result.amount = load_le_u64(source + 36);
   return result;
 }
 
 Hash32 sha256_request_digest(
-    uint64_t request_type, struct zStatelessInputSliceFields request) {
-  const uint64_t request_len = request.zlen;
+    uint64_t request_type, struct StatelessInputSliceFields request) {
+  const uint64_t request_len = request.len;
   if (request_len >= UINT32_MAX)
     return zero_hash();
   uint8_t *preimage = scratch_borrow(request_len + 1);
   if (!preimage)
     return zero_hash();
   const uint8_t *request_bytes =
-      stateless_input_ptr(request.zoff, request_len);
+      stateless_input_ptr(request.off, request_len);
   if (!request_bytes)
     return zero_hash();
   preimage[0] = (uint8_t)request_type;

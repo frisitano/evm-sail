@@ -8,17 +8,17 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-static struct zCodeRegionSliceFields code_region_value(uint64_t off,
+static struct CodeRegionSliceFields code_region_value(uint64_t off,
                                                        uint64_t len) {
-  struct zCodeRegionSliceFields out;
-  out.zoff = off;
-  out.zlen = len;
+  struct CodeRegionSliceFields out;
+  out.off = off;
+  out.len = len;
   return out;
 }
 
 /* Unstable source bytes are copied into the arena and registered; workspace
  * exhaustion fails closed. */
-static struct zCodeRegionSliceFields code_region_from_bytes(
+static struct CodeRegionSliceFields code_region_from_bytes(
     const uint8_t *bytes, uint64_t len) {
   if (len == 0) return code_region_value(0, 0);
   if (!bytes) GUEST_ABORT();
@@ -31,10 +31,10 @@ static struct zCodeRegionSliceFields code_region_from_bytes(
  * input pointer and the bytes are never copied. A slice that fails
  * re-validation against the live input is structural corruption, not a
  * witness deficiency. */
-struct zCodeRegionSliceFields code_region_from_input(
-    struct zStatelessInputSliceFields input) {
-  const uint64_t off = input.zoff;
-  const uint64_t len = input.zlen;
+struct CodeRegionSliceFields code_region_from_input(
+    struct StatelessInputSliceFields input) {
+  const uint64_t off = input.off;
+  const uint64_t len = input.len;
   if (len == 0) return code_region_value(0, 0);
   const uint8_t *bytes = stateless_input_ptr(off, len);
   if (!bytes) GUEST_ABORT();
@@ -43,46 +43,48 @@ struct zCodeRegionSliceFields code_region_from_input(
   return code_region_value(region, len);
 }
 
-struct zCodeRegionSliceFields code_region_from_memory(
-    struct zEvmMemorySliceFields input) {
-  const uint64_t off = input.zoff;
-  const uint64_t len = input.zlen;
+struct CodeRegionSliceFields code_region_from_memory(
+    struct EvmMemorySliceFields input) {
+  const uint64_t off = input.off;
+  const uint64_t len = input.len;
   return code_region_from_bytes(memory_ptr(off, len), len);
 }
 
-struct zCodeRegionSliceFields code_region_from_output(
-    struct zOutputSliceFields input) {
-  const uint64_t off = input.zoff;
-  const uint64_t len = input.zlen;
+struct CodeRegionSliceFields code_region_from_output(
+    struct OutputSliceFields input) {
+  const uint64_t off = input.off;
+  const uint64_t len = input.len;
   return code_region_from_bytes(output_ptr(off, len), len);
 }
 
-void code_db_lookup(struct zoptionzIRCodezK *out, Hash32 hash) {
+struct zoptionzIRCodezK code_db_lookup(Hash32 hash) {
+  struct zoptionzIRCodezK out = {0};
   uint64_t off = 0, len = 0, jumpdest_ref = 0;
   if (!code_db_lookup_indexed(hash, &off, &len, &jumpdest_ref)) {
-    out->kind = Kind_zNonezIRCodezK;
-    out->variants.zNonezIRCodezK = UNIT;
-    return;
+    out.kind = Kind_zNonezIRCodezK;
+    out.variants.zNonezIRCodezK = UNIT;
+    return out;
   }
-  out->kind = Kind_zSomezIRCodezK;
-  struct zCode *code = &out->variants.zSomezIRCodezK;
-  code->zbytes.zoff = off;
-  code->zbytes.zlen = len;
-  code->zjumpdests = jumpdest_ref;
+  out.kind = Kind_zSomezIRCodezK;
+  struct Code *code = &out.variants.zSomezIRCodezK;
+  code->bytes.off = off;
+  code->bytes.len = len;
+  code->jumpdests = jumpdest_ref;
+  return out;
 }
 
-struct zAddressResult
+struct AddressResult
 code_db_read_delegation(Hash32 hash) {
-  struct zAddressResult result = {0};
-  result.zsuccess =
-      code_db_read_delegation_address(&result.zaddress, hash);
+  struct AddressResult result = {0};
+  result.success =
+      code_db_read_delegation_address(&result.address, hash);
   return result;
 }
 
-uint64_t code_db_analyze_indexed(struct zCodeRegionSliceFields code,
+uint64_t code_db_analyze_indexed(struct CodeRegionSliceFields code,
                                  bool amsterdam_or_later) {
-  const uint64_t len = code.zlen;
-  const uint8_t *bytes = code_ptr(code.zoff, len);
+  const uint64_t len = code.len;
+  const uint8_t *bytes = code_ptr(code.off, len);
   const uint64_t jumpdest_ref =
       code_db_analyze_bytes(bytes, len, amsterdam_or_later);
   if (len != 0 && jumpdest_ref == 0) GUEST_ABORT();

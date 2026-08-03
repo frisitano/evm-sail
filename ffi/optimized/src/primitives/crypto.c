@@ -16,8 +16,8 @@ static const uint8_t hash_empty;
 #define DEFINE_SLICE_HASH(name, slice_type, resolver, algorithm, digest_type) \
   Hash32 name(                                                   \
       struct slice_type input) {                                               \
-    const uint64_t off = input.zoff;                                          \
-    const uint64_t len = input.zlen;                                          \
+    const uint64_t off = input.off;                                          \
+    const uint64_t len = input.len;                                          \
     const uint8_t *bytes = resolver(off, len);                                 \
     Hash32 digest = {{0}};                            \
     _Static_assert(sizeof(digest) == sizeof(digest_type),                     \
@@ -31,24 +31,24 @@ static const uint8_t hash_empty;
   }
 
 DEFINE_SLICE_HASH(host_keccak_stateless_input,
-                  zStatelessInputSliceFields, stateless_input_ptr,
+                  StatelessInputSliceFields, stateless_input_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_scratch, zScratchSliceFields,
+DEFINE_SLICE_HASH(host_keccak_scratch, ScratchSliceFields,
                   scratch_ptr, zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_memory, zEvmMemorySliceFields, memory_ptr,
+DEFINE_SLICE_HASH(host_keccak_memory, EvmMemorySliceFields, memory_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_code, zCodeRegionSliceFields, code_ptr,
+DEFINE_SLICE_HASH(host_keccak_code, CodeRegionSliceFields, code_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_output, zOutputSliceFields, output_ptr,
+DEFINE_SLICE_HASH(host_keccak_output, OutputSliceFields, output_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_log_data, zLogDataSliceFields,
+DEFINE_SLICE_HASH(host_keccak_log_data, LogDataSliceFields,
                   log_data_ptr, zkvm_keccak256, zkvm_keccak256_hash)
 DEFINE_SLICE_HASH(host_sha256_stateless_input,
-                  zStatelessInputSliceFields, stateless_input_ptr,
+                  StatelessInputSliceFields, stateless_input_ptr,
                   zkvm_sha256, zkvm_sha256_hash)
-DEFINE_SLICE_HASH(host_sha256_scratch, zScratchSliceFields,
+DEFINE_SLICE_HASH(host_sha256_scratch, ScratchSliceFields,
                   scratch_ptr, zkvm_sha256, zkvm_sha256_hash)
-DEFINE_SLICE_HASH(host_sha256_memory, zEvmMemorySliceFields, memory_ptr,
+DEFINE_SLICE_HASH(host_sha256_memory, EvmMemorySliceFields, memory_ptr,
                   zkvm_sha256, zkvm_sha256_hash)
 
 #undef DEFINE_SLICE_HASH
@@ -91,9 +91,9 @@ Hash32 host_sha256_pair(
 }
 
 /* LOG payloads are copied from active-frame memory into the log-data arena. */
-unit log_add_data_memory(struct zEvmMemorySliceFields data) {
-  const uint64_t off = data.zoff;
-  const uint64_t len = data.zlen;
+unit log_add_data_memory(struct EvmMemorySliceFields data) {
+  const uint64_t off = data.off;
+  const uint64_t len = data.len;
   const uint8_t *p = memory_ptr(off, len);
   if (p) log_add_data_bulk(p, len);
   return UNIT;

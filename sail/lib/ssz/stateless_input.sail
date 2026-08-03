@@ -951,8 +951,17 @@ function decode_chain_config(
     let activation_start : int(16) = 16;
     let activation_fixed_end : int(24) = 24;
     let a : int(16) = 16;
-    let block_number_start = activation_start + ssz_u32(cc, ssz_field_offset(a, FA_BLOCK_NUMBER_OFF));
-    let timestamp_start = activation_start + ssz_u32(cc, ssz_field_offset(a, FA_TIMESTAMP_OFF));
+    let block_number_offset = ssz_u32(cc, ssz_field_offset(a, FA_BLOCK_NUMBER_OFF));
+    let timestamp_offset = ssz_u32(cc, ssz_field_offset(a, FA_TIMESTAMP_OFF));
+    if (block_number_offset > cc_length - activation_start)
+        | (timestamp_offset > cc_length - activation_start)
+    then {
+        throw InvalidBlock(InvalidConfig)
+    };
+    let block_number_start : stateless_input_pointer =
+        activation_start + block_number_offset;
+    let timestamp_start : stateless_input_pointer =
+        activation_start + timestamp_offset;
     if activation_fixed_end != block_number_start then {
         throw InvalidBlock(InvalidConfig)
     };

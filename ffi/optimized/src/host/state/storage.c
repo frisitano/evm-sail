@@ -95,7 +95,7 @@ StorageId storage_schema_insert(AccountId account_id, const U256 *slot,
       storage_schema_active_account != account_id)
     GUEST_ABORT();
   if (lookup_storage_id(account_id, slot) != STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "duplicate BAL storage slot");
     return STORAGE_NO_ROW;
   }
@@ -119,7 +119,7 @@ StorageId storage_schema_insert(AccountId account_id, const U256 *slot,
 StorageId get_storage_id(AccountId account_id, const U256 *slot) {
   const StorageId id = lookup_storage_id(account_id, slot);
   if (id == STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "storage absent from block access list");
   }
   return id;
@@ -300,7 +300,7 @@ StorageViewStatus storage_transaction_view(AccountId account_id,
 /* Write the active generation directly. Sail supplies the transaction-start
  * original from the preceding semantic SLOAD. Rollback records only fields
  * whose values actually change. */
-unit storage_update(Address a, U256 s, U256 v, U256 orig) {
+unit host_storage_update(Address a, U256 s, U256 v, U256 orig) {
   const AccountId account_id = get_account_id(&a);
   if (have_exception) return UNIT;
   account_transaction_touch(account_id);
@@ -309,7 +309,7 @@ unit storage_update(Address a, U256 s, U256 v, U256 orig) {
   const StorageId storage_id =
       lookup_storage_id(account_id, &s);
   if (storage_id == STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "storage write absent from block access list");
     return UNIT;
   }

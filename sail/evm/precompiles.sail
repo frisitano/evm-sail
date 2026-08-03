@@ -14,8 +14,8 @@ by each precompile; the field modulus and blob element count validate their
 respective algebraic inputs.
 */
 let ACCELERATOR_INPUT_MAX : int(2097152) = 2097152
-let FIELD_ELEMENTS_PER_BLOB : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000001000))
-let BLS_MODULUS : word = U256(unsigned(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001))
+let FIELD_ELEMENTS_PER_BLOB : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000001000))
+let BLS_MODULUS : word = u256(unsigned(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001))
 
 let BLAKE2F_INPUT_LENGTH : int(213) = 213
 let BLAKE2F_FINAL_BLOCK_OFFSET : int(212) = 212
@@ -49,24 +49,24 @@ let BLS_G2_POINT_OFFSET : int(128) = 128
 /* Full-width address constants keep precompile recognition as ordinary
  * address equality. Construct them through the canonical word conversion so
  * their representation is identical to transaction and CALL targets. */
-let PRECOMPILE_ADDRESS_1 : address = word_to_address(U256(1))
-let PRECOMPILE_ADDRESS_2 : address = word_to_address(U256(2))
-let PRECOMPILE_ADDRESS_3 : address = word_to_address(U256(3))
-let PRECOMPILE_ADDRESS_4 : address = word_to_address(U256(4))
-let PRECOMPILE_ADDRESS_5 : address = word_to_address(U256(5))
-let PRECOMPILE_ADDRESS_6 : address = word_to_address(U256(6))
-let PRECOMPILE_ADDRESS_7 : address = word_to_address(U256(7))
-let PRECOMPILE_ADDRESS_8 : address = word_to_address(U256(8))
-let PRECOMPILE_ADDRESS_9 : address = word_to_address(U256(9))
-let PRECOMPILE_ADDRESS_10 : address = word_to_address(U256(10))
-let PRECOMPILE_ADDRESS_11 : address = word_to_address(U256(11))
-let PRECOMPILE_ADDRESS_12 : address = word_to_address(U256(12))
-let PRECOMPILE_ADDRESS_13 : address = word_to_address(U256(13))
-let PRECOMPILE_ADDRESS_14 : address = word_to_address(U256(14))
-let PRECOMPILE_ADDRESS_15 : address = word_to_address(U256(15))
-let PRECOMPILE_ADDRESS_16 : address = word_to_address(U256(16))
-let PRECOMPILE_ADDRESS_17 : address = word_to_address(U256(17))
-let PRECOMPILE_ADDRESS_256 : address = word_to_address(U256(256))
+let PRECOMPILE_ADDRESS_1 : address = word_to_address(u256(1))
+let PRECOMPILE_ADDRESS_2 : address = word_to_address(u256(2))
+let PRECOMPILE_ADDRESS_3 : address = word_to_address(u256(3))
+let PRECOMPILE_ADDRESS_4 : address = word_to_address(u256(4))
+let PRECOMPILE_ADDRESS_5 : address = word_to_address(u256(5))
+let PRECOMPILE_ADDRESS_6 : address = word_to_address(u256(6))
+let PRECOMPILE_ADDRESS_7 : address = word_to_address(u256(7))
+let PRECOMPILE_ADDRESS_8 : address = word_to_address(u256(8))
+let PRECOMPILE_ADDRESS_9 : address = word_to_address(u256(9))
+let PRECOMPILE_ADDRESS_10 : address = word_to_address(u256(10))
+let PRECOMPILE_ADDRESS_11 : address = word_to_address(u256(11))
+let PRECOMPILE_ADDRESS_12 : address = word_to_address(u256(12))
+let PRECOMPILE_ADDRESS_13 : address = word_to_address(u256(13))
+let PRECOMPILE_ADDRESS_14 : address = word_to_address(u256(14))
+let PRECOMPILE_ADDRESS_15 : address = word_to_address(u256(15))
+let PRECOMPILE_ADDRESS_16 : address = word_to_address(u256(16))
+let PRECOMPILE_ADDRESS_17 : address = word_to_address(u256(17))
+let PRECOMPILE_ADDRESS_256 : address = word_to_address(u256(256))
 
 /*! A precompile's outcome: success and the EVM-visible output bytes.
     Failure consumes the frame's gas like any exceptional call. */
@@ -161,9 +161,9 @@ function precompile_number(bytes : address) -> precompile_selector = {
     yields a successful call with empty output. */
 function run_ecrecover(input : CalldataSlice) -> PrecompileResult = {
     let v = slice_load(input, PRECOMPILE_WORD_OFFSET);
-    let valid_v = (v == U256(27)) | (v == U256(28));
+    let valid_v = (v == u256(27)) | (v == u256(28));
     if valid_v then {
-        let parity : y_parity = if v == U256(27) then { 0 } else { 1 };
+        let parity : y_parity = if v == u256(27) then { 0 } else { 1 };
         let (recovered, address) = ecrecover_addr(
             word_to_hash(slice_load(input, 0)),
             parity,

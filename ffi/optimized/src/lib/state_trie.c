@@ -5,6 +5,7 @@
 #include "evmsail/lib/state_trie.h"
 
 Hash32
-compute_state_root(Hash32 parent_state_root) {
-  return mpt_compute_state_root(parent_state_root);
+compute_state_root(unit ignored) {
+  (void)ignored;
+  return mpt_compute_state_root(k_parent_state_root);
 }

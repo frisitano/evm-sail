@@ -296,4 +296,3 @@ bool mpt_decode_trusted_state_node(ByteSpan encoded,
                                    DecodedNode *node) {
   return mpt_decode_node_impl(encoded, node, true);
 }
-

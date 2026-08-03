@@ -48,79 +48,79 @@ let HTR_BUILDER_EXIT_PUBKEY : int(20) = 20
 /* SSZ zero hashes by subtree level. Keeping these as constants avoids hashing
  * the same all-zero subtree once per level for every Merkle root. */
 let SSZ_ZERO_HASH_01 : hash = word_to_hash(
-    U256(unsigned(0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b)),
+    u256(unsigned(0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b)),
 )
 let SSZ_ZERO_HASH_02 : hash = word_to_hash(
-    U256(unsigned(0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71)),
+    u256(unsigned(0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71)),
 )
 let SSZ_ZERO_HASH_03 : hash = word_to_hash(
-    U256(unsigned(0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c)),
+    u256(unsigned(0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c)),
 )
 let SSZ_ZERO_HASH_04 : hash = word_to_hash(
-    U256(unsigned(0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c)),
+    u256(unsigned(0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c)),
 )
 let SSZ_ZERO_HASH_05 : hash = word_to_hash(
-    U256(unsigned(0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30)),
+    u256(unsigned(0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30)),
 )
 let SSZ_ZERO_HASH_06 : hash = word_to_hash(
-    U256(unsigned(0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1)),
+    u256(unsigned(0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1)),
 )
 let SSZ_ZERO_HASH_07 : hash = word_to_hash(
-    U256(unsigned(0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c)),
+    u256(unsigned(0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c)),
 )
 let SSZ_ZERO_HASH_08 : hash = word_to_hash(
-    U256(unsigned(0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193)),
+    u256(unsigned(0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193)),
 )
 let SSZ_ZERO_HASH_09 : hash = word_to_hash(
-    U256(unsigned(0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1)),
+    u256(unsigned(0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1)),
 )
 let SSZ_ZERO_HASH_10 : hash = word_to_hash(
-    U256(unsigned(0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b)),
+    u256(unsigned(0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b)),
 )
 let SSZ_ZERO_HASH_11 : hash = word_to_hash(
-    U256(unsigned(0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220)),
+    u256(unsigned(0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220)),
 )
 let SSZ_ZERO_HASH_12 : hash = word_to_hash(
-    U256(unsigned(0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f)),
+    u256(unsigned(0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f)),
 )
 let SSZ_ZERO_HASH_13 : hash = word_to_hash(
-    U256(unsigned(0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e)),
+    u256(unsigned(0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e)),
 )
 let SSZ_ZERO_HASH_14 : hash = word_to_hash(
-    U256(unsigned(0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784)),
+    u256(unsigned(0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784)),
 )
 let SSZ_ZERO_HASH_15 : hash = word_to_hash(
-    U256(unsigned(0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb)),
+    u256(unsigned(0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb)),
 )
 let SSZ_ZERO_HASH_16 : hash = word_to_hash(
-    U256(unsigned(0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb)),
+    u256(unsigned(0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb)),
 )
 let SSZ_ZERO_HASH_17 : hash = word_to_hash(
-    U256(unsigned(0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab)),
+    u256(unsigned(0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab)),
 )
 let SSZ_ZERO_HASH_18 : hash = word_to_hash(
-    U256(unsigned(0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4)),
+    u256(unsigned(0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4)),
 )
 let SSZ_ZERO_HASH_19 : hash = word_to_hash(
-    U256(unsigned(0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f)),
+    u256(unsigned(0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f)),
 )
 let SSZ_ZERO_HASH_20 : hash = word_to_hash(
-    U256(unsigned(0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa)),
+    u256(unsigned(0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa)),
 )
 let SSZ_ZERO_HASH_21 : hash = word_to_hash(
-    U256(unsigned(0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c)),
+    u256(unsigned(0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c)),
 )
 let SSZ_ZERO_HASH_22 : hash = word_to_hash(
-    U256(unsigned(0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167)),
+    u256(unsigned(0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167)),
 )
 let SSZ_ZERO_HASH_23 : hash = word_to_hash(
-    U256(unsigned(0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7)),
+    u256(unsigned(0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7)),
 )
 let SSZ_ZERO_HASH_24 : hash = word_to_hash(
-    U256(unsigned(0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0)),
+    u256(unsigned(0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0)),
 )
 let SSZ_ZERO_HASH_25 : hash = word_to_hash(
-    U256(unsigned(0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544)),
+    u256(unsigned(0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544)),
 )
 
 /*! The root of an all-zero subtree at `level`. */

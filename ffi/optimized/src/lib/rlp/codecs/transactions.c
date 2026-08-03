@@ -82,9 +82,9 @@ static const rlp_item *tx_field(const rlp_item *fields, uint8_t index) {
   return index == TX_FIELD_ABSENT ? NULL : &fields[index];
 }
 
-static struct zTransactionFields decode_failure(enum zBlockError reason,
+static struct TransactionFields decode_failure(enum BlockError reason,
                                                 const char *location) {
-  struct zTransactionFields result;
+  struct TransactionFields result;
   memset(&result, 0, sizeof(result));
   throw_invalid_block(reason, location);
   return result;
@@ -219,10 +219,10 @@ static bool quantity_u64(const rlp_item *item, uint64_t *value) {
   return true;
 }
 
-static struct zStatelessInputSliceFields content_slice(const rlp_item *item) {
-  struct zStatelessInputSliceFields result = {
-      .zoff = item->content_off,
-      .zlen = item->content_len,
+static struct StatelessInputSliceFields content_slice(const rlp_item *item) {
+  struct StatelessInputSliceFields result = {
+      .off = item->content_off,
+      .len = item->content_len,
   };
   return result;
 }
@@ -232,7 +232,7 @@ static Address low_address(U256 value) {
 }
 
 static bool decode_access_list(const rlp_item *field,
-                               struct zAccessListRef *result) {
+                               struct AccessListRef *result) {
   rlp_cursor entries;
   if (!item_list(field, &entries))
     return false;
@@ -260,15 +260,15 @@ static bool decode_access_list(const rlp_item *field,
     }
   }
 
-  result->zencoded = content_slice(field);
-  result->zaddress_count = address_count;
-  result->zslot_count = slot_count;
+  result->encoded = content_slice(field);
+  result->address_count = address_count;
+  result->slot_count = slot_count;
   return true;
 }
 
 static bool decode_blob_hashes(const rlp_item *field, uint64_t blob_limit,
-                               struct zBlobHashesFields *result,
-                               enum zBlockError *error) {
+                               struct BlobHashesFields *result,
+                               enum BlockError *error) {
   rlp_cursor hashes;
   if (!item_list(field, &hashes))
     return false;
@@ -281,7 +281,7 @@ static bool decode_blob_hashes(const rlp_item *field, uint64_t blob_limit,
         hash.source[0] != 0xa0)
       return false;
     if (hash.content[0] != 0x01) {
-      *error = zExecutionInvalid;
+      *error = ExecutionInvalid;
       return false;
     }
     if (count == blob_limit)
@@ -289,13 +289,13 @@ static bool decode_blob_hashes(const rlp_item *field, uint64_t blob_limit,
     ++count;
   }
 
-  result->zbytes = content_slice(field);
-  result->zcount = count;
+  result->bytes = content_slice(field);
+  result->count = count;
   return true;
 }
 
 static bool validate_authorizations(
-    const rlp_item *field, struct zAuthorizzationListRefFields *result) {
+    const rlp_item *field, struct AuthorizationListRefFields *result) {
   rlp_cursor tuples;
   if (!item_list(field, &tuples))
     return false;
@@ -319,12 +319,12 @@ static bool validate_authorizations(
     ++count;
   }
 
-  result->zencoded = content_slice(field);
-  result->zcount = count;
+  result->encoded = content_slice(field);
+  result->count = count;
   return true;
 }
 
-static bool decode_common_fields(struct zTransactionFields *result,
+static bool decode_common_fields(struct TransactionFields *result,
                                  const rlp_item *nonce,
                                  const rlp_item *gas,
                                  const rlp_item *recipient,
@@ -337,68 +337,68 @@ static bool decode_common_fields(struct zTransactionFields *result,
   U256 recipient_word;
   uint64_t gas_limit = 0;
   uint64_t nonce_u64 = 0;
-  if ((!nonce_is_u64 && !quantity_u256(nonce, &result->znonce)) ||
+  if ((!nonce_is_u64 && !quantity_u256(nonce, &result->nonce)) ||
       (nonce_is_u64 && !quantity_u64(nonce, &nonce_u64)) ||
       !quantity_u64(gas, &gas_limit) ||
       !word_raw(recipient, &recipient_word) ||
-      !quantity_u256(value, &result->zvalue) ||
-      !word_raw(v, &result->zsig_v) ||
-      !quantity_u256(r, &result->zsig_r) ||
-      !quantity_u256(s, &result->zsig_s))
+      !quantity_u256(value, &result->value) ||
+      !word_raw(v, &result->sig_v) ||
+      !quantity_u256(r, &result->sig_r) ||
+      !quantity_u256(s, &result->sig_s))
     return false;
   if (nonce_is_u64) {
     const U256 widened = {{nonce_u64, 0, 0, 0}};
-    result->znonce = widened;
+    result->nonce = widened;
   }
-  result->zgas_limit = gas_limit;
-  result->zis_create = recipient->content_len == 0;
-  result->zrecipient = low_address(recipient_word);
-  result->zinput_src = content_slice(data);
+  result->gas_limit = gas_limit;
+  result->is_create = recipient->content_len == 0;
+  result->recipient = low_address(recipient_word);
+  result->input_src = content_slice(data);
   return true;
 }
 
-struct zTransactionFields decode_transaction(
-    struct zStatelessInputSliceFields transaction,
-    struct zStatelessInputSliceFields public_key, uint64_t blob_limit) {
-  struct zTransactionFields result;
+struct TransactionFields decode_transaction(
+    struct StatelessInputSliceFields transaction,
+    struct StatelessInputSliceFields public_key, uint8_t blob_limit) {
+  struct TransactionFields result;
   memset(&result, 0, sizeof(result));
-  result.zraw = transaction;
-  result.zpubkey = public_key;
+  result.raw = transaction;
+  result.pubkey = public_key;
 
   const uint8_t *tx_bytes =
-      stateless_input_ptr(transaction.zoff, transaction.zlen);
+      stateless_input_ptr(transaction.off, transaction.len);
   const uint8_t *key_bytes =
-      stateless_input_ptr(public_key.zoff, public_key.zlen);
-  if (!tx_bytes || transaction.zlen == 0 || !key_bytes ||
-      public_key.zlen != 65)
-    return decode_failure(zRlpDecode, "optimized transaction input");
+      stateless_input_ptr(public_key.off, public_key.len);
+  if (!tx_bytes || transaction.len == 0 || !key_bytes ||
+      public_key.len != 65)
+    return decode_failure(RlpDecode, "optimized transaction input");
 
   const uint8_t first = tx_bytes[0];
   const bool legacy = first >= 0xc0;
   const uint8_t type = legacy ? 0 : first;
   if (type > 4 || (!legacy && type == 0))
-    return decode_failure(zRlpDecode, "optimized transaction type");
+    return decode_failure(RlpDecode, "optimized transaction type");
 
   const uint64_t payload_delta = legacy ? 0 : 1;
   rlp_cursor fields;
-  if (transaction.zlen < payload_delta ||
-      !exact_list(tx_bytes + payload_delta, transaction.zoff + payload_delta,
-                  transaction.zlen - payload_delta, &fields))
-    return decode_failure(zRlpDecode, "optimized transaction envelope");
+  if (transaction.len < payload_delta ||
+      !exact_list(tx_bytes + payload_delta, transaction.off + payload_delta,
+                  transaction.len - payload_delta, &fields))
+    return decode_failure(RlpDecode, "optimized transaction envelope");
 
   const TxFieldLayout *layout = &TX_FIELD_LAYOUTS[type];
   rlp_item f[14];
   if (!take_fields(fields, f, layout->field_count))
-    return decode_failure(zRlpDecode, "optimized transaction fields");
+    return decode_failure(RlpDecode, "optimized transaction fields");
 
-  const struct zStatelessInputSliceFields public_key_body = {
-      .zoff = public_key.zoff + 1,
-      .zlen = 64,
+  const struct StatelessInputSliceFields public_key_body = {
+      .off = public_key.off + 1,
+      .len = 64,
   };
   const Hash32 sender_hash =
       host_keccak_stateless_input(public_key_body);
-  result.zsender = hash_low_address(&sender_hash);
-  result.ztx_type = (enum zTxType)type;
+  result.sender = hash_low_address(&sender_hash);
+  result.tx_type = (enum TxType)type;
 
   const rlp_item *nonce = tx_field(f, layout->nonce);
   const rlp_item *gas = tx_field(f, layout->gas);
@@ -420,43 +420,43 @@ struct zTransactionFields decode_transaction(
 
   if (!decode_common_fields(&result, nonce, gas, recipient, value, data, v, r,
                             s, layout->nonce_is_u64))
-    return decode_failure(zRlpDecode, "optimized transaction scalars");
+    return decode_failure(RlpDecode, "optimized transaction scalars");
 
-  if (chain_id && !quantity_u64(chain_id, &result.zchain_id))
-    return decode_failure(zRlpDecode, "optimized transaction chain id");
+  if (chain_id && !quantity_u64(chain_id, &result.chain_id))
+    return decode_failure(RlpDecode, "optimized transaction chain id");
 
   if (gas_price) {
-    if (!quantity_u256(gas_price, &result.zmax_fee))
-      return decode_failure(zRlpDecode, "optimized transaction gas price");
-    result.zmax_priority_fee = result.zmax_fee;
-  } else if (!quantity_u256(max_priority_fee, &result.zmax_priority_fee) ||
-             !quantity_u256(max_fee, &result.zmax_fee)) {
-    return decode_failure(zRlpDecode, "optimized transaction fees");
+    if (!quantity_u256(gas_price, &result.max_fee))
+      return decode_failure(RlpDecode, "optimized transaction gas price");
+    result.max_priority_fee = result.max_fee;
+  } else if (!quantity_u256(max_priority_fee, &result.max_priority_fee) ||
+             !quantity_u256(max_fee, &result.max_fee)) {
+    return decode_failure(RlpDecode, "optimized transaction fees");
   }
 
   if (max_blob_fee &&
-      !quantity_u256(max_blob_fee, &result.zmax_blob_fee))
-    return decode_failure(zRlpDecode, "optimized transaction blob fee");
+      !quantity_u256(max_blob_fee, &result.max_blob_fee))
+    return decode_failure(RlpDecode, "optimized transaction blob fee");
 
-  if (access_list && !decode_access_list(access_list, &result.zaccess_list))
-    return decode_failure(zRlpDecode, "optimized transaction access list");
+  if (access_list && !decode_access_list(access_list, &result.access_list))
+    return decode_failure(RlpDecode, "optimized transaction access list");
 
-  enum zBlockError nested_error = zRlpDecode;
+  enum BlockError nested_error = RlpDecode;
   if (blob_hashes &&
-      !decode_blob_hashes(blob_hashes, blob_limit, &result.zblob_hashes,
+      !decode_blob_hashes(blob_hashes, blob_limit, &result.blob_hashes,
                           &nested_error))
     return decode_failure(nested_error, "optimized transaction blob hashes");
 
   if (authorizations &&
-      !validate_authorizations(authorizations, &result.zauthorizzations))
-    return decode_failure(zRlpDecode,
+      !validate_authorizations(authorizations, &result.authorizations))
+    return decode_failure(RlpDecode,
                           "optimized transaction authorizations");
 
-  const struct zStatelessInputSliceFields signing_fields = {
-      .zoff = first_signed->source_off,
-      .zlen = v->source_off - first_signed->source_off,
+  const struct StatelessInputSliceFields signing_fields = {
+      .off = first_signed->source_off,
+      .len = v->source_off - first_signed->source_off,
   };
-  result.zsigning_hash =
-      tx_signing_hash(type, signing_fields, result.zsig_v);
+  result.signing_hash =
+      tx_signing_hash(type, signing_fields, result.sig_v);
   return result;
 }

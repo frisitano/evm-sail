@@ -50,13 +50,13 @@ unit bal_note_code_change(uint64_t index,
                           Address address,
                           Hash32 code_hash);
 
-unit warm_reset(uint64_t current_transaction_epoch);
+unit warm_reset(uint32_t current_transaction_epoch);
 bool account_is_warm(Address address);
 unit account_mark_warm(Address address);
 bool storage_is_warm(Address address, U256 slot);
 unit storage_mark_warm(Address address, U256 slot);
 
-unit authorization_tracker_reset(uint64_t count_hint);
+unit authorization_tracker_reset(uint32_t count_hint);
 bool authorization_tracker_seen(Address authority);
 bool authorization_tracker_originally_delegated(
     Address authority);
@@ -69,23 +69,14 @@ unit authorization_tracker_commit(Address authority,
 unit logs_tx_reset(unit ignored);
 unit log_begin(Address address);
 unit log_add_topic(U256 topic);
-unit log_add_data_memory(struct zEvmMemorySliceFields data);
+unit log_add_data_memory(struct EvmMemorySliceFields data);
 unit log_add_data_word(U256 value);
 uint64_t logs_tx_start(unit ignored);
 uint64_t logs_tx_count(unit ignored);
 Address log_addr(uint64_t index);
 uint64_t log_topic_count(uint64_t index);
 U256 log_topic(uint64_t log_index, uint64_t topic_index);
-uint64_t log_data_off(uint64_t index);
-uint64_t log_data_len(uint64_t index);
-
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
-void acct_block_get(struct zoptionzIRAccountzK *out,
-                    Address address);
-#endif
-
-void storage_block_iter_next(struct zoptionzIRStorageTrieEntryzK *out,
-                             Address address);
-void acct_block_iter_next(struct zoptionzIRAcctTrieEntryzK *out, unit ignored);
+uint32_t log_data_off(uint64_t index);
+uint32_t log_data_len(uint64_t index);
 
 #endif

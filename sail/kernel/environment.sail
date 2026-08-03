@@ -81,16 +81,16 @@ enum EnvField = {
 function k_env(f : EnvField) -> word = {
     let active_tx = k_tx;
     match f {
-        F_Number => U256(word_of_block_number(k_header.number)),
-        F_Timestamp => U256(word_of_block_timestamp(k_header.timestamp)),
+        F_Number => u256(word_of_block_number(k_header.number)),
+        F_Timestamp => u256(word_of_block_timestamp(k_header.timestamp)),
         F_Coinbase => address_to_word(k_header.fee_recipient),
         F_BaseFee => k_header.base_fee,
-        F_ChainId => U256(word_of_chain_identifier(k_chain_id)),
-        F_GasLimit => U256(k_header.gas_limit),
+        F_ChainId => u256(word_of_chain_identifier(k_chain_id)),
+        F_GasLimit => u256(k_header.gas_limit),
         F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(active_tx.origin),
         F_GasPrice => active_tx.gas_price,
-        F_SlotNumber => U256(word_of_slot_number(k_header.slot_number)),
+        F_SlotNumber => u256(word_of_slot_number(k_header.slot_number)),
     }
 }
 
@@ -109,7 +109,7 @@ function blockhash_word_distance(current, number) = current - number
     witness. */
 function k_blockhash(number_word : word) -> hash = {
     let current = k_header.number;
-    let current_word : word = U256(word_of_block_number(current));
+    let current_word : word = u256(word_of_block_number(current));
     if number_word < current_word then {
         let (distance_word as 'distance) = blockhash_word_distance(current_word, number_word);
         if distance_word <= 256 then {

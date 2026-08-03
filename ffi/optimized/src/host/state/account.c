@@ -128,12 +128,14 @@ static void acct_dump_invalidate(void);
 
 /* Finds an address in the BAL-preallocated account universe.
  *
- * Address lane zero supplies the initial bucket because Ethereum addresses are
+ * The first address bytes supply the initial bucket because Ethereum addresses are
  * already hash-derived. Linear probing resolves collisions and full Address
  * equality validates a candidate. A miss returns ACCOUNT_ID_NONE; execution
  * APIs decide whether that miss is a BAL violation. */
 AccountId lookup_account_id(const Address *address) {
-  uint32_t bucket = (uint32_t)address->lanes[0] & acct_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket &= acct_table.bucket_mask;
   for (uint32_t probes = 0; probes < acct_table.bucket_count; probes++) {
     const AccountId id = acct_table.buckets[bucket];
     if (id == ACCOUNT_ID_NONE) return ACCOUNT_ID_NONE;
@@ -149,7 +151,7 @@ AccountId lookup_account_id(const Address *address) {
 AccountId get_account_id(const Address *address) {
   const AccountId id = lookup_account_id(address);
   if (id == ACCOUNT_ID_NONE) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "account absent from block access list");
   }
   return id;
@@ -181,12 +183,14 @@ AccountId account_schema_insert(const Address *address) {
   if (acct_table.count > ACCOUNT_ID_NONE + 1u &&
       address_compare(&acct_table.entries[acct_table.count - 1u].address,
                       address) >= 0) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "BAL accounts are not strictly increasing");
     return ACCOUNT_ID_NONE;
   }
 
-  uint32_t bucket = (uint32_t)address->lanes[0] & acct_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket &= acct_table.bucket_mask;
   for (uint32_t probes = 0; probes < acct_table.bucket_count; probes++) {
     const AccountId existing = acct_table.buckets[bucket];
     if (existing == ACCOUNT_ID_NONE) {
@@ -202,7 +206,7 @@ AccountId account_schema_insert(const Address *address) {
     }
     if (existing >= acct_table.count) GUEST_ABORT();
     if (address_equal(&acct_table.entries[existing].address, address)) {
-      throw_invalid_block(zInvalidBlockAccessList,
+      throw_invalid_block(InvalidBlockAccessList,
                           "duplicate BAL account");
       return ACCOUNT_ID_NONE;
     }
@@ -735,7 +739,7 @@ static AccountState *account_state_for_write(Address address,
 /* Replaces every semantic account field in the active transaction view.
  * Storage roots remain trie metadata. A logical clear advances the owning
  * AccountEntry generation rather than adding a boolean to AccountState. */
-unit account_update(Address a, uint64_t nonce, U256 bal, Hash32 chash,
+unit host_account_update(Address a, uint64_t nonce, U256 bal, Hash32 chash,
                     bool exists, bool storage_cleared, bool created,
                     bool selfdestructed) {
   const AccountId id = get_account_id(&a);
@@ -821,7 +825,7 @@ unit acct_tx_set_code_hash(Address a, Hash32 code_hash) {
  * dirty is monotonic for the block and drives final account-trie consideration.
  * The standard executable retains the structurally identical Sail equation.
  */
-void account_transaction_merge(struct zTransactionMergeSemantics semantics,
+void account_transaction_merge(struct TransactionMergeSemantics semantics,
                                uint64_t current_transaction_epoch) {
   for (uint32_t i = 0; i < acct_tx_rows_n; i++) {
     const AccountId account_id = acct_tx_rows[i];
@@ -829,7 +833,7 @@ void account_transaction_merge(struct zTransactionMergeSemantics semantics,
     AccountEntry *entry = &acct_table.entries[account_id];
     const Address address = acct_table.entries[account_id].address;
     const bool deleted = state->selfdestructed &&
-                         (!semantics.zdelete_only_created || state->created);
+                         (!semantics.delete_only_created || state->created);
 
     if (deleted) {
       state->current.nonce = 0;
@@ -840,7 +844,7 @@ void account_transaction_merge(struct zTransactionMergeSemantics semantics,
        * leaves post-CREATE writes visible after SELFDESTRUCT and can make a
        * later CREATE2 incorrectly collide with the deleted account. */
       entry->storage_generation++;
-      if (!semantics.zpreserve_selfdestruct_balance ||
+      if (!semantics.preserve_selfdestruct_balance ||
           word_equal(&state->current.balance, &account_zero)) {
         state->current.balance = account_zero;
         state->current.exists = false;

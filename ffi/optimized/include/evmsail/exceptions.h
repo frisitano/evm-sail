@@ -3,6 +3,8 @@
 
 #include "evmsail/prelude.h"
 
+extern const char *exception_location;
+
 /*
  * Raise the generated Sail InvalidBlock exception from an optimized C
  * override. The corresponding Sail extern must carry `$[c_throws]` so the
@@ -12,13 +14,13 @@
  *
  * The shared model ABI header owns the exception and BlockError layouts.
  */
-static inline void throw_invalid_block(enum zBlockError reason,
+static inline void throw_invalid_block(enum BlockError reason,
                                                const char *location) {
   if (have_exception) return;
-  current_exception->kind = Kind_zInvalidBlock;
-  current_exception->variants.zInvalidBlock = reason;
+  current_exception.kind = Kind_InvalidBlock;
+  current_exception.variants.InvalidBlock = reason;
   have_exception = true;
-  copy_sail_string(throw_location, location);
+  exception_location = location;
 }
 
 #endif

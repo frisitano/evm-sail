@@ -4,8 +4,8 @@
 #include "evmsail/prelude.h"
 
 /* Decodes one complete transaction while retaining variable fields as input slices. */
-struct zTransactionFields decode_transaction(
-    struct zStatelessInputSliceFields transaction,
-    struct zStatelessInputSliceFields public_key, uint64_t blob_limit);
+struct TransactionFields decode_transaction(
+    struct StatelessInputSliceFields transaction,
+    struct StatelessInputSliceFields public_key, uint8_t blob_limit);
 
 #endif

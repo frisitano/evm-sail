@@ -33,14 +33,14 @@ static U256 legacy_chain_id(U256 v) {
 
 Hash32 tx_signing_hash(
     uint8_t envelope_type,
-    struct zStatelessInputSliceFields content, U256 v) {
+    struct StatelessInputSliceFields content, U256 v) {
   const bool typed = envelope_type != 0;
   const bool eip155 = !typed && u256_gte_small(v, 35);
   const U256 zero_word = {{0}};
   const U256 chain_id = eip155 ? legacy_chain_id(v) : zero_word;
   const uint64_t suffix_len =
       eip155 ? rlp_quantity_size_u256(chain_id) + 2 : 0;
-  const uint64_t content_len = content.zlen;
+  const uint64_t content_len = content.len;
   uint64_t list_content_len = content_len;
   uint64_t total = typed ? 1 : 0;
   if (envelope_type > 4 || content_len > (UINT64_C(1) << 30) ||
@@ -54,7 +54,7 @@ Hash32 tx_signing_hash(
   uint8_t *preimage = scratch_borrow(total);
   if (!preimage)
     return zero_hash();
-  const uint64_t content_off = content.zoff;
+  const uint64_t content_off = content.off;
   const uint8_t *content_bytes =
       stateless_input_ptr(content_off, content_len);
   if (!content_bytes)

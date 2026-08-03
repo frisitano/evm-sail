@@ -4,7 +4,7 @@
 #include "evmsail/prelude.h"
 
 Hash32 block_header_hash(
-    struct zBlockHeader header,
+    struct BlockHeader header,
     Hash32 transactions_root,
     Hash32 withdrawals_root,
     Hash32 requests_hash,

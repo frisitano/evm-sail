@@ -541,7 +541,7 @@ function execute_pop() -> unit = {
 function execute_mload() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
-    let range = charge_memory_range(offset_word, U256(32));
+    let range = charge_memory_range(offset_word, u256(32));
     if is_running() then {
         push(mem_load(range.off))
     }
@@ -552,7 +552,7 @@ function execute_mstore() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let v = pop();
-    let range = charge_memory_range(offset_word, U256(32));
+    let range = charge_memory_range(offset_word, u256(32));
     if is_running() then {
         mem_store(range.off, v)
     }
@@ -956,7 +956,7 @@ function opcode_stack_effect(op : ast) -> (operand_stack_height, operand_stack_h
             (0, 0)
         },
     LOG(n) => (n + 2, 0),
-    CREATE() => (3, 1), CALL() => (7, 1), CALLCODE() => (7, 1),
+    opcode_CREATE() => (3, 1), CALL() => (7, 1), CALLCODE() => (7, 1),
     RETURN() => (2, 0), DELEGATECALL() => (6, 1), CREATE2() => (4, 1),
     STATICCALL() => (6, 1), REVERT() => (2, 0), INVALID() => (0, 0),
     SELFDESTRUCT() => (1, 0),
@@ -1054,7 +1054,7 @@ function execute_opcode(op : ast) -> unit = match op {
     /* ---- log: EVM checks/prices, kernel records ---- */
     LOG(n) => execute_log(n),
     /* ---- system ---- */
-    CREATE() => execute_create(),
+    opcode_CREATE() => execute_create(),
     CREATE2() => execute_create2(),
     CALL() => execute_call(),
     CALLCODE() => execute_callcode(),

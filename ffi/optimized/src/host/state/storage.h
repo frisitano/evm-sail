@@ -13,14 +13,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-struct zoptionzIRStorageTrieEntryzK;
-struct zStorageEntry;
-
-void storage_block_iter_next(struct zoptionzIRStorageTrieEntryzK *result,
-                             Address address);
+struct StorageEntry;
 
 unit storage_db_reset(const unit u);
-unit storage_update(Address address, U256 slot, U256 value, U256 original);
+unit host_storage_update(Address address, U256 slot, U256 value,
+                         U256 original);
 unit storage_tx_clear(Address address);
 unit storage_tx_reset(const unit u);
 bool storage_has_writes(Address address);

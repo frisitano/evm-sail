@@ -35,6 +35,8 @@ unit skip(const unit value) {
 
 bool eq_bool(const bool lhs, const bool rhs) { return lhs == rhs; }
 
+bool not(const bool value) { return !value; }
+
 bool undefined_bool(const unit value) {
   (void)value;
   return false;

@@ -35,21 +35,13 @@ void transient_workspace_bind(void) {
 
 static uint64_t transient_key_hash(const TransientKey *key) {
   uint64_t h = 0xcbf29ce484222325ull;
-  const uint64_t words[7] = {
-      key->address.lanes[0],
-      key->address.lanes[1],
-      key->address.lanes[2] & UINT64_C(0xffffffff),
-      key->slot.limbs[0],
-      key->slot.limbs[1],
-      key->slot.limbs[2],
-      key->slot.limbs[3],
-  };
-  for (int i = 0; i < 7; i++) {
-    uint64_t w = words[i];
-    for (int b = 0; b < 8; b++) {
-      h ^= (w >> (8 * b)) & 0xff;
-      h *= 0x100000001b3ull;
-    }
+  for (size_t i = 0; i < sizeof(key->address.bytes); ++i) {
+    h ^= key->address.bytes[i];
+    h *= 0x100000001b3ull;
+  }
+  for (size_t i = 0; i < sizeof(key->slot.limbs); ++i) {
+    h ^= ((const uint8_t *)(const void *)key->slot.limbs)[i];
+    h *= 0x100000001b3ull;
   }
   return h;
 }

@@ -18,14 +18,14 @@
 #include <stdint.h>
 
 /* ---- EIP-2929 warm sets ---- */
-unit warm_reset(uint64_t current_transaction_epoch);
+unit warm_reset(uint32_t current_transaction_epoch);
 bool account_is_warm(Address a);
 unit account_mark_warm(Address a);
 bool storage_is_warm(Address a, const U256 s);
 unit storage_mark_warm(Address a, const U256 s);
 
 /* ---- EIP-7702 transaction-local authority tracker ---- */
-unit authorization_tracker_reset(uint64_t count_hint);
+unit authorization_tracker_reset(uint32_t count_hint);
 bool authorization_tracker_seen(Address authority);
 bool authorization_tracker_originally_delegated(Address authority);
 bool authorization_tracker_delegation_set(Address authority);

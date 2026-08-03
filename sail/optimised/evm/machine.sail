@@ -9,3 +9,9 @@ function conserved_gas_add(left, right) =
     } else {
         throw InvalidBlock(ExecutionInvalid)
     }
+
+/* Optimized `gas` is a uint64 range, so reduction modulo 2^256 is the
+ * identity. Avoid materializing the 257-bit word modulus solely to widen a
+ * live-gas value before pushing it. */
+function push_gas(value : gas) -> unit =
+    push_word(u256(value))

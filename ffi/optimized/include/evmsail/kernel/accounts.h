@@ -9,16 +9,16 @@
 /* Materializes one authenticated block account into the AccountId assigned by
  * BAL schema construction, without recording an EVM/BAL access. */
 bool account_preload(Hash32 parent_state_root, AccountId account_id,
-                     Hash32 address_hash, struct zAccount *account,
+                     Hash32 address_hash, struct Account *account,
                      NodeId *storage_root_node);
 
-struct zAccount k_aload(
+struct Account k_aload(
     Hash32 parent_state_root,
     Address address);
 unit store_account(Address address,
-                           struct zAccount account);
+                           struct Account account);
 unit store_account_info(Address address,
-                                struct zAccount account,
-                                struct zAccountInfo info);
+                                struct Account account,
+                                struct AccountInfo info);
 
 #endif

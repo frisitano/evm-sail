@@ -241,19 +241,19 @@ enum { MPT_DEBUG_GENERATED_CAPACITY = 4096 };
 static DebugGeneratedLog debug_generated;
 #endif
 
-static bool mpt_variable_list_item(const struct zBoundedSszzListRef *items,
+static bool mpt_variable_list_item(const struct BoundedSszListRef *items,
                                    ByteSpan bytes, uint64_t index,
                                    ByteSpan *item);
 
-static enum zBlockError mpt_block_error(uint64_t status) {
+static enum BlockError mpt_block_error(uint64_t status) {
   switch (status) {
   case MPT_RLP_DECODE:
-    return zRlpDecode;
+    return RlpDecode;
   case MPT_INVALID_CONFIG:
-    return zInvalidConfig;
+    return InvalidConfig;
   case MPT_WITNESS_DEFICIENT:
   default:
-    return zWitnessDeficient;
+    return WitnessDeficient;
   }
 }
 
@@ -769,7 +769,7 @@ static bool mpt_decode_hash_item(const RlpItem *item,
 }
 
 static bool mpt_decode_account_value(ByteSpan value,
-                                     struct zAccountInfo *account) {
+                                     struct AccountInfo *account) {
   RlpItem outer, field[4];
   ByteSpan root = value;
   if (!mpt_rlp_pop(&root, &outer) || root.len != 0 || !outer.list)
@@ -780,12 +780,12 @@ static bool mpt_decode_account_value(ByteSpan value,
       return false;
   if (fields.len != 0)
     return mpt_fail(MPT_RLP_DECODE);
-  return mpt_decode_u64_item(&field[0], &account->znonce) &&
-         mpt_decode_word_item(&field[1], &account->zbalance) &&
+  return mpt_decode_u64_item(&field[0], &account->nonce) &&
+         mpt_decode_word_item(&field[1], &account->balance) &&
          mpt_decode_hash_item(&field[2], &EVMSAIL_EMPTY_TRIE_ROOT,
-                              &account->zstorage_root) &&
+                              &account->storage_root) &&
          mpt_decode_hash_item(&field[3], &EVMSAIL_KECCAK_EMPTY,
-                              &account->zcode_hash);
+                              &account->code_hash);
 }
 
 static bool mpt_reference_from_encoded_node(ByteSpan node,
@@ -1993,10 +1993,10 @@ static uint64_t mpt_index_at_position(uint64_t count, uint64_t position) {
   return position;
 }
 
-static bool mpt_resolve_list(const struct zBoundedSszzListRef *items,
+static bool mpt_resolve_list(const struct BoundedSszListRef *items,
                              ByteSpan *bytes) {
-  const uint64_t off = items->zbytes.zoff;
-  const uint64_t len = items->zbytes.zlen;
+  const uint64_t off = items->bytes.off;
+  const uint64_t len = items->bytes.len;
   const uint8_t *resolved = stateless_input_ptr(off, len);
   if (len > SIZE_MAX || !resolved)
     return mpt_fail(MPT_INVALID_CONFIG);
@@ -2027,14 +2027,14 @@ static bool mpt_read_u64_le(ByteSpan bytes,
   return true;
 }
 
-static bool mpt_variable_list_item(const struct zBoundedSszzListRef *items,
+static bool mpt_variable_list_item(const struct BoundedSszListRef *items,
                                    ByteSpan bytes, uint64_t index,
                                    ByteSpan *item) {
   uint32_t start = 0, stop = 0;
-  if (index >= items->zcount || index > SIZE_MAX / 4 ||
+  if (index >= items->count || index > SIZE_MAX / 4 ||
       !mpt_read_u32_le(bytes, (size_t)index * 4, &start))
     return mpt_fail(MPT_INVALID_CONFIG);
-  if (index + 1 < items->zcount) {
+  if (index + 1 < items->count) {
     if (!mpt_read_u32_le(bytes, (size_t)(index + 1) * 4, &stop))
       return false;
   } else {
@@ -2043,22 +2043,22 @@ static bool mpt_variable_list_item(const struct zBoundedSszzListRef *items,
     stop = (uint32_t)bytes.len;
   }
   if (start > stop || stop > bytes.len ||
-      (items->zmax_item_length != 0 &&
-       (uint64_t)(stop - start) > items->zmax_item_length))
+      (items->max_item_length != 0 &&
+       (uint64_t)(stop - start) > items->max_item_length))
     return mpt_fail(MPT_INVALID_CONFIG);
   item->data = bytes.data + start;
   item->len = stop - start;
   return true;
 }
 
-unit mpt_index_witness_nodes(struct zBoundedSszzListRef nodes) {
+unit mpt_index_witness_nodes(struct BoundedSszListRef nodes) {
   enum {
     MPT_MAX_WITNESS_NODES = 1u << 22,
     MPT_MAX_WITNESS_NODE_LENGTH = 1u << 10,
   };
   mpt_status = MPT_OK;
   ByteSpan bytes = {0};
-  if (nodes.zcount > MPT_MAX_WITNESS_NODES ||
+  if (nodes.count > MPT_MAX_WITNESS_NODES ||
       !mpt_resolve_list(&nodes, &bytes)) {
     mpt_fail(MPT_INVALID_CONFIG);
     mpt_throw("optimized witness node list");
@@ -2066,8 +2066,8 @@ unit mpt_index_witness_nodes(struct zBoundedSszzListRef nodes) {
   }
 
   mpt_node_arena_reset();
-  mpt_node_index_prepare(nodes.zcount);
-  for (uint64_t index = 0; index < nodes.zcount; ++index) {
+  mpt_node_index_prepare(nodes.count);
+  for (uint64_t index = 0; index < nodes.count; ++index) {
     ByteSpan node = {0};
     Hash32 digest = {{0}};
     if (!mpt_variable_list_item(&nodes, bytes, index, &node) ||
@@ -2082,7 +2082,7 @@ unit mpt_index_witness_nodes(struct zBoundedSszzListRef nodes) {
   return UNIT;
 }
 
-unit mpt_index_witness_codes(struct zBoundedSszzListRef codes,
+unit mpt_index_witness_codes(struct BoundedSszListRef codes,
                                      bool amsterdam_or_later) {
   enum {
     MPT_MAX_WITNESS_CODES = 1u << 18,
@@ -2090,14 +2090,14 @@ unit mpt_index_witness_codes(struct zBoundedSszzListRef codes,
   };
   mpt_status = MPT_OK;
   ByteSpan bytes = {0};
-  if (codes.zcount > MPT_MAX_WITNESS_CODES ||
+  if (codes.count > MPT_MAX_WITNESS_CODES ||
       !mpt_resolve_list(&codes, &bytes)) {
     mpt_fail(MPT_INVALID_CONFIG);
     mpt_throw("optimized witness code list");
     return UNIT;
   }
 
-  for (uint64_t index = 0; index < codes.zcount; ++index) {
+  for (uint64_t index = 0; index < codes.count; ++index) {
     ByteSpan code = {0};
     if (!mpt_variable_list_item(&codes, bytes, index, &code) ||
         code.len > MPT_MAX_WITNESS_CODE_LENGTH ||
@@ -2132,12 +2132,12 @@ static void mpt_ordered_root_finish(Hash32 *root) {
 }
 
 Hash32
-mpt_transaction_trie_root(struct zBoundedSszzListRef transactions) {
+mpt_transaction_trie_root(struct BoundedSszListRef transactions) {
   mpt_reset(UNIT);
   mpt_status = MPT_OK;
   ByteSpan bytes = {0};
   Hash32 root = {{0}};
-  if (transactions.zcount > (UINT64_C(1) << 20) ||
+  if (transactions.count > (UINT64_C(1) << 20) ||
       !mpt_resolve_list(&transactions, &bytes)) {
     mpt_fail(MPT_INVALID_CONFIG);
     mpt_ordered_root_finish(&root);
@@ -2145,8 +2145,8 @@ mpt_transaction_trie_root(struct zBoundedSszzListRef transactions) {
     return root;
   }
   for (uint64_t position = 0;
-       mpt_status == MPT_OK && position < transactions.zcount; ++position) {
-    const uint64_t index = mpt_index_at_position(transactions.zcount, position);
+       mpt_status == MPT_OK && position < transactions.count; ++position) {
+    const uint64_t index = mpt_index_at_position(transactions.count, position);
     ByteSpan transaction;
     if (!mpt_variable_list_item(&transactions, bytes, index,
                                 &transaction))
@@ -2157,7 +2157,7 @@ mpt_transaction_trie_root(struct zBoundedSszzListRef transactions) {
     item.external_value = true;
     item.external_value_bytes = transaction.data;
     item.external_value_len = transaction.len;
-    if (!mpt_ordered_insert(&item, transactions.zcount, position))
+    if (!mpt_ordered_insert(&item, transactions.count, position))
       break;
   }
   mpt_ordered_root_finish(&root);
@@ -2167,7 +2167,7 @@ mpt_transaction_trie_root(struct zBoundedSszzListRef transactions) {
 }
 
 Hash32
-mpt_withdrawals_trie_root(struct zBoundedSszzListRef withdrawals) {
+mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals) {
   enum {
     MPT_WITHDRAWAL_SIZE = 44,
     MPT_WITHDRAWAL_ADDRESS_OFF = 16,
@@ -2178,18 +2178,17 @@ mpt_withdrawals_trie_root(struct zBoundedSszzListRef withdrawals) {
   mpt_status = MPT_OK;
   ByteSpan bytes = {0};
   Hash32 root = {{0}};
-  if (withdrawals.zcount > 16 ||
-      withdrawals.zcount > SIZE_MAX / MPT_WITHDRAWAL_SIZE ||
+  if (withdrawals.count > 16 ||
       !mpt_resolve_list(&withdrawals, &bytes) ||
-      bytes.len != (size_t)withdrawals.zcount * MPT_WITHDRAWAL_SIZE) {
+      bytes.len != (size_t)withdrawals.count * MPT_WITHDRAWAL_SIZE) {
     mpt_fail(MPT_INVALID_CONFIG);
     mpt_ordered_root_finish(&root);
     mpt_throw("optimized withdrawals trie root");
     return root;
   }
   for (uint64_t position = 0;
-       mpt_status == MPT_OK && position < withdrawals.zcount; ++position) {
-    const uint64_t index = mpt_index_at_position(withdrawals.zcount, position);
+       mpt_status == MPT_OK && position < withdrawals.count; ++position) {
+    const uint64_t index = mpt_index_at_position(withdrawals.count, position);
     const size_t off = (size_t)index * MPT_WITHDRAWAL_SIZE;
     ByteSpan withdrawal = {
         bytes.data + off,
@@ -2217,7 +2216,7 @@ mpt_withdrawals_trie_root(struct zBoundedSszzListRef withdrawals) {
       break;
     item.kind = TRIE_ENTRY_LEAF;
     item.value_len = (uint8_t)writer.len;
-    if (!mpt_ordered_insert(&item, withdrawals.zcount, position))
+    if (!mpt_ordered_insert(&item, withdrawals.count, position))
       break;
   }
   mpt_ordered_root_finish(&root);
@@ -2270,7 +2269,7 @@ mpt_receipt_table_root(uint64_t count) {
 
 uint64_t stateless_account_read(
     Hash32 root,
-    Hash32 address_hash, struct zAccountInfo *info,
+    Hash32 address_hash, struct AccountInfo *info,
     bool *found, NodeId *terminal_node, NodeId *storage_root_node) {
   *found = false;
   *storage_root_node = MPT_NODE_ID_EMPTY;
@@ -2281,7 +2280,7 @@ uint64_t stateless_account_read(
                        terminal_node) &&
       value.len != 0) {
     if (mpt_decode_account_value(value, info) &&
-        mpt_bind_storage_root_identity(&info->zstorage_root,
+        mpt_bind_storage_root_identity(&info->storage_root,
                                        storage_root_node)) {
       *found = true;
     }

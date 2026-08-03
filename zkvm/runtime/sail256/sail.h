@@ -152,12 +152,7 @@ unit skip(const unit);
  * and_bool and or_bool are special-cased by the compiler to ensure
  * short-circuiting evaluation.
  */
-#ifndef __cplusplus
-static inline bool not(bool b)
-{
-     return !b;
-}
-#endif
+bool not(bool b);
 bool EQUAL(bool)(const bool, const bool);
 bool UNDEFINED(bool)(const unit);
 

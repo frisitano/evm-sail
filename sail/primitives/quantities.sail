@@ -535,7 +535,7 @@ type code_chunk_index = range(0, code_region_bound)
 val word_of_nat_byte_count : forall 'value, 0 <= 'value. int('value) -> word
 function word_of_nat_byte_count(value) =
     if value < 2 ^ 256 then {
-        U256(value)
+        u256(value)
     } else {
         assert(false);
         WORD_ZERO

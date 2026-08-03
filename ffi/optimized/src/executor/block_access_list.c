@@ -62,7 +62,7 @@ void bal_input_workspace_bind(void) {
   WORKSPACE_BIND(bal_expected, GUEST_BAL_EXPECTED_ENTRIES);
 }
 
-static bool bal_fail(enum zBlockError reason, const char *location) {
+static bool bal_fail(enum BlockError reason, const char *location) {
   throw_invalid_block(reason, location);
   return false;
 }
@@ -71,7 +71,7 @@ static bool bal_expect(enum bal_iter_tag tag, AccountId account_id,
                        StorageId storage_id, const bal_rlp_item *item) {
   if (bal_expected_count >= GUEST_BAL_EXPECTED_ENTRIES) GUEST_ABORT();
   if (item != NULL && item->source_len > UINT32_MAX)
-    return bal_fail(zInvalidBlockAccessList, "BAL expected value length");
+    return bal_fail(InvalidBlockAccessList, "BAL expected value length");
   BalExpectedEntry *entry = &bal_expected[bal_expected_count++];
   entry->tag = (uint8_t)tag;
   entry->account_id = account_id;
@@ -96,7 +96,7 @@ static bool bal_parse_length(const uint8_t *source, uint64_t available,
 static bool bal_parse_item(const uint8_t *source, uint64_t available,
                                      bal_rlp_item *item) {
   if (available == 0)
-    return bal_fail(zRlpDecode, "BAL RLP item");
+    return bal_fail(RlpDecode, "BAL RLP item");
 
   const uint8_t header = source[0];
   uint64_t content_offset = 0;
@@ -115,7 +115,7 @@ static bool bal_parse_item(const uint8_t *source, uint64_t available,
     content_offset = 1 + width;
     if (!bal_parse_length(source + 1, available - 1, width,
                                     &content_len, &minimal))
-      return bal_fail(zRlpDecode, "BAL RLP string length");
+      return bal_fail(RlpDecode, "BAL RLP string length");
     canonical = minimal && content_len > 55;
   } else if (header <= 0xf7) {
     is_list = true;
@@ -128,13 +128,13 @@ static bool bal_parse_item(const uint8_t *source, uint64_t available,
     content_offset = 1 + width;
     if (!bal_parse_length(source + 1, available - 1, width,
                                     &content_len, &minimal))
-      return bal_fail(zRlpDecode, "BAL RLP list length");
+      return bal_fail(RlpDecode, "BAL RLP list length");
     canonical = minimal && content_len > 55;
   }
 
   if (content_offset > available ||
       content_len > available - content_offset)
-    return bal_fail(zRlpDecode, "BAL RLP bounds");
+    return bal_fail(RlpDecode, "BAL RLP bounds");
 
   if (!is_list && header >= 0x80 && header <= 0xb7 &&
       content_len == 1 && source[content_offset] < 0x80)
@@ -161,7 +161,7 @@ static bool bal_take(bal_rlp_cursor *cursor,
 static bool bal_list(const bal_rlp_item *item,
                                bal_rlp_cursor *children) {
   if (!item->is_list || !item->canonical)
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL canonical list");
   children->next = item->content;
   children->remaining = item->content_len;
@@ -170,7 +170,7 @@ static bool bal_list(const bal_rlp_item *item,
 
 static bool bal_bytes(const bal_rlp_item *item) {
   if (item->is_list || !item->canonical)
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL canonical bytes");
   return true;
 }
@@ -180,14 +180,14 @@ static bool bal_uint(const bal_rlp_item *item,
   if (!bal_bytes(item)) return false;
   if (item->content_len > maximum_len ||
       (item->content_len != 0 && item->content[0] == 0))
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL canonical integer");
   return true;
 }
 
 static bool bal_end(const bal_rlp_cursor *cursor) {
   if (cursor->remaining != 0)
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL trailing fields");
   return true;
 }
@@ -220,24 +220,24 @@ static bool bal_initialize_storage_changes(const bal_rlp_item *field,
         !bal_list(&changes_item, &changes) || changes.remaining == 0 ||
         !bal_decode_word(&slot_item, &slot)) {
       if (!have_exception)
-        bal_fail(zInvalidBlockAccessList, "BAL storage-change shape");
+        bal_fail(InvalidBlockAccessList, "BAL storage-change shape");
       return false;
     }
     if (have_previous_slot && word_compare(&previous_slot, &slot) >= 0)
-      return bal_fail(zInvalidBlockAccessList,
+      return bal_fail(InvalidBlockAccessList,
                       "BAL storage changes are not strictly increasing");
     previous_slot = slot;
     have_previous_slot = true;
 
     const StorageId expected_storage_id = storage_id_count();
     StorageId storage_id;
-    struct zStorageValue value;
+    struct StorageValue value;
     if (!storage_preload(account_id, storage_root_node, slot, &storage_id,
                          &value))
       return false;
     if (storage_id != expected_storage_id ||
         storage_id_count() != expected_storage_id + 1u)
-      return bal_fail(zInvalidBlockAccessList,
+      return bal_fail(InvalidBlockAccessList,
                       "duplicate BAL storage slot");
 
     ++bal_expected_item_count;
@@ -265,20 +265,20 @@ static bool bal_initialize_storage_reads(const bal_rlp_item *field,
         !bal_decode_word(&slot_item, &slot))
       return false;
     if (have_previous_slot && word_compare(&previous_slot, &slot) >= 0)
-      return bal_fail(zInvalidBlockAccessList,
+      return bal_fail(InvalidBlockAccessList,
                       "BAL storage reads are not strictly increasing");
     previous_slot = slot;
     have_previous_slot = true;
 
     const StorageId expected_storage_id = storage_id_count();
     StorageId storage_id;
-    struct zStorageValue value;
+    struct StorageValue value;
     if (!storage_preload(account_id, storage_root_node, slot, &storage_id,
                          &value))
       return false;
     if (storage_id != expected_storage_id ||
         storage_id_count() != expected_storage_id + 1u)
-      return bal_fail(zInvalidBlockAccessList,
+      return bal_fail(InvalidBlockAccessList,
                       "duplicate BAL storage slot");
     if (!bal_expect(BAL_ITER_STORAGE_READ, account_id, storage_id, NULL))
       return false;
@@ -302,23 +302,23 @@ static bool bal_initialize_account_changes(const bal_rlp_item *field,
 }
 
 unit initialize_block_access_list_state(
-    struct zStatelessInputSliceFields bytes, Hash32 parent_state_root) {
+    struct StatelessInputSliceFields bytes, Hash32 parent_state_root) {
   bal_expected_count = 0;
   bal_expected_item_count = 0;
   bal_expected_source = NULL;
   bal_expected_source_len = 0;
   bal_expected_ready = false;
 
-  const uint8_t *source = stateless_input_ptr(bytes.zoff, bytes.zlen);
-  if (source == NULL && bytes.zlen != 0) {
-    bal_fail(zRlpDecode, "BAL preload input");
+  const uint8_t *source = stateless_input_ptr(bytes.off, bytes.len);
+  if (source == NULL && bytes.len != 0) {
+    bal_fail(RlpDecode, "BAL preload input");
     return UNIT;
   }
 
   bal_rlp_item root;
-  if (!bal_parse_item(source, bytes.zlen, &root)) return UNIT;
-  if (root.source_len != bytes.zlen) {
-    bal_fail(zRlpDecode, "BAL preload root length");
+  if (!bal_parse_item(source, bytes.len, &root)) return UNIT;
+  if (root.source_len != bytes.len) {
+    bal_fail(RlpDecode, "BAL preload root length");
     return UNIT;
   }
 
@@ -333,7 +333,7 @@ unit initialize_block_access_list_state(
     bal_rlp_item account_item;
     if (!bal_take(&account_counter, &account_item)) return UNIT;
     if (account_count == GUEST_STATE_ACCOUNTS) {
-      bal_fail(zInvalidBlockAccessList, "BAL account capacity");
+      bal_fail(InvalidBlockAccessList, "BAL account capacity");
       return UNIT;
     }
     account_count++;
@@ -359,14 +359,14 @@ unit initialize_block_access_list_state(
         !bal_take(&fields, &code_changes) || !bal_end(&fields) ||
         !bal_bytes(&address_item) || address_item.content_len != 20) {
       if (!have_exception)
-        bal_fail(zInvalidBlockAccessList, "BAL preload account shape");
+        bal_fail(InvalidBlockAccessList, "BAL preload account shape");
       return UNIT;
     }
 
     const Address address = address_from_be_bytes(address_item.content);
     if (have_previous_address &&
         address_compare(&previous_address, &address) >= 0) {
-      bal_fail(zInvalidBlockAccessList,
+      bal_fail(InvalidBlockAccessList,
                "BAL accounts are not strictly increasing");
       return UNIT;
     }
@@ -375,7 +375,7 @@ unit initialize_block_access_list_state(
     const Hash32 address_hash = host_keccak_address(address);
     const AccountId account_id =
         account_schema_insert(&address);
-    struct zAccount account;
+    struct Account account;
     NodeId storage_root_node = EVMSAIL_NODE_ID_EMPTY;
     if (account_id == ACCOUNT_ID_NONE ||
         !account_preload(parent_state_root, account_id, address_hash, &account,
@@ -404,7 +404,7 @@ unit initialize_block_access_list_state(
 
   storage_schema_seal();
   bal_expected_source = source;
-  bal_expected_source_len = bytes.zlen;
+  bal_expected_source_len = bytes.len;
   bal_expected_ready = true;
   return UNIT;
 }
@@ -427,10 +427,10 @@ static bool bal_word_equal(const bal_rlp_item *item,
   const uint64_t zero_prefix = 32 - item->content_len;
   for (uint64_t i = 0; i < zero_prefix; ++i)
     if (bytes[i] != 0)
-      return bal_fail(zInvalidBlockAccessList,
+      return bal_fail(InvalidBlockAccessList,
                                 "BAL word width");
   if (memcmp(bytes + zero_prefix, item->content, item->content_len) != 0)
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL word mismatch");
   return true;
 }
@@ -440,7 +440,7 @@ static bool bal_u64_equal(const bal_rlp_item *item,
   uint64_t actual = 0;
   if (!bal_decode_u64(item, &actual)) return false;
   if (actual != expected)
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL integer mismatch");
   return true;
 }
@@ -486,12 +486,12 @@ static bool bal_code_equal(const bal_rlp_item *item,
     uint64_t jumpdest_ref = 0;
     if (!code_db_lookup_indexed(code_hash, &off, &code_len, &jumpdest_ref) ||
         !code_db_resolve_code(off, code_len, &code, &code_len))
-      return bal_fail(zWitnessDeficient,
+      return bal_fail(WitnessDeficient,
                                 "BAL code lookup");
   }
   if (item->content_len != code_len ||
       (code_len != 0 && memcmp(item->content, code, code_len) != 0))
-    return bal_fail(zInvalidBlockAccessList,
+    return bal_fail(InvalidBlockAccessList,
                               "BAL code mismatch");
   return true;
 }
@@ -526,10 +526,10 @@ static bool bal_validate_expected(uint32_t position,
 
   if (tag != (enum bal_iter_tag)expected->tag ||
       account_id != expected->account_id)
-    return bal_fail(zInvalidBlockAccessList, "BAL recorder shape");
+    return bal_fail(InvalidBlockAccessList, "BAL recorder shape");
   if ((tag == BAL_ITER_STORAGE_CHANGE || tag == BAL_ITER_STORAGE_READ) &&
       storage_id != expected->storage_id)
-    return bal_fail(zInvalidBlockAccessList, "BAL storage identity");
+    return bal_fail(InvalidBlockAccessList, "BAL storage identity");
 
   if (expected->expected == NULL) return true;
   bal_rlp_item item;
@@ -546,16 +546,16 @@ static bool bal_validate_expected(uint32_t position,
   case BAL_ITER_CODE_CHANGE:
     return bal_pair_code(&item, index, code_hash);
   default:
-    return bal_fail(zInvalidBlockAccessList, "BAL unexpected value");
+    return bal_fail(InvalidBlockAccessList, "BAL unexpected value");
   }
 }
 
-unit validate_block_access_list(struct zStatelessInputSliceFields bytes,
+unit validate_block_access_list(struct StatelessInputSliceFields bytes,
                                 uint64_t block_gas_limit) {
-  const uint8_t *source = stateless_input_ptr(bytes.zoff, bytes.zlen);
+  const uint8_t *source = stateless_input_ptr(bytes.off, bytes.len);
   if (!bal_expected_ready || source != bal_expected_source ||
-      bytes.zlen != bal_expected_source_len) {
-    bal_fail(zInvalidBlockAccessList, "BAL initialization");
+      bytes.len != bal_expected_source_len) {
+    bal_fail(InvalidBlockAccessList, "BAL initialization");
     return UNIT;
   }
 
@@ -572,11 +572,11 @@ unit validate_block_access_list(struct zStatelessInputSliceFields bytes,
   Hash32 code_hash = {{0}};
   if (bal_iter_next_probe(&account_id, &storage_id, &index, &value, &nonce,
                           &code_hash) != BAL_ITER_EMPTY) {
-    bal_fail(zInvalidBlockAccessList, "BAL recorder trailing entry");
+    bal_fail(InvalidBlockAccessList, "BAL recorder trailing entry");
     return UNIT;
   }
 
   if (bal_expected_item_count > block_gas_limit / UINT64_C(2000))
-    bal_fail(zBlockAccessListTooLarge, "BAL item gas");
+    bal_fail(BlockAccessListTooLarge, "BAL item gas");
   return UNIT;
 }

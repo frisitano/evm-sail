@@ -232,10 +232,12 @@ bool mpt_decode_cached_node(ByteSpan encoded, NodeId node_id,
 /* DIGEST PROBE COLUMN                                                      */
 /* ======================================================================== */
 
-/* The key is already a keccak digest, so lane zero is a uniformly distributed
+/* The key is already a keccak digest, so its first bytes are a uniformly distributed
  * bucket seed and needs no additional mixing. */
 static uint32_t witness_digest_bucket(const Hash32 *digest) {
-  return (uint32_t)digest->lanes[0] & node_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, digest->bytes, sizeof(bucket));
+  return bucket & node_table.bucket_mask;
 }
 
 bool mpt_node_table_insert(const Hash32 *digest, ByteSpan encoded) {
@@ -399,4 +401,3 @@ Hash32 mpt_storage_root_hash(NodeId root_node) {
     GUEST_ABORT();
   return row->digest;
 }
-

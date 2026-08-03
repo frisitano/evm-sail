@@ -16,7 +16,7 @@
  * mem_frame_leave just pops the checkpoint. The canonical generated-C ABI
  * carries mathematical byte quantities; the production ABI represents the
  * protocol-bounded values directly as uint64_t. */
-#include "sail.h"
+#include "evmsail/prelude.h"
 #include "primitives/value.h"
 #include "evmsail/host/region_access.h"
 #include "workspace.h"
@@ -74,7 +74,7 @@ static uint64_t mem_frame_enter_value(void) {
   return (uint64_t)f_base[h_top];
 }
 
-uint64_t mem_frame_enter(const unit u) {
+uint32_t mem_frame_enter(const unit u) {
   (void)u;
   return mem_frame_enter_value();
 }
@@ -120,7 +120,7 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-U256 mem_load_word(uint64_t off) {
+U256 mem_load_word(uint32_t off) {
   uint64_t offset = off;
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
@@ -133,7 +133,7 @@ U256 mem_load_word(uint64_t off) {
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(uint64_t off, const U256 w) {
+unit mem_store_word(uint32_t off, U256 w) {
   uint8_t buf[32];
   sail_word_to_be_bytes(buf, (w));
   uint8_t *d = frame_write_region(off, 32);
@@ -143,7 +143,7 @@ unit mem_store_word(uint64_t off, const U256 w) {
 
 /* MCOPY: overlapping-safe copy within the current frame. Both ranges are
  * established before either pointer is taken. */
-unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
+unit mem_move(uint32_t dst, uint32_t src, uint32_t len) {
   uint64_t dst_value = dst;
   uint64_t src_value = src;
   uint64_t len_value = len;
@@ -159,9 +159,8 @@ unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
 }
 
 /* (byte-quantity offset, bits(8) value) -> unit */
-unit mem_write_byte(uint64_t off, uint64_t v) {
+unit mem_write_byte(uint32_t off, uint64_t v) {
   uint64_t offset = off;
-  if (offset == UINT64_MAX) GUEST_ABORT();
   f_establish(offset + 1);
   arena[f_base[h_top] + offset] = (uint8_t)(v & 0xff);
   return UNIT;

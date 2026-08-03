@@ -13,18 +13,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-struct zoptionzIRAccountzK;
-struct zoptionzIRAcctTrieEntryzK;
-struct zAccount;
-struct zAcctEntry;
-
-void acct_block_get(struct zoptionzIRAccountzK *result, Address address);
-void acct_block_iter_next(struct zoptionzIRAcctTrieEntryzK *result, unit u);
+struct Account;
+struct AcctEntry;
 
 unit acct_db_reset(const unit u);
-unit account_update(Address address, uint64_t nonce, U256 balance,
-                    Hash32 code_hash, bool exists, bool storage_cleared,
-                    bool created, bool selfdestructed);
+unit host_account_update(Address address, uint64_t nonce, U256 balance,
+                         Hash32 code_hash, bool exists, bool storage_cleared,
+                         bool created, bool selfdestructed);
 unit acct_tx_set_balance(Address address, U256 balance);
 unit acct_tx_set_nonce(Address address, uint64_t nonce);
 unit acct_tx_set_code_hash(Address address, Hash32 code_hash);

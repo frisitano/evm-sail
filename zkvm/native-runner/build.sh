@@ -32,6 +32,9 @@ C_OPTIMISED_DIR="$ROOT/sail/optimised"
 C_OPTIMISED_MANIFEST="$C_OPTIMISED_DIR/manifest"
 C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
 C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
+OPTIMIZED_PACKAGE="evmsail"
+OPTIMIZED_GENERATED="$BUILD/generated"
+OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 mkdir -p "$BUILD"
 
 SAIL="$(bash "$ROOT/zkvm/resolve_optimized_sail.sh")"
@@ -68,18 +71,19 @@ FFI_ROOT="$ROOT/ffi"
 if [ "$EVM_BUILD_MODE" = standard ]; then
   MODEL_FFI="$FFI_ROOT/spec"
   MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI")
+  MODEL_SOURCE="$BUILD/zkvm_block.c"
+  MODEL_HEADER="zkvm_block.h"
 else
   MODEL_FFI="$FFI_ROOT/optimized"
-  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
+  MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
+  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
 fi
+MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  MODEL_HEADERS=(sail_failure.h)
-  while IFS= read -r path; do
-    MODEL_HEADERS+=("${path#"$MODEL_FFI/include/"}")
-  done < <(find "$MODEL_FFI/include/evmsail" -type f -name '*.h' ! -name model.h | LC_ALL=C sort)
+  MODEL_HEADERS=()
   NATIVE_TEST_SOURCE="$MODEL_FFI/src/test/native.c"
   ADDRESS_RESULT_SOURCE=""
 else
@@ -122,6 +126,7 @@ case "$(uname -s)" in
 esac
 
 CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+MODEL_CFLAGS=()
 if [ "$EVM_BUILD_MODE" = standard ]; then
   GMP_CFLAGS=()
   GMP_LINK_FLAGS=(-lgmp)
@@ -131,7 +136,13 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
   fi
   CFLAGS+=("${GMP_CFLAGS[@]}")
 else
-  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATES -DEVMSAIL_OPTIMIZED_FFI)
+  CFLAGS+=(
+    -DEVMSAIL_NATIVE_DEBUG_AGGREGATES
+    -DEVMSAIL_OPTIMIZED_FFI
+    -ffunction-sections
+    -fdata-sections
+  )
+  MODEL_CFLAGS+=(-fvisibility=hidden)
 fi
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
@@ -159,23 +170,42 @@ done
 #   EXTRA_PRESERVE adds any one-off inspection symbols.
 PRESERVE_FLAGS=(
   --c-preserve main
-  --c-preserve leaf_child_ref
   --c-preserve resume_frame
-  --c-preserve debug_account_storage_root
 )
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  PRESERVE_FLAGS+=(--c-preserve debug_account_storage_root)
+fi
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
-SAIL_CMD=(
-  "$SAIL" "${SAIL_Z3_FLAGS[@]}"
-  -c -O --Oconstant-fold --c-no-main --c-no-rts
-  --c-specialize
-  "${PRESERVE_FLAGS[@]}"
-  "${MODEL_INCLUDE_FLAGS[@]}"
-)
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  SAIL_CMD=(
+    "$SAIL" "${SAIL_Z3_FLAGS[@]}"
+    -c -O --Oconstant-fold --all-modules
+    --c-optimized-model --c-package "$OPTIMIZED_PACKAGE"
+    --c-output-dir "$OPTIMIZED_GENERATED"
+    --c-optimized-source-root sail
+    --c-optimized-include-dir "$MODEL_FFI/include"
+    --c-optimized-external-type StatelessInputSliceFields=evmsail/host/types.h
+    --c-optimized-external-type ScratchSliceFields=evmsail/host/types.h
+    --c-optimized-external-type EvmMemorySliceFields=evmsail/host/types.h
+    --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h
+    --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h
+    --c-optimized-external-type OutputSliceFields=evmsail/host/types.h
+    "${PRESERVE_FLAGS[@]}"
+    "${MODEL_INCLUDE_FLAGS[@]}"
+  )
+else
+  SAIL_CMD=(
+    "$SAIL" "${SAIL_Z3_FLAGS[@]}"
+    -c -O --Oconstant-fold --c-no-main --c-no-rts
+    --c-specialize
+    "${PRESERVE_FLAGS[@]}"
+    "${MODEL_INCLUDE_FLAGS[@]}"
+  )
+fi
 if [ "${EVM_SAIL_LOG:-off}" = on ]; then
   SAIL_CMD+=(--c-specialize-log)
 fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  SAIL_CMD+=(--c-require-bounded-int)
   while IFS= read -r relative || [ -n "$relative" ]; do
     [ -z "$relative" ] && continue
     SAIL_CMD+=(--splice "$C_OPTIMISED_DIR/$relative")
@@ -190,8 +220,10 @@ fi
 SAIL_CMD+=(
   sail/evm.sail_project evm
   --variable EVM_DEBUG=on
-  -o "$BUILD/zkvm_block"
 )
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  SAIL_CMD+=(-o "$BUILD/zkvm_block")
+fi
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. In optimized
@@ -199,9 +231,27 @@ SAIL_CMD+=(
 # MUST precede -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
+MODEL_OBJS=()
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  [ -s "$OPTIMIZED_MODEL_MANIFEST" ] || { echo "error: missing generated model manifest" >&2; exit 2; }
+  while IFS= read -r relative || [ -n "$relative" ]; do
+    [ -z "$relative" ] && continue
+    source="$OPTIMIZED_GENERATED/src/spec/$relative"
+    [ -f "$source" ] || { echo "error: missing generated model source: $relative" >&2; exit 2; }
+    object_name="${relative%.c}"
+    object_name="${object_name//\//__}"
+    object="$BUILD/model__${object_name}.o"
+    "$CC" "${CFLAGS[@]}" "${MODEL_CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+        "$MODEL_HEADER_FLAG" -c "$source" -o "$object"
+    MODEL_OBJS+=("$object")
+  done < "$OPTIMIZED_MODEL_MANIFEST"
+  [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
+else
+  object="$BUILD/zkvm_block.o"
+  "$CC" "${CFLAGS[@]}" "${MODEL_CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+      "$MODEL_HEADER_FLAG" -c "$MODEL_SOURCE" -o "$object"
+  MODEL_OBJS+=("$object")
+fi
 
 # --- 4b. Selected model backend. Optimized sources are a deterministic
 # Sail-shaped manifest; the specification backend retains its standalone ABI.
@@ -215,7 +265,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     object_name="${object_name//\//__}"
     object="$BUILD/optimized__${object_name}.o"
     "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
-        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        "$MODEL_HEADER_FLAG" \
         -c "$source" -o "$object"
     MODEL_BACKEND_OBJS+=("$object")
   done < "$MODEL_FFI/sources.list"
@@ -234,7 +284,7 @@ else
     source="${source_and_name%:*}"
     object="$BUILD/${source_and_name##*:}.o"
     "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
-        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        "$MODEL_HEADER_FLAG" \
         -c "$source" -o "$object"
     MODEL_BACKEND_OBJS+=("$object")
   done
@@ -244,7 +294,7 @@ fi
 #   Each backend owns its lifecycle and debug bridge so generated-model ABI
 #   details do not leak back into a shared native utility.
 "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+    "$MODEL_HEADER_FLAG" \
     -c "$NATIVE_TEST_SOURCE" -o "$BUILD/native_test.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
@@ -257,7 +307,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
     object_name="$(basename "${source%.c}")"
     o="$BUILD/$object_name.o"
     "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
-        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        "$MODEL_HEADER_FLAG" \
         -c "$MODEL_FFI/$source" -o "$o"
     HOST_OBJS+=("$o")
   done
@@ -271,7 +321,7 @@ fi
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "${MODEL_BACKEND_OBJS[@]}"
+    "${MODEL_OBJS[@]}" "${MODEL_BACKEND_OBJS[@]}"
     "$BUILD/native_test.o" "$BUILD/main.o"
     "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
@@ -280,6 +330,11 @@ if [ "$EVM_BUILD_MODE" = standard ] || [ "$EVM_PROFILE" = on ]; then
 fi
 if [ "$EVM_BUILD_MODE" = standard ]; then
   LINK_CMD+=("${RUNTIME_LINK_FLAGS[@]}")
+else
+  case "$(uname -s)" in
+    Darwin) LINK_CMD+=(-Wl,-dead_strip) ;;
+    *)      LINK_CMD+=(-Wl,--gc-sections) ;;
+  esac
 fi
 LINK_CMD+=("${STACK_FLAGS[@]}" -o "$OUT")
 echo "# link:"

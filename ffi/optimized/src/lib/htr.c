@@ -21,7 +21,7 @@
 enum {
   HTR_MAX_DEPTH = 25,
   HTR_CHUNK_SIZE = 32,
-  HTR_BYTE_LIST_LIMIT = 1073741824,
+  EVMSAIL_HTR_BYTE_LIST_LIMIT = 1073741824,
 };
 
 typedef uint8_t htr_root[HTR_CHUNK_SIZE];
@@ -145,10 +145,10 @@ static int htr_subspan(const struct htr_span *span, uint64_t off, uint64_t len,
   return 1;
 }
 
-static int htr_resolve(struct zStatelessInputSliceFields slice,
+static int htr_resolve(struct StatelessInputSliceFields slice,
                        struct htr_span *result) {
-  const uint64_t off = slice.zoff;
-  const uint64_t len = slice.zlen;
+  const uint64_t off = slice.off;
+  const uint64_t len = slice.len;
   result->bytes = stateless_input_ptr(off, len);
   if (!result->bytes) return 0;
   result->len = len;
@@ -295,7 +295,7 @@ static int htr_bytevector(const uint8_t *bytes, uint64_t len, htr_root out) {
 
 static int htr_bytelist(const uint8_t *bytes, uint64_t len,
                         uint64_t limit_bytes, htr_root out) {
-  if (len > limit_bytes || limit_bytes > HTR_BYTE_LIST_LIMIT)
+  if (len > limit_bytes || limit_bytes > EVMSAIL_HTR_BYTE_LIST_LIMIT)
     return 0;
   htr_root root;
   const uint64_t capacity_chunks = (limit_bytes + 31) / 32;
@@ -346,26 +346,26 @@ static uint32_t htr_load_u32(const uint8_t *bytes) {
 }
 
 static int htr_resolve_input(struct htr_input_view *view,
-                             struct zStatelessInputRef input_ref) {
-  view->transaction_count = input_ref.ztransactions.zcount;
-  view->withdrawal_count = input_ref.zwithdrawals.zcount;
-  return htr_resolve(input_ref.znew_payload_request,
+                             struct StatelessInputRef input_ref) {
+  view->transaction_count = input_ref.transactions.count;
+  view->withdrawal_count = input_ref.withdrawals.count;
+  return htr_resolve(input_ref.new_payload_request,
                      &view->new_payload_request) &&
-         htr_resolve(input_ref.zexecution_payload, &view->execution_payload) &&
-         htr_resolve(input_ref.zversioned_hashes, &view->versioned_hashes) &&
-         htr_resolve(input_ref.zdeposits, &view->deposits) &&
-         htr_resolve(input_ref.zwithdrawal_requests,
+         htr_resolve(input_ref.execution_payload, &view->execution_payload) &&
+         htr_resolve(input_ref.versioned_hashes, &view->versioned_hashes) &&
+         htr_resolve(input_ref.deposits, &view->deposits) &&
+         htr_resolve(input_ref.withdrawal_requests,
                      &view->withdrawal_requests) &&
-         htr_resolve(input_ref.zconsolidation_requests,
+         htr_resolve(input_ref.consolidation_requests,
                      &view->consolidation_requests) &&
-         htr_resolve(input_ref.zbuilder_deposit_requests,
+         htr_resolve(input_ref.builder_deposit_requests,
                      &view->builder_deposit_requests) &&
-         htr_resolve(input_ref.zbuilder_exit_requests,
+         htr_resolve(input_ref.builder_exit_requests,
                      &view->builder_exit_requests) &&
-         htr_resolve(input_ref.zextra_data, &view->extra_data) &&
-         htr_resolve(input_ref.ztransactions.zbytes, &view->transactions) &&
-         htr_resolve(input_ref.zwithdrawals.zbytes, &view->withdrawals) &&
-         htr_resolve(input_ref.zblock_access_list, &view->block_access_list);
+         htr_resolve(input_ref.extra_data, &view->extra_data) &&
+         htr_resolve(input_ref.transactions.bytes, &view->transactions) &&
+         htr_resolve(input_ref.withdrawals.bytes, &view->withdrawals) &&
+         htr_resolve(input_ref.block_access_list, &view->block_access_list);
 }
 
 static int htr_withdrawal(const uint8_t *bytes, htr_root out) {
@@ -485,11 +485,12 @@ static int htr_transactions(const struct htr_span *span, uint64_t count,
     const uint64_t stop =
         i + 1 < count ? htr_load_u32(span->bytes + table_off + 4) : span->len;
     if (start > stop || stop > span->len ||
-        stop - start > HTR_BYTE_LIST_LIMIT) {
+        stop - start > EVMSAIL_HTR_BYTE_LIST_LIMIT) {
       return 0;
     }
     htr_root item;
-    if (!htr_bytelist(span->bytes + start, stop - start, HTR_BYTE_LIST_LIMIT,
+    if (!htr_bytelist(span->bytes + start, stop - start,
+                      EVMSAIL_HTR_BYTE_LIST_LIMIT,
                       item) ||
         !htr_accumulator_push(&acc, item)) {
       return 0;
@@ -569,7 +570,8 @@ static int htr_execution_payload(const struct htr_input_view *input,
          htr_uint64(payload, 512, leaves[15]) &&
          htr_uint64(payload, 520, leaves[16]) &&
          htr_bytelist(input->block_access_list.bytes,
-                      input->block_access_list.len, HTR_BYTE_LIST_LIMIT,
+                      input->block_access_list.len,
+                      EVMSAIL_HTR_BYTE_LIST_LIMIT,
                       leaves[17]) &&
          htr_uint64(payload, 532, leaves[18]) &&
          htr_merkleize(leaves, 19, 5, out);
@@ -592,7 +594,7 @@ static int htr_execution_requests(const struct htr_input_view *input,
 }
 
 Hash32 htr_new_payload_request(
-    struct zStatelessInputRef input_ref) {
+    struct StatelessInputRef input_ref) {
   struct htr_input_view input = {0};
   htr_root leaves[4] = {{0}};
   htr_root root = {0};

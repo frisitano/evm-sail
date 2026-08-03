@@ -51,8 +51,8 @@ type word = range(0, 2 ^ 256 - 1)
 /* Transitional constructor spelling for value-producing sites.  Unlike the
  * former newtype constructor this is the identity and introduces no nominal
  * wrapper; construction sites are removed as their bounds become explicit. */
-val U256 : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
-function U256(value) = value
+val u256 : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
+function u256(value) = value
 
 /*! A 20-byte account address (YP §4.1), in canonical protocol byte order. */
 type address = vector(20, inc, byte)
@@ -185,14 +185,14 @@ function word_to_address(value : word) -> address = {
 }
 
 /* the all-zero word / address constants */
-let ZERO_WORD : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
+let ZERO_WORD : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
 let ZERO_ADDRESS : address = Address(vector_init(20, 0x00))
 let ZERO_HASH : hash = B256(vector_init(32, 0x00))
 
-let WORD_ZERO : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
-let WORD_ONE : word = U256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000001))
-let WORD_ALL_ONES : word = U256(unsigned(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
-let WORD_SIGN_BIT : word = U256(unsigned(0x8000000000000000000000000000000000000000000000000000000000000000))
+let WORD_ZERO : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
+let WORD_ONE : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000001))
+let WORD_ALL_ONES : word = u256(unsigned(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
+let WORD_SIGN_BIT : word = u256(unsigned(0x8000000000000000000000000000000000000000000000000000000000000000))
 
 /* Keep every operation on the nominal EVM word inside this small algebra.
  * Arithmetic is stated over mathematical integers and reduced exactly once
@@ -202,7 +202,7 @@ val word_add_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'ri
         int('right),
     ) -> word
 function word_add_word(left, right) =
-    U256(tmod_nat(left + right, sizeof(word_modulus)))
+    u256(tmod_nat(left + right, sizeof(word_modulus)))
 
 val word_sub_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
@@ -217,18 +217,18 @@ function word_sub_word(left, right) =
     }
 
 function word_and(left : word, right : word) -> word =
-    U256(unsigned(and_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+    u256(unsigned(and_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
 function word_or(left : word, right : word) -> word =
-    U256(unsigned(or_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+    u256(unsigned(or_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
 function word_xor(left : word, right : word) -> word =
-    U256(unsigned(xor_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
-function word_not(value : word) -> word = U256(unsigned(not_vec(get_slice_int(256, value, 0))))
+    u256(unsigned(xor_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
+function word_not(value : word) -> word = u256(unsigned(not_vec(get_slice_int(256, value, 0))))
 function word_bit(value : word, index : range(0, 255)) -> bit = get_slice_int(256, value, 0)[index]
 val word_low_byte : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> byte
 function word_low_byte(value) = get_slice_int(8, value, 0)
 
 function word_shift_right_one(value : word) -> word =
-    U256(tdiv_nat(value, 2))
+    u256(tdiv_nat(value, 2))
 
 /*md
 ## Helpers
@@ -292,7 +292,7 @@ overload word_add = {word_add_word}
 overload word_sub = {word_sub_word}
 
 /* Multiplication is exact in the canonical model and reduced only at the word
- * boundary.  The optimized splice lowers the equation to native U256
+ * boundary.  The optimized splice lowers the equation to native u256
  * multiplication, whose low half is the same result. */
 /*! Multiplies words modulo the 256-bit word modulus. */
 val word_mul_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
@@ -313,7 +313,7 @@ function word_div_word(dividend, divisor) = {
     if divisor == 0 then {
         WORD_ZERO
     } else {
-        U256(tdiv_nat(dividend, divisor))
+        u256(tdiv_nat(dividend, divisor))
     }
 }
 
@@ -329,7 +329,7 @@ function word_mod_word(dividend, divisor) = {
     if divisor == 0 then {
         WORD_ZERO
     } else {
-        U256(tmod_nat(dividend, divisor))
+        u256(tmod_nat(dividend, divisor))
     }
 }
 overload word_mod = {word_mod_word}
@@ -343,7 +343,7 @@ function word_greater_than_word(left, right) = left > right
 
 /*! Shifts a word left by a bounded count, yielding zero at the width. */
 function word_shift_left(value : word, amount : word_bit_count) -> word = {
-    U256(unsigned(sail_shiftleft(get_slice_int(256, value, 0), amount)))
+    u256(unsigned(sail_shiftleft(get_slice_int(256, value, 0), amount)))
 }
 
 /*! Shifts a word right logically by a bounded count. */
@@ -498,7 +498,7 @@ function alu_addmod(a, b, n) = {
     if n == 0 then {
         WORD_ZERO
     } else {
-        U256(tmod_nat(a + b, n))
+        u256(tmod_nat(a + b, n))
     }
 }
 
@@ -514,7 +514,7 @@ function alu_mulmod(a, b, n) = {
     if n == 0 then {
         WORD_ZERO
     } else {
-        U256(tmod_nat(a * b, n))
+        u256(tmod_nat(a * b, n))
     }
 }
 
@@ -622,4 +622,4 @@ function alu_sar(shift_amt : word, v : word) -> word = {
 }
 
 /*! `CLZ`: the count of leading zero bits of a 256-bit word (EIP-7939). */
-function alu_clz(x : word) -> word = U256(256 - word_bit_length(x))
+function alu_clz(x : word) -> word = u256(256 - word_bit_length(x))

@@ -62,6 +62,10 @@ bool rlp_add_length(uint64_t *total, uint64_t amount) {
   return true;
 }
 
+uint64_t rlp_length_byte_native(uint8_t value) {
+  return value;
+}
+
 static unsigned be_u64_width(uint64_t value) {
   unsigned width = 0;
   while (value != 0) {

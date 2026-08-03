@@ -48,9 +48,11 @@ else
 fi
 
 # 2. link a shared library: build.sh's objects (incl. native_test.o), minus main.o
+MODEL_OBJS=()
 MODEL_BACKEND_OBJS=()
 HOST_OBJS=()
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then
+  MODEL_OBJS+=("$BUILD/zkvm_block.o")
   MODEL_BACKEND_OBJS=(
     "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o"
     "$BUILD/region_access.o" "$BUILD/model_address_result.o"
@@ -59,6 +61,15 @@ if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then
   HOST_SOURCES=(capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output)
   for hc in "${HOST_SOURCES[@]}"; do HOST_OBJS+=("$BUILD/$hc.o"); done
 else
+  OPTIMIZED_MODEL_MANIFEST="$BUILD/generated/src/spec/sources.list"
+  [ -s "$OPTIMIZED_MODEL_MANIFEST" ] || { echo "error: missing generated model manifest" >&2; exit 2; }
+  while IFS= read -r relative || [ -n "$relative" ]; do
+    [ -z "$relative" ] && continue
+    object_name="${relative%.c}"
+    object_name="${object_name//\//__}"
+    MODEL_OBJS+=("$BUILD/model__${object_name}.o")
+  done < "$OPTIMIZED_MODEL_MANIFEST"
+  [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
   while IFS= read -r relative || [ -n "$relative" ]; do
     case "$relative" in ''|'#'*) continue ;; esac
     source="$ROOT/ffi/optimized/src/$relative"
@@ -78,7 +89,7 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # read_input, write_output, the output buffer, and run_once. The real guest's
 # Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "${MODEL_BACKEND_OBJS[@]}" "$BUILD/native_test.o"
+    "${MODEL_OBJS[@]}" "${MODEL_BACKEND_OBJS[@]}" "$BUILD/native_test.o"
     "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ] || [ "${EVM_PROFILE:-off}" = on ]; then
