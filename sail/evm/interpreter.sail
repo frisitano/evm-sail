@@ -443,6 +443,11 @@ function run_call(kind : CallKind) -> unit = {
         return ()
     };
 
+    /* The target access happens once the static charge is affordable. Mark it
+       before pricing EIP-7702's delegation target: a self-delegation therefore
+       pays one cold target access followed by one warm delegation access. */
+    k_account_mark_warm(target);
+
     /* STATE ACCESS (only now that the static gas is covered): the EIP-7702
        delegation designation (reads the target's code) + new-account component. */
     let (tg_deleg, tg_target) = k_deleg_target(target);
@@ -527,7 +532,6 @@ function run_call(kind : CallKind) -> unit = {
         return ()
     };
 
-    k_account_mark_warm(target);
     if tg_deleg then {
         k_account_mark_warm(tg_target)
     };
