@@ -1,0 +1,120 @@
+/* C-backed transaction runtime collections for evm-sail.
+ *
+ * EIP-2929 warm access and EIP-7702 authorization tracking live behind the
+ * abstract host interfaces declared in Sail. Logs and the append-only state
+ * journal are separate subsystems in logs.c and journal.c respectively.
+ *
+ * Addresses, words, and hashes cross through the selected standard/optimized
+ * ABI and are stored without Sail runtime wrappers; counts, tags, and bytes
+ * cross as scalars. Each collection owns fixed workspace storage, resets only
+ * its live count, and fails closed before a write can exceed its capacity. */
+#include "host/state/runtime.h"
+#include "host/state/internal.h"
+#include "workspace.h"
+#include "primitives/value.h"
+#include <stdint.h>
+#include <string.h>
+
+/* ---------------------------- value helpers ----------------------------- */
+
+typedef Address address160;
+
+/* ------------------------------ warm sets ------------------------------- */
+/* The protocol epoch is also the BAL index: zero denotes pre-execution,
+ * transactions use index + 1, and the final index denotes post-execution.
+ * Warm rows store that epoch plus one so zero remains the unwarmed/rollback
+ * sentinel without conflating it with the pre-execution system-call phase. */
+uint32_t current_warm_epoch;
+
+unit warm_reset(uint64_t current_transaction_epoch) {
+  if (current_transaction_epoch >= UINT32_MAX) GUEST_ABORT();
+  current_warm_epoch = (uint32_t)current_transaction_epoch + 1;
+  return UNIT;
+}
+/* --------------------- EIP-7702 authority tracker ---------------------- */
+
+typedef struct {
+  address160 key;
+  uint8_t used;
+  uint8_t originally_delegated;
+  uint8_t delegation_set;
+} auth_tracker_entry;
+
+static auth_tracker_entry *auth_tracker;
+static uint32_t auth_tracker_limit;
+
+static uint64_t auth_tracker_hash(const address160 *a) {
+  uint64_t h = UINT64_C(1469598103934665603);
+  for (unsigned i = 0; i < 2; ++i) {
+    h ^= a->lanes[i];
+    h *= UINT64_C(1099511628211);
+  }
+  h ^= a->lanes[2] & UINT64_C(0xffffffff);
+  h *= UINT64_C(1099511628211);
+  h ^= h >> 32;
+  h *= UINT64_C(0xd6e8feb86659fd93);
+  h ^= h >> 32;
+  return h;
+}
+
+static auth_tracker_entry *auth_tracker_find(const address160 *key,
+                                              int insert) {
+  if (auth_tracker_limit == 0) return NULL;
+  uint32_t slot = (uint32_t)auth_tracker_hash(key) & (auth_tracker_limit - 1);
+  for (uint32_t probes = 0; probes < auth_tracker_limit; ++probes) {
+    auth_tracker_entry *entry = &auth_tracker[slot];
+    if (!entry->used) {
+      if (!insert) return NULL;
+      entry->used = 1;
+      entry->key = *key;
+      entry->originally_delegated = 0;
+      entry->delegation_set = 0;
+      return entry;
+    }
+    if (address_equal(&entry->key, key)) return entry;
+    slot = (slot + 1) & (auth_tracker_limit - 1);
+  }
+  return NULL;
+}
+
+unit authorization_tracker_reset(uint64_t count_hint) {
+  uint64_t need = count_hint < 8 ? 16 : count_hint * 2;
+  uint32_t cap = 16;
+  while ((uint64_t)cap < need && cap <= UINT32_MAX / 2) cap *= 2;
+  if ((uint64_t)cap < need || cap > GUEST_AUTHORIZATION_ENTRIES) GUEST_ABORT();
+  auth_tracker_limit = cap;
+  memset(auth_tracker, 0, (size_t)auth_tracker_limit * sizeof(*auth_tracker));
+  return UNIT;
+}
+
+bool authorization_tracker_seen(Address authority) {
+  address160 key = authority;
+  return auth_tracker_find(&key, 0) != NULL;
+}
+
+bool authorization_tracker_originally_delegated(Address authority) {
+  address160 key = authority;
+  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
+  return entry != NULL && entry->originally_delegated != 0;
+}
+
+bool authorization_tracker_delegation_set(Address authority) {
+  address160 key = authority;
+  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
+  return entry != NULL && entry->delegation_set != 0;
+}
+
+unit authorization_tracker_commit(Address authority,
+                                  bool originally_delegated,
+                                  bool sets_delegation) {
+  address160 key = authority;
+  auth_tracker_entry *entry = auth_tracker_find(&key, 1);
+  if (entry == NULL) GUEST_ABORT();
+  if (originally_delegated) entry->originally_delegated = 1;
+  if (sets_delegation) entry->delegation_set = 1;
+  return UNIT;
+}
+
+void state_runtime_workspace_bind(void) {
+  WORKSPACE_BIND(auth_tracker, GUEST_AUTHORIZATION_ENTRIES);
+}

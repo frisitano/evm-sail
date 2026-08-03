@@ -22,9 +22,8 @@ opcode bodies live in [execute_opcode][].
     2 = `DELEGATECALL`, 3 = `STATICCALL`); defined with the
     interpreter. */
 val run_call : CallKind -> unit
-/*! The create runner (`true` = `CREATE2`); defined with the
-    interpreter. */
-val run_create : bool -> unit
+/*! The contract-creation runner; defined with the interpreter. */
+val run_create : CreateKind -> unit
 
 /*md
 ## Helpers
@@ -92,13 +91,14 @@ function pop_log_topics(count : log_topic_count) -> LogTopics =
 ## The opcode bodies
 
 Each semantic opcode constructor has a named body. The standard decoder
-dispatches its `ast` to these functions below, while optimized C builds can
-call the same generated functions directly from a raw opcode byte without
-materializing an `ast`.
+validates the instruction's stack effect before dispatching its `ast` to these
+functions below. Optimized C applies the same validation at its raw-byte
+dispatch boundary before calling a generated body, without materializing an
+`ast`.
 */
 /*! Implements `ADD`. */
 function execute_add() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_add(a, b))
@@ -106,7 +106,7 @@ function execute_add() -> unit = {
 
 /*! Implements `MUL`. */
 function execute_mul() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_mul(a, b))
@@ -114,7 +114,7 @@ function execute_mul() -> unit = {
 
 /*! Implements `SUB`. */
 function execute_sub() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_sub(a, b))
@@ -122,7 +122,7 @@ function execute_sub() -> unit = {
 
 /*! Implements unsigned `DIV`. */
 function execute_div() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_div(a, b))
@@ -130,7 +130,7 @@ function execute_div() -> unit = {
 
 /*! Implements signed `SDIV`. */
 function execute_sdiv() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_sdiv(a, b))
@@ -138,7 +138,7 @@ function execute_sdiv() -> unit = {
 
 /*! Implements unsigned `MOD`. */
 function execute_mod() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_mod(a, b))
@@ -146,7 +146,7 @@ function execute_mod() -> unit = {
 
 /*! Implements signed `SMOD`. */
 function execute_smod() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_smod(a, b))
@@ -154,7 +154,7 @@ function execute_smod() -> unit = {
 
 /*! Implements `ADDMOD`. */
 function execute_addmod() -> unit = {
-    charge(G_mid);
+    if not_bool(charge(G_mid)) then { return () };
     let a = pop();
     let b = pop();
     let n = pop();
@@ -163,7 +163,7 @@ function execute_addmod() -> unit = {
 
 /*! Implements `MULMOD`. */
 function execute_mulmod() -> unit = {
-    charge(G_mid);
+    if not_bool(charge(G_mid)) then { return () };
     let a = pop();
     let b = pop();
     let n = pop();
@@ -174,13 +174,13 @@ function execute_mulmod() -> unit = {
 function execute_exp() -> unit = {
     let a = pop();
     let e = pop();
-    charge(exp_gas(e));
+    if not_bool(charge(exp_gas(e))) then { return () };
     push(alu_exp(a, e))
 }
 
 /*! Implements `SIGNEXTEND`. */
 function execute_signextend() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let bi = pop();
     let v = pop();
     push(alu_signextend(bi, v))
@@ -188,7 +188,7 @@ function execute_signextend() -> unit = {
 
 /*! Implements unsigned `LT`. */
 function execute_lt() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_lt(a, b))
@@ -196,7 +196,7 @@ function execute_lt() -> unit = {
 
 /*! Implements unsigned `GT`. */
 function execute_gt() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_gt(a, b))
@@ -204,7 +204,7 @@ function execute_gt() -> unit = {
 
 /*! Implements signed `SLT`. */
 function execute_slt() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_slt(a, b))
@@ -212,7 +212,7 @@ function execute_slt() -> unit = {
 
 /*! Implements signed `SGT`. */
 function execute_sgt() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_sgt(a, b))
@@ -220,7 +220,7 @@ function execute_sgt() -> unit = {
 
 /*! Implements `EQ`. */
 function execute_eq() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_eq(a, b))
@@ -228,14 +228,14 @@ function execute_eq() -> unit = {
 
 /*! Implements `ISZERO`. */
 function execute_iszero() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     push(alu_iszero(a))
 }
 
 /*! Implements bitwise `AND`. */
 function execute_and() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_and(a, b))
@@ -243,7 +243,7 @@ function execute_and() -> unit = {
 
 /*! Implements bitwise `OR`. */
 function execute_or() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_or(a, b))
@@ -251,7 +251,7 @@ function execute_or() -> unit = {
 
 /*! Implements bitwise `XOR`. */
 function execute_xor() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     let b = pop();
     push(alu_xor(a, b))
@@ -259,14 +259,14 @@ function execute_xor() -> unit = {
 
 /*! Implements bitwise `NOT`. */
 function execute_not() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let a = pop();
     push(alu_not(a))
 }
 
 /*! Implements `BYTE`. */
 function execute_byte() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let i = pop();
     let x = pop();
     push(alu_byte(i, x))
@@ -275,7 +275,7 @@ function execute_byte() -> unit = {
 /*! Implements logical left shift `SHL` (EIP-145). */
 function execute_shl() -> unit = {
     /* EIP-145 */
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let s = pop();
     let v = pop();
     push(alu_shl(s, v))
@@ -284,7 +284,7 @@ function execute_shl() -> unit = {
 /*! Implements logical right shift `SHR` (EIP-145). */
 function execute_shr() -> unit = {
     /* EIP-145 */
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let s = pop();
     let v = pop();
     push(alu_shr(s, v))
@@ -293,7 +293,7 @@ function execute_shr() -> unit = {
 /*! Implements arithmetic right shift `SAR` (EIP-145). */
 function execute_sar() -> unit = {
     /* EIP-145 */
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let s = pop();
     let v = pop();
     push(alu_sar(s, v))
@@ -302,7 +302,7 @@ function execute_sar() -> unit = {
 /*! Implements count-leading-zeroes `CLZ` (EIP-7939). */
 function execute_clz() -> unit = {
     /* EIP-7939 */
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     let x = pop();
     push(alu_clz(x))
 }
@@ -320,44 +320,44 @@ function execute_keccak256() -> unit = {
 
 /*! Implements `ADDRESS`. */
 function execute_address() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(address_to_word(self_addr()))
 }
 
 /*! Implements `ORIGIN`. */
 function execute_origin() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_Origin))
 }
 
 /*! Implements `CALLER`. */
 function execute_caller() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(address_to_word(message.caller))
 }
 
 /*! Implements `CALLVALUE`. */
 function execute_callvalue() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(message.value)
 }
 
 /*! Implements `GASPRICE`. */
 function execute_gasprice() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_GasPrice))
 }
 
 /*! Implements `CALLDATASIZE`. */
 function execute_calldatasize() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     let input = calldata;
     push(word_of_byte_count(region_slice_length(input)))
 }
 
 /*! Implements `CALLDATALOAD`. */
 function execute_calldataload() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     if is_running() then {
         push(slice_load_word_offset(calldata, offset_word))
@@ -366,7 +366,7 @@ function execute_calldataload() -> unit = {
 
 /*! Implements `CALLDATACOPY`. */
 function execute_calldatacopy() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
@@ -379,13 +379,13 @@ function execute_calldatacopy() -> unit = {
 
 /*! Implements `CODESIZE`. */
 function execute_codesize() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(word_of_byte_count(frame_code_len()))
 }
 
 /*! Implements `CODECOPY`. */
 function execute_codecopy() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
@@ -399,27 +399,25 @@ function execute_codecopy() -> unit = {
 /*! Implements `BALANCE`, including warm/cold account access. */
 function execute_balance() -> unit = {
     let a = word_to_address(pop());
-    let warm = k_access_account(a);
-    charge(account_cost(warm));
-    if is_running() then {
-        push(k_get_balance(a))
-    }
+    let warm = k_account_is_warm(a);
+    if not_bool(charge(account_cost(warm))) then { return () };
+    k_account_mark_warm(a);
+    push(k_get_balance(a))
 }
 
 /*! Implements `SELFBALANCE`. */
 function execute_selfbalance() -> unit = {
-    charge(G_low);
+    if not_bool(charge(G_low)) then { return () };
     push(k_get_balance(self_addr()))
 }
 
 /*! Implements `EXTCODESIZE`, including warm/cold account access. */
 function execute_extcodesize() -> unit = {
     let a = word_to_address(pop());
-    let warm = k_access_account(a);
-    charge(account_cost(warm) + external_code_read_cost());
-    if is_running() then {
-        push(word_of_byte_count(k_get_code_size(a)))
-    }
+    let warm = k_account_is_warm(a);
+    if not_bool(charge(account_cost(warm) + external_code_read_cost())) then { return () };
+    k_account_mark_warm(a);
+    push(word_of_byte_count(k_get_code_size(a)))
 }
 
 /*! Implements `EXTCODECOPY`, including access and copy gas. */
@@ -428,11 +426,12 @@ function execute_extcodecopy() -> unit = {
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    let warm = k_access_account(a);
-    charge(account_cost(warm) + external_code_read_cost());
+    let warm = k_account_is_warm(a);
+    if not_bool(charge(account_cost(warm) + external_code_read_cost())) then { return () };
     charge_copy_gas(length_word);
     let range = charge_memory_range(destination_word, length_word);
     if is_running() then {
+        k_account_mark_warm(a);
         k_code_copy(a, range.off, source_word, range.len)
     }
 }
@@ -440,22 +439,21 @@ function execute_extcodecopy() -> unit = {
 /*! Implements `EXTCODEHASH`, including warm/cold account access. */
 function execute_extcodehash() -> unit = {
     let a = word_to_address(pop());
-    let warm = k_access_account(a);
-    charge(account_cost(warm));
-    if is_running() then {
-        push(hash_to_word(k_get_codehash(a)))
-    }
+    let warm = k_account_is_warm(a);
+    if not_bool(charge(account_cost(warm))) then { return () };
+    k_account_mark_warm(a);
+    push(hash_to_word(k_get_codehash(a)))
 }
 
 /*! Implements `RETURNDATASIZE`. */
 function execute_returndatasize() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(word_of_byte_count(returndata_size()))
 }
 
 /*! Implements bounds-checked `RETURNDATACOPY`. */
 function execute_returndatacopy() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
@@ -468,80 +466,80 @@ function execute_returndatacopy() -> unit = {
 
 /*! Implements `BLOCKHASH`. */
 function execute_blockhash() -> unit = {
-    charge(20);
+    if not_bool(charge(20)) then { return () };
     push(hash_to_word(k_blockhash(pop())))
 }
 
 /*! Implements `COINBASE`. */
 function execute_coinbase() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_Coinbase))
 }
 
 /*! Implements `TIMESTAMP`. */
 function execute_timestamp() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_Timestamp))
 }
 
 /*! Implements `NUMBER`. */
 function execute_number() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_Number))
 }
 
 /*! Implements `SLOTNUM`. */
 function execute_slotnum() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_SlotNumber))
 }
 
 /*! Implements `PREVRANDAO`. */
 function execute_prevrandao() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_PrevRandao))
 }
 
 /*! Implements `GASLIMIT`. */
 function execute_gaslimit() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_GasLimit))
 }
 
 /*! Implements `CHAINID`. */
 function execute_chainid() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_ChainId))
 }
 
 /*! Implements `BASEFEE`. */
 function execute_basefee() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(k_env(F_BaseFee))
 }
 
 /*! Implements `BLOBBASEFEE`. */
 function execute_blobbasefee() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     let execution_profile = k_execution_profile;
     push(blob_base_fee(execution_profile.protocol, k_header.excess_blob_gas))
 }
 
 /*! Implements `BLOBHASH`. */
 function execute_blobhash() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     push(k_blobhash(pop()))
 }
 
 /*! Implements `POP`. */
 function execute_pop() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     let _ = pop()
 }
 
 /*! Implements `MLOAD`. */
 function execute_mload() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let range = charge_memory_range(offset_word, U256(32));
     if is_running() then {
@@ -551,7 +549,7 @@ function execute_mload() -> unit = {
 
 /*! Implements `MSTORE`. */
 function execute_mstore() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let v = pop();
     let range = charge_memory_range(offset_word, U256(32));
@@ -562,7 +560,7 @@ function execute_mstore() -> unit = {
 
 /*! Implements `MSTORE8`. */
 function execute_mstore8() -> unit = {
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let v = pop();
     let range = charge_memory_range(offset_word, WORD_ONE);
@@ -573,14 +571,14 @@ function execute_mstore8() -> unit = {
 
 /*! Implements `MSIZE`. */
 function execute_msize() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(word_of_nat_byte_count(memory_word_count(evm_memory_high_water()) * 32))
 }
 
 /*! Implements overlapping memory copy `MCOPY` (EIP-5656). */
 function execute_mcopy() -> unit = {
     /* EIP-5656 */
-    charge(G_verylow);
+    if not_bool(charge(G_verylow)) then { return () };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
@@ -596,15 +594,13 @@ function execute_mcopy() -> unit = {
                 destination.required_size
             };
         let expansion = memory_expansion(required_size, available);
-        charge(expansion.cost);
-        if is_running() then {
-            apply_memory_expansion(expansion);
-            mem_mcopy(
-                destination.range.off,
-                source.range.off,
-                destination.range.len,
-            )
-        }
+        if not_bool(charge(expansion.cost)) then { return () };
+        apply_memory_expansion(expansion);
+        mem_mcopy(
+            destination.range.off,
+            source.range.off,
+            destination.range.len,
+        )
     }
 }
 
@@ -613,10 +609,9 @@ function execute_sload() -> unit = {
     /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
     let s = pop();
     let warm = k_slot_is_warm(self_addr(), s);
-    charge(sload_cost(warm));
-    if is_running() then {
-        push(k_sload(self_addr(), s).curr)
-    }
+    if not_bool(charge(sload_cost(warm))) then { return () };
+    k_slot_mark_warm(self_addr(), s);
+    push(k_sload(self_addr(), s).curr)
 }
 
 /*! Implements `SSTORE`, including fork-specific gas and refunds. */
@@ -642,12 +637,13 @@ function execute_sstore() -> unit = {
                 if not_bool(is_running()) then {
                     return ()
                 };
+                k_slot_mark_warm(self_addr(), s);
                 let entry = k_sload(self_addr(), s);
                 let costs = sstore_costs(entry.orig, entry.curr, v, cold);
                 if costs.state_credit != 0 then {
                     credit_state_gas_refund(costs.state_credit)
                 };
-                charge(costs.execution);
+                if not_bool(charge(costs.execution)) then { return () };
                 charge_state_gas(costs.state_charge);
                 if not_bool(costs.refund == GAS_REFUND_ZERO) then {
                     record_refund(costs.refund)
@@ -663,7 +659,7 @@ function execute_sstore() -> unit = {
 /*! Implements transient-storage load `TLOAD` (EIP-1153). */
 function execute_tload() -> unit = {
     /* EIP-1153 */
-    charge(G_warm_access);
+    if not_bool(charge(G_warm_access)) then { return () };
     let s = pop();
     push(k_tload(self_addr(), s))
 }
@@ -674,7 +670,7 @@ function execute_tstore() -> unit = {
     if guard_static() then {
         ()
     } else {
-        charge(G_warm_access);
+        if not_bool(charge(G_warm_access)) then { return () };
         let s = pop();
         let v = pop();
         k_tstore(self_addr(), s, v)
@@ -683,14 +679,14 @@ function execute_tstore() -> unit = {
 
 /*! Implements unconditional `JUMP`. */
 function execute_jump() -> unit = {
-    charge(G_mid);
+    if not_bool(charge(G_mid)) then { return () };
     let dest = pop();
     do_jump(dest)
 }
 
 /*! Implements conditional `JUMPI`. */
 function execute_jumpi() -> unit = {
-    charge(G_high);
+    if not_bool(charge(G_high)) then { return () };
     let dest = pop();
     let cond = pop();
     if word_is_zero(cond) then {
@@ -702,45 +698,64 @@ function execute_jumpi() -> unit = {
 
 /*! Implements `PC`, returning the current opcode position. */
 function execute_pc() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push(alu_sub(word_of_byte_count(pc), WORD_ONE))
 }
 
 /*! Implements `GAS`, returning gas remaining after its own charge. */
 function execute_gas() -> unit = {
-    charge(G_base);
+    if not_bool(charge(G_base)) then { return () };
     push_gas(gas_remaining)
 }
 
 /*! Implements `JUMPDEST`. */
-function execute_jumpdest() -> unit = charge(G_jumpdest)
+function execute_jumpdest() -> unit = {
+    if not_bool(charge(G_jumpdest)) then { return () }
+}
 
 /*! Implements the `PUSH0` through `PUSH32` family. */
 function execute_push(n : push_width, v : word) -> unit = {
     if n == 0 then {
-        charge(G_base)
+        if not_bool(charge(G_base)) then { return () }
     } else {
-        charge(G_verylow)
+        if not_bool(charge(G_verylow)) then { return () }
     };
     push(v)
 }
 
 /*! Implements the `DUP1` through `DUP16` family. */
 function execute_dup(n : stack_operation_index) -> unit = {
-    charge(G_verylow);
-    if stack_height() < n then {
-        exc_halt(StackUnderflow)
-    } else {
-        push(peek(n - 1))
-    }
+    if not_bool(charge(G_verylow)) then { return () };
+    push(peek(n - 1))
 }
 
 /*! Implements the `SWAP1` through `SWAP16` family. */
 function execute_swap(n : stack_operation_index) -> unit = {
-    charge(G_verylow);
-    if stack_height() < n + 1 then {
-        exc_halt(StackUnderflow)
+    if not_bool(charge(G_verylow)) then { return () };
+    let top = peek(0);
+    let other = peek(n);
+    stack_set(0, other);
+    stack_set(n, top)
+}
+
+/*! Implements immediate deep-stack duplication `DUPN`. */
+function execute_dupn(immediate : byte) -> unit = {
+    if not_bool(deep_stack_immediate_valid(immediate)) then {
+        exc_halt(InvalidOpcode)
     } else {
+        if not_bool(charge(G_verylow)) then { return () };
+        let n = decode_single_stack_index(immediate);
+        push(peek(n - 1))
+    }
+}
+
+/*! Implements immediate deep-stack exchange `SWAPN`. */
+function execute_swapn(immediate : byte) -> unit = {
+    if not_bool(deep_stack_immediate_valid(immediate)) then {
+        exc_halt(InvalidOpcode)
+    } else {
+        if not_bool(charge(G_verylow)) then { return () };
+        let n = decode_single_stack_index(immediate);
         let top = peek(0);
         let other = peek(n);
         stack_set(0, other);
@@ -748,60 +763,17 @@ function execute_swap(n : stack_operation_index) -> unit = {
     }
 }
 
-/*! Implements immediate deep-stack duplication `DUPN`. */
-function execute_dupn(immediate : byte) -> unit = {
-    charge(G_verylow);
-    if is_running() then {
-        if not_bool(deep_stack_immediate_valid(immediate)) then {
-            exc_halt(InvalidOpcode)
-        } else {
-            let n = decode_single_stack_index(immediate);
-            if stack_height() < n then {
-                exc_halt(StackUnderflow)
-            } else {
-                push(peek(n - 1))
-            }
-        }
-    }
-}
-
-/*! Implements immediate deep-stack exchange `SWAPN`. */
-function execute_swapn(immediate : byte) -> unit = {
-    charge(G_verylow);
-    if is_running() then {
-        if not_bool(deep_stack_immediate_valid(immediate)) then {
-            exc_halt(InvalidOpcode)
-        } else {
-            let n = decode_single_stack_index(immediate);
-            if stack_height() < n + 1 then {
-                exc_halt(StackUnderflow)
-            } else {
-                let top = peek(0);
-                let other = peek(n);
-                stack_set(0, other);
-                stack_set(n, top)
-            }
-        }
-    }
-}
-
 /*! Implements immediate pairwise deep-stack `EXCHANGE`. */
 function execute_exchange(immediate : byte) -> unit = {
-    charge(G_verylow);
-    if is_running() then {
-        if not_bool(exchange_immediate_valid(immediate)) then {
-            exc_halt(InvalidOpcode)
-        } else {
-            let (n, m) = decode_exchange_stack_indices(immediate);
-            if stack_height() < m + 1 then {
-                exc_halt(StackUnderflow)
-            } else {
-                let first = peek(n);
-                let second = peek(m);
-                stack_set(n, second);
-                stack_set(m, first)
-            }
-        }
+    if not_bool(exchange_immediate_valid(immediate)) then {
+        exc_halt(InvalidOpcode)
+    } else {
+        if not_bool(charge(G_verylow)) then { return () };
+        let (n, m) = decode_exchange_stack_indices(immediate);
+        let first = peek(n);
+        let second = peek(m);
+        stack_set(n, second);
+        stack_set(m, first)
     }
 }
 
@@ -817,7 +789,7 @@ function execute_log(n : log_topic_count) -> unit = {
         let range = charge_memory_range(offset_word, length_word);
         if is_running() then {
             let data = active_memory_slice(range.off, range.len);
-            k_log(self_addr(), topics, LogDataMemory(memory_slice(data.off, data.len)))
+            k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.off, data.len)))
         }
     }
 }
@@ -862,10 +834,11 @@ function execute_selfdestruct() -> unit = {
     } else {
         let beneficiary = word_to_address(pop());
         if profile.fork >= Amsterdam then {
-            let warm = k_access_account(beneficiary);
+            let warm = k_account_is_warm(beneficiary);
             let access_cost = 0 + G_selfdestruct + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
             check_execution_gas(access_cost);
             if is_running() then {
+                k_account_mark_warm(beneficiary);
                 let bal = k_get_balance(self_addr());
                 let creates_account = word_nonzero(bal) & k_account_is_empty(beneficiary);
                 let execution_cost = if creates_account then {
@@ -873,8 +846,8 @@ function execute_selfdestruct() -> unit = {
                     } else {
                         access_cost
                     };
-                charge(execution_cost);
-                if is_running() & creates_account then {
+                if not_bool(charge(execution_cost)) then { return () };
+                if creates_account then {
                     charge_state_gas(G_amsterdam_state_new_account)
                 };
                 if is_running() then {
@@ -887,13 +860,14 @@ function execute_selfdestruct() -> unit = {
             }
         } else {
             let bal = k_get_balance(self_addr());
-            let warm = k_access_account(beneficiary);
-            charge(G_selfdestruct);
+            let warm = k_account_is_warm(beneficiary);
+            if not_bool(charge(G_selfdestruct)) then { return () };
             if not_bool(warm) then {
-                charge(G_cold_account)
+                if not_bool(charge(G_cold_account)) then { return () }
             };
-            if is_running() & word_nonzero(bal) & k_account_is_empty(beneficiary) then {
-                charge(G_newaccount)
+            k_account_mark_warm(beneficiary);
+            if word_nonzero(bal) & k_account_is_empty(beneficiary) then {
+                if not_bool(charge(G_newaccount)) then { return () }
             };
             if is_running() then {
                 let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
@@ -917,9 +891,9 @@ function execute_selfdestruct() -> unit = {
 }
 
 /*! Implements `CREATE` through the common create runner. */
-function execute_create() -> unit = run_create(false)
+function execute_create() -> unit = run_create(CreateByNonce)
 /*! Implements `CREATE2` through the common create runner. */
-function execute_create2() -> unit = run_create(true)
+function execute_create2() -> unit = run_create(CreateBySalt)
 /*! Implements `CALL` through the common call runner. */
 function execute_call() -> unit = run_call(Call)
 /*! Implements `CALLCODE` through the common call runner. */
@@ -928,6 +902,65 @@ function execute_callcode() -> unit = run_call(CallCode)
 function execute_delegatecall() -> unit = run_call(DelegateCall)
 /*! Implements `STATICCALL` through the common call runner. */
 function execute_staticcall() -> unit = run_call(StaticCall)
+
+/*! The Yellow Paper stack effect `(delta, alpha)` for every decoded
+    instruction. Invalid deep-stack immediates have no stack effect because
+    their opcode body raises `InvalidOpcode` before accessing the stack. */
+function opcode_stack_effect(op : ast) -> (operand_stack_height, operand_stack_height) = match op {
+    STOP() => (0, 0),
+    ADD() => (2, 1), MUL() => (2, 1), SUB() => (2, 1),
+    DIV() => (2, 1), SDIV() => (2, 1), MOD() => (2, 1), SMOD() => (2, 1),
+    ADDMOD() => (3, 1), MULMOD() => (3, 1), EXP() => (2, 1),
+    SIGNEXTEND() => (2, 1),
+    LT() => (2, 1), GT() => (2, 1), SLT() => (2, 1), SGT() => (2, 1),
+    EQ() => (2, 1), ISZERO() => (1, 1),
+    AND() => (2, 1), OR() => (2, 1), XOR() => (2, 1), NOT() => (1, 1),
+    BYTE() => (2, 1), SHL() => (2, 1), SHR() => (2, 1), SAR() => (2, 1),
+    CLZ() => (1, 1),
+    KECCAK256() => (2, 1),
+    ADDRESS() => (0, 1), BALANCE() => (1, 1), ORIGIN() => (0, 1),
+    CALLER() => (0, 1), CALLVALUE() => (0, 1), CALLDATALOAD() => (1, 1),
+    CALLDATASIZE() => (0, 1), CALLDATACOPY() => (3, 0),
+    CODESIZE() => (0, 1), CODECOPY() => (3, 0), GASPRICE() => (0, 1),
+    EXTCODESIZE() => (1, 1), EXTCODECOPY() => (4, 0),
+    RETURNDATASIZE() => (0, 1), RETURNDATACOPY() => (3, 0),
+    EXTCODEHASH() => (1, 1),
+    BLOCKHASH() => (1, 1), COINBASE() => (0, 1), TIMESTAMP() => (0, 1),
+    NUMBER() => (0, 1), PREVRANDAO() => (0, 1), GASLIMIT() => (0, 1),
+    CHAINID() => (0, 1), SELFBALANCE() => (0, 1), BASEFEE() => (0, 1),
+    BLOBHASH() => (1, 1), BLOBBASEFEE() => (0, 1), SLOTNUM() => (0, 1),
+    POP() => (1, 0), MLOAD() => (1, 1), MSTORE() => (2, 0),
+    MSTORE8() => (2, 0), SLOAD() => (1, 1), SSTORE() => (2, 0),
+    JUMP() => (1, 0), JUMPI() => (2, 0), PC() => (0, 1), MSIZE() => (0, 1),
+    GAS() => (0, 1), JUMPDEST() => (0, 0), TLOAD() => (1, 1),
+    TSTORE() => (2, 0), MCOPY() => (3, 0),
+    PUSH(_, _) => (0, 1),
+    DUP(n) => (n, n + 1),
+    SWAP(n) => (n + 1, n + 1),
+    DUPN(immediate) => if deep_stack_immediate_valid(immediate) then {
+            let n = decode_single_stack_index(immediate);
+            (n, n + 1)
+        } else {
+            (0, 0)
+        },
+    SWAPN(immediate) => if deep_stack_immediate_valid(immediate) then {
+            let n = decode_single_stack_index(immediate);
+            (n + 1, n + 1)
+        } else {
+            (0, 0)
+        },
+    EXCHANGE(immediate) => if exchange_immediate_valid(immediate) then {
+            let (_, higher) = decode_exchange_stack_indices(immediate);
+            (higher + 1, higher + 1)
+        } else {
+            (0, 0)
+        },
+    LOG(n) => (n + 2, 0),
+    CREATE() => (3, 1), CALL() => (7, 1), CALLCODE() => (7, 1),
+    RETURN() => (2, 0), DELEGATECALL() => (6, 1), CREATE2() => (4, 1),
+    STATICCALL() => (6, 1), REVERT() => (2, 0), INVALID() => (0, 0),
+    SELFDESTRUCT() => (1, 0),
+}
 
 /*! Standard decoded-opcode dispatcher. Each arm invokes the same narrow
     semantic function used directly by the optimized raw-byte interpreter. */
@@ -1033,5 +1066,12 @@ function execute_opcode(op : ast) -> unit = match op {
     SELFDESTRUCT() => execute_selfdestruct(),
 }
 
-/*! The single-step transition function over the standard decoded AST. */
-function execute(op : ast) -> unit = execute_opcode(op)
+/*! The single-step transition function over the standard decoded AST. Stack
+    validity is established before gas charging or any instruction side
+    effect, as part of the Yellow Paper exceptional-halt predicate. */
+function execute(op : ast) -> unit = {
+    let (inputs, outputs) = opcode_stack_effect(op);
+    if validate_stack(inputs, outputs) then {
+        execute_opcode(op)
+    }
+}

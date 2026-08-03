@@ -1,8 +1,3 @@
-/* CALL/CALLCODE/DELEGATECALL/STATICCALL (selected by `kind`) and           */
-/* The complete parent frame, including a kernel state checkpoint, is       */
-/* suspended before child effects begin and restored on return. k_revert    */
-/* rolls the world back atomically when the child fails. The applicable     */
-
 /*md
 # The interpreter
 
@@ -25,9 +20,10 @@ opcodes. This module specifies that machinery in three layers:
    child as the active frame, and returns to the single run loop. When the
    child halts, that loop restores and resumes the parent. There is no
    recursive interpreter invocation. All world effects go through kernel syscalls:
-   [k_state_checkpoint][] on entry, [k_transfer][] for value, and [k_revert][] on
-   failure — the kernel rolls the world back atomically on a reverting
-   child. The applicable rules are EIP-150 (63/64ths gas cap + stipend),
+   [k_journal_checkpoint][] on entry, [k_transfer][] for value, and
+   [k_journal_revert][] on failure — the kernel rolls the world back
+   atomically on a reverting child. The applicable rules are EIP-150
+   (63/64ths gas cap + stipend),
    EIP-214 (static-context write protection), EIP-2929 (cold/warm
    access), and EIP-7702 (delegated-code execution).
 */
@@ -206,26 +202,28 @@ function fetch() -> ast = {
                     let after_immediate : code_pointer = current + 1 + size;
                     (after_immediate, PUSH(size, value))
                 } else {
-                    if (profile.fork >= Amsterdam) & (230 <= opcode) & (opcode <= 232) then {
-                        let immediate = slice_byte(code, immediate_offset);
-                        let immediate_valid : bool = match opcode {
-                            230 => deep_stack_immediate_valid(immediate),
-                            231 => deep_stack_immediate_valid(immediate),
-                            232 => exchange_immediate_valid(immediate),
-                            _ => false,
-                        };
-                        let after_instruction : code_pointer = if immediate_valid then {
-                                current + 2
-                            } else {
-                                current + 1
-                            };
-                        let instruction : ast = match opcode {
-                            230 => DUPN(immediate),
-                            231 => SWAPN(immediate),
-                            232 => EXCHANGE(immediate),
-                            _ => INVALID(),
-                        };
-                        (after_instruction, instruction)
+                    if profile.fork >= Amsterdam then {
+                        match deep_stack_operation(opcode) {
+                            Some(operation) => {
+                                let immediate = slice_byte(code, immediate_offset);
+                                let immediate_valid = deep_stack_operation_immediate_valid(
+                                    operation,
+                                    immediate,
+                                );
+                                let after_instruction : code_pointer = if immediate_valid then {
+                                        current + 2
+                                    } else {
+                                        current + 1
+                                    };
+                                let instruction : ast = match operation {
+                                    DeepStackDuplicate => DUPN(immediate),
+                                    DeepStackSwap => SWAPN(immediate),
+                                    DeepStackExchange => EXCHANGE(immediate),
+                                };
+                                (after_instruction, instruction)
+                            },
+                            None() => (immediate_offset, decode_simple(opcode)),
+                        }
                     } else {
                         (immediate_offset, decode_simple(opcode))
                     }
@@ -305,41 +303,50 @@ function executable_code(target : address, dele : bool, dtgt : address) -> Code 
 /*md
 ## The message calls
 */
-/*! Whether a call kind consumes an explicit value stack operand. */
-function call_takes_value(kind : CallKind) -> bool =
-    match kind {
-        Call => true,
-        CallCode => true,
-        _ => false,
-    }
+/*! The behavior selected by one member of the closed CALL-family algebra.
+    Interpreting `CallKind` once keeps operand decoding, value transfer, child
+    identity, and static-context construction coupled instead of re-matching
+    the tag independently at every use site. */
+struct CallSemantics = {
+    takes_value : bool,
+    transfers_value : bool,
+    uses_target_address : bool,
+    inherits_caller_and_value : bool,
+    enters_static_context : bool,
+}
 
-/*! Whether a call kind transfers value between distinct accounts. */
-function call_transfers_value(kind : CallKind) -> bool =
+/*! Defunctionalizes each CALL-family opcode into the data consumed by the
+    shared message-call interpreter. */
+function call_semantics(kind : CallKind) -> CallSemantics =
     match kind {
-        Call => true,
-        _ => false,
-    }
-
-/*! Whether a call kind executes with the target as its storage address. */
-function call_uses_target_address(kind : CallKind) -> bool =
-    match kind {
-        Call => true,
-        StaticCall => true,
-        _ => false,
-    }
-
-/*! Whether a call kind inherits the parent caller and call value. */
-function call_is_delegate(kind : CallKind) -> bool =
-    match kind {
-        DelegateCall => true,
-        _ => false,
-    }
-
-/*! Whether a call kind introduces a read-only execution context. */
-function call_is_static(kind : CallKind) -> bool =
-    match kind {
-        StaticCall => true,
-        _ => false,
+        Call => struct {
+            takes_value = true,
+            transfers_value = true,
+            uses_target_address = true,
+            inherits_caller_and_value = false,
+            enters_static_context = false,
+        },
+        CallCode => struct {
+            takes_value = true,
+            transfers_value = false,
+            uses_target_address = false,
+            inherits_caller_and_value = false,
+            enters_static_context = false,
+        },
+        DelegateCall => struct {
+            takes_value = false,
+            transfers_value = false,
+            uses_target_address = false,
+            inherits_caller_and_value = true,
+            enters_static_context = false,
+        },
+        StaticCall => struct {
+            takes_value = false,
+            transfers_value = false,
+            uses_target_address = true,
+            inherits_caller_and_value = false,
+            enters_static_context = true,
+        },
     }
 
 /* The four call opcodes share one implementation selected by `kind`.
@@ -363,6 +370,7 @@ function call_is_static(kind : CallKind) -> bool =
     `CALL`/`CALLCODE`), `argsOffset`, `argsLen`, `retOffset`, `retLen`.
     Pushes 1 on success, 0 on failure. */
 function run_call(kind : CallKind) -> unit = {
+    let semantics = call_semantics(kind);
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let current_depth = call_depth;
@@ -370,7 +378,7 @@ function run_call(kind : CallKind) -> unit = {
     let gas_request = pop();
     let target_word = pop();
     let target = word_to_address(target_word);
-    let value = if call_takes_value(kind) then {
+    let value = if semantics.takes_value then {
             pop()
         } else {
             WORD_ZERO
@@ -380,26 +388,18 @@ function run_call(kind : CallKind) -> unit = {
     let ret_off_word = pop();
     let ret_len_word = pop();
 
-    /* A stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroes the gas). The protocol unwinds the whole op on
-       an exception; Sail has no unwind, so bail out here before any gas is
-       re-added below. */
-    if not_bool(is_running()) then {
-        return ()
-    };
-
     /* EIP-214: a value-bearing CALL inside a static context is a write and
        raises WriteInStaticContext -- an exceptional halt that consumes all the
        caller frame's gas. CALLCODE/DELEGATECALL/STATICCALL never trigger it
        (CALLCODE has no static guard in the spec; the others force value = 0). */
-    if call_transfers_value(kind) & word_nonzero(value) & message.is_static then {
+    if semantics.transfers_value & word_nonzero(value) & message.is_static then {
         exc_halt(WriteProtection);
         return ()
     };
 
-    /* EIP-2929 access: warm the target (a set update, NOT a state read) and take
-       its cold/warm cost. */
-    let warm = k_access_account(target);
+    /* EIP-2929 access: inspect warmth without mutating state, then mark the
+       target only after the access charge has been established as payable. */
+    let warm = k_account_is_warm(target);
     let target_cost : gas_constant = account_cost(warm);
     let transfer_cost : gas_constant = if word_nonzero(value) then {
             call_value_cost()
@@ -447,7 +447,7 @@ function run_call(kind : CallKind) -> unit = {
        delegation designation (reads the target's code) + new-account component. */
     let (tg_deleg, tg_target) = k_deleg_target(target);
     let delegation_cost : gas_constant = if tg_deleg then {
-            let dw = k_access_account(tg_target);
+            let dw = k_account_is_warm(tg_target);
             account_cost(dw)
         } else {
             GAS_CONSTANT_ZERO
@@ -455,12 +455,12 @@ function run_call(kind : CallKind) -> unit = {
     let new_account_charged =    profile.fork
                               >= Amsterdam
                               &  word_nonzero(value)
-                              &  call_transfers_value(kind)
+                              &  semantics.transfers_value
                               &  k_account_is_empty(target);
     let create_cost : gas_constant = if   profile.fork
                                         < Amsterdam
                                         & word_nonzero(value)
-                                        & call_transfers_value(kind)
+                                        & semantics.transfers_value
                                         & k_account_is_empty(target) then {
             G_newaccount
         } else {
@@ -500,13 +500,13 @@ function run_call(kind : CallKind) -> unit = {
     if profile.fork >= Amsterdam then {
         /* Amsterdam charges execution work, then state growth, before
            applying EIP-150 to the execution gas left for the child. */
-        charge(required);
+        if not_bool(charge(required)) then { return () };
         if new_account_charged then {
             charge_state_gas(G_amsterdam_state_new_account)
         };
         if is_running() then {
             base_child = call_gas_cap_word(gas_remaining, gas_request);
-            charge(base_child)
+            if not_bool(charge(base_child)) then { return () }
         }
     } else {
         let avail = gas_remaining;
@@ -520,13 +520,16 @@ function run_call(kind : CallKind) -> unit = {
 
         /* Legacy message-call charging combines the child allocation with
            access, value-transfer, new-account, and memory costs. */
-        charge(required);
-        if is_running() then {
-            charge(base_child)
-        }
+        if not_bool(charge(required)) then { return () };
+        if not_bool(charge(base_child)) then { return () }
     };
     if not_bool(is_running()) then {
         return ()
+    };
+
+    k_account_mark_warm(target);
+    if tg_deleg then {
+        k_account_mark_warm(tg_target)
     };
 
     /* gas is now covered; message preparation loads the
@@ -555,7 +558,7 @@ function run_call(kind : CallKind) -> unit = {
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
        caller's balance covering the transfer. */
-    if call_takes_value(kind) & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller))) then {
+    if semantics.takes_value & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller))) then {
         returndata_clear();
         refund_gas(child_gas);
         if new_account_charged then {
@@ -595,7 +598,7 @@ function run_call(kind : CallKind) -> unit = {
                         returndata = result.output;
 
                         /* the value transfer is part of the successful call */
-                        if call_transfers_value(kind) & word_nonzero(value) then {
+                        if semantics.transfers_value & word_nonzero(value) then {
                             k_transfer(caller, target, value)
                         };
                         returndata_copy_prefix(ret.off, ret.len);
@@ -633,25 +636,25 @@ function run_call(kind : CallKind) -> unit = {
                  else the immediate caller and the call's value;
                - static: forced for STATICCALL, else inherited (a static frame
                  stays static for all of its sub-calls). */
-            let child_addr : address = if call_uses_target_address(kind) then { target } else { caller };
-            let child_caller : address = if call_is_delegate(kind) then {
+            let child_addr : address = if semantics.uses_target_address then { target } else { caller };
+            let child_caller : address = if semantics.inherits_caller_and_value then {
                     message.caller
                 } else {
                     caller
                 };
-            let child_value : word = if call_is_delegate(kind) then {
+            let child_value : word = if semantics.inherits_caller_and_value then {
                     message.value
                 } else {
                     value
                 };
-            let child_static : bool = if call_is_static(kind) then {
+            let child_static : bool = if semantics.enters_static_context then {
                     true
                 } else {
                     message.is_static
                 };
             let child_calldata = if is_running() then {
                     let bytes = active_memory_slice(args.off, args.len);
-                    MemoryCalldata(memory_slice(bytes.off, bytes.len))
+                    MemoryCalldata(evm_memory_slice(bytes.off, bytes.len))
                 } else {
                     EMPTY_CALLDATA
                 };
@@ -667,7 +670,7 @@ function run_call(kind : CallKind) -> unit = {
                     },
                 ),
             );
-            if call_transfers_value(kind) & word_nonzero(value) then {
+            if semantics.transfers_value & word_nonzero(value) then {
                 k_transfer(caller, target, value)
             };
 
@@ -697,13 +700,30 @@ function run_call(kind : CallKind) -> unit = {
     }
 }
 
-/*! `CREATE` (`is2 = false`) and `CREATE2` (`is2 = true`, EIP-1014).
+/*! The behavior selected by one member of the closed CREATE-family algebra.
+    Interpreting `CreateKind` once keeps operand decoding, hashing charges, and
+    address derivation coupled rather than passing an unexplained boolean
+    through the shared creation path. */
+struct CreateSemantics = {
+    uses_salt : bool,
+}
+
+/*! Defunctionalizes each CREATE-family opcode into the data consumed by the
+    shared contract-creation interpreter. */
+function create_semantics(kind : CreateKind) -> CreateSemantics =
+    match kind {
+        CreateByNonce => struct { uses_salt = false },
+        CreateBySalt => struct { uses_salt = true },
+    }
+
+/*! `CREATE` (`CreateByNonce`) and `CREATE2` (`CreateBySalt`, EIP-1014).
     Both deploy a new contract by running the initcode supplied in
     memory; the new address derives from `(creator, nonce)` for `CREATE`
     or `(creator, salt, keccak256(initcode))` for `CREATE2`. Operand
     layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
     the new address on success, 0 on failure. */
-function run_create(is2 : bool) -> unit = {
+function run_create(kind : CreateKind) -> unit = {
+    let semantics = create_semantics(kind);
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let current_depth = call_depth;
@@ -711,17 +731,11 @@ function run_create(is2 : bool) -> unit = {
     let value = pop();
     let off_word = pop();
     let len_word = pop();
-    let salt = if is2 then {
+    let salt = if semantics.uses_salt then {
             pop()
         } else {
             WORD_ZERO
         };
-
-    /* a stack underflow during the operand pops exceptionally halts the frame
-       (exc_halt zeroes the gas); bail out before any child gas is allocated. */
-    if not_bool(is_running()) then {
-        return ()
-    };
 
     /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
        context -- it raises WriteProtection (an exceptional halt consuming all
@@ -737,11 +751,11 @@ function run_create(is2 : bool) -> unit = {
     /* up-front charges: memory expansion over the initcode, the CREATE base
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
-    charge(create_access_cost());
+    if not_bool(charge(create_access_cost())) then { return () };
     if profile.fork >= Shanghai then {
         charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
     };
-    if is2 then {
+    if semantics.uses_salt then {
         charge_word_scaled_gas(G_keccak_word, memory_word_count_word(len_word))
     };
 
@@ -759,7 +773,7 @@ function run_create(is2 : bool) -> unit = {
         /* derive the new contract address: keccak(0xff, creator, salt,
            keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
         let nonce = k_get_nonce(creator);
-        let new_addr : address = if is2 & is_running() then {
+        let new_addr : address = if semantics.uses_salt & is_running() then {
                 k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode)))
             } else {
                 k_create_addr(creator, nonce)
@@ -814,7 +828,7 @@ function run_create(is2 : bool) -> unit = {
              * the protocol runs them in the parent, before
              * process_create_message). */
             let child_depth : frame_depth = current_depth + 1;
-            let _ = k_access_account(new_addr);
+            k_account_mark_warm(new_addr);
             let new_account_charged = (profile.fork >= Amsterdam) & k_account_is_empty(new_addr);
             if new_account_charged then {
                 charge_state_gas(G_amsterdam_state_new_account)
@@ -912,9 +926,10 @@ function resume_call(continuation : CallContinuation, output : OutputSlice) -> u
     returndata_copy_prefix(continuation.return_offset, continuation.return_length);
     if succeeded then {
         record_refund(child_refund);
+        k_journal_commit();
         push(WORD_ONE)
     } else {
-        k_revert(checkpoint.state);
+        k_journal_revert();
         if continuation.new_account_charged then {
             credit_state_gas_refund(G_amsterdam_state_new_account)
         };
@@ -975,9 +990,10 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
         let deployed_bytes : OutputSlice = if frontier_empty_deposit then { EMPTY_OUTPUT_SLICE } else { returndata };
         let deployed_code = code_db_intern_output(deployed_bytes);
         k_deploy_code(continuation.address, deployed_code);
+        k_journal_commit();
         push(address_to_word(continuation.address))
     } else {
-        k_revert(checkpoint.state);
+        k_journal_revert();
         if continuation.new_account_charged then {
             credit_state_gas_refund(G_amsterdam_state_new_account)
         };

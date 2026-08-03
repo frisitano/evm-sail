@@ -1,7 +1,6 @@
 #ifndef EVMSAIL_SCRATCH_H
 #define EVMSAIL_SCRATCH_H
 
-#include "quantity_abi.h"
 #include "sail.h"
 
 #include <stdbool.h>
@@ -16,9 +15,8 @@ bool scratch_commit(uint64_t off, uint64_t len);
  * the visible arena length.
  */
 uint8_t *scratch_borrow(uint64_t len);
-bool scratch_reserve_at(EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                        EVMSAIL_BYTE_QUANTITY_PARAM(len));
-unit scratch_truncate(EVMSAIL_BYTE_QUANTITY_PARAM(len));
+bool scratch_reserve_at(uint64_t off, uint64_t len);
+unit scratch_truncate(uint64_t len);
 const uint8_t *scratch_region(uint64_t off, uint64_t len);
 const uint8_t *scratch_base(void);
 uint64_t scratch_length(void);

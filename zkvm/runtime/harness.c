@@ -3,6 +3,9 @@
 
 #include "sail.h"
 #include "htif.h"
+#ifdef EVMSAIL_OPTIMIZED_FFI
+#include "workspace.h"
+#endif
 
 /* Sail-generated entry points (see build/zkvm_block.c). */
 extern void model_init(void);
@@ -11,6 +14,9 @@ extern unit zmain(unit);
 
 int zkvm_start(void)
 {
+#ifdef EVMSAIL_OPTIMIZED_FFI
+    workspace_init();
+#endif
     model_init();
     zmain(UNIT);
     model_fini();

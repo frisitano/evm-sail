@@ -22,6 +22,8 @@
 # ===========================================================================
 
 SAIL ?= $(shell bash zkvm/resolve_optimized_sail.sh)
+Z3_MEMO_PATH ?= $(abspath sail_smt_cache)
+SAIL_Z3_FLAGS := --memo-z3 --memo-z3-path $(Z3_MEMO_PATH)
 LAKE ?= lake
 COQC ?= opam exec -- rocq c
 PYTHON ?= python3
@@ -47,7 +49,9 @@ C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
 C_OPT_BUILD_DIR     := build/c-optimised
 C_OPT_MODEL         := $(C_OPT_BUILD_DIR)/evm
-C_OPTIMIZED_SPLICE  := sail/splices/c_optimized.sail
+C_OPTIMISED_DIR     := sail/optimised
+C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
+C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
 COQ_DIR             := extractions/coq
 COQ_CONTRACTS_DIR   := $(COQ_DIR)/contracts
 COQ_MODEL_DIR       := $(COQ_DIR)/model
@@ -72,12 +76,14 @@ LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-C_MODEL_HEADERS     := sail_failure.h region_access.h hash.h precompiles.h output.h \
+C_SPEC_HEADERS      := sail_failure.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
-C_OPTIMIZED_HEADERS := word_bytes.h preimage.h htr.h mpt.h state.h \
-                       interpreter.h
-C_MODEL_INCLUDES    := $(foreach header,$(C_MODEL_HEADERS),--c-include $(header))
+C_OPTIMIZED_INCLUDE_DIR := ffi/optimized/include
+C_OPTIMIZED_SOURCE_DIR  := ffi/optimized/src
+C_OPTIMIZED_HEADERS     := sail_failure.h \
+                           $(patsubst $(C_OPTIMIZED_INCLUDE_DIR)/%,%,$(shell find $(C_OPTIMIZED_INCLUDE_DIR)/evmsail -type f -name '*.h' ! -name model.h | sort))
+C_SPEC_INCLUDES     := $(foreach header,$(C_SPEC_HEADERS),--c-include $(header))
 C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
 C_PRESERVE_FLAGS    := --c-preserve main \
                        --c-preserve leaf_child_ref \
@@ -108,7 +114,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all c-optimised c-spec check check-contracts clean docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test zisk-guest
+.PHONY: all c-optimised c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -117,9 +123,11 @@ help:
 	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
+	@echo "  make clear-z3-memo  - remove the persistent Sail/Z3 type-check cache"
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
+	@echo "  make check-optimized-ffi - enforce the allocation-free optimized C boundary"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
@@ -132,7 +140,7 @@ help:
 	@echo "  make all            - check + lint + fmt-check"
 
 check:
-	$(SAIL) $(MODEL)
+	$(SAIL) $(SAIL_Z3_FLAGS) $(MODEL)
 
 # Two checks (each recipe is a single-line shell command; Make 3.81 has no
 # .ONESHELL). (1) sail --all-warnings on the project entries type-checks every
@@ -140,7 +148,7 @@ check:
 # every comment line must be the same width as the divider, so the closing */
 # columns line up.
 lint:
-	@o=$$($(SAIL) --all-warnings $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (sail warnings)"; exit 1; fi; \
+	@o=$$($(SAIL) $(SAIL_Z3_FLAGS) --all-warnings $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (sail warnings)"; exit 1; fi; \
 	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
 	echo "lint: clean"
 	@$(PYTHON) tools/docs_lint.py . || { echo "lint: FAILED (docs style)"; exit 1; }
@@ -148,13 +156,19 @@ lint:
 # one sail call per file: the files $include each other, so a single multi-file
 # invocation double-loads them and errors.
 fmt:
-	@for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit file "$$f"; done; echo "formatted $$(echo $(SAIL_FILES) | wc -w | tr -d ' ') file(s) with sail --fmt"
+	@for f in $(SAIL_FILES); do $(SAIL) $(SAIL_Z3_FLAGS) --fmt --fmt-emit file "$$f"; done; echo "formatted $$(echo $(SAIL_FILES) | wc -w | tr -d ' ') file(s) with sail --fmt"
 
 fmt-check:
-	@rc=0; for f in $(SAIL_FILES); do $(SAIL) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
+	@rc=0; for f in $(SAIL_FILES); do $(SAIL) $(SAIL_Z3_FLAGS) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
 
 runtime-test:
 	$(PYTHON) zkvm/runtime/sail256/test_runtime.py
+
+check-optimized-ffi-manifest:
+	$(PYTHON) tools/check_optimized_ffi.py --manifest-only
+
+check-optimized-ffi:
+	$(PYTHON) tools/check_optimized_ffi.py
 
 zisk-guest:
 	bash zkvm/zisk/build.sh guest
@@ -163,7 +177,7 @@ eest-smoke:
 	@$(PYTHON) harness/run.py $(EEST_SMOKE) --limit 1 --quiet
 
 check-contracts:
-	@for f in $(SAIL_CONTRACTS); do $(SAIL) "$$f"; done
+	@for f in $(SAIL_CONTRACTS); do $(SAIL) $(SAIL_Z3_FLAGS) "$$f"; done
 	test -s $(EXTERN_CONTRACT)
 	test -s $(LEAN_HOST_AXIOMS)
 	test -s $(LEAN_SPECIALIZATION)
@@ -201,7 +215,7 @@ check-contracts:
 extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
 	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
-	$(SAIL) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
+	$(SAIL) $(SAIL_Z3_FLAGS) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
 	test -s $(COQ_MODEL_DIR)/evm.v
 	test -s $(COQ_MODEL_DIR)/evm_types.v
 	grep -q "Definition process_transaction" $(COQ_MODEL_DIR)/evm.v
@@ -221,8 +235,8 @@ extract-coq: check-contracts
 # backend. The Sail model, not generated C, is the readable source of truth.
 c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
-	$(SAIL) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) --c-specialize \
+	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
+		$(C_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
 	test -s $(C_SPEC_MODEL).c
 	test -s $(C_SPEC_MODEL).h
@@ -234,12 +248,12 @@ c-spec:
 			-c $(C_SPEC_MODEL).c -o $(C_SPEC_BUILD_DIR)/evm.o
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
 
-c-optimised:
+c-optimised: check-optimized-ffi
 	mkdir -p $(C_OPT_BUILD_DIR)
-	$(SAIL) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_MODEL_INCLUDES) $(C_OPTIMIZED_INCLUDES) \
+	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
+		$(C_PRESERVE_FLAGS) $(C_OPTIMIZED_INCLUDES) \
 		--c-specialize --c-specialize-log --c-require-bounded-int \
-		--splice $(C_OPTIMIZED_SPLICE) \
+		$(C_OPTIMISED_SPLICE_FLAGS) \
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_OPT_MODEL)
 	test -s $(C_OPT_MODEL).c
 	test -s $(C_OPT_MODEL).h
@@ -247,7 +261,7 @@ c-optimised:
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
 		$(CC) -O2 -w -DEVMSAIL_MODEL_H=\"evm.h\" \
 			-I$(C_OPT_BUILD_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
-			-I"$$sail_lib" -Iffi/optimized -Iffi \
+			-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
 			-c $(C_OPT_MODEL).c -o $(C_OPT_BUILD_DIR)/evm.o
 	test -s $(C_OPT_BUILD_DIR)/evm.o
 
@@ -256,7 +270,7 @@ extract-lean:
 	test -s $(LEAN_SAIL_LIB)/lakefile.toml
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	$(SAIL) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	$(SAIL) $(SAIL_Z3_FLAGS) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
 	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
 	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
 	rm -f $(LEAN_MODEL_DIR)/.gitignore
@@ -320,7 +334,7 @@ docs-site: docs-env
 	'$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean
 	rm -rf $(BOOK)/site $(BOOK_BUILD)
 	@mkdir -p $(BOOK_BUILD) $(BOOK)/docs
-	$(SAIL) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK_BUILD) $(MODEL)
+	$(SAIL) $(SAIL_Z3_FLAGS) --doc --doc-format identity --doc-embed plain --doc-embed-with-location --doc-bundle doc.json -o $(BOOK_BUILD) $(MODEL)
 	'$(DOCS_BIN)/sail-lsp-index' --sail '$(SAIL)' --root . --workspace-root sail --project $(PROJECT) --module evm --output $(BOOK_BUILD)/lsp-index.json
 	'$(DOCS_BIN)/sail-book-gen' --sail '$(SAIL)' --root . --project $(PROJECT) --module evm --book $(BOOK) --site-name "EVM Sail Specification" --no-config
 	cd $(BOOK) && DISABLE_MKDOCS_2_WARNING=true '$(DOCS_BIN)/mkdocs' build --strict -d site
@@ -334,4 +348,7 @@ lean-harness:
 
 clean:
 	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
-	rm -rf sail_smt_cache sail/sail_smt_cache $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+
+clear-z3-memo:
+	rm -f "$(Z3_MEMO_PATH)" sail/sail_smt_cache

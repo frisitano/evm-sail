@@ -113,17 +113,6 @@ val blob_schedule : forall 'target 'maximum 'denominator,
 function blob_schedule(target, maximum, denominator) =
     struct { target = target, max = maximum, base_fee_update_fraction = denominator }
 
-/*! Projections unpack the schedule's existential indices at the function
-    boundary. */
-function blob_schedule_target_of(schedule : BlobSchedule) -> blob_schedule_target_count =
-    schedule.target
-
-function blob_schedule_maximum_of(schedule : BlobSchedule) -> blob_schedule_max_count =
-    schedule.max
-
-function blob_schedule_denominator_of(schedule : BlobSchedule) -> blob_schedule_fee_update_fraction =
-    schedule.base_fee_update_fraction
-
 /*! The protocol parameter tuples admitted by supported forks. Keeping the
     fields under one constraint preserves their relationships: consumers know
     that they received one real protocol profile rather than an arbitrary
@@ -377,18 +366,15 @@ type ProtocolProfile = {
 /*! The gas limits which become concrete once a correlated protocol profile
     is paired with the executing block header. `transaction_total_limit`
     bounds the transaction's complete reservoir; `transaction_regular_limit`
-    bounds the regular-execution part of that reservoir. Amsterdam receipts
-    accumulate the paid gas from both dimensions, so their cumulative bound is
-    twice the header limit even though each block dimension remains bounded by
-    the header independently. */
+    bounds the regular-execution part of that reservoir. Receipt accumulation
+    is indexed directly by the two block reservoirs and therefore needs no
+    duplicate scalar limit here. */
 type gas_limits_parameters(
-    'fork : Int,
     'block_limit : Int,
     'profile_total_limit : Int,
     'profile_regular_limit : Int,
     'transaction_total_limit : Int,
     'transaction_regular_limit : Int,
-    'receipt_cumulative_limit : Int,
 ) -> Bool =
        0 <= 'block_limit
     &  'block_limit <= block_gas_limit_bound
@@ -404,62 +390,46 @@ type gas_limits_parameters(
             'transaction_total_limit
         else
             'profile_regular_limit)
-    &  'receipt_cumulative_limit
-        == (if 'fork < amsterdam_fork_value then
-            'block_limit
-        else
-            2 * 'block_limit)
 
 struct GasLimitsFields(
-    'fork : Int,
     'block_limit : Int,
     'profile_total_limit : Int,
     'profile_regular_limit : Int,
     'transaction_total_limit : Int,
     'transaction_regular_limit : Int,
-    'receipt_cumulative_limit : Int,
 ), gas_limits_parameters(
-    'fork,
     'block_limit,
     'profile_total_limit,
     'profile_regular_limit,
     'transaction_total_limit,
     'transaction_regular_limit,
-    'receipt_cumulative_limit,
 ) = {
     block_limit : int('block_limit),
     transaction_total_limit : int('transaction_total_limit),
     transaction_regular_limit : int('transaction_regular_limit),
-    receipt_cumulative_limit : int('receipt_cumulative_limit),
     system_regular_limit : int(30000000),
     system_state_limit : int(0),
 }
 
 type GasLimits = {
-    'fork
     'block_limit
     'profile_total_limit
     'profile_regular_limit
     'transaction_total_limit
-    'transaction_regular_limit
-    'receipt_cumulative_limit,
+    'transaction_regular_limit,
     gas_limits_parameters(
-        'fork,
         'block_limit,
         'profile_total_limit,
         'profile_regular_limit,
         'transaction_total_limit,
         'transaction_regular_limit,
-        'receipt_cumulative_limit,
     ).
     GasLimitsFields(
-        'fork,
         'block_limit,
         'profile_total_limit,
         'profile_regular_limit,
         'transaction_total_limit,
         'transaction_regular_limit,
-        'receipt_cumulative_limit,
     )
 }
 
@@ -506,7 +476,6 @@ val gas_limits_for : forall
         ),
         int('block_limit),
     ) -> GasLimitsFields(
-        'fork,
         'block_limit,
         'profile_total_limit,
         'profile_regular_limit,
@@ -527,10 +496,6 @@ val gas_limits_for : forall
                 'profile_total_limit)
         else
             'profile_regular_limit),
-        (if 'fork < amsterdam_fork_value then
-            'block_limit
-        else
-            2 * 'block_limit),
     )
 function gas_limits_for(profile, block_limit) = {
     let transaction_total_limit =
@@ -545,17 +510,10 @@ function gas_limits_for(profile, block_limit) = {
         } else {
             profile.transaction_regular_gas_limit
         };
-    let receipt_cumulative_limit =
-        if profile.fork < Amsterdam then {
-            block_limit
-        } else {
-            2 * block_limit
-        };
     struct {
         block_limit = block_limit,
         transaction_total_limit = transaction_total_limit,
         transaction_regular_limit = transaction_regular_limit,
-        receipt_cumulative_limit = receipt_cumulative_limit,
         system_regular_limit = SYSTEM_CALL_GAS_LIMIT,
         system_state_limit = 0,
     }
@@ -579,7 +537,6 @@ type execution_profile_parameters(
     'block_limit : Int,
     'transaction_total_limit : Int,
     'transaction_regular_limit : Int,
-    'receipt_cumulative_limit : Int,
 ) -> Bool =
        protocol_profile_parameters(
            'fork,
@@ -594,13 +551,11 @@ type execution_profile_parameters(
            'refund_divisor,
        )
     &  gas_limits_parameters(
-           'fork,
            'block_limit,
            'profile_total_limit,
            'profile_regular_limit,
            'transaction_total_limit,
            'transaction_regular_limit,
-           'receipt_cumulative_limit,
        )
 
 struct ExecutionProfileFields(
@@ -617,7 +572,6 @@ struct ExecutionProfileFields(
     'block_limit : Int,
     'transaction_total_limit : Int,
     'transaction_regular_limit : Int,
-    'receipt_cumulative_limit : Int,
 ), execution_profile_parameters(
     'fork,
     'target,
@@ -632,7 +586,6 @@ struct ExecutionProfileFields(
     'block_limit,
     'transaction_total_limit,
     'transaction_regular_limit,
-    'receipt_cumulative_limit,
 ) = {
     protocol : ProtocolProfileFields(
         'fork,
@@ -647,13 +600,11 @@ struct ExecutionProfileFields(
         'refund_divisor,
     ),
     gas : GasLimitsFields(
-        'fork,
         'block_limit,
         'profile_total_limit,
         'profile_regular_limit,
         'transaction_total_limit,
         'transaction_regular_limit,
-        'receipt_cumulative_limit,
     ),
 }
 
@@ -670,8 +621,7 @@ type ExecutionProfile = {
     'refund_divisor
     'block_limit
     'transaction_total_limit
-    'transaction_regular_limit
-    'receipt_cumulative_limit,
+    'transaction_regular_limit,
     execution_profile_parameters(
         'fork,
         'target,
@@ -686,7 +636,6 @@ type ExecutionProfile = {
         'block_limit,
         'transaction_total_limit,
         'transaction_regular_limit,
-        'receipt_cumulative_limit,
     ).
     ExecutionProfileFields(
         'fork,
@@ -702,7 +651,6 @@ type ExecutionProfile = {
         'block_limit,
         'transaction_total_limit,
         'transaction_regular_limit,
-        'receipt_cumulative_limit,
     )
 }
 
@@ -777,10 +725,6 @@ val execution_profile_for : forall
                 'profile_total_limit)
         else
             'profile_regular_limit),
-        (if 'fork < amsterdam_fork_value then
-            'block_limit
-        else
-            2 * 'block_limit),
     )
 function execution_profile_for(protocol, block_limit) =
     struct {

@@ -61,10 +61,10 @@ let DEPOSIT_REQUEST_INDEX : int(184) = 184
 /*! Enters a top-level protocol system-call frame. The caller has already
     made a fresh memory frame and, for a word input, frozen the
     parent-memory span that `input` references. */
-function enter_system_call_frame(tgt : address, input : CalldataSlice) -> journal_checkpoint = {
+function enter_system_call_frame(tgt : address, input : CalldataSlice) -> unit = {
     let execution_profile = k_execution_profile;
     let gas_limits = execution_profile.gas;
-    let checkpoint = k_state_checkpoint();
+    k_journal_checkpoint();
     pc = 0;
     call_depth = 0;
     gas_remaining = gas_limits.system_regular_limit;
@@ -85,8 +85,7 @@ function enter_system_call_frame(tgt : address, input : CalldataSlice) -> journa
             is_static = false,
             depth = 0,
         };
-    frame_code = code_db_resolve(k_code_key(tgt));
-    checkpoint
+    frame_code = code_db_resolve(k_code_key(tgt))
 }
 
 /*! Issues one unchecked block-start system call: a 30M-gas frame from
@@ -104,11 +103,13 @@ function system_call(tgt : address, input : hash) -> unit = {
         mem_store_word(input_range.off, hash_to_word(input));
         let input_slice = active_memory_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
-        let checkpoint = enter_system_call_frame(tgt, MemoryCalldata(memory_slice(input_slice.off, input_slice.len)));
+        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.off, input_slice.len)));
         let _ = interpret();
         memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {
-            k_revert(checkpoint)
+            k_journal_revert()
+        } else {
+            k_journal_commit()
         };
         k_tx_merge() /* system call is a top-level boundary: merge its storage */
     }
@@ -133,18 +134,19 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
     } else {
         memory_reset();
         let parent_memory = memory_frame_enter();
-        let checkpoint = enter_system_call_frame(tgt, EMPTY_CALLDATA);
+        enter_system_call_frame(tgt, EMPTY_CALLDATA);
         let output = interpret();
         if frame_succeeded() then {
             let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
             memory_frame_leave(parent_memory);
+            k_journal_commit();
             k_tx_merge(); /* system call is a top-level boundary: merge its storage */
             result
         } else {
             memory_frame_leave(parent_memory);
-            k_revert(checkpoint);
+            k_journal_revert();
             k_tx_merge();
             throw InvalidBlock(ExecutionInvalid)
         }

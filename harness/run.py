@@ -151,7 +151,6 @@ class SpikeGuest:
         self.rebuild = rebuild
 
     def run_once(self, inp):
-        inp = dump_state.prepare_optimized_input(inp, rebuild=self.rebuild)
         self.rebuild = False
         with tempfile.NamedTemporaryFile(
             suffix=".ssz", delete=False, dir=TMP_ROOT
@@ -260,7 +259,6 @@ class ZiskGuest:
         self.built = True
 
     def run_once(self, inp):
-        inp = dump_state.prepare_optimized_input(inp, rebuild=self.rebuild)
         self.rebuild = False
         if not self.built:
             self._build()
@@ -530,7 +528,7 @@ def main():
         choices=("standard", "optimized"),
         default="optimized",
         help="native C build mode (default: optimized); standard omits the "
-             "c_optimized.sail splice",
+             "sail/optimised module overrides",
     )
     ap.add_argument("--timeout", type=float, default=None,
                     help="per-case wall-clock budget; only meaningful with --spike/--zisk "

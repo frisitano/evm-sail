@@ -1,6 +1,5 @@
 #ifndef TRIE_NODE_DB_H
 #define TRIE_NODE_DB_H
-#include "quantity_abi.h"
 #ifndef EVMSAIL_MODEL_H
 #error "EVMSAIL_MODEL_H must name the generated model header"
 #endif
@@ -22,8 +21,7 @@
  * packages a successful span with its source tag; this table stays unaware of
  * generated aggregate layouts. */
 unit nodedb_reset(const unit u);
-unit nodedb_insert(sail_fixed_bytes_32 kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                   EVMSAIL_BYTE_QUANTITY_PARAM(len));
+unit nodedb_insert(sail_fixed_bytes_32 kh, uint64_t off, uint64_t len);
 bool nodedb_lookup_span(sail_fixed_bytes_32 kh, uint64_t *off, uint64_t *len);
 void nodedb_insert_digest(const sail_fixed_bytes_32 *hash, uint64_t off, uint64_t len);
 

@@ -44,6 +44,8 @@
     - RLP
         - [RLP](reference/sail/lib/rlp/index.md)
         - reference/sail/lib/rlp/*.md
+        - Protocol codecs
+            - reference/sail/lib/rlp/codecs/*.md
     - SSZ
         - [SSZ](reference/sail/lib/ssz/index.md)
         - reference/sail/lib/ssz/*.md
@@ -53,6 +55,7 @@
         - [Ordered trie indices](reference/sail/lib/mpt/indexed.md)
         - [Trie paths and hex-prefix encoding](reference/sail/lib/mpt/primitives.md)
         - [Trie nodes](reference/sail/lib/mpt/nodes.md)
+        - [Trie node encoding and decoding](reference/sail/lib/mpt/codec.md)
         - [Trie updates and the canonical builder](reference/sail/lib/mpt/updates.md)
         - [The witness-native trie](reference/sail/lib/mpt/trie.md)
     - [State trie](reference/sail/lib/state_trie.md)

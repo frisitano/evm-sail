@@ -34,8 +34,12 @@ esac
 # generated objects and the linked ELF (run.py --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
-C_SPLICE="$ROOT/sail/splices/c_optimized.sail"
-C_PROFILE_SPLICE="$ROOT/sail/splices/c_optimized_profile.sail"
+SAIL_Z3_MEMO_PATH="${SAIL_Z3_MEMO_PATH:-$ROOT/sail_smt_cache}"
+SAIL_Z3_FLAGS=(--memo-z3 --memo-z3-path "$SAIL_Z3_MEMO_PATH")
+C_OPTIMISED_DIR="$ROOT/sail/optimised"
+C_OPTIMISED_MANIFEST="$C_OPTIMISED_DIR/manifest"
+C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
+C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -71,8 +75,10 @@ fi
 FFI_ROOT="$ROOT/ffi"
 if [ -z "${GUEST:-}" ]; then
   MODEL_FFI="$FFI_ROOT/optimized"
+  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
 else
   MODEL_FFI="$FFI_ROOT/spec"
+  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI")
 fi
 # Freestanding includes FIRST so <stdio.h>/<stdlib.h>/<string.h>/<gmp.h> resolve
 # to our shims + vendored mini-gmp instead of newlib / libgmp.
@@ -81,7 +87,10 @@ CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
         -ffunction-sections -fdata-sections
         -I"$RT/sail256" -I"$RT/freestanding" -I"$RT"
         -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device"
-        -I"$MODEL_FFI" -I"$FFI_ROOT")
+        "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT")
+if [ -z "${GUEST:-}" ]; then
+  CFLAGS+=(-DEVMSAIL_OPTIMIZED_FFI)
+fi
 if [ "$PLATFORM" = zisk ]; then
   CFLAGS+=(
     -DEVMSAIL_EXTERNAL_HEAP
@@ -91,12 +100,6 @@ if [ "$PLATFORM" = zisk ]; then
   if [ "$EVM_DEBUG" = on ]; then
     CFLAGS+=(-DEVMSAIL_DEBUG)
   fi
-fi
-if [ -z "${GUEST:-}" ]; then
-  CFLAGS+=(
-    -DEVMSAIL_POINTER_ABI
-    -DEVMSAIL_CAPACITY_FIXED
-  )
 fi
 # --gc-sections drops the unused Sail diagnostic/format surface (and its
 # gmp_printf/asprintf references).
@@ -108,7 +111,7 @@ sail_lib() {
 }
 
 # spike memory ranges MUST match link.ld: MAIN, then (omitted guard gap), STACK.
-SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x04000000"
+SPIKE_MEM="0x80000000:0x10000000,0x90010000:0x04000000,0xA0000000:0x10000000"
 # spike's --isa string does not name Zicclsm; that extension only mandates
 # transparent misaligned load/store support, which spike provides via
 # --misaligned. So rv64im + --misaligned is the Zicclsm-equivalent run config.
@@ -117,17 +120,20 @@ SPIKE_FLAGS=(--isa="$SPIKE_ISA" --misaligned -m"$SPIKE_MEM" --extlib="$SPIKE_DEV
 
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
-MODEL_HEADERS=(
-  region_access.h hash.h precompiles.h output.h scratch.h memory.h
-  frame_stack.h
-  transient_storage.h stack.h code_db.h kernel_state.h trie_node_db.h
-  state_db.h
-)
+if [ -z "${GUEST:-}" ]; then
+  MODEL_HEADERS=(sail_failure.h)
+  while IFS= read -r path; do
+    MODEL_HEADERS+=("${path#"$MODEL_FFI/include/"}")
+  done < <(find "$MODEL_FFI/include/evmsail" -type f -name '*.h' ! -name model.h | LC_ALL=C sort)
+else
+  MODEL_HEADERS=(
+    sail_failure.h region_access.h hash.h precompiles.h output.h scratch.h
+    memory.h frame_stack.h transient_storage.h stack.h code_db.h
+    kernel_state.h trie_node_db.h state_db.h
+  )
+fi
 if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
-fi
-if [ -z "${GUEST:-}" ]; then
-  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -161,20 +167,31 @@ compile_common() {
   local lib; lib="$(sail_lib)"
   # 1. Sail -> C: no main, no Sail runtime harness (we supply our own).
   if [ -n "${GUEST:-}" ]; then
-    "$SAIL" -c --c-no-main --c-no-rts --c-preserve main \
+    "$SAIL" "${SAIL_Z3_FLAGS[@]}" \
+        -c --c-no-main --c-no-rts --c-preserve main \
         "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
+    local optimized_splice_flags=()
+    local relative
+    while IFS= read -r relative || [ -n "$relative" ]; do
+      [ -z "$relative" ] && continue
+      optimized_splice_flags+=(--splice "$C_OPTIMISED_DIR/$relative")
+    done < "$C_OPTIMISED_MANIFEST"
     local profile_splice_flags=()
     if [ "$EVM_PROFILE" = on ]; then
-      profile_splice_flags=(--splice "$C_PROFILE_SPLICE")
+      while IFS= read -r relative || [ -n "$relative" ]; do
+        [ -z "$relative" ] && continue
+        profile_splice_flags+=(--splice "$C_PROFILE_DIR/$relative")
+      done < "$C_PROFILE_MANIFEST"
     fi
-    ( cd "$ROOT" && "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts \
+    ( cd "$ROOT" && "$SAIL" "${SAIL_Z3_FLAGS[@]}" \
+        -c -O --Oconstant-fold --c-no-main --c-no-rts \
         --c-preserve main --c-preserve leaf_child_ref \
         --c-preserve resume_frame \
-        --c-specialize --c-require-bounded-int \
+        --c-specialize --c-specialize-log --c-require-bounded-int \
         "${MODEL_INCLUDE_FLAGS[@]}" \
-        --splice "$C_SPLICE" \
+        "${optimized_splice_flags[@]}" \
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" \
@@ -188,65 +205,57 @@ compile_common() {
       -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
-  # 2b. Selected model backend. The spec and optimized builds each own their
-  #     complete FFI implementation; only standardized platform headers are shared.
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/state.c" -o "$BUILD/model_state.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/hash.c" -o "$BUILD/hash.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/code.c" -o "$BUILD/model_code.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/region_access.c" -o "$BUILD/region_access.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/address_result.c" -o "$BUILD/model_address_result.o"
-  "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-      -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/frame_stack.c" -o "$BUILD/model_frame_stack.o"
-  HTR_OBJ=""
-  PREIMAGE_OBJ=""
-  MPT_OBJ=""
-  INTERPRETER_OBJ=""
+  # 2b. Selected model backend. Optimized bindings follow the Sail module
+  #     tree and are compiled from one deterministic manifest. The spec backend
+  #     retains its independent GMP ABI and flat implementation.
+  MODEL_BACKEND_OBJS=()
   if [ -z "${GUEST:-}" ]; then
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$MODEL_FFI/preimage.c" -o "$BUILD/preimage.o"
-    PREIMAGE_OBJ="$BUILD/preimage.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$MODEL_FFI/htr.c" -o "$BUILD/htr.o"
-    HTR_OBJ="$BUILD/htr.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$MODEL_FFI/mpt.c" -o "$BUILD/mpt.o"
-    MPT_OBJ="$BUILD/mpt.o"
-    "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-        -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
-    INTERPRETER_OBJ="$BUILD/interpreter.o"
+    while IFS= read -r relative || [ -n "$relative" ]; do
+      case "$relative" in ''|'#'*) continue ;; esac
+      local source="$MODEL_FFI/src/$relative"
+      [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
+      local object_name="${relative%.c}"
+      object_name="${object_name//\//__}"
+      local object="$BUILD/optimized__${object_name}.o"
+      "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+          -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+          -c "$source" -o "$object"
+      MODEL_BACKEND_OBJS+=("$object")
+    done < "$MODEL_FFI/sources.list"
+  else
+    local source_and_name source object
+    local -a backend_sources=(
+      "state.c:model_state"
+      "hash.c:hash"
+      "code.c:model_code"
+      "region_access.c:region_access"
+      "address_result.c:model_address_result"
+      "frame_stack.c:model_frame_stack"
+      "precompiles.c:precompiles"
+      "capacity.c:capacity"
+      "memory.c:memory"
+      "scratch.c:scratch"
+      "transient_storage.c:transient_storage"
+      "stack.c:stack"
+      "code_db.c:code_db"
+      "kernel_state.c:kernel_state"
+      "output.c:output"
+      "trie_node_db.c:trie_node_db"
+      "state_db.c:state_db"
+    )
+    for source_and_name in "${backend_sources[@]}"; do
+      source="${source_and_name%:*}"
+      object="$BUILD/${source_and_name##*:}.o"
+      "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+          -Wno-unused -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+          -c "$MODEL_FFI/$source" -o "$object"
+      MODEL_BACKEND_OBJS+=("$object")
+    done
   fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
   "$GCC" "${CFLAGS[@]}" -I"$lib" \
       -Wno-unused -Wno-error=implicit-function-declaration \
       -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
-  # 3b. The precompile adapter is platform-neutral and calls only the standard
-  #     zkvm_accelerators.h interface.
-  "$GCC" "${CFLAGS[@]}" -I"$lib" \
-      -I"$BUILD" -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -Wno-unused -c "$MODEL_FFI/precompiles.c" -o "$BUILD/precompiles.o"
-  # 3c. C host backends: nominal region access, transient storage,
-  #     output arena, operand stack, code/JUMPDEST arenas, and witness/account
-  #     databases.
-  for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db output; do
-    "$GCC" "${CFLAGS[@]}" -I"$lib" \
-        -I"$BUILD" -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-        -Wno-unused -c "$MODEL_FFI/$hc.c" -o "$BUILD/$hc.o"
-  done
 }
 
 compile_profile_scope() {
@@ -308,14 +317,7 @@ cmd_zisk_lib() {
   rm -f "$BUILD/libevmsail_zisk.a"
   "$AR" crs "$BUILD/libevmsail_zisk.a" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
-      "$BUILD/precompiles.o" \
-      "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" \
-      ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"} \
-      ${HTR_OBJ:+"$HTR_OBJ"} \
-      ${MPT_OBJ:+"$MPT_OBJ"} \
-      ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
-      "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
+      "${MODEL_BACKEND_OBJS[@]}" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} "$BUILD/zkvm_block.o"
   echo "built $BUILD/libevmsail_zisk.a"
 }
@@ -324,14 +326,7 @@ link_guest() {
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/precompiles.o" "$BUILD/accel_guest.o" \
-      "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" \
-      ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"} \
-      ${HTR_OBJ:+"$HTR_OBJ"} \
-      ${MPT_OBJ:+"$MPT_OBJ"} \
-      ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"} \
-      "$BUILD/memory.o" "$BUILD/scratch.o" "$BUILD/transient_storage.o" "$BUILD/state_db.o" "$BUILD/stack.o" \
-      "$BUILD/code_db.o" "$BUILD/kernel_state.o" "$BUILD/trie_node_db.o" "$BUILD/output.o" "$BUILD/capacity.o" \
+      "$BUILD/accel_guest.o" "${MODEL_BACKEND_OBJS[@]}" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \
       "$BUILD/zkvm_block.o" \
       -o "$BUILD/zkvm_guest.elf"

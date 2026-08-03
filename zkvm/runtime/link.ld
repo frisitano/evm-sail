@@ -37,6 +37,7 @@ MEMORY
 {
   MAIN  (rwxa) : ORIGIN = 0x80000000, LENGTH = 0x10000000  /* 256 MiB */
   STACK (rw)   : ORIGIN = 0x90010000, LENGTH = 0x04000000  /*  64 MiB */
+  WORKSPACE (rw) : ORIGIN = 0xA0000000, LENGTH = 0x10000000 /* 256 MiB */
 }
 
 /* Size of the unmapped guard gap immediately below the stack bottom (>= 4 KiB).
@@ -46,6 +47,8 @@ __stack_guard_size = ORIGIN(STACK) - (ORIGIN(MAIN) + LENGTH(MAIN));
 /* Stack: bottom at the start of the STACK region, top (initial sp) at its end. */
 __stack_bottom = ORIGIN(STACK);
 __stack_top    = ORIGIN(STACK) + LENGTH(STACK);
+__workspace_start = ORIGIN(WORKSPACE);
+__workspace_end = ORIGIN(WORKSPACE) + LENGTH(WORKSPACE);
 
 SECTIONS
 {

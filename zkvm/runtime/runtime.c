@@ -11,7 +11,7 @@
  *     heap region, with a first-fit free list + coalescing,
  *   - the mem-copy/compare family + strlen (gcc emits calls to these for
  *     struct copies even under -ffreestanding) and qsort
- *     (ffi/optimized/state_db.c BAL sorting),
+ *     (ffi/optimized/src/host/state/store.c BAL sorting),
  *   - the standardized termination mapping: abort()/exit, the Sail failure
  *     contract (sail_assert / sail_failure / sail_match_failure), and the
  *     trap-vector handler all halt the machine and report ABNORMAL termination
@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+
 #include <stdbool.h>
 
 #include "stdio.h"
@@ -121,11 +122,32 @@ int __clzdi2(uint64_t value)
     return count;
 }
 
+int __ctzdi2(uint64_t value)
+{
+    int count = 0;
+    uint64_t mask = UINT64_C(1);
+    while (mask != 0 && (value & mask) == 0) {
+        mask <<= 1;
+        count++;
+    }
+    return count;
+}
+
 uint64_t __bswapdi2(uint64_t value)
 {
     volatile uint64_t result = 0;
     for (unsigned i = 0; i < 8; i++) {
         result = (result << 8) | (value & UINT64_C(0xff));
+        value >>= 8;
+    }
+    return result;
+}
+
+uint32_t __bswapsi2(uint32_t value)
+{
+    volatile uint32_t result = 0;
+    for (unsigned i = 0; i < 4; i++) {
+        result = (result << 8) | (value & UINT32_C(0xff));
         value >>= 8;
     }
     return result;
@@ -248,7 +270,7 @@ size_t strlen(const char *s)
  * (rather than a pure bump allocator) keeps the working set bounded. */
 
 #ifdef EVMSAIL_EXTERNAL_HEAP
-extern void evmsail_heap_region(char **start, char **end);
+extern void heap_region(char **start, char **end);
 #else
 extern char __heap_start[];
 extern char __heap_end[];
@@ -277,7 +299,7 @@ static void heap_init(void)
     char *heap_start;
     char *heap_end;
 #ifdef EVMSAIL_EXTERNAL_HEAP
-    evmsail_heap_region(&heap_start, &heap_end);
+    heap_region(&heap_start, &heap_end);
 #else
     heap_start = __heap_start;
     heap_end = __heap_end;
@@ -425,7 +447,8 @@ void cleanup_rts(void) {}
 
 /* qsort: heapsort -- in-place, no recursion, no allocation, O(n log n) worst
  * case, fully deterministic for a total-order comparator (the BAL builder in
- * ffi/optimized/state_db.c sorts consensus-critical row arrays through this). */
+ * ffi/optimized/src/host/state/store.c sorts consensus-critical row arrays
+ * through this). */
 static void qsort_swap(char *a, char *b, size_t sz)
 {
     while (sz--) {

@@ -677,8 +677,9 @@ function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> ha
         1,
     )
 
-/*! The fixed-width execution-request element whose root occupies a list
-    leaf. */
+/*! The closed fixed-width leaf-operation algebra carried through the generic
+    request-list recursion. [htr_request_leaf][] interprets it at depth zero,
+    replacing a higher-order leaf function without duplicating merkleization. */
 enum HtrRequestKind = {
     HtrDeposit,
     HtrWithdrawalRequest,

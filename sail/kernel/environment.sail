@@ -9,7 +9,7 @@ environment reads the `evm` layer serves opcodes from.
     read. */
 register k_parent_state_root : hash = ZERO_HASH
 /*! The number of witnessed ancestor headers ([k_blockhash][] range). */
-register k_n_headers : item_count = 0
+register k_n_headers : ancestor_hash_count = 0
 /*! The chain id (`CHAINID`, EIP-155 domains). */
 register k_chain_id : chain_identifier = 1
 /*! The active protocol policy and all gas limits derived from the executing
@@ -45,11 +45,15 @@ register k_tx : TxEnv =
         gas_price = ZERO_WORD,
         blob_hashes = EMPTY_BLOB_HASHES,
     } : TxEnvFields(blob_schedule_inactive_count))
-/*! The EIP-7928 position stamped on committed state changes in the current
-    execution phase. */
-register k_block_access_index : block_access_index = 0
+/*! The current execution epoch: zero for pre-execution effects, transaction
+    index plus one during transaction execution, and transaction count plus
+    one for post-execution effects. EIP-2929 warmth and EIP-7928 BAL changes
+    share this transaction-scoped identity. */
+register k_current_transaction_epoch : block_access_index = 0
 
-/*! The environment fields opcodes read through [k_env][]. */
+/*! The closed environment-projection algebra interpreted by [k_env][]. Each
+    opcode supplies one constant member, so the shared projection remains
+    explicit and first-order for executable and proof backends. */
 enum EnvField = {
     /* block number (`NUMBER`) */
     F_Number,

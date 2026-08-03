@@ -32,8 +32,8 @@ static bool private_input_ready;
 static const uint8_t empty_region;
 
 
-#define SLICE_OFF(slice) evmsail_byte_quantity_value((slice).zoff)
-#define SLICE_LEN(slice) evmsail_byte_quantity_value((slice).zlen)
+#define SLICE_OFF(slice) ((slice).zoff)
+#define SLICE_LEN(slice) ((slice).zlen)
 
 static void acquire_private_input(void) {
   if (!private_input_ready) {
@@ -113,12 +113,12 @@ const uint8_t *evmsail_output_ptr(uint64_t off, uint64_t len) {
 
 #define DEFINE_SLICE_VALUE(name, type)                                       \
   static void name(struct type *out, uint64_t off, uint64_t len) {            \
-    evmsail_byte_quantity_set(&out->zoff, off);                               \
-    evmsail_byte_quantity_set(&out->zlen, len);                               \
+    out->zoff = off;                                                          \
+    out->zlen = len;                                                          \
   }
 
 DEFINE_SLICE_VALUE(stateless_input_value, zStatelessInputSliceFields)
-DEFINE_SLICE_VALUE(memory_slice_value, zMemorySliceFields)
+DEFINE_SLICE_VALUE(memory_slice_value, zEvmMemorySliceFields)
 DEFINE_SLICE_VALUE(scratch_slice_value, zScratchSliceFields)
 
 #undef DEFINE_SLICE_VALUE
@@ -131,7 +131,7 @@ static void full_input_value(struct zStatelessInputSliceFields *out) {
       (uint64_t)private_input_size);
 }
 
-static void expanded_memory_value(struct zMemorySliceFields *out,
+static void expanded_memory_value(struct zEvmMemorySliceFields *out,
                                   uint64_t len) {
   memory_slice_value(out, evm_memory_expand(len), len);
 }
@@ -144,18 +144,23 @@ static void node_lookup_value(struct zStatelessInputSliceFields *out,
   stateless_input_value(out, off, len);
 }
 
-void stateless_input(struct zStatelessInputSliceFields *out, unit u) {
+struct zStatelessInputSliceFields stateless_input(unit u) {
+  struct zStatelessInputSliceFields out;
   (void)u;
-  full_input_value(out);
+  full_input_value(&out);
+  return out;
 }
 
-void mem_expand(struct zMemorySliceFields *out,
-                EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
-  expanded_memory_value(out, evmsail_byte_quantity_value(len));
+struct zEvmMemorySliceFields mem_expand(uint64_t len) {
+  struct zEvmMemorySliceFields out;
+  expanded_memory_value(&out, len);
+  return out;
 }
 
-void nodedb_lookup(struct zStatelessInputSliceFields *out, sail_fixed_bytes_32 hash) {
-  node_lookup_value(out, hash);
+struct zStatelessInputSliceFields nodedb_lookup(sail_fixed_bytes_32 hash) {
+  struct zStatelessInputSliceFields out;
+  node_lookup_value(&out, hash);
+  return out;
 }
 
 static uint64_t region_byte_at(span_resolver resolve, uint64_t off,
@@ -246,44 +251,34 @@ static unit region_copy_to_memory(span_resolver resolve, uint64_t off,
 }
 
 #define DEFINE_SLICE_BYTE(prefix, type, resolver)                             \
-  uint64_t prefix##_byte_at(struct type slice,                                \
-                            EVMSAIL_BYTE_QUANTITY_PARAM(index)) {              \
+  uint64_t prefix##_byte_at(struct type slice, uint64_t index) {              \
     return region_byte_at(resolver, SLICE_OFF(slice), SLICE_LEN(slice),        \
-                          evmsail_byte_quantity_value(index));                 \
+                          index);                                              \
   }
 
 #define DEFINE_SLICE_LOAD(prefix, type, resolver)                             \
-  sail_u256 prefix##_load_word(                                                \
-      struct type slice, EVMSAIL_BYTE_QUANTITY_PARAM(index)) {                 \
+  sail_u256 prefix##_load_word(struct type slice, uint64_t index) {            \
     return region_load_word(resolver, SLICE_OFF(slice), SLICE_LEN(slice),      \
-                            evmsail_byte_quantity_value(index));                \
+                            index);                                             \
   }
 
 #define DEFINE_SLICE_LOAD_N(prefix, type, resolver)                           \
-  sail_u256 prefix##_load_n_word(                                              \
-      struct type slice,                                                       \
-      EVMSAIL_BYTE_QUANTITY_PARAM(index),                                      \
-      EVMSAIL_BYTE_QUANTITY_PARAM(len)) {                                      \
+  sail_u256 prefix##_load_n_word(struct type slice, uint64_t index,            \
+                                 uint64_t len) {                               \
     return region_load_n_word(resolver, SLICE_OFF(slice), SLICE_LEN(slice),    \
-                              evmsail_byte_quantity_value(index),               \
-                              evmsail_byte_quantity_value(len));                \
+                              index, len);                                      \
   }
 
 #define DEFINE_SLICE_COPY(prefix, type, resolver)                             \
-  unit prefix##_copy_to_memory(struct type slice,                              \
-                               EVMSAIL_BYTE_QUANTITY_PARAM(dst),                \
-                               EVMSAIL_BYTE_QUANTITY_PARAM(index),              \
-                               EVMSAIL_BYTE_QUANTITY_PARAM(len)) {              \
+  unit prefix##_copy_to_memory(struct type slice, uint64_t dst,                \
+                               uint64_t index, uint64_t len) {                 \
     return region_copy_to_memory(                                              \
-        resolver, SLICE_OFF(slice), SLICE_LEN(slice),                          \
-        evmsail_byte_quantity_value(dst),                                      \
-        evmsail_byte_quantity_value(index),                                    \
-        evmsail_byte_quantity_value(len));                                     \
+        resolver, SLICE_OFF(slice), SLICE_LEN(slice), dst, index, len);        \
   }
 
 DEFINE_SLICE_BYTE(stateless_input, zStatelessInputSliceFields,
                   evmsail_stateless_input_ptr)
-DEFINE_SLICE_BYTE(memory_slice, zMemorySliceFields, evmsail_memory_ptr)
+DEFINE_SLICE_BYTE(memory_slice, zEvmMemorySliceFields, evmsail_memory_ptr)
 DEFINE_SLICE_BYTE(code_region, zCodeRegionSliceFields, evmsail_code_ptr)
 DEFINE_SLICE_BYTE(scratch_slice, zScratchSliceFields, evmsail_scratch_ptr)
 DEFINE_SLICE_BYTE(log_data_slice, zLogDataSliceFields, evmsail_log_data_ptr)
@@ -291,7 +286,7 @@ DEFINE_SLICE_BYTE(output_slice, zOutputSliceFields, evmsail_output_ptr)
 
 DEFINE_SLICE_LOAD(stateless_input, zStatelessInputSliceFields,
                   evmsail_stateless_input_ptr)
-DEFINE_SLICE_LOAD(memory_slice, zMemorySliceFields, evmsail_memory_ptr)
+DEFINE_SLICE_LOAD(memory_slice, zEvmMemorySliceFields, evmsail_memory_ptr)
 DEFINE_SLICE_LOAD(code_region, zCodeRegionSliceFields, evmsail_code_ptr)
 DEFINE_SLICE_LOAD(scratch_slice, zScratchSliceFields, evmsail_scratch_ptr)
 DEFINE_SLICE_LOAD(log_data_slice, zLogDataSliceFields, evmsail_log_data_ptr)
@@ -304,7 +299,7 @@ DEFINE_SLICE_LOAD_N(scratch_slice, zScratchSliceFields, evmsail_scratch_ptr)
 
 DEFINE_SLICE_COPY(stateless_input, zStatelessInputSliceFields,
                   evmsail_stateless_input_ptr)
-DEFINE_SLICE_COPY(memory_slice, zMemorySliceFields, evmsail_memory_ptr)
+DEFINE_SLICE_COPY(memory_slice, zEvmMemorySliceFields, evmsail_memory_ptr)
 DEFINE_SLICE_COPY(code_region, zCodeRegionSliceFields, evmsail_code_ptr)
 DEFINE_SLICE_COPY(output_slice, zOutputSliceFields, evmsail_output_ptr)
 
@@ -313,35 +308,27 @@ DEFINE_SLICE_COPY(output_slice, zOutputSliceFields, evmsail_output_ptr)
 #undef DEFINE_SLICE_LOAD_N
 #undef DEFINE_SLICE_COPY
 
-void stateless_input_count_nonzero(
-    sail_int *out, struct zStatelessInputSliceFields slice) {
-  evmsail_byte_quantity_set(
-      out, region_count_nonzero(evmsail_stateless_input_ptr, SLICE_OFF(slice),
-                                SLICE_LEN(slice)));
+uint64_t stateless_input_count_nonzero(
+    struct zStatelessInputSliceFields slice) {
+  return region_count_nonzero(evmsail_stateless_input_ptr, SLICE_OFF(slice),
+                              SLICE_LEN(slice));
 }
 
 
 bool stateless_input_strided_zero(
     struct zStatelessInputSliceFields slice,
-    EVMSAIL_BYTE_QUANTITY_PARAM(start),
-    EVMSAIL_BYTE_QUANTITY_PARAM(stride),
-    EVMSAIL_BYTE_QUANTITY_PARAM(width),
-    EVMSAIL_BYTE_QUANTITY_PARAM(count)) {
+    uint64_t start, uint64_t stride, uint64_t width, uint64_t count) {
   return region_strided_zero(
       evmsail_stateless_input_ptr, SLICE_OFF(slice), SLICE_LEN(slice),
-      evmsail_byte_quantity_value(start), evmsail_byte_quantity_value(stride),
-      evmsail_byte_quantity_value(width), evmsail_byte_quantity_value(count));
+      start, stride, width, count);
 }
 
 bool memory_slice_strided_zero(
-    struct zMemorySliceFields slice, EVMSAIL_BYTE_QUANTITY_PARAM(start),
-    EVMSAIL_BYTE_QUANTITY_PARAM(stride),
-    EVMSAIL_BYTE_QUANTITY_PARAM(width),
-    EVMSAIL_BYTE_QUANTITY_PARAM(count)) {
+    struct zEvmMemorySliceFields slice, uint64_t start, uint64_t stride,
+    uint64_t width, uint64_t count) {
   return region_strided_zero(
       evmsail_memory_ptr, SLICE_OFF(slice), SLICE_LEN(slice),
-      evmsail_byte_quantity_value(start), evmsail_byte_quantity_value(stride),
-      evmsail_byte_quantity_value(width), evmsail_byte_quantity_value(count));
+      start, stride, width, count);
 }
 
 static bool regions_equal(span_resolver left_resolver, uint64_t left_off,
@@ -404,17 +391,15 @@ static void scratch_result_value(struct zScratchRegionResult *result,
     return;
   }
   result->kind = Kind_zScratchRegionReady;
-  CREATE(sail_int)(&result->variants.zScratchRegionReady.zoff);
-  CREATE(sail_int)(&result->variants.zScratchRegionReady.zlen);
   scratch_slice_value(
       &result->variants.zScratchRegionReady,
       0,
       end);
 }
 
-void scratch_store_byte(struct zScratchRegionResult *result,
-                        EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t data) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+void scratch_store_byte(struct zScratchRegionResult *result, uint64_t off,
+                        uint64_t data) {
+  const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 1);
   if (!out) {
     scratch_result_value(result, false, 0);
@@ -449,8 +434,8 @@ static void scratch_store_region(struct zScratchRegionResult *result,
 
 #define DEFINE_SCRATCH_STORE(name, type, resolver)                            \
   void name(struct zScratchRegionResult *result,                              \
-            EVMSAIL_BYTE_QUANTITY_PARAM(off), struct type slice) {            \
-    scratch_store_region(result, evmsail_byte_quantity_value(off), resolver,   \
+            uint64_t off, struct type slice) {                                \
+    scratch_store_region(result, off, resolver,                               \
                          SLICE_OFF(slice), SLICE_LEN(slice));                  \
   }
 
@@ -466,9 +451,8 @@ DEFINE_SCRATCH_STORE(scratch_store_output, zOutputSliceFields,
 #undef DEFINE_SCRATCH_STORE
 
 void scratch_store_address(struct zScratchRegionResult *result,
-                           EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                           sail_fixed_bytes_20 data) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+                           uint64_t off, sail_fixed_bytes_20 data) {
+  const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
   if (!out) {
     scratch_result_value(result, false, 0);
@@ -480,9 +464,9 @@ void scratch_store_address(struct zScratchRegionResult *result,
 }
 
 void scratch_store_b256(struct zScratchRegionResult *result,
-                        EVMSAIL_BYTE_QUANTITY_PARAM(off), sail_fixed_bytes_32 data,
+                        uint64_t off, sail_fixed_bytes_32 data,
                         uint64_t len) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+  const uint64_t dst = off;
   if (len > 32) {
     scratch_result_value(result, false, 0);
     return;
@@ -498,9 +482,9 @@ void scratch_store_b256(struct zScratchRegionResult *result,
 }
 
 void scratch_store_fixed_bytes_256(struct zScratchRegionResult *result,
-                                   EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                                   uint64_t off,
                                    sail_fixed_bytes_256 data) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+  const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out) {
     scratch_result_value(result, false, 0);
@@ -513,8 +497,8 @@ void scratch_store_fixed_bytes_256(struct zScratchRegionResult *result,
 
 void scratch_store_receipt_logs_bloom(
     struct zScratchRegionResult *result,
-    EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t start, uint64_t count) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+    uint64_t off, uint64_t start, uint64_t count) {
+  const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out || !evmsail_receipt_logs_bloom_write(start, count, out)) {
     scratch_result_value(result, false, 0);
@@ -525,9 +509,9 @@ void scratch_store_receipt_logs_bloom(
 }
 
 void scratch_store_word(struct zScratchRegionResult *result,
-                        EVMSAIL_BYTE_QUANTITY_PARAM(off),
+                        uint64_t off,
                         const sail_u256 data, uint64_t len) {
-  const uint64_t dst = evmsail_byte_quantity_value(off);
+  const uint64_t dst = off;
   if (len > 32) {
     scratch_result_value(result, false, 0);
     return;
@@ -554,7 +538,7 @@ bool public_output_write(struct zScratchSliceFields output) {
   return true;
 }
 
-bool output_buffer_store_memory(struct zMemorySliceFields slice) {
+bool output_buffer_store_memory(struct zEvmMemorySliceFields slice) {
   return output_buffer_store_bytes(
       evmsail_memory_ptr(SLICE_OFF(slice), SLICE_LEN(slice)),
       SLICE_LEN(slice));
@@ -603,15 +587,12 @@ bool accelerator_ripemd160(struct zCalldataSlice input) {
 }
 
 bool accelerator_modexp(struct zCalldataSlice input,
-                        EVMSAIL_BYTE_QUANTITY_PARAM(base_len),
-                        EVMSAIL_BYTE_QUANTITY_PARAM(exponent_len),
-                        EVMSAIL_BYTE_QUANTITY_PARAM(modulus_len)) {
+                        uint64_t base_len, uint64_t exponent_len,
+                        uint64_t modulus_len) {
   CALL_ACCELERATOR(
       input,
       accelerator_modexp_bytes(
-          bytes, len, evmsail_byte_quantity_value(base_len),
-          evmsail_byte_quantity_value(exponent_len),
-          evmsail_byte_quantity_value(modulus_len)));
+          bytes, len, base_len, exponent_len, modulus_len));
 }
 
 bool accelerator_bn254_add(struct zCalldataSlice input) {

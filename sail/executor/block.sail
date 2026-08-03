@@ -8,9 +8,9 @@ accounting, withdrawals, and block-end request collection.
 /*! Everything block validation needs from a successfully executed body: gas
     and blob-gas totals, receipts, and the collected EIP-7685 requests. */
 struct BlockExecutionResult = {
-    header_gas_used : gas,
-    execution_gas_used : gas,
-    state_gas_used : gas,
+    header_gas_used : block_gas,
+    execution_gas_used : block_gas,
+    state_gas_used : block_gas,
     blob_gas_used : blob_gas_used,
     first_tx_recipient : address,
     receipts_root : hash,
@@ -18,21 +18,88 @@ struct BlockExecutionResult = {
     requests : ExecutionRequests,
 }
 
-let PRE_MERGE_BLOCK_REWARD = unsigned(0x1bc16d674ec80000)
+/*! The two independent block gas dimensions introduced by Amsterdam. Earlier
+    forks use only `execution`; `state` remains zero. Indexing the accumulator
+    by the concrete header limit makes an over-limit intermediate
+    unrepresentable after transaction admission. */
+type block_gas_usage_relation(
+    'limit : Int,
+    'execution : Int,
+    'state : Int,
+    'receipts : Int,
+) -> Bool =
+       0 <= 'limit
+    &  'limit <= block_gas_limit_bound
+    &  0 <= 'execution
+    &  'execution <= 'limit
+    &  0 <= 'state
+    &  'state <= 'limit
+    &  0 <= 'receipts
+    &  'receipts <= 'execution + 'state
 
-/*! Returns a block's remaining gas, rejecting an accumulated value above the
-    header limit with the block-validation error required by EIP-7778. */
-val remaining_block_gas : forall 'limit 'used,
-    0 <= 'limit
-    & 'limit <= block_gas_limit_bound
-    & 0 <= 'used.
-    (int('limit), int('used)) -> range(0, 'limit)
-function remaining_block_gas(limit, used) =
-    if used <= limit then {
-        limit - used
-    } else {
-        throw InvalidBlock(GasUsedExceedsLimit)
+/*! The exact execution, state, and receipt gas accumulated under one block
+    header gas limit. */
+struct BlockGasUsageFields(
+    'limit : Int,
+    'execution : Int,
+    'state : Int,
+    'receipts : Int,
+), block_gas_usage_relation('limit, 'execution, 'state, 'receipts) = {
+    execution : int('execution),
+    state : int('state),
+    receipts : int('receipts),
+}
+
+/*! A block gas accumulator existentially hiding its current totals while
+    retaining their relationship to the concrete header limit. */
+type BlockGasUsageFor('limit : Int) = {
+    'execution 'state 'receipts,
+    block_gas_usage_relation('limit, 'execution, 'state, 'receipts).
+    BlockGasUsageFields('limit, 'execution, 'state, 'receipts)
+}
+
+val block_gas_usage_empty : forall 'limit, 0 <= 'limit & 'limit <= block_gas_limit_bound. int('limit) -> BlockGasUsageFields(
+        'limit,
+        0,
+        0,
+        0,
+    )
+function block_gas_usage_empty(_limit) =
+    struct { execution = 0, state = 0, receipts = 0 }
+
+/*! Adds gas contributions whose transaction allowance was already checked
+    against the exact remaining block budgets. No overflow/limit test is
+    repeated here: the dependent preconditions are the admission proof. */
+val block_gas_usage_add : forall 'limit 'execution 'state 'receipts 'add_execution 'add_state 'add_receipt,
+                               block_gas_usage_relation('limit, 'execution, 'state, 'receipts)
+                            &  0
+                            <= 'add_execution
+                            &  'add_execution
+                            <= 'limit
+                            -  'execution
+                            &  0
+                            <= 'add_state
+                            &  'add_state
+                            <= 'limit
+                            -  'state
+                            &  0
+                            <= 'add_receipt
+                            &  'add_receipt
+                            <= 'add_execution
+                            +  'add_state. (
+        BlockGasUsageFields('limit, 'execution, 'state, 'receipts),
+        int('add_execution),
+        int('add_state),
+        int('add_receipt),
+    ) -> BlockGasUsageFields('limit, 'execution + 'add_execution, 'state + 'add_state, 'receipts + 'add_receipt)
+function block_gas_usage_add(usage, add_execution, add_state, add_receipt) =
+    struct {
+        execution = usage.execution + add_execution,
+        state = usage.state + add_state,
+        receipts = usage.receipts + add_receipt,
     }
+
+let PRE_MERGE_BLOCK_REWARD = unsigned(0x1bc16d674ec80000)
 
 /*! The block-start writes: beacon root (Cancun+, EIP-4788) and parent
     hash history (Prague+, EIP-2935). */
@@ -67,9 +134,8 @@ function execute_block_transactions(
         (public_keys_length != public_key_count_value * public_key_length) then {
         throw InvalidBlock(WitnessDeficient)
     };
-    let gas_limit = gas_limits.block_limit;
-    var execution_gas_acc : gas = GAS_ZERO;
-    var state_gas_acc : gas = GAS_ZERO;
+    let (gas_limit as 'gas_limit) = gas_limits.block_limit;
+    var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
     var receipts = receipt_accumulator_empty();
@@ -88,63 +154,75 @@ function execute_block_transactions(
         let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
         keys = slice_suffix(keys_fields, public_key_length);
         let tx = decode_transaction(transaction, public_key);
-        k_block_access_index = i + 1;
+        k_current_transaction_epoch = i + 1;
         if i == 0 then {
             tx0_to = tx.recipient
         };
-        let available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc);
-        let available_state_gas = remaining_block_gas(gas_limit, state_gas_acc);
+
+        /* A local binding opens the existential accumulator, retaining its
+           concrete execution/state indices for this admission step. */
+        let usage = gas_usage;
+        let available_execution_gas = gas_limit - usage.execution;
+        let available_state_gas = gas_limit - usage.state;
         let allowance = transaction_gas_allowance(
             tx.gas_limit,
             gas_limits.transaction_total_limit,
             gas_limits.transaction_regular_limit,
         );
-        let transaction_fits : bool = if profile.fork >= Amsterdam then {
-                (allowance.regular <= available_execution_gas) &
-                (allowance.total <= available_state_gas)
-            } else {
-                allowance.total <= available_execution_gas
-            };
-        if not_bool(transaction_fits) then {
-            throw InvalidBlock(GasUsedExceedsLimit)
-        } else {
-            let tx_blob_gas : transaction_blob_gas =
-                sizeof(gas_per_blob_value) * tx.blob_hashes.count;
-            let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
-                    blob_gas_acc
-                } else {
-                    block_blob_gas_add(
-                        profile.blob_schedule.max,
-                        blob_gas_acc,
-                        tx_blob_gas,
-                    )
-                };
-            let receipt = process_transaction(tx, allowance);
-            execution_gas_acc = conserved_gas_add(execution_gas_acc, receipt.execution_gas);
-            state_gas_acc = conserved_gas_add(state_gas_acc, receipt.state_gas);
-            if (gas_limit < execution_gas_acc) | (gas_limit < state_gas_acc) then {
+        if profile.fork >= Amsterdam then {
+            if (available_execution_gas < allowance.regular) | (available_state_gas < allowance.total) then {
                 throw InvalidBlock(GasUsedExceedsLimit)
-            };
-            receipts = receipt_accumulator_push(receipts, receipt, next.index);
-            if profile.fork >= Prague then {
-                remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
-            };
-            blob_gas_acc = next_blob_gas
+            } else {
+                let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
+                let next_blob_gas : blob_gas_used = block_blob_gas_add(
+                    profile.blob_schedule.max,
+                    blob_gas_acc,
+                    tx_blob_gas,
+                );
+                let receipt = process_transaction(tx, allowance);
+                let next_usage = block_gas_usage_add(usage, receipt.execution_gas, receipt.state_gas, receipt.gas_used);
+                gas_usage = next_usage;
+                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                if profile.fork >= Prague then {
+                    remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
+                };
+                blob_gas_acc = next_blob_gas
+            }
+        } else {
+            if available_execution_gas < allowance.total then {
+                throw InvalidBlock(GasUsedExceedsLimit)
+            } else {
+                let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
+                let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
+                        blob_gas_acc
+                    } else {
+                        block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, tx_blob_gas)
+                    };
+                let receipt = process_transaction(tx, allowance);
+                let next_usage = block_gas_usage_add(usage, receipt.gas_used, 0, receipt.gas_used);
+                gas_usage = next_usage;
+                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                if profile.fork >= Prague then {
+                    remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
+                };
+                blob_gas_acc = next_blob_gas
+            }
         }
     };
     if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    let header_gas_used = if (profile.fork >= Amsterdam) & (execution_gas_acc < state_gas_acc) then {
-            state_gas_acc
+    let final_usage = gas_usage;
+    let header_gas_used = if (profile.fork >= Amsterdam) & (final_usage.execution < final_usage.state) then {
+            final_usage.state
         } else {
-            execution_gas_acc
+            final_usage.execution
         };
     let receipts_root = receipt_accumulator_root(receipts);
     struct {
         header_gas_used = header_gas_used,
-        execution_gas_used = execution_gas_acc,
-        state_gas_used = state_gas_acc,
+        execution_gas_used = final_usage.execution,
+        state_gas_used = final_usage.state,
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
         receipts_root = receipts_root,
@@ -194,15 +272,13 @@ function execute_block_body(
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     bal_reset();
-    k_block_access_index = 0;
+    k_current_transaction_epoch = 0;
+    warm_reset(k_current_transaction_epoch);
     run_block_start_system_calls();
-    let result = execute_block_transactions(
-        body.transactions,
-        public_keys,
-        expected_deposits,
-    );
+    let result = execute_block_transactions(body.transactions, public_keys, expected_deposits);
     let post_tx_index = body.transactions.count + 1;
-    k_block_access_index = post_tx_index;
+    k_current_transaction_epoch = post_tx_index;
+    warm_reset(k_current_transaction_epoch);
     apply_block_end_state(body);
     let requests = if profile.fork >= Prague then {
             collect_execution_requests(expected_deposits)

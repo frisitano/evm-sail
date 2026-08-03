@@ -8,76 +8,6 @@ or re-encodes the list: the original source-backed slice is also the value
 hashed into the execution-payload header.
 */
 
-/*! Counts one logical BAL item and enforces `gas_limit / 2000` without a
-    separate sizing pass. */
-function bal_count_item(count : item_count, maximum : item_count) -> item_count =
-    if count < maximum then {
-        count + 1
-    } else {
-        throw InvalidBlock(BlockAccessListTooLarge)
-    }
-
-/*! Requires a canonical RLP list and returns its child cursor. */
-val bal_ref_cursor : forall 'source_off 'source_len 'content_len,
-                       rlp_field_ref_valid('source_off, 'source_len, 'content_len). RlpFieldRef(
-        'source_off,
-        'source_len,
-        'content_len,
-    ) -> RlpCursor('source_off + ('source_len - 'content_len), 'content_len)
-function bal_ref_cursor(f) =
-    if f.is_list & rlp_ref_framing_canonical(f) then {
-        rlp_decode_list(f)
-    } else {
-        throw InvalidBlock(InvalidBlockAccessList)
-    }
-
-/*! Requires a canonical RLP byte string and returns its content slice. */
-function bal_ref_bytes forall 'source_off 'source_len 'content_len,
-                         rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
-    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    StatelessInputSlice
-) =
-    if rlp_ref_bytes_canonical(f) then {
-        rlp_item_content(f)
-    } else {
-        throw InvalidBlock(InvalidBlockAccessList)
-    }
-
-/*! Requires a canonical RLP integer in the EVM-word domain. */
-function bal_ref_word forall 'source_off 'source_len 'content_len,
-                        rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
-    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    word
-) =
-    if rlp_item_uint_canonical(f) & (f.content_len <= 32) then {
-        rlp_decode_word(f)
-    } else {
-        throw InvalidBlock(InvalidBlockAccessList)
-    }
-
-/*! Requires a canonical RLP integer in the host-index/nonce domain. */
-function bal_ref_uint64 forall 'source_off 'source_len 'content_len,
-                          rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
-    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
-    ssz_uint
-) =
-    if rlp_item_uint_canonical(f) & (f.content_len <= 8) then {
-        rlp_decode_uint64(f)
-    } else {
-        throw InvalidBlock(InvalidBlockAccessList)
-    }
-
-/*! Requires that a decoded list has no unconsumed children. */
-function bal_expect_end forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (cursor :
-    RlpCursor('source_off, 'source_len)) -> (
-    unit
-) =
-    if cursor.len == 0 then {
-        ()
-    } else {
-        throw InvalidBlock(InvalidBlockAccessList)
-    }
-
 /*! Compares one canonical `[index, word]` pair. */
 function bal_compare_index_word forall 'source_off 'source_len 'content_len,
                                   rlp_field_ref_valid('source_off, 'source_len, 'content_len). (
@@ -170,14 +100,12 @@ termination_measure bal_validate_storage_change_values(cursor, slot) =
 
 /*! Consumes canonical `[slot, changes]` entries in their encoded order. */
 function bal_validate_storage_changes forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    cursor : RlpCursor('source_off, 'source_len),
-    count : item_count,
-    maximum : item_count,
+    cursor : RlpCursor('source_off, 'source_len)
 ) -> (
-    item_count
+    range(0, 'source_len)
 ) =
     if cursor.len == 0 then {
-        count
+        0
     } else {
         let slot_field = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, slot_field.source.len);
@@ -193,22 +121,19 @@ function bal_validate_storage_changes forall 'source_off 'source_len, source_val
         };
         let slot = bal_ref_word(slot_value);
         bal_validate_storage_change_values(changes, slot);
-        let count = bal_count_item(count, maximum);
-        bal_validate_storage_changes(next, count, maximum)
+        1 + bal_validate_storage_changes(next)
     }
-termination_measure bal_validate_storage_changes(cursor, count, maximum) =
+termination_measure bal_validate_storage_changes(cursor) =
     cursor.len
 
 /*! Consumes the read-only storage slots in their encoded order. */
 function bal_validate_storage_reads forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    cursor : RlpCursor('source_off, 'source_len),
-    count : item_count,
-    maximum : item_count,
+    cursor : RlpCursor('source_off, 'source_len)
 ) -> (
-    item_count
+    range(0, 'source_len)
 ) =
     if cursor.len == 0 then {
-        count
+        0
     } else {
         let slot_field = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, slot_field.source.len);
@@ -221,10 +146,9 @@ function bal_validate_storage_reads forall 'source_off 'source_len, source_valid
             },
             _ => throw InvalidBlock(InvalidBlockAccessList),
         };
-        let count = bal_count_item(count, maximum);
-        bal_validate_storage_reads(next, count, maximum)
+        1 + bal_validate_storage_reads(next)
     }
-termination_measure bal_validate_storage_reads(cursor, count, maximum) =
+termination_measure bal_validate_storage_reads(cursor) =
     cursor.len
 
 /*! Consumes balance changes in their encoded order. */
@@ -288,14 +212,12 @@ termination_measure bal_validate_code_changes(cursor) =
     is the traversal driver; the host iterator supplies exactly one comparison
     event for every decoded semantic value. */
 function bal_validate_accounts forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
-    cursor : RlpCursor('source_off, 'source_len),
-    count : item_count,
-    maximum : item_count,
+    cursor : RlpCursor('source_off, 'source_len)
 ) -> (
-    item_count
+    range(0, 'source_len)
 ) =
     if cursor.len == 0 then {
-        count
+        0
     } else {
         let account_field = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, account_field.source.len);
@@ -326,9 +248,8 @@ function bal_validate_accounts forall 'source_off 'source_len, source_valid_rang
             _ => throw InvalidBlock(InvalidBlockAccessList),
         };
 
-        let count = bal_count_item(count, maximum);
-        let count = bal_validate_storage_changes(bal_ref_cursor(storage_changes_field), count, maximum);
-        let count = bal_validate_storage_reads(bal_ref_cursor(storage_reads_field), count, maximum);
+        let storage_changes = bal_validate_storage_changes(bal_ref_cursor(storage_changes_field));
+        let storage_reads = bal_validate_storage_reads(bal_ref_cursor(storage_reads_field));
         bal_validate_balance_changes(bal_ref_cursor(balance_changes_field));
         bal_validate_nonce_changes(bal_ref_cursor(nonce_changes_field));
         bal_validate_code_changes(bal_ref_cursor(code_changes_field));
@@ -336,18 +257,24 @@ function bal_validate_accounts forall 'source_off 'source_len, source_valid_rang
             BalAccountEnd(_) => (),
             _ => throw InvalidBlock(InvalidBlockAccessList),
         };
-        bal_validate_accounts(next, count, maximum)
+        1 + storage_changes + storage_reads + bal_validate_accounts(next)
     }
-termination_measure bal_validate_accounts(cursor, count, maximum) =
+termination_measure bal_validate_accounts(cursor) =
     cursor.len
 
 /*! Validates the canonical EIP-7928 BAL directly against the host recorder. */
-function validate_block_access_list(bytes : StatelessInputSlice, maximum_items : item_count) -> unit = {
+function validate_block_access_list(
+    bytes : StatelessInputSliceAtMost(block_access_list_length_bound),
+    block_gas_limit : block_gas_limit,
+) -> unit = {
     bal_prepare_iter();
     let root = rlp_single_ref(bytes);
-    let _ = bal_validate_accounts(bal_ref_cursor(root), 0, maximum_items);
+    let bal_items = bal_validate_accounts(bal_ref_cursor(root));
     match bal_iter_next() {
         BalEmpty(_) => (),
         _ => throw InvalidBlock(InvalidBlockAccessList),
+    };
+    if BLOCK_ACCESS_LIST_ITEM_GAS * bal_items > block_gas_limit then {
+        throw InvalidBlock(BlockAccessListTooLarge)
     }
 }

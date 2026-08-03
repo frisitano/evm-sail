@@ -1,36 +1,9 @@
 /*md
 # Payload commitments
 
-The header-level commitments recomputed from the payload: the
-transactions and withdrawals tries, the EIP-7685 requests hash, and the
-block header hash itself.
+Recursive transaction, withdrawal, and receipt tries plus the header-level
+commitment checks over their recomputed roots.
 */
-
-/*! The RLP of one withdrawal (EIP-4895), assembled in the scratch
-    arena. */
-function withdrawal_rlp(withdrawal : StatelessInputSliceLength(44)) -> ScratchSlice = {
-    let index = decode_ssz_uint(withdrawal, WD_INDEX);
-    let validator_index = decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX);
-    let address = sub_slice(withdrawal, WD_ADDRESS, ADDRESS_BYTE_LENGTH);
-    let amount = decode_ssz_uint(withdrawal, WD_AMOUNT);
-    let index_length = rlp_uint_size(index);
-    let validator_index_length = rlp_uint_size(validator_index);
-    let address_length = rlp_slice_size(address);
-    let amount_length = rlp_uint_size(amount);
-    let content_length = index_length + validator_index_length + address_length + amount_length;
-    if 48 < content_length then {
-        throw InvalidBlock(RlpDecode)
-    };
-    let bounded_content_length : range(0, 48) = tmod_nat(content_length, 49);
-    let content_len = bounded_content_length;
-    let start = scratch_reserve(rlp_list_size(content_len));
-    rlp_write_list_prefix(content_len);
-    rlp_write_uint(index);
-    rlp_write_uint(validator_index);
-    rlp_write_slice(address);
-    rlp_write_uint(amount);
-    rlp_finish(start)
-}
 
 /*md
 ## Recursive indexed tries
@@ -41,8 +14,10 @@ same: recursively partition the canonical key-order cursor by nibble and use
 the shared MPT child combiner. No Sail list, explicit frame stack, or
 collection-sized vector is involved.
 */
-/*! The three value sources committed by Ethereum's index-keyed payload
-    tries. */
+/*! The closed source algebra for Ethereum's three index-keyed payload tries.
+    [indexed_trie_begin][] and [indexed_trie_pop][] interpret it as count and
+    value operations, allowing one recursive trie builder without storing
+    function values or duplicating the traversal. */
 union IndexedTrieSource = {
     IndexedTransactions : TransactionListRef,
     IndexedWithdrawals : WithdrawalListRef,
@@ -117,7 +92,7 @@ function indexed_trie_pop(source : IndexedTrieSource, cursor : IndexedTrieCursor
         },
     };
     (
-        item_leaf(index_item.key, value),
+        trie_leaf(index_item.key, value),
         struct { keys = next_keys, receipt_zero = cursor.receipt_zero, receipt_remaining = remaining },
     )
 }
@@ -175,113 +150,6 @@ function indexed_trie_root(source : IndexedTrieSource) -> hash = {
     let root = trie_subtree_root(subtree);
     scratch_rewind(mark);
     root
-}
-
-/*! The block header hash: `keccak256(rlp(header))` with the recomputed
-    body roots spliced in (YP §4.4; post-merge constants for ommers,
-    difficulty, and nonce). */
-function block_header_hash(
-    header : BlockHeader,
-    transactions_root : hash,
-    withdrawals_root : hash,
-    requests_hash : hash,
-    block_access_list_hash : hash,
-) -> (
-    hash
-) = {
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    let word_length = rlp_word_size();
-    let address_length = rlp_addr_size();
-    let bloom_length = 3 + LOGS_BLOOM_BYTE_LENGTH;
-    let difficulty_length = rlp_uint_size(0);
-    let number_length = rlp_uint_size(header.number);
-    let gas_limit_length = rlp_uint_size(header.gas_limit);
-    let gas_used_length = rlp_uint_size(header.gas_used);
-    let timestamp_length = rlp_uint_size(header.timestamp);
-    let extra_data_length = rlp_scratch_slice_size(header.extra_data);
-    let nonce_length = 1 + EIGHT_BYTE_LENGTH;
-    var content_length : rlp_scratch_length = rlp_scratch_length_add(6 * word_length, address_length);
-    content_length = rlp_scratch_length_add(content_length, bloom_length);
-    content_length = rlp_scratch_length_add(content_length, difficulty_length);
-    content_length = rlp_scratch_length_add(content_length, number_length);
-    content_length = rlp_scratch_length_add(content_length, gas_limit_length);
-    content_length = rlp_scratch_length_add(content_length, gas_used_length);
-    content_length = rlp_scratch_length_add(content_length, timestamp_length);
-    content_length = rlp_scratch_length_add(content_length, extra_data_length);
-    content_length = rlp_scratch_length_add(content_length, nonce_length);
-    if profile.fork >= London then {
-        let field_length = rlp_uint_word_size(header.base_fee);
-        content_length = rlp_scratch_length_add(content_length, field_length)
-    };
-    if profile.fork >= Shanghai then {
-        content_length = rlp_scratch_length_add(content_length, word_length)
-    };
-    if profile.fork >= Cancun then {
-        let blob_gas_used_length = rlp_uint_size(header.blob_gas_used);
-        let excess_blob_gas_length = rlp_uint_size(header.excess_blob_gas);
-        content_length = rlp_scratch_length_add(content_length, blob_gas_used_length);
-        content_length = rlp_scratch_length_add(content_length, excess_blob_gas_length);
-        content_length = rlp_scratch_length_add(content_length, word_length)
-    };
-    if profile.fork >= Prague then {
-        content_length = rlp_scratch_length_add(content_length, word_length)
-    };
-    if profile.fork >= Amsterdam then {
-        let slot_number_length = rlp_uint_size(header.slot_number);
-        content_length = rlp_scratch_length_add(content_length, word_length);
-        content_length = rlp_scratch_length_add(content_length, slot_number_length)
-    };
-
-    /* Six fixed words plus the protocol-bounded variable fields give an
-     * Amsterdam header-content maximum of 749 bytes. Keep that semantic
-     * bound instead of reconstructing a generic backend byte length. */
-    if 749 < content_length then {
-        throw InvalidBlock(RlpDecode)
-    };
-    let bounded_content_length : range(0, 749) = tmod_nat(content_length, 750);
-    let content_len = bounded_content_length;
-    let mark = scratch_reserve(rlp_list_size(content_len));
-    rlp_write_list_prefix(content_len);
-    rlp_write_word(hash_to_word(header.parent_hash));
-    rlp_write_word(hash_to_word(EMPTY_OMMER_HASH));
-    rlp_write_addr(header.fee_recipient);
-    rlp_write_word(hash_to_word(header.state_root));
-    rlp_write_word(hash_to_word(transactions_root));
-    rlp_write_word(hash_to_word(header.receipts_root));
-    rlp_write_logs_bloom(logs_bloom_from_ref(header.logs_bloom));
-    rlp_write_uint(0);
-    rlp_write_uint(header.number);
-    rlp_write_uint(header.gas_limit);
-    rlp_write_uint(header.gas_used);
-    rlp_write_uint(header.timestamp);
-    rlp_write_slice(header.extra_data);
-    rlp_write_word(header.prev_randao);
-    rlp_write_string_prefix(EIGHT_BYTE_LENGTH, 0x00);
-    scratch_push_word_be(ZERO_WORD, EIGHT_BYTE_LENGTH);
-    if profile.fork >= London then {
-        rlp_write_uint_word(header.base_fee)
-    };
-    if profile.fork >= Shanghai then {
-        rlp_write_word(hash_to_word(withdrawals_root))
-    };
-
-    if profile.fork >= Cancun then {
-        rlp_write_uint(header.blob_gas_used);
-        rlp_write_uint(header.excess_blob_gas);
-        rlp_write_word(hash_to_word(header.parent_beacon_block_root))
-    };
-    if profile.fork >= Prague then {
-        rlp_write_word(hash_to_word(requests_hash))
-    };
-    if profile.fork >= Amsterdam then {
-        rlp_write_word(hash_to_word(block_access_list_hash));
-        rlp_write_uint(header.slot_number)
-    };
-    let encoded = rlp_finish(mark);
-    let block_hash = keccak256(encoded);
-    scratch_rewind(mark);
-    block_hash
 }
 
 /*! The transactions-trie root (YP §4.4.2): leaf `i` holds the raw

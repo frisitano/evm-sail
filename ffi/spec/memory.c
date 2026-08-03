@@ -88,7 +88,7 @@ unit mem_clear(const unit u) {
 }
 
 /* Enter a sub-call and return the fresh frame's absolute arena base. Sail
- * stores that base in the active frame's nominal MemorySlice. */
+ * stores that base in the active frame's nominal EvmMemorySlice. */
 static uint64_t mem_frame_enter_value(void) {
   /* The EVM call-depth rule makes this host-capacity failure unreachable. */
   if (h_top + 1 >= MEMORY_MAXDEPTH) abort();
@@ -98,9 +98,9 @@ static uint64_t mem_frame_enter_value(void) {
   return (uint64_t)f_base[h_top];
 }
 
-void mem_frame_enter(sail_int *out, const unit u) {
+uint64_t mem_frame_enter(const unit u) {
   (void)u;
-  evmsail_byte_quantity_set(out, mem_frame_enter_value());
+  return mem_frame_enter_value();
 }
 
 /* leave a sub-call: pop the checkpoint. The dead frame's bytes sit above the
@@ -113,8 +113,8 @@ unit mem_frame_leave(const unit u) {
 }
 
 /* byte-quantity offset -> bits(8) byte (0 beyond the established extent) */
-uint64_t mem_read_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
-  uint64_t offset = evmsail_byte_quantity_value(off);
+uint64_t mem_read_byte(uint64_t off) {
+  uint64_t offset = off;
   return (offset < f_len[h_top])
              ? (uint64_t)arena[f_base[h_top] + offset]
              : 0;
@@ -125,7 +125,7 @@ uint64_t hm_depth(const unit u) { (void)u; return (uint64_t)h_top; }
 
 /* Materialize the logical extent whose affordability Sail already proved and
  * return its absolute arena base. region_access.c packages this span in the
- * generated MemorySlice representation. */
+ * generated EvmMemorySlice representation. */
 uint64_t evm_memory_expand(uint64_t len) {
   f_establish(len);
   return (uint64_t)f_base[h_top];
@@ -144,8 +144,8 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-sail_u256 mem_load_word(EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
-  uint64_t offset = evmsail_byte_quantity_value(off);
+sail_u256 mem_load_word(uint64_t off) {
+  uint64_t offset = off;
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
     uint64_t o = offset + (uint64_t)i;
@@ -157,10 +157,10 @@ sail_u256 mem_load_word(EVMSAIL_BYTE_QUANTITY_PARAM(off)) {
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const sail_u256 w) {
+unit mem_store_word(uint64_t off, const sail_u256 w) {
   uint8_t buf[32];
   sail_word_to_be_bytes(buf, (w));
-  uint8_t *d = frame_write_region(evmsail_byte_quantity_value(off), 32);
+  uint8_t *d = frame_write_region(off, 32);
   memcpy(d, buf, 32);
   return UNIT;
 }
@@ -168,12 +168,10 @@ unit mem_store_word(EVMSAIL_BYTE_QUANTITY_PARAM(off), const sail_u256 w) {
 /* MCOPY: overlapping-safe copy within the current frame. Both ranges are
  * established BEFORE either pointer is taken (a second establishment could
  * realloc the arena from under the first pointer). */
-unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
-              EVMSAIL_BYTE_QUANTITY_PARAM(src),
-              EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
-  uint64_t dst_value = evmsail_byte_quantity_value(dst);
-  uint64_t src_value = evmsail_byte_quantity_value(src);
-  uint64_t len_value = evmsail_byte_quantity_value(len);
+unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
+  uint64_t dst_value = dst;
+  uint64_t src_value = src;
+  uint64_t len_value = len;
   if (!len_value) return UNIT;
   if (src_value > UINT64_MAX - len_value ||
       dst_value > UINT64_MAX - len_value)
@@ -186,8 +184,8 @@ unit mem_move(EVMSAIL_BYTE_QUANTITY_PARAM(dst),
 }
 
 /* (byte-quantity offset, bits(8) value) -> unit */
-unit mem_write_byte(EVMSAIL_BYTE_QUANTITY_PARAM(off), uint64_t v) {
-  uint64_t offset = evmsail_byte_quantity_value(off);
+unit mem_write_byte(uint64_t off, uint64_t v) {
+  uint64_t offset = off;
   if (offset == UINT64_MAX) abort();
   f_establish(offset + 1);
   arena[f_base[h_top] + offset] = (uint8_t)(v & 0xff);

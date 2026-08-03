@@ -8,8 +8,10 @@ receipt, and withdrawal commitments.
   and their compact encoding.
 - [Ordered trie indices](indexed.md) — canonical key order for list-indexed
   transaction, withdrawal, and receipt tries.
-- [Trie nodes](nodes.md) — leaf, extension, and branch forms and their
-  RLP references.
+- [Trie node types](nodes.md) — leaf, extension, and branch forms and their
+  references.
+- [Trie node codec](codec.md) — canonical hex-prefix/RLP encoding and
+  decoding.
 - [Trie updates and the canonical builder](updates.md) — sorted update
   streams and root computation from scratch.
 - [The witness-native trie](trie.md) — reading and updating a trie

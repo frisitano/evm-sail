@@ -303,7 +303,7 @@ operation may grow the arena while an optimized C writer holds its pointer.
 
 The readable Sail specification remains the normative state-root equation. The
 optimized build alone replaces `compute_state_root` at the whole-operation
-boundary and links `ffi/optimized/mpt.c`, which consumes the same account,
+boundary and links `ffi/optimized/src/lib/mpt/trie.c`, which consumes the same account,
 storage, and authenticated witness-node host contracts.
 
 The implementation uses one statically allocated workspace containing at most
@@ -473,7 +473,7 @@ follow-ups rather than the next default optimization:
    existing AST, and compiler specialization of the opcode match. Choose the
    smallest boundary that removes repeated decode/source work.
 4. Measure frame pushes and resumes before changing
-   `ffi/optimized/frame_stack.c`. The optimized ABI already uses one lazily
+   `ffi/optimized/src/host/frame_stack.c`. The optimized ABI already uses one lazily
    allocated fixed-capacity array and
    structure assignment; it does not perform a heap allocation per frame.
    Change continuation storage only if counters show copying is material.
@@ -549,6 +549,32 @@ optimize every `malloc` or `memcpy`.
    workload both improve; reject local instruction-count wins that move cost
    into lookup, conversion, or finalization.
 
+#### Preallocated pointer-backed slices
+
+This is queued behind the bound/specialization cleanup. Do not turn every
+semantic slice into a native pointer: input-relative and dynamically growing
+sources still need their existing provenance and lifetime rules.
+
+1. Rename the position field from `off` to `ptr` where the value denotes the
+   start of a retained region view.
+2. Introduce a distinct statically allocated slice type for regions whose
+   complete capacity is reserved before optimized guest execution. Its Sail
+   semantics remain a bounded start plus length.
+3. Add a custom-compiler C-representation selection for that start newtype so
+   the optimized preallocated build lowers it to `uint8_t *`. Keep the spec
+   build and non-preallocated slices in their ordinary proof-friendly
+   representation.
+4. Use the pointer-backed slice consistently in optimized preallocated memory
+   region structs, including retained code views, so a view into stateless
+   input can be stored without copying its bytes.
+5. Make allocation provenance and lifetime explicit: region bases must be
+   stable before any pointer-backed slice is constructed, scratch growth must
+   not invalidate retained pointers, and reset must invalidate every prior
+   view.
+6. Validate generated layouts against the generated model header and measure
+   whether removed address additions and code copies outweigh the wider
+   pointer-bearing aggregates on the production ZisK workload.
+
 ### Validation and handoff after every phase
 
 For exploratory variants, run focused standard and optimized native fixtures,
@@ -595,7 +621,8 @@ interpreter override, raw-opcode leaf dispatch, and direct word/fixed-byte
 conversion refinement subsequently passed the same 26,104/26,104 standard and
 26,104/26,104 optimized runs. The spec build retains the Sail interpreter
 and direct endian equations; only the optimized build links
-`ffi/optimized/interpreter.c` and injects `ffi/optimized/word_bytes.h`.
+`ffi/optimized/src/evm/interpreter.c` and injects
+`ffi/optimized/include/evmsail/primitives/word.h`.
 Inspection confirmed that the spec generated C retains the explicit Sail
 HTR and state-root implementations and does not link either optimized glue
 implementation. The optimized generated C makes one replacement call at each

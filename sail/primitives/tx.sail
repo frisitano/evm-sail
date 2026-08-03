@@ -5,9 +5,9 @@
 The decoded transaction and its EIP-7702 authorization tuple, the log
 record, and the receipt. Pure data — no registers, no externs.
 */
-/*! The EIP-2718 envelope type: the single transaction discriminant
-    The type-derived predicates at the end of this module read it — no
-    boolean flags are stored. */
+/*! The EIP-2718 envelope type: the single transaction discriminant. Its
+    closed semantic descriptor below derives fork and feature requirements;
+    transactions do not store redundant boolean flags. */
 enum TxType = {
     /* type 0: pre-EIP-2718 RLP list */
     LegacyTx,
@@ -19,6 +19,67 @@ enum TxType = {
     BlobTx,
     /* type 4: EIP-7702 set code */
     SetCodeTx,
+}
+
+/*! The canonical EIP-2718 wire discriminant. Keeping the reversible encoding
+    as a mapping gives decoders and encoders one authoritative definition:
+    encoders apply it forwards, while decoders validate and apply it
+    backwards before dispatching on the semantic transaction type. */
+mapping tx_envelope_type : TxType <-> byte = {
+    LegacyTx <-> 0x00,
+    AccessListTx <-> 0x01,
+    FeeMarketTx <-> 0x02,
+    BlobTx <-> 0x03,
+    SetCodeTx <-> 0x04,
+}
+
+/*! The two transaction-signature encodings. Legacy transactions use the
+    original/EIP-155 `v` domain; every EIP-2718 typed envelope carries an
+    explicit zero-or-one parity. */
+enum TxSignatureScheme = { LegacySignature, TypedSignature }
+
+/*! Protocol requirements determined solely by an EIP-2718 envelope type.
+    Computing this descriptor once prevents validation from repeatedly
+    dispatching on the same closed transaction-type algebra. */
+struct TxTypeSemantics = {
+    minimum_fork : Fork,
+    signature : TxSignatureScheme,
+    blob : bool,
+    set_code : bool,
+}
+
+/*! Derives the protocol requirements of one transaction envelope. */
+function tx_type_semantics(t : TxType) -> TxTypeSemantics = match t {
+    LegacyTx => struct {
+        minimum_fork = Frontier,
+        signature = LegacySignature,
+        blob = false,
+        set_code = false,
+    },
+    AccessListTx => struct {
+        minimum_fork = Berlin,
+        signature = TypedSignature,
+        blob = false,
+        set_code = false,
+    },
+    FeeMarketTx => struct {
+        minimum_fork = London,
+        signature = TypedSignature,
+        blob = false,
+        set_code = false,
+    },
+    BlobTx => struct {
+        minimum_fork = Cancun,
+        signature = TypedSignature,
+        blob = true,
+        set_code = false,
+    },
+    SetCodeTx => struct {
+        minimum_fork = Prague,
+        signature = TypedSignature,
+        blob = false,
+        set_code = true,
+    },
 }
 
 /*md
@@ -46,8 +107,11 @@ struct BlobHashesFields('limit : Int), transaction_blob_limit_value('limit) = {
     count : transaction_blob_count('limit),
 }
 
-let EMPTY_BLOB_HASHES : BlobHashesFields(blob_schedule_inactive_count) =
-    (struct { bytes = EMPTY_STATELESS_INPUT_SLICE, count = 0 } : BlobHashesFields(blob_schedule_inactive_count))
+let EMPTY_BLOB_HASHES : BlobHashesFields(blob_schedule_inactive_count) = struct {
+        bytes = EMPTY_STATELESS_INPUT_SLICE,
+        count = 0,
+    } :
+        BlobHashesFields(blob_schedule_inactive_count)
 
 /*! A byte span contained by one SSZ transaction envelope. This structural
     bound is independent of fork-specific calldata and initcode limits. */
@@ -74,14 +138,30 @@ let EMPTY_ACCESS_LIST_REF : AccessListRef = struct {
         slot_count = 0,
     }
 
-/*! A validated EIP-7702 authorization-list content span. Tuples remain
-    source-backed and are decoded one at a time during execution. */
-struct AuthorizationListRef = {
+/*! A validated EIP-7702 authorization-list content span. Its dependent count
+    remains visible to execution, so recursive authorization processing can
+    derive refund bounds from the number of admitted tuples. */
+struct AuthorizationListRefFields(
+    'count : Int,
+), 0 <= 'count & 'count <= transaction_length_bound = {
     encoded : StatelessInputSlice,
-    count : transaction_item_count,
+    count : int('count),
 }
 
-let EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef = struct { encoded = EMPTY_STATELESS_INPUT_SLICE, count = 0 }
+type AuthorizationListRef = {
+    'count,
+    0 <= 'count & 'count <= transaction_length_bound.
+    AuthorizationListRefFields('count)
+}
+
+val authorization_list_ref : forall 'count, 0 <= 'count & 'count <= transaction_length_bound. (
+        StatelessInputSlice,
+        int('count),
+    ) -> AuthorizationListRefFields('count)
+function authorization_list_ref(encoded, count) =
+    struct { encoded = encoded, count = count }
+
+let EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef = authorization_list_ref(EMPTY_STATELESS_INPUT_SLICE, 0)
 
 /*! A byte length contained by one SSZ transaction envelope. */
 type transaction_byte_length = range(0, transaction_length_bound)
@@ -203,47 +283,86 @@ struct LogSeriesRef = {
     (`max(execution_gas_before_refund, calldata_floor)`); it
     differs from `gas_used` (the receipt's refunded gas) precisely by the
     refund and excludes `state_gas`. */
-struct Receipt = {
+type receipt_gas_relation(
+    'limit : Int,
+    'regular_limit : Int,
+    'gas_used : Int,
+    'execution_gas : Int,
+    'state_gas : Int,
+) -> Bool =
+       0 <= 'limit
+    &  'limit <= block_gas_limit_bound
+    &  0 <= 'regular_limit
+    &  'regular_limit <= 'limit
+    &  0 <= 'gas_used
+    &  'gas_used <= 'limit
+    &  0 <= 'execution_gas
+    &  'execution_gas <= 'regular_limit
+    &  0 <= 'state_gas
+    &  'state_gas <= 'limit
+    &  'gas_used <= 'execution_gas + 'state_gas
+
+/*! The concrete receipt record indexed by its admitted and consumed gas
+    quantities. */
+struct ReceiptFields(
+    'limit : Int,
+    'regular_limit : Int,
+    'gas_used : Int,
+    'execution_gas : Int,
+    'state_gas : Int,
+), receipt_gas_relation(
+    'limit,
+    'regular_limit,
+    'gas_used,
+    'execution_gas,
+    'state_gas,
+) = {
     tx_type : TxType,
     success : bool,
-    gas_used : gas,
-    execution_gas : gas,
-    state_gas : gas,
+    gas_used : int('gas_used),
+    execution_gas : int('execution_gas),
+    state_gas : int('state_gas),
     logs : LogSeriesRef,
 }
 
-/*! The envelope type byte, as it appears in tx and receipt encodings. */
-function tx_type_byte(t : TxType) -> byte = match t {
-    LegacyTx => 0x00,
-    AccessListTx => 0x01,
-    FeeMarketTx => 0x02,
-    BlobTx => 0x03,
-    SetCodeTx => 0x04,
+/*! A receipt retaining the transaction limits that bounded each gas
+    contribution. */
+type ReceiptWithin(
+    'limit : Int,
+    'regular_limit : Int,
+) = {
+    'gas_used 'execution_gas 'state_gas,
+    receipt_gas_relation(
+        'limit,
+        'regular_limit,
+        'gas_used,
+        'execution_gas,
+        'state_gas,
+    ).
+    ReceiptFields(
+        'limit,
+        'regular_limit,
+        'gas_used,
+        'execution_gas,
+        'state_gas,
+    )
 }
 
-/*! Whether the type carries an EIP-2930 access list envelope (type 1). */
-function tx_is_access_list(t : TxType) -> bool = match t {
-    AccessListTx => true,
-    _ => false,
-}
-
-/*! Whether the type is an EIP-1559-style fee-market envelope (types
-    2/3/4). */
-function tx_is_dynamic_fee(t : TxType) -> bool = match t {
-    FeeMarketTx => true,
-    BlobTx => true,
-    SetCodeTx => true,
-    _ => false,
-}
-
-/*! Whether the type is an EIP-4844 blob transaction (type 3). */
-function tx_is_blob(t : TxType) -> bool = match t {
-    BlobTx => true,
-    _ => false,
-}
-
-/*! Whether the type is an EIP-7702 set-code transaction (type 4). */
-function tx_is_set_code(t : TxType) -> bool = match t {
-    SetCodeTx => true,
-    _ => false,
+/*! A receipt whose originating transaction limit is not needed. */
+type Receipt = {
+    'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
+    receipt_gas_relation(
+        'limit,
+        'regular_limit,
+        'gas_used,
+        'execution_gas,
+        'state_gas,
+    ).
+    ReceiptFields(
+        'limit,
+        'regular_limit,
+        'gas_used,
+        'execution_gas,
+        'state_gas,
+    )
 }

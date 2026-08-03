@@ -5,9 +5,9 @@
 #include <string.h>
 
 #if defined(__GNUC__) || defined(__clang__)
-#define EVMSAIL_LEAN_API __attribute__((visibility("default")))
+#define GUEST_API __attribute__((visibility("default")))
 #else
-#define EVMSAIL_LEAN_API
+#define GUEST_API
 #endif
 
 extern lean_object *initialize_evm_x2dlean_x2drunner_Runner(uint8_t builtin);
@@ -46,7 +46,7 @@ static lean_object *take_io_value(lean_object *result) {
   return value;
 }
 
-EVMSAIL_LEAN_API void evmsail_lib_init(void) {
+GUEST_API void guest_init(void) {
   if (g_initialized) return;
 
   lean_initialize_runtime_module();
@@ -65,7 +65,7 @@ EVMSAIL_LEAN_API void evmsail_lib_init(void) {
   g_initialized = 1;
 }
 
-EVMSAIL_LEAN_API void evmsail_lib_fini(void) {
+GUEST_API void guest_fini(void) {
   if (!g_initialized) return;
   replace_buffer(&g_output, NULL);
   replace_buffer(&g_debug, NULL);
@@ -73,19 +73,15 @@ EVMSAIL_LEAN_API void evmsail_lib_fini(void) {
   g_initialized = 0;
 }
 
-EVMSAIL_LEAN_API void evmsail_clear_memory(void) {
+GUEST_API void guest_reset(void) {
   replace_buffer(&g_output, NULL);
   replace_buffer(&g_debug, NULL);
 }
 
-EVMSAIL_LEAN_API void evmsail_test_reset(void) {
-  evmsail_clear_memory();
-}
-
-EVMSAIL_LEAN_API unsigned long
-evmsail_run_once(const unsigned char *input, unsigned long length,
-                 const unsigned char **output) {
-  if (!g_initialized) evmsail_lib_init();
+GUEST_API unsigned long
+guest_run(const unsigned char *input, unsigned long length,
+          const unsigned char **output) {
+  if (!g_initialized) guest_init();
 
   lean_object *result = evmsail_lean_run_once(copy_input(input, length));
   replace_buffer(&g_output, take_io_value(result));
@@ -98,9 +94,9 @@ evmsail_run_once(const unsigned char *input, unsigned long length,
   return (unsigned long)lean_sarray_size(g_output);
 }
 
-EVMSAIL_LEAN_API unsigned long
-evmsail_debug_dump(const unsigned char **output) {
-  if (!g_initialized) evmsail_lib_init();
+GUEST_API unsigned long
+guest_debug_dump(const unsigned char **output) {
+  if (!g_initialized) guest_init();
 
   lean_object *result = evmsail_lean_debug_dump(lean_box(0));
   replace_buffer(&g_debug, take_io_value(result));

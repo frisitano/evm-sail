@@ -5,43 +5,43 @@
 
 #include <stdint.h>
 
-static void code_region_value(struct zCodeRegionSliceFields *out, uint64_t off,
-                              uint64_t len) {
-  CREATE(sail_int)(&out->zoff);
-  CREATE(sail_int)(&out->zlen);
-  evmsail_byte_quantity_set(&out->zoff, off);
-  evmsail_byte_quantity_set(&out->zlen, len);
+static struct zCodeRegionSliceFields code_region_value(uint64_t off,
+                                                       uint64_t len) {
+  struct zCodeRegionSliceFields out;
+  out.zoff = off;
+  out.zlen = len;
+  return out;
 }
 
-static void code_region_from_bytes(struct zCodeRegionSliceFields *out,
-                                   const uint8_t *bytes, uint64_t len) {
+static struct zCodeRegionSliceFields code_region_from_bytes(
+    const uint8_t *bytes, uint64_t len) {
   uint64_t off = 0;
   if (!bytes || !code_db_append_region(bytes, len, &off)) {
     off = 0;
     len = 0;
   }
-  code_region_value(out, off, len);
+  return code_region_value(off, len);
 }
 
-void code_region_from_input(struct zCodeRegionSliceFields *out,
-                            struct zStatelessInputSliceFields input) {
-  const uint64_t off = evmsail_byte_quantity_value(input.zoff);
-  const uint64_t len = evmsail_byte_quantity_value(input.zlen);
-  code_region_from_bytes(out, evmsail_stateless_input_ptr(off, len), len);
+struct zCodeRegionSliceFields code_region_from_input(
+    struct zStatelessInputSliceFields input) {
+  const uint64_t off = input.zoff;
+  const uint64_t len = input.zlen;
+  return code_region_from_bytes(evmsail_stateless_input_ptr(off, len), len);
 }
 
-void code_region_from_memory(struct zCodeRegionSliceFields *out,
-                             struct zMemorySliceFields input) {
-  const uint64_t off = evmsail_byte_quantity_value(input.zoff);
-  const uint64_t len = evmsail_byte_quantity_value(input.zlen);
-  code_region_from_bytes(out, evmsail_memory_ptr(off, len), len);
+struct zCodeRegionSliceFields code_region_from_memory(
+    struct zEvmMemorySliceFields input) {
+  const uint64_t off = input.zoff;
+  const uint64_t len = input.zlen;
+  return code_region_from_bytes(evmsail_memory_ptr(off, len), len);
 }
 
-void code_region_from_output(struct zCodeRegionSliceFields *out,
-                             struct zOutputSliceFields input) {
-  const uint64_t off = evmsail_byte_quantity_value(input.zoff);
-  const uint64_t len = evmsail_byte_quantity_value(input.zlen);
-  code_region_from_bytes(out, evmsail_output_ptr(off, len), len);
+struct zCodeRegionSliceFields code_region_from_output(
+    struct zOutputSliceFields input) {
+  const uint64_t off = input.zoff;
+  const uint64_t len = input.zlen;
+  return code_region_from_bytes(evmsail_output_ptr(off, len), len);
 }
 
 void code_db_lookup(struct zoptionzIRCodezK *out, sail_fixed_bytes_32 hash) {
@@ -53,9 +53,7 @@ void code_db_lookup(struct zoptionzIRCodezK *out, sail_fixed_bytes_32 hash) {
   }
   out->kind = Kind_zSomezIRCodezK;
   struct zCode *code = &out->variants.zSomezIRCodezK;
-  CREATE(sail_int)(&code->zbytes.zoff);
-  CREATE(sail_int)(&code->zbytes.zlen);
-  evmsail_byte_quantity_set(&code->zbytes.zoff, off);
-  evmsail_byte_quantity_set(&code->zbytes.zlen, len);
+  code->zbytes.zoff = off;
+  code->zbytes.zlen = len;
   code->zjumpdests = jumpdest_ref;
 }

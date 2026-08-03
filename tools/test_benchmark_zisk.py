@@ -5,7 +5,6 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from tools.benchmark_zisk import (
     FixtureCase,
@@ -29,25 +28,13 @@ TMP_ROOT = Path(os.environ.get("AGENT_TMPDIR", REPO_ROOT / ".agent-tmp"))
 
 
 class ProfileParserTests(unittest.TestCase):
-    def test_only_evm_sail_receives_private_capacity_metadata(self) -> None:
+    def test_all_guests_receive_canonical_input(self) -> None:
         evm_sail = Guest("evm-sail", Path("evm-sail.elf"))
         reth = Guest("reth", Path("reth.elf"))
-        with patch(
-            "harness.dump_state.prepare_optimized_input",
-            return_value=b"payload-with-capacities",
-        ) as prepare:
-            framed_evm_sail = frame_guest_input(evm_sail, b"payload")
-            framed_reth = frame_guest_input(reth, b"payload")
-
-        prepare.assert_called_once_with(b"payload")
-        self.assertEqual(
-            framed_evm_sail[:8],
-            len(b"payload-with-capacities").to_bytes(8, "little"),
-        )
-        self.assertEqual(
-            framed_evm_sail[8 : 8 + len(b"payload-with-capacities")],
-            b"payload-with-capacities",
-        )
+        framed_evm_sail = frame_guest_input(evm_sail, b"payload")
+        framed_reth = frame_guest_input(reth, b"payload")
+        self.assertEqual(framed_evm_sail[:8], len(b"payload").to_bytes(8, "little"))
+        self.assertEqual(framed_evm_sail[8 : 8 + len(b"payload")], b"payload")
         self.assertEqual(framed_reth[:8], len(b"payload").to_bytes(8, "little"))
         self.assertEqual(framed_reth[8 : 8 + len(b"payload")], b"payload")
 
@@ -63,6 +50,27 @@ class ProfileParserTests(unittest.TestCase):
 ║  execute_block     ███████████████░░░░  210,112,000  55.1%  ║
 ║  serialize_output  ░░░░░░░░░░░░░░░░░░░      786,000   0.2%  ║
 ╚═════════════════════════════════════════════════════════════╝
+"""
+        self.assertEqual(
+            parse_profile_scope_steps(report),
+            {"execute_block": 420224, "serialize_output": 1572},
+        )
+        self.assertEqual(
+            parse_profile_scope_costs(report),
+            {"execute_block": 210112000, "serialize_output": 786000},
+        )
+
+    def test_parses_full_statistics_profile_tag_rows(self) -> None:
+        report = """
+PROFILE TAGS STEPS (STEPS, % STEPS, CALLS, AVG, MIN, MAX)
+----------------------------------------------------------------
+  420,224  49.60%  1  420,224  420,224  420,224 execute_block
+    1,572   0.20%  1    1,572    1,572    1,572 serialize_output
+
+PROFILE TAGS COST (COST, % COST, CALLS, AVG, MIN, MAX)
+----------------------------------------------------------------
+210,112,000  55.10%  1  210,112,000  210,112,000  210,112,000 execute_block
+    786,000   0.20%  1      786,000      786,000      786,000 serialize_output
 """
         self.assertEqual(
             parse_profile_scope_steps(report),
@@ -90,6 +98,27 @@ class ProfileParserTests(unittest.TestCase):
 ║   0 evm_execute                  ███████░░░    12,345  31.2% ║
 ║   1 sha256                       ██░░░░░░░░     2,000   5.1% ║
 ╚═════════════════════════════════════════════════════════════╝
+"""
+        self.assertEqual(
+            parse_top_cost_functions(report),
+            [
+                {
+                    "name": "evm_execute",
+                    "cost": 12345,
+                    "share_percent": 31.2,
+                },
+                {"name": "sha256", "cost": 2000, "share_percent": 5.1},
+            ],
+        )
+
+    def test_parses_full_statistics_top_cost_functions(self) -> None:
+        report = """
+TOP COST FUNCTIONS (COST, % COST, CALLS, FUNCTION)
+-------------------------------------------------
+12,345  31.20%  4 evm_execute
+ 2,000   5.10%  1 sha256
+
+PROFILE TAGS STEPS (STEPS, % STEPS, CALLS, AVG, MIN, MAX)
 """
         self.assertEqual(
             parse_top_cost_functions(report),
@@ -221,12 +250,36 @@ class DashboardExportTests(unittest.TestCase):
                 block_index=0,
                 payload=b"input",
                 expected=b"output",
+                gas_used=30_000_000,
             )
             elf = tmp / "guest.elf"
             elf.write_bytes(b"elf")
-            guests = [Guest("evm-sail", elf), Guest("reth", elf)]
+            guests = [
+                Guest("evm-sail", elf),
+                Guest("reth", elf),
+                Guest("ethrex", elf),
+            ]
             guest_results = {}
             for guest in guests:
+                if guest.name == "ethrex":
+                    unavailable = {
+                        "code": "guest_heap_oom",
+                        "message": "Guest unavailable: heap exhausted",
+                    }
+                    guest_results[guest.name] = {
+                        "elf": {
+                            "path": str(elf),
+                            "size_bytes": 3,
+                            "sha256": "cd" * 32,
+                        },
+                        "cases": [
+                            {"measurements": [], "unavailable": unavailable}
+                        ],
+                        "profiles": [
+                            {"artifacts": {"unavailable": unavailable}}
+                        ],
+                    }
+                    continue
                 instrumented = guest.name == "evm-sail"
                 guest_results[guest.name] = {
                     "elf": {
@@ -322,12 +375,15 @@ class DashboardExportTests(unittest.TestCase):
             self.assertEqual(catalog["fixture_count"], 1)
             self.assertEqual(
                 [guest["name"] for guest in catalog["guests"]],
-                ["evm-sail", "reth"],
+                ["evm-sail", "reth", "ethrex"],
             )
             self.assertEqual(catalog["generated_at_unix_ns"], "123")
             fixture_entry = catalog["fixtures"][0]
             shard = json.loads((output / fixture_entry["shard"]).read_text())
-            self.assertEqual(shard["format_version"], 4)
+            self.assertEqual(catalog["format_version"], 5)
+            self.assertEqual(shard["format_version"], 5)
+            self.assertEqual(fixture_entry["max_gas_used"], 30_000_000)
+            self.assertEqual(shard["cases"][0]["gas_used"], 30_000_000)
             case_guests = shard["cases"][0]["guests"]
             self.assertEqual(case_guests["evm-sail"]["total_steps"], 1004)
             self.assertEqual(case_guests["evm-sail"]["total_cost"], 4000)
@@ -357,6 +413,10 @@ class DashboardExportTests(unittest.TestCase):
             self.assertEqual(
                 case_guests["evm-sail"]["opcode_profile_completeness"],
                 "all_used_operations",
+            )
+            self.assertEqual(
+                case_guests["ethrex"]["unavailable"]["code"],
+                "guest_heap_oom",
             )
 
 

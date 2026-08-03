@@ -1,5 +1,5 @@
 /* Frames form a stack in the backing arena. Sail owns the active frame's   */
-/* absolute MemorySlice and saves/restores it with the other frame registers; */
+/* absolute EvmMemorySlice and saves/restores it with the other frame registers; */
 /* this boundary only allocates, establishes, and releases arena frames.    */
 
 /*md
@@ -33,7 +33,7 @@ val mem_write_byte = impure { c: "mem_write_byte" } : (memory_pointer, byte) -> 
 /*! Resets memory to a single empty frame (per-transaction reset). */
 val mem_clear = impure { c: "mem_clear" } : unit -> unit
 /*! Pushes a fresh, zeroed memory for a sub-call frame. */
-val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> source_pointer
+val mem_frame_enter = impure { c: "mem_frame_enter" } : unit -> memory_pointer
 /*! Pops the current frame's memory, restoring the caller's. */
 val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
 
@@ -44,7 +44,8 @@ val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
     charged and returns the current frame's absolute source slice. Failure to
     realize this established precondition is a host implementation failure,
     not an EVM out-of-gas result. */
-val mem_expand = impure { c: "mem_expand" } : forall 'required, host_valid_range(0, 'required). int('required) -> MemorySliceLength(
+val mem_expand = impure { c: "mem_expand" } : forall 'required, memory_region_valid_range(0, 'required).
+    int('required) -> EvmMemorySliceLength(
         'required,
     )
 

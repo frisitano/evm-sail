@@ -18,13 +18,15 @@
 #include <stdint.h>
 
 /* Generated aggregate adapter implemented by hash.c. */
-struct zMemorySliceFields;
-unit log_add_data_memory(struct zMemorySliceFields data);
+struct zEvmMemorySliceFields;
+unit log_add_data_memory(struct zEvmMemorySliceFields data);
 
 /* ---- EIP-2929 warm sets ---- */
-unit warm_reset(const unit u);
-bool warm_addr_touch(sail_fixed_bytes_20 a);
-bool warm_slot_touch(sail_fixed_bytes_20 a, const sail_u256 s);
+unit warm_reset(uint64_t current_transaction_epoch);
+bool account_is_warm(sail_fixed_bytes_20 a);
+unit account_mark_warm(sail_fixed_bytes_20 a);
+bool storage_is_warm(sail_fixed_bytes_20 a, const sail_u256 s);
+unit storage_mark_warm(sail_fixed_bytes_20 a, const sail_u256 s);
 
 /* ---- EIP-7702 transaction-local authority tracker ---- */
 unit authorization_tracker_reset(uint64_t count_hint);
@@ -45,8 +47,7 @@ unit log_begin(sail_fixed_bytes_20 a);        /* start a new record for emitter 
 unit log_add_topic(sail_u256 t);       /* append a topic to the current record  */
 unit log_add_data_bulk(const uint8_t *p, uint64_t n); /* append data bytes (one memcpy) */
 unit log_add_data_word(sail_u256 value);
-uint64_t logs_checkpoint(const unit u);
-unit logs_revert(uint64_t checkpoint);
+void logs_revert_last(void);
 uint64_t log_count(const unit u);
 uint64_t logs_tx_start(const unit u);
 uint64_t logs_tx_count(const unit u);
@@ -70,12 +71,20 @@ sail_fixed_bytes_256 evmsail_block_logs_bloom(unit ignored);
 bool evmsail_receipt_logs_bloom_write(uint64_t start, uint64_t count,
                                       uint8_t out[256]);
 
-/* ---- semantic call-frame checkpoints ----
- * Sail sees only the returned token. These functions privately coordinate
- * account/storage undo cursors, transient storage, warm sets, and logs. */
-unit host_state_checkpoint_reset(const unit u);
-void host_state_checkpoint(sail_int *result, const unit u);
-unit host_state_revert(const sail_int checkpoint);
+/* State-journal frame boundaries. Checkpoints and commits are structural
+ * markers in the journal itself; no subsystem cursor is captured or passed
+ * through the Sail ABI. */
+unit state_journal_reset(const unit u);
+unit state_journal_checkpoint(const unit u);
+unit state_journal_revert(const unit u);
+unit state_journal_commit(const unit u);
+
+/* Spec-backend implementation hooks. Account and storage retain their typed
+ * GMP-owning undo arenas, while these compact journal entries preserve the
+ * global mutation order needed for frame reversion. */
+uint32_t state_journal_current_frame_marker(void);
+void state_journal_push_account_undo(void);
+void state_journal_push_storage_undo(void);
 
 /* Called by transient_storage.c before a public TSTORE write. */
 unit state_journal_push_transient(sail_fixed_bytes_20 a, sail_u256 slot,

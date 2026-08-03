@@ -67,17 +67,16 @@ uint8_t *scratch_borrow(uint64_t len) {
   return scratch_bytes + scratch_top;
 }
 
-bool scratch_reserve_at(EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                        EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
-  uint64_t off_value = evmsail_byte_quantity_value(off);
-  uint64_t len_value = evmsail_byte_quantity_value(len);
+bool scratch_reserve_at(uint64_t off, uint64_t len) {
+  uint64_t off_value = off;
+  uint64_t len_value = len;
   if (off_value != scratch_top || len_value > UINT64_MAX - off_value)
     return false;
   return scratch_ensure(off_value + len_value);
 }
 
-unit scratch_truncate(EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
-  uint64_t len_value = evmsail_byte_quantity_value(len);
+unit scratch_truncate(uint64_t len) {
+  uint64_t len_value = len;
   if (len_value <= scratch_top) scratch_top = len_value;
   return UNIT;
 }

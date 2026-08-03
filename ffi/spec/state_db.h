@@ -7,7 +7,6 @@
  * once when witness material is first loaded and used only for MPT traversal. */
 #ifndef STATE_DB_H
 #define STATE_DB_H
-#include "quantity_abi.h"
 #ifndef EVMSAIL_MODEL_H
 #error "EVMSAIL_MODEL_H must name the generated model header"
 #endif
@@ -60,8 +59,7 @@ uint64_t storage_row_probe(uint64_t layer, sail_fixed_bytes_20 a, sail_u256 s,
 unit storage_tx_update_raw(sail_fixed_bytes_20 a, sail_u256 s, sail_u256 v,
                            sail_u256 orig);
 void storage_secure_key(sail_u256 slot, sail_fixed_bytes_32 *slot_hash);
-uint64_t storage_tx_checkpoint(const unit u);
-unit storage_tx_revert(uint64_t checkpoint);
+void storage_tx_revert_last(void);
 unit storage_tx_clear(sail_fixed_bytes_20 a);
 unit storage_tx_reset(const unit u);
 bool storage_has_writes(sail_fixed_bytes_20 a);
@@ -89,8 +87,7 @@ void acct_secure_key(sail_fixed_bytes_20 address, sail_fixed_bytes_32 *address_h
 unit acct_tx_set_balance(sail_fixed_bytes_20 a, const sail_u256 balance);
 unit acct_tx_set_nonce(sail_fixed_bytes_20 a, uint64_t nonce);
 unit acct_tx_set_code_hash(sail_fixed_bytes_20 a, sail_fixed_bytes_32 code_hash);
-uint64_t acct_tx_checkpoint(const unit u);
-unit acct_tx_revert(uint64_t checkpoint);
+void acct_tx_revert_last(void);
 unit acct_tx_reset(const unit u);
 /* Optimized whole-operation transaction merge. The standard build retains
  * the explicit Sail account-then-storage loops. */
@@ -151,16 +148,6 @@ uint64_t storage_block_iter_next_probe(sail_fixed_bytes_20 a, sail_u256 *slot,
                                        sail_fixed_bytes_32 *address_hash,
                                        sail_fixed_bytes_32 *slot_hash);
 uint32_t acct_block_updates_prepare(void);
-uint64_t acct_block_update_probe_at(uint32_t index, sail_fixed_bytes_20 *addr,
-                                    uint64_t *cn, sail_u256 *cb,
-                                    sail_fixed_bytes_32 *cs, sail_fixed_bytes_32 *cc, bool *ce,
-                                    bool *csc, bool *ccr, bool *csd,
-                                    uint64_t *on, sail_u256 *ob,
-                                    sail_fixed_bytes_32 *os, sail_fixed_bytes_32 *oc, bool *oe,
-                                    bool *osc, bool *ocr, bool *osd,
-                                    sail_fixed_bytes_32 *address_hash,
-                                    sail_fixed_bytes_32 *post_storage_root);
-unit acct_block_update_post_storage_store_at(uint32_t index, sail_fixed_bytes_32 root);
 unit acct_block_iter_begin(const unit u);
 uint64_t acct_block_iter_next_probe(sail_fixed_bytes_20 *addr, uint64_t *cn,
                                     sail_u256 *cb, sail_fixed_bytes_32 *cs,
@@ -170,9 +157,6 @@ uint64_t acct_block_iter_next_probe(sail_fixed_bytes_20 *addr, uint64_t *cn,
                                     sail_fixed_bytes_32 *oc, bool *oe, bool *osc,
                                     bool *ocr, bool *osd,
                                     sail_fixed_bytes_32 *address_hash);
-unit acct_post_storage_root_store(sail_fixed_bytes_20 a,
-                                  sail_fixed_bytes_32 root);
-sail_fixed_bytes_32 acct_post_storage_root_read(sail_fixed_bytes_20 a);
 /* k_tx_merge drain pops (side-effect-free) + block propagation hooks */
 uint64_t storage_tx_pop_probe(sail_fixed_bytes_20 *addr, sail_u256 *slot,
                               sail_u256 *curr, sail_u256 *orig);

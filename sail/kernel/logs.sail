@@ -47,7 +47,7 @@ function read_logs() -> LogSeriesRef =
 function read_log_data(index : log_store_index) -> LogDataSlice = {
     let off = log_data_offset(index);
     let len = log_data_length(index);
-    if len <= 2 ^ 64 - 1 - off then {
+    if len <= sizeof(log_data_region_bound) - off then {
         log_data_slice(off, len)
     } else {
         assert(false, "log data slice overflow");

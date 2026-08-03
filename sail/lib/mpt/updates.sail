@@ -18,8 +18,10 @@ union TrieChange = {
     ascending key order. */
 struct TrieUpdate = { key : TriePath, change : TrieChange }
 
-/*! A pull source for ordered trie updates. Each variant owns an independently
-    opened host iterator. */
+/*! The closed pull-source algebra for ordered trie updates. Each variant owns
+    an independently opened host iterator and [trie_update_source_next][] is
+    its sole interpreter, allowing one cursor and rebuild algorithm without
+    function-valued callbacks. */
 union TrieUpdateSource = {
     /* changed storage rows for one account */
     StorageTrieUpdates : address,
@@ -148,19 +150,19 @@ union TrieItemValue = {
 /*! A sorted-stream item: a path and its payload. */
 struct TrieItem = { path : TriePath, value : TrieItemValue }
 
-function item_leaf(path : TriePath, value : TrieLeafValue) -> TrieItem =
+function trie_leaf(path : TriePath, value : TrieLeafValue) -> TrieItem =
     struct { path = path, value = LeafItem(value) }
 
-function item_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem =
-    item_leaf(path, InputTrieLeaf(value))
+function trie_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem =
+    trie_leaf(path, InputTrieLeaf(value))
 
-function item_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem =
-    item_leaf(path, ScratchTrieLeaf(value))
+function trie_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem =
+    trie_leaf(path, ScratchTrieLeaf(value))
 
-function item_branch(path : TriePath, childref : NodeRef) -> TrieItem =
+function trie_branch(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = BranchItem(childref) }
 
-function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
+function trie_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = SubtreeItem(childref) }
 
 /*! The child reference of a single-item subtree at `depth`: the item's
@@ -168,7 +170,7 @@ function item_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     collapse can demand node material: an unknown-type hash reference
     absorbing a nonempty suffix resolves its node from the witness db
     (fail-closed). */
-function item_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
+function trie_child_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
     let suffix = path_drop(it.path, depth);
     match it.value {
         LeafItem(value) => leaf_child_ref(suffix, value),
@@ -253,7 +255,7 @@ function trie_children_add(
             };
             var updated = children;
             updated.mask = branch_mask_set(updated.mask, index);
-            updated.children[unsigned(index)] = item_ref(item, depth + 1);
+            updated.children[unsigned(index)] = trie_child_ref(item, depth + 1);
             updated.only = Some(item);
             updated.count = child_count + 1;
             updated
@@ -269,7 +271,7 @@ function trie_children_finish(prefix : TriePath, children : TrieChildren) -> opt
         if children.count == 1 then {
             children.only
         } else {
-            Some(item_branch(prefix, branch_child_ref(children.mask, children.children)))
+            Some(trie_branch(prefix, branch_child_ref(children.mask, children.children)))
         }
     }
 
@@ -277,5 +279,5 @@ function trie_children_finish(prefix : TriePath, children : TrieChildren) -> opt
 function trie_subtree_root(subtree : option(TrieItem)) -> hash =
     match subtree {
         None() => EMPTY_TRIE_ROOT,
-        Some(item) => trie_ref_to_root(item_ref(item, 0)),
+        Some(item) => trie_ref_to_root(trie_child_ref(item, 0)),
     }

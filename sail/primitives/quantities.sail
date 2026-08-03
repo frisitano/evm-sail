@@ -246,14 +246,6 @@ type ssz_offset = range(0, 2 ^ 32 - 1)
 /*! An index into a table of four-byte SSZ offsets. */
 type ssz_offset_index = range(0, 2 ^ 30 - 1)
 
-/*! The number of entries in a host-backed collection without a tighter
-    schema-specific bound. Host tables are addressed by 64-bit ordinals in
-    every executable build; protocol and structural counts use their own
-    tighter singleton/range types instead. */
-type item_count = range(0, 2 ^ 64 - 1)
-/*! An index into a host-backed collection without a tighter schema bound. */
-type item_index = range(0, 2 ^ 64 - 1)
-
 /* Small structural domains carry their protocol bounds directly. */
 /*! The EVM call-frame depth ceiling (Yellow Paper `I_e`). */
 type call_depth_limit : Int = 1024
@@ -279,7 +271,9 @@ type merkle_depth = range(0, 64)
 type opcode = range(0, 255)
 /*! The largest one-based precompile identifier admitted by the model. */
 type precompile_id_bound : Int = 256
-/*! The one-based identifier of a precompiled contract. */
+/*! The closed first-order selector for the precompile catalog. Availability,
+    gas pricing, and execution are separate interpreters of this identifier so
+    their protocol equations remain explicit without function-valued records. */
 type precompile_id = range(1, precompile_id_bound)
 /*! An active precompile identifier, or zero for an ordinary address. */
 type precompile_selector = range(0, precompile_id_bound)
@@ -293,6 +287,8 @@ type bloom_bit_index = range(0, 2047)
 type bloom_u64_index = range(0, 31)
 /*! A bit position within a log-bloom u64. */
 type bloom_u64_bit = range(0, 63)
+/*! The number of authenticated ancestor hashes available to `BLOCKHASH`. */
+type ancestor_hash_count = range(0, 256)
 /*! An index into the 256 most recent ancestor block hashes. */
 type ancestor_index = range(0, 255)
 
@@ -335,46 +331,96 @@ function precompile_id_to_address(value : precompile_id) -> address = {
     result
 }
 
-/* Source, memory, and code positions are transparent mathematical naturals in
- * the canonical specification. Their names document the byte domain expected
- * by each interface. The optimized splice supplies finite bounds from which
- * the C backend selects native representations. Raw EVM operands remain words
- * until the opcode has established its specified overflow behaviour. */
-/*! Whether an offset/length pair is representable by the host. This is
-    vacuous for the canonical natural-number model; optimized builds strengthen
-    it with their concrete address-space bound. */
+/* Each host byte arena has its own semantic address-space boundary. Keeping
+ * the bounds nominally separate allows an executable backend to refine one
+ * arena without changing the others. The initial executable profile admits
+ * uint32-sized regions; tighter protocol bounds remain attached to the
+ * structures which have them. Raw EVM operands remain words until the opcode
+ * has established their specified overflow behaviour. */
+/*! Default capacity of an implementation-owned byte arena. */
+type default_host_region_bound : Int = 2 ^ 32 - 1
+/*! Immutable stateless-input envelope capacity. */
+type stateless_input_region_bound : Int = default_host_region_bound
+/*! Executor scratch-arena capacity. */
+type scratch_region_bound : Int = default_host_region_bound
+/*! Shared per-frame EVM-memory arena capacity. */
+type memory_region_bound : Int = default_host_region_bound
+/*! Content-addressed executable-code arena capacity. */
+type code_region_bound : Int = default_host_region_bound
+/*! Retained transaction-log data arena capacity. */
+type log_data_region_bound : Int = default_host_region_bound
+/*! Guest output-buffer capacity. */
+type output_region_bound : Int = default_host_region_bound
+
+/*! Whether an offset/length pair is representable by a generic host
+    interface. Region-bearing values use the more specific predicates below. */
 type host_valid_range('off : Int, 'len : Int) -> Bool =
-    0 <= 'off & 0 <= 'len
-/*! Whether a source-backed byte range is representable by the selected
-    model. This is a semantic representation invariant, not an FFI type. */
+    0 <= 'off & 0 <= 'len & 'off + 'len <= default_host_region_bound
+/*! Common bound for relative source coordinates used by generic cursor
+    operations. Nominal slices retain their region-specific invariant. */
 type source_valid_range('off : Int, 'len : Int) -> Bool =
-    0 <= 'off & 0 <= 'len
+    0 <= 'off & 0 <= 'len & 'off + 'len <= default_host_region_bound
+type stateless_input_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= stateless_input_region_bound
+type scratch_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= scratch_region_bound
+type memory_region_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= memory_region_bound
+type code_region_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= code_region_bound
+type log_data_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= log_data_region_bound
+type output_region_valid_range('off : Int, 'len : Int) -> Bool =
+    0 <= 'off & 0 <= 'len & 'off + 'len <= output_region_bound
 /*! Whether one host byte quantity is representable. Unlike
     `host_valid_range`, this does not assert that two quantities can be added
     without overflow. */
 type host_valid_access('value : Int) -> Bool =
-    0 <= 'value
-/*! Whether a semantic source length is representable by the selected model.
-    The canonical specification is unbounded; optimized builds strengthen
-    this representation invariant independently of protocol limits. */
+    0 <= 'value & 'value <= default_host_region_bound
+/*! Whether one relative source coordinate is representable. */
 type source_valid_length('value : Int) -> Bool =
-    0 <= 'value
-/*! A position representable by the host byte-store interface. The canonical
-    model is unbounded; production builds refine this representation. */
-type host_access = nat
+    0 <= 'value & 'value <= default_host_region_bound
+/*! A position representable by a generic host byte-store interface. */
+type host_access = range(0, default_host_region_bound)
 /*! An absolute byte position in a named source region. */
-type source_pointer = nat
+type source_pointer = range(0, default_host_region_bound)
 /*! A byte length or regular-layout count derived from a source region. */
-type source_length = nat
-/*! An opaque ordinal issued by the host rollback journal. The model may store
-    and return this complete transaction-state snapshot cursor, but cannot
-    inspect subsystem journals or replay the host's rollback mechanism. */
-type journal_checkpoint = nat
+type source_length = range(0, default_host_region_bound)
+/*! A coordinate in the immutable stateless-input envelope. */
+type stateless_input_pointer = range(0, stateless_input_region_bound)
+/*! A length in the immutable stateless-input envelope. */
+type stateless_input_length = range(0, stateless_input_region_bound)
+/*! A coordinate in the executor scratch arena. */
+type scratch_pointer = range(0, scratch_region_bound)
+/*! A length in the executor scratch arena. */
+type scratch_length = range(0, scratch_region_bound)
+/*! A coordinate in retained log-data storage. */
+type log_data_pointer = range(0, log_data_region_bound)
+/*! A length in retained log-data storage. */
+type log_data_length = range(0, log_data_region_bound)
+/*! A coordinate in the guest output region. */
+type output_pointer = range(0, output_region_bound)
+/*! A length in the guest output region. */
+type output_length = range(0, output_region_bound)
+/*! A relative coordinate in calldata. Calldata may borrow either immutable
+    stateless input or the active EVM-memory frame, so this is the semantic
+    boundary for that explicit sum type rather than a generic host quantity. */
+type calldata_pointer = range(0, default_host_region_bound)
+/*! A byte length in calldata, independent of which calldata variant owns the
+    bytes. */
+type calldata_length = range(0, default_host_region_bound)
+/*! The number of bytes loaded into one EVM word. */
+type word_byte_count = range(0, 32)
+/*! A cursor into a transaction-local journal-owned worklist. */
+type journal_cursor = range(0, default_host_region_bound)
+/*! The monotonically increasing storage incarnation owned by an account.
+    Generation zero is reserved for the absence of a generation. */
+type storage_generation = range(0, default_host_region_bound)
 
-/*! An absolute byte position in the current EVM memory frame. */
-type memory_pointer = nat
-/*! A length or allocated size in EVM memory. */
-type memory_length = nat
+/*! An absolute byte position in the shared EVM-memory arena. */
+type memory_pointer = range(0, memory_region_bound)
+/*! A materialized length or allocation size in the EVM-memory arena. */
+type memory_length = range(0, memory_region_bound)
 
 /*! Largest possible initial/live gas value from the SSZ-backed block-gas
     domain. Fork and header limits may make this ceiling smaller; this union
@@ -394,20 +440,28 @@ type memory_affordable_word_bound : Int =
     exact live `gas_remaining`. */
 type memory_affordable_byte_bound : Int =
     32 * memory_affordable_word_bound
+/*! Largest word count representable by the current EVM-memory region. */
+type memory_region_word_bound : Int = 2 ^ 27
+/*! Whether a word count may be presented to the cumulative memory-cost
+    equation. This follows from the independently configured host-region
+    boundary; the exact live-gas check remains the protocol affordability
+    rule. */
+type memory_cost_input('words : Int) -> Bool =
+    0 <= 'words & 'words <= memory_region_word_bound
 
 /* A range describes the mathematical EVM address selected by an opcode.  Its
  * materializability is established separately by the memory-expansion cost:
  * an unaffordable range halts before it reaches the host byte store. */
 /*! The invariant carried by every canonical EVM memory range. */
 type memory_valid_range('off : Int, 'len : Int) -> Bool =
-    0 <= 'off & 0 <= 'len
+    0 <= 'off & 0 <= 'len & 'off + 'len <= memory_region_bound
 
 /*! A memory endpoint which may be presented to the expansion-cost equation.
     The canonical specification admits every mathematical byte position;
     executable splices may strengthen this representation boundary after
     proving that every excluded endpoint is unaffordable. */
 type memory_expansion_endpoint('required : Int) -> Bool =
-    0 <= 'required
+    0 <= 'required & 'required <= memory_region_bound
 
 /*! Relates a canonical memory operand to its exclusive endpoint. A zero-size
     operand accesses no memory, so both its retained range and endpoint are
@@ -466,16 +520,15 @@ let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) =
     struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
 
 /*! An absolute byte position in the code arena. */
-type code_pointer = nat
+type code_pointer = range(0, code_region_bound)
 /*! A contract-code length. */
-type code_length = nat
-/*! The representation invariant required of executable code. The canonical
-    model is mathematically unbounded; optimized builds strengthen this with
+type code_length = range(0, code_region_bound)
+/*! The representation invariant required of executable code, including
     enough cursor headroom for a complete PUSH32 immediate. */
 type code_valid_length('len : Int) -> Bool =
-    0 <= 'len
+    0 <= 'len & 'len + 32 <= code_region_bound
 /*! An index into the 256-byte chunks of a JUMPDEST bitmap. */
-type code_chunk_index = nat
+type code_chunk_index = range(0, code_region_bound)
 
 /*! Embeds an arbitrary mathematical byte count in an EVM word after checking
     the EVM-word boundary. */

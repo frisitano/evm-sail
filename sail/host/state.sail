@@ -4,10 +4,8 @@
 The host-side mutable state stores, as bodyless axioms: transient storage
 (EIP-1153), the two-layer account and storage overlays (transaction over
 block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
-and the log store. A single semantic checkpoint atomically captures every
-frame-revertible component. Its implementation may use cursors, snapshots,
-or an undo journal, but those representation choices are unobservable to the
-model.
+and the log store. Frame rollback is specified separately by the closed
+[state-journal operation algebra][module-host-journal].
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts
@@ -21,15 +19,6 @@ val transient_reset = impure { c: "transient_storage_reset" } : unit -> unit
 val transient_store = impure { c: "transient_storage_write" } : (address, word, word) -> unit
 /*! Reads a transient storage slot; zero when never written (`TLOAD`). */
 val transient_load = impure { c: "transient_storage_read" } : (address, word) -> word
-
-/*! Clears the host's checkpoint handles and private rollback history at a
-    transaction boundary. */
-val state_checkpoint_reset = impure { c: "host_state_checkpoint_reset" } : unit -> unit
-/*! Captures the complete frame-revertible transaction state: account and
-    storage updates, transient storage, warm sets, and logs. */
-val state_checkpoint = impure { c: "host_state_checkpoint" } : unit -> journal_checkpoint
-/*! Restores exactly the semantic state denoted by `checkpoint`. */
-val state_revert = impure { c: "host_state_revert" } : journal_checkpoint -> unit
 
 /*! Inserts or overwrites a row in the transaction-layer storage overlay
     (the raw store behind `SSTORE`). */
@@ -110,14 +99,6 @@ val acct_block_iter_begin = impure { c: "acct_block_iter_begin" } : unit -> unit
 /*! Returns the next account update candidate and its cached secure key in
     ascending secure-key order, or `None` when traversal is complete. */
 val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> option(AcctTrieEntry)
-/*! Caches the post-state storage root derived by Sail for one account during
-    state-root preparation. This is auxiliary traversal state: it does not
-    mutate the account's pre-state storage-root anchor. */
-val acct_post_storage_root_store = impure { c: "acct_post_storage_root_store" } : (address, hash) -> unit
-/*! Reads the post-state storage root cached by the immediately preceding
-    state-root preparation pass. */
-val acct_post_storage_root_read = impure { c: "acct_post_storage_root_read" } : address -> hash
-
 /* EIP-7928 block-access-list recorder */
 /*! Clears the block-access-list recorder (start of block execution). */
 val bal_reset = impure { c: "bal_reset" } : unit -> unit
@@ -184,13 +165,15 @@ val bal_iter_next = impure { c: "bal_iter_next" } : unit -> BalIterEntry
 /* EIP-2929 warm address/slot sets */
 /*! Clears both warm sets (per-transaction reset; EIP-2929 warmth is
     transaction-scoped). */
-val warm_reset = impure { c: "warm_reset" } : unit -> unit
-/*! Adds the address to the warm set and returns its prior membership —
-    the EIP-2929 cold/warm discriminator. */
-val warm_addr_touch = impure { c: "warm_addr_touch" } : address -> bool
-/*! Adds `(address, slot)` to the warm slot set and returns its prior
-    membership. */
-val warm_slot_touch = impure { c: "warm_slot_touch" } : (address, word) -> bool
+val warm_reset = impure { c: "warm_reset" } : block_access_index -> unit
+/*! Returns whether the address is already warm without mutating the warm set. */
+val account_is_warm = impure { c: "account_is_warm" } : address -> bool
+/*! Marks the address warm after its access charge has been paid. */
+val account_mark_warm = impure { c: "account_mark_warm" } : address -> unit
+/*! Returns whether `(address, slot)` is already warm without mutation. */
+val storage_is_warm = impure { c: "storage_is_warm" } : (address, word) -> bool
+/*! Marks `(address, slot)` warm after its access charge has been paid. */
+val storage_mark_warm = impure { c: "storage_mark_warm" } : (address, word) -> unit
 
 /* EIP-7702 transaction-local authority bookkeeping */
 /*! Clears and pre-sizes the authorization tracker for one transaction. */
@@ -212,7 +195,7 @@ val log_begin = impure { c: "log_begin" } : address -> unit
 /*! Appends one topic to the current record. */
 val log_add_topic = impure { c: "log_add_topic" } : word -> unit
 /*! Copies an EVM-memory payload into the current retained log record. */
-val log_add_data_memory = impure { c: "log_add_data_memory" } : MemorySlice -> unit
+val log_add_data_memory = impure { c: "log_add_data_memory" } : EvmMemorySlice -> unit
 /*! Appends one canonical big-endian word payload to the current record. */
 val log_add_data_word = impure { c: "log_add_data_word" } : word -> unit
 /*! Start and length of the current transaction's retained log range. */
@@ -226,6 +209,6 @@ val log_topics_count = impure { c: "log_topic_count" } : log_store_index -> log_
 /*! Reads one topic from an indexed retained log. */
 val log_topic = impure { c: "log_topic" } : (log_store_index, log_store_index) -> word
 /*! Offset of an indexed retained log's payload in the host log-data arena. */
-val log_data_offset = impure { c: "log_data_off" } : log_store_index -> log_store_index
+val log_data_offset = impure { c: "log_data_off" } : log_store_index -> log_data_pointer
 /*! Byte length of an indexed retained log's payload. */
-val log_data_length = impure { c: "log_data_len" } : log_store_index -> log_store_index
+val log_data_length = impure { c: "log_data_len" } : log_store_index -> log_data_length

@@ -108,29 +108,6 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
     }
 }
 
-/*! The first `n` nibbles. */
-function path_take(path : TriePath, n : trie_path_len) -> TriePath =
-    if n == 0 then {
-        path_empty()
-    } else {
-        if path_len(path) <= n then {
-            path
-        } else {
-            var result = path_empty();
-            var index : trie_path_len = 0;
-            while index < n termination_measure(n - index) do {
-                result = path_append_nibble(result, path_nibble(path, index));
-            let current_index = index;
-            index = if current_index < 64 then {
-                    current_index + 1
-                } else {
-                    throw InvalidBlock(WitnessDeficient)
-                }
-            };
-            result
-        }
-    }
-
 /*! The path with its first `n` nibbles removed. */
 function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
     let length = path_len(path);

@@ -21,7 +21,8 @@ val accelerator_ripemd160 = impure { c: "accelerator_ripemd160" } : CalldataSlic
 /*! Modular exponentiation over the concatenated base, exponent, and modulus
     fields, writing a modulus-sized result; the flag reports acceleration
     success. */
-val accelerator_modexp = impure { c: "accelerator_modexp" } : (CalldataSlice, host_access, host_access, host_access) -> bool
+val accelerator_modexp = impure { c: "accelerator_modexp" } :
+    (CalldataSlice, calldata_length, calldata_length, calldata_length) -> bool
 /*! BN254 G1 point addition over the 128-byte two-point input, writing
     the 64-byte sum; `false` on a malformed point. */
 val accelerator_bn254_add = impure { c: "accelerator_bn254_add" } : CalldataSlice -> bool

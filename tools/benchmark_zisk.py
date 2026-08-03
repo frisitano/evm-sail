@@ -54,9 +54,18 @@ PROFILE_TAG_ROW = re.compile(
     r"^[║│]\s{2}([a-z][a-z0-9_]*)\s+.*?"
     r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+[║│]\s*$"
 )
+FULL_PROFILE_TAG_ROW = re.compile(
+    r"^\s*([0-9][0-9,]*)\s+[0-9]+(?:\.[0-9]+)?%\s+"
+    r"[0-9][0-9,]*\s+[0-9][0-9,]*\s+[0-9][0-9,]*\s+"
+    r"[0-9][0-9,]*\s+([a-z][a-z0-9_]*)\s*$"
+)
 TOP_COST_FUNCTION_ROW = re.compile(
     r"^[║│]\s+\d+\s+(.+?)\s+[█▓▒░]+\s+"
     r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+[║│]\s*$"
+)
+FULL_TOP_COST_FUNCTION_ROW = re.compile(
+    r"^\s*([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%\s+"
+    r"[0-9][0-9,]*\s+(.+?)\s*$"
 )
 SDK_OPCODE_COST_ROW = re.compile(
     r"^[║│]\s{2}([a-z][a-z0-9_]*)\s+[█▓▒░]+\s+"
@@ -87,6 +96,7 @@ class FixtureCase:
     block_index: int
     payload: bytes
     expected: bytes
+    gas_used: int | None = None
 
     @property
     def identity(self) -> str:
@@ -105,6 +115,14 @@ def decode_hex(value: str) -> bytes:
     if value.startswith(("0x", "0X")):
         value = value[2:]
     return bytes.fromhex(value)
+
+
+def decode_quantity(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value, 0)
+    return None
 
 
 def sha256_file(path: Path) -> str:
@@ -160,6 +178,9 @@ def load_cases(paths: Iterable[Path]) -> list[FixtureCase]:
                         block_index=block_index,
                         payload=decode_hex(input_hex),
                         expected=decode_hex(output_hex),
+                        gas_used=decode_quantity(
+                            (block.get("blockHeader") or {}).get("gasUsed")
+                        ),
                     )
                 )
     return cases
@@ -203,19 +224,8 @@ def frame_input(payload: bytes) -> bytes:
 
 
 def prepare_guest_payload(guest: Guest, payload: bytes) -> bytes:
-    """Attach private execution metadata required by a specific guest.
-
-    The optimized evm-sail guest uses the same per-fixture capacity trailer as
-    the native and Spike fixture harnesses. Peer guests must continue to see
-    the canonical stateless input unchanged.
-    """
-    if guest.name != "evm-sail":
-        return payload
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-    from harness.dump_state import prepare_optimized_input
-
-    return prepare_optimized_input(payload)
+    """Return the canonical stateless input unchanged for every guest."""
+    return payload
 
 
 def frame_guest_input(guest: Guest, payload: bytes) -> bytes:
@@ -244,16 +254,29 @@ def parse_cost(output: str) -> int:
 
 def parse_profile_scope_metric(output: str, metric: str) -> dict[str, int]:
     """Parse inclusive scope totals from a ziskemu profile-tag table."""
-    marker = f"{metric.upper()} PROFILE TAGS"
-    if marker not in output:
+    sdk_marker = f"{metric.upper()} PROFILE TAGS"
+    full_marker = f"PROFILE TAGS {metric.upper()}"
+    if sdk_marker in output:
+        section = output.split(sdk_marker, 1)[1]
+        row_pattern = PROFILE_TAG_ROW
+        name_group = 1
+        value_group = 2
+    elif full_marker in output:
+        section = output.split(full_marker, 1)[1]
+        row_pattern = FULL_PROFILE_TAG_ROW
+        name_group = 2
+        value_group = 1
+    else:
         raise RuntimeError(f"ZisK profile report has no {metric} profile-tag section")
-    section = output.split(marker, 1)[1]
+
     scopes: dict[str, int] = {}
     for line in section.splitlines():
-        match = PROFILE_TAG_ROW.match(line)
+        match = row_pattern.match(line)
         if match:
-            scopes[match.group(1)] = int(match.group(2).replace(",", ""))
-        elif scopes and line.startswith(("╚", "└")):
+            scopes[match.group(name_group)] = int(
+                match.group(value_group).replace(",", "")
+            )
+        elif scopes and (not line.strip() or line.startswith(("╚", "└"))):
             break
     if not scopes:
         raise RuntimeError(
@@ -271,7 +294,7 @@ def parse_profile_scope_costs(output: str) -> dict[str, int]:
 
 
 def parse_top_cost_functions(output: str) -> list[dict[str, object]]:
-    """Parse the compact SDK top-cost function table."""
+    """Parse the SDK or full-statistics top-cost function table."""
     marker = "TOP COST FUNCTIONS"
     if marker not in output:
         return []
@@ -280,14 +303,20 @@ def parse_top_cost_functions(output: str) -> list[dict[str, object]]:
     for line in section.splitlines():
         match = TOP_COST_FUNCTION_ROW.match(line)
         if match:
+            name, cost, share = match.group(1), match.group(2), match.group(3)
+        else:
+            match = FULL_TOP_COST_FUNCTION_ROW.match(line)
+            if match:
+                cost, share, name = match.group(1), match.group(2), match.group(3)
+        if match:
             functions.append(
                 {
-                    "name": match.group(1).rstrip(),
-                    "cost": int(match.group(2).replace(",", "")),
-                    "share_percent": float(match.group(3)),
+                    "name": name.rstrip(),
+                    "cost": int(cost.replace(",", "")),
+                    "share_percent": float(share),
                 }
             )
-        elif functions and line.startswith(("╚", "└")):
+        elif functions and (not line.strip() or line.startswith(("╚", "└"))):
             break
     return functions
 
@@ -509,15 +538,27 @@ def run_profile(
     if keep_report:
         artifacts["report"] = str(report_path)
     if mode == "sdk":
-        command.extend(
-            [
-                "--stats",
-                "--sdk",
-                "--opcodes",
-                "--profile-tags",
-                "--top-functions",
-            ]
-        )
+        if comprehensive:
+            disassembly_path = Path(f"{stem}.disassembly.txt")
+            command.extend(
+                [
+                    "--stats",
+                    "--read-symbols",
+                    "--disasm",
+                    str(disassembly_path),
+                ]
+            )
+            artifacts["disassembly"] = str(disassembly_path)
+        else:
+            command.extend(
+                [
+                    "--stats",
+                    "--sdk",
+                    "--opcodes",
+                    "--profile-tags",
+                    "--top-functions",
+                ]
+            )
     else:
         profiler_path = Path(f"{stem}.profile.json.gz")
         disassembly_path = Path(f"{stem}.disassembly.txt")
@@ -562,7 +603,6 @@ def run_profile(
     artifacts["actual_output_bytes"] = len(actual)
     if mode == "sdk":
         artifacts["cost"] = parse_cost(diagnostic)
-        artifacts["opcode_costs"] = parse_opcode_costs(diagnostic)
         artifacts["top_cost_functions"] = parse_top_cost_functions(diagnostic)
         artifacts["function_profile_status"] = (
             "stack_mismatch"
@@ -573,94 +613,67 @@ def run_profile(
                 else "no_function_rows"
             )
         )
+        has_scope_steps = (
+            "STEPS PROFILE TAGS" in diagnostic
+            or "PROFILE TAGS STEPS" in diagnostic
+        )
+        has_scope_costs = (
+            "COST PROFILE TAGS" in diagnostic
+            or "PROFILE TAGS COST" in diagnostic
+        )
         artifacts["scope_steps"] = (
-            parse_profile_scope_steps(diagnostic)
-            if "STEPS PROFILE TAGS" in diagnostic
-            else {}
+            parse_profile_scope_steps(diagnostic) if has_scope_steps else {}
         )
         artifacts["scope_costs"] = (
-            parse_profile_scope_costs(diagnostic)
-            if "COST PROFILE TAGS" in diagnostic
-            else {}
+            parse_profile_scope_costs(diagnostic) if has_scope_costs else {}
         )
         if comprehensive:
-            comprehensive_output_path = Path(f"{stem}.comprehensive.output.bin")
-            comprehensive_report_path = Path(f"{stem}.comprehensive.txt")
-            disassembly_path = Path(f"{stem}.disassembly.txt")
-            comprehensive_output_path.unlink(missing_ok=True)
-            comprehensive_command = [
-                str(ziskemu),
-                "--elf",
-                str(guest.elf),
-                "--inputs",
-                str(input_path),
-                "--output",
-                str(comprehensive_output_path),
-                "--stats",
-                "--read-symbols",
-                "--disasm",
-                str(disassembly_path),
-            ]
-            comprehensive_result = subprocess.run(
-                comprehensive_command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            comprehensive_diagnostic = (
-                comprehensive_result.stdout + comprehensive_result.stderr
-            )
-            comprehensive_report_path.write_text(comprehensive_diagnostic)
-            comprehensive_output = (
-                comprehensive_output_path.read_bytes()
-                if comprehensive_output_path.exists()
-                else b""
-            )
-            if (
-                comprehensive_result.returncode != 0
-                or not output_matches(comprehensive_output, case.expected)
-            ):
-                raise RuntimeError(
-                    f"{guest.name} comprehensive profile failed "
-                    f"{case.identity}; see {comprehensive_report_path}"
-                )
-            comprehensive_steps = parse_steps(comprehensive_diagnostic)
-            if comprehensive_steps != artifacts["steps"]:
-                raise RuntimeError(
-                    f"{guest.name} profile step mismatch for {case.identity}: "
-                    f"SDK={artifacts['steps']}, full={comprehensive_steps}"
-                )
-            comprehensive_cost = parse_cost(comprehensive_diagnostic)
-            if comprehensive_cost != artifacts["cost"]:
-                raise RuntimeError(
-                    f"{guest.name} profile cost mismatch for {case.identity}: "
-                    f"SDK={artifacts['cost']}, full={comprehensive_cost}"
-                )
             artifacts["opcode_costs"] = parse_comprehensive_opcode_costs(
-                comprehensive_diagnostic
+                diagnostic
             )
             artifacts["opcode_profile_completeness"] = "all_used_operations"
             artifacts["executed_functions"] = parse_executed_functions(
-                disassembly_path.read_text(), comprehensive_steps
+                disassembly_path.read_text(), int(artifacts["steps"])
             )
             artifacts["function_inventory_status"] = "ok"
-            if keep_report:
-                artifacts["comprehensive_report"] = str(
-                    comprehensive_report_path
-                )
-                artifacts["disassembly"] = str(disassembly_path)
-                artifacts["comprehensive_output"] = str(
-                    comprehensive_output_path
-                )
-            else:
-                comprehensive_report_path.unlink()
-                comprehensive_output_path.unlink()
+            if not keep_report:
                 disassembly_path.unlink()
+        else:
+            artifacts["opcode_costs"] = parse_opcode_costs(diagnostic)
     if not keep_report:
         report_path.unlink()
         input_path.unlink()
         output_path.unlink()
     return artifacts
+
+
+def unavailable_profile(
+    error: BaseException,
+    guest: Guest,
+    case: FixtureCase,
+    run_dir: Path,
+    mode: str,
+) -> dict[str, str]:
+    """Describe a guest/profile failure without treating it as a measurement."""
+    report_path = run_dir / "profiles" / guest.name / f"{case.identity}.{mode}.txt"
+    diagnostic = report_path.read_text() if report_path.exists() else ""
+    if "OOM limit of heap with bump allocator" in diagnostic:
+        return {
+            "code": "guest_heap_oom",
+            "message": "Guest unavailable: ZisK bump-allocator heap exhausted",
+            "report": str(report_path),
+        }
+    if isinstance(error, subprocess.TimeoutExpired):
+        return {
+            "code": "timeout",
+            "message": "Guest unavailable: profile timed out",
+            "report": str(report_path),
+        }
+    return {
+        "code": "guest_failure",
+        "message": "Guest unavailable: execution failed",
+        "report": str(report_path),
+    }
 
 
 def fixture_taxonomy(path: Path) -> dict[str, str]:
@@ -748,14 +761,18 @@ def export_dashboard_data(
                 profile = profiles[case_index]
                 measurements = measurement.get("measurements")
                 artifacts = profile.get("artifacts")
-                if not isinstance(measurements, list) or not measurements:
-                    raise ValueError(
-                        f"missing measurements for {guest.name} {case.identity}"
-                    )
                 if not isinstance(artifacts, dict):
                     raise ValueError(
                         f"missing profile artifacts for {guest.name} "
                         f"{case.identity}"
+                    )
+                unavailable = artifacts.get("unavailable")
+                if isinstance(unavailable, dict):
+                    case_guests[guest.name] = {"unavailable": unavailable}
+                    continue
+                if not isinstance(measurements, list) or not measurements:
+                    raise ValueError(
+                        f"missing measurements for {guest.name} {case.identity}"
                     )
                 scope_steps = artifacts.get("scope_steps", {})
                 scope_costs = artifacts.get("scope_costs", {})
@@ -833,11 +850,12 @@ def export_dashboard_data(
                     "name": case.name,
                     "block_index": case.block_index,
                     "input_bytes": len(case.payload),
+                    "gas_used": case.gas_used,
                     "guests": case_guests,
                 }
             )
         shard = {
-            "format_version": 4,
+            "format_version": 5,
             "fixture": {**taxonomy, "id": fixture_id},
             "cases": shard_cases,
         }
@@ -850,6 +868,14 @@ def export_dashboard_data(
                 "id": fixture_id,
                 "shard": shard_name,
                 "case_count": len(shard_cases),
+                "max_gas_used": max(
+                    (
+                        case.gas_used
+                        for _, case in fixture_cases
+                        if case.gas_used is not None
+                    ),
+                    default=None,
+                ),
             }
         )
 
@@ -876,7 +902,7 @@ def export_dashboard_data(
         )
     )
     payload = {
-        "format_version": 4,
+        "format_version": 5,
         "generated_at_unix_ns": str(benchmark_result["generated_at_unix_ns"]),
         "guests": guest_catalog,
         "ziskemu": benchmark_result["ziskemu"],
@@ -900,9 +926,13 @@ def summarize_guest(cases: list[dict[str, object]]) -> dict[str, object]:
     total_steps = 0
     median_elapsed_ns = 0
     p95_elapsed_ns = 0
+    unavailable_count = 0
     for case in cases:
         measurements = case["measurements"]
         assert isinstance(measurements, list)
+        if not measurements:
+            unavailable_count += 1
+            continue
         steps = {int(measurement["steps"]) for measurement in measurements}
         if len(steps) != 1:
             raise RuntimeError(f"non-deterministic step counts: {sorted(steps)}")
@@ -912,10 +942,12 @@ def summarize_guest(cases: list[dict[str, object]]) -> dict[str, object]:
         p95_elapsed_ns += percentile(elapsed, 0.95)
     return {
         "case_count": len(cases),
+        "measured_case_count": len(cases) - unavailable_count,
+        "unavailable_case_count": unavailable_count,
         "total_steps": total_steps,
         "sum_case_median_elapsed_ns": median_elapsed_ns,
         "sum_case_p95_elapsed_ns": p95_elapsed_ns,
-        "all_outputs_matched": True,
+        "all_outputs_matched": unavailable_count == 0,
     }
 
 
@@ -936,12 +968,26 @@ def markdown_report(result: dict[str, object], baseline: str) -> str:
         summary = guest["summary"]
         elf = guest["elf"]
         steps = int(summary["total_steps"])
+        unavailable = int(summary.get("unavailable_case_count", 0))
+        comparable = unavailable == 0
+        ratio = f"{steps / baseline_steps:.2f}x" if comparable else "n/a"
+        output = (
+            "exact"
+            if comparable
+            else f"{int(summary['measured_case_count'])}/{int(summary['case_count'])} exact; {unavailable} unavailable"
+        )
         lines.append(
             f"| {name} | {int(elf['size_bytes']) / (1024 * 1024):.2f} | "
-            f"{steps:,} | {steps / baseline_steps:.2f}x | "
+            f"{steps:,} | {ratio} | "
             f"{int(summary['sum_case_median_elapsed_ns']) / 1_000_000:.2f} | "
-            f"{int(summary['sum_case_p95_elapsed_ns']) / 1_000_000:.2f} | exact |"
+            f"{int(summary['sum_case_p95_elapsed_ns']) / 1_000_000:.2f} | {output} |"
         )
+    metadata = result.get("metadata", {})
+    if isinstance(metadata, dict) and metadata:
+        lines.extend(["", "## Provenance", ""])
+        for name, value in sorted(metadata.items()):
+            rendered = f"[{value}]({value})" if name == "source_url" else value
+            lines.append(f"- `{name}`: {rendered}")
     lines.extend(
         [
             "",
@@ -1005,9 +1051,16 @@ def parse_args() -> argparse.Namespace:
         "--dashboard-only",
         action="store_true",
         help=(
-            "use each SDK profile invocation as the benchmark measurement; "
-            "dashboard generation also runs a supplemental full profile for "
-            "comprehensive operation and executed-function data"
+            "use each full statistics profile invocation as the benchmark "
+            "measurement and dashboard source"
+        ),
+    )
+    parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help=(
+            "record failed guest profiles as unavailable and continue; "
+            "intended for comparative dashboard runs"
         ),
     )
     return parser.parse_args()
@@ -1093,6 +1146,7 @@ def main() -> int:
                 "block_index": case.block_index,
                 "input_sha256": hashlib.sha256(case.payload).hexdigest(),
                 "input_bytes": len(case.payload),
+                "gas_used": case.gas_used,
                 "expected_output_bytes": len(case.expected),
             }
             for case in cases
@@ -1117,21 +1171,31 @@ def main() -> int:
                     f"  {args.profile} profile {case_index}/{len(cases)}",
                     flush=True,
                 )
+                try:
+                    artifacts = run_profile(
+                        ziskemu,
+                        guest,
+                        case,
+                        run_dir,
+                        args.timeout,
+                        args.profile,
+                        keep_report=not args.dashboard_only,
+                        comprehensive=bool(args.dashboard_dir),
+                    )
+                except (RuntimeError, subprocess.TimeoutExpired) as error:
+                    if not args.continue_on_error:
+                        raise
+                    unavailable = unavailable_profile(
+                        error, guest, case, run_dir, args.profile
+                    )
+                    print(f"    {unavailable['message']}", flush=True)
+                    artifacts = {"unavailable": unavailable}
                 profiles.append(
                     {
                         "identity": case.identity,
                         "name": case.name,
                         "block_index": case.block_index,
-                        "artifacts": run_profile(
-                            ziskemu,
-                            guest,
-                            case,
-                            run_dir,
-                            args.timeout,
-                            args.profile,
-                            keep_report=not args.dashboard_only,
-                            comprehensive=bool(args.dashboard_dir),
-                        ),
+                        "artifacts": artifacts,
                     }
                 )
 
@@ -1140,6 +1204,18 @@ def main() -> int:
             for case, profile in zip(cases, profiles):
                 artifacts = profile["artifacts"]
                 assert isinstance(artifacts, dict)
+                unavailable = artifacts.get("unavailable")
+                if isinstance(unavailable, dict):
+                    measured_cases.append(
+                        {
+                            "identity": case.identity,
+                            "name": case.name,
+                            "block_index": case.block_index,
+                            "measurements": [],
+                            "unavailable": unavailable,
+                        }
+                    )
+                    continue
                 measured_cases.append(
                     {
                         "identity": case.identity,

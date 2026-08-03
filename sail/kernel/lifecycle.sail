@@ -1,13 +1,13 @@
 /*md
 # State: the transaction lifecycle
 
-Snapshot, revert, per-transaction reset, and the transaction-end merge
+Journal checkpoints, rollback, per-transaction reset, and transaction-end merge
 into the block layer.
 */
 
-/*! Captures all frame-revertible transaction state. The frame checkpoint
-    stores its refund counter separately. */
-function k_state_checkpoint() -> journal_checkpoint = state_checkpoint()
+/*! Appends a frame marker to the state journal. The suspended frame stores its
+    refund counter separately. */
+function k_journal_checkpoint() -> unit = state_journal_checkpoint()
 
 /*! Installs the block header. */
 function k_set_header(h : BlockHeader) -> unit = k_header = h
@@ -15,25 +15,52 @@ function k_set_header(h : BlockHeader) -> unit = k_header = h
 /*! Installs the per-transaction environment. */
 function k_set_tx(env : TxEnv) -> unit = k_tx = env
 
-/*! Resets every per-transaction store and the private checkpoint history. */
+/*! Resets every per-transaction store and the state journal. */
 function k_tx_reset() -> unit = {
-    acct_tx_reset();
+    /* Storage reset consumes the per-account transaction worklists owned by
+       the account table, so it must precede the account reset. */
     storage_tx_reset();
-    warm_reset();
+    acct_tx_reset();
+    warm_reset(k_current_transaction_epoch);
     transient_reset();
     logs_tx_reset();
-    state_checkpoint_reset()
+    state_journal_reset()
 }
+
+/*! The two correlated lifecycle choices selected once from the active fork.
+    Passing this descriptor into the merge keeps both the Sail implementation
+    and optimized host implementation from independently re-dispatching on the
+    fork or observing impossible feature combinations. */
+struct TransactionMergeSemantics = {
+    delete_only_created : bool,
+    preserve_selfdestruct_balance : bool,
+}
+
+/*! Selects the complete transaction-end lifecycle semantics for one fork. */
+function transaction_merge_semantics(fork : Fork) -> TransactionMergeSemantics =
+    if fork >= Amsterdam then {
+        struct {
+            delete_only_created = true,
+            preserve_selfdestruct_balance = true,
+        }
+    } else if fork >= Cancun then {
+        struct {
+            delete_only_created = true,
+            preserve_selfdestruct_balance = false,
+        }
+    } else {
+        struct {
+            delete_only_created = false,
+            preserve_selfdestruct_balance = false,
+        }
+    }
 
 /*! Whether a selfdestructed account is cleared at transaction end: always
     before Cancun; only if created in the same transaction from Cancun on
     (EIP-6780). Amsterdam preserves any balance left by a self-beneficiary
     `SELFDESTRUCT` (EIP-8246). */
-function account_deleted_at_tx_end(acc : Account) -> bool = {
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    acc.selfdestructed & ((profile.fork < Cancun) | acc.created)
-}
+function account_deleted_at_tx_end(semantics : TransactionMergeSemantics, acc : Account) -> bool =
+    acc.selfdestructed & (not_bool(semantics.delete_only_created) | acc.created)
 
 /*! The transaction-end merge: drains the transaction overlays into the
     block layer, applying the fork-specific selfdestruct clearing rule,
@@ -43,6 +70,7 @@ function account_deleted_at_tx_end(acc : Account) -> bool = {
 function k_tx_merge() -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
+    let semantics = transaction_merge_semantics(profile.fork);
     var more : bool = true;
 
     /* Each pop advances a cursor over a protocol-sized host table. */
@@ -50,9 +78,9 @@ function k_tx_merge() -> unit = {
         match acct_tx_pop() {
             Some(e) => {
                 var curr : Account = e.value.curr;
-                let deleted = account_deleted_at_tx_end(curr);
+                let deleted = account_deleted_at_tx_end(semantics, curr);
                 if deleted then {
-                    if profile.fork >= Amsterdam then {
+                    if semantics.preserve_selfdestruct_balance then {
                         curr = account_clear_preserving_balance(curr)
                     } else {
                         curr = account_delete(curr)
@@ -68,13 +96,13 @@ function k_tx_merge() -> unit = {
                     storage_block_clear(e.addr)
                 };
                 if curr.info.nonce != e.value.orig.info.nonce then {
-                    bal_nonce_change(k_block_access_index, e.addr, curr.info.nonce)
+                    bal_nonce_change(k_current_transaction_epoch, e.addr, curr.info.nonce)
                 };
                 if curr.info.balance != e.value.orig.info.balance then {
-                    bal_balance_change(k_block_access_index, e.addr, curr.info.balance)
+                    bal_balance_change(k_current_transaction_epoch, e.addr, curr.info.balance)
                 };
                 if curr.info.code_hash != e.value.orig.info.code_hash then {
-                    bal_code_change(k_block_access_index, e.addr, curr.info.code_hash)
+                    bal_code_change(k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 };
                 curr = { curr with created = false,  selfdestructed = false };
                 if account_changed(curr, e.value.orig) then {
@@ -92,7 +120,7 @@ function k_tx_merge() -> unit = {
             Some(e) => {
                 match acct_block_get(e.key.addr) {
                     Some(acc) => if acc.present & e.value.curr != e.value.orig then {
-                        bal_storage_change(k_block_access_index, e.key.addr, e.key.slot, e.value.curr);
+                        bal_storage_change(k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr);
                         storage_block_put(e)
                     },
                     None() => (),
@@ -101,9 +129,12 @@ function k_tx_merge() -> unit = {
             None() => more = false,
         }
     };
-    acct_tx_reset();
-    storage_tx_reset()
+    storage_tx_reset();
+    acct_tx_reset()
 }
 
-/*! Atomically restores the transaction state captured at a frame boundary. */
-function k_revert(checkpoint : journal_checkpoint) -> unit = state_revert(checkpoint)
+/*! Replays the state journal backwards to its innermost open frame boundary. */
+function k_journal_revert() -> unit = state_journal_revert()
+
+/*! Records a successful child frame without discarding its reversible entries. */
+function k_journal_commit() -> unit = state_journal_commit()

@@ -82,13 +82,11 @@ unit nodedb_reset(const unit u) {
   return UNIT;
 }
 
-unit nodedb_insert(sail_fixed_bytes_32 kh, EVMSAIL_BYTE_QUANTITY_PARAM(off),
-                   EVMSAIL_BYTE_QUANTITY_PARAM(len)) {
+unit nodedb_insert(sail_fixed_bytes_32 kh, uint64_t off, uint64_t len) {
   sail_fixed_bytes_32 k = kh;
   if (!nd_tab)
     nodedb_reset(UNIT);
-  nd_put(&k, evmsail_byte_quantity_value(off),
-         evmsail_byte_quantity_value(len));
+  nd_put(&k, off, len);
   nd_memo_valid = 0;
   return UNIT;
 }

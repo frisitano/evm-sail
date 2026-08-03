@@ -194,9 +194,84 @@ __asm__(
 #define END_SCOPE(id, tag) case id: __asm__ volatile("addi x0, x2, " #id ::: "memory"); break
 #endif
 
-unit evmsail_cycle_scope_start(uint64_t scope)
+#if defined(__riscv)
+/*
+ * Sail exceptions unwind through generated return checks rather than C
+ * longjmp.  Consequently an exception can skip the explicit end marker for
+ * one or more nested scopes.  Keep the profiler's small logical scope stack
+ * here so closing an ancestor can first close every abandoned child in LIFO
+ * order.  Successful executions still emit exactly the original marker
+ * sequence.
+ */
+static uint8_t cycle_scope_stack[256];
+static uint16_t cycle_scope_depth;
+
+static inline void cycle_scope_report_end(uint64_t scope)
+{
+    switch (scope) {
+    END_SCOPE(0, stateless_validation);
+    END_SCOPE(1, decode_input);
+    END_SCOPE(2, index_witness);
+    END_SCOPE(3, validate_payload);
+    END_SCOPE(4, execute_block);
+    END_SCOPE(5, validate_result);
+    END_SCOPE(6, compute_output_root);
+    END_SCOPE(7, serialize_output);
+    END_SCOPE(8, block_start);
+    END_SCOPE(9, block_transactions);
+    END_SCOPE(10, tx_decode);
+    END_SCOPE(11, tx_reset);
+    END_SCOPE(12, tx_validate);
+    END_SCOPE(13, tx_upfront);
+    END_SCOPE(14, tx_frame);
+    END_SCOPE(15, tx_settle);
+    END_SCOPE(16, receipts_root);
+    END_SCOPE(17, block_end_state);
+    END_SCOPE(18, block_end_requests);
+    END_SCOPE(19, state_root);
+    END_SCOPE(20, block_access_list);
+    END_SCOPE(21, htr_execution_payload);
+    END_SCOPE(22, htr_transactions);
+    END_SCOPE(23, htr_withdrawals);
+    END_SCOPE(24, htr_versioned_hashes);
+    END_SCOPE(25, htr_execution_requests);
+    END_SCOPE(26, htr_bytes_root);
+    END_SCOPE(27, htr_merkle_padding);
+    END_SCOPE(28, account_load);
+    END_SCOPE(29, account_tx_lookup);
+    END_SCOPE(30, account_block_lookup);
+    END_SCOPE(31, account_witness);
+    END_SCOPE(32, storage_load);
+    END_SCOPE(33, storage_tx_lookup);
+    END_SCOPE(34, storage_block_lookup);
+    END_SCOPE(35, storage_witness);
+    END_SCOPE(36, bal_account_touch);
+    END_SCOPE(37, bal_storage_read);
+    END_SCOPE(38, index_witness_nodes);
+    END_SCOPE(39, index_witness_codes);
+    END_SCOPE(40, index_witness_headers);
+    END_SCOPE(41, request_withdrawals);
+    END_SCOPE(42, request_consolidations);
+    END_SCOPE(43, request_builder_deposits);
+    END_SCOPE(44, request_builder_exits);
+    END_SCOPE(45, account_mutation);
+    END_SCOPE(46, storage_mutation);
+    END_SCOPE(47, tx_merge);
+    END_SCOPE(48, tx_merge_accounts);
+    END_SCOPE(49, tx_merge_storage);
+    END_SCOPE(50, system_call_interpret);
+    END_SCOPE(51, system_call_merge);
+    default: break;
+    }
+}
+#endif
+
+unit cycle_scope_start(uint64_t scope)
 {
 #if defined(__riscv)
+    if (cycle_scope_depth < sizeof(cycle_scope_stack)) {
+        cycle_scope_stack[cycle_scope_depth++] = (uint8_t)scope;
+    }
     switch (scope) {
     START_SCOPE(0, stateless_validation);
     START_SCOPE(1, decode_input);
@@ -258,64 +333,15 @@ unit evmsail_cycle_scope_start(uint64_t scope)
     return UNIT;
 }
 
-unit evmsail_cycle_scope_end(uint64_t scope)
+unit cycle_scope_end(uint64_t scope)
 {
 #if defined(__riscv)
-    switch (scope) {
-    END_SCOPE(0, stateless_validation);
-    END_SCOPE(1, decode_input);
-    END_SCOPE(2, index_witness);
-    END_SCOPE(3, validate_payload);
-    END_SCOPE(4, execute_block);
-    END_SCOPE(5, validate_result);
-    END_SCOPE(6, compute_output_root);
-    END_SCOPE(7, serialize_output);
-    END_SCOPE(8, block_start);
-    END_SCOPE(9, block_transactions);
-    END_SCOPE(10, tx_decode);
-    END_SCOPE(11, tx_reset);
-    END_SCOPE(12, tx_validate);
-    END_SCOPE(13, tx_upfront);
-    END_SCOPE(14, tx_frame);
-    END_SCOPE(15, tx_settle);
-    END_SCOPE(16, receipts_root);
-    END_SCOPE(17, block_end_state);
-    END_SCOPE(18, block_end_requests);
-    END_SCOPE(19, state_root);
-    END_SCOPE(20, block_access_list);
-    END_SCOPE(21, htr_execution_payload);
-    END_SCOPE(22, htr_transactions);
-    END_SCOPE(23, htr_withdrawals);
-    END_SCOPE(24, htr_versioned_hashes);
-    END_SCOPE(25, htr_execution_requests);
-    END_SCOPE(26, htr_bytes_root);
-    END_SCOPE(27, htr_merkle_padding);
-    END_SCOPE(28, account_load);
-    END_SCOPE(29, account_tx_lookup);
-    END_SCOPE(30, account_block_lookup);
-    END_SCOPE(31, account_witness);
-    END_SCOPE(32, storage_load);
-    END_SCOPE(33, storage_tx_lookup);
-    END_SCOPE(34, storage_block_lookup);
-    END_SCOPE(35, storage_witness);
-    END_SCOPE(36, bal_account_touch);
-    END_SCOPE(37, bal_storage_read);
-    END_SCOPE(38, index_witness_nodes);
-    END_SCOPE(39, index_witness_codes);
-    END_SCOPE(40, index_witness_headers);
-    END_SCOPE(41, request_withdrawals);
-    END_SCOPE(42, request_consolidations);
-    END_SCOPE(43, request_builder_deposits);
-    END_SCOPE(44, request_builder_exits);
-    END_SCOPE(45, account_mutation);
-    END_SCOPE(46, storage_mutation);
-    END_SCOPE(47, tx_merge);
-    END_SCOPE(48, tx_merge_accounts);
-    END_SCOPE(49, tx_merge_storage);
-    END_SCOPE(50, system_call_interpret);
-    END_SCOPE(51, system_call_merge);
-    default: break;
+    while (cycle_scope_depth != 0 &&
+           cycle_scope_stack[cycle_scope_depth - 1] != scope) {
+        cycle_scope_report_end(cycle_scope_stack[--cycle_scope_depth]);
     }
+    cycle_scope_report_end(scope);
+    if (cycle_scope_depth != 0) --cycle_scope_depth;
 #else
     (void)scope;
 #endif

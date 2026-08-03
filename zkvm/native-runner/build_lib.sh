@@ -48,21 +48,27 @@ else
 fi
 
 # 2. link a shared library: build.sh's objects (incl. native_test.o), minus main.o
+MODEL_BACKEND_OBJS=()
 HOST_OBJS=()
-for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
-  HOST_OBJS+=("$BUILD/$hc.o")
-done
-if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
-HTR_OBJ=""
-PREIMAGE_OBJ=""
-MPT_OBJ=""
-INTERPRETER_OBJ=""
-if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
-  PREIMAGE_OBJ="$BUILD/preimage.o"
-  HTR_OBJ="$BUILD/htr.o"
-  MPT_OBJ="$BUILD/mpt.o"
-  INTERPRETER_OBJ="$BUILD/interpreter.o"
+if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then
+  MODEL_BACKEND_OBJS=(
+    "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o"
+    "$BUILD/region_access.o" "$BUILD/model_address_result.o"
+    "$BUILD/model_frame_stack.o"
+  )
+  HOST_SOURCES=(capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output)
+  for hc in "${HOST_SOURCES[@]}"; do HOST_OBJS+=("$BUILD/$hc.o"); done
+else
+  while IFS= read -r relative || [ -n "$relative" ]; do
+    case "$relative" in ''|'#'*) continue ;; esac
+    source="$ROOT/ffi/optimized/src/$relative"
+    [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
+    object_name="${relative%.c}"
+    object_name="${object_name//\//__}"
+    MODEL_BACKEND_OBJS+=("$BUILD/optimized__${object_name}.o")
+  done < "$ROOT/ffi/optimized/sources.list"
 fi
+if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
 case "$(uname -s)" in
   Darwin) SHFLAG=(-dynamiclib -install_name "@rpath/libevmsail_guest.dylib"); EXT=dylib ;;
   *)      SHFLAG=(-shared); EXT=so ;;
@@ -72,13 +78,12 @@ OUT="$BUILD/libevmsail_guest.$EXT"
 # read_input, write_output, the output buffer, and run_once. The real guest's
 # Spike I/O device adapter is never linked into host builds.
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" "$BUILD/native_test.o"
-    ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"}
-    ${HTR_OBJ:+"$HTR_OBJ"}
-    ${MPT_OBJ:+"$MPT_OBJ"}
-    ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
-    "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
+    "$BUILD/zkvm_block.o" "${MODEL_BACKEND_OBJS[@]}" "$BUILD/native_test.o"
+    "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
+if [ "${EVM_BUILD_MODE:-optimized}" = standard ] || [ "${EVM_PROFILE:-off}" = on ]; then
+  LINK_CMD+=("${HOST_OBJS[@]}")
+fi
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then
   LINK_CMD+=("${RUNTIME_LINK_FLAGS[@]}")
 fi

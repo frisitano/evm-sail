@@ -12,7 +12,7 @@ frame transitions remain entirely in Sail.
 */
 /*! Copies frame memory into the host output buffer; the flag reports
     acceptance. */
-val output_buffer_store_memory = impure { c: "output_buffer_store_memory" } : MemorySlice -> bool
+val output_buffer_store_memory = impure { c: "output_buffer_store_memory" } : EvmMemorySlice -> bool
 /*! Copies top-level calldata into the host output buffer. This is used by the
     identity precompile without first materializing the input in EVM memory. */
 val output_buffer_store_input = impure { c: "output_buffer_store_input" } : StatelessInputSlice -> bool
@@ -37,7 +37,7 @@ function output_buffer_slice(len) =
 
 /*! Copies frame output into the host buffer so it survives frame
     teardown; the canonical returndata source. */
-function freeze_memory_output(data : MemorySlice) -> OutputSlice = {
+function freeze_memory_output(data : EvmMemorySlice) -> OutputSlice = {
     let len = data.len;
     if len == 0 then {
         EMPTY_OUTPUT_SLICE

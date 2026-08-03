@@ -131,18 +131,22 @@ sail/        the specification (evm.sail_project defines the single build)
     transaction.sail  tx validity + the state transition + refunds
   executor/
     block.sail        whole-block execution (txs + withdrawals)
-    payload.sail      transaction/withdrawal MPT roots for payload validation
+    payload.sail      payload commitment validation and indexed MPT roots
     system_calls.sail protocol system-call orchestration
     block_access_list.sail EIP-7928 validation
   lib/
-    rlp/rlp.sail       RLP decoding and encoding
+    rlp/
+      encoding.sail    canonical sizing/writing + exact scratch encoder
+      decoding.sail    canonical framing, cursors, and scalar decoding
+      codecs/           address, tx, receipt, header, BAL, state codecs
     ssz/
       ssz.sail         generic source-backed SSZ readers and list navigation
       stateless_input.sail concrete SszStatelessInput refs and decoder
     htr.sail           SSZ hash-tree-root computation
     mpt/               generic MPT implementation
       primitives.sail  trie paths + hex-prefix encoding
-      nodes.sail       node refs, RLP encoding/decoding + C-backed node-db
+      nodes.sail       node and reference types
+      codec.sail       hex-prefix/RLP node encoding and decoding
       updates.sail     ordered updates + canonical trie rebuilding
       trie.sail        witness overlay, roots + fail-closed lookup
 ffi/         C backends: memory.c (memory/nominal region access), scratch.c
@@ -206,9 +210,10 @@ make extract                                # run maintained proof extractions
 separate ignored directories under `build/` and compile-check it against
 `ffi/spec` and `ffi/optimized`, respectively. Generated C is not retained as a
 readable source mirror: the Sail model is the source of truth. The optimized
-target uses the same specialization and `c_optimized.sail` splice as optimized
-native and zkVM builds. Spec C and proof extraction retain the explicit,
-readable Sail equations. See
+target uses the same ordered `sail/optimised/manifest` module overrides as
+optimized native and zkVM builds. The override tree mirrors `sail/`, so each
+replacement remains next to the corresponding canonical module path. Spec C
+and proof extraction retain the explicit, readable Sail equations. See
 [`extractions/README.md`](extractions/README.md) for the maintained proof
 extractions.
 
