@@ -40,7 +40,7 @@ section or EIP it implements; fork-dependent rules are gated on the
   [Blocks](reference/sail/primitives/block.md) — the protocol data types.
 - [The Merkle-Patricia trie](reference/sail/lib/mpt/trie.md) and the
   [state trie](reference/sail/lib/state_trie.md).
-- [RLP](reference/sail/lib/rlp/rlp.md) and
+- [RLP](reference/sail/lib/rlp/index.md) and
   [SSZ](reference/sail/lib/ssz/ssz.md) serialization;
   [hash_tree_root](reference/sail/lib/htr.md).
 - [Cryptographic primitives](reference/sail/primitives/crypto.md).

@@ -15,13 +15,48 @@ register validation_failure_present : bool = false
 register validation_failure_scope : validation_stage = 0
 /*! The block-validation error recorded by the last failure. */
 register validation_failure_reason : BlockError = InvalidConfig
+/*! Whether the latest completed block execution recorded its gas totals. */
+register validation_debug_gas_present : bool = false
+/*! Header gas computed from the execution and state reservoirs. */
+register validation_debug_header_gas_actual : gas = GAS_ZERO
+/*! Header gas committed by the payload being validated. */
+register validation_debug_header_gas_expected : gas = GAS_ZERO
+/*! Cumulative regular execution gas consumed by the block. */
+register validation_debug_execution_gas : gas = GAS_ZERO
+/*! Cumulative Amsterdam state gas consumed by the block. */
+register validation_debug_state_gas : gas = GAS_ZERO
 
 /*! Captures Sail's current throw site for the native failure dump. */
 val validation_debug_capture_location = impure { c: "validation_debug_capture_location" } : unit -> unit
 
 /*! Clears the recorded failure at the start of a validation attempt. */
 function validation_debug_reset() -> unit = {
-    validation_failure_present = false
+    validation_failure_present = false;
+    validation_debug_gas_present = false
+}
+
+/*! Retains the block gas split for native failure diagnostics. */
+val validation_debug_capture_block_gas : forall 'actual 'expected 'execution 'state,
+       0 <= 'actual
+    &  'actual <= block_gas_limit_bound
+    &  0 <= 'expected
+    &  'expected <= block_gas_limit_bound
+    &  0 <= 'execution
+    &  'execution <= block_gas_limit_bound
+    &  0 <= 'state
+    &  'state <= block_gas_limit_bound.
+    (int('actual), int('expected), int('execution), int('state)) -> unit
+function validation_debug_capture_block_gas(
+    actual,
+    expected,
+    execution,
+    state,
+) -> unit = {
+    validation_debug_gas_present = true;
+    validation_debug_header_gas_actual = actual;
+    validation_debug_header_gas_expected = expected;
+    validation_debug_execution_gas = execution;
+    validation_debug_state_gas = state
 }
 
 /*! Records the failing validation stage and reason for host

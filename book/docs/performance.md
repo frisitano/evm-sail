@@ -54,3 +54,7 @@ responsive when the full retained corpus is published.
     The profile JSON is generated from the local retained fixture corpus and is
     intentionally not committed. Documentation builds without generated data
     still succeed and show the command needed to populate the dashboard.
+    Public Glamsterdam runs use the linked
+    [devnet batch catalog](https://pub-df22334654034ebab51bc096137a59d8.r2.dev/devnets/glamsterdam-devnet-7/index.html),
+    whose exact URL is also retained in each generated dashboard catalog and
+    benchmark report.

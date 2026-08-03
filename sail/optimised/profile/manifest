@@ -1,0 +1,9 @@
+host/accelerators.sail
+kernel/lifecycle.sail
+evm/transaction.sail
+lib/ssz/stateless_input.sail
+executor/system_calls.sail
+executor/block.sail
+executor/stateless.sail
+executor/result.sail
+main.sail

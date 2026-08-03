@@ -57,14 +57,14 @@ scratch-backed preimage.
 */
 val stateless_input_keccak256 = impure { c: "host_keccak_stateless_input" } : StatelessInputSlice -> hash
 val scratch_keccak256 = impure { c: "host_keccak_scratch" } : ScratchSlice -> hash
-val memory_keccak256 = impure { c: "host_keccak_memory" } : MemorySlice -> hash
+val memory_keccak256 = impure { c: "host_keccak_memory" } : EvmMemorySlice -> hash
 val code_keccak256 = impure { c: "host_keccak_code" } : CodeRegionSlice -> hash
 val output_keccak256 = impure { c: "host_keccak_output" } : OutputSlice -> hash
 val log_data_keccak256 = impure { c: "host_keccak_log_data" } : LogDataSlice -> hash
 
 val stateless_input_sha256 = impure { c: "host_sha256_stateless_input" } : StatelessInputSlice -> hash
 val scratch_sha256 = impure { c: "host_sha256_scratch" } : ScratchSlice -> hash
-val memory_sha256 = impure { c: "host_sha256_memory" } : MemorySlice -> hash
+val memory_sha256 = impure { c: "host_sha256_memory" } : EvmMemorySlice -> hash
 
 function calldata_keccak256(input : CalldataSlice) -> hash =
     match input {

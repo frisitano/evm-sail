@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* The standard Sail RTS refers to these hooks, which a standalone generated
@@ -22,7 +23,7 @@ void model_pre_exit(void) {}
 static const uint8_t *g_in = NULL;
 static size_t g_in_len = 0;
 
-static void evmsail_set_input(const uint8_t *p, size_t n)
+static void set_input(const uint8_t *p, size_t n)
 {
     g_in = p;
     g_in_len = n;
@@ -54,16 +55,16 @@ void write_output(const uint8_t *output, size_t size)
 extern unit acct_db_reset(unit);             /* transaction + block account state */
 extern unit storage_db_reset(unit);          /* transaction + block storage state */
 extern unit bal_reset(unit);                 /* EIP-7928 block-access-list accumulator */
-extern unit warm_reset(unit);                /* EIP-2929 warm sets */
+extern unit warm_reset(uint64_t);            /* EIP-2929 warm sets */
 extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
-extern unit host_state_checkpoint_reset(unit);
+extern unit state_journal_reset(unit);
 extern unit nodedb_reset(unit);              /* hash-keyed witness node store */
 extern unit code_db_reset(unit);             /* content-addressed code store (missing-code tests) */
 
 /* clear_memory: the C-side full world wipe that replaces k_world_reset. Zeroes
  * every piece of guest state that persists across in-process runs. */
-void evmsail_clear_memory(void)
+static void reset_world(void)
 {
     /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
     acct_db_reset(UNIT);
@@ -71,10 +72,10 @@ void evmsail_clear_memory(void)
     bal_reset(UNIT);
     /* ephemeral per-frame/per-tx state (also cleared by k_tx_reset, but a
      * zero-transaction block would otherwise inherit it) */
-    warm_reset(UNIT);
+    warm_reset(1);
     transient_storage_reset(UNIT);
     logs_reset(UNIT);
-    host_state_checkpoint_reset(UNIT);
+    state_journal_reset(UNIT);
     /* content-addressed witness stores -- cleared so a fixture that
      * under-specifies its witness FAILS (valid=false) instead of borrowing a
      * stale node/code that an EARLIER fixture registered. The node DB alone is
@@ -88,9 +89,9 @@ void evmsail_clear_memory(void)
     have_exception = false;
 }
 
-void evmsail_test_reset(void)
+void guest_reset(void)
 {
-    evmsail_clear_memory();
+    reset_world();
     g_out_len = 0;
 }
 
@@ -98,8 +99,20 @@ void evmsail_test_reset(void)
 extern void model_init(void);
 extern void model_fini(void);
 
-void evmsail_lib_init(void) { model_init(); }
-void evmsail_lib_fini(void) { model_fini(); }
+void guest_init(void) { model_init(); }
+void guest_fini(void) { model_fini(); }
+
+/* The spec backend has no optimized-invariant boundary, but still reports
+ * native thread setup failures through the common harness ABI. */
+static char last_error[1024];
+
+static void record_thread_error(const char *operation, int error)
+{
+    (void)snprintf(last_error, sizeof last_error, "%s failed: %s",
+                   operation, strerror(error));
+}
+
+const char *guest_last_error(void) { return last_error; }
 
 /* Big stack: the guest recurses over multi-MB SSZ lists; the exe pins a 512 MB
  * main-thread stack (build.sh). In-process the ctypes caller's thread stack is
@@ -113,24 +126,40 @@ static void *run_thread(void *unused)
     return NULL;
 }
 
-unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
-                               const unsigned char **out)
+unsigned long guest_run(const unsigned char *in, unsigned long n,
+                        const unsigned char **out)
 {
     g_out_len = 0;
-    evmsail_set_input(in, n);
+    last_error[0] = '\0';
+    set_input(in, n);
 
     pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, GUEST_STACK_BYTES);
-    pthread_t t;
-    if (pthread_create(&t, &attr, run_thread, NULL) == 0) {
-        pthread_join(t, NULL);
-    } else {
-        /* fallback: run inline (may overflow on deep inputs, but never silently
-         * skips) */
-        (void)run_thread(NULL);
+    int error = pthread_attr_init(&attr);
+    if (error != 0) {
+        record_thread_error("pthread_attr_init", error);
+        *out = g_out;
+        return 0;
     }
-    pthread_attr_destroy(&attr);
+
+    error = pthread_attr_setstacksize(&attr, GUEST_STACK_BYTES);
+    if (error != 0) {
+        record_thread_error("pthread_attr_setstacksize", error);
+        (void)pthread_attr_destroy(&attr);
+        *out = g_out;
+        return 0;
+    }
+
+    pthread_t t;
+    error = pthread_create(&t, &attr, run_thread, NULL);
+    (void)pthread_attr_destroy(&attr);
+    if (error != 0) {
+        record_thread_error("pthread_create", error);
+        *out = g_out;
+        return 0;
+    }
+
+    error = pthread_join(t, NULL);
+    if (error != 0) record_thread_error("pthread_join", error);
 
     *out = g_out;
     return (unsigned long)g_out_len;
@@ -238,7 +267,7 @@ static void dispose_hash(sail_fixed_bytes_32 *value)
     (void)value;
 }
 
-unsigned long evmsail_debug_dump(const unsigned char **out)
+unsigned long guest_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
     sail_fixed_bytes_32 root = {0};
@@ -289,6 +318,15 @@ unsigned long evmsail_debug_dump(const unsigned char **out)
         d_byte((unsigned char)(ln & 0xff));
         for (size_t i = 0; i < ln; i++)
             d_byte((unsigned char)validation_loc[i]);
+    }
+
+    d_byte('B');
+    d_byte(zvalidation_debug_gas_present ? 1 : 0);
+    if (zvalidation_debug_gas_present) {
+        d_u64(sail_int_get_ui(zvalidation_debug_header_gas_actual));
+        d_u64(sail_int_get_ui(zvalidation_debug_header_gas_expected));
+        d_u64(sail_int_get_ui(zvalidation_debug_execution_gas));
+        d_u64(sail_int_get_ui(zvalidation_debug_state_gas));
     }
 
     d_byte('A');

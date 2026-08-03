@@ -227,8 +227,6 @@ function word_bit(value : word, index : range(0, 255)) -> bit = get_slice_int(25
 val word_low_byte : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> byte
 function word_low_byte(value) = get_slice_int(8, value, 0)
 
-function word_shift_left_one(value : word) -> word =
-    U256(tmod_nat(value * 2, sizeof(word_modulus)))
 function word_shift_right_one(value : word) -> word =
     U256(tdiv_nat(value, 2))
 
@@ -259,49 +257,13 @@ val word_ule : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right &
     ) -> bool
 function word_ule(a, b) = not_bool(word_ult(b, a))
 
-/*! Returns the position above an 8-bit value's most significant set bit. */
-function byte_bit_length(value : range(0, 2 ^ 8 - 1)) -> range(0, 8) =
-    if value < 2 ^ 4 then {
-        if value < 2 ^ 2 then {
-            if value < 2 ^ 1 then { value } else { 2 }
-        } else {
-            if value < 2 ^ 3 then { 3 } else { 4 }
-        }
-    } else {
-        if value < 2 ^ 6 then { if value < 2 ^ 5 then { 5 } else { 6 } } else { if value < 2 ^ 7 then { 7 } else { 8 } }
-    }
-
-/*! Returns the position above a 16-bit value's most significant set bit. */
-function u16_bit_length(value : range(0, 2 ^ 16 - 1)) -> range(0, 16) =
-    if value < 2 ^ 8 then {
-        byte_bit_length(value)
-    } else {
-        8 + byte_bit_length(tdiv_nat(value, 2 ^ 8))
-    }
-
-/*! Returns the position above a 32-bit value's most significant set bit. */
-function u32_bit_length(value : range(0, 2 ^ 32 - 1)) -> range(0, 32) =
-    if value < 2 ^ 16 then {
-        u16_bit_length(value)
-    } else {
-        16 + u16_bit_length(tdiv_nat(value, 2 ^ 16))
-    }
-
-/*! Returns the position above a 64-bit value's most significant set bit. */
+/*! Returns the position above a 64-bit value's most significant set bit.
+    Sail defines leading-zero count over fixed bitvectors in every semantic
+    backend; subtracting it from the vector width also gives zero for zero. */
 function u64_bit_length(value : range(0, 2 ^ 64 - 1)) -> range(0, 64) =
-    if value < 2 ^ 32 then {
-        u32_bit_length(value)
-    } else {
-        32 + u32_bit_length(tdiv_nat(value, 2 ^ 32))
-    }
-
-/*! Returns the position above a 128-bit value's most significant set bit. */
-function u128_bit_length(value : range(0, 2 ^ 128 - 1)) -> range(0, 128) =
-    if value < 2 ^ 64 then {
-        u64_bit_length(value)
-    } else {
-        64 + u64_bit_length(tdiv_nat(value, 2 ^ 64))
-    }
+    let leading : range(0, 64) =
+        count_leading_zeros(get_slice_int(64, value, 0))
+    in 64 - leading
 
 /*! Returns the position above a word's most significant set bit.  The
     logarithmic decomposition keeps both the mathematical specification and

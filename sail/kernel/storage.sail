@@ -7,19 +7,28 @@ and transient storage (EIP-1153), over the host state stores.
 
 val k_aload : address -> Account
 val stateless_storage_by_key : (hash, hash) -> word
+val precompile_number : address -> precompile_selector
 
 function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, slot = s }
 
-/*! Marks an address warm and returns its prior warm bit (EIP-2929: the
-    EVM charges the cold cost on `false`, the warm cost on `true`). The
-    host includes a new warm entry in its semantic checkpoint. */
-function k_access_account(a : address) -> bool = warm_addr_touch(a)
-/*! Marks a storage slot warm and returns its prior warm bit. New entries
-    belong to the host's semantic checkpoint. */
-function k_slot_is_warm(a : address, s : word) -> bool = warm_slot_touch(a, s)
+/*! Returns the address's EIP-2929 warm bit without changing state. Active
+    precompiles are warm independently of the BAL-derived account table. */
+function k_account_is_warm(a : address) -> bool =
+    if precompile_number(a) != 0 then { true } else { account_is_warm(a) }
+
+/*! Marks an address warm after the caller has established that its access gas
+    is affordable. Active precompiles need no host-table entry. */
+function k_account_mark_warm(a : address) -> unit =
+    if precompile_number(a) != 0 then { () } else { account_mark_warm(a) }
+
+/*! Returns a storage slot's EIP-2929 warm bit without changing state. */
+function k_slot_is_warm(a : address, s : word) -> bool = storage_is_warm(a, s)
+
+/*! Marks a storage slot warm after the caller has paid its access charge. */
+function k_slot_mark_warm(a : address, s : word) -> unit = storage_mark_warm(a, s)
 
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose
- * mutations are recorded between k_state_checkpoint / k_revert boundaries --- */
+ * mutations are recorded between k_journal_checkpoint / k_journal_revert boundaries --- */
 
 /*! Resolves a slot to its live [StorageValue][type-StorageValue]: `curr`
     is the value `SLOAD` pushes; `orig` is the EIP-2200 transaction-start

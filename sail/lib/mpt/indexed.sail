@@ -28,9 +28,11 @@ struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
 
 /*! The minimal nonzero byte width of a supported RLP list index. */
 type rlp_index_byte_width = range(1, 8)
+/*! A numeric index admitted by an execution-payload indexed trie. */
+type rlp_index = range(0, transaction_count_bound - 1)
 
 /*! Returns the minimal byte width of an indexed-trie position. */
-function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
+function rlp_index_encoded_width(value : rlp_index) -> rlp_index_byte_width =
     if value < 256 then {
         1
     } else {
@@ -59,7 +61,7 @@ function rlp_index_encoded_width(value : item_index) -> rlp_index_byte_width =
 
 /*! The transactions/withdrawals-trie key for list index `i`:
     `rlp(i)` as a nibble path (YP §4.4.2). */
-function trie_index_key(index : item_index) -> TriePath =
+function trie_index_key(index : rlp_index) -> TriePath =
     if index == 0 then {
         path_append_byte(path_empty(), 0x80)
     } else {

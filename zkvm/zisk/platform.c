@@ -12,7 +12,7 @@
 extern void *sys_alloc_aligned(size_t bytes, size_t align);
 extern void sys_write(uint32_t fd, const uint8_t *data, size_t size);
 
-void evmsail_heap_region(char **start, char **end)
+void heap_region(char **start, char **end)
 {
     static char *heap_start;
 
@@ -41,10 +41,10 @@ void htif_puts(const char *s)
 extern _Bool zvalidation_failure_present;
 extern uint64_t zvalidation_failure_scope;
 extern int zvalidation_failure_reason;
-extern int evmsail_debug_ecrecover_status;
-extern uint64_t evmsail_debug_ecrecover_parity;
-extern uint8_t evmsail_debug_ecrecover_pubkey[64];
-extern uint8_t evmsail_debug_ecrecover_address[20];
+extern int debug_ecrecover_status;
+extern uint64_t debug_ecrecover_parity;
+extern uint8_t debug_ecrecover_pubkey[64];
+extern uint8_t debug_ecrecover_address[20];
 
 static char hex_digit(unsigned value)
 {
@@ -67,7 +67,7 @@ static void print_hex(const char *prefix, const uint8_t *bytes, size_t size)
     sys_write(2, (const uint8_t *)line, prefix_size + 2 * size + 1);
 }
 
-void evmsail_zisk_report_debug(void)
+void zisk_report_debug(void)
 {
     char line[] = "validation_failure=0 scope=00 reason=00\n";
     unsigned scope = (unsigned)zvalidation_failure_scope & 0xffu;
@@ -81,15 +81,15 @@ void evmsail_zisk_report_debug(void)
     sys_write(2, (const uint8_t *)line, sizeof line - 1);
 
     char recovery[] = "ecrecover_status=00 parity=00\n";
-    unsigned status = (unsigned)evmsail_debug_ecrecover_status & 0xffu;
-    unsigned parity = (unsigned)evmsail_debug_ecrecover_parity & 0xffu;
+    unsigned status = (unsigned)debug_ecrecover_status & 0xffu;
+    unsigned parity = (unsigned)debug_ecrecover_parity & 0xffu;
     recovery[17] = hex_digit(status >> 4);
     recovery[18] = hex_digit(status & 0xfu);
     recovery[27] = hex_digit(parity >> 4);
     recovery[28] = hex_digit(parity & 0xfu);
     sys_write(2, (const uint8_t *)recovery, sizeof recovery - 1);
-    print_hex("ecrecover_pubkey=", evmsail_debug_ecrecover_pubkey, 64);
-    print_hex("ecrecover_address=", evmsail_debug_ecrecover_address, 20);
+    print_hex("ecrecover_pubkey=", debug_ecrecover_pubkey, 64);
+    print_hex("ecrecover_address=", debug_ecrecover_address, 20);
 }
 #endif
 

@@ -130,6 +130,26 @@ function stack_height() -> operand_stack_height = {
     height
 }
 
+/*! Checks the Yellow Paper stack precondition for one instruction before it
+    charges gas or performs side effects. `inputs` is the instruction's
+    required stack height (delta) and `outputs` is the height it contributes
+    after consuming those inputs (alpha). */
+function validate_stack(
+    inputs : operand_stack_height,
+    outputs : operand_stack_height,
+) -> bool = {
+    let height = stack_height();
+    if height < inputs then {
+        exc_halt(StackUnderflow);
+        false
+    } else if STACK_LIMIT < height - inputs + outputs then {
+        exc_halt(StackOverflow);
+        false
+    } else {
+        true
+    }
+}
+
 /*! The `n`-th-from-top operand (`n = 0` is the top); zero out of
     range. */
 function peek(n : stack_index) -> word = stack_peek_word(n)
@@ -194,10 +214,6 @@ function returndata_size() -> source_pointer = {
     let data = returndata;
     data.len
 }
-
-/*! One returndata byte. */
-function returndata_byte(index : source_pointer) -> byte =
-    slice_byte(returndata, index)
 
 /*! `RETURNDATACOPY` into frame memory (bounds pre-checked by the
     opcode). */
@@ -273,7 +289,7 @@ function returndata_copy_words(dst : memory_pointer, source_offset : word, lengt
  * representation. The slice length is the exact highest accessed byte; gas
  * and `MSIZE` round that watermark to EVM words when required. */
 /*! The active frame's established memory range in the shared memory arena. */
-register evm_memory : MemorySlice = EMPTY_MEMORY_SLICE
+register evm_memory : EvmMemorySlice = EMPTY_EVM_MEMORY_SLICE
 
 /*! Returns the active frame's exact byte high-water mark. */
 function evm_memory_high_water() -> memory_length = {
@@ -285,12 +301,12 @@ function evm_memory_high_water() -> memory_length = {
 /*! Clears all frame-memory storage and resets the active range. */
 function memory_reset() -> unit = {
     mem_clear();
-    evm_memory = EMPTY_MEMORY_SLICE
+    evm_memory = EMPTY_EVM_MEMORY_SLICE
 }
 
 /*! Expands the active frame memory to an already-charged size and returns the
     resulting high-water-mark witness. */
-val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> MemorySliceLength(
+val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> EvmMemorySliceLength(
         'required,
     )
 
@@ -308,11 +324,11 @@ function memory_expand_to(new_size) = {
 /*! Returns an already-expanded memory range. The successful expansion value
     retains the high-water containment fact that would be lost by reading the
     existential [evm_memory][] register again. */
-val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> MemorySlice
+val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> EvmMemorySlice
 
 function active_memory_slice(off, len) =
     if len == 0 then {
-        EMPTY_MEMORY_SLICE
+        EMPTY_EVM_MEMORY_SLICE
     } else {
         sub_slice(memory_expand_to(off + len), off, len)
     }
@@ -331,22 +347,22 @@ function memory_code_slice(off, len) =
 /* Entering a child returns the saved parent pointer. Restoring that value is
  * the complete Sail-side memory-frame unwind; no second size register exists. */
 /*! Saves the parent range and enters an empty child-memory frame. */
-function memory_frame_enter() -> MemorySlice = {
+function memory_frame_enter() -> EvmMemorySlice = {
     let parent = evm_memory;
     let base : source_pointer = mem_frame_enter();
-    evm_memory = memory_slice(base, 0);
+    evm_memory = evm_memory_slice(base, 0);
     parent
 }
 
 /*! Releases child memory and restores the saved parent range. */
-function memory_frame_leave(parent : MemorySlice) -> unit = {
+function memory_frame_leave(parent : EvmMemorySlice) -> unit = {
     mem_frame_leave();
     evm_memory = parent
 }
 
 /*! Captures parent execution state and enters child stack and memory frames. */
 function suspend_frame() -> FrameCheckpoint = {
-    let state = k_state_checkpoint();
+    k_journal_checkpoint();
     let saved_pc = pc;
     let saved_gas = gas_remaining;
     let saved_state_gas = state_gas_remaining;
@@ -360,7 +376,6 @@ function suspend_frame() -> FrameCheckpoint = {
     stack_enter_frame();
     let saved_memory = memory_frame_enter();
     struct {
-        state = state,
         pc = saved_pc,
         gas_remaining = saved_gas,
         state_gas_remaining = saved_state_gas,
@@ -390,14 +405,6 @@ function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
     frame_code = checkpoint.code;
     calldata = checkpoint.calldata
 }
-
-/*! One memory byte; zero when the frame has halted. */
-function mem_get_byte(off : memory_pointer) -> byte =
-    if is_running() then {
-        mem_read_byte(off)
-    } else {
-        0x00
-    }
 
 /*! Writes one memory byte and raises the high-water mark; a no-op when
     halted. */
@@ -430,11 +437,6 @@ function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_leng
     if len != 0 then {
         mem_move(dst, src, len)
     }
-
-/*! `CODECOPY`: copies the frame's own code into memory, zero-padded past
-    the end. */
-function mem_codecopy(dst : memory_pointer, off : source_pointer, len : memory_length) -> unit =
-    slice_copy(frame_code.bytes, dst, off, len)
 
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. */

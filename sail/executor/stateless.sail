@@ -24,6 +24,12 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
             throw InvalidBlock(InvalidExecutionRequests)
         }
     };
+    validation_debug_capture_block_gas(
+        result.header_gas_used,
+        header.gas_used,
+        result.execution_gas_used,
+        result.state_gas_used,
+    );
     if result.header_gas_used != header.gas_used then {
         throw InvalidBlock(InvalidGasUsed)
     };
@@ -41,9 +47,7 @@ function validate_executed_block(block : Block, input_ref : StatelessInputRef, r
         throw InvalidBlock(InvalidLogsBloom)
     };
     if profile.fork >= Amsterdam then {
-        let maximum_items : item_count =
-            execution_profile.gas.block_limit / 2000;
-        validate_block_access_list(block.body.block_access_list, maximum_items)
+        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
     }
 }
 

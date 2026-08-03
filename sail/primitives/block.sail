@@ -92,7 +92,7 @@ struct Withdrawal = {
 struct BlockBody = {
     transactions : TransactionListRef,
     withdrawals : WithdrawalListRef,
-    block_access_list : StatelessInputSlice,
+    block_access_list : StatelessInputSliceAtMost(block_access_list_length_bound),
 }
 
 /*! A block: header plus body. */

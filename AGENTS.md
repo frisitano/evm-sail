@@ -25,22 +25,42 @@ duplicating instructions elsewhere.
   its only executable entry. There is no entry/backend selection: every build
   contains the full stateless validator. The canonical project contains no
   cycle-scope declarations or calls. `EVM_PROFILE=on` is an optimized-C
-  build-only switch that applies `sail/splices/c_optimized_profile.sail` after
-  the ordinary optimized splice; standard builds reject it.
+  build-only switch that applies the ordered
+  `sail/optimised/profile/manifest` overrides after the ordinary optimized
+  overrides; standard builds reject it. Optimized overrides mirror the
+  canonical module tree under `sail/optimised/`: an override of
+  `sail/lib/rlp/encoding.sail`, for example, lives in
+  `sail/optimised/lib/rlp/encoding.sail`. `sail/optimised/manifest` fixes their
+  application order.
   `EVM_DEBUG=on|off` controls native-test validation diagnostics; real zkVM
   guest builds set it to `off`.
 - `sail/host/state.sail` is the declaration-only host world-state surface for
-  impure FFI contracts. `sail/host/environment.sail` declares the fixed-size,
+  impure FFI contracts, while `sail/host/journal.sail` owns the closed journal
+  entry algebra and its checkpoint/commit/revert contracts.
+  `sail/host/environment.sail` declares the fixed-size,
   O(1) ancestor-hash host table. `sail/kernel/environment.sail` owns the kernel
   registers, and the remaining `sail/kernel/` modules group pure Sail `k_*`
   operations by subsystem.
 - `sail/executor/payload.sail` owns the transaction and withdrawal MPT roots
-  used to reconstruct and validate the execution payload's block hash.
+  used to reconstruct and validate the execution payload's block hash. Its
+  `IndexedTrieSource` variants share the indexed transaction, withdrawal, and
+  receipt trie reduction without erasing the source identity into booleans.
+- `sail/lib/rlp/encoding.sail` and `decoding.sail` are the shared RLP
+  primitives. Encoding callers size first and use `RlpEncoder`, which owns an
+  exact scratch reservation and verifies the written width at `finish`.
+  Protocol codecs live under `sail/lib/rlp/codecs/` (addresses, transaction
+  envelopes and signing preimages, receipts, withdrawals, block headers,
+  state leaves, and the block access list); executor modules retain lifecycle
+  and validation policy rather than wire-format details.
 - `sail/lib/mpt/` is the generic trie implementation, split by dependency
-  layer into paths/hex-prefix primitives, node encoding and decoding, ordered
-  updates/canonical rebuilding, and authenticated traversal. Its public root
+  layer into paths/hex-prefix primitives, node/reference types, the node RLP
+  codec, ordered updates/canonical rebuilding, and authenticated traversal.
+  Its public root
   entry is `trie_root(base_root, updates)` (witness-native overlay, fail-closed
-  on missing node material). `sail/lib/state_trie.sail`
+  on missing node material). `TrieUpdateSource` defunctionalizes account and
+  per-account storage update streams behind one cursor/reducer; callers select
+  a source variant rather than duplicating the trie algorithm.
+  `sail/lib/state_trie.sail`
   owns Ethereum account/storage decoding, stateless reads, and post-state-root
   assembly over that core. The Yellow Paper Appendix C/D equations are kept as
   documentation on the internal functions; an empty base computes TRIE(I)
@@ -56,18 +76,24 @@ duplicating instructions elsewhere.
   see them as bodyless parameters; executables link their C definitions from
   `ffi/`. The C backends are split completely: `ffi/spec/` owns the generated
   GMP-backed ABI, while `ffi/optimized/` owns the fixed-layout ABI,
-  pointer-based stores, capacity planning, and whole-operation replacements
+  pointer-based stores and whole-operation replacements
   selected by the custom compiler. A build compiles exactly one directory;
   neither backend includes private headers or implementation from the other.
   Both compile against the GENERATED model header (`-DEVMSAIL_MODEL_H`, `-I`
   build dir) and name its concrete types directly, so generated layouts are
-  never hand-mirrored or hidden behind a second ABI alias layer.
+  never hand-mirrored or hidden behind a second ABI alias layer. Optimized
+  headers include `evmsail/model.h`, the single generated-header selection
+  shim required because Sail emits `--c-include` headers before its own model
+  header; it declares no wrapper types or runtime interface.
   `ffi/spec/state.c` and
   `ffi/spec/code.c` construct the generated account/storage and `option(Code)`
   values; `ffi/spec/frame_stack.c` applies generated ownership operations only
   to continuation slots actually reached. Their optimized counterparts use
-  direct fixed-layout assignment. Each backend's `hash.c` implements the hash
-  axioms, segmented byte equality, and log records for its own ABI. Sail emits fixed
+  direct fixed-layout assignment. Each backend's crypto implementation handles
+  the hash axioms and segmented byte equality for its own ABI. Optimized log
+  records and their block bloom are owned by `src/host/state/logs.c`, while
+  `src/executor/receipts.c` owns encoded receipt retention and delegates only
+  the ordered receipt-root reduction to the generic MPT module. Sail emits fixed
   256-bit JUMPDEST chunks
   directly into one length-preallocated packed C table, so no generated list
   crosses that boundary. A
@@ -85,11 +111,11 @@ duplicating instructions elsewhere.
   explicit Sail bodies and throws. SSZ decoding reads only from
   `StatelessInputSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer
   exists.
-  `ffi/spec/hash.c`, `ffi/optimized/hash.c`, and each backend's
-  `precompiles.c` call the root `zkvm_accelerators.h` contract directly; the
+  `ffi/spec/hash.c`, `ffi/optimized/src/primitives/crypto.c`, and each backend's
+  accelerator module call the root `zkvm_accelerators.h` contract directly; the
   former `host_crypto.c` forwarding layer has been removed.
-  `ffi/optimized/htr.c` is a narrower optimized-C refinement: the
-  `c_optimized.sail` splice replaces the complete
+  `ffi/optimized/src/lib/htr.c` is a narrower optimized-C refinement: the
+  `sail/optimised/lib/htr.sail` override replaces the complete
   `htr_new_payload_request` operation with one pure C call that consumes the
   validated `StatelessInputRef` slices directly. Spec C and Lean/Coq
   extraction retain the explicit equations in `sail/lib/htr.sail`, so this
@@ -98,7 +124,8 @@ duplicating instructions elsewhere.
   experiment saved only about 0.009% of whole-program ZisK steps and was
   rejected in favour of the validated-reference boundary;
   `zkvm_accelerators.h` remains unchanged.
-  Optimized C also injects the header-only `ffi/optimized/word_bytes.h`
+  Optimized C also injects the header-only
+  `ffi/optimized/include/evmsail/primitives/word.h`
   refinements for fixed hash/address ↔ native-word conversions. Spec C
   and proof extraction retain the direct canonical-byte concatenation and
   fixed-slice endian equations in `sail/prelude.sail`; neither standard nor
@@ -111,7 +138,29 @@ duplicating instructions elsewhere.
   transient storage, code/JUMPDEST storage, node DB, operand stack, and the
   suspended-frame stack. The optimized backend may additionally replace
   high-level Sail operations without imposing those representations on the
-  spec build. The BAL recorder uses distinct keyed hash
+  spec build. Its source hierarchy follows Sail at established module
+  boundaries. `ffi/optimized/include/evmsail/` contains the Sail-facing public
+  declarations; `ffi/optimized/src/` contains implementations and private
+  headers. In particular, `src/host/state.c` adapts generated aggregate values
+  while `src/host/state/` owns the dense semantic state, transaction logs, BAL
+  metadata, and state-root iterators. Large optimized storage is pointer-backed
+  and bound once from `src/workspace.c` before model initialization. Modules
+  use direct indexing into that stable, pre-provisioned region; they must not
+  own capacity-sized backing arrays or allocate, resize, or free storage. The
+  optimized code subsystem similarly separates content identity, packed
+  JUMPDEST metadata, and owned synthesized bytes into `CodeTable`,
+  `JumpdestTable`, and `CodeArena`. A nonzero `CodeId` is the opaque offset
+  carried by Sail's code-region slice; immutable witness code remains borrowed,
+  while only unstable memory/output or synthesized code is copied into the
+  arena. Delegation classification is cached on the code row. Operand stacks,
+  suspended frames, ancestor hashes, logs, and receipts follow the same
+  one-time workspace-binding rule rather than owning capacity-sized static
+  arrays.
+  The optimized FFI audit enforces both the source manifest and this production
+  policy. Closed families of optimized-host behavior use explicit tags and
+  first-order dispatch rather than function pointers or callbacks; this keeps
+  control flow visible to the compiler and proof-oriented source, and the audit
+  rejects indirect C function declarations and calls. The BAL recorder uses distinct keyed hash
   tables for storage reads `(address, slot)` and storage changes
   `(address, slot, block_access_index)` plus field changes keyed by
   `(address, block_access_index)`. It sorts the dense rows once and exposes one
@@ -142,12 +191,12 @@ duplicating instructions elsewhere.
   `tools/stage_zisk_guests.sh` refreshes them and their checksums, and
   `tools/benchmark_zisk.py` uses these three guests by default.
   `--debug` invokes the
-  native-only `evmsail_debug_dump` after a failure; it is not linked into the
+  native-only `guest_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.
   This is the sole fixture runner; the parallel Rust runner was removed. The
   old `runner_ffi.c` (stdin ssz_src) is deleted, and the driver/test
-  world-wipe lives in each backend's `native_test.c`
-  `evmsail_clear_memory` (the model no longer defines `k_world_reset`). The
+  world-wipe lives in each backend's `native_test.c` as `guest_reset` (the
+  model no longer defines `k_world_reset`). The
   dedicated `witness_probe` re-root
   harness was also removed: every stateless account/storage lookup walks the
   witness trie from the authenticated root (parsing each node on the path), so
@@ -196,6 +245,15 @@ retain the mathematical representation. `make c-optimised` enables
 `--c-specialize-log` by default so its output records the inferred argument
 bounds, representation demands, and specialization worklist.
 
+When several finite execution modes share an algorithm, represent the mode in
+Sail with one closed enum/union and dispatch once at the semantic boundary.
+This is the preferred defunctionalization boundary for shared cursor/reducer
+machinery, and optimized C must mirror that source algebra rather than invent
+parallel boolean flags or a C-only semantic switch. Keep genuine runtime
+predicates (success/failure, warm/cold, presence, equality, decoder facts) as
+booleans; do not introduce wrapper variants that add no impossible-state or
+shared-algorithm benefit.
+
 When arithmetic depends on fork-selected bounds, pass the `ProtocolProfile`
 (or the smallest correlated profile subrecord) as an explicit argument. Do not
 read `k_protocol_profile` inside the helper being constrained. Keeping the
@@ -206,11 +264,19 @@ the profile inward.
 
 The custom compiler also recognizes `$[c_throws]` on impure externs and
 propagates the `Throw` effect to generated C call sites. These features are
-C-backend concerns: the model never carries C-representation or
-optimized-exception annotations, and Lean/Coq extraction retains the ordinary
-semantic types without loading the C-only splice. Set `SAIL` explicitly to
-test another build of this custom compiler; upstream Sail is not a supported
-fallback for repository targets.
+C-backend concerns: the base specification never carries C-representation or
+optimized-exception annotations, while `sail/optimised/` may refine a semantic
+type to an optimized-only C representation. In particular, canonical 20-byte
+addresses and 32-byte digests retain byte-index semantics in Sail but use
+`fixed_bytes_u64_lanes` in optimized C. Lean/Coq extraction retains the
+ordinary semantic types without loading the C-only splice. Set `SAIL`
+explicitly to test another build of this custom compiler; upstream Sail is not
+a supported fallback for repository targets. Sail/Z3 query memoization is
+explicitly enabled for model checks, extraction, and native/guest generation,
+using the repo-local `sail_smt_cache` file. `Z3_MEMO_PATH` overrides it in Make
+and `SAIL_Z3_MEMO_PATH` overrides it in the build scripts. Ordinary
+`make clean` preserves this cache; use `make clear-z3-memo` only when compiler,
+constraints, or solver changes require invalidating it.
 
 Run from repo root unless noted:
 

@@ -16,8 +16,8 @@ static const uint8_t hash_empty;
 #define DEFINE_SLICE_HASH(name, slice_type, resolver, algorithm, digest_type) \
   sail_fixed_bytes_32 name(                                                   \
       struct slice_type input) {                                               \
-    const uint64_t off = evmsail_byte_quantity_value(input.zoff);             \
-    const uint64_t len = evmsail_byte_quantity_value(input.zlen);             \
+    const uint64_t off = input.zoff;                                          \
+    const uint64_t len = input.zlen;                                          \
     const uint8_t *bytes = resolver(off, len);                                 \
     digest_type digest = {{0}};                                               \
     if (!bytes || len > UINT32_MAX ||                                         \
@@ -32,7 +32,7 @@ DEFINE_SLICE_HASH(host_keccak_stateless_input,
                   zkvm_keccak256, zkvm_keccak256_hash)
 DEFINE_SLICE_HASH(host_keccak_scratch, zScratchSliceFields,
                   evmsail_scratch_ptr, zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_memory, zMemorySliceFields, evmsail_memory_ptr,
+DEFINE_SLICE_HASH(host_keccak_memory, zEvmMemorySliceFields, evmsail_memory_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
 DEFINE_SLICE_HASH(host_keccak_code, zCodeRegionSliceFields, evmsail_code_ptr,
                   zkvm_keccak256, zkvm_keccak256_hash)
@@ -45,7 +45,7 @@ DEFINE_SLICE_HASH(host_sha256_stateless_input,
                   zkvm_sha256, zkvm_sha256_hash)
 DEFINE_SLICE_HASH(host_sha256_scratch, zScratchSliceFields,
                   evmsail_scratch_ptr, zkvm_sha256, zkvm_sha256_hash)
-DEFINE_SLICE_HASH(host_sha256_memory, zMemorySliceFields, evmsail_memory_ptr,
+DEFINE_SLICE_HASH(host_sha256_memory, zEvmMemorySliceFields, evmsail_memory_ptr,
                   zkvm_sha256, zkvm_sha256_hash)
 
 #undef DEFINE_SLICE_HASH
@@ -78,9 +78,9 @@ sail_fixed_bytes_32 host_sha256_pair(
 }
 
 /* LOG payloads are copied from active-frame memory into the log-data arena. */
-unit log_add_data_memory(struct zMemorySliceFields data) {
-  const uint64_t off = evmsail_byte_quantity_value(data.zoff);
-  const uint64_t len = evmsail_byte_quantity_value(data.zlen);
+unit log_add_data_memory(struct zEvmMemorySliceFields data) {
+  const uint64_t off = data.zoff;
+  const uint64_t len = data.zlen;
   const uint8_t *p = evmsail_memory_ptr(off, len);
   if (p) log_add_data_bulk(p, len);
   return UNIT;

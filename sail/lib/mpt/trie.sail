@@ -111,7 +111,7 @@ function updates_subtree(
             };
             let subtree : option(TrieItem) = match update.change {
                 TrieDelete() => None(),
-                TriePut(value) => Some(item_scratch_leaf(update.key, value)),
+                TriePut(value) => Some(trie_scratch_leaf(update.key, value)),
             };
             (subtree, next)
         } else {
@@ -170,11 +170,11 @@ function overlay_leaf_subtree(
             };
             let subtree : option(TrieItem) = match update.change {
                 TrieDelete() => None(),
-                TriePut(updated) => Some(item_scratch_leaf(key, updated)),
+                TriePut(updated) => Some(trie_scratch_leaf(key, updated)),
             };
             (subtree, next)
         } else {
-            (Some(item_input_leaf(key, value)), updates)
+            (Some(trie_input_leaf(key, value)), updates)
         }
     } else {
         let next_cursor : trie_path_cursor = cursor + 1;
@@ -188,7 +188,7 @@ function overlay_leaf_subtree(
             if update_under_current_prefix(remaining) then {
                 let update_nibble = update_child_nibble(remaining);
                 if leaf_pending & (unsigned(leaf_nibble) < unsigned(update_nibble)) then {
-                    children = trie_children_add(children, prefix, leaf_nibble, Some(item_input_leaf(key, value)));
+                    children = trie_children_add(children, prefix, leaf_nibble, Some(trie_input_leaf(key, value)));
                     leaf_pending = false
                 } else {
                     let child_prefix = path_concat(prefix, path_single(update_nibble));
@@ -212,7 +212,7 @@ function overlay_leaf_subtree(
                     remaining = rebased
                 }
             } else {
-                children = trie_children_add(children, prefix, leaf_nibble, Some(item_input_leaf(key, value)));
+                children = trie_children_add(children, prefix, leaf_nibble, Some(trie_input_leaf(key, value)));
                 leaf_pending = false
             }
         };
@@ -246,7 +246,7 @@ function overlay_extension_subtree(
         if update_under_current_prefix(updates) then {
             witness_subtree(resolve_witness_ref(childref), child_prefix, updates, cursor)
         } else {
-            (Some(item_branch(child_prefix, childref)), updates)
+            (Some(trie_branch(child_prefix, childref)), updates)
         }
     } else {
         if cursor == 64 then {
@@ -267,7 +267,7 @@ function overlay_extension_subtree(
                             children,
                             prefix,
                             extension_nibble,
-                            Some(item_branch(child_prefix, childref)),
+                            Some(trie_branch(child_prefix, childref)),
                         );
                         extension_pending = false
                     } else {
@@ -296,7 +296,7 @@ function overlay_extension_subtree(
                         children,
                         prefix,
                         extension_nibble,
-                        Some(item_branch(child_prefix, childref)),
+                        Some(trie_branch(child_prefix, childref)),
                     );
                     extension_pending = false
                 }
@@ -363,7 +363,7 @@ function witness_subtree(node, prefix, updates, cursor) = {
                                 }
                             } else {
                                 if present then {
-                                    (Some(item_subtree(child_prefix, childref)), remaining)
+                                    (Some(trie_subtree(child_prefix, childref)), remaining)
                                 } else {
                                     (None(), remaining)
                                 }

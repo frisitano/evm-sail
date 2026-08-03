@@ -1,15 +1,15 @@
-# Compiler-specialization papers
+# Research papers
 
-This directory contains research references for the evm-sail specialization
-work. These papers are background material, not normative documentation for the
-compiler.
+This directory contains research references for the evm-sail compiler
+specialization and Iris/Islaris verification work. These papers are background
+material, not normative documentation for the compiler.
 
 Each included paper has its source PDF beside a Mathpix-generated Markdown
 conversion. The PDF is the source of truth: equations, figures, tables, page
 references, and code should be checked against it before being relied on in an
 implementation or citation.
 
-## Included papers
+## Compiler specialization
 
 ### Better Defunctionalization through Lambda Set Specialization
 
@@ -60,6 +60,68 @@ implementation or citation.
   2026-07-29; the Markdown is a format conversion and may contain OCR or layout
   errors
 
+## Iris, Islaris, and foundational verification
+
+### Islaris: Verification of Machine Code Against Authoritative ISA Semantics
+
+- Authors: Michael Sammler, Angus Hammond, Rodolphe Lepigre, Brian Campbell,
+  Jean Pichon-Pharabod, Derek Dreyer, Deepak Garg, and Peter Sewell
+- Publication: PLDI, 2022
+- [PDF](islaris-verification-machine-code/paper.pdf) and
+  [Markdown](islaris-verification-machine-code/paper.md)
+- Original: [author-hosted PDF](https://www.cl.cam.ac.uk/~jp622/islaris.pdf)
+  and [DOI 10.1145/3519939.3523434](https://doi.org/10.1145/3519939.3523434)
+- License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), as stated
+  on the paper's first page
+- PDF provenance: author-hosted PDF; SHA-256
+  `ae93493acdb6a2239615b1b3b90aa0bd7f66ee5b80c9edc1d779fbe0d3e1ffba`
+- Conversion provenance: Mathpix via Atlas Oracle (`mpxpy` backend), completed
+  2026-07-30; headings, tables, footnotes, and extracted figures were manually
+  normalized after conversion
+- Relevance: Islaris connects Isla traces from authoritative Sail ISA semantics
+  to an Iris separation logic and automated Coq proofs, making it the most
+  direct verification reference for evm-sail
+
+### Verified Symbolic Execution with Kripke Specification Monads (and No Meta-programming)
+
+- Authors: Steven Keuchel, Sander Huyghebaert, Georgy Lukyanov, and Dominique
+  Devriese
+- Publication: PACMPL 6 (ICFP), Article 97, 2022
+- [PDF](verified-symbolic-execution-kripke-monads/paper.pdf) and
+  [Markdown](verified-symbolic-execution-kripke-monads/paper.md)
+- Original:
+  [Iris-hosted PDF](https://iris-project.org/pdfs/2022-icfp-symbexec-final.pdf)
+  and [DOI 10.1145/3547628](https://doi.org/10.1145/3547628)
+- License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), as stated
+  on the paper's first page
+- PDF provenance: Iris project-hosted PDF; SHA-256
+  `6d75fb7fd1e3410c7ac881d934efa3b2fa6e98cec4e40d0ba7edf075561aad8d`
+- Conversion provenance: Mathpix via Atlas Oracle (`mpxpy` backend), completed
+  2026-07-30; headings, tables, footnotes, formulas, and extracted figures were
+  manually normalized after conversion
+- Relevance: this paper explains Katamaran's verified symbolic execution for
+  µSail, its Kripke specification monads, and the Iris model connecting its
+  program logic to an operational semantics
+
+### RefinedC: Automating the Foundational Verification of C Code with Refined Ownership Types
+
+- Authors: Michael Sammler, Rodolphe Lepigre, Robbert Krebbers, Kayvan
+  Memarian, Derek Dreyer, and Deepak Garg
+- Publication: PLDI, 2021
+- [PDF](refinedc/paper.pdf) and [Markdown](refinedc/paper.md)
+- Original: [project-hosted PDF](https://plv.mpi-sws.org/refinedc/paper.pdf)
+  and [DOI 10.1145/3453483.3454036](https://doi.org/10.1145/3453483.3454036)
+- License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), as stated
+  on the paper's first page
+- PDF provenance: RefinedC project-hosted PDF; SHA-256
+  `80d43dea0e754222a6aa851c884b4d2aee59d288a0237409952e45941104c9e0`
+- Conversion provenance: Mathpix via Atlas Oracle (`mpxpy` backend), completed
+  2026-07-30; headings, tables, footnotes, code, formulas, and extracted figures
+  were manually normalized after conversion
+- Relevance: RefinedC introduces Lithium's predictable proof-search discipline
+  on top of Iris; Islaris builds on this automation style for machine-code
+  verification
+
 ## Supplementary material
 
 These papers are relevant to the work, but are linked rather than copied or
@@ -85,10 +147,10 @@ both repository redistribution and a derivative Markdown conversion.
 ## Copyright and attribution
 
 The PDFs and their converted contents are third-party works and are not
-relicensed by the evm-sail repository's software license. The three included
+relicensed by the evm-sail repository's software license. All six included
 works are distributed under CC BY 4.0. Their authors, original records, license,
-and the fact of conversion are identified above and in each Markdown file.
-No author endorsement is implied.
+and the fact of conversion are identified above and in each Markdown file. No
+author endorsement is implied.
 
 CC BY 4.0 permits sharing and adaptation, including commercially, provided
 appropriate credit is given, the license is linked, and changes are indicated.

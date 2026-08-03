@@ -114,18 +114,17 @@ static uint64_t jumpdest_table_alloc_value(uint64_t code_len_value) {
 
 /* Reserve the exact table size before Sail starts analysis. The arena is
  * zeroed so chunks without JUMPDESTs need no writes. */
-uint64_t jumpdest_table_alloc(EVMSAIL_BYTE_QUANTITY_PARAM(code_len)) {
-  return jumpdest_table_alloc_value(evmsail_byte_quantity_value(code_len));
+uint64_t jumpdest_table_alloc(uint64_t code_len) {
+  return jumpdest_table_alloc_value(code_len);
 }
 
 /* Store one completed Sail chunk. Chunk bit zero describes the first byte in
  * the corresponding 256-byte code span, hence little-endian limb order. */
-bool jumpdest_table_store_chunk(uint64_t ref,
-                                EVMSAIL_BYTE_QUANTITY_PARAM(code_len),
-                                EVMSAIL_BYTE_QUANTITY_PARAM(chunk_index),
+bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
+                                uint64_t chunk_index,
                                 const sail_u256 chunk) {
-  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
-  uint64_t chunk_index_value = evmsail_byte_quantity_value(chunk_index);
+  uint64_t code_len_value = code_len;
+  uint64_t chunk_index_value = chunk_index;
   size_t base = 0;
   uint64_t nwords = 0;
   if (!jumpdest_table_span(ref, code_len_value, &base, &nwords) ||
@@ -148,11 +147,9 @@ bool jumpdest_table_store_chunk(uint64_t ref,
   return true;
 }
 
-bool jumpdest_ref_contains(uint64_t ref,
-                           EVMSAIL_BYTE_QUANTITY_PARAM(code_len),
-                           EVMSAIL_BYTE_QUANTITY_PARAM(i)) {
-  uint64_t code_len_value = evmsail_byte_quantity_value(code_len);
-  uint64_t index_value = evmsail_byte_quantity_value(i);
+bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
+  uint64_t code_len_value = code_len;
+  uint64_t index_value = i;
   if (ref == 0 || index_value >= code_len_value) return false;
   size_t base = 0;
   if (!jumpdest_table_span(ref, code_len_value, &base, NULL)) return false;
@@ -208,8 +205,8 @@ static void code_db_grow(void) {
  * safe, but a warm process reusing this DB across fixtures would let a code
  * blob registered by one fixture satisfy a later negative "code missing" test
  * (the witness deliberately omits that code, expecting valid=false). The model
- * never calls this; it exists for the in-process harness (test_utils.c) whose
- * evmsail_clear_memory wipes state between fixtures. The code, table, and
+ * never calls this; it exists for the in-process harness whose `guest_reset`
+ * wipes state between fixtures. The code, table, and
  * jumpdest arenas retain their allocations but reset their logical lengths. */
 unit code_db_reset(const unit u) {
   (void)u;

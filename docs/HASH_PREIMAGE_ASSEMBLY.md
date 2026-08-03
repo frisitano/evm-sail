@@ -21,7 +21,7 @@ slice:
 ```sail
 stateless_input_keccak256 : StatelessInputSlice -> hash
 scratch_keccak256         : ScratchSlice -> hash
-memory_keccak256          : MemorySlice -> hash
+memory_keccak256          : EvmMemorySlice -> hash
 ```
 
 A segmented representation is an assembly technique, not a second

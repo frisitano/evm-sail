@@ -12,14 +12,19 @@ semantics while the bytes themselves remain in host-backed memory.
 /*! The active scratch arena; its length is the Sail-owned high-water mark. */
 register scratch_arena : ScratchSlice = EMPTY_SCRATCH_SLICE
 
-/*! Adds two scratch lengths, preserving the selected host representation
-    bound. The canonical specification uses mathematical naturals; optimized
-    builds refine this equation with an explicit overflow check. */
+/*! Adds two scratch lengths, preserving the scratch region's own capacity
+    bound. */
 val scratch_length_add : forall 'left 'right, source_valid_length('left) & source_valid_length('right). (
         int('left),
         int('right),
     ) -> source_length
-function scratch_length_add(left, right) = left + right
+function scratch_length_add(left, right) =
+    if right <= sizeof(scratch_region_bound) - left then {
+        left + right
+    } else {
+        assert(false, "scratch length overflow");
+        0
+    }
 
 /*! Marks the start of a scratch construction. */
 function scratch_begin() -> source_pointer = {

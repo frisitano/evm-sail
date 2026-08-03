@@ -8,7 +8,7 @@
  * A thin CLI over the SHARED harness surface in test_utils.c — the exact
  * same input/ssz_src/output/run_once plumbing the ctypes libs
  * (libevmsail_guest) use — so there is ONE native I/O
- * implementation. evmsail_run_once executes the guest on a dedicated
+ * implementation. guest_run executes the guest on a dedicated
  * 512 MB-stack thread (deep SSZ-list recursion).
  *
  * If a Sail assertion/exception fires, the GMP-free runtime calls
@@ -19,16 +19,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "test_utils.h"
+
 /* Version banner. Printed on -v / --version / version so the EEST `consume
  * direct` harness can identify this binary (its FixtureConsumerTool matches
  * `detect_binary_pattern = ^evm-sail`). Keep the leading token "evm-sail". */
 #define EVMSAIL_VERSION "evm-sail zkvm stateless guest 0.1.0"
-
-/* test_utils.c: the shared harness surface (also the ctypes lib ABI) */
-extern void evmsail_lib_init(void);
-extern void evmsail_lib_fini(void);
-extern unsigned long evmsail_run_once(const unsigned char *in, unsigned long n,
-                                      const unsigned char **out);
 
 static unsigned char *read_file(const char *path, unsigned long *out_len)
 {
@@ -66,10 +62,17 @@ int main(int argc, char **argv)
     unsigned char *in = read_file(argv[1], &in_len);
     if (!in) return 2;
 
-    evmsail_lib_init();
+    guest_init();
     const unsigned char *out = NULL;
-    unsigned long out_len = evmsail_run_once(in, in_len, &out);
-    evmsail_lib_fini();
+    unsigned long out_len = guest_run(in, in_len, &out);
+    const char *error = guest_last_error();
+    guest_fini();
+
+    if (error != NULL && error[0] != '\0') {
+        fprintf(stderr, "native-runner: %s\n", error);
+        free(in);
+        return 1;
+    }
 
     for (unsigned long i = 0; i < out_len; i++) {
         printf("%02x", out[i]);

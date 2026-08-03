@@ -7,23 +7,23 @@
  * warm process can run many fixtures back-to-back by fully wiping guest state
  * between runs.
  *
- * A Python ctypes harness drives this: evmsail_lib_init() once, then per
- * fixture either fork() a child that calls evmsail_run_once() (fresh by
- * construction, no reset), or -- in a persistent worker -- evmsail_test_reset()
- * followed by evmsail_run_once().
+ * A Python ctypes harness drives this: guest_init() once, then per fixture
+ * either fork() a child that calls guest_run() (fresh by construction, no
+ * reset), or -- in a persistent worker -- guest_reset() followed by
+ * guest_run().
  */
 #ifndef EVMSAIL_TEST_UTILS_H
 #define EVMSAIL_TEST_UTILS_H
 
 #if defined(__GNUC__) || defined(__clang__)
-#define EVMSAIL_GUEST_API __attribute__((visibility("default")))
+#define GUEST_API __attribute__((visibility("default")))
 #else
-#define EVMSAIL_GUEST_API
+#define GUEST_API
 #endif
 
 /* model_init / model_fini around the whole session (once per process). */
-EVMSAIL_GUEST_API void evmsail_lib_init(void);
-EVMSAIL_GUEST_API void evmsail_lib_fini(void);
+GUEST_API void guest_init(void);
+GUEST_API void guest_fini(void);
 
 /* FULL wipe back to the post-model_init "fresh block" state: world overlay +
  * warm/journal/logs/refund/selfdestruct/created/bal/transient (k_world_reset),
@@ -31,25 +31,26 @@ EVMSAIL_GUEST_API void evmsail_lib_fini(void);
  * (set true on a deficient witness and NEVER self-reset -- the one leak an
  * FFI-only reset would miss), and the buffered output. Call between fixtures
  * ONLY in a reused (warm-worker) process; a forked child does not need it. */
-EVMSAIL_GUEST_API void evmsail_test_reset(void);
-
-/* The world wipe alone (no output-buffer reset). Calls the FFI resets directly;
- * needs no Sail-level k_world_reset. */
-EVMSAIL_GUEST_API void evmsail_clear_memory(void);
+GUEST_API void guest_reset(void);
 
 /* Run the guest once over `in`[0..n) on a large-stack thread (the guest needs
  * a big stack for deep SSZ-list recursion). Resets the output buffers first,
  * so it is correct in BOTH the fork and warm-worker modes. On return, *out
  * points into the static output buffer (valid until the next run); the return
  * value is the output length in bytes. */
-EVMSAIL_GUEST_API unsigned long
-evmsail_run_once(const unsigned char *in, unsigned long n,
-                 const unsigned char **out);
+GUEST_API unsigned long
+guest_run(const unsigned char *in, unsigned long n,
+          const unsigned char **out);
+
+/* Empty after a successful run. The optimized native backend reports a
+ * fail-closed host invariant here after unwinding to its test-only thread
+ * boundary. The returned pointer remains valid until the next run. */
+GUEST_API const char *guest_last_error(void);
 
 /* On-demand post-run debug dump of the live FFI state and canonical main.sail
  * output as a self-describing big-endian blob; *out points into a static buffer
  * valid until the next dump. This function is native-test-only. */
-EVMSAIL_GUEST_API unsigned long
-evmsail_debug_dump(const unsigned char **out);
+GUEST_API unsigned long
+guest_debug_dump(const unsigned char **out);
 
 #endif /* EVMSAIL_TEST_UTILS_H */

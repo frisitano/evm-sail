@@ -26,8 +26,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"      # repo root (evm-sail)
 BUILD="${NATIVE_BUILD:-$HERE/.build}"
-C_OPTIMIZED_SPLICE="$ROOT/sail/splices/c_optimized.sail"
-C_OPTIMIZED_PROFILE_SPLICE="$ROOT/sail/splices/c_optimized_profile.sail"
+SAIL_Z3_MEMO_PATH="${SAIL_Z3_MEMO_PATH:-$ROOT/sail_smt_cache}"
+SAIL_Z3_FLAGS=(--memo-z3 --memo-z3-path "$SAIL_Z3_MEMO_PATH")
+C_OPTIMISED_DIR="$ROOT/sail/optimised"
+C_OPTIMISED_MANIFEST="$C_OPTIMISED_DIR/manifest"
+C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
+C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 mkdir -p "$BUILD"
 
 SAIL="$(bash "$ROOT/zkvm/resolve_optimized_sail.sh")"
@@ -35,7 +39,6 @@ export SAIL
 CC="${CC:-cc}"
 EVM_PROFILE="${EVM_PROFILE:-off}"
 EVM_BUILD_MODE="${EVM_BUILD_MODE:-optimized}"
-EVM_CAPACITY_MODE="${EVM_CAPACITY_MODE:-fixed}"
 case "$EVM_PROFILE" in
   off|on) ;;
   *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
@@ -48,10 +51,6 @@ if [ "$EVM_BUILD_MODE" = standard ] && [ "$EVM_PROFILE" = on ]; then
   echo "error: EVM_PROFILE=on is available only for optimized builds" >&2
   exit 2
 fi
-case "$EVM_CAPACITY_MODE" in
-  fixed|measure) ;;
-  *) echo "error: EVM_CAPACITY_MODE must be fixed or measure" >&2; exit 2 ;;
-esac
 
 # --- Sail C runtime include dir (where sail.h lives) ------------------------
 # Query Sail rather than deriving this from the executable path. This also
@@ -68,22 +67,38 @@ RT="$ROOT/zkvm/runtime"
 FFI_ROOT="$ROOT/ffi"
 if [ "$EVM_BUILD_MODE" = standard ]; then
   MODEL_FFI="$FFI_ROOT/spec"
+  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI")
 else
   MODEL_FFI="$FFI_ROOT/optimized"
+  MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
 fi
 
 # Inject the owning FFI headers directly. There is deliberately no aggregate
 # model/input umbrella: each external operation is declared by its subsystem.
-MODEL_HEADERS=(
-  region_access.h hash.h precompiles.h output.h scratch.h memory.h
-  transient_storage.h stack.h frame_stack.h code_db.h kernel_state.h trie_node_db.h
-  state_db.h
-)
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  MODEL_HEADERS=(sail_failure.h)
+  while IFS= read -r path; do
+    MODEL_HEADERS+=("${path#"$MODEL_FFI/include/"}")
+  done < <(find "$MODEL_FFI/include/evmsail" -type f -name '*.h' ! -name model.h | LC_ALL=C sort)
+  NATIVE_TEST_SOURCE="$MODEL_FFI/src/test/native.c"
+  ADDRESS_RESULT_SOURCE=""
+else
+  MODEL_HEADERS=(
+    sail_failure.h region_access.h hash.h precompiles.h output.h scratch.h
+    memory.h transient_storage.h stack.h frame_stack.h code_db.h
+    kernel_state.h trie_node_db.h state_db.h
+  )
+  MODEL_STATE_SOURCE="$MODEL_FFI/state.c"
+  STATE_KERNEL_SOURCE="$MODEL_FFI/state_db.c"
+  HASH_SOURCE="$MODEL_FFI/hash.c"
+  CODE_SOURCE="$MODEL_FFI/code.c"
+  REGION_ACCESS_SOURCE="$MODEL_FFI/region_access.c"
+  FRAME_STACK_SOURCE="$MODEL_FFI/frame_stack.c"
+  NATIVE_TEST_SOURCE="$MODEL_FFI/native_test.c"
+  ADDRESS_RESULT_SOURCE="$MODEL_FFI/address_result.c"
+fi
 if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
-fi
-if [ "$EVM_BUILD_MODE" = optimized ]; then
-  MODEL_HEADERS+=(word_bytes.h preimage.h htr.h mpt.h state.h interpreter.h)
 fi
 MODEL_INCLUDE_FLAGS=()
 for header in "${MODEL_HEADERS[@]}"; do
@@ -116,12 +131,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
   fi
   CFLAGS+=("${GMP_CFLAGS[@]}")
 else
-  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATES)
-  if [ "$EVM_CAPACITY_MODE" = fixed ]; then
-    CFLAGS+=(-DEVMSAIL_POINTER_ABI -DEVMSAIL_CAPACITY_FIXED)
-  else
-    CFLAGS+=(-DEVMSAIL_CAPACITY_MEASURE)
-  fi
+  CFLAGS+=(-DEVMSAIL_NATIVE_DEBUG_AGGREGATES -DEVMSAIL_OPTIMIZED_FFI)
 fi
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi
 
@@ -155,7 +165,8 @@ PRESERVE_FLAGS=(
 )
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 SAIL_CMD=(
-  "$SAIL" -c -O --Oconstant-fold --c-no-main --c-no-rts
+  "$SAIL" "${SAIL_Z3_FLAGS[@]}"
+  -c -O --Oconstant-fold --c-no-main --c-no-rts
   --c-specialize
   "${PRESERVE_FLAGS[@]}"
   "${MODEL_INCLUDE_FLAGS[@]}"
@@ -164,9 +175,16 @@ if [ "${EVM_SAIL_LOG:-off}" = on ]; then
   SAIL_CMD+=(--c-specialize-log)
 fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  SAIL_CMD+=(--c-require-bounded-int --splice "$C_OPTIMIZED_SPLICE")
+  SAIL_CMD+=(--c-require-bounded-int)
+  while IFS= read -r relative || [ -n "$relative" ]; do
+    [ -z "$relative" ] && continue
+    SAIL_CMD+=(--splice "$C_OPTIMISED_DIR/$relative")
+  done < "$C_OPTIMISED_MANIFEST"
   if [ "$EVM_PROFILE" = on ]; then
-    SAIL_CMD+=(--splice "$C_OPTIMIZED_PROFILE_SPLICE")
+    while IFS= read -r relative || [ -n "$relative" ]; do
+      [ -z "$relative" ] && continue
+      SAIL_CMD+=(--splice "$C_PROFILE_DIR/$relative")
+    done < "$C_PROFILE_MANIFEST"
   fi
 fi
 SAIL_CMD+=(
@@ -181,76 +199,69 @@ SAIL_CMD+=(
 # MUST precede -I"$SAIL_LIB" in every unit that includes sail.h.
 
 # --- 4. compile generated model --------------------------------------------
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
     -c "$BUILD/zkvm_block.c" -o "$BUILD/zkvm_block.o"
 
-# --- 4b. Selected model backend. The spec and optimized builds each own their
-#     complete FFI implementation; only standardized platform headers are shared.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/state.c" -o "$BUILD/model_state.o"
-
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/hash.c" -o "$BUILD/hash.o"
-
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/code.c" -o "$BUILD/model_code.o"
-
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/region_access.c" -o "$BUILD/region_access.o"
-
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/address_result.c" -o "$BUILD/model_address_result.o"
-
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-    -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/frame_stack.c" -o "$BUILD/model_frame_stack.o"
-
-HTR_OBJ=""
-PREIMAGE_OBJ=""
-MPT_OBJ=""
-INTERPRETER_OBJ=""
+# --- 4b. Selected model backend. Optimized sources are a deterministic
+# Sail-shaped manifest; the specification backend retains its standalone ABI.
+MODEL_BACKEND_OBJS=()
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/preimage.c" -o "$BUILD/preimage.o"
-  PREIMAGE_OBJ="$BUILD/preimage.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/htr.c" -o "$BUILD/htr.o"
-  HTR_OBJ="$BUILD/htr.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/mpt.c" -o "$BUILD/mpt.o"
-  MPT_OBJ="$BUILD/mpt.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/interpreter.c" -o "$BUILD/interpreter.o"
-  INTERPRETER_OBJ="$BUILD/interpreter.o"
+  while IFS= read -r relative || [ -n "$relative" ]; do
+    case "$relative" in ''|'#'*) continue ;; esac
+    source="$MODEL_FFI/src/$relative"
+    [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
+    object_name="${relative%.c}"
+    object_name="${object_name//\//__}"
+    object="$BUILD/optimized__${object_name}.o"
+    "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$source" -o "$object"
+    MODEL_BACKEND_OBJS+=("$object")
+  done < "$MODEL_FFI/sources.list"
+else
+  backend_sources=(
+    "$MODEL_STATE_SOURCE:model_state"
+    "$HASH_SOURCE:hash"
+    "$CODE_SOURCE:model_code"
+    "$REGION_ACCESS_SOURCE:region_access"
+    "$FRAME_STACK_SOURCE:model_frame_stack"
+  )
+  if [ -n "$ADDRESS_RESULT_SOURCE" ]; then
+    backend_sources+=("$ADDRESS_RESULT_SOURCE:model_address_result")
+  fi
+  for source_and_name in "${backend_sources[@]}"; do
+    source="${source_and_name%:*}"
+    object="$BUILD/${source_and_name##*:}.o"
+    "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$source" -o "$object"
+    MODEL_BACKEND_OBJS+=("$object")
+  done
 fi
 
 # --- 5. backend-specific native harness + CLI main ---------------------------
 #   Each backend owns its lifecycle and debug bridge so generated-model ABI
 #   details do not leak back into a shared native utility.
-"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" -I"$MODEL_FFI" -I"$FFI_ROOT" \
+"$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
     -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-    -c "$MODEL_FFI/native_test.c" -o "$BUILD/native_test.o"
+    -c "$NATIVE_TEST_SOURCE" -o "$BUILD/native_test.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
 # --- 6. C host backends + direct precompile adapter -------------------------
 HOST_OBJS=()
-for hc in capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output; do
-  o="$BUILD/$hc.o"
-  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$MODEL_FFI" -I"$FFI_ROOT" \
-      -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
-      -c "$MODEL_FFI/$hc.c" -o "$o"
-  HOST_OBJS+=("$o")
-done
+if [ "$EVM_BUILD_MODE" = standard ]; then
+  HOST_SOURCES=(capacity.c memory.c scratch.c transient_storage.c stack.c code_db.c kernel_state.c precompiles.c output.c)
+  HOST_SOURCES+=(trie_node_db.c state_db.c)
+  for source in "${HOST_SOURCES[@]}"; do
+    object_name="$(basename "${source%.c}")"
+    o="$BUILD/$object_name.o"
+    "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+        -DEVMSAIL_MODEL_H='"zkvm_block.h"' \
+        -c "$MODEL_FFI/$source" -o "$o"
+    HOST_OBJS+=("$o")
+  done
+fi
 if [ "$EVM_PROFILE" = on ]; then
   o="$BUILD/cycle_scopes.o"
   "$CC" "${CFLAGS[@]}" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -c "$RT/cycle_scopes.c" -o "$o"
@@ -260,13 +271,13 @@ fi
 # --- 7. link ----------------------------------------------------------------
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
-    "$BUILD/zkvm_block.o" "$BUILD/model_state.o" "$BUILD/hash.o" "$BUILD/model_code.o" "$BUILD/region_access.o" "$BUILD/model_address_result.o" "$BUILD/model_frame_stack.o" "$BUILD/native_test.o" "$BUILD/main.o"
-    ${PREIMAGE_OBJ:+"$PREIMAGE_OBJ"}
-    ${HTR_OBJ:+"$HTR_OBJ"}
-    ${MPT_OBJ:+"$MPT_OBJ"}
-    ${INTERPRETER_OBJ:+"$INTERPRETER_OBJ"}
-    "${HOST_OBJS[@]}" "${RUNTIME_OBJS[@]}"
+    "$BUILD/zkvm_block.o" "${MODEL_BACKEND_OBJS[@]}"
+    "$BUILD/native_test.o" "$BUILD/main.o"
+    "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
+if [ "$EVM_BUILD_MODE" = standard ] || [ "$EVM_PROFILE" = on ]; then
+  LINK_CMD+=("${HOST_OBJS[@]}")
+fi
 if [ "$EVM_BUILD_MODE" = standard ]; then
   LINK_CMD+=("${RUNTIME_LINK_FLAGS[@]}")
 fi

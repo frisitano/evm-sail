@@ -27,6 +27,11 @@ ceiling.
     Amsterdam `SszExecutionPayload.gas_limit`. */
 type block_gas_limit_bound : Int = ssz_uint_bound
 
+/*! EIP-7928 charges one BAL item against each 2,000 units of block gas. */
+type block_access_list_item_gas : Int = 2000
+let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) =
+    sizeof(block_access_list_item_gas)
+
 /*! Available gas in a running EVM frame. */
 type gas = nat
 
@@ -36,8 +41,11 @@ type gas = nat
 type live_gas_valid('value : Int) -> Bool =
     0 <= 'value
 
-/*! Gas supplied by a transaction before fork-specific validation. */
-type transaction_gas = nat
+/*! Gas supplied by a transaction before fork-specific validation. Any value
+    above the execution payload's SSZ `uint64` block-gas-limit domain cannot be
+    admitted, so the RLP boundary rejects it before constructing a
+    transaction. */
+type transaction_gas = range(0, block_gas_limit_bound)
 
 /*! A transient computed charge. Canonically this is an exact natural;
     optimized builds use a native representation only after the computation's
@@ -106,7 +114,9 @@ type block_gas = range(0, block_gas_limit_bound)
     bounded by the block gas limit. Amsterdam receipts account for regular and
     state gas together, so the execution profile supplies the tighter
     header-dependent bound. */
-type receipt_cumulative_gas = nat
+type receipt_cumulative_gas = range(0, 2 * block_gas_limit_bound)
+type receipt_cumulative_gas_valid('value : Int) -> Bool =
+    0 <= 'value & 'value <= 2 * block_gas_limit_bound
 
 let GAS_ZERO : gas = 0
 
@@ -152,6 +162,10 @@ let STATE_GAS_DELTA_ZERO : state_gas_delta = 0
 /*! State gas after adding the intrinsic transaction charge and before the
     block-level non-negative/u64 checks. */
 type transaction_state_gas_delta = int
+
+/*! A non-negative transaction state-gas total after settlement has rejected
+    a negative signed delta. */
+type transaction_state_gas_used = nat
 
 /* The transaction refund cap is `gas_used / 2` before London and
  * `gas_used / 5` from London onward.  Keep the exact protocol alternatives

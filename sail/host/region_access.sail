@@ -13,67 +13,71 @@ runtime resolver crosses the model boundary.
     acquires its pointer once and all derived spans reuse offsets into it. */
 val stateless_input = impure { c: "stateless_input" } : unit -> StatelessInputSlice
 
-val stateless_input_byte_at = impure { c: "stateless_input_byte_at" } : (StatelessInputSlice, source_pointer) -> byte
-val memory_slice_byte_at = impure { c: "memory_slice_byte_at" } : (MemorySlice, source_pointer) -> byte
-val code_region_byte_at = impure { c: "code_region_byte_at" } : (CodeRegionSlice, source_pointer) -> byte
-val scratch_slice_byte_at = impure { c: "scratch_slice_byte_at" } : (ScratchSlice, source_pointer) -> byte
-val log_data_slice_byte_at = impure { c: "log_data_slice_byte_at" } : (LogDataSlice, source_pointer) -> byte
-val output_slice_byte_at = impure { c: "output_slice_byte_at" } : (OutputSlice, source_pointer) -> byte
+val stateless_input_byte_at = impure { c: "stateless_input_byte_at" } : (StatelessInputSlice, stateless_input_length) -> byte
+val memory_slice_byte_at = impure { c: "memory_slice_byte_at" } : (EvmMemorySlice, memory_length) -> byte
+val code_region_byte_at = impure { c: "code_region_byte_at" } : (CodeRegionSlice, code_length) -> byte
+val scratch_slice_byte_at = impure { c: "scratch_slice_byte_at" } : (ScratchSlice, scratch_length) -> byte
+val log_data_slice_byte_at = impure { c: "log_data_slice_byte_at" } : (LogDataSlice, log_data_length) -> byte
+val output_slice_byte_at = impure { c: "output_slice_byte_at" } : (OutputSlice, output_length) -> byte
 
-val stateless_input_count_nonzero = impure { c: "stateless_input_count_nonzero" } : StatelessInputSlice -> host_access
+val stateless_input_count_nonzero = impure { c: "stateless_input_count_nonzero" } :
+    StatelessInputSlice -> stateless_input_length
 
 val stateless_input_strided_zero = impure { c: "stateless_input_strided_zero" } : (
         StatelessInputSlice,
-        source_pointer,
-        host_access,
-        host_access,
-        host_access,
+        stateless_input_length,
+        stateless_input_length,
+        stateless_input_length,
+        stateless_input_length,
     ) -> bool
 val memory_slice_strided_zero = impure { c: "memory_slice_strided_zero" } : (
-        MemorySlice,
-        source_pointer,
-        host_access,
-        host_access,
-        host_access,
+        EvmMemorySlice,
+        memory_length,
+        memory_length,
+        memory_length,
+        memory_length,
     ) -> bool
 
-val stateless_input_load_word = impure { c: "stateless_input_load_word" } : (StatelessInputSlice, source_pointer) -> word
-val memory_slice_load_word = impure { c: "memory_slice_load_word" } : (MemorySlice, source_pointer) -> word
-val code_region_load_word = impure { c: "code_region_load_word" } : (CodeRegionSlice, source_pointer) -> word
-val scratch_slice_load_word = impure { c: "scratch_slice_load_word" } : (ScratchSlice, source_pointer) -> word
-val log_data_slice_load_word = impure { c: "log_data_slice_load_word" } : (LogDataSlice, source_pointer) -> word
-val output_slice_load_word = impure { c: "output_slice_load_word" } : (OutputSlice, source_pointer) -> word
+val stateless_input_load_word = impure { c: "stateless_input_load_word" } :
+    (StatelessInputSlice, stateless_input_length) -> word
+val memory_slice_load_word = impure { c: "memory_slice_load_word" } : (EvmMemorySlice, memory_length) -> word
+val code_region_load_word = impure { c: "code_region_load_word" } : (CodeRegionSlice, code_length) -> word
+val scratch_slice_load_word = impure { c: "scratch_slice_load_word" } : (ScratchSlice, scratch_length) -> word
+val log_data_slice_load_word = impure { c: "log_data_slice_load_word" } : (LogDataSlice, log_data_length) -> word
+val output_slice_load_word = impure { c: "output_slice_load_word" } : (OutputSlice, output_length) -> word
 
 val stateless_input_load_n_word = impure { c: "stateless_input_load_n_word" } : (
         StatelessInputSlice,
-        source_pointer,
-        host_access,
+        stateless_input_length,
+        word_byte_count,
     ) -> word
-val code_region_load_n_word = impure { c: "code_region_load_n_word" } : (CodeRegionSlice, source_pointer, host_access) -> word
-val scratch_slice_load_n_word = impure { c: "scratch_slice_load_n_word" } : (ScratchSlice, source_pointer, host_access) -> word
+val code_region_load_n_word = impure { c: "code_region_load_n_word" } :
+    (CodeRegionSlice, code_length, word_byte_count) -> word
+val scratch_slice_load_n_word = impure { c: "scratch_slice_load_n_word" } :
+    (ScratchSlice, scratch_length, word_byte_count) -> word
 
 val stateless_input_copy_to_memory = impure { c: "stateless_input_copy_to_memory" } : (
         StatelessInputSlice,
         memory_pointer,
-        source_pointer,
+        stateless_input_length,
         memory_length,
     ) -> unit
 val memory_slice_copy_to_memory = impure { c: "memory_slice_copy_to_memory" } : (
-        MemorySlice,
+        EvmMemorySlice,
         memory_pointer,
-        source_pointer,
+        memory_length,
         memory_length,
     ) -> unit
 val code_region_copy_to_memory = impure { c: "code_region_copy_to_memory" } : (
         CodeRegionSlice,
         memory_pointer,
-        source_pointer,
+        code_length,
         memory_length,
     ) -> unit
 val output_slice_copy_to_memory = impure { c: "output_slice_copy_to_memory" } : (
         OutputSlice,
         memory_pointer,
-        source_pointer,
+        output_length,
         memory_length,
     ) -> unit
 
@@ -89,7 +93,8 @@ overload region_slices_equal = {
     input_code_slices_equal
 }
 
-val stateless_input_slice_byte : forall 'off, source_valid_length('off). (StatelessInputSlice, int('off)) -> byte
+val stateless_input_slice_byte : forall 'off, 0 <= 'off & 'off <= stateless_input_region_bound.
+    (StatelessInputSlice, int('off)) -> byte
 function stateless_input_slice_byte(s, off) =
     if off < s.len then {
         stateless_input_byte_at(s, off)
@@ -97,7 +102,7 @@ function stateless_input_slice_byte(s, off) =
         0x00
     }
 
-val memory_slice_byte : forall 'off, source_valid_length('off). (MemorySlice, int('off)) -> byte
+val memory_slice_byte : forall 'off, 0 <= 'off & 'off <= memory_region_bound. (EvmMemorySlice, int('off)) -> byte
 function memory_slice_byte(s, off) =
     if off < s.len then {
         memory_slice_byte_at(s, off)
@@ -105,7 +110,7 @@ function memory_slice_byte(s, off) =
         0x00
     }
 
-val code_slice_byte : forall 'off, source_valid_length('off). (CodeRegionSlice, int('off)) -> byte
+val code_slice_byte : forall 'off, 0 <= 'off & 'off <= code_region_bound. (CodeRegionSlice, int('off)) -> byte
 function code_slice_byte(s, off) =
     if off < s.len then {
         code_region_byte_at(s, off)
@@ -113,7 +118,7 @@ function code_slice_byte(s, off) =
         0x00
     }
 
-val scratch_byte : forall 'off, source_valid_length('off). (ScratchSlice, int('off)) -> byte
+val scratch_byte : forall 'off, 0 <= 'off & 'off <= scratch_region_bound. (ScratchSlice, int('off)) -> byte
 function scratch_byte(s, off) =
     if off < s.len then {
         scratch_slice_byte_at(s, off)
@@ -121,7 +126,7 @@ function scratch_byte(s, off) =
         0x00
     }
 
-val log_data_byte : forall 'off, source_valid_length('off). (LogDataSlice, int('off)) -> byte
+val log_data_byte : forall 'off, 0 <= 'off & 'off <= log_data_region_bound. (LogDataSlice, int('off)) -> byte
 function log_data_byte(s, off) =
     if off < s.len then {
         log_data_slice_byte_at(s, off)
@@ -129,7 +134,7 @@ function log_data_byte(s, off) =
         0x00
     }
 
-val output_byte : forall 'off, source_valid_length('off). (OutputSlice, int('off)) -> byte
+val output_byte : forall 'off, 0 <= 'off & 'off <= output_region_bound. (OutputSlice, int('off)) -> byte
 function output_byte(s, off) =
     if off < s.len then {
         output_slice_byte_at(s, off)
@@ -137,7 +142,8 @@ function output_byte(s, off) =
         0x00
     }
 
-val calldata_slice_byte : forall 'off, source_valid_length('off). (CalldataSlice, int('off)) -> byte
+val calldata_slice_byte : forall 'off, 0 <= 'off & 'off <= default_host_region_bound.
+    (CalldataSlice, int('off)) -> byte
 function calldata_slice_byte(s, off) =
     match s {
         InputCalldata(bytes) => stateless_input_slice_byte(bytes, off),
@@ -153,7 +159,7 @@ overload slice_byte = {
     calldata_slice_byte
 }
 
-function slice_count_nonzero(s : StatelessInputSlice) -> source_length =
+function slice_count_nonzero(s : StatelessInputSlice) -> stateless_input_length =
     stateless_input_count_nonzero(s)
 
 val stateless_input_slice_strided_zero : forall 'start 'stride 'width 'count,
@@ -175,7 +181,7 @@ val memory_slice_strided_zero_value : forall 'start 'stride 'width 'count,
                                         & source_valid_length('stride)
                                         & source_valid_length('width)
                                         & source_valid_length('count). (
-        MemorySlice,
+        EvmMemorySlice,
         int('start),
         int('stride),
         int('width),
@@ -209,7 +215,7 @@ function stateless_input_slice_load(s, off) =
         ZERO_WORD
     }
 
-val memory_slice_load : forall 'off, source_valid_length('off). (MemorySlice, int('off)) -> word
+val memory_slice_load : forall 'off, source_valid_length('off). (EvmMemorySlice, int('off)) -> word
 function memory_slice_load(s, off) =
     if off < s.len then {
         memory_slice_load_word(s, off)
@@ -273,7 +279,7 @@ function stateless_input_slice_load_word_offset(s : StatelessInputSlice, off : w
         ZERO_WORD
     }
 
-function memory_slice_load_word_offset(s : MemorySlice, off : word) -> word =
+function memory_slice_load_word_offset(s : EvmMemorySlice, off : word) -> word =
     if off < s.len then {
         slice_load(s, off)
     } else {
@@ -298,7 +304,11 @@ overload slice_load_word_offset = {
     calldata_slice_load_word_offset
 }
 
-val stateless_input_slice_load_n : forall 'off 'n, source_valid_length('off) & source_valid_length('n). (
+val stateless_input_slice_load_n : forall 'off 'n,
+                                        0 <= 'off
+                                      & 'off <= stateless_input_region_bound
+                                      & 0 <= 'n
+                                      & 'n <= 32. (
         StatelessInputSlice,
         int('off),
         int('n),
@@ -310,7 +320,11 @@ function stateless_input_slice_load_n(s, off, n) =
         ZERO_WORD
     }
 
-val code_slice_load_n : forall 'off 'n, source_valid_length('off) & source_valid_length('n). (
+val code_slice_load_n : forall 'off 'n,
+                             0 <= 'off
+                           & 'off <= code_region_bound
+                           & 0 <= 'n
+                           & 'n <= 32. (
         CodeRegionSlice,
         int('off),
         int('n),
@@ -322,7 +336,11 @@ function code_slice_load_n(s, off, n) =
         ZERO_WORD
     }
 
-val scratch_slice_load_n : forall 'off 'n, source_valid_length('off) & source_valid_length('n). (
+val scratch_slice_load_n : forall 'off 'n,
+                                0 <= 'off
+                              & 'off <= scratch_region_bound
+                              & 0 <= 'n
+                              & 'n <= 32. (
         ScratchSlice,
         int('off),
         int('n),
@@ -341,7 +359,12 @@ overload slice_load_n = {
 }
 
 val stateless_input_slice_copy : forall 'dst 'off 'len,
-                                   host_valid_access('dst) & source_valid_length('off) & host_valid_access('len). (
+                                   0 <= 'dst
+                                 & 'dst <= memory_region_bound
+                                 & 0 <= 'off
+                                 & 'off <= stateless_input_region_bound
+                                 & 0 <= 'len
+                                 & 'len <= memory_region_bound. (
         StatelessInputSlice,
         int('dst),
         int('off),
@@ -351,8 +374,13 @@ function stateless_input_slice_copy(s, dst, off, len) =
     stateless_input_copy_to_memory(s, dst, off, len)
 
 val memory_slice_copy : forall 'dst 'off 'len,
-                          host_valid_access('dst) & source_valid_length('off) & host_valid_access('len). (
-        MemorySlice,
+                          0 <= 'dst
+                        & 'dst <= memory_region_bound
+                        & 0 <= 'off
+                        & 'off <= memory_region_bound
+                        & 0 <= 'len
+                        & 'len <= memory_region_bound. (
+        EvmMemorySlice,
         int('dst),
         int('off),
         int('len),
@@ -361,7 +389,12 @@ function memory_slice_copy(s, dst, off, len) =
     memory_slice_copy_to_memory(s, dst, off, len)
 
 val code_slice_copy : forall 'dst 'off 'len,
-                        host_valid_access('dst) & source_valid_length('off) & host_valid_access('len). (
+                        0 <= 'dst
+                      & 'dst <= memory_region_bound
+                      & 0 <= 'off
+                      & 'off <= code_region_bound
+                      & 0 <= 'len
+                      & 'len <= memory_region_bound. (
         CodeRegionSlice,
         int('dst),
         int('off),
@@ -371,7 +404,12 @@ function code_slice_copy(s, dst, off, len) =
     code_region_copy_to_memory(s, dst, off, len)
 
 val output_slice_copy : forall 'dst 'off 'len,
-                          host_valid_access('dst) & source_valid_length('off) & host_valid_access('len). (
+                          0 <= 'dst
+                        & 'dst <= memory_region_bound
+                        & 0 <= 'off
+                        & 'off <= output_region_bound
+                        & 0 <= 'len
+                        & 'len <= memory_region_bound. (
         OutputSlice,
         int('dst),
         int('off),
@@ -401,7 +439,7 @@ function stateless_input_slice_copy_word_offset(
         stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, 0, len)
     }
 
-function memory_slice_copy_word_offset(s : MemorySlice, dst : memory_pointer, off : word, len : memory_length) -> unit =
+function memory_slice_copy_word_offset(s : EvmMemorySlice, dst : memory_pointer, off : word, len : memory_length) -> unit =
     if off < s.len then {
         slice_copy(s, dst, off, len)
     } else {

@@ -53,6 +53,11 @@
       inclusive: "Inclusive steps",
     },
   };
+  const ORDERINGS = {
+    "gas-desc": "Gas used: high to low",
+    "gas-asc": "Gas used: low to high",
+    name: "Name: A to Z",
+  };
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -123,6 +128,7 @@
       name: profile.name,
       block_index: profile.block_index,
       input_bytes: profile.input_bytes,
+      gas_used: profile.gas_used,
       guests: {
         [guestName]: {
           total_steps: profile.total_steps,
@@ -146,11 +152,13 @@
     const metric = METRICS[metricName];
     const guestValues = guests.map((guest, index) => {
       const guestProfile = profile.guests?.[guest.name] || {};
+      const unavailable = guestProfile.unavailable || null;
       return {
         ...guest,
         index,
         profile: guestProfile,
-        totalValue: guestProfile[metric.total] || 0,
+        unavailable,
+        totalValue: unavailable ? null : (guestProfile[metric.total] ?? null),
         scopeValues: guestProfile[metric.scopes] || {},
       };
     });
@@ -158,7 +166,12 @@
       ...metric,
       name: metricName,
       guestValues,
-      maxTotal: Math.max(1, ...guestValues.map((guest) => guest.totalValue)),
+      maxTotal: Math.max(
+        1,
+        ...guestValues
+          .map((guest) => guest.totalValue)
+          .filter((value) => Number.isFinite(value)),
+      ),
     };
   }
 
@@ -214,17 +227,22 @@
 
   function renderSummary(view, profile, metric) {
     const totals = metric.guestValues.map((guest) => guest.totalValue);
-    const best = Math.min(...totals.filter((value) => value > 0));
+    const best = Math.min(
+      ...totals.filter((value) => Number.isFinite(value) && value > 0),
+    );
     const body = document.createDocumentFragment();
     metric.guestValues.forEach((guest) => {
       const row = document.createElement("tr");
-      const relative = best ? guest.totalValue / best : 0;
+      const available = Number.isFinite(guest.totalValue);
+      const relative = available && best ? guest.totalValue / best : 0;
       row.append(
         element("td", null, guest.name),
         comparisonCell(
           guest.totalValue,
           metric.maxTotal,
           guest.index,
+          "",
+          guest.unavailable?.message || "Unavailable",
         ),
         element(
           "td",
@@ -234,7 +252,9 @@
         element(
           "td",
           "evmsail-perf-number",
-          best ? `+${number.format(guest.totalValue - best)}` : "—",
+          available && best
+            ? `+${number.format(guest.totalValue - best)}`
+            : "—",
         ),
       );
       body.append(row);
@@ -245,24 +265,38 @@
       `All bars use the largest guest ${metric.label.toLocaleLowerCase()} ` +
       "as a shared scale. Relative and delta columns compare against the " +
       "least expensive guest for this exact input.";
-    view.inputBytes.textContent = `${number.format(profile.input_bytes)} input bytes`;
+    const gasUsed = Number.isFinite(profile.gas_used)
+      ? ` · ${number.format(profile.gas_used)} gas used`
+      : "";
+    view.inputBytes.textContent =
+      `${number.format(profile.input_bytes)} input bytes${gasUsed}`;
   }
 
   function renderProvenance(view, catalog, fixture, profile, guests) {
     const generated = new Date(
       Number(catalog.generated_at_unix_ns) / 1_000_000,
     );
-    view.provenance.textContent =
+    const description =
       `${guests.map((guest) => guest.name).join(" · ")} · ${fixture.path} · ` +
       `${profile.name} / block ${profile.block_index} · generated ` +
       generated.toISOString().slice(0, 10);
+    view.provenance.replaceChildren(document.createTextNode(description));
+    const sourceUrl = catalog.metadata?.source_url;
+    if (typeof sourceUrl === "string" && /^https?:\/\//.test(sourceUrl)) {
+      const source = element("a", "", "dataset source");
+      source.href = sourceUrl;
+      source.rel = "noreferrer";
+      view.provenance.append(document.createTextNode(" · "), source);
+    }
   }
 
   function renderPipeline(view, metric) {
     const fragment = document.createDocumentFragment();
     PIPELINE.forEach(([label, scope, depth]) => {
       const values = metric.guestValues.map((guest) =>
-        scope
+        guest.unavailable
+          ? null
+          : scope
           ? Object.hasOwn(guest.scopeValues, scope)
             ? guest.scopeValues[scope]
             : null
@@ -283,7 +317,9 @@
             value === null
               ? "evmsail-perf-unavailable"
               : "evmsail-perf-number",
-            value === null ? "Not instrumented" : number.format(value),
+            value === null
+              ? guest.unavailable?.message || "Not instrumented"
+              : number.format(value),
           ),
         );
         if (value !== null) {
@@ -327,7 +363,16 @@
       row.append(element("td", null, pretty(name)));
       row.append(element("td", null, scopeFamily(name)));
       values.forEach((value, index) => {
-        row.append(comparisonCell(value, maximum, index));
+        const unavailable = metric.guestValues[index].unavailable;
+        row.append(
+          comparisonCell(
+            value,
+            maximum,
+            index,
+            "",
+            unavailable?.message || "Not instrumented",
+          ),
+        );
       });
       body.append(row);
     });
@@ -349,6 +394,7 @@
     );
     const guest = guests[guestIndex];
     const guestProfile = profile.guests?.[guest?.name] || {};
+    const unavailable = guestProfile.unavailable;
     const allFunctions = guestProfile.executed_functions || [];
     const needle = view.functionSearch.value.trim().toLocaleLowerCase();
     const rows = needle
@@ -378,7 +424,9 @@
     });
     view.functions.replaceChildren(body);
     view.functionsEmpty.hidden = rows.length !== 0;
-    view.functionsEmpty.textContent = allFunctions.length
+    view.functionsEmpty.textContent = unavailable
+      ? unavailable.message
+      : allFunctions.length
       ? "No executed function symbols match this filter."
       : `No executed function inventory was reported for ${guest?.name || "this guest"}.`;
     updateLimitNote(view.functionNote, rows.length, rows.length);
@@ -420,7 +468,16 @@
       row.append(element("td", "evmsail-perf-function", name));
       entries.forEach((entry, index) => {
         if (!entry) {
-          row.append(comparisonCell(null, maximum, index, "", "Not used"));
+          const unavailable = profile.guests?.[guests[index].name]?.unavailable;
+          row.append(
+            comparisonCell(
+              null,
+              maximum,
+              index,
+              "",
+              unavailable?.message || "Not used",
+            ),
+          );
           return;
         }
         const cell = comparisonCell(
@@ -480,6 +537,18 @@
     metricSelect.value = "steps";
     metricField.append(metricSelect);
     controls.append(metricField);
+
+    const orderField = element("label", "evmsail-perf-field");
+    orderField.append(element("span", null, "Order"));
+    const orderSelect = document.createElement("select");
+    Object.entries(ORDERINGS).forEach(([value, label]) => {
+      const option = element("option", null, label);
+      option.value = value;
+      orderSelect.append(option);
+    });
+    orderSelect.value = "gas-desc";
+    orderField.append(orderSelect);
+    controls.append(orderField);
 
     const fixtureSearch = document.createElement("input");
     fixtureSearch.type = "search";
@@ -674,6 +743,7 @@
     return {
       selectors,
       metricSelect,
+      orderSelect,
       fixtureSearch,
       fixtureSelect,
       fixtureNote,
@@ -756,16 +826,45 @@
 
     function fixtureLabel(fixture) {
       const category = fixture.category ? `${fixture.category}/` : "";
-      return `${category}${fixture.fixture} (${number.format(fixture.case_count)})`;
+      const gas = Number.isFinite(fixture.max_gas_used)
+        ? ` · max ${number.format(fixture.max_gas_used)} gas`
+        : "";
+      return (
+        `${category}${fixture.fixture} (${number.format(fixture.case_count)})` +
+        gas
+      );
+    }
+
+    function ordered(items, gasField, label) {
+      const result = [...items];
+      if (view.orderSelect.value === "name") {
+        return result.sort((left, right) =>
+          label(left).localeCompare(label(right), undefined, { numeric: true }),
+        );
+      }
+      const direction = view.orderSelect.value === "gas-asc" ? 1 : -1;
+      return result.sort((left, right) => {
+        const leftGas = Number.isFinite(left[gasField]) ? left[gasField] : null;
+        const rightGas = Number.isFinite(right[gasField]) ? right[gasField] : null;
+        if (leftGas === null && rightGas === null) return 0;
+        if (leftGas === null) return 1;
+        if (rightGas === null) return -1;
+        const gasOrder = direction * (leftGas - rightGas);
+        return gasOrder || label(left).localeCompare(label(right));
+      });
     }
 
     function rebuildFixtures() {
-      const grouped = fixtures.filter(
-        (fixture) =>
-          fixture.suite === selected.suite &&
-          fixture.target === selected.target &&
-          fixture.fork === selected.fork &&
-          fixture.feature === selected.feature,
+      const grouped = ordered(
+        fixtures.filter(
+          (fixture) =>
+            fixture.suite === selected.suite &&
+            fixture.target === selected.target &&
+            fixture.fork === selected.fork &&
+            fixture.feature === selected.feature,
+        ),
+        "max_gas_used",
+        fixtureLabel,
       );
       const result = filteredOptions(
         grouped,
@@ -818,15 +917,18 @@
     }
 
     function caseLabel(profile) {
+      const gas = Number.isFinite(profile.gas_used)
+        ? ` · ${number.format(profile.gas_used)} gas used`
+        : "";
       return (
         `${profile.name} · block ${profile.block_index} · ` +
-        `${number.format(profile.input_bytes)} input bytes`
+        `${number.format(profile.input_bytes)} input bytes${gas}`
       );
     }
 
     function rebuildCases() {
       const result = filteredOptions(
-        shard.cases,
+        ordered(shard.cases, "gas_used", caseLabel),
         view.caseSearch.value,
         caseLabel,
       );
@@ -859,7 +961,15 @@
       view.status.textContent =
         `${number.format(catalog.fixture_count)} fixture files · ` +
         `${number.format(catalog.case_count)} profiled cases · ` +
-        `${guests.length} guests`;
+        `${guests.length} guests` +
+        (() => {
+          const unavailable = guests.filter(
+            (guest) => profile.guests?.[guest.name]?.unavailable,
+          ).length;
+          return unavailable
+            ? ` · ${unavailable} unavailable measurement${unavailable === 1 ? "" : "s"}`
+            : "";
+        })();
       const metric = profileMetric(profile, guests, view.metricSelect.value);
       renderProvenance(view, catalog, fixture, profile, guests);
       renderSummary(view, profile, metric);
@@ -880,6 +990,7 @@
     view.caseSearch.addEventListener("input", rebuildCases);
     view.caseSelect.addEventListener("change", renderSelectedCase);
     view.metricSelect.addEventListener("change", renderSelectedCase);
+    view.orderSelect.addEventListener("change", rebuildFixtures);
     view.functionGuestSelect.addEventListener("change", renderSelectedCase);
     view.functionSearch.addEventListener("input", renderSelectedCase);
 

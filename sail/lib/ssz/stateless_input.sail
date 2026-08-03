@@ -157,7 +157,7 @@ function ssz_list_pop forall ('maximum : Int), source_valid_length('maximum) & '
     let bytes = items.bytes;
     let nat = bytes.len;
     let next = if next_index < items.count then {
-            ssz_offset_to_source_pointer(ssz_u32(bytes, ssz_offset_table_position(next_index)))
+            ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(next_index)))
         } else {
             nat
         };
@@ -193,9 +193,9 @@ function ssz_list_at forall ('maximum : Int) ('index : Int),
         throw InvalidBlock(InvalidConfig)
     };
     let next_index : range(0, 'maximum) = index + 1;
-    let start = ssz_offset_to_source_pointer(ssz_u32_at(bytes, ssz_offset_table_position(index)));
+    let start = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(index)));
     let stop : source_pointer = if next_index < items.count then {
-            ssz_offset_to_source_pointer(ssz_u32_at(bytes, ssz_offset_table_position(next_index)))
+            ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(next_index)))
         } else {
             bytes.len
         };
@@ -282,7 +282,7 @@ struct StatelessInputRef = {
     extra_data : StatelessInputSliceAtMost(extra_data_length_bound),
     transactions : TransactionListRef,
     withdrawals : WithdrawalListRef,
-    block_access_list : StatelessInputSlice,
+    block_access_list : StatelessInputSliceAtMost(block_access_list_length_bound),
     witness_state : WitnessNodeListRef,
     witness_codes : WitnessCodeListRef,
     witness_headers : WitnessHeaderListRef,
@@ -480,16 +480,19 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     );
     let (withdrawal_bytes, payload_after_withdrawals) = ssz_take(payload_after_transactions, block_access_list_offset);
     let withdrawals = ssz_bounded_fixed_list_ref(withdrawal_bytes, WD_SIZE, MAX_WITHDRAWALS_PER_PAYLOAD);
-    let block_access_list = ssz_finish(payload_after_withdrawals);
+    let block_access_list_bytes = ssz_finish(payload_after_withdrawals);
     let extra_data : StatelessInputSliceAtMost(extra_data_length_bound) =
         if extra_data_bytes.len <= MAX_EXTRA_DATA_LENGTH then {
             extra_data_bytes
         } else {
             throw InvalidBlock(InvalidConfig)
         };
-    if MAX_BLOCK_ACCESS_LIST_LENGTH < block_access_list.len then {
-        throw InvalidBlock(InvalidConfig)
-    };
+    let block_access_list : StatelessInputSliceAtMost(block_access_list_length_bound) =
+        if block_access_list_bytes.len <= MAX_BLOCK_ACCESS_LIST_LENGTH then {
+            block_access_list_bytes
+        } else {
+            throw InvalidBlock(InvalidConfig)
+        };
 
     let requests_start : int(0) = 0;
     let deposits_offset = ssz_u32(execution_requests, ssz_field_offset(requests_start, REQ_DEPOSITS_OFF));

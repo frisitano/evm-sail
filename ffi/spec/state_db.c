@@ -11,6 +11,7 @@
  * table row. */
 #include "state_db.h"
 #include "hash_bytes.h"
+#include "kernel_state.h"
 #include "value_convert.h"
 #include "zkvm_accelerators.h"
 #include <stdint.h>
@@ -505,8 +506,7 @@ static void storage_tx_list(storage_state_row *row) {
 /* --- lifecycle -------------------------------------------------------- */
 
 /* full world wipe (between independent blocks/fixtures) */
-/* whole-overlay wipe (both layers): the HARNESS world reset
-   (test_utils.c evmsail_clear_memory); no Sail caller. */
+/* Whole-overlay wipe (both layers): the harness `guest_reset`; no Sail caller. */
 unit storage_db_reset(const unit u) {
   (void)u;
   storage_tx_pop_cursor = 0;
@@ -550,41 +550,32 @@ unit storage_tx_reset(const unit u) {
   return UNIT;
 }
 
-uint64_t storage_tx_checkpoint(const unit u) {
-  (void)u;
-  return storage_undo_n;
-}
-
-unit storage_tx_revert(uint64_t checkpoint) {
-  if (checkpoint > storage_undo_n) abort();
-  while (storage_undo_n > checkpoint) {
-    storage_undo_entry *undo = &storage_undo[--storage_undo_n];
-    if (undo->tag == STORAGE_UNDO_WRITE) {
-      storage_state_row *row = storage_table_get(
-          &storage_table, undo->raw_addr, undo->slot, undo->generation);
-      if (!row) abort();
-      if (undo->prior_present) {
-        row->tx_active = 1;
-        row->generation = undo->generation;
-        memcpy(row->tx_current, undo->prior_current,
-               sizeof(row->tx_current));
-        memcpy(row->tx_original, undo->prior_original,
-               sizeof(row->tx_original));
-      } else {
-        row->tx_active = 0;
-      }
-    } else if (undo->tag == STORAGE_UNDO_CLEAR) {
-      sail_fixed_bytes_32 ah;
-      if (!acct_cached_secure_key(be_bytes_to_sail_address(undo->raw_addr),
-                                  &ah))
-        secure_keccak_address(be_bytes_to_sail_address(undo->raw_addr), &ah);
-      storage_epoch_row *epoch = storage_epoch_intern(undo->raw_addr, &ah);
-      if (epoch) epoch->active_generation = undo->generation;
+void storage_tx_revert_last(void) {
+  if (storage_undo_n == 0) abort();
+  storage_undo_entry *undo = &storage_undo[--storage_undo_n];
+  if (undo->tag == STORAGE_UNDO_WRITE) {
+    storage_state_row *row = storage_table_get(
+        &storage_table, undo->raw_addr, undo->slot, undo->generation);
+    if (!row) abort();
+    if (undo->prior_present) {
+      row->tx_active = 1;
+      row->generation = undo->generation;
+      memcpy(row->tx_current, undo->prior_current, sizeof(row->tx_current));
+      memcpy(row->tx_original, undo->prior_original,
+             sizeof(row->tx_original));
     } else {
-      abort();
+      row->tx_active = 0;
     }
+  } else if (undo->tag == STORAGE_UNDO_CLEAR) {
+    sail_fixed_bytes_32 ah;
+    if (!acct_cached_secure_key(be_bytes_to_sail_address(undo->raw_addr), &ah))
+      secure_keccak_address(be_bytes_to_sail_address(undo->raw_addr), &ah);
+    storage_epoch_row *epoch = storage_epoch_intern(undo->raw_addr, &ah);
+    if (!epoch) abort();
+    epoch->active_generation = undo->generation;
+  } else {
+    abort();
   }
-  return UNIT;
 }
 
 unit storage_tx_clear(sail_fixed_bytes_20 a) {
@@ -600,6 +591,7 @@ unit storage_tx_clear(sail_fixed_bytes_20 a) {
   undo->generation = epoch->active_generation;
   if (storage_next_generation == UINT64_MAX) abort();
   epoch->active_generation = ++storage_next_generation;
+  state_journal_push_storage_undo();
   return UNIT;
 }
 
@@ -775,6 +767,7 @@ unit storage_tx_update_raw(sail_fixed_bytes_20 a, sail_u256 s, sail_u256 v,
   e->generation = generation;
   e->tx_active = 1;
   storage_tx_list(e);
+  state_journal_push_storage_undo();
   return UNIT;
 }
 
@@ -1044,8 +1037,6 @@ typedef struct {
   uint64_t tx_orig_nonce; uint64_t tx_orig_bal[4];
   sail_fixed_bytes_32 tx_orig_sroot, tx_orig_chash;
   uint8_t tx_orig_exists, tx_orig_storage_cleared;
-  /* Derived traversal cache; never exposed as semantic account state. */
-  sail_fixed_bytes_32 post_sroot;
   uint32_t snapshot_cursor;
   uint64_t bal_epoch;
   uint32_t bal_balance_head, bal_balance_tail;
@@ -1100,8 +1091,6 @@ typedef struct {
 static acct_undo_entry *acct_undo = NULL;
 static uint32_t acct_undo_n = 0, acct_undo_cap = 0;
 static const uint32_t ACCT_NO_SNAPSHOT = UINT32_MAX;
-static uint32_t acct_active_snapshot = UINT32_MAX;
-static uint32_t acct_next_snapshot = 0;
 
 
 /* per-account compute_root snapshots are invalidated when the block base
@@ -1286,12 +1275,14 @@ static acct_state_row *acct_tx_bind_write(sail_fixed_bytes_20 a,
   return row;
 }
 
-/* The active undo cursor is the lazy snapshot identity. Each account saves its
-   reversible projection at most once at that cursor; successful child frames
-   retain their entries because an enclosing frame may still revert them. */
+/* The structural journal marker is the lazy snapshot identity. Each account
+ * saves its reversible projection at most once per open frame; successful
+ * child records remain ordered in the journal for a possible enclosing
+ * revert. */
 static int acct_snapshot_for_write(acct_state_row *row, int prior_present) {
-  if (acct_active_snapshot == ACCT_NO_SNAPSHOT ||
-      row->snapshot_cursor == acct_active_snapshot)
+  const uint32_t frame_marker = state_journal_current_frame_marker();
+  if (frame_marker == ACCT_NO_SNAPSHOT ||
+      row->snapshot_cursor == frame_marker)
     return 1;
   if (acct_undo_cap < acct_undo_n + 1) {
     uint32_t cap = acct_undo_cap ? acct_undo_cap * 2 : 64;
@@ -1314,7 +1305,8 @@ static int acct_snapshot_for_write(acct_state_row *row, int prior_present) {
   undo->storage_cleared = row->cur_storage_cleared;
   undo->created = row->cur_created;
   undo->selfdestructed = row->cur_selfdestructed;
-  row->snapshot_cursor = acct_active_snapshot;
+  row->snapshot_cursor = frame_marker;
+  state_journal_push_account_undo();
   return 1;
 }
 
@@ -1337,8 +1329,6 @@ unit acct_db_reset(const unit u) {
   free(acct_undo);
   acct_undo = NULL;
   acct_undo_n = acct_undo_cap = 0;
-  acct_active_snapshot = ACCT_NO_SNAPSHOT;
-  acct_next_snapshot = 0;
   acct_dump_invalidate();
   return UNIT;
 }
@@ -1364,43 +1354,24 @@ unit acct_tx_reset(const unit u) {
   acct_tx_rows_n = 0;
   acct_tx_pop_cursor = 0;
   acct_undo_n = 0;
-  acct_active_snapshot = ACCT_NO_SNAPSHOT;
-  acct_next_snapshot = 0;
   return UNIT;
 }
 
-uint64_t acct_tx_checkpoint(const unit u) {
-  (void)u;
-  uint32_t prior = acct_active_snapshot;
-  uint32_t cursor = acct_undo_n;
-  if (acct_next_snapshot == ACCT_NO_SNAPSHOT) abort();
-  acct_active_snapshot = acct_next_snapshot++;
-  /* The checkpoint is opaque to Sail: high = parent identity, low = cursor. */
-  return ((uint64_t)prior << 32) | cursor;
-}
-
-unit acct_tx_revert(uint64_t checkpoint) {
-  uint32_t cursor = (uint32_t)checkpoint;
-  uint32_t prior = (uint32_t)(checkpoint >> 32);
-  if (cursor > acct_undo_n) abort();
-  while (acct_undo_n > cursor) {
-    const acct_undo_entry *undo = &acct_undo[--acct_undo_n];
-    acct_state_row *current =
-        acct_table_get(&acct_tx_table, undo->raw_addr);
-    if (!current) abort();
-    current->cur_nonce = undo->nonce;
-    memcpy(current->cur_bal, undo->balance, sizeof(current->cur_bal));
-    current->cur_sroot = undo->storage_root;
-    current->cur_chash = undo->code_hash;
-    current->cur_exists = undo->exists;
-    current->cur_storage_cleared = undo->storage_cleared;
-    current->cur_created = undo->created;
-    current->cur_selfdestructed = undo->selfdestructed;
-    current->snapshot_cursor = undo->snapshot_cursor;
-    current->tx_active = undo->prior_present;
-  }
-  acct_active_snapshot = prior;
-  return UNIT;
+void acct_tx_revert_last(void) {
+  if (acct_undo_n == 0) abort();
+  const acct_undo_entry *undo = &acct_undo[--acct_undo_n];
+  acct_state_row *current = acct_table_get(&acct_tx_table, undo->raw_addr);
+  if (!current) abort();
+  current->cur_nonce = undo->nonce;
+  memcpy(current->cur_bal, undo->balance, sizeof(current->cur_bal));
+  current->cur_sroot = undo->storage_root;
+  current->cur_chash = undo->code_hash;
+  current->cur_exists = undo->exists;
+  current->cur_storage_cleared = undo->storage_cleared;
+  current->cur_created = undo->created;
+  current->cur_selfdestructed = undo->selfdestructed;
+  current->snapshot_cursor = undo->snapshot_cursor;
+  current->tx_active = undo->prior_present;
 }
 
 /* Merge the transaction projection into the cumulative projection, then clear
@@ -1595,23 +1566,6 @@ unit acct_block_iter_begin(const unit u) {
   return UNIT;
 }
 
-unit acct_post_storage_root_store(sail_fixed_bytes_20 a,
-                                  sail_fixed_bytes_32 root) {
-  uint8_t address[20];
-  evmsail_address_to_be_bytes(address, a);
-  acct_state_row *entry = acct_table_get(&acct_block_table, address);
-  if (entry) entry->post_sroot = root;
-  return UNIT;
-}
-
-sail_fixed_bytes_32 acct_post_storage_root_read(sail_fixed_bytes_20 a) {
-  uint8_t address[20];
-  evmsail_address_to_be_bytes(address, a);
-  const acct_state_row *entry = acct_table_get(&acct_block_table, address);
-  static const sail_fixed_bytes_32 zero = {{0}};
-  return (entry ? entry->post_sroot : zero);
-}
-
 static uint64_t acct_entry_probe(const acct_state_row *entry,
                                  sail_fixed_bytes_20 *addr, uint64_t *cn,
                                  sail_u256 *cb, sail_fixed_bytes_32 *cs,
@@ -1665,34 +1619,6 @@ static uint64_t acct_iter_next_probe(uint32_t *position, bool *active,
       return 1;
   }
   return 0;
-}
-
-uint64_t acct_block_update_probe_at(uint32_t index, sail_fixed_bytes_20 *addr,
-                                    uint64_t *cn, sail_u256 *cb,
-                                    sail_fixed_bytes_32 *cs, sail_fixed_bytes_32 *cc, bool *ce,
-                                    bool *csc, bool *ccr, bool *csd,
-                                    uint64_t *on, sail_u256 *ob,
-                                    sail_fixed_bytes_32 *os, sail_fixed_bytes_32 *oc, bool *oe,
-                                    bool *osc, bool *ocr, bool *osd,
-                                    sail_fixed_bytes_32 *address_hash,
-                                    sail_fixed_bytes_32 *post_storage_root) {
-  if (index >= acct_block_iter_end) return 0;
-  const acct_state_row *entry =
-      &acct_block_table.rows[acct_block_iter_order[index]];
-  if (!acct_entry_probe(entry, addr, cn, cb, cs, cc, ce, csc, ccr, csd, on,
-                        ob, os, oc, oe, osc, ocr, osd, address_hash))
-    return 0;
-  if (post_storage_root) *post_storage_root = entry->post_sroot;
-  return 1;
-}
-
-unit acct_block_update_post_storage_store_at(uint32_t index, sail_fixed_bytes_32 root) {
-  if (index < acct_block_iter_end) {
-    acct_state_row *entry =
-        &acct_block_table.rows[acct_block_iter_order[index]];
-    entry->post_sroot = root;
-  }
-  return UNIT;
 }
 
 uint64_t acct_block_iter_next_probe(sail_fixed_bytes_20 *addr, uint64_t *cn,

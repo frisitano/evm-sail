@@ -34,27 +34,51 @@ let EMPTY_JUMP_TABLE : jump_table_index = 0
     not a protocol deployment-size limit. */
 type CodeSlice = {
     'off 'len,
-    source_valid_range('off, 'len) & code_valid_length('len).
+    code_region_valid_range('off, 'len) & code_valid_length('len).
     CodeRegionSliceFields('off, 'len)
 }
 
 /*! Reclassifies a byte span after its producer has established the executable
     length invariant. */
-val code_slice : forall 'off 'len, source_valid_range('off, 'len) & code_valid_length('len). CodeRegionSliceFields(
+val code_slice : forall 'off 'len, code_region_valid_range('off, 'len) & code_valid_length('len). CodeRegionSliceFields(
         'off,
         'len,
     ) -> CodeSlice
 function code_slice(bytes) = bytes
 
 /*! Converts a source span whose producer guarantees executable cursor
-    headroom. This is vacuous in the canonical model; the optimized splice
-    checks the representation invariant if a proof was erased by storage in a
-    non-dependent aggregate. */
+    headroom. The explicit check re-establishes the proof after the length has
+    crossed a non-dependent host boundary. */
 function validated_code_slice(bytes : CodeRegionSlice) -> CodeSlice =
-    code_slice(bytes)
+    if bytes.len <= sizeof(code_region_bound) - 32 then {
+        code_slice(bytes)
+    } else {
+        assert(false, "executable code cursor headroom");
+        code_slice(EMPTY_CODE_REGION_SLICE)
+    }
 
 /*! Canonical empty executable code. */
 let EMPTY_CODE_SLICE : CodeSlice = code_slice(EMPTY_CODE_REGION_SLICE)
+
+/*! The closed family of Amsterdam opcodes whose instruction encoding carries
+    one validity-sensitive immediate byte. Keeping this classification in the
+    specification lets instruction fetch and PUSH-aware code analysis share
+    one dispatch without introducing a function-valued decoder. */
+enum DeepStackOperation = {
+    DeepStackDuplicate,
+    DeepStackSwap,
+    DeepStackExchange,
+}
+
+/*! Classifies an opcode as one of Amsterdam's immediate deep-stack
+    operations. */
+function deep_stack_operation(opcode : opcode) -> option(DeepStackOperation) =
+    match opcode {
+        230 => Some(DeepStackDuplicate),
+        231 => Some(DeepStackSwap),
+        232 => Some(DeepStackExchange),
+        _ => None(),
+    }
 
 /*! Whether an EIP-8024 `DUPN`/`SWAPN` immediate is valid. Invalid
     immediates remain opcode-aligned during JUMPDEST analysis. */
@@ -68,6 +92,18 @@ function deep_stack_immediate_valid(immediate : byte) -> bool = {
 function exchange_immediate_valid(immediate : byte) -> bool = {
     let value : opcode = unsigned(immediate);
     value <= 81 | 128 <= value
+}
+
+/*! Applies the immediate-validity rule selected by a decoded deep-stack
+    operation. `DUPN` and `SWAPN` share the single-index encoding, while
+    `EXCHANGE` uses the pair encoding. */
+function deep_stack_operation_immediate_valid(
+    operation : DeepStackOperation,
+    immediate : byte,
+) -> bool = match operation {
+    DeepStackDuplicate => deep_stack_immediate_valid(immediate),
+    DeepStackSwap => deep_stack_immediate_valid(immediate),
+    DeepStackExchange => exchange_immediate_valid(immediate),
 }
 
 /*! Executable code: its byte span and resolved `JUMPDEST` table. The

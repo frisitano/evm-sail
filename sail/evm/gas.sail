@@ -391,17 +391,23 @@ function sstore_clear_refund() -> gas_constant =
 /* covered raises an out-of-gas exceptional halt (YP: the step is invalid,   */
 /* all remaining gas is consumed). A non-positive amount is a no-op.         */
 
-/*! Debits an exact cost from the running frame or halts out of gas. */
-val charge : forall 'amount, 0 <= 'amount. int('amount) -> unit
+/*! Debits an exact cost from the running frame. Returns false after entering
+    an out-of-gas exceptional halt, allowing the current opcode body to return
+    immediately to the interpreter loop without polling [is_running][]. */
+val charge : forall 'amount, 0 <= 'amount. int('amount) -> bool
 function charge(amount) =
-    if not_bool(is_running()) | amount == 0 then {
-        ()
+    if not_bool(is_running()) then {
+        false
+    } else if amount == 0 then {
+        true
     } else {
         let remaining = gas_remaining;
         if amount <= remaining then {
-            gas_remaining = remaining - amount
+            gas_remaining = remaining - amount;
+            true
         } else {
-            exc_halt(OutOfGas)
+            exc_halt(OutOfGas);
+            false
         }
     }
 
@@ -535,7 +541,14 @@ val memory_word_count : forall 'byte_len,
         memory_word_count_relation('byte_len, 'words).
         int('words)
     }
-function memory_word_count(byte_len) = tdiv_nat(byte_len + 31, 32)
+function memory_word_count(byte_len) = {
+    let quotient = tdiv_nat(byte_len, 32);
+    if tmod_nat(byte_len, 32) == 0 then {
+        quotient
+    } else {
+        quotient + 1
+    }
+}
 
 /*! Returns the number of words covering a word-sized byte length without
     forming `byte_len + 31`, whose mathematical intermediate can require 257
@@ -565,13 +578,18 @@ type memory_cost_relation('words : Int, 'cost : Int) -> Bool =
     & 'cost == 3 * 'words + div('words * 'words, 512)
 
 val mem_cost : forall 'words,
-    0 <= 'words.
+    memory_cost_input('words).
     int('words) -> {
         'cost,
         memory_cost_relation('words, 'cost).
         int('cost)
     }
-function mem_cost(words) = G_memory * words + (words * words) / 512
+function mem_cost(words) = {
+    let linear : int(3 * 'words) = G_memory * words;
+    let square : int('words * 'words) = words * words;
+    let quadratic : int(div('words * 'words, 512)) = square / 512;
+    linear + quadratic
+}
 
 /* A zero-sized operand does not access memory, irrespective of its offset. */
 /*! Canonicalizes one operand and retains its exact exclusive endpoint. */
@@ -588,10 +606,35 @@ function memory_access(start, size) =
     if size == 0 then {
         EMPTY_MEMORY_ACCESS
     } else {
-        (struct {
-            range = memory_range(start, size),
-            required_size = start + size,
-        } : MemoryAccessFields('start, 'size, 'start + 'size))
+        if start <= sizeof(memory_region_bound) then {
+            let (bounded_start as 'bounded_start) :
+                    {'bounded_start,
+                     'bounded_start == 'start & 0 <= 'bounded_start & 'bounded_start <= memory_region_bound.
+                     int('bounded_start)} = start;
+            if size <= sizeof(memory_region_bound) - bounded_start then {
+                let (bounded_size as 'bounded_size) :
+                        {'bounded_size,
+                            'bounded_size
+                         == 'size
+                         &  0
+                         <  'bounded_size
+                         &  'bounded_size
+                         <= memory_region_bound
+                         -  'bounded_start.
+                         int('bounded_size)} = size;
+                struct {
+                    range = memory_range(bounded_start, bounded_size),
+                    required_size = bounded_start + bounded_size,
+                } :
+                    MemoryAccessFields('bounded_start, 'bounded_size, 'bounded_start + 'bounded_size)
+            } else {
+                exc_halt(OutOfGas);
+                EMPTY_MEMORY_ACCESS
+            }
+        } else {
+            exc_halt(OutOfGas);
+            EMPTY_MEMORY_ACCESS
+        }
     }
 
 /*! Computes an affordable incremental cost for reaching a memory size.
@@ -614,9 +657,14 @@ function memory_expansion_cost(required_size, available) = {
     } else {
         let old_cost = mem_cost(old_words);
         let new_cost = mem_cost(new_words);
-        if old_cost <= new_cost & new_cost <= old_cost + available then {
-            let cost : range(0, 'available) = new_cost - old_cost;
-            cost
+        if old_cost <= new_cost then {
+            let cost = new_cost - old_cost;
+            if cost <= available then {
+                cost
+            } else {
+                exc_halt(OutOfGas);
+                0
+            }
         } else {
             exc_halt(OutOfGas);
             0
@@ -694,8 +742,7 @@ function charge_memory_range(start, size) =
         let available = gas_remaining;
         let access = memory_access(start, size);
         let plan = memory_expansion(access.required_size, available);
-        charge(plan.cost);
-        if is_running() then {
+        if charge(plan.cost) then {
             apply_memory_expansion(plan);
             access.range
         } else {
@@ -1466,34 +1513,39 @@ function legacy_sstore_costs(original : word, current : word, new : word, cold :
                 G_warm_access
             }
         };
-    var refund : gas_refund = GAS_REFUND_ZERO;
-    if current != new then {
-        if original == current then {
-            /* clean slot being changed: refund only when clearing a non-zero slot */
+    let refund : gas_refund = if current == new then {
+            0
+        } else if original == current then {
+            /* A clean non-zero slot earns the clear refund exactly once. */
             if not_bool(word_is_zero(original)) & word_is_zero(new) then {
-                refund = validated_refund_add(refund, clear_refund)
+                clear_refund
+            } else {
+                0
             }
         } else {
-            /* dirty slot */
-            if not_bool(word_is_zero(original)) then {
-                if word_is_zero(current) then {
-                    refund = validated_refund_add(refund, GAS_CONSTANT_ZERO - clear_refund)
-                }; /* un-clear */
-                if word_is_zero(new) then {
-                    refund = validated_refund_add(refund, clear_refund)
-                } /* re-clear */
-            };
-            if original == new then {
-                /* reset to original */
+            /* A dirty slot first reverses or reapplies an earlier clear, then
+             * adds the reset-to-original refund when applicable. Computing
+             * the one transition delta directly avoids treating these
+             * mutually related components as independent accumulators. */
+            let clear_delta =
                 if word_is_zero(original) then {
-                    refund = validated_refund_add(refund, G_sset - G_warm_access)
-                    /* 19900 */
+                    0
                 } else {
-                    refund = validated_refund_add(refund, G_sreset - G_warm_access)
-                } /* 2800 */
-            }
-        }
-    };
+                      (if word_is_zero(current) then { 0 - clear_refund } else { 0 })
+                    + (if word_is_zero(new) then { clear_refund } else { 0 })
+                };
+            let reset_delta =
+                if original == new then {
+                    if word_is_zero(original) then {
+                        G_sset - G_warm_access
+                    } else {
+                        G_sreset - G_warm_access
+                    }
+                } else {
+                    0
+                };
+            clear_delta + reset_delta
+        };
     struct { execution = base + cold_cost, refund = refund, state_charge = 0, state_credit = 0 }
 }
 
@@ -1509,7 +1561,21 @@ function amsterdam_sstore_costs(original : word, current : word, new : word, col
         } else {
             access
         };
-    var refund : gas_refund = GAS_REFUND_ZERO;
+    let clear_delta = if
+        changed & not_bool(word_is_zero(original)) & not_bool(word_is_zero(current)) & word_is_zero(new)
+    then {
+        R_amsterdam_storage_clear
+    } else if changed & not_bool(word_is_zero(original)) & word_is_zero(current) then {
+        0 - R_amsterdam_storage_clear
+    } else {
+        0
+    };
+    let restore_delta = if changed & (original == new) then {
+            G_amsterdam_storage_write
+        } else {
+            0
+        };
+    let refund : gas_refund = clear_delta + restore_delta;
     let state_charge : gas_cost = if clean_change & word_is_zero(original) then {
             G_amsterdam_state_storage_set
         } else {
@@ -1517,18 +1583,9 @@ function amsterdam_sstore_costs(original : word, current : word, new : word, col
         };
     var state_credit : state_gas_spill = 0;
 
-    if changed then {
-        if not_bool(word_is_zero(original)) & not_bool(word_is_zero(current)) & word_is_zero(new) then {
-            refund = validated_refund_add(refund, R_amsterdam_storage_clear)
-        };
-        if not_bool(word_is_zero(original)) & word_is_zero(current) then {
-            refund = validated_refund_add(refund, GAS_CONSTANT_ZERO - R_amsterdam_storage_clear)
-        };
-        if original == new then {
-            refund = validated_refund_add(refund, G_amsterdam_storage_write);
-            if word_is_zero(original) then {
-                state_credit = G_amsterdam_state_storage_set
-            }
+    if changed & (original == new) then {
+        if word_is_zero(original) then {
+            state_credit = G_amsterdam_state_storage_set
         }
     };
 
@@ -1567,7 +1624,8 @@ function charge_word_scaled_gas(per_unit : gas_constant, units : word) -> unit =
         let exact_cost : linear_gas_variable_product = per_unit * affordable_units;
         if exact_cost <= remaining then {
             let cost : gas_cost = exact_cost;
-            charge(cost)
+            let _ = charge(cost);
+            ()
         } else {
             exc_halt(OutOfGas)
         }
@@ -1578,7 +1636,7 @@ function charge_word_scaled_gas(per_unit : gas_constant, units : word) -> unit =
 
 /*! Charges an opcode base cost and its per-memory-word component. */
 function charge_memory_word_gas(base : gas_constant, per_word : gas_constant, size : word) -> unit = {
-    charge(base);
+    if not_bool(charge(base)) then { return () };
     charge_word_scaled_gas(per_word, memory_word_count_word(size))
 }
 
@@ -1593,9 +1651,9 @@ function charge_copy_gas(size : word) -> unit =
 /* LOG0..LOG4: base + per-topic + per-data-byte. */
 /*! Charges the base, topic, and data-byte components of a log operation. */
 function charge_log_gas(num_topics : log_topic_count, size : word) -> unit = {
-    charge(G_log);
+    if not_bool(charge(G_log)) then { return () };
     let topic_cost : gas_cost = G_logtopic * num_topics;
-    charge(topic_cost);
+    if not_bool(charge(topic_cost)) then { return () };
     charge_word_scaled_gas(G_logdata, size)
 }
 
@@ -1603,19 +1661,6 @@ function charge_log_gas(num_topics : log_topic_count, size : word) -> unit = {
     (EIP-160). */
 function exp_gas(exponent : word) -> gas_cost = {
     G_expbyte * word_byte_length(exponent) + G_exp
-}
-
-/*! The EIP-3860 per-word initcode cost, charged by `CREATE`/`CREATE2`
-    and create transactions from Shanghai. */
-function initcode_gas(byte_len : nat) -> nat = {
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    if profile.fork >= Shanghai then {
-        let words = memory_word_count(byte_len);
-        words + words
-    } else {
-        0
-    }
 }
 
 /*! The EIP-3860 charge for transaction-backed initcode, retaining the SSZ

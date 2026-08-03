@@ -105,30 +105,42 @@ static int sv_find(const slot_vec *m, const address160 *a, const word256 *s) {
   return -1;
 }
 
-unit warm_reset(const unit u) {
-  (void)u;
+unit warm_reset(uint64_t current_transaction_epoch) {
+  (void)current_transaction_epoch;
   warm_addr.n = 0;
   warm_slot.n = 0;
   return UNIT;
 }
-bool warm_addr_touch(sail_fixed_bytes_20 a) {
+bool account_is_warm(sail_fixed_bytes_20 a) {
   address160 k = sail_address160(a);
-  if (av_find(&warm_addr, &k) >= 0) return true;
+  return av_find(&warm_addr, &k) >= 0;
+}
+
+unit account_mark_warm(sail_fixed_bytes_20 a) {
+  address160 k = sail_address160(a);
+  if (av_find(&warm_addr, &k) >= 0) return UNIT;
   if (!av_reserve(&warm_addr, warm_addr.n + 1)) abort();
   journal_push_warm_address(&k);
   warm_addr.v[warm_addr.n++] = k;
-  return false;
+  return UNIT;
 }
-bool warm_slot_touch(sail_fixed_bytes_20 a, const sail_u256 s) {
+
+bool storage_is_warm(sail_fixed_bytes_20 a, const sail_u256 s) {
   address160 ka = sail_address160(a);
   word256 ks = sail_word256((s));
-  if (sv_find(&warm_slot, &ka, &ks) >= 0) return true;
+  return sv_find(&warm_slot, &ka, &ks) >= 0;
+}
+
+unit storage_mark_warm(sail_fixed_bytes_20 a, const sail_u256 s) {
+  address160 ka = sail_address160(a);
+  word256 ks = sail_word256((s));
+  if (sv_find(&warm_slot, &ka, &ks) >= 0) return UNIT;
   if (!sv_reserve(&warm_slot, warm_slot.n + 1)) abort();
   journal_push_warm_slot(&ka, &ks);
   warm_slot.v[warm_slot.n].a = ka;
   warm_slot.v[warm_slot.n].s = ks;
   warm_slot.n++;
-  return false;
+  return UNIT;
 }
 
 /* --------------------- EIP-7702 authority tracker ---------------------- */
@@ -253,6 +265,8 @@ static uint32_t data_n, data_cap;
 static uint32_t tx_log_start;
 static uint64_t block_logs_bloom[32];
 
+static void journal_push_log(void);
+
 bool log_data_configure_capacity(uint64_t capacity) {
   if (capacity > UINT32_MAX || capacity > SIZE_MAX) return false;
   if (capacity > data_cap) {
@@ -330,6 +344,7 @@ unit log_begin(sail_fixed_bytes_20 a) {
     r->topic_cnt = 0;
     r->data_off = data_n;
     r->data_len = 0;
+    journal_push_log();
   }
   return UNIT;
 }
@@ -353,15 +368,11 @@ unit log_add_data_word(sail_u256 value) {
   sail_word_to_be_bytes(bytes, value);
   return log_add_data_bulk(bytes, sizeof(bytes));
 }
-uint64_t logs_checkpoint(const unit u) { (void)u; return logs_n; }
-unit logs_revert(uint64_t checkpoint) {
-  if (checkpoint < logs_n) {
-    log_rec *first_removed = &logs[checkpoint];
-    topics_n = first_removed->topic_off;
-    data_n = first_removed->data_off;
-    logs_n = (uint32_t)checkpoint;
-  }
-  return UNIT;
+void logs_revert_last(void) {
+  if (logs_n == 0) abort();
+  const log_rec *removed = &logs[--logs_n];
+  topics_n = removed->topic_off;
+  data_n = removed->data_off;
 }
 uint64_t log_count(const unit u) { (void)u; return logs_n; }
 sail_fixed_bytes_20 log_addr( uint64_t i) {
@@ -455,10 +466,18 @@ const uint8_t *log_data_base(void) { return log_data; }
 uint64_t log_data_length(void) { return data_n; }
 
 /* ------------------------- private undo journal ------------------------- */
-/* These tags and rows are backend implementation details. Sail observes only
- * a StateCheckpoint token and asks this module to restore it atomically. */
+/* These tags are backend implementation details. The account and storage
+ * entries point into their own typed, GMP-owning undo arenas; this compact
+ * stream records only global reversal order and structural frame markers. */
 enum {
-  JT_TRAN = 1, JT_WARMA = 2, JT_WARMS = 3
+  JT_TRAN = 1,
+  JT_WARMA,
+  JT_WARMS,
+  JT_ACCOUNT_UNDO,
+  JT_STORAGE_UNDO,
+  JT_LOG,
+  JT_FRAME_CHECKPOINT,
+  JT_FRAME_COMMIT,
 };
 
 typedef struct {
@@ -505,9 +524,43 @@ static void journal_push_warm_slot(const address160 *a, const word256 *s) {
   e->w0 = *s;
 }
 
-static void journal_revert(uint32_t checkpoint) {
-  if (checkpoint > jrn_n) abort();
-  while (jrn_n > checkpoint) {
+void state_journal_push_account_undo(void) {
+  (void)jrn_push(JT_ACCOUNT_UNDO);
+}
+
+void state_journal_push_storage_undo(void) {
+  (void)jrn_push(JT_STORAGE_UNDO);
+}
+
+static void journal_push_log(void) { (void)jrn_push(JT_LOG); }
+
+/* Return the innermost checkpoint that has not been paired with a commit.
+ * Committed child markers remain in the stream so an enclosing revert still
+ * observes and reverses their mutations. */
+uint32_t state_journal_current_frame_marker(void) {
+  uint32_t closed = 0;
+  for (uint32_t i = jrn_n; i > 0; --i) {
+    const uint32_t tag = jrn[i - 1].tag;
+    if (tag == JT_FRAME_COMMIT) {
+      closed++;
+    } else if (tag == JT_FRAME_CHECKPOINT) {
+      if (closed == 0) return i - 1;
+      closed--;
+    }
+  }
+  if (closed != 0) abort();
+  return UINT32_MAX;
+}
+
+static uint32_t journal_require_open_frame(void) {
+  const uint32_t marker = state_journal_current_frame_marker();
+  if (marker == UINT32_MAX) abort();
+  return marker;
+}
+
+static void journal_revert_to(uint32_t target) {
+  if (target > jrn_n) abort();
+  while (jrn_n > target) {
     const jentry *e = &jrn[--jrn_n];
     if (e->tag == JT_TRAN) {
       sail_fixed_bytes_20 address = be_bytes_to_sail_address(e->a.b);
@@ -520,75 +573,48 @@ static void journal_revert(uint32_t checkpoint) {
       int i = sv_find(&warm_slot, &e->a, &e->w0);
       if (i < 0) abort();
       warm_slot.v[i] = warm_slot.v[--warm_slot.n];
+    } else if (e->tag == JT_ACCOUNT_UNDO) {
+      acct_tx_revert_last();
+    } else if (e->tag == JT_STORAGE_UNDO) {
+      storage_tx_revert_last();
+    } else if (e->tag == JT_LOG) {
+      logs_revert_last();
+    } else if (e->tag == JT_FRAME_CHECKPOINT ||
+               e->tag == JT_FRAME_COMMIT) {
+      /* Nested structural markers carry no semantic state of their own. */
     } else {
       abort();
     }
   }
 }
 
-/* ---------------------- semantic checkpoint registry ------------------- */
+/* -------------------------- state journal frames ----------------------- */
 
-typedef struct {
-  uint64_t accounts;
-  uint64_t storage;
-  uint32_t journal;
-  uint32_t logs;
-} state_checkpoint_record;
-
-static state_checkpoint_record *state_checkpoints;
-static size_t state_checkpoints_n, state_checkpoints_cap;
-
-static void state_checkpoint_reserve(size_t need) {
-  if (need <= state_checkpoints_cap) return;
-  size_t cap = state_checkpoints_cap ? state_checkpoints_cap * 2 : 32;
-  while (cap < need) cap *= 2;
-  state_checkpoint_record *next = (state_checkpoint_record *)realloc(
-      state_checkpoints, cap * sizeof(state_checkpoint_record));
-  if (!next) abort();
-  state_checkpoints = next;
-  state_checkpoints_cap = cap;
-}
-
-unit host_state_checkpoint_reset(const unit u) {
+unit state_journal_reset(const unit u) {
   (void)u;
-  state_checkpoints_n = 0;
   jrn_n = 0;
   return UNIT;
 }
 
-static uint64_t state_checkpoint_take(const unit u) {
+unit state_journal_checkpoint(const unit u) {
   (void)u;
-  if (state_checkpoints_n == UINT64_MAX) abort();
-  state_checkpoint_reserve(state_checkpoints_n + 1);
-  state_checkpoint_record *record = &state_checkpoints[state_checkpoints_n];
-  record->journal = jrn_n;
-  record->logs = logs_n;
-  record->storage = storage_tx_checkpoint(UNIT);
-  record->accounts = acct_tx_checkpoint(UNIT);
-  state_checkpoints_n++;
-  return (uint64_t)state_checkpoints_n;
-}
-
-static unit state_checkpoint_revert(uint64_t checkpoint) {
-  if (checkpoint == 0 || checkpoint > state_checkpoints_n) abort();
-  state_checkpoint_record record = state_checkpoints[checkpoint - 1];
-
-  acct_tx_revert(record.accounts);
-  storage_tx_revert(record.storage);
-  logs_revert(record.logs);
-  journal_revert(record.journal);
-
-  /* A reverted frame and every checkpoint issued beneath it are stale. The
-   * next sibling may reuse their private token values; Sail cannot inspect
-   * or manufacture a meaningful handle. */
-  state_checkpoints_n = (size_t)(checkpoint - 1);
+  (void)jrn_push(JT_FRAME_CHECKPOINT);
   return UNIT;
 }
 
-void host_state_checkpoint(sail_int *result, const unit u) {
-  convert_sail_int_of_mach_uint(result, state_checkpoint_take(u));
+unit state_journal_revert(const unit u) {
+  (void)u;
+  const uint32_t marker = journal_require_open_frame();
+  journal_revert_to(marker + 1);
+  if (jrn_n != marker + 1 || jrn[marker].tag != JT_FRAME_CHECKPOINT)
+    abort();
+  jrn_n = marker;
+  return UNIT;
 }
 
-unit host_state_revert(const sail_int checkpoint) {
-  return state_checkpoint_revert(convert_mach_uint_of_sail_int(checkpoint));
+unit state_journal_commit(const unit u) {
+  (void)u;
+  (void)journal_require_open_frame();
+  (void)jrn_push(JT_FRAME_COMMIT);
+  return UNIT;
 }

@@ -40,7 +40,7 @@ DOC_BLOCK = re.compile(r"/\*!(.*?)\*/", re.S)
 def is_book_source(path: Path, root: Path) -> bool:
     """Whether a Sail file belongs to the canonical specification book."""
     rel = path.relative_to(root)
-    return not (len(rel.parts) >= 2 and rel.parts[:2] == ("sail", "splices"))
+    return not (len(rel.parts) >= 2 and rel.parts[:2] == ("sail", "optimised"))
 
 
 def lint_file(path: Path, rel: str) -> list[str]:

@@ -48,19 +48,207 @@ type TransactionGasAllowance = {
     TransactionGasAllowanceFields('total, 'regular)
 }
 
+/*! The post-intrinsic gas state admitted for a transaction. Keeping the
+    admitted limit, the regular-gas ceiling, both intrinsic charges, and the
+    two live reservoirs in one dependent value preserves the conservation
+    equation established by transaction validation. */
+type transaction_initial_gas_relation(
+    'total : Int,
+    'regular : Int,
+    'intrinsic_execution : Int,
+    'intrinsic_state : Int,
+    'calldata_floor : Int,
+    'execution : Int,
+    'state : Int,
+) -> Bool =
+       0 <= 'intrinsic_execution
+    &  0 <= 'intrinsic_state
+    &  0 <= 'calldata_floor
+    &  'intrinsic_execution <= 'regular
+    &  'calldata_floor <= 'regular
+    &  'regular <= 'total
+    &  'total <= block_gas_limit_bound
+    &  0 <= 'execution
+    &  0 <= 'state
+    &  'execution + 'state + 'intrinsic_execution + 'intrinsic_state == 'total
+    &  'execution <= 'regular - 'intrinsic_execution
+
+struct TransactionInitialGasFields(
+    'total : Int,
+    'regular : Int,
+    'intrinsic_execution : Int,
+    'intrinsic_state : Int,
+    'calldata_floor : Int,
+    'execution : Int,
+    'state : Int,
+), transaction_initial_gas_relation(
+    'total,
+    'regular,
+    'intrinsic_execution,
+    'intrinsic_state,
+    'calldata_floor,
+    'execution,
+    'state,
+) = {
+    admitted_limit : int('total),
+    regular_limit : int('regular),
+    intrinsic_execution : int('intrinsic_execution),
+    intrinsic_state : int('intrinsic_state),
+    calldata_floor : int('calldata_floor),
+    execution_remaining : int('execution),
+    state_remaining : int('state),
+}
+
+type TransactionInitialGas = {
+    'total
+    'regular
+    'intrinsic_execution
+    'intrinsic_state
+    'calldata_floor
+    'execution
+    'state,
+    transaction_initial_gas_relation(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ).
+    TransactionInitialGasFields(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+}
+
+/*! The initial gas state for one concrete admitted transaction limit. This
+    view hides the internal split while retaining the limit that the block
+    transaction loop has already checked against its remaining budgets. */
+type TransactionInitialGasFor('total : Int) = {
+    'regular
+    'intrinsic_execution
+    'intrinsic_state
+    'calldata_floor
+    'execution
+    'state,
+    transaction_initial_gas_relation(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ).
+    TransactionInitialGasFields(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+}
+
+/*! The initial gas state retaining both the complete and regular execution
+    allowances checked by the block loop. */
+type TransactionInitialGasForLimits(
+    'total : Int,
+    'regular : Int,
+) = {
+    'intrinsic_execution
+    'intrinsic_state
+    'calldata_floor
+    'execution
+    'state,
+    transaction_initial_gas_relation(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ).
+    TransactionInitialGasFields(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+}
+
+/*! Constructs the dependent initial-gas record once transaction validation
+    has established its conservation relation. */
+val transaction_initial_gas_fields : forall 'total 'regular 'intrinsic_execution 'intrinsic_state 'calldata_floor 'execution 'state,
+                                       transaction_initial_gas_relation(
+                                           'total,
+                                           'regular,
+                                           'intrinsic_execution,
+                                           'intrinsic_state,
+                                           'calldata_floor,
+                                           'execution,
+                                           'state,
+                                       ). (
+        int('total),
+        int('regular),
+        int('intrinsic_execution),
+        int('intrinsic_state),
+        int('calldata_floor),
+        int('execution),
+        int('state),
+    ) -> TransactionInitialGasFields(
+        'total,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+function transaction_initial_gas_fields(
+    total,
+    regular,
+    intrinsic_execution,
+    intrinsic_state,
+    calldata_floor,
+    execution,
+    state,
+) =
+    struct {
+        admitted_limit = total,
+        regular_limit = regular,
+        intrinsic_execution = intrinsic_execution,
+        intrinsic_state = intrinsic_state,
+        calldata_floor = calldata_floor,
+        execution_remaining = execution,
+        state_remaining = state,
+    }
+
 /*! The values established by successful up-front transaction validation
     (YP §6.2): sender, pre-state nonce, intrinsic gas, blob fee, and the
     EIP-1559 effective gas and priority prices. Invalid transactions throw
     before this value is constructed. */
-struct TxValidity = {
+struct TxValidityFields(
+    'limit : Int,
+    'regular : Int,
+),
+       0 <= 'regular
+    &  'regular <= 'limit
+    &  'limit <= block_gas_limit_bound = {
     sender : address,
     nonce_before : account_nonce,
-    gas_limit : block_gas_limit,
-    initial_execution_gas : gas,
-    initial_state_gas : gas,
-    intrinsic_execution_gas : gas_cost,
-    intrinsic_state_gas : gas_cost,
-    calldata_floor : gas_cost,
+    gas : TransactionInitialGasForLimits('limit, 'regular),
     blob_fee : word,
     /* effective gas price (EIP-1559, from the caps + base fee) */
     gas_price : word,
@@ -68,14 +256,117 @@ struct TxValidity = {
     priority_fee : word,
 }
 
-/*! The result of a transaction's top-level frame: success and remaining
-    gas. */
-struct TxFrameResult = {
+/*! A validity result whose limit is not needed by the consumer. */
+type TxValidity = {
+    'limit 'regular,
+       0 <= 'regular
+    &  'regular <= 'limit
+    &  'limit <= block_gas_limit_bound.
+    TxValidityFields('limit, 'regular)
+}
+
+/*! The transaction gas conserved at the top-level frame boundary. The
+    snapshot retains both admitted budgets and the exact split consumed by
+    ordinary execution and state access. Settlement can therefore apply
+    refunds and the calldata floor without reconstructing or revalidating
+    either contribution. */
+type tx_frame_gas_snapshot_relation(
+    'limit : Int,
+    'regular : Int,
+    'calldata_floor : Int,
+    'remaining : Int,
+    'state_used : Int,
+) -> Bool =
+       0 <= 'regular
+    &  'regular <= 'limit
+    &  'limit <= block_gas_limit_bound
+    &  0 <= 'calldata_floor
+    &  'calldata_floor <= 'regular
+    &  0 <= 'remaining
+    &  0 <= 'state_used
+    &  'state_used <= 'limit
+    &  'remaining + 'state_used <= 'limit
+    &  'limit - 'remaining - 'state_used <= 'regular
+
+/*! The concrete top-level frame gas snapshot whose indices retain the
+    transaction admission and conservation proof. */
+struct TxFrameGasSnapshotFields(
+    'limit : Int,
+    'regular : Int,
+    'calldata_floor : Int,
+    'remaining : Int,
+    'state_used : Int,
+), tx_frame_gas_snapshot_relation(
+    'limit,
+    'regular,
+    'calldata_floor,
+    'remaining,
+    'state_used,
+) = {
+    admitted_limit : int('limit),
+    regular_limit : int('regular),
+    calldata_floor : int('calldata_floor),
+    remaining : int('remaining),
+    state_used : int('state_used),
+}
+
+/*! A top-level frame gas snapshot with existentially hidden gas totals. */
+type TxFrameGasSnapshot = {
+    'limit 'regular 'calldata_floor 'remaining 'state_used,
+    tx_frame_gas_snapshot_relation(
+        'limit,
+        'regular,
+        'calldata_floor,
+        'remaining,
+        'state_used,
+    ).
+    TxFrameGasSnapshotFields(
+        'limit,
+        'regular,
+        'calldata_floor,
+        'remaining,
+        'state_used,
+    )
+}
+
+/*! A completed top-level frame tied to both admitted transaction limits. */
+type TxFrameGasSnapshotForLimits(
+    'limit : Int,
+    'regular : Int,
+) = {
+    'calldata_floor 'remaining 'state_used,
+    tx_frame_gas_snapshot_relation(
+        'limit,
+        'regular,
+        'calldata_floor,
+        'remaining,
+        'state_used,
+    ).
+    TxFrameGasSnapshotFields(
+        'limit,
+        'regular,
+        'calldata_floor,
+        'remaining,
+        'state_used,
+    )
+}
+
+/*! The result of a transaction's top-level frame: success, the bounded gas
+    snapshot consumed by settlement, and refunds. */
+struct TxFrameResultFields(
+    'limit : Int,
+    'regular : Int,
+), 0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound = {
     success : bool,
-    execution_gas_remaining : gas,
-    state_gas_remaining : gas,
-    state_gas_used : state_gas_delta,
+    gas : TxFrameGasSnapshotForLimits('limit, 'regular),
     refund : gas_refund,
+}
+
+/*! A completed top-level frame with existentially hidden admitted limits. */
+type TxFrameResult = {
+    'limit 'regular,
+    0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound.
+    TxFrameResultFields('limit, 'regular)
 }
 
 /*! The four CALL-family execution modes. `Call` is an ordinary call;
@@ -83,6 +374,12 @@ struct TxFrameResult = {
     `DelegateCall` additionally inherits the caller and value; and
     `StaticCall` enters a read-only frame. */
 enum CallKind = { Call, CallCode, DelegateCall, StaticCall }
+
+/*! The two contract-creation address schemes. `CreateByNonce` is ordinary
+    `CREATE`; `CreateBySalt` is EIP-1014 `CREATE2`. Keeping this as a closed
+    semantic tag prevents callers from encoding an execution mode in an
+    otherwise unexplained boolean. */
+enum CreateKind = { CreateByNonce, CreateBySalt }
 
 /*! The per-frame call message (YP §8, the I tuple): caller, executing
     address, code owner, value, calldata length, static flag, and call
@@ -110,7 +407,6 @@ struct Message = {
  * host's stack-of-stacks; returndata intentionally becomes the child output. */
 /*! The suspended parent-frame state restored after nested execution. */
 struct FrameCheckpoint = {
-    state : journal_checkpoint,
     pc : code_pointer,
     gas_remaining : gas,
     state_gas_remaining : gas,
@@ -121,7 +417,7 @@ struct FrameCheckpoint = {
     call_depth : frame_depth,
     code : Code,
     calldata : CalldataSlice,
-    memory : MemorySlice,
+    memory : EvmMemorySlice,
 }
 
 /*! The suspended parent information needed after a message call returns. */

@@ -14,7 +14,7 @@ val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
     their stable arena span. */
 val code_region_from_input = impure { c: "code_region_from_input" } : StatelessInputSlice -> CodeRegionSlice
 /*! Copies active-frame memory into the executable-code arena. */
-val code_region_from_memory = impure { c: "code_region_from_memory" } : MemorySlice -> CodeRegionSlice
+val code_region_from_memory = impure { c: "code_region_from_memory" } : EvmMemorySlice -> CodeRegionSlice
 /*! Copies frozen initcode output into the executable-code arena. */
 val code_region_from_output = impure { c: "code_region_from_output" } : OutputSlice -> CodeRegionSlice
 /*! Allocates a JUMPDEST bitmap large enough for a code body. */
@@ -83,14 +83,20 @@ function analyze_code_from(code, fork, table, pc, analysis) = {
         let step : range(1, 33) = if (96 <= opcode_value) & (opcode_value <= 127) then {
                 opcode_value - 94
             } else {
-                if (fork >= Amsterdam) & (opcode_value == 230 | opcode_value == 231) then {
-                    if deep_stack_immediate_valid(slice_byte(code, position + 1)) then { 2 } else { 1 }
-                } else {
-                    if (fork >= Amsterdam) & (opcode_value == 232) then {
-                        if exchange_immediate_valid(slice_byte(code, position + 1)) then { 2 } else { 1 }
-                    } else {
-                        1
+                if fork >= Amsterdam then {
+                    match deep_stack_operation(opcode_value) {
+                        Some(operation) => if deep_stack_operation_immediate_valid(
+                            operation,
+                            slice_byte(code, position + 1),
+                        ) then {
+                            2
+                        } else {
+                            1
+                        },
+                        None() => 1,
                     }
+                } else {
+                    1
                 }
             };
         if step < code_len - position then {
@@ -163,7 +169,7 @@ function code_db_intern_input(bytes : StatelessInputSlice) -> CodeSlice =
     validated_code_slice(code_region_from_input(bytes))
 
 /*! Normalizes memory-backed initcode into the code arena before analysis. */
-function code_db_intern_memory(bytes : MemorySlice) -> CodeSlice =
+function code_db_intern_memory(bytes : EvmMemorySlice) -> CodeSlice =
     validated_code_slice(code_region_from_memory(bytes))
 
 /*! Normalizes frozen creation output into the code arena before deployment. */

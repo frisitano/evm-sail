@@ -3,15 +3,15 @@
 
 The stateless guest is built once as a shared library and driven in-process.
 Normal runs return only main.sail's canonical SSZ validation result. On demand,
-evmsail_debug_dump serializes the live post-run host state for failure analysis;
+guest_debug_dump serializes the live post-run host state for failure analysis;
 that utility is never linked into the real RISC-V guest.
 
-Note: execution is gas-bounded, but a warm in-process worker has
-no per-case timeout/crash isolation (unlike the old subprocess) -- a pathological
-case would take down the whole run. The full corpus is gas-bounded in practice.
+Note: execution is gas-bounded. The optimized native backend converts its
+fail-closed host invariant failures into per-case Python exceptions at a
+test-only thread boundary; faults outside that boundary can still terminate a
+warm in-process worker.
 """
-import ctypes, hashlib, os, resource, struct, subprocess, sys
-from collections import OrderedDict
+import ctypes, os, resource, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
@@ -22,15 +22,15 @@ _EXT = "dylib" if sys.platform == "darwin" else "so"
 _guest = None
 _guest_profile = None
 _guest_build_mode = None
-_capacity_planner = None
-_capacity_cache = OrderedDict()
-_CAPACITY_CACHE_LIMIT = 64
 
-def _build_paths(build_mode, capacity_mode="fixed"):
+
+class GuestExecutionError(RuntimeError):
+    """A native guest run stopped at its test-only failure boundary."""
+
+def _build_paths(build_mode):
     if build_mode not in ("standard", "optimized"):
         raise ValueError("build_mode must be 'standard' or 'optimized'")
-    suffix = "-measure" if build_mode == "optimized" and capacity_mode == "measure" else ""
-    build_dir = os.path.join(_NR, f".build-{build_mode}{suffix}")
+    build_dir = os.path.join(_NR, f".build-{build_mode}")
     return (
         build_dir,
         os.path.join(build_dir, f"libevmsail_guest.{_EXT}"),
@@ -39,63 +39,41 @@ def _build_paths(build_mode, capacity_mode="fixed"):
 
 def _bind(path):
     """dlopen a test_utils.c-shaped lib and bind the shared ctypes signatures."""
-    lib = ctypes.CDLL(path)
+    try:
+        lib = ctypes.CDLL(path)
+    except OSError as error:
+        raise GuestExecutionError(
+            f"could not load native guest library {path}: {error}"
+        ) from error
     P = ctypes.POINTER(ctypes.c_ubyte)
-    lib.evmsail_run_once.restype = ctypes.c_ulong
-    lib.evmsail_run_once.argtypes = [ctypes.c_char_p, ctypes.c_ulong, ctypes.POINTER(P)]
-    lib.evmsail_debug_dump.restype = ctypes.c_ulong
-    lib.evmsail_debug_dump.argtypes = [ctypes.POINTER(P)]
-    lib.evmsail_lib_init()
+    lib.guest_init.restype = None
+    lib.guest_init.argtypes = []
+    lib.guest_fini.restype = None
+    lib.guest_fini.argtypes = []
+    lib.guest_reset.restype = None
+    lib.guest_reset.argtypes = []
+    lib.guest_run.restype = ctypes.c_ulong
+    lib.guest_run.argtypes = [ctypes.c_char_p, ctypes.c_ulong, ctypes.POINTER(P)]
+    lib.guest_debug_dump.restype = ctypes.c_ulong
+    lib.guest_debug_dump.argtypes = [ctypes.POINTER(P)]
+    # Lean's independently implemented test ABI does not expose the optimized
+    # C failure boundary. Keep that backend loadable while requiring all C
+    # native builds to use the common accessor.
+    try:
+        lib.guest_last_error.restype = ctypes.c_char_p
+        lib.guest_last_error.argtypes = []
+    except AttributeError:
+        pass
+    lib.guest_init()
     return lib
 
-def _load_capacity_planner(rebuild=False):
-    """Load the growable optimized ABI used only to measure region high-water
-    marks before entering the fixed-allocation pointer ABI."""
-    global _capacity_planner
-    if _capacity_planner is not None:
-        return _capacity_planner
-    build_dir, guest_lib, profile_marker = _build_paths("optimized", "measure")
-    if rebuild or not os.path.exists(guest_lib):
-        print("# building optimized capacity planner (one-time)...", file=sys.stderr)
-        env = dict(
-            os.environ,
-            EVM_BUILD_MODE="optimized",
-            EVM_CAPACITY_MODE="measure",
-            EVM_PROFILE="off",
-            NATIVE_BUILD=build_dir,
-        )
-        subprocess.check_call([os.path.join(_NR, "build_lib.sh")], env=env)
-        with open(profile_marker, "w") as f:
-            f.write("off\n")
-    lib = _bind(guest_lib)
-    lib.evmsail_capacity_measure_get.restype = ctypes.c_ulong
-    lib.evmsail_capacity_measure_get.argtypes = [ctypes.c_ulong]
-    _capacity_planner = lib
-    return lib
 
-def prepare_optimized_input(inp, rebuild=False):
-    """Append private fixed-arena capacity metadata to canonical SSZ input.
-
-    The trailer is stripped by the optimized host before any Sail decoder or
-    commitment code sees the input. It is therefore execution metadata, not a
-    protocol field or part of the authenticated stateless input.
-    """
-    cache_key = (len(inp), hashlib.sha256(inp).digest())
-    cached_trailer = _capacity_cache.get(cache_key)
-    if cached_trailer is not None and not rebuild:
-        _capacity_cache.move_to_end(cache_key)
-        return inp + cached_trailer
-    planner = _load_capacity_planner(rebuild=rebuild)
-    _run(planner, inp)
-    capacities = [planner.evmsail_capacity_measure_get(i) for i in range(6)]
-    trailer = b"EVMCAP01" + struct.pack(
-        "<IIQ6Q", 1, len(capacities), len(inp), *capacities
-    )
-    _capacity_cache[cache_key] = trailer
-    _capacity_cache.move_to_end(cache_key)
-    while len(_capacity_cache) > _CAPACITY_CACHE_LIMIT:
-        _capacity_cache.popitem(last=False)
-    return inp + trailer
+def _last_error(lib):
+    accessor = getattr(lib, "guest_last_error", None)
+    if accessor is None:
+        return ""
+    message = accessor()
+    return message.decode(errors="replace") if message else ""
 
 def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     """Load main.sail's native shared library, building it if needed."""
@@ -118,7 +96,6 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
         env = dict(
             os.environ,
             EVM_BUILD_MODE=build_mode,
-            EVM_CAPACITY_MODE="fixed",
             EVM_PROFILE=wanted,
             NATIVE_BUILD=build_dir,
             EXTRA_PRESERVE="debug_account_storage_root",
@@ -129,8 +106,6 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     _guest = _bind(guest_lib)
     _guest_profile = wanted
     _guest_build_mode = build_mode
-    if build_mode == "optimized":
-        _load_capacity_planner(rebuild=rebuild)
     return _guest
 
 def load_lean_guest(rebuild=False):
@@ -166,23 +141,31 @@ def load_lean_guest(rebuild=False):
     return _guest
 
 def _run(lib, inp):
-    lib.evmsail_clear_memory()
     outp = ctypes.POINTER(ctypes.c_ubyte)()
-    n = lib.evmsail_run_once(inp, len(inp), ctypes.byref(outp))
+    try:
+        lib.guest_reset()
+        n = lib.guest_run(inp, len(inp), ctypes.byref(outp))
+    except (OSError, ctypes.ArgumentError) as error:
+        raise GuestExecutionError(f"native guest call failed: {error}") from error
+    error = _last_error(lib)
+    if error:
+        raise GuestExecutionError(error)
+    if n and not outp:
+        raise GuestExecutionError(
+            f"native guest returned {n} output bytes through a null pointer"
+        )
     return ctypes.string_at(outp, n) if n else b""
 
 def run_once_guest(inp):
     """Wipe state, run one SszStatelessInput through main.sail, returning its
     canonical SSZ SszStatelessValidationResult bytes."""
     lib = _guest if _guest is not None else load_guest()
-    if _guest_build_mode == "optimized":
-        inp = prepare_optimized_input(inp)
     return _run(lib, inp)
 
 def _debug_dump_bytes():
     lib = _guest if _guest is not None else load_guest()
     sp = ctypes.POINTER(ctypes.c_ubyte)()
-    m = lib.evmsail_debug_dump(ctypes.byref(sp))
+    m = lib.guest_debug_dump(ctypes.byref(sp))
     return ctypes.string_at(sp, m)
 
 # BlockError enum names, in sail/exceptions.sail declaration order (= the
@@ -230,7 +213,7 @@ def _u64(b, p): return int.from_bytes(b[p:p + 8], "big"), p + 8
 def _w(b, p):   return int.from_bytes(b[p:p + 32], "big"), p + 32
 
 def decode_snapshot(b):
-    """Blob (see test_utils.c evmsail_debug_dump) -> native debug state.
+    """Blob (see test_utils.c guest_debug_dump) -> native debug state.
     accounts: {acct_hash_int: {address, nonce, bal, sroot, computed_sroot,
                                chash, storage:{slot:val}}}
     (materialized state = what execution touched; unchanged witness-base values are not
@@ -253,6 +236,22 @@ def decode_snapshot(b):
             "scope": scope_name,
             "reason": reason_name,
             "location": location,
+        }
+    else:
+        p += 1
+    assert b[p:p + 1] == b"B", "bad snapshot: missing block gas section"; p += 1
+    block_gas = None
+    if b[p] == 1:
+        p += 1
+        actual, p = _u64(b, p)
+        expected, p = _u64(b, p)
+        execution, p = _u64(b, p)
+        state, p = _u64(b, p)
+        block_gas = {
+            "actual": actual,
+            "expected": expected,
+            "execution": execution,
+            "state": state,
         }
     else:
         p += 1
@@ -281,6 +280,7 @@ def decode_snapshot(b):
     assert b[p:p + 1] == b"E", "bad snapshot: missing end marker"
     return {"ok": ok, "root": root, "exc": exc, "output": output,
             "validation_failure": validation_failure,
+            "block_gas": block_gas,
             "accounts": accounts, "stack": stack, "mem_frame_depth": md}
 
 def format_snapshot(snap, limit=0):
@@ -295,6 +295,14 @@ def format_snapshot(snap, limit=0):
     lines = [f"state_root={snap['root']:#066x} "
              f"validation={valid}{failure}{exc}",
              f"accounts (materialized): {len(snap['accounts'])}"]
+    if snap["block_gas"] is not None:
+        gas = snap["block_gas"]
+        lines.insert(
+            1,
+            "block gas: "
+            f"actual={gas['actual']} expected={gas['expected']} "
+            f"execution={gas['execution']} state={gas['state']}",
+        )
     for i, (hk, a) in enumerate(snap["accounts"].items()):
         if limit and i >= limit:
             lines.append(f"  ... (+{len(snap['accounts']) - limit} more)"); break
