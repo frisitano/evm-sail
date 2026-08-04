@@ -527,15 +527,12 @@ type code_length = range(0, code_region_bound)
     enough cursor headroom for a complete PUSH32 immediate. */
 type code_valid_length('len : Int) -> Bool =
     0 <= 'len & 'len + 32 <= code_region_bound
-/*! An index into the 256-byte chunks of a JUMPDEST bitmap. */
-type code_chunk_index = range(0, code_region_bound)
-
 /*! Embeds an arbitrary mathematical byte count in an EVM word after checking
     the EVM-word boundary. */
 val word_of_nat_byte_count : forall 'value, 0 <= 'value. int('value) -> word
 function word_of_nat_byte_count(value) =
     if value < 2 ^ 256 then {
-        U256(value)
+        u256(value)
     } else {
         assert(false);
         WORD_ZERO

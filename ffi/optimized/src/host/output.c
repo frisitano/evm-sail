@@ -66,6 +66,6 @@ bool output_buffer_finish(uint64_t len) {
   buffer->length = len;
   return true;
 }
-struct zOutputSliceFields output_buffer_slice(uint64_t len) {
+struct OutputSliceFields output_buffer_slice(uint32_t len) {
   return region_output_buffer_slice(len);
 }

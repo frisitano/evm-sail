@@ -9,47 +9,38 @@
 #include <stdint.h>
 #include <string.h>
 
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-#error "fixed_bytes_u64_lanes requires a little-endian optimized target"
-#endif
-
 static inline uint8_t byte_value(const uint64_t value) {
   return (uint8_t)value;
 }
 
 /*
- * The lane representation assigns semantic byte i to bits
- * (i % 8) * 8 of lane i / 8. Optimized targets are little-endian, so the lane
- * storage itself is the canonical byte sequence used by Ethereum encodings.
- * Keep the semantic length explicit: a 20-byte address occupies three lanes,
- * but its final four storage bytes are padding rather than address bytes.
+ * The optimized fixed-byte representation stores the canonical protocol byte
+ * sequence directly, without host-endian padding or lane reinterpretation.
  */
 static inline const uint8_t *address_bytes_const(
     const Address *value) {
-  return (const uint8_t *)(const void *)value->lanes;
+  return value->bytes;
 }
 
 static inline uint8_t *address_bytes(
     Address *value) {
-  return (uint8_t *)(void *)value->lanes;
+  return value->bytes;
 }
 
 static inline const uint8_t *hash_bytes_const(
     const Hash32 *value) {
-  return (const uint8_t *)(const void *)value->lanes;
+  return value->bytes;
 }
 
 static inline uint8_t *hash_bytes(
     Hash32 *value) {
-  return (uint8_t *)(void *)value->lanes;
+  return value->bytes;
 }
 
 static inline bool address_equal(
     const Address *left,
     const Address *right) {
-  return left->lanes[0] == right->lanes[0] &&
-         left->lanes[1] == right->lanes[1] &&
-         (uint32_t)left->lanes[2] == (uint32_t)right->lanes[2];
+  return memcmp(left->bytes, right->bytes, sizeof(left->bytes)) == 0;
 }
 
 static inline uint64_t load_u64(const uint8_t bytes[8]) {
@@ -64,55 +55,18 @@ static inline void store_u64(uint8_t bytes[8], uint64_t value) {
 
 static inline bool address_equal_be_bytes(
     const Address *left, const uint8_t right[20]) {
-  uint32_t tail;
-  memcpy(&tail, right + 16, sizeof(tail));
-  return left->lanes[0] == load_u64(right) &&
-         left->lanes[1] == load_u64(right + 8) &&
-         (uint32_t)left->lanes[2] == tail;
+  return memcmp(left->bytes, right, sizeof(left->bytes)) == 0;
 }
 
 static inline bool hash_equal_be_bytes(
     const Hash32 *left, const uint8_t right[32]) {
-  return left->lanes[0] == load_u64(right) &&
-         left->lanes[1] == load_u64(right + 8) &&
-         left->lanes[2] == load_u64(right + 16) &&
-         left->lanes[3] == load_u64(right + 24);
-}
-
-/* Compare one lane in canonical byte order. Canonical byte zero occupies the
- * lane's least-significant byte so a raw integer comparison would use the
- * wrong significance. Find the first differing byte with three word-sized
- * tests and compare only that byte. This avoids both a byte loop and the
- * out-of-line __bswapdi2 emitted for RV64IM. */
-static inline int canonical_lane_compare(uint64_t left,
-                                                 uint64_t right) {
-  uint64_t difference = left ^ right;
-  unsigned shift = 0;
-  if (difference == 0) return 0;
-  if ((uint32_t)difference == 0) {
-    difference >>= 32;
-    shift += 32;
-  }
-  if ((uint16_t)difference == 0) {
-    difference >>= 16;
-    shift += 16;
-  }
-  if ((uint8_t)difference == 0) shift += 8;
-  const uint8_t left_byte = (uint8_t)(left >> shift);
-  const uint8_t right_byte = (uint8_t)(right >> shift);
-  return left_byte < right_byte ? -1 : 1;
+  return memcmp(left->bytes, right, sizeof(left->bytes)) == 0;
 }
 
 static inline int address_compare(
     const Address *left,
     const Address *right) {
-  int order =
-      canonical_lane_compare(left->lanes[0], right->lanes[0]);
-  if (order != 0) return order;
-  order = canonical_lane_compare(left->lanes[1], right->lanes[1]);
-  if (order != 0) return order;
-  return canonical_lane_compare(
-      (uint32_t)left->lanes[2], (uint32_t)right->lanes[2]);
+  return memcmp(left->bytes, right->bytes, sizeof(left->bytes));
 }
 
 static inline bool word_equal(const U256 *left,
@@ -228,10 +182,10 @@ static inline U256 be_bytes_to_sail_word(const uint8_t in[32]) {
 }
 
 static inline void sail_hash_to_be_words4(uint64_t out[4], Hash32 value) {
-  out[0] = __builtin_bswap64(value.lanes[0]);
-  out[1] = __builtin_bswap64(value.lanes[1]);
-  out[2] = __builtin_bswap64(value.lanes[2]);
-  out[3] = __builtin_bswap64(value.lanes[3]);
+  out[0] = __builtin_bswap64(load_u64(value.bytes));
+  out[1] = __builtin_bswap64(load_u64(value.bytes + 8));
+  out[2] = __builtin_bswap64(load_u64(value.bytes + 16));
+  out[3] = __builtin_bswap64(load_u64(value.bytes + 24));
 }
 
 static inline void sail_hash_to_le_words4(uint64_t out[4], Hash32 value) {
@@ -244,14 +198,12 @@ static inline void sail_hash_to_le_words4(uint64_t out[4], Hash32 value) {
 }
 
 static inline Hash32 be_words4_to_sail_hash(const uint64_t words[4]) {
-  return (Hash32){
-      .lanes = {
-          __builtin_bswap64(words[0]),
-          __builtin_bswap64(words[1]),
-          __builtin_bswap64(words[2]),
-          __builtin_bswap64(words[3]),
-      },
-  };
+  Hash32 result;
+  store_u64(result.bytes, __builtin_bswap64(words[0]));
+  store_u64(result.bytes + 8, __builtin_bswap64(words[1]));
+  store_u64(result.bytes + 16, __builtin_bswap64(words[2]));
+  store_u64(result.bytes + 24, __builtin_bswap64(words[3]));
+  return result;
 }
 
 static inline Hash32 le_words4_to_sail_hash(const uint64_t words[4]) {

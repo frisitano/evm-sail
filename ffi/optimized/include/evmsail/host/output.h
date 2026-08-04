@@ -3,7 +3,7 @@
 
 #include "evmsail/prelude.h"
 
-struct zOutputSliceFields output_buffer_slice(uint64_t len);
+struct OutputSliceFields output_buffer_slice(uint32_t len);
 
 #include <stdbool.h>
 #include <stdint.h>

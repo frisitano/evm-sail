@@ -4,8 +4,8 @@
 #include "evmsail/prelude.h"
 
 unit initialize_block_access_list_state(
-    struct zStatelessInputSliceFields bytes, Hash32 parent_state_root);
+    struct StatelessInputSliceFields bytes, Hash32 parent_state_root);
 unit validate_block_access_list(
-    struct zStatelessInputSliceFields bytes, uint64_t block_gas_limit);
+    struct StatelessInputSliceFields bytes, uint64_t block_gas_limit);
 
 #endif

@@ -93,7 +93,6 @@ void account_clear_storage_generation(AccountId id);
 bool account_exists(AccountId id);
 bool account_transaction_view(const Address *address, AccountView *view);
 bool account_block_view(const Address *address, AccountView *view);
-void account_diagnostics_invalidate(AccountId id);
 void account_balance_restore(AccountId id, U256 prior);
 void account_nonce_restore(AccountId id, uint64_t prior);
 void account_code_hash_restore(AccountId id, Hash32 prior);
@@ -133,7 +132,7 @@ void account_state_workspace_bind(void);
 void storage_state_workspace_bind(void);
 void block_access_list_workspace_bind(void);
 
-void account_transaction_merge(struct zTransactionMergeSemantics semantics,
+void account_transaction_merge(struct TransactionMergeSemantics semantics,
                                uint64_t current_transaction_epoch);
 void storage_transaction_merge(uint64_t current_transaction_epoch);
 

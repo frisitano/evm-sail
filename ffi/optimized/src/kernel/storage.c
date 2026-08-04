@@ -13,12 +13,12 @@
 #include <stdint.h>
 #include <string.h>
 
-static enum zBlockError witness_error(uint64_t status) {
-  return status == 1 ? zWitnessDeficient : zRlpDecode;
+static enum BlockError witness_error(uint64_t status) {
+  return status == 1 ? WitnessDeficient : RlpDecode;
 }
 
 bool storage_preload(AccountId account_id, NodeId storage_root_node, U256 slot,
-                     StorageId *storage_id, struct zStorageValue *value) {
+                     StorageId *storage_id, struct StorageValue *value) {
   memset(value, 0, sizeof(*value));
 
   Hash32 slot_hash;
@@ -29,25 +29,25 @@ bool storage_preload(AccountId account_id, NodeId storage_root_node, U256 slot,
   if (have_exception) return false;
   if (storage_root_node != EVMSAIL_NODE_ID_EMPTY) {
     const uint64_t status = stateless_storage_read(
-        storage_root_node, slot_hash, &value->zcurr, &prestate_exists,
+        storage_root_node, slot_hash, &value->curr, &prestate_exists,
         &terminal_node);
     if (status != 0) {
       throw_invalid_block(witness_error(status), "optimized storage load");
       return false;
     }
   }
-  value->zorig = value->zcurr;
-  storage_block_initialize(account_id, id, value->zcurr, terminal_node,
+  value->orig = value->curr;
+  storage_block_initialize(account_id, id, value->curr, terminal_node,
                            prestate_exists);
   if (storage_id != NULL) *storage_id = id;
   return true;
 }
 
-struct zStorageValue k_sload(
+struct StorageValue k_sload(
     Hash32 parent_state_root,
     Address address, U256 slot) {
   (void)parent_state_root;
-  struct zStorageValue value;
+  struct StorageValue value;
   memset(&value, 0, sizeof(value));
   const AccountId account_id = get_account_id(&address);
   if (have_exception) return value;
@@ -56,8 +56,8 @@ struct zStorageValue k_sload(
   const StorageViewStatus tx_status =
       storage_transaction_view(account_id, &slot, &view);
   if (tx_status == STORAGE_VIEW_FOUND) {
-    value.zcurr = view.current;
-    value.zorig = view.original;
+    value.curr = view.current;
+    value.orig = view.original;
     return value;
   }
 
@@ -65,17 +65,17 @@ struct zStorageValue k_sload(
   if (have_exception || tx_status == STORAGE_VIEW_CLEARED) return value;
 
   if (storage_block_view(account_id, &slot, &view)) {
-    value.zcurr = view.current;
-    value.zorig = view.original;
+    value.curr = view.current;
+    value.orig = view.original;
     return value;
   }
   if (!have_exception)
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "storage absent from block access list");
   return value;
 }
 
 unit k_sstore(Address address, U256 slot,
                       U256 current, U256 original) {
-  return storage_update(address, slot, current, original);
+  return host_storage_update(address, slot, current, original);
 }

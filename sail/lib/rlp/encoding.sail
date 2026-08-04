@@ -200,7 +200,7 @@ function rlp_uint_word_size(w) = {
 val rlp_uint_nat_size : forall 'n, rlp_natural_valid('n). int('n) -> rlp_natural_size
 function rlp_uint_nat_size(n) = {
     if n < sizeof(word_modulus) then {
-        rlp_uint_word_size(U256(n))
+        rlp_uint_word_size(u256(n))
     } else {
         /* n >= 2^256 implies a minimal encoding of at least 33 bytes, so the
          * single-byte RLP case is unreachable on this branch. */
@@ -361,21 +361,21 @@ function rlp_write_uint_word(w) = {
             0x00
         };
     rlp_write_string_prefix(len, first);
-    scratch_push_word_be(U256(w), len)
+    scratch_push_word_be(u256(w), len)
 }
 
 /*! Appends a natural as a minimal RLP integer. */
 val rlp_write_uint_nat : forall 'n, rlp_natural_valid('n). int('n) -> unit
 function rlp_write_uint_nat(n) =
     if n < sizeof(word_modulus) then {
-        rlp_write_uint_word(U256(n))
+        rlp_write_uint_word(u256(n))
     } else {
         throw InvalidBlock(InvalidConfig)
     }
 
 /*! Appends a uint64-range protocol quantity as a minimal RLP integer. */
 val rlp_write_uint_u64 : forall 'n, 0 <= 'n & 'n <= 2 ^ 64 - 1. int('n) -> unit
-function rlp_write_uint_u64(n) = rlp_write_uint_word(U256(n))
+function rlp_write_uint_u64(n) = rlp_write_uint_word(u256(n))
 
 /* Optimized semantic u64 subtypes select the word-bounded arm directly.
  * Canonical unbounded naturals retain the generic specification. */

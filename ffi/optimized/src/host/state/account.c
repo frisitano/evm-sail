@@ -123,17 +123,16 @@ static uint32_t acct_tx_rows_n = 0;
  * worklist without growth, relocation, or a second global lookup structure. */
 static StorageId *transaction_storage_ids;
 
-/* Marks the native diagnostic materialization stale after semantic mutation. */
-static void acct_dump_invalidate(void);
-
 /* Finds an address in the BAL-preallocated account universe.
  *
- * Address lane zero supplies the initial bucket because Ethereum addresses are
+ * The first address bytes supply the initial bucket because Ethereum addresses are
  * already hash-derived. Linear probing resolves collisions and full Address
  * equality validates a candidate. A miss returns ACCOUNT_ID_NONE; execution
  * APIs decide whether that miss is a BAL violation. */
 AccountId lookup_account_id(const Address *address) {
-  uint32_t bucket = (uint32_t)address->lanes[0] & acct_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket &= acct_table.bucket_mask;
   for (uint32_t probes = 0; probes < acct_table.bucket_count; probes++) {
     const AccountId id = acct_table.buckets[bucket];
     if (id == ACCOUNT_ID_NONE) return ACCOUNT_ID_NONE;
@@ -149,7 +148,7 @@ AccountId lookup_account_id(const Address *address) {
 AccountId get_account_id(const Address *address) {
   const AccountId id = lookup_account_id(address);
   if (id == ACCOUNT_ID_NONE) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "account absent from block access list");
   }
   return id;
@@ -160,13 +159,6 @@ AccountId get_account_id(const Address *address) {
 bool account_exists(AccountId id) {
   return id != ACCOUNT_ID_NONE && id < acct_table.count &&
          acct_table.states[id].current.exists;
-}
-
-/* Invalidates the native diagnostic account snapshot after storage changes.
- * Production MPT reduction discovers those changes from storage.c directly. */
-void account_diagnostics_invalidate(AccountId id) {
-  if (id == ACCOUNT_ID_NONE || id >= acct_table.count) GUEST_ABORT();
-  acct_dump_invalidate();
 }
 
 /* Appends one BAL account and installs it in the address index.
@@ -181,18 +173,18 @@ AccountId account_schema_insert(const Address *address) {
   if (acct_table.count > ACCOUNT_ID_NONE + 1u &&
       address_compare(&acct_table.entries[acct_table.count - 1u].address,
                       address) >= 0) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "BAL accounts are not strictly increasing");
     return ACCOUNT_ID_NONE;
   }
 
-  uint32_t bucket = (uint32_t)address->lanes[0] & acct_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket &= acct_table.bucket_mask;
   for (uint32_t probes = 0; probes < acct_table.bucket_count; probes++) {
     const AccountId existing = acct_table.buckets[bucket];
     if (existing == ACCOUNT_ID_NONE) {
       const AccountId i = acct_table.count;
-      memset(&acct_table.entries[i], 0, sizeof(acct_table.entries[i]));
-      memset(&acct_table.states[i], 0, sizeof(acct_table.states[i]));
       acct_table.entries[i].address = *address;
       acct_table.entries[i].storage_begin = UINT32_MAX;
       acct_table.entries[i].storage_generation = STORAGE_INITIAL_GENERATION;
@@ -202,7 +194,7 @@ AccountId account_schema_insert(const Address *address) {
     }
     if (existing >= acct_table.count) GUEST_ABORT();
     if (address_equal(&acct_table.entries[existing].address, address)) {
-      throw_invalid_block(zInvalidBlockAccessList,
+      throw_invalid_block(InvalidBlockAccessList,
                           "duplicate BAL account");
       return ACCOUNT_ID_NONE;
     }
@@ -319,32 +311,26 @@ static AccountState *account_state_for_restore(AccountId id) {
 
 void account_balance_restore(AccountId id, U256 prior) {
   account_state_for_restore(id)->current.balance = prior;
-  acct_dump_invalidate();
 }
 
 void account_nonce_restore(AccountId id, uint64_t prior) {
   account_state_for_restore(id)->current.nonce = prior;
-  acct_dump_invalidate();
 }
 
 void account_code_hash_restore(AccountId id, Hash32 prior) {
   account_state_for_restore(id)->current.code_hash = prior;
-  acct_dump_invalidate();
 }
 
 void account_exists_restore(AccountId id, bool prior) {
   account_state_for_restore(id)->current.exists = prior;
-  acct_dump_invalidate();
 }
 
 void account_created_restore(AccountId id, bool prior) {
   account_state_for_restore(id)->created = prior;
-  acct_dump_invalidate();
 }
 
 void account_selfdestructed_restore(AccountId id, bool prior) {
   account_state_for_restore(id)->selfdestructed = prior;
-  acct_dump_invalidate();
 }
 
 uint32_t account_transaction_count(void) { return acct_tx_rows_n; }
@@ -442,7 +428,6 @@ void account_clear_storage_generation(AccountId id) {
   /* TODO(proof): establish in Sail that the number of storage clears for one
    * account cannot saturate StorageGeneration during a block. */
   entry->storage_generation++;
-  acct_dump_invalidate();
 }
 
 /* ======================================================================== */
@@ -457,11 +442,16 @@ unit acct_db_reset(const unit u) {
   if (acct_table.bucket_count != 0)
     memset(acct_table.buckets, 0,
            acct_table.bucket_count * sizeof(*acct_table.buckets));
+  if (acct_table.count > 1u) {
+    memset(acct_table.entries + 1u, 0,
+           (size_t)(acct_table.count - 1u) * sizeof(*acct_table.entries));
+    memset(acct_table.states + 1u, 0,
+           (size_t)(acct_table.count - 1u) * sizeof(*acct_table.states));
+  }
   acct_table.count = 1u;
   acct_table.bucket_count = 0;
   acct_table.bucket_mask = 0;
   acct_tx_rows_n = 0;
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -514,7 +504,6 @@ unit account_block_initialize(AccountId id, Hash32 address_hash,
       .storage_root_node = storage_root_node,
       .prestate_exists = exists,
   };
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -561,7 +550,7 @@ bool account_block_view(const Address *address, AccountView *view) {
   return true;
 }
 
-/* Cursor used only by generated/native diagnostic iteration. Calling begin
+/* Cursor implementing the Sail account-trie iterator contract. Calling begin
  * first orders AccountTrieBinding in the MPT module's reusable scratch. */
 static uint32_t acct_block_iter_position = 0;
 static bool acct_block_iter_active = false;
@@ -605,7 +594,7 @@ void account_trie_bindings_permute(uint32_t *destinations, uint32_t count) {
   }
 }
 
-/* Starts diagnostic iteration in canonical update order. The preparatory sort
+/* Starts Sail-model iteration in canonical update order. The preparatory sort
  * is idempotent and changes only AccountTrieBinding order, never AccountIds. */
 unit acct_block_iter_begin(const unit u) {
   (void)u;
@@ -634,49 +623,37 @@ static bool acct_state_empty(const AccountState *state) {
          hash_equal(&state->current.code_hash, &EVMSAIL_KECCAK_EMPTY);
 }
 
-/* Supplies account-update metadata to the optimized MPT reducer.
+/* Supplies a minimal borrowed binding view to account-trie consumers.
  *
  * A transaction-local storage clear selects the explicit empty NodeId as the
  * base. fields_changed covers account fields only; storage changes are folded
  * into the storage root while this binding is processed. */
-void acct_block_update_meta_at(
-    uint32_t index, Address *address,
-    Hash32 *address_hash,
-    NodeId *storage_base_node,
-    NodeId *original_storage_root_node,
-    bool *current_live, bool *original_exists, bool *fields_changed,
-    NodeId *terminal_node) {
+bool account_trie_binding_get(uint32_t index, AccountTrieView *view) {
+  if (view == NULL || index >= account_trie_binding_count()) return false;
   const AccountId id = acct_block_update_id_at(index);
   const AccountState *state = &acct_table.states[id];
   const AccountTrieBinding *binding = &acct_table.trie_bindings[index];
-  *address = acct_table.entries[id].address;
-  *address_hash = binding->secure_key;
-  *storage_base_node =
+  view->account_id = id;
+  view->secure_key = &binding->secure_key;
+  view->storage_base_node =
       acct_table.entries[id].storage_generation != STORAGE_INITIAL_GENERATION
                            ? EVMSAIL_NODE_ID_EMPTY
                            : binding->storage_root_node;
-  *original_storage_root_node = binding->storage_root_node;
-  *current_live = state->current.exists && !acct_state_empty(state);
-  *original_exists = binding->prestate_exists;
-  *fields_changed = state->dirty;
-  *terminal_node = binding->terminal_node;
+  view->original_storage_root_node = binding->storage_root_node;
+  view->terminal_node = binding->terminal_node;
+  view->nonce = state->current.nonce;
+  view->balance = &state->current.balance;
+  view->code_hash = &state->current.code_hash;
+  view->current_live = state->current.exists && !acct_state_empty(state);
+  view->original_exists = binding->prestate_exists;
+  view->fields_changed = state->dirty;
+  return true;
 }
 
-/* Supplies the final semantic account fields for canonical account RLP. */
-void acct_block_update_current_at(
-    uint32_t index, uint64_t *nonce, U256 *balance,
-    Hash32 *code_hash) {
-  const AccountState *state =
-      &acct_table.states[acct_block_update_id_at(index)];
-  *nonce = state->current.nonce;
-  *balance = state->current.balance;
-  *code_hash = state->current.code_hash;
-}
-
-/* Materializes the next ordered binding into the generated diagnostic
- * aggregate. Original fields intentionally mirror the current semantic value:
- * production root construction compares current account RLP against the
- * borrowed authenticated pre-state RLP and never consumes this adapter. */
+/* Materializes the next ordered binding for the explicit Sail state-trie
+ * equations retained by standard C and proof extraction. Original fields
+ * intentionally mirror the current semantic value; optimized root reduction
+ * compares current account RLP against the authenticated pre-state RLP. */
 uint64_t acct_block_iter_next_probe(Address *addr, uint64_t *cn,
                                     U256 *cb, Hash32 *cs,
                                     Hash32 *cc, bool *ce, bool *csc,
@@ -735,7 +712,7 @@ static AccountState *account_state_for_write(Address address,
 /* Replaces every semantic account field in the active transaction view.
  * Storage roots remain trie metadata. A logical clear advances the owning
  * AccountEntry generation rather than adding a boolean to AccountState. */
-unit account_update(Address a, uint64_t nonce, U256 bal, Hash32 chash,
+unit host_account_update(Address a, uint64_t nonce, U256 bal, Hash32 chash,
                     bool exists, bool storage_cleared, bool created,
                     bool selfdestructed) {
   const AccountId id = get_account_id(&a);
@@ -771,7 +748,6 @@ unit account_update(Address a, uint64_t nonce, U256 bal, Hash32 chash,
       acct_table.entries[id].storage_generation ==
           state->original_storage_generation)
     account_clear_storage_generation(id);
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -783,7 +759,6 @@ unit acct_tx_set_balance(Address a, const U256 balance) {
     state_journal_push_account_balance(id, state->current.balance);
     state->current.balance = balance;
   }
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -795,7 +770,6 @@ unit acct_tx_set_nonce(Address a, uint64_t nonce) {
     state_journal_push_account_nonce(id, state->current.nonce);
     state->current.nonce = nonce;
   }
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -807,7 +781,6 @@ unit acct_tx_set_code_hash(Address a, Hash32 code_hash) {
     state_journal_push_account_code_hash(id, state->current.code_hash);
     state->current.code_hash = code_hash;
   }
-  acct_dump_invalidate();
   return UNIT;
 }
 
@@ -821,7 +794,7 @@ unit acct_tx_set_code_hash(Address a, Hash32 code_hash) {
  * dirty is monotonic for the block and drives final account-trie consideration.
  * The standard executable retains the structurally identical Sail equation.
  */
-void account_transaction_merge(struct zTransactionMergeSemantics semantics,
+void account_transaction_merge(struct TransactionMergeSemantics semantics,
                                uint64_t current_transaction_epoch) {
   for (uint32_t i = 0; i < acct_tx_rows_n; i++) {
     const AccountId account_id = acct_tx_rows[i];
@@ -829,7 +802,7 @@ void account_transaction_merge(struct zTransactionMergeSemantics semantics,
     AccountEntry *entry = &acct_table.entries[account_id];
     const Address address = acct_table.entries[account_id].address;
     const bool deleted = state->selfdestructed &&
-                         (!semantics.zdelete_only_created || state->created);
+                         (!semantics.delete_only_created || state->created);
 
     if (deleted) {
       state->current.nonce = 0;
@@ -840,7 +813,7 @@ void account_transaction_merge(struct zTransactionMergeSemantics semantics,
        * leaves post-CREATE writes visible after SELFDESTRUCT and can make a
        * later CREATE2 incorrectly collide with the deleted account. */
       entry->storage_generation++;
-      if (!semantics.zpreserve_selfdestruct_balance ||
+      if (!semantics.preserve_selfdestruct_balance ||
           word_equal(&state->current.balance, &account_zero)) {
         state->current.balance = account_zero;
         state->current.exists = false;
@@ -871,35 +844,10 @@ void account_transaction_merge(struct zTransactionMergeSemantics semantics,
         !hash_equal(&state->current.code_hash, &state->original.code_hash) ||
         state->current.exists != state->original.exists ||
         storage_was_cleared;
-    if (changed) {
-      state->dirty = 1;
-      acct_dump_invalidate();
-    }
+    if (changed) state->dirty = 1;
   }
 
 }
-
-/* ======================================================================== */
-/* NATIVE DIAGNOSTIC SNAPSHOT                                               */
-/*                                                                          */
-/* This section exists only to expose a stable materialized post-state to the */
-/* native harness. Production MPT construction never consumes these rows.    */
-/* ======================================================================== */
-
-/* Materialized diagnostic row. Hashes are canonical byte digests while the
- * balance remains in the backend's little-endian limb representation. */
-typedef struct {
-  Hash32 hkey;
-  Address raw_addr;
-  uint64_t nonce;
-  U256 balance;
-  Hash32 sroot, post_sroot, chash;
-} AccountDumpEntry;
-
-/* Lazily materialized diagnostic array and its cache state. */
-static AccountDumpEntry *acct_dump_entries;
-static uint32_t acct_dump_len = 0;
-static int acct_dump_valid = 0;
 
 /* Assigns all account-owned arrays from the single preallocated guest
  * workspace. This performs no heap allocation and does not initialize a block;
@@ -911,76 +859,4 @@ void account_state_workspace_bind(void) {
   WORKSPACE_BIND(acct_table.buckets, GUEST_ACCOUNT_INDEX_BUCKETS);
   WORKSPACE_BIND(acct_tx_rows, GUEST_STATE_ACCOUNTS);
   WORKSPACE_BIND(transaction_storage_ids, GUEST_STATE_STORAGE);
-
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
-  WORKSPACE_BIND(acct_dump_entries, GUEST_STATE_ACCOUNTS);
-#endif
-}
-
-/* Rebuilds the native diagnostic snapshot in account-trie update order. */
-static void acct_dump_build(void) {
-  if (acct_dump_valid) return;
-  (void)mpt_account_updates_prepare();
-  acct_dump_len = 0;
-  for (uint32_t i = 0; i < account_trie_binding_count(); i++) {
-    const AccountTrieBinding *binding = &acct_table.trie_bindings[i];
-    const AccountId account_id = binding->account_id;
-    const AccountState *state = &acct_table.states[account_id];
-    if (!state->current.exists)
-      continue;
-    const Hash32 storage_root =
-        mpt_storage_root_hash(binding->storage_root_node);
-    if (acct_dump_len >= GUEST_STATE_ACCOUNTS) GUEST_ABORT();
-    AccountDumpEntry *row = &acct_dump_entries[acct_dump_len++];
-    row->hkey = binding->secure_key;
-    row->raw_addr = acct_table.entries[account_id].address;
-    row->nonce = state->current.nonce;
-    row->balance = state->current.balance;
-    row->sroot = storage_root;
-    row->post_sroot = storage_root;
-    row->chash = state->current.code_hash;
-  }
-  acct_dump_valid = 1;
-}
-
-/* Diagnostic accessors return zero values for out-of-range indices to match
- * the native harness ABI. They are not used by production guest execution. */
-uint64_t acct_dump_count(const unit u) { (void)u; acct_dump_build(); return acct_dump_len; }
-U256 acct_dump_hkey(uint64_t i) {
-  acct_dump_build();
-  if (i < acct_dump_len)
-    return hash_to_sail_word(&acct_dump_entries[i].hkey);
-  return account_zero;
-}
-Address acct_dump_address(uint64_t i) {
-  static const Address zero = {{0}};
-  acct_dump_build();
-  return i < acct_dump_len ? acct_dump_entries[i].raw_addr : zero;
-}
-uint64_t acct_dump_nonce(uint64_t i) { acct_dump_build(); return i < acct_dump_len ? acct_dump_entries[i].nonce : 0; }
-U256 acct_dump_balance(uint64_t i) {
-  acct_dump_build();
-  return i < acct_dump_len ? acct_dump_entries[i].balance : account_zero;
-}
-U256 acct_dump_storage_root(uint64_t i) {
-  static const Hash32 zero = {{0}};
-  acct_dump_build();
-  return hash_to_sail_word(
-      i < acct_dump_len ? &acct_dump_entries[i].sroot : &zero);
-}
-Hash32 acct_dump_post_storage_root(uint64_t i) {
-  static const Hash32 zero = {{0}};
-  acct_dump_build();
-  return i < acct_dump_len ? acct_dump_entries[i].post_sroot : zero;
-}
-U256 acct_dump_code_hash(uint64_t i) {
-  static const Hash32 zero = {{0}};
-  acct_dump_build();
-  return hash_to_sail_word(
-      i < acct_dump_len ? &acct_dump_entries[i].chash : &zero);
-}
-
-/* Invalidates the lazy native diagnostic snapshot after committed mutation. */
-static void acct_dump_invalidate(void) {
-  acct_dump_valid = 0;
 }

@@ -2,7 +2,7 @@
  *
  * One continuation is suspended per interpreter call frame, so the capacity
  * is the EVM call-depth limit. The generated model header owns
- * zFrameContinuation's layout; the empty pop returns the Kind_zEmpty arm,
+ * FrameContinuation's layout; the empty pop returns the Kind_Empty arm,
  * which is the Sail-visible bottom-of-stack sentinel rather than a failure. */
 #include "evmsail/prelude.h"
 #include "evmsail/host/frame_stack.h"
@@ -12,7 +12,7 @@
 
 typedef struct {
   /* Depth-indexed continuation slots, reused across transactions. */
-  struct zFrameContinuation *slots;
+  struct FrameContinuation *slots;
   /* Number of live suspended frames. */
   uint64_t top;
 } FrameStack;
@@ -29,16 +29,16 @@ unit frame_stack_reset(unit u) {
   return UNIT;
 }
 
-unit frame_stack_push(struct zFrameContinuation continuation) {
+unit frame_stack_push(struct FrameContinuation continuation) {
   if (frame_stack.top >= GUEST_SUSPENDED_FRAMES) GUEST_ABORT();
   frame_stack.slots[frame_stack.top++] = continuation;
   return UNIT;
 }
 
-void frame_stack_pop(struct zFrameContinuation *out, unit u) {
+void frame_stack_pop(struct FrameContinuation *out, unit u) {
   (void)u;
   if (frame_stack.top == 0) {
-    out->kind = Kind_zEmpty;
+    out->kind = Kind_Empty;
     return;
   }
   *out = frame_stack.slots[--frame_stack.top];

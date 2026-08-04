@@ -5,6 +5,6 @@
 #include "evmsail/primitives/block.h"
 
 bool logs_bloom_matches_ref(
-    LogsBloom computed, struct zStatelessInputSliceFields reference) {
+    LogsBloom computed, struct StatelessInputSliceFields reference) {
   return region_logs_bloom_matches_ref(computed, reference);
 }

@@ -8,18 +8,26 @@
 #endif
 
 /* Sail-generated entry points (see build/zkvm_block.c). */
+#ifdef EVMSAIL_OPTIMIZED_FFI
+extern void evmsail_model_init(void);
+#else
 extern void model_init(void);
 extern void model_fini(void);
+#endif
 extern unit zmain(unit);
 
 int zkvm_start(void)
 {
 #ifdef EVMSAIL_OPTIMIZED_FFI
     workspace_init();
-#endif
+    evmsail_model_init();
+#else
     model_init();
+#endif
     zmain(UNIT);
+#ifndef EVMSAIL_OPTIMIZED_FFI
     model_fini();
+#endif
     return 0;
 }
 

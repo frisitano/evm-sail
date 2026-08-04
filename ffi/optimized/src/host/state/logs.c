@@ -34,7 +34,7 @@ typedef struct {
 } LogTable;
 
 static LogTable log_table;
-static uint64_t block_logs_bloom[32];
+static uint64_t block_logs_bloom_words[32];
 
 void state_logs_workspace_bind(void) {
   WORKSPACE_BIND(log_table.records, GUEST_LOG_RECORDS);
@@ -48,7 +48,7 @@ unit logs_reset(unit ignored) {
   log_table.topic_count = 0;
   log_table.data_length = 0;
   log_table.transaction_start = 0;
-  memset(block_logs_bloom, 0, sizeof(block_logs_bloom));
+  memset(block_logs_bloom_words, 0, sizeof(block_logs_bloom_words));
   return UNIT;
 }
 
@@ -146,7 +146,7 @@ static void bloom_write_digest(uint8_t out[256],
         (uint16_t)(((uint16_t)(digest->data[2 * i] & 0x07) << 8) |
                    digest->data[2 * i + 1]);
     out[255 - (bit >> 3)] |= (uint8_t)(UINT8_C(1) << (bit & 7));
-    block_logs_bloom[bit >> 6] |= UINT64_C(1) << (bit & 63);
+    block_logs_bloom_words[bit >> 6] |= UINT64_C(1) << (bit & 63);
   }
 }
 
@@ -160,14 +160,14 @@ static bool bloom_write_bytes(uint8_t out[256], const uint8_t *bytes,
 
 unit receipt_runtime_block_bloom_reset(unit ignored) {
   (void)ignored;
-  memset(block_logs_bloom, 0, sizeof(block_logs_bloom));
+  memset(block_logs_bloom_words, 0, sizeof(block_logs_bloom_words));
   return UNIT;
 }
 
 LogsBloom receipt_runtime_block_bloom(unit ignored) {
   (void)ignored;
   LogsBloom bloom;
-  memcpy(bloom.bytes, block_logs_bloom, sizeof(bloom.bytes));
+  memcpy(bloom.bytes, block_logs_bloom_words, sizeof(bloom.bytes));
   return bloom;
 }
 
@@ -192,12 +192,12 @@ bool receipt_runtime_bloom_write(uint64_t start, uint64_t count,
   return true;
 }
 
-uint64_t log_data_len(uint64_t index) {
+uint32_t log_data_len(uint64_t index) {
   return index < log_table.record_count ? log_table.records[index].data_length
                                         : 0;
 }
 
-uint64_t log_data_off(uint64_t index) {
+uint32_t log_data_off(uint64_t index) {
   if (index >= log_table.record_count ||
       log_table.records[index].data_length == 0)
     return 0;
@@ -213,5 +213,3 @@ const uint8_t *log_data_region(uint64_t offset, uint64_t length) {
 }
 
 const uint8_t *log_data_base(void) { return log_table.data; }
-
-uint64_t log_data_length(void) { return log_table.data_length; }

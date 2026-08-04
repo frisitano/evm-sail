@@ -69,7 +69,7 @@ function system_call(tgt : address, input : hash) -> unit = {
         mem_store_word(input_range.off, hash_to_word(input));
         let input_slice = active_memory_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
-        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.off, input_slice.len)));
+        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.bytes, input_slice.len)));
         let _ = profiled_system_call_interpret();
         memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {

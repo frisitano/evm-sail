@@ -53,16 +53,14 @@ static StorageTable storage_table = {
 static Address storage_block_iter_key;
 static uint32_t storage_block_iter_position = 0;
 static uint32_t storage_block_iter_end = 0;
+static StorageGeneration storage_block_iter_generation =
+    STORAGE_INITIAL_GENERATION;
 static bool storage_block_iter_active = false;
 
 static const StorageId STORAGE_NO_ROW = UINT32_MAX;
 static AccountId storage_schema_active_account = UINT32_MAX;
 static StorageId storage_schema_active_begin = 0;
 static bool storage_schema_is_sealed = false;
-
-/* drop the per-account compute_root snapshots when the block base changes
-   (defined with the snapshot builders below) */
-static void storage_dump_invalidate(void);
 
 static void storage_account_range(AccountId account_id, StorageId *begin,
                                   uint32_t *count) {
@@ -95,18 +93,14 @@ StorageId storage_schema_insert(AccountId account_id, const U256 *slot,
       storage_schema_active_account != account_id)
     GUEST_ABORT();
   if (lookup_storage_id(account_id, slot) != STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "duplicate BAL storage slot");
     return STORAGE_NO_ROW;
   }
   if (storage_table.n >= storage_table.cap) GUEST_ABORT();
   const StorageId i = storage_table.n;
   StorageSchema *schema = &storage_table.schema[i];
-  StorageState *state = &storage_table.states[i];
   StorageTrieBinding *binding = &storage_table.trie_bindings[i];
-  memset(schema, 0, sizeof(*schema));
-  memset(state, 0, sizeof(*state));
-  memset(binding, 0, sizeof(*binding));
   schema->slot = *slot;
   binding->secure_key = *secure_key;
   binding->terminal_node = EVMSAIL_NODE_ID_UNLINKED;
@@ -119,7 +113,7 @@ StorageId storage_schema_insert(AccountId account_id, const U256 *slot,
 StorageId get_storage_id(AccountId account_id, const U256 *slot) {
   const StorageId id = lookup_storage_id(account_id, slot);
   if (id == STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "storage absent from block access list");
   }
   return id;
@@ -187,13 +181,20 @@ const U256 *storage_id_slot(StorageId id) {
 /* Whole-overlay wipe (both layers): the harness world reset. */
 unit storage_db_reset(const unit u) {
   (void)u;
+  if (storage_table.n != 0) {
+    memset(storage_table.schema, 0,
+           (size_t)storage_table.n * sizeof(*storage_table.schema));
+    memset(storage_table.states, 0,
+           (size_t)storage_table.n * sizeof(*storage_table.states));
+    memset(storage_table.trie_bindings, 0,
+           (size_t)storage_table.n * sizeof(*storage_table.trie_bindings));
+  }
   storage_table.n = 0;
   storage_schema_active_account = UINT32_MAX;
   storage_schema_active_begin = 0;
   storage_schema_is_sealed = false;
   storage_block_iter_position = storage_block_iter_end = 0;
   storage_block_iter_active = false;
-  storage_dump_invalidate();
   return UNIT;
 }
 
@@ -244,7 +245,6 @@ void storage_block_initialize(AccountId account_id, StorageId storage_id,
    * their authenticated zero values would be rejected as stale on first use. */
   state->storage_generation = account_storage_generation(account_id);
   state->transaction_original_generation = state->storage_generation;
-  storage_dump_invalidate();
 }
 
 
@@ -300,7 +300,7 @@ StorageViewStatus storage_transaction_view(AccountId account_id,
 /* Write the active generation directly. Sail supplies the transaction-start
  * original from the preceding semantic SLOAD. Rollback records only fields
  * whose values actually change. */
-unit storage_update(Address a, U256 s, U256 v, U256 orig) {
+unit host_storage_update(Address a, U256 s, U256 v, U256 orig) {
   const AccountId account_id = get_account_id(&a);
   if (have_exception) return UNIT;
   account_transaction_touch(account_id);
@@ -309,7 +309,7 @@ unit storage_update(Address a, U256 s, U256 v, U256 orig) {
   const StorageId storage_id =
       lookup_storage_id(account_id, &s);
   if (storage_id == STORAGE_NO_ROW) {
-    throw_invalid_block(zInvalidBlockAccessList,
+    throw_invalid_block(InvalidBlockAccessList,
                         "storage write absent from block access list");
     return UNIT;
   }
@@ -337,13 +337,11 @@ unit storage_update(Address a, U256 s, U256 v, U256 orig) {
 void storage_value_restore(StorageId id, U256 prior) {
   if (id >= storage_table.n) GUEST_ABORT();
   storage_table.states[id].current = prior;
-  storage_dump_invalidate();
 }
 
 void storage_generation_restore(StorageId id, StorageGeneration prior) {
   if (id >= storage_table.n) GUEST_ABORT();
   storage_table.states[id].storage_generation = prior;
-  storage_dump_invalidate();
 }
 
 /* Removes transaction-only bookkeeping for a row whose list insertion is
@@ -359,18 +357,12 @@ void storage_transaction_forget(StorageId id) {
 unit storage_block_clear(Address a) {
   (void)get_account_id(&a);
   if (have_exception) return UNIT;
-  storage_dump_invalidate();
   return UNIT;
 }
 
 /* ---- cumulative storage enumeration -------------------------------------
    Each AccountEntry owns one contiguous StorageId interval. State-root
    traversal consumes a measured secure-key order over exactly that range. */
-
-typedef struct {
-  U256 slot;
-  U256 value;
-} StorageDumpEntry;
 
 /* EELS account_has_storage: a nonempty write map in either the surviving
    transaction generation or the cumulative block overlay counts as storage.
@@ -394,32 +386,18 @@ bool storage_has_writes(Address a) {
   return false;
 }
 
-static void storage_dump_push(StorageDumpEntry *rows, uint32_t *length,
-                              const U256 *slot,
-                              U256 value) {
-  if (*length >= GUEST_STATE_STORAGE) GUEST_ABORT();
-  rows[*length].slot = *slot;
-  rows[*length].value = value;
-  (*length)++;
-}
-
-uint32_t storage_update_candidates(Address address, StorageId *begin,
-                                   StorageGeneration *generation) {
-  const AccountId account_id = get_account_id(&address);
-  if (have_exception) {
-    *begin = 0;
-    *generation = STORAGE_INITIAL_GENERATION;
-    return 0;
-  }
+uint32_t storage_trie_candidates(AccountId account_id, StorageId *begin,
+                                 StorageGeneration *generation) {
   uint32_t count;
   account_storage_range(account_id, begin, &count);
   *generation = account_storage_generation(account_id);
   return count;
 }
 
-bool storage_update_order_key(StorageId storage_id,
-                              StorageGeneration generation,
-                              NodeId *terminal_node, Hash32 *secure_key) {
+bool storage_trie_binding_order_key(StorageId storage_id,
+                                    StorageGeneration generation,
+                                    NodeId *terminal_node,
+                                    Hash32 *secure_key) {
   if (storage_id >= storage_table.n) GUEST_ABORT();
   const StorageTrieBinding *binding =
       &storage_table.trie_bindings[storage_id];
@@ -431,28 +409,36 @@ bool storage_update_order_key(StorageId storage_id,
   return true;
 }
 
-uint64_t storage_block_update_probe(StorageId storage_id, U256 *slot,
-                                    U256 *curr, U256 *orig,
-                                    Hash32 *slot_hash,
-                                    NodeId *terminal_node,
-                                    bool *prestate_exists) {
+bool storage_trie_binding_get(StorageId storage_id,
+                              StorageGeneration generation,
+                              StorageTrieView *view) {
   if (storage_id >= storage_table.n) GUEST_ABORT();
-  const StorageSchema *schema = &storage_table.schema[storage_id];
   const StorageState *state = &storage_table.states[storage_id];
   const StorageTrieBinding *binding =
       &storage_table.trie_bindings[storage_id];
-  *slot = schema->slot;
-  *curr = state->current;
-  *orig = state->original;
-  *slot_hash = binding->secure_key;
-  *terminal_node = binding->terminal_node;
-  *prestate_exists = binding->prestate_exists;
-  return 1;
+  if (binding->terminal_node == EVMSAIL_NODE_ID_UNLINKED ||
+      state->storage_generation != generation)
+    return false;
+  *view = (StorageTrieView){
+      .current = &state->current,
+      .original = &state->original,
+      .secure_key = &binding->secure_key,
+      .terminal_node = binding->terminal_node,
+      .prestate_exists = binding->prestate_exists,
+  };
+  return true;
 }
 
 unit storage_block_iter_begin(Address a) {
   storage_block_iter_key = a;
-  storage_block_iter_end = mpt_storage_updates_prepare(a);
+  const AccountId account_id = get_account_id(&a);
+  if (have_exception) {
+    storage_block_iter_position = storage_block_iter_end = 0;
+    storage_block_iter_active = false;
+    return UNIT;
+  }
+  storage_block_iter_end =
+      mpt_storage_updates_prepare(account_id, &storage_block_iter_generation);
   storage_block_iter_position = 0;
   storage_block_iter_active = true;
   return UNIT;
@@ -466,72 +452,20 @@ uint64_t storage_block_iter_next_probe(Address a, U256 *slot,
       !address_equal(&a, &storage_block_iter_key) ||
       storage_block_iter_end <= storage_block_iter_position)
     return 0;
-  NodeId terminal_node;
-  bool prestate_exists;
   const StorageId index = storage_block_iter_position++;
   const StorageId storage_id = mpt_storage_update_id_at(index);
   const AccountId account_id = get_account_id(&a);
   if (have_exception) return 0;
+  StorageTrieView view;
+  if (!storage_trie_binding_get(storage_id, storage_block_iter_generation,
+                                &view))
+    return 0;
   *address_hash = host_keccak_address(*account_id_address(account_id));
-  return storage_block_update_probe(storage_id, slot, curr, orig, slot_hash,
-                                    &terminal_node, &prestate_exists);
-}
-
-/* All cumulative block entries for an account, including read-only entries.
-   The authenticated base lives in the MPT node DB, so untouched base slots are
-   intentionally absent. This materialized view exists only for debug dumps. */
-static StorageDumpEntry *storage_dump_entries;
-static uint32_t storage_dump_len = 0;
-static Hash32 storage_dump_account_hash;
-static int storage_dump_valid = 0;
-
-static void storage_dump_build(const Hash32 *ak) {
-  if (storage_dump_valid &&
-      hash_equal(&storage_dump_account_hash, ak)) return;
-  storage_dump_len = 0;
-  for (AccountId account_id = 1u;
-       account_id < account_id_count(); account_id++) {
-    const Hash32 account_hash =
-        host_keccak_address(*account_id_address(account_id));
-    if (!hash_equal(&account_hash, ak)) continue;
-    StorageId begin;
-    uint32_t count;
-    account_storage_range(account_id, &begin, &count);
-    for (StorageId id = begin; id < begin + count; id++) {
-      if (storage_table.trie_bindings[id].terminal_node ==
-              EVMSAIL_NODE_ID_UNLINKED ||
-          storage_table.states[id].storage_generation !=
-              account_storage_generation(account_id))
-        continue;
-      storage_dump_push(storage_dump_entries, &storage_dump_len,
-                        &storage_table.schema[id].slot,
-                        storage_table.states[id].current);
-    }
-    break;
-  }
-  storage_dump_account_hash = *ak;
-  storage_dump_valid = 1;
-}
-
-static void storage_dump_invalidate(void) {
-  storage_dump_valid = 0;
-}
-
-uint64_t storage_dump_count(U256 ak) {
-  Hash32 key = hash_from_sail_word(ak);
-  storage_dump_build(&key);
-  return storage_dump_len;
-}
-U256 storage_dump_slot(U256 ak, uint64_t j) {
-  Hash32 key = hash_from_sail_word(ak);
-  storage_dump_build(&key);
-  static const U256 zero = {{0}};
-  return j < storage_dump_len ? storage_dump_entries[j].slot : zero;
-}
-U256 storage_dump_value(U256 ak, uint64_t j) {
-  Hash32 key = hash_from_sail_word(ak);
-  storage_dump_build(&key);
-  return j < storage_dump_len ? storage_dump_entries[j].value : storage_zero;
+  *slot = *storage_id_slot(storage_id);
+  *curr = *view.current;
+  *orig = *view.original;
+  *slot_hash = *view.secure_key;
+  return 1;
 }
 
 void storage_transaction_merge(uint64_t current_transaction_epoch) {
@@ -581,8 +515,6 @@ void storage_transaction_merge(uint64_t current_transaction_epoch) {
       bal_note_storage_change(current_transaction_epoch,
                               *account_id_address(account_id), schema->slot,
                               final_value);
-      account_diagnostics_invalidate(account_id);
-      storage_dump_invalidate();
     }
   }
 }
@@ -591,8 +523,4 @@ void storage_state_workspace_bind(void) {
   WORKSPACE_BIND(storage_table.schema, GUEST_STATE_STORAGE);
   WORKSPACE_BIND(storage_table.states, GUEST_STATE_STORAGE);
   WORKSPACE_BIND(storage_table.trie_bindings, GUEST_STATE_STORAGE);
-
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
-  WORKSPACE_BIND(storage_dump_entries, GUEST_STATE_STORAGE);
-#endif
 }

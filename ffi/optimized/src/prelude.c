@@ -3,6 +3,8 @@
 
 #include "evmsail/primitives/word.h"
 
+const char *exception_location;
+
 U256 hash_to_word(Hash32 bytes) {
   return word_from_hash(bytes);
 }
@@ -11,8 +13,8 @@ Hash32 word_to_hash(U256 value) {
   return hash_from_word(value);
 }
 
-uint64_t u64_bit_length(uint64_t value) {
-  return bit_length_u64(value);
+uint8_t u64_bit_length(uint64_t value) {
+  return (uint8_t)bit_length_u64(value);
 }
 
 Address word_to_address(U256 value) {

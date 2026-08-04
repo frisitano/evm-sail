@@ -24,14 +24,14 @@ axioms.
 /*! keccak256 of the empty string: the `codeHash` of every codeless
     account. */
 let KECCAK_EMPTY : hash = word_to_hash(
-    U256(unsigned(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)),
+    u256(unsigned(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)),
 )
 
 /*! `keccak256(rlp(""))` — the root of an empty Merkle-Patricia trie: the
     storage root of every account with no storage (`EMPTY_ACCOUNT`, freshly
     created). */
 let EMPTY_TRIE_ROOT : hash = word_to_hash(
-    U256(unsigned(0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421)),
+    u256(unsigned(0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421)),
 )
 
 /* ---- Crypto core. The `c:`-bound vals below are the axiomatic boundary:
@@ -106,10 +106,10 @@ The `host/accelerators.sail` k256 axioms, plus the curve-order constants
 that signature validity rules bound `r`/`s` against.
 */
 /*! `n` of the secp256k1 group order. */
-let SECP_N_FULL : word = U256(unsigned(0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141))
+let SECP_N_FULL : word = u256(unsigned(0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141))
 /*! `n/2` of the secp256k1 group order — the EIP-2 low-`s` malleability
     bound. */
-let SECP_N_HALF : word = U256(unsigned(0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0))
+let SECP_N_HALF : word = u256(unsigned(0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0))
 
 /*! Recovers the signer address from `(h, y_parity, r, s)`, returning
     recovery success and the recovered address (used by EIP-7702). */

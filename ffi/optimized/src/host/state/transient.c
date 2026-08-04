@@ -12,22 +12,27 @@
 #include <string.h>
 
 typedef struct {
-  Address address;
+  AccountId account_id;
   U256 slot;
 } TransientKey;
 
 typedef struct {
   TransientKey key;
   U256 value;
-  uint8_t used;
+  uint32_t epoch;
 } TransientEntry;
 
 typedef struct {
   TransientEntry *entries;
   uint32_t count;
+  uint32_t epoch;
 } TransientTable;
 
-static TransientTable transient_table;
+static TransientTable transient_table = {.epoch = 1u};
+
+_Static_assert((GUEST_TRANSIENT_STORAGE_ENTRIES &
+                (GUEST_TRANSIENT_STORAGE_ENTRIES - 1u)) == 0,
+               "transient-storage table size must be a power of two");
 
 void transient_workspace_bind(void) {
   WORKSPACE_BIND(transient_table.entries, GUEST_TRANSIENT_STORAGE_ENTRIES);
@@ -35,35 +40,31 @@ void transient_workspace_bind(void) {
 
 static uint64_t transient_key_hash(const TransientKey *key) {
   uint64_t h = 0xcbf29ce484222325ull;
-  const uint64_t words[7] = {
-      key->address.lanes[0],
-      key->address.lanes[1],
-      key->address.lanes[2] & UINT64_C(0xffffffff),
-      key->slot.limbs[0],
-      key->slot.limbs[1],
-      key->slot.limbs[2],
-      key->slot.limbs[3],
-  };
-  for (int i = 0; i < 7; i++) {
-    uint64_t w = words[i];
-    for (int b = 0; b < 8; b++) {
-      h ^= (w >> (8 * b)) & 0xff;
-      h *= 0x100000001b3ull;
-    }
+  for (size_t i = 0; i < sizeof(key->account_id); ++i) {
+    h ^= ((const uint8_t *)(const void *)&key->account_id)[i];
+    h *= 0x100000001b3ull;
+  }
+  for (size_t i = 0; i < sizeof(key->slot.limbs); ++i) {
+    h ^= ((const uint8_t *)(const void *)key->slot.limbs)[i];
+    h *= 0x100000001b3ull;
   }
   return h;
 }
 
 static void transient_table_clear(TransientTable *table) {
-  memset(table->entries, 0,
-         GUEST_TRANSIENT_STORAGE_ENTRIES * sizeof(*table->entries));
+  table->epoch++;
+  if (table->epoch == 0) {
+    memset(table->entries, 0,
+           GUEST_TRANSIENT_STORAGE_ENTRIES * sizeof(*table->entries));
+    table->epoch = 1u;
+  }
   table->count = 0;
 }
 
 /* Returns whether two account-specific transient-storage keys are equal. */
 static bool transient_key_equal(const TransientKey *left,
                                 const TransientKey *right) {
-  return address_equal(&left->address, &right->address) &&
+  return left->account_id == right->account_id &&
          word_equal(&left->slot, &right->slot);
 }
 
@@ -75,20 +76,22 @@ static uint32_t transient_table_find(TransientTable *table,
       (uint32_t)(hash & (GUEST_TRANSIENT_STORAGE_ENTRIES - 1));
   for (;;) {
     TransientEntry *entry = &table->entries[i];
-    if (!entry->used || transient_key_equal(&entry->key, key)) return i;
+    if (entry->epoch != table->epoch ||
+        transient_key_equal(&entry->key, key))
+      return i;
     i = (i + 1) & (GUEST_TRANSIENT_STORAGE_ENTRIES - 1);
   }
 }
 
 static bool transient_table_set(TransientTable *table,
                                 const TransientKey *key, U256 value) {
-  if (table->count * 10 >= GUEST_TRANSIENT_STORAGE_ENTRIES * 7) return false;
-
   const uint32_t i = transient_table_find(
       table, key, transient_key_hash(key));
   TransientEntry *entry = &table->entries[i];
-  if (!entry->used) {
-    entry->used = 1;
+  if (entry->epoch != table->epoch) {
+    if (table->count * 10 >= GUEST_TRANSIENT_STORAGE_ENTRIES * 7)
+      return false;
+    entry->epoch = table->epoch;
     entry->key = *key;
     table->count++;
   }
@@ -100,7 +103,7 @@ static TransientEntry *transient_table_get(TransientTable *table,
                                            const TransientKey *key) {
   const uint32_t i = transient_table_find(
       table, key, transient_key_hash(key));
-  return table->entries[i].used ? &table->entries[i] : NULL;
+  return table->entries[i].epoch == table->epoch ? &table->entries[i] : NULL;
 }
 
 /* clear transient storage at tx/world reset */
@@ -110,21 +113,23 @@ unit transient_storage_reset(const unit u) {
   return UNIT;
 }
 
-static TransientKey transient_key_make(Address address, U256 slot) {
+static TransientKey transient_key_make(AccountId account_id, U256 slot) {
   TransientKey key = {
-      .address = address,
+      .account_id = account_id,
       .slot = slot,
   };
   return key;
 }
 
-static TransientEntry *transient_storage_lookup(Address address, U256 slot) {
-  TransientKey key = transient_key_make(address, slot);
+static TransientEntry *transient_storage_lookup(AccountId account_id,
+                                                U256 slot) {
+  TransientKey key = transient_key_make(account_id, slot);
   return transient_table_get(&transient_table, &key);
 }
 
-static unit transient_storage_set(Address address, U256 slot, U256 value) {
-  TransientKey key = transient_key_make(address, slot);
+static unit transient_storage_set(AccountId account_id, U256 slot,
+                                  U256 value) {
+  TransientKey key = transient_key_make(account_id, slot);
   if (!transient_table_set(&transient_table, &key, value)) GUEST_ABORT();
   return UNIT;
 }
@@ -135,23 +140,27 @@ static unit transient_storage_set(Address address, U256 slot, U256 value) {
 unit transient_storage_write(Address addr, const U256 slot,
                              const U256 v) {
   static const U256 zero = {{0}};
+  const AccountId account_id = get_account_id(&addr);
+  if (have_exception) return UNIT;
   U256 slot_value = (slot);
   U256 value = (v);
-  TransientEntry *entry = transient_storage_lookup(addr, slot_value);
+  TransientEntry *entry = transient_storage_lookup(account_id, slot_value);
   U256 prior = entry ? entry->value : zero;
-  state_journal_push_transient(addr, slot_value, prior);
-  return transient_storage_set(addr, slot_value, value);
+  state_journal_push_transient(account_id, slot_value, prior);
+  return transient_storage_set(account_id, slot_value, value);
 }
 
-unit transient_storage_restore(Address addr, U256 slot,
+unit transient_storage_restore(AccountId account_id, U256 slot,
                                U256 v) {
-  return transient_storage_set(addr, slot, v);
+  return transient_storage_set(account_id, slot, v);
 }
 
 /* the 256-bit value at (address, slot); 0 if absent */
 U256 transient_storage_read(Address addr,
                                  const U256 slot) {
   static const U256 zero = {{0}};
-  TransientEntry *entry = transient_storage_lookup(addr, (slot));
+  const AccountId account_id = get_account_id(&addr);
+  if (have_exception) return zero;
+  TransientEntry *entry = transient_storage_lookup(account_id, (slot));
   return entry ? entry->value : zero;
 }

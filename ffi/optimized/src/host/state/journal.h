@@ -16,7 +16,7 @@ unit state_journal_checkpoint(unit ignored);
 unit state_journal_revert(unit ignored);
 unit state_journal_commit(unit ignored);
 
-unit state_journal_push_transient(Address address, U256 slot, U256 prior);
+unit state_journal_push_transient(AccountId account_id, U256 slot, U256 prior);
 void state_journal_push_warm_account(AccountId id, uint32_t prior_epoch);
 void state_journal_push_warm_storage(StorageId id, uint32_t prior_epoch);
 void state_journal_push_account_balance(AccountId id, U256 prior);

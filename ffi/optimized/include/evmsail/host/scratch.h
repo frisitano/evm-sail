@@ -1,7 +1,7 @@
 #ifndef EVMSAIL_OPTIMIZED_HOST_SCRATCH_H
 #define EVMSAIL_OPTIMIZED_HOST_SCRATCH_H
 
-#include "sail.h"
+#include "evmsail/prelude.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,10 +14,9 @@ bool scratch_commit(uint64_t off, uint64_t len);
  * the visible arena length.
  */
 uint8_t *scratch_borrow(uint64_t len);
-bool scratch_reserve_at(uint64_t off, uint64_t len);
-unit scratch_truncate(uint64_t len);
+bool scratch_reserve_at(uint32_t off, uint32_t len);
+unit scratch_truncate(uint32_t len);
 const uint8_t *scratch_region(uint64_t off, uint64_t len);
 const uint8_t *scratch_base(void);
-uint64_t scratch_length(void);
 
 #endif

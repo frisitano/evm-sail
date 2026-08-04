@@ -28,36 +28,13 @@ function k_deploy_code(a : address, code : CodeSlice) -> unit = {
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
-val delegation_code_index : forall 'index, 0 <= 'index & 'index <= 19. int('index) -> int(3 + 'index)
-function delegation_code_index(index) = 3 + index
-
-/*! Marks address bytes that decode as `JUMPDEST` in a delegation designator. */
-function delegation_jumpdest_chunk(target : address) -> JumpdestChunk = {
-    var bits = EMPTY_JUMPDEST_CHUNK;
-    foreach (k from 0 to 19) {
-        let b = target[k];
-        if b == 0x5b then {
-            bits = or_vec(bits, sail_shiftleft(sail_zero_extend(0x01, 256), delegation_code_index(k)))
-        }
-    };
-    bits
-}
-
 /*! Installs an EIP-7702 delegation designator
     (`0xef0100 ‖ target`) as the account's code. */
 function k_set_delegation(a : address, target : address) -> unit = {
     let cur = k_aload(a);
-    let code_len : code_length = 23;
-    let code_length = code_len;
-    let model_code_length : code_length = code_length;
-    let table = jumpdest_table_alloc(model_code_length);
-    assert(table != EMPTY_JUMP_TABLE, "delegation JUMPDEST table allocation");
-    let chunk = delegation_jumpdest_chunk(target);
-    if chunk != EMPTY_JUMPDEST_CHUNK then {
-        let stored = jumpdest_table_store_chunk(table, model_code_length, 0, chunk);
-        assert(stored, "delegation JUMPDEST chunk store")
-    };
-    let h : hash = code_intern_delegation(target, table);
+    let execution_profile = k_execution_profile;
+    let code = validated_code_slice(code_region_from_delegation(target));
+    let h : hash = code_db_insert(code, execution_profile.protocol.fork);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
 
@@ -78,13 +55,12 @@ function k_deleg_target(a : address) -> (bool, address) = {
 /*! `EXTCODESIZE`: the account's code length in bytes. */
 function k_get_code_size(a : address) -> code_length = {
     let code = code_db_resolve(k_code_key(a));
-    let bytes = code.bytes;
-    bytes.len
+    code.len
 }
 
 /*! `EXTCODECOPY`: copies account code into frame memory, zero-padded
     past the end. */
 function k_code_copy(a : address, dst : memory_pointer, off : word, len : memory_length) -> unit = {
     let code = code_db_resolve(k_code_key(a));
-    slice_copy_word_offset(code.bytes, dst, off, len)
+    slice_copy_word_offset(code_bytes(code), dst, off, len)
 }

@@ -4,6 +4,6 @@
 #include "evmsail/prelude.h"
 
 bool logs_bloom_matches_ref(
-    LogsBloom computed, struct zStatelessInputSliceFields reference);
+    LogsBloom computed, struct StatelessInputSliceFields reference);
 
 #endif

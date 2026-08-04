@@ -8,6 +8,8 @@
 #   make c-spec         generate and compile-check the specification C model
 #   make c-optimised    generate and compile-check the optimized C model
 #   make eest-smoke     run one embedded v0.6.2 stateless fixture
+#   make extract-python generate and smoke-test the complete Python model
+#   make python-lint    lint the generated Python model with pinned Ruff
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
@@ -31,6 +33,12 @@ DOCS_VENV ?= .venv-docs
 DOCS_VENV_ABS := $(abspath $(DOCS_VENV))
 DOCS_BIN := $(DOCS_VENV_ABS)/bin
 DOCS_ENV_STAMP := $(DOCS_VENV_ABS)/.evm-sail-docs-ready
+RUFF_VERSION ?= 0.15.22
+ETHEREUM_TYPES_VERSION ?= 0.4.1
+PYDANTIC_VERSION ?= 2.12.5
+PYCRYPTODOME_VERSION ?= 3.23.0
+PYTHON_RUFF ?= $(UV) run --no-project --with ruff==$(RUFF_VERSION) ruff
+PYTHON_EVM ?= $(UV) run --no-project --with ethereum-types==$(ETHEREUM_TYPES_VERSION) --with pydantic==$(PYDANTIC_VERSION) --with pycryptodome==$(PYCRYPTODOME_VERSION) python
 
 PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
@@ -39,8 +47,14 @@ EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/ei
 CONTRACTS_DIR       := extractions/contracts
 C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
+C_SPEC_SPECIALIZATION_LIMIT ?= 256
 C_OPT_BUILD_DIR     := build/c-optimised
-C_OPT_MODEL         := $(C_OPT_BUILD_DIR)/evm
+C_OPT_GENERATED_DIR := $(C_OPT_BUILD_DIR)/generated
+C_OPT_GENERATED_INCLUDE_DIR := $(C_OPT_GENERATED_DIR)/include
+C_OPT_GENERATED_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/spec
+C_OPT_GENERATED_MANIFEST := $(C_OPT_GENERATED_SOURCE_DIR)/sources.list
+C_OPT_GENERATED_OBJECT_DIR := $(C_OPT_BUILD_DIR)/model
+C_OPT_PACKAGE       := evmsail
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
 C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
@@ -51,6 +65,19 @@ COQ_PROOFS_DIR      := $(COQ_DIR)/proofs
 LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
 LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
+PYTHON_DIR          := extractions/python
+PYTHON_PACKAGE      := $(PYTHON_DIR)/evm
+PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
+PYTHON_HOST_CONTRACT := $(CONTRACTS_DIR)/HostContract.py
+PYTHON_CACHE_DIR    := $(abspath .agent-tmp/python-cache)
+# Run Ruff's complete default error family: import correctness, syntax and
+# invalid constructs, unused/rebound/undefined names, and related Python
+# errors. In particular F821 checks every generated annotation; explicit
+# runtime/type imports ensure typos are not hidden behind wildcard-import
+# ambiguity. Preserve Sail's source-level variable spelling and no-op lets,
+# which account for E741 and F841 respectively.
+PYTHON_RUFF_RULES   := E4,E7,E9,F
+PYTHON_RUFF_IGNORES := E741,F841
 LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
@@ -60,24 +87,58 @@ C_SPEC_HEADERS      := sail_failure.h region_access.h hash.h precompiles.h outpu
                        code_db.h kernel_state.h trie_node_db.h state_db.h
 C_OPTIMIZED_INCLUDE_DIR := ffi/optimized/include
 C_OPTIMIZED_SOURCE_DIR  := ffi/optimized/src
-C_OPTIMIZED_HEADERS     := sail_failure.h \
-                           $(patsubst $(C_OPTIMIZED_INCLUDE_DIR)/%,%,$(shell find $(C_OPTIMIZED_INCLUDE_DIR)/evmsail -type f -name '*.h' ! -name model.h | sort))
+C_OPTIMIZED_EXTERNAL_TYPES_HEADER := evmsail/host/types.h
+C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
+                              ScratchSliceFields \
+                              EvmMemorySliceFields \
+                              CodeRegionSliceFields \
+                              LogDataSliceFields \
+                              OutputSliceFields
+C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := $(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER))
+C_OPTIMIZED_BYTE_POINTER_FLAGS := \
+	--c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at \
+	--c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at \
+	--c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at \
+	--c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at \
+	--c-optimized-byte-pointer-field CodeFields.bytes=code_at \
+	--c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at \
+	--c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at
 C_SPEC_INCLUDES     := $(foreach header,$(C_SPEC_HEADERS),--c-include $(header))
-C_OPTIMIZED_INCLUDES := $(foreach header,$(C_OPTIMIZED_HEADERS),--c-include $(header))
-C_PRESERVE_FLAGS    := --c-preserve main \
+C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve leaf_child_ref \
                        --c-preserve resume_frame \
                        --c-preserve process_transaction \
                        --c-preserve compute_state_root \
                        --c-preserve trie_root \
                        --c-preserve decode_stateless_input_ref
+C_OPT_PRESERVE_FLAGS := --c-preserve main \
+                        --c-preserve resume_frame \
+                        --c-preserve process_transaction \
+                        --c-preserve compute_state_root \
+                        --c-preserve decode_stateless_input_ref
 SAIL_CONTRACTS      :=
 EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
+# Installed Sail Python plugins are discovered automatically. Set this to the
+# in-tree sail_plugin_python.cmxs path when validating an uninstalled build.
+SAIL_PYTHON_PLUGIN  ?=
+# The EVM artifact is intended for source-level review. Keep the checked AST's
+# direct control flow and mirror Sail source paths in an importable package.
+# Pydantic reifies dependent record parameters and checks their Sail validity
+# constraints at Python construction/update boundaries. Explicit Sail
+# conversions remain explicit constructors in Python.
+# Override this value to request another backend presentation.
+SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
+                       --python-split --python-source-root sail \
+                       --python-extern-module evm.HostContract \
+                       --python-import-file $(PYTHON_HOST_CONTRACT) \
+                       --python-pydantic \
+                       --python-ethereum-fixed-bytes address=Bytes20 \
+                       --python-ethereum-fixed-bytes hash=Bytes32
 # Every Sail source owned by this repository, discovered rather than listed by
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all c-optimised c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean fmt fmt-check help lean-extract lean-harness lint runtime-test zisk-guest
+.PHONY: all c-optimised c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -95,6 +156,8 @@ help:
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
 	@echo "  make docs-env       - create/update the repo-local uv documentation environment"
+	@echo "  make extract-python - generate and smoke-test the complete Python model"
+	@echo "  make python-lint    - lint generated Python with Ruff $(RUFF_VERSION)"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -142,6 +205,7 @@ check-contracts:
 	test -s $(EXTERN_CONTRACT)
 	test -s $(LEAN_HOST_AXIOMS)
 	test -s $(LEAN_SPECIALIZATION)
+	test -s $(PYTHON_HOST_CONTRACT)
 	grep -q "Record InputOracle" $(EXTERN_CONTRACT)
 	grep -q "Record OutputTraceContract" $(EXTERN_CONTRACT)
 	grep -q "Record CryptoContract" $(EXTERN_CONTRACT)
@@ -167,6 +231,10 @@ check-contracts:
 	grep -q "checkpointDenotes" $(LEAN_HOST_AXIOMS)
 	grep -q "^def referenceWorldStateContract" $(LEAN_HOST_AXIOMS)
 	grep -q "^def worldStateBoundary" $(LEAN_HOST_AXIOMS)
+	grep -q "^class HostState:" $(PYTHON_HOST_CONTRACT)
+	grep -q "^class AcceleratorContract:" $(PYTHON_HOST_CONTRACT)
+	grep -q "^def state_journal_checkpoint(" $(PYTHON_HOST_CONTRACT)
+	grep -q "^def state_journal_revert(" $(PYTHON_HOST_CONTRACT)
 
 extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
@@ -186,13 +254,15 @@ extract-coq: check-contracts
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 	cd $(COQ_MODEL_DIR) && $(COQC) $(abspath $(COQ_PROOFS_DIR))/RlpCursor.v
 
-# Sail emits one C translation unit. Both targets keep that generated output in
-# ignored build directories and compile-check it against the matching complete
-# backend. The Sail model, not generated C, is the readable source of truth.
+# Both targets keep generated output in ignored build directories and
+# compile-check it against the matching complete backend. The optimized model
+# uses Sail's package/module layout; handwritten FFI remains under ffi/.
+# The Sail model, not generated C, is the readable source of truth.
 c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
+		$(C_SPEC_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
+		--c-specialization-limit $(C_SPEC_SPECIALIZATION_LIMIT) \
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
 	test -s $(C_SPEC_MODEL).c
 	test -s $(C_SPEC_MODEL).h
@@ -205,21 +275,36 @@ c-spec:
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
 
 c-optimised: check-optimized-ffi
-	mkdir -p $(C_OPT_BUILD_DIR)
-	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
-		$(C_PRESERVE_FLAGS) $(C_OPTIMIZED_INCLUDES) \
-		--c-specialize --c-specialize-log --c-require-bounded-int \
+	mkdir -p $(C_OPT_GENERATED_DIR)
+	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
+		--c-optimized-model --c-package $(C_OPT_PACKAGE) \
+		--c-output-dir $(C_OPT_GENERATED_DIR) \
+		--c-optimized-source-root sail \
+		--c-optimized-include-dir $(C_OPTIMIZED_INCLUDE_DIR) \
+		$(C_OPTIMIZED_EXTERNAL_TYPE_FLAGS) \
+		$(C_OPTIMIZED_BYTE_POINTER_FLAGS) \
+		$(C_OPT_PRESERVE_FLAGS) --c-specialize-log \
 		$(C_OPTIMISED_SPLICE_FLAGS) \
-		$(MODEL) --variable EVM_DEBUG=off -o $(C_OPT_MODEL)
-	test -s $(C_OPT_MODEL).c
-	test -s $(C_OPT_MODEL).h
+		$(MODEL) --variable EVM_DEBUG=off
+	test -s $(C_OPT_GENERATED_MANIFEST)
+	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
 	@sail_lib="$$($(SAIL) --dir)/lib"; \
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
-		$(CC) -O2 -w -DEVMSAIL_MODEL_H=\"evm.h\" \
-			-I$(C_OPT_BUILD_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
-			-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
-			-c $(C_OPT_MODEL).c -o $(C_OPT_BUILD_DIR)/evm.o
-	test -s $(C_OPT_BUILD_DIR)/evm.o
+		mkdir -p $(C_OPT_GENERATED_OBJECT_DIR); \
+		count=0; \
+		while IFS= read -r relative || [ -n "$$relative" ]; do \
+			[ -z "$$relative" ] && continue; \
+			source="$(C_OPT_GENERATED_SOURCE_DIR)/$$relative"; \
+			test -s "$$source" || { echo "missing generated optimized source: $$relative"; exit 1; }; \
+			object_name=$$(printf '%s' "$${relative%.c}" | tr '/' '_'); \
+			$(CC) -O2 -w -Wno-error=implicit-function-declaration \
+				-DEVMSAIL_MODEL_H=\"$(C_OPT_PACKAGE)/spec.h\" \
+				-I$(C_OPT_GENERATED_INCLUDE_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
+				-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
+				-c "$$source" -o "$(C_OPT_GENERATED_OBJECT_DIR)/$$object_name.o"; \
+			count=$$((count + 1)); \
+		done < $(C_OPT_GENERATED_MANIFEST); \
+		test "$$count" -gt 0
 
 extract-lean:
 	mkdir -p $(LEAN_MODEL_DIR)
@@ -247,7 +332,26 @@ extract-lean:
 	cd $(LEAN_MODEL_DIR) && $(LAKE) update Sail
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
-extract: extract-coq extract-lean
+extract-python:
+	mkdir -p $(PYTHON_DIR) $(PYTHON_CACHE_DIR)
+	rm -rf $(PYTHON_PACKAGE)
+	rm -f $(PYTHON_DIR)/evm.py
+	$(SAIL) $(if $(SAIL_PYTHON_PLUGIN),-plugin $(SAIL_PYTHON_PLUGIN)) --python $(SAIL_PYTHON_FLAGS) -o $(PYTHON_PACKAGE) $(MODEL)
+	test -s $(PYTHON_MODEL)
+	test -s $(PYTHON_PACKAGE)/HostContract.py
+	! grep -R -q "call_extern" $(PYTHON_PACKAGE)
+	! grep -R -q "register_extern" $(PYTHON_PACKAGE)
+	! grep -R -q "_sail_extern\\." $(PYTHON_PACKAGE)
+	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m compileall -q $(PYTHON_PACKAGE)
+	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
+	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON_EVM) $(PYTHON_DIR)/smoke.py
+
+python-lint:
+	test -s $(PYTHON_MODEL)
+	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
+
+extract: extract-coq extract-lean extract-python
 
 all: check lint fmt-check
 
@@ -285,7 +389,7 @@ lean-harness:
 
 clean:
 	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
-	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
 
 clear-z3-memo:
 	rm -f "$(Z3_MEMO_PATH)" sail/sail_smt_cache

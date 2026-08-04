@@ -20,7 +20,7 @@ The fixed lengths identify addresses, words, limbs, and double words.
 /*! A range in the immutable stateless-input envelope. Its source is carried
     by the nominal type rather than a runtime field. */
 struct StatelessInputSliceFields('off : Int, 'len : Int), stateless_input_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -51,7 +51,7 @@ type StatelessInputSliceAtMost('maximum : Int) = {
 /*! A range in the executor's reusable scratch arena. Its source is carried by
     the nominal type rather than a runtime field. */
 struct ScratchSliceFields('off : Int, 'len : Int), scratch_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -78,7 +78,7 @@ type ScratchSliceAtLeast('minimum : Int) = {
     optimized ABI), so a suspended parent's range remains valid while a child
     frame is active. */
 struct EvmMemorySliceFields('off : Int, 'len : Int), memory_region_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -102,7 +102,7 @@ type EvmMemorySliceAtLeast('minimum : Int) = {
 
 /*! A range in the content-addressed executable-code arena. */
 struct CodeRegionSliceFields('off : Int, 'len : Int), code_region_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -114,7 +114,7 @@ type CodeRegionSlice = {
 
 /*! A range in the transaction-log data arena. */
 struct LogDataSliceFields('off : Int, 'len : Int), log_data_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -126,7 +126,7 @@ type LogDataSlice = {
 
 /*! A range in the frame-output buffer. */
 struct OutputSliceFields('off : Int, 'len : Int), output_region_valid_range('off, 'len) = {
-    off : int('off),
+    bytes : int('off),
     len : int('len),
 }
 
@@ -175,42 +175,42 @@ val stateless_input_slice : forall 'off 'len, stateless_input_valid_range('off, 
         'len,
     )
 function stateless_input_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 val scratch_slice : forall 'off 'len, scratch_valid_range('off, 'len). (int('off), int('len)) -> ScratchSliceFields(
         'off,
         'len,
     )
 function scratch_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 val evm_memory_slice : forall 'off 'len, memory_region_valid_range('off, 'len). (int('off), int('len)) -> EvmMemorySliceFields(
         'off,
         'len,
     )
 function evm_memory_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 val code_region_slice : forall 'off 'len, code_region_valid_range('off, 'len). (int('off), int('len)) -> CodeRegionSliceFields(
         'off,
         'len,
     )
 function code_region_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 val log_data_slice : forall 'off 'len, log_data_valid_range('off, 'len). (int('off), int('len)) -> LogDataSliceFields(
         'off,
         'len,
     )
 function log_data_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 val output_slice : forall 'off 'len, output_region_valid_range('off, 'len). (int('off), int('len)) -> OutputSliceFields(
         'off,
         'len,
     )
 function output_slice(off, len) =
-    struct { off = off, len = len }
+    struct { bytes = off, len = len }
 
 let EMPTY_STATELESS_INPUT_SLICE : StatelessInputSliceFields(0, 0) = stateless_input_slice(0, 0)
 let EMPTY_SCRATCH_SLICE : ScratchSliceFields(0, 0) = scratch_slice(0, 0)
@@ -234,7 +234,7 @@ val stateless_input_sub_slice : forall 'base 'source_len 'off 'len,
         'len,
     )
 function stateless_input_sub_slice(s, off, len) =
-    stateless_input_slice(s.off + off, len)
+    struct { bytes = s.bytes + off, len = len }
 
 val scratch_sub_slice : forall 'base 'source_len 'off 'len,
                           scratch_valid_range('base, 'source_len) & 0 <= 'off & 0 <= 'len & 'off + 'len <= 'source_len. (
@@ -243,7 +243,7 @@ val scratch_sub_slice : forall 'base 'source_len 'off 'len,
         int('len),
     ) -> ScratchSliceFields('base + 'off, 'len)
 function scratch_sub_slice(s, off, len) =
-    scratch_slice(s.off + off, len)
+    struct { bytes = s.bytes + off, len = len }
 
 val memory_sub_slice : forall 'base 'source_len 'off 'len,
                          memory_region_valid_range('base, 'source_len) & 0 <= 'off & 0 <= 'len & 'off + 'len <= 'source_len. (
@@ -252,7 +252,7 @@ val memory_sub_slice : forall 'base 'source_len 'off 'len,
         int('len),
     ) -> EvmMemorySliceFields('base + 'off, 'len)
 function memory_sub_slice(s, off, len) =
-    evm_memory_slice(s.off + off, len)
+    struct { bytes = s.bytes + off, len = len }
 
 /* There is deliberately no code_region_sub_slice: a code-region offset is an
  * opaque host handle, so derived slices must never be built by offset
@@ -265,7 +265,7 @@ val log_data_sub_slice : forall 'base 'source_len 'off 'len,
         int('len),
     ) -> LogDataSliceFields('base + 'off, 'len)
 function log_data_sub_slice(s, off, len) =
-    log_data_slice(s.off + off, len)
+    struct { bytes = s.bytes + off, len = len }
 
 /*! A contained calldata sub-range, preserving whether the bytes came from
     top-level input or suspended caller memory. */
@@ -306,7 +306,7 @@ val stateless_input_slice_suffix : forall 'base 'source_len 'relative,
         int('relative),
     ) -> StatelessInputSliceFields('base + 'relative, 'source_len - 'relative)
 function stateless_input_slice_suffix(s, off) =
-    stateless_input_slice(s.off + off, s.len - off)
+    struct { bytes = s.bytes + off, len = s.len - off }
 
 val scratch_slice_suffix : forall 'base 'source_len 'relative,
                              scratch_valid_range('base, 'source_len) & 0 <= 'relative & 'relative <= 'source_len. (
@@ -314,7 +314,7 @@ val scratch_slice_suffix : forall 'base 'source_len 'relative,
         int('relative),
     ) -> ScratchSliceFields('base + 'relative, 'source_len - 'relative)
 function scratch_slice_suffix(s, off) =
-    scratch_slice(s.off + off, s.len - off)
+    struct { bytes = s.bytes + off, len = s.len - off }
 
 overload slice_suffix = {
     stateless_input_slice_suffix,

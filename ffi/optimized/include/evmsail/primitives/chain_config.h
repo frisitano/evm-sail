@@ -18,7 +18,7 @@
 #define EVMSAIL_FORK_AMSTERDAM UINT64_C(16)
 
 static inline uint64_t active_fork(void) {
-  return zk_execution_profile.zprotocol.zfork;
+  return k_execution_profile.protocol.fork;
 }
 
 #endif

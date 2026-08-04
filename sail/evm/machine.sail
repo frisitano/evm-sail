@@ -68,7 +68,7 @@ register frame_code : Code = EMPTY_CODE
 
 /*! The frame code length in bytes (`CODESIZE`). */
 function frame_code_len() -> code_length = {
-    let code = frame_code.bytes;
+    let code = frame_code;
     let length = code.len;
     length
 }
@@ -77,9 +77,9 @@ function frame_code_len() -> code_length = {
     (YP §9.4.3). */
 val frame_jumpdest_valid : forall 'dest, source_valid_length('dest). int('dest) -> bool
 function frame_jumpdest_valid(dest) = {
-    let code = frame_code.bytes;
+    let code = frame_code;
     let length = code.len;
-    jumpdest_ref_contains(frame_code.jumpdests, length, dest)
+    jumpdest_ref_contains(code.jumpdests, length, dest)
 }
 
 /*md
@@ -167,7 +167,7 @@ function push_word(w : word) -> unit =
     modulus; the total canonical definition retains modular behavior outside
     that invariant. */
 function push_gas(value : gas) -> unit =
-    push_word(U256(tmod_nat(value, sizeof(word_modulus))))
+    push_word(u256(tmod_nat(value, sizeof(word_modulus))))
 
 overload push = {push_word, push_gas}
 

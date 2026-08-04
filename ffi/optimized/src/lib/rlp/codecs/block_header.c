@@ -26,18 +26,18 @@ static uint8_t *write_rlp_fixed(uint8_t *out, const uint8_t *bytes,
   return out + len;
 }
 
-static uint64_t block_header_content_size(const struct zBlockHeader *header,
+static uint64_t block_header_content_size(const struct BlockHeader *header,
                                           uint64_t extra_len,
                                           uint8_t extra_first) {
   uint64_t len = 6 * 33 + 21 + 259 + 1 + 9;
   if (!rlp_add_length(
-          &len, rlp_quantity_size_u64(header->znumber)) ||
+          &len, rlp_quantity_size_u64(header->number)) ||
       !rlp_add_length(
-          &len, rlp_quantity_size_u64(header->zgas_limit)) ||
+          &len, rlp_quantity_size_u64(header->gas_limit)) ||
       !rlp_add_length(
-          &len, rlp_quantity_size_u64(header->zgas_used)) ||
+          &len, rlp_quantity_size_u64(header->gas_used)) ||
       !rlp_add_length(
-          &len, rlp_quantity_size_u64(header->ztimestamp)))
+          &len, rlp_quantity_size_u64(header->timestamp)))
     return UINT64_MAX;
   const uint64_t extra_size =
       rlp_string_size(extra_len, extra_first);
@@ -47,16 +47,16 @@ static uint64_t block_header_content_size(const struct zBlockHeader *header,
   const uint64_t fork = active_fork();
   if (fork >= EVMSAIL_FORK_LONDON &&
       !rlp_add_length(
-          &len, rlp_quantity_size_u256(header->zbase_fee)))
+          &len, rlp_quantity_size_u256(header->base_fee)))
     return UINT64_MAX;
   if (fork >= EVMSAIL_FORK_SHANGHAI &&
       !rlp_add_length(&len, 33))
     return UINT64_MAX;
   if (fork >= EVMSAIL_FORK_CANCUN &&
       (!rlp_add_length(
-           &len, rlp_quantity_size_u64(header->zblob_gas_used)) ||
+           &len, rlp_quantity_size_u64(header->blob_gas_used)) ||
        !rlp_add_length(
-           &len, rlp_quantity_size_u64(header->zexcess_blob_gas)) ||
+           &len, rlp_quantity_size_u64(header->excess_blob_gas)) ||
        !rlp_add_length(&len, 33)))
     return UINT64_MAX;
   if (fork >= EVMSAIL_FORK_PRAGUE &&
@@ -65,30 +65,28 @@ static uint64_t block_header_content_size(const struct zBlockHeader *header,
   if (fork >= EVMSAIL_FORK_AMSTERDAM &&
       (!rlp_add_length(&len, 33) ||
        !rlp_add_length(
-           &len, rlp_quantity_size_u64(header->zslot_number))))
+           &len, rlp_quantity_size_u64(header->slot_number))))
     return UINT64_MAX;
   return len;
 }
 
 Hash32 block_header_hash(
-    struct zBlockHeader header,
+    struct BlockHeader header,
     Hash32 transactions_root, Hash32 withdrawals_root,
     Hash32 requests_hash,
     Hash32 block_access_list_hash) {
-  const uint64_t extra_len = header.zextra_data.zlen;
+  const uint64_t extra_len = header.extra_data.len;
   const uint8_t *extra_bytes = NULL;
   uint8_t extra_first = 0;
   if (extra_len != 0) {
-    extra_bytes = stateless_input_ptr(
-        header.zextra_data.zoff, extra_len);
+    extra_bytes = header.extra_data.bytes;
     if (!extra_bytes)
       return zero_hash();
     extra_first = extra_bytes[0];
   }
-  const uint8_t *logs_bloom_bytes = stateless_input_ptr(
-      header.zlogs_bloom.zoff, header.zlogs_bloom.zlen);
+  const uint8_t *logs_bloom_bytes = header.logs_bloom.bytes;
   if (!logs_bloom_bytes ||
-      header.zlogs_bloom.zlen != 256)
+      header.logs_bloom.len != 256)
     return zero_hash();
   const uint64_t content_len =
       block_header_content_size(&header, extra_len, extra_first);
@@ -105,25 +103,25 @@ Hash32 block_header_hash(
     return zero_hash();
   uint8_t prev_randao[32];
   const uint64_t fork = active_fork();
-  sail_word_to_be_bytes(prev_randao, header.zprev_randao);
+  sail_word_to_be_bytes(prev_randao, header.prev_randao);
   uint8_t *cursor = rlp_write_list_prefix(preimage, content_len);
   cursor = write_rlp_fixed(
-      cursor, hash_bytes_const(&header.zparent_hash), 32);
+      cursor, hash_bytes_const(&header.parent_hash), 32);
   cursor = write_rlp_fixed(cursor, empty_ommer_hash, 32);
   cursor = write_rlp_fixed(
-      cursor, address_bytes_const(&header.zfee_recipient), 20);
+      cursor, address_bytes_const(&header.fee_recipient), 20);
   cursor = write_rlp_fixed(
-      cursor, hash_bytes_const(&header.zstate_root), 32);
+      cursor, hash_bytes_const(&header.state_root), 32);
   cursor = write_rlp_fixed(
       cursor, hash_bytes_const(&transactions_root), 32);
   cursor = write_rlp_fixed(
-      cursor, hash_bytes_const(&header.zreceipts_root), 32);
+      cursor, hash_bytes_const(&header.receipts_root), 32);
   cursor = write_rlp_fixed(cursor, logs_bloom_bytes, 256);
   cursor = rlp_write_u64(cursor, 0);
-  cursor = rlp_write_u64(cursor, header.znumber);
-  cursor = rlp_write_u64(cursor, header.zgas_limit);
-  cursor = rlp_write_u64(cursor, header.zgas_used);
-  cursor = rlp_write_u64(cursor, header.ztimestamp);
+  cursor = rlp_write_u64(cursor, header.number);
+  cursor = rlp_write_u64(cursor, header.gas_limit);
+  cursor = rlp_write_u64(cursor, header.gas_used);
+  cursor = rlp_write_u64(cursor, header.timestamp);
   cursor = rlp_write_string_prefix(cursor, extra_len, extra_first);
   if (extra_len != 0)
     memmove(cursor, extra_bytes, extra_len);
@@ -133,16 +131,16 @@ Hash32 block_header_hash(
   memset(cursor, 0, 8);
   cursor += 8;
   if (fork >= EVMSAIL_FORK_LONDON)
-    cursor = rlp_write_u256(cursor, header.zbase_fee);
+    cursor = rlp_write_u256(cursor, header.base_fee);
   if (fork >= EVMSAIL_FORK_SHANGHAI)
     cursor = write_rlp_fixed(
         cursor, hash_bytes_const(&withdrawals_root), 32);
   if (fork >= EVMSAIL_FORK_CANCUN) {
-    cursor = rlp_write_u64(cursor, header.zblob_gas_used);
-    cursor = rlp_write_u64(cursor, header.zexcess_blob_gas);
+    cursor = rlp_write_u64(cursor, header.blob_gas_used);
+    cursor = rlp_write_u64(cursor, header.excess_blob_gas);
     cursor = write_rlp_fixed(
         cursor,
-        hash_bytes_const(&header.zparent_beacon_block_root), 32);
+        hash_bytes_const(&header.parent_beacon_block_root), 32);
   }
   if (fork >= EVMSAIL_FORK_PRAGUE)
     cursor = write_rlp_fixed(
@@ -150,7 +148,7 @@ Hash32 block_header_hash(
   if (fork >= EVMSAIL_FORK_AMSTERDAM) {
     cursor = write_rlp_fixed(
         cursor, hash_bytes_const(&block_access_list_hash), 32);
-    cursor = rlp_write_u64(cursor, header.zslot_number);
+    cursor = rlp_write_u64(cursor, header.slot_number);
   }
   if ((uint64_t)(cursor - preimage) != total)
     return zero_hash();

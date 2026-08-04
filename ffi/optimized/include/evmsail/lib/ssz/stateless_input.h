@@ -3,20 +3,20 @@
 
 #include "evmsail/prelude.h"
 
-struct zStatelessInputRef decode_stateless_input_ref(
-    struct zStatelessInputSliceFields input);
+struct StatelessInputRef decode_stateless_input_ref(
+    struct StatelessInputSliceFields input);
 
-struct zWithdrawal decode_withdrawal(
-    struct zStatelessInputSliceFields withdrawal);
+struct Withdrawal decode_withdrawal(
+    struct StatelessInputSliceFields withdrawal);
 
-U256 ssz_u256(struct zStatelessInputSliceFields input,
-                           uint64_t offset);
+U256 ssz_u256(struct StatelessInputSliceFields input,
+                   uint32_t offset);
 
 Hash32 sha256_request_digest(
-    uint64_t request_type, struct zStatelessInputSliceFields request);
+    uint64_t request_type, struct StatelessInputSliceFields request);
 
-unit index_witness_nodes(struct zBoundedSszzListRef nodes);
-unit index_witness_codes(struct zBoundedSszzListRef codes,
+unit index_witness_nodes(struct BoundedSszListRef nodes);
+unit index_witness_codes(struct BoundedSszListRef codes,
                                  bool amsterdam_or_later);
 
 #endif

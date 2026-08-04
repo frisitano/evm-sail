@@ -129,15 +129,15 @@ void mpt_node_arena_reset(void) {
 /* Sizes the digest probe column from the decoded witness-node count.
  *
  * A power-of-two table at or below 50% load makes masking and linear probing
- * cheap, and clearing exactly the active bucket range keeps reset cost
- * proportional to the input rather than the fixed workspace capacity. */
+ * cheap. The guest workspace starts zeroed, and mpt_node_index_clear clears
+ * the previous active range before a reused native run, so preparation only
+ * establishes the new logical bounds. */
 void mpt_node_index_prepare(uint64_t node_count) {
   uint32_t bucket_count = 1u;
   const uint64_t required = node_count == 0 ? 1u : 2u * node_count;
   while (bucket_count < required &&
          bucket_count < GUEST_WITNESS_INDEX_ENTRIES)
     bucket_count <<= 1;
-  memset(node_table.index, 0, bucket_count * sizeof(*node_table.index));
   node_table.bucket_count = bucket_count;
   node_table.bucket_mask = bucket_count - 1u;
   node_table.index_count = 0;
@@ -159,10 +159,11 @@ bool mpt_allocate_node_id(NodeId *node_id) {
 /* Claims a freshly allocated payload row for the current generation. */
 static WitnessNode *witness_node_init(NodeId node_id, ByteSpan encoded) {
   WitnessNode *row = &node_table.nodes[node_id];
-  memset(row, 0, sizeof(*row));
-  row->generation = node_table.generation;
   row->data = encoded.data;
   row->len = encoded.len;
+  row->decoded = false;
+  row->digest_known = false;
+  row->generation = node_table.generation;
   return row;
 }
 
@@ -232,10 +233,12 @@ bool mpt_decode_cached_node(ByteSpan encoded, NodeId node_id,
 /* DIGEST PROBE COLUMN                                                      */
 /* ======================================================================== */
 
-/* The key is already a keccak digest, so lane zero is a uniformly distributed
+/* The key is already a keccak digest, so its first bytes are a uniformly distributed
  * bucket seed and needs no additional mixing. */
 static uint32_t witness_digest_bucket(const Hash32 *digest) {
-  return (uint32_t)digest->lanes[0] & node_table.bucket_mask;
+  uint32_t bucket = 0;
+  memcpy(&bucket, digest->bytes, sizeof(bucket));
+  return bucket & node_table.bucket_mask;
 }
 
 bool mpt_node_table_insert(const Hash32 *digest, ByteSpan encoded) {
@@ -399,4 +402,3 @@ Hash32 mpt_storage_root_hash(NodeId root_node) {
     GUEST_ABORT();
   return row->digest;
 }
-

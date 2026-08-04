@@ -103,7 +103,7 @@ function system_call(tgt : address, input : hash) -> unit = {
         mem_store_word(input_range.off, hash_to_word(input));
         let input_slice = active_memory_slice(input_range.off, input_range.len);
         let parent_memory = memory_frame_enter();
-        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.off, input_slice.len)));
+        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.bytes, input_slice.len)));
         let _ = interpret();
         memory_frame_leave(parent_memory);
         if not_bool(frame_succeeded()) then {
@@ -169,16 +169,16 @@ function authenticate_deposit_request(data : LogDataSlice, expected : StatelessI
     if data.len != DEPOSIT_EVENT_DATA_LENGTH then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
-    if   (slice_load(data, DEPOSIT_PUBKEY_HEAD) != U256(160))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != U256(256))
-       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != U256(320))
-       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != U256(384))
-       | (slice_load(data, DEPOSIT_INDEX_HEAD) != U256(512))
-       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != U256(48))
-       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != U256(32))
-       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != U256(8))
-       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != U256(96))
-       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != U256(8)) then {
+    if   (slice_load(data, DEPOSIT_PUBKEY_HEAD) != u256(160))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != u256(256))
+       | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != u256(320))
+       | (slice_load(data, DEPOSIT_SIGNATURE_HEAD) != u256(384))
+       | (slice_load(data, DEPOSIT_INDEX_HEAD) != u256(512))
+       | (slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD) != u256(48))
+       | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD) != u256(32))
+       | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != u256(8))
+       | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != u256(96))
+       | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != u256(8)) then {
         throw InvalidBlock(InvalidExecutionRequests)
     };
     if DEPOSIT_REQUEST_LENGTH <= expected.len then {

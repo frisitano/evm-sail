@@ -14,10 +14,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
-#include <stdio.h>
-#endif
-
 /* First-failure classification recorded in mpt_status. */
 typedef enum {
   MPT_OK = 0,
@@ -30,7 +26,7 @@ enum {
   MPT_SECURE_KEY_NIBBLES = 64,
   MPT_INLINE_REFERENCE_MAX = 31,
   MPT_ENCODED_VALUE_MAX = 128,
-  MPT_DEBUG_NODE_BYTES = 600,
+  MPT_ENCODED_NODE_MAX = 600,
 };
 
 /* NodeId 0 is exclusively an unresolved edge. UINT32_MAX denotes the
@@ -52,21 +48,12 @@ typedef struct {
   size_t len;
 } ByteSpan;
 
-static inline bool mpt_fail_at(uint64_t status, unsigned line) {
+static inline bool mpt_fail(uint64_t status) {
   if (mpt_status == MPT_OK) {
     mpt_status = status;
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
-    fprintf(stderr, "mpt fail status=%llu line=%u", (unsigned long long)status,
-            line);
-    fputc('\n', stderr);
-#else
-    (void)line;
-#endif
   }
   return false;
 }
-
-#define mpt_fail(status) mpt_fail_at((status), __LINE__)
 
 static inline bool mpt_keccak(const uint8_t *data, size_t len, Hash32 *out) {
   static const uint8_t empty[1] = {0};

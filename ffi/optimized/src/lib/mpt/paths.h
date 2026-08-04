@@ -33,4 +33,3 @@ bool mpt_key_matches(const Hash32 *key, unsigned position,
                      const NibblePath *path);
 
 #endif
-

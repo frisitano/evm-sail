@@ -4,7 +4,7 @@
 #include "evmsail/prelude.h"
 
 /* Native diagnostic hook declared only by sail/host/debug_enabled.sail. */
-#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES
+#ifdef EVMSAIL_NATIVE_TEST
 unit validation_debug_capture_location(unit ignored);
 #endif
 

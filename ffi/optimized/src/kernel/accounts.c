@@ -18,41 +18,41 @@ static bool account_word_zero(U256 value) {
           value.limbs[3]) == 0;
 }
 
-static struct zAccount empty_account(void) {
-  struct zAccount account;
+static struct Account empty_account(void) {
+  struct Account account;
   memset(&account, 0, sizeof(account));
-  account.zinfo.zstorage_root = EVMSAIL_EMPTY_TRIE_ROOT;
-  account.zinfo.zcode_hash = EVMSAIL_KECCAK_EMPTY;
-  account.zstorage_cleared = true;
+  account.info.storage_root = EVMSAIL_EMPTY_TRIE_ROOT;
+  account.info.code_hash = EVMSAIL_KECCAK_EMPTY;
+  account.storage_cleared = true;
   return account;
 }
 
-static bool account_info_empty(const struct zAccountInfo *info) {
-  return info->znonce == 0 && account_word_zero(info->zbalance) &&
-         hash_equal(&info->zcode_hash, &EVMSAIL_KECCAK_EMPTY);
+static bool account_info_is_empty(const struct AccountInfo *info) {
+  return info->nonce == 0 && account_word_zero(info->balance) &&
+         hash_equal(&info->code_hash, &EVMSAIL_KECCAK_EMPTY);
 }
 
-static void account_from_view(struct zAccount *account,
+static void account_from_view(struct Account *account,
                               const AccountView *view) {
-  account->zinfo.znonce = view->value.nonce;
-  account->zinfo.zbalance = view->value.balance;
-  account->zinfo.zstorage_root = view->storage_root;
-  account->zinfo.zcode_hash = view->value.code_hash;
-  account->zpresent = view->value.exists;
-  account->zstorage_cleared = view->storage_cleared;
-  account->zcreated = view->created;
-  account->zselfdestructed = view->selfdestructed;
+  account->info.nonce = view->value.nonce;
+  account->info.balance = view->value.balance;
+  account->info.storage_root = view->storage_root;
+  account->info.code_hash = view->value.code_hash;
+  account->present = view->value.exists;
+  account->storage_cleared = view->storage_cleared;
+  account->created = view->created;
+  account->selfdestructed = view->selfdestructed;
 }
 
-static enum zBlockError witness_error(uint64_t status) {
-  return status == 1 ? zWitnessDeficient : zRlpDecode;
+static enum BlockError witness_error(uint64_t status) {
+  return status == 1 ? WitnessDeficient : RlpDecode;
 }
 
 bool account_preload(Hash32 parent_state_root, AccountId account_id,
-                     Hash32 address_hash, struct zAccount *account,
+                     Hash32 address_hash, struct Account *account,
                      NodeId *storage_root_node) {
   *account = empty_account();
-  struct zAccountInfo info;
+  struct AccountInfo info;
   bool found = false;
   NodeId terminal_node = EVMSAIL_NODE_ID_EMPTY;
   NodeId account_storage_root_node = EVMSAIL_NODE_ID_EMPTY;
@@ -64,24 +64,24 @@ bool account_preload(Hash32 parent_state_root, AccountId account_id,
     return false;
   }
   if (found) {
-    account->zinfo = info;
-    account->zpresent = true;
-    account->zstorage_cleared = false;
+    account->info = info;
+    account->present = true;
+    account->storage_cleared = false;
   }
   account_block_initialize(
-      account_id, address_hash, account->zinfo.znonce, account->zinfo.zbalance,
-      account_storage_root_node, account->zinfo.zcode_hash, account->zpresent,
-      account->zstorage_cleared, terminal_node);
+      account_id, address_hash, account->info.nonce, account->info.balance,
+      account_storage_root_node, account->info.code_hash, account->present,
+      account->storage_cleared, terminal_node);
   if (have_exception) return false;
   *storage_root_node = account_storage_root_node;
   return true;
 }
 
-struct zAccount k_aload(
+struct Account k_aload(
     Hash32 parent_state_root,
     Address address) {
   (void)parent_state_root;
-  struct zAccount account = empty_account();
+  struct Account account = empty_account();
   AccountView view;
   if (account_transaction_view(&address, &view)) {
     account_from_view(&account, &view);
@@ -99,41 +99,41 @@ struct zAccount k_aload(
 }
 
 unit store_account(Address address,
-                           struct zAccount account) {
-  return account_update(
-      address, account.zinfo.znonce, account.zinfo.zbalance,
-      account.zinfo.zcode_hash, account.zpresent, account.zstorage_cleared,
-      account.zcreated, account.zselfdestructed);
+                           struct Account account) {
+  return host_account_update(
+      address, account.info.nonce, account.info.balance,
+      account.info.code_hash, account.present, account.storage_cleared,
+      account.created, account.selfdestructed);
 }
 
 unit store_account_info(Address address,
-                                struct zAccount account,
-                                struct zAccountInfo info) {
-  const bool empty = account_info_empty(&info);
+                                struct Account account,
+                                struct AccountInfo info) {
+  const bool empty = account_info_is_empty(&info);
   if (empty) storage_tx_clear(address);
 
-  struct zAccount next = account;
+  struct Account next = account;
   if (empty) {
-    memset(&next.zinfo, 0, sizeof(next.zinfo));
-    next.zinfo.zstorage_root = account.zinfo.zstorage_root;
-    next.zinfo.zcode_hash = EVMSAIL_KECCAK_EMPTY;
-    next.zpresent = false;
-    next.zstorage_cleared = true;
+    memset(&next.info, 0, sizeof(next.info));
+    next.info.storage_root = account.info.storage_root;
+    next.info.code_hash = EVMSAIL_KECCAK_EMPTY;
+    next.present = false;
+    next.storage_cleared = true;
   } else {
-    next.zinfo = info;
-    next.zpresent = true;
+    next.info = info;
+    next.present = true;
   }
 
-  if (!hash_equal(&next.zinfo.zstorage_root,
-                          &account.zinfo.zstorage_root) ||
-      next.zpresent != account.zpresent ||
-      next.zstorage_cleared != account.zstorage_cleared)
+  if (!hash_equal(&next.info.storage_root,
+                          &account.info.storage_root) ||
+      next.present != account.present ||
+      next.storage_cleared != account.storage_cleared)
     return store_account(address, next);
-  if (!word_equal(&next.zinfo.zbalance, &account.zinfo.zbalance))
-    acct_tx_set_balance(address, next.zinfo.zbalance);
-  if (next.zinfo.znonce != account.zinfo.znonce)
-    acct_tx_set_nonce(address, next.zinfo.znonce);
-  if (!hash_equal(&next.zinfo.zcode_hash, &account.zinfo.zcode_hash))
-    acct_tx_set_code_hash(address, next.zinfo.zcode_hash);
+  if (!word_equal(&next.info.balance, &account.info.balance))
+    acct_tx_set_balance(address, next.info.balance);
+  if (next.info.nonce != account.info.nonce)
+    acct_tx_set_nonce(address, next.info.nonce);
+  if (!hash_equal(&next.info.code_hash, &account.info.code_hash))
+    acct_tx_set_code_hash(address, next.info.code_hash);
   return UNIT;
 }

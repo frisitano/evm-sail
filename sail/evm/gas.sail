@@ -38,7 +38,7 @@ let GAS_PER_BLOB : range(gas_per_blob_value, gas_per_blob_value) = sizeof(gas_pe
     word overflow changes validity. Intermediate arithmetic remains
     mathematical rather than acquiring modular EVM semantics. */
 val protocol_word : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word
-function protocol_word(value) = U256(value)
+function protocol_word(value) = u256(value)
 
 /*! Evaluates EIP-4844's integer fake exponential at its observable EVM word
     boundary. The result is exact while it fits; once the monotonically
@@ -49,7 +49,7 @@ function protocol_word(value) = U256(value)
     and update fraction remain visible to specialization. Every mutable value
     is bounded by equations over those singleton parameters. The one-word
     observation is semantic: execution-specs likewise converts the arbitrary
-    precision result with a checked `U256` constructor. */
+    precision result with a checked `u256` constructor. */
 val fake_exponential_word :
     forall 'target 'maximum 'denominator 'numerator,
     blob_schedule_parameters('target, 'maximum, 'denominator)
@@ -554,8 +554,8 @@ function memory_word_count(byte_len) = {
     forming `byte_len + 31`, whose mathematical intermediate can require 257
     bits even though the final quotient remains an EVM word. */
 function memory_word_count_word(byte_len : word) -> word = {
-    let quotient = word_div(byte_len, U256(32));
-    if word_mod(byte_len, U256(32)) == WORD_ZERO then {
+    let quotient = word_div(byte_len, u256(32));
+    if word_mod(byte_len, u256(32)) == WORD_ZERO then {
         quotient
     } else {
         word_add(quotient, WORD_ONE)
@@ -1050,7 +1050,7 @@ function modexp_gas(input : CalldataSlice, available : gas) -> option(gas_cost) 
                     /* The Osaka structural check above has already rejected
                        an exponent length above 1024.  Keep the successful
                        subtraction in its exact 992-byte host domain. */
-                    let osaka_extra : range(0, 992) = if word_greater_than_word(extra, U256(992)) then {
+                    let osaka_extra : range(0, 992) = if word_greater_than_word(extra, u256(992)) then {
                             992
                         } else {
                             extra

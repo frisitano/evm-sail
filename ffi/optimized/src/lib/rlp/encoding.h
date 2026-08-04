@@ -12,6 +12,7 @@ Hash32 keccak_bytes(
 Hash32 sha256_bytes(
     const uint8_t *bytes, uint64_t len);
 bool rlp_add_length(uint64_t *total, uint64_t amount);
+uint64_t rlp_length_byte_native(uint8_t value);
 uint64_t rlp_quantity_size_u64(uint64_t value);
 uint64_t rlp_quantity_size_u256(U256 value);
 uint64_t rlp_string_size(uint64_t len, uint8_t first);

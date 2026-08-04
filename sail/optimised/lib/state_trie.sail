@@ -8,7 +8,4 @@
  * RLP failure as the standard implementation.
  */
 $[c_throws]
-val optimized_compute_state_root = impure { c: "compute_state_root" } : hash -> hash
-
-function compute_state_root() -> hash =
-    optimized_compute_state_root(k_parent_state_root)
+val compute_state_root = impure { c: "compute_state_root" } : unit -> hash

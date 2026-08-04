@@ -4,10 +4,10 @@
 #include "evmsail/prelude.h"
 
 Hash32 execution_requests_hash(
-    struct zStatelessInputRef input_ref);
+    struct StatelessInputRef input_ref);
 Hash32 transaction_trie_root(
-    struct zBoundedSszzListRef transactions);
+    struct BoundedSszListRef transactions);
 Hash32 withdrawals_trie_root(
-    struct zBoundedSszzListRef withdrawals);
+    struct BoundedSszListRef withdrawals);
 
 #endif

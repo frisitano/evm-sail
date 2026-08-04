@@ -79,7 +79,7 @@ struct TransactionCosts = {
     enclosing SSZ transaction-envelope bound. This bound is structural and is
     deliberately independent of the active protocol deployment limit. */
 function transaction_initcode_slice(input : TransactionInputSlice) -> CodeSlice =
-    code_db_intern_input(stateless_input_slice(input.off, input.len))
+    code_db_intern_input(stateless_input_slice(input.bytes, input.len))
 
 /*! Values established before entering the top-level transaction frame. */
 struct TxUpfrontResult = {
@@ -1243,7 +1243,13 @@ function run_transaction_frame(tx, v, upfront) = {
     admitted limit in the result type makes the post-refund conservation proof
     available to settlement and to bounded-integer specialization. */
 val remaining_gas_after_refund : forall 'limit 'total 'remaining 'cap,
-                                      0
+                                      -gas_refund_bound
+                                   <= 'total
+                                   &  'total
+                                   <= gas_refund_bound
+                                      + authorization_refund_per_item
+                                        * transaction_length_bound
+                                   &  0
                                    <= 'remaining
                                    &  'remaining
                                    <= 'limit

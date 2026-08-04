@@ -15,7 +15,6 @@
  * miss here is an invariant breach and fails closed. The one exception is
  * stack_peek_word, whose zero-out-of-range result is part of the documented
  * host contract in sail/host/stack.sail. */
-#include "sail.h"
 #include "evmsail/host/stack.h"
 #include "host/stack_ops.h"
 #include "workspace.h"
@@ -61,7 +60,7 @@ unit stack_leave_frame(const unit u) {
   return UNIT;
 }
 
-uint64_t stack_depth(const unit u) {
+uint16_t stack_depth(const unit u) {
   (void)u;
   return operand_stack.frames[operand_stack.depth].height;
 }
@@ -80,14 +79,14 @@ unit stack_push_word(const U256 word) {
   return UNIT;
 }
 
-U256 stack_peek_word(uint64_t index) {
+U256 stack_peek_word(uint16_t index) {
   const OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   return index >= frame->height
              ? stack_zero
              : frame->words[frame->height - 1u - index];
 }
 
-unit stack_set_word(uint64_t index, const U256 word) {
+unit stack_set_word(uint16_t index, U256 word) {
   OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   if (index >= frame->height) GUEST_ABORT();
   frame->words[frame->height - 1u - index] = word;

@@ -13,8 +13,8 @@
 #include <stdint.h>
 
 /* Generated aggregate adapter implemented by the region-access layer. */
-struct zEvmMemorySliceFields;
-unit log_add_data_memory(struct zEvmMemorySliceFields data);
+struct EvmMemorySliceFields;
+unit log_add_data_memory(struct EvmMemorySliceFields data);
 
 unit logs_reset(unit ignored);
 unit logs_tx_reset(unit ignored);
@@ -31,11 +31,10 @@ uint64_t logs_tx_count(unit ignored);
 Address log_addr(uint64_t index);
 uint64_t log_topic_count(uint64_t index);
 U256 log_topic(uint64_t log_index, uint64_t topic_index);
-uint64_t log_data_len(uint64_t index);
-uint64_t log_data_off(uint64_t index);
+uint32_t log_data_len(uint64_t index);
+uint32_t log_data_off(uint64_t index);
 const uint8_t *log_data_region(uint64_t offset, uint64_t length);
 const uint8_t *log_data_base(void);
-uint64_t log_data_length(void);
 
 /* The receipt writer sets sparse bits directly in its final RLP span while
  * maintaining the block-wide 32-word accumulator. */

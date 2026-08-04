@@ -16,7 +16,7 @@
  * mem_frame_leave just pops the checkpoint. The canonical generated-C ABI
  * carries mathematical byte quantities; the production ABI represents the
  * protocol-bounded values directly as uint64_t. */
-#include "sail.h"
+#include "evmsail/prelude.h"
 #include "primitives/value.h"
 #include "evmsail/host/region_access.h"
 #include "workspace.h"
@@ -51,6 +51,21 @@ static void f_establish(uint64_t end) {
   f_len[h_top] = (size_t)end;
 }
 
+/* Establish a range that the caller will overwrite completely. Only an
+ * untouched gap before the destination needs materializing as zero; bytes in
+ * the destination itself must not be cleared immediately before the write. */
+static void f_establish_write(uint64_t off, uint64_t end) {
+  if (end <= f_len[h_top]) return;
+  const size_t base = f_base[h_top];
+  const size_t established = f_len[h_top];
+  if (end > GUEST_EVM_MEMORY_BYTES ||
+      base > GUEST_EVM_MEMORY_BYTES - (size_t)end)
+    GUEST_ABORT();
+  if (off > established)
+    memset(arena + base + established, 0, (size_t)off - established);
+  f_len[h_top] = (size_t)end;
+}
+
 static uint8_t *frame_write_region(uint64_t off, uint64_t len);
 
 /* Clear back to a single empty top-level frame (called per transaction); the
@@ -74,7 +89,7 @@ static uint64_t mem_frame_enter_value(void) {
   return (uint64_t)f_base[h_top];
 }
 
-uint64_t mem_frame_enter(const unit u) {
+uint32_t mem_frame_enter(const unit u) {
   (void)u;
   return mem_frame_enter_value();
 }
@@ -113,14 +128,14 @@ uint64_t evm_memory_expand(uint64_t len) {
 static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
   if (len == 0) return NULL;
   if (off > UINT64_MAX - len) GUEST_ABORT();
-  f_establish(off + len);
+  f_establish_write(off, off + len);
   return arena + f_base[h_top] + off;
 }
 
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-U256 mem_load_word(uint64_t off) {
+U256 mem_load_word(uint32_t off) {
   uint64_t offset = off;
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
@@ -133,7 +148,7 @@ U256 mem_load_word(uint64_t off) {
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(uint64_t off, const U256 w) {
+unit mem_store_word(uint32_t off, U256 w) {
   uint8_t buf[32];
   sail_word_to_be_bytes(buf, (w));
   uint8_t *d = frame_write_region(off, 32);
@@ -143,7 +158,7 @@ unit mem_store_word(uint64_t off, const U256 w) {
 
 /* MCOPY: overlapping-safe copy within the current frame. Both ranges are
  * established before either pointer is taken. */
-unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
+unit mem_move(uint32_t dst, uint32_t src, uint32_t len) {
   uint64_t dst_value = dst;
   uint64_t src_value = src;
   uint64_t len_value = len;
@@ -152,18 +167,16 @@ unit mem_move(uint64_t dst, uint64_t src, uint64_t len) {
       dst_value > UINT64_MAX - len_value)
     GUEST_ABORT();
   f_establish(src_value + len_value);
-  f_establish(dst_value + len_value);
-  memmove(arena + f_base[h_top] + dst_value,
+  uint8_t *destination = frame_write_region(dst_value, len_value);
+  memmove(destination,
           arena + f_base[h_top] + src_value, len_value);
   return UNIT;
 }
 
 /* (byte-quantity offset, bits(8) value) -> unit */
-unit mem_write_byte(uint64_t off, uint64_t v) {
+unit mem_write_byte(uint32_t off, uint64_t v) {
   uint64_t offset = off;
-  if (offset == UINT64_MAX) GUEST_ABORT();
-  f_establish(offset + 1);
-  arena[f_base[h_top] + offset] = (uint8_t)(v & 0xff);
+  *frame_write_region(offset, 1) = (uint8_t)(v & 0xff);
   return UNIT;
 }
 

@@ -69,4 +69,3 @@ bool mpt_bind_storage_root_identity(const Hash32 *root,
 Hash32 mpt_storage_root_hash(NodeId root_node);
 
 #endif
-

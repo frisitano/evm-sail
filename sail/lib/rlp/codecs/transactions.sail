@@ -26,7 +26,7 @@ function transaction_rlp_content forall 'source_off 'source_len 'content_len,
     StatelessInputSlice
 ) = {
     let content = rlp_item_content(f);
-    stateless_input_slice(content.off, content.len)
+    stateless_input_slice(content.bytes, content.len)
 }
 
 /* The unconsumed key-list content span strictly decreases on every call. */
@@ -312,8 +312,8 @@ val tx_sig_span : forall 'first_source_off 'first_source_len 'first_content_len 
         RlpFieldRef('signature_source_off, 'signature_source_len, 'signature_content_len),
     ) -> StatelessInputSlice
 function tx_sig_span(first, signature) = {
-    let start = first.source.off;
-    let stop = signature.source.off;
+    let start = first.source.bytes;
+    let stop = signature.source.bytes;
     let start_offset = start;
     let stop_offset = stop;
     if stop_offset < start_offset then {

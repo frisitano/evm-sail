@@ -106,5 +106,3 @@ bool mpt_key_matches(const Hash32 *key, unsigned position,
       return false;
   return true;
 }
-
-

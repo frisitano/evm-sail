@@ -28,6 +28,7 @@ FORBIDDEN_MODULE_BACKING_ARRAY = re.compile(
     re.DOTALL,
 )
 FORBIDDEN_HOST_PREFIX = re.compile(r"\b(?:evmsail|optimized)_[A-Za-z0-9_]*")
+GENERATED_PACKAGE_SYMBOLS = {"evmsail_model_init"}
 FORBIDDEN_INDIRECT_FUNCTION = re.compile(
     r"\(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*\s*\)\s*\("
 )
@@ -55,27 +56,6 @@ def manifest_sources() -> list[str]:
     if duplicates:
         raise ValueError(f"duplicate manifest entries: {', '.join(duplicates)}")
     return entries
-
-
-def without_debug_blocks(source: str) -> str:
-    """Remove native-debug-only preprocessor blocks from the production view."""
-    output: list[str] = []
-    depth = 0
-    for line in source.splitlines(keepends=True):
-        directive = line.lstrip()
-        if directive.startswith("#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES"):
-            depth = 1
-            output.append("\n")
-            continue
-        if depth:
-            if directive.startswith(("#if", "#ifdef", "#ifndef")):
-                depth += 1
-            elif directive.startswith("#endif"):
-                depth -= 1
-            output.append("\n")
-            continue
-        output.append(line)
-    return "".join(output)
 
 
 def strip_comments_and_literals(source: str) -> str:
@@ -167,7 +147,7 @@ def main() -> int:
             if not path.is_file():
                 continue
             source = strip_comments_and_literals(
-                without_debug_blocks(path.read_text(errors="replace"))
+                path.read_text(errors="replace")
             )
             for pattern, label in (
                 (FORBIDDEN_CALLS, "forbidden allocation/sort call"),
@@ -193,6 +173,8 @@ def main() -> int:
             source = strip_comments_and_literals(path.read_text(errors="replace"))
             relative = path.relative_to(ROOT)
             for match in FORBIDDEN_HOST_PREFIX.finditer(source):
+                if match.group(0) in GENERATED_PACKAGE_SYMBOLS:
+                    continue
                 line = source.count("\n", 0, match.start()) + 1
                 errors.append(
                     f"{relative}:{line}: redundant optimized-host prefix: "

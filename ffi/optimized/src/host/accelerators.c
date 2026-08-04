@@ -11,14 +11,13 @@
 
 /* Construct the generated Sail aggregate at the accelerator boundary.  The
  * lower-level ecrecover adapter intentionally remains layout-independent. */
-struct zAddressResult precompile_ecrecover_hash_sig(
-    Hash32 hash, uint64_t yparity, const U256 r,
-    const U256 s) {
-  struct zAddressResult result = {0};
+struct AddressResult precompile_ecrecover_hash_sig(
+    Hash32 hash, uint8_t yparity, U256 r, U256 s) {
+  struct AddressResult result = {0};
   uint8_t address[20];
-  result.zsuccess = precompile_ecrecover_hash_sig_address(
+  result.success = precompile_ecrecover_hash_sig_address(
       address, hash, yparity, r, s);
-  result.zaddress = address_from_be_bytes(address);
+  result.address = address_from_be_bytes(address);
   return result;
 }
 
@@ -376,13 +375,6 @@ bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len) {
                               &verified) == ZKVM_EOK && verified;
 }
 
-#ifdef EVMSAIL_DEBUG
-int debug_ecrecover_status = ZKVM_EFAIL;
-uint64_t debug_ecrecover_parity;
-uint8_t debug_ecrecover_pubkey[64];
-uint8_t debug_ecrecover_address[20];
-#endif
-
 bool precompile_ecrecover_hash_sig_address(uint8_t address[20], Hash32 hash,
                                            uint64_t yparity, U256 r,
                                            U256 s) {
@@ -390,16 +382,14 @@ bool precompile_ecrecover_hash_sig_address(uint8_t address[20], Hash32 hash,
   zkvm_secp256k1_pubkey public_key;
   zkvm_keccak256_hash address_hash = {{0}};
   bool ok = yparity <= 1;
-  int recovery_status = ZKVM_EFAIL;
   memset(address, 0, 20);
   memset(&public_key, 0, sizeof public_key);
   sail_word_to_be_bytes(signature.data, r);
   sail_word_to_be_bytes(signature.data + 32, s);
   if (ok) {
-    recovery_status = zkvm_secp256k1_ecrecover(
-        (const zkvm_secp256k1_hash *)hash_bytes_const(&hash), &signature,
-        (uint8_t)yparity, &public_key);
-    ok = recovery_status == ZKVM_EOK;
+    ok = zkvm_secp256k1_ecrecover(
+             (const zkvm_secp256k1_hash *)hash_bytes_const(&hash), &signature,
+             (uint8_t)yparity, &public_key) == ZKVM_EOK;
   }
   if (ok) {
     ok = zkvm_keccak256(public_key.data, sizeof public_key.data,
@@ -408,13 +398,5 @@ bool precompile_ecrecover_hash_sig_address(uint8_t address[20], Hash32 hash,
   if (ok) {
     memcpy(address, address_hash.data + 12, 20);
   }
-#ifdef EVMSAIL_DEBUG
-  debug_ecrecover_status = recovery_status;
-  debug_ecrecover_parity = yparity;
-  memcpy(debug_ecrecover_pubkey, public_key.data,
-         sizeof debug_ecrecover_pubkey);
-  memcpy(debug_ecrecover_address, address,
-         sizeof debug_ecrecover_address);
-#endif
   return ok;
 }

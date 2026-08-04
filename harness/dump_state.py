@@ -98,8 +98,9 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
             EVM_BUILD_MODE=build_mode,
             EVM_PROFILE=wanted,
             NATIVE_BUILD=build_dir,
-            EXTRA_PRESERVE="debug_account_storage_root",
         )
+        if build_mode == "standard":
+            env["EXTRA_PRESERVE"] = "debug_account_storage_root"
         subprocess.check_call([os.path.join(_NR, "build_lib.sh")], env=env)
         with open(profile_marker, "w") as f:
             f.write(wanted + "\n")
