@@ -21,6 +21,7 @@ from typing import Any, Iterator
 WORD_BYTES = 32
 WORD_MASK = (1 << 256) - 1
 DELEGATION_PREFIX = b"\xef\x01\x00"
+STORAGE_INITIAL_GENERATION = 1
 
 
 class AcceleratorContract:
@@ -140,16 +141,10 @@ class AccountTxRow:
 
 
 @dataclass(slots=True)
-class JournalSnapshot:
-    account_tx: dict[bytes, Any]
-    storage_tx: dict[tuple[bytes, int], Any]
-    storage_cleared: set[bytes]
-    transient: dict[tuple[bytes, int], int]
-    warm_addresses: set[bytes]
-    warm_slots: set[tuple[bytes, int]]
-    logs: list[LogRecord]
-    log_data: bytearray
-    current_log: int | None
+class StorageTxRow:
+    key: Any
+    value: Any
+    generation: int
 
 
 @dataclass(slots=True)
@@ -175,8 +170,9 @@ class HostState:
     code_db: dict[bytes, Any] = field(default_factory=dict)
     node_db: dict[bytes, Any] = field(default_factory=dict)
     transient: dict[tuple[bytes, int], int] = field(default_factory=dict)
-    storage_tx: dict[tuple[bytes, int], Any] = field(default_factory=dict)
-    storage_cleared: set[bytes] = field(default_factory=set)
+    storage_tx: dict[tuple[bytes, int], StorageTxRow] = field(default_factory=dict)
+    storage_generations: dict[bytes, int] = field(default_factory=dict)
+    storage_next_generation: int = STORAGE_INITIAL_GENERATION
     storage_block: dict[tuple[bytes, int], StorageBlockRow] = field(
         default_factory=dict
     )
@@ -184,23 +180,23 @@ class HostState:
     account_tx: dict[bytes, Any] = field(default_factory=dict)
     account_block: dict[bytes, AccountBlockRow] = field(default_factory=dict)
     account_iterator: list[AccountBlockRow] = field(default_factory=list)
-    post_storage_roots: dict[bytes, Any] = field(default_factory=dict)
-    checkpoints: list[JournalSnapshot] = field(default_factory=list)
-    warm_addresses: set[bytes] = field(default_factory=set)
-    warm_slots: set[tuple[bytes, int]] = field(default_factory=set)
+    journal: list[Any] = field(default_factory=list)
+    warm_addresses: dict[bytes, int] = field(default_factory=dict)
+    warm_slots: dict[tuple[bytes, int], int] = field(default_factory=dict)
+    current_warm_epoch: int = 1
     logs: list[LogRecord] = field(default_factory=list)
     transaction_log_start: int = 0
     current_log: int | None = None
     authorizations: dict[bytes, AuthorizationRecord] = field(default_factory=dict)
     bal_accounts: set[bytes] = field(default_factory=set)
     bal_addresses: dict[bytes, Any] = field(default_factory=dict)
-    bal_storage_changes: dict[tuple[bytes, int], tuple[int, int]] = field(
+    bal_storage_changes: dict[tuple[bytes, int], dict[int, int]] = field(
         default_factory=dict
     )
     bal_storage_reads: set[tuple[bytes, int]] = field(default_factory=set)
-    bal_balance_changes: dict[bytes, tuple[int, int]] = field(default_factory=dict)
-    bal_nonce_changes: dict[bytes, tuple[int, int]] = field(default_factory=dict)
-    bal_code_changes: dict[bytes, tuple[int, Any]] = field(default_factory=dict)
+    bal_balance_changes: dict[bytes, dict[int, int]] = field(default_factory=dict)
+    bal_nonce_changes: dict[bytes, dict[int, int]] = field(default_factory=dict)
+    bal_code_changes: dict[bytes, dict[int, Any]] = field(default_factory=dict)
     bal_iterator: list[Any] = field(default_factory=list)
     accelerators: AcceleratorContract = field(default_factory=AcceleratorContract)
 
@@ -295,7 +291,7 @@ def _ensure_length(region: bytearray, required: int) -> None:
 
 
 def _slice_bytes(region: bytes | bytearray, value: Any) -> bytes:
-    start = int(value.off)
+    start = int(value.bytes)
     end = start + int(value.len)
     return bytes(region[start:end])
 
@@ -648,14 +644,14 @@ def mem_frame_leave() -> None:
 
 
 def mem_expand(required: int) -> Any:
-    from evm.primitives.bytes import memory_slice
+    from evm.primitives.bytes import evm_memory_slice
 
     state = get_state()
     frame = _current_memory_frame(state)
     length = int(required)
     _ensure_length(state.memory_bytes, frame.base + length)
     frame.length = max(frame.length, length)
-    return memory_slice(frame.base, length)
+    return evm_memory_slice(frame.base, length)
 
 
 def mem_move(destination: int, source: int, length: int) -> None:
@@ -839,6 +835,18 @@ def memory_keccak256(value: Any) -> Any:
     return _keccak_region("memory", value)
 
 
+def code_keccak256(value: Any) -> Any:
+    return _keccak_region("code", value)
+
+
+def output_keccak256(value: Any) -> Any:
+    return _keccak_region("output", value)
+
+
+def log_data_keccak256(value: Any) -> Any:
+    return _keccak_region("log", value)
+
+
 def stateless_input_sha256(value: Any) -> Any:
     return _sha256_region("input", value)
 
@@ -880,11 +888,11 @@ def code_region_from_delegation(address: Any) -> Any:
     return _append_code(DELEGATION_PREFIX + _fixed_wire_bytes(address))
 
 
-def jumpdest_table_alloc(code_length: int) -> int:
+def jumpdest_table_alloc(code: Any) -> int:
     state = get_state()
     index = state.next_jumpdest_table
     state.next_jumpdest_table += 1
-    state.jumpdest_tables[index] = JumpdestTable(code_length=int(code_length))
+    state.jumpdest_tables[index] = JumpdestTable(code_length=int(code.len))
     return index
 
 
@@ -910,32 +918,26 @@ def jumpdest_ref_contains(table: int, code_length: int, destination: int) -> boo
     return index in entry.positions
 
 
-def code_db_store(value: Any, jumpdests: int) -> Any:
-    from evm.primitives.code import Code
+def code_db_store(code: Any) -> Any:
+    from evm.primitives.code import code_bytes
 
-    digest = _keccak(_region_bytes("code", value))
-    key = bytes(digest)
-    result = _bytes32_from_wire(digest)
-    get_state().code_db[key] = Code(bytes=value, jumpdests=jumpdests)
-    return result
+    digest = _keccak(_region_bytes("code", code_bytes(code)))
+    get_state().code_db[bytes(digest)] = code
+    return _bytes32_from_wire(digest)
 
 
 def code_db_lookup(value: Any) -> Any | None:
     return get_state().code_db.get(_hash_key(value))
 
 
-def code_intern_delegation(address: Any, jumpdests: int) -> Any:
-    value = _append_code(DELEGATION_PREFIX + _fixed_wire_bytes(address))
-    return code_db_store(value, jumpdests)
-
-
 def code_db_read_delegation(value: Any) -> Any:
     from evm.prelude import AddressResult
+    from evm.primitives.code import code_bytes
 
     code = code_db_lookup(value)
     if code is None:
         return AddressResult(success=False, address=_bytes20_from_wire(bytes(20)))
-    payload = _region_bytes("code", code.bytes)
+    payload = _region_bytes("code", code_bytes(code))
     valid = len(payload) == 23 and payload.startswith(DELEGATION_PREFIX)
     address = payload[3:] if valid else bytes(20)
     return AddressResult(success=valid, address=_bytes20_from_wire(address))
@@ -972,58 +974,201 @@ def transient_reset() -> None:
 
 
 def transient_store(address: Any, slot: int, value: int) -> None:
-    get_state().transient[_address_slot_key(address, slot)] = int(value)
+    from evm.host.journal import JournalTransientChange, JournalTransientChanged
+
+    state = get_state()
+    key = _address_slot_key(address, slot)
+    state.journal.append(
+        JournalTransientChanged(
+            JournalTransientChange(
+                address=address, slot=int(slot), prior=state.transient.get(key, 0)
+            )
+        )
+    )
+    state.transient[key] = int(value)
 
 
 def transient_load(address: Any, slot: int) -> int:
     return get_state().transient.get(_address_slot_key(address, slot), 0)
 
 
+def _journal_account_row(state: HostState, address: Any) -> AccountTxRow:
+    row = state.account_tx.get(_address_key(address))
+    if row is None:
+        raise RuntimeError("journal entry references a missing transaction account")
+    return row
+
+
+def _journal_restore(state: HostState, entry: Any) -> None:
+    from evm.host.journal import (
+        JournalAccountBalanceChanged,
+        JournalAccountCodeHashChanged,
+        JournalAccountCreatedChanged,
+        JournalAccountExistsChanged,
+        JournalAccountNonceChanged,
+        JournalAccountSelfdestructedChanged,
+        JournalAccountStorageGenerationChanged,
+        JournalFrameCheckpointed,
+        JournalFrameCommitted,
+        JournalLogAppended,
+        JournalStorageRowGenerationChanged,
+        JournalStorageValueChanged,
+        JournalTransactionAccountListed,
+        JournalTransactionStorageListed,
+        JournalTransientChanged,
+        JournalWarmAccountChanged,
+        JournalWarmStorageChanged,
+    )
+
+    if isinstance(entry, JournalTransientChanged):
+        change = entry.value
+        state.transient[_address_slot_key(change.address, change.slot)] = int(
+            change.prior
+        )
+    elif isinstance(entry, JournalWarmAccountChanged):
+        state.warm_addresses[_address_key(entry.value.address)] = int(
+            entry.value.prior_epoch
+        )
+    elif isinstance(entry, JournalWarmStorageChanged):
+        state.warm_slots[_storage_key(entry.value.key)] = int(entry.value.prior_epoch)
+    elif isinstance(entry, JournalAccountBalanceChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.info.balance = entry.value.prior
+    elif isinstance(entry, JournalAccountNonceChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.info.nonce = entry.value.prior
+    elif isinstance(entry, JournalAccountCodeHashChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.info.code_hash = entry.value.prior
+    elif isinstance(entry, JournalAccountExistsChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.present = entry.value.prior
+    elif isinstance(entry, JournalAccountCreatedChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.created = entry.value.prior
+    elif isinstance(entry, JournalAccountSelfdestructedChanged):
+        row = _journal_account_row(state, entry.value.address)
+        row.current.selfdestructed = entry.value.prior
+    elif isinstance(entry, JournalTransactionAccountListed):
+        if not state.account_tx:
+            raise RuntimeError("journal account listing has no transaction row")
+        state.account_tx.popitem()
+    elif isinstance(entry, JournalTransactionStorageListed):
+        key = _address_key(entry.value)
+        listed = None
+        for storage_key in reversed(state.storage_tx):
+            if storage_key[0] == key:
+                listed = storage_key
+                break
+        if listed is None:
+            raise RuntimeError("journal storage listing has no transaction row")
+        del state.storage_tx[listed]
+    elif isinstance(entry, JournalLogAppended):
+        record = state.logs.pop()
+        del state.log_data[record.data_offset:]
+        state.current_log = None
+    elif isinstance(entry, JournalStorageValueChanged):
+        state.storage_tx[_storage_key(entry.value.key)].value.curr = entry.value.prior
+    elif isinstance(entry, JournalStorageRowGenerationChanged):
+        state.storage_tx[_storage_key(entry.value.key)].generation = int(
+            entry.value.prior
+        )
+    elif isinstance(entry, JournalAccountStorageGenerationChanged):
+        key = _address_key(entry.value.address)
+        prior = int(entry.value.prior)
+        state.storage_generations[key] = prior
+        row = state.account_tx.get(key)
+        if row is not None:
+            row.current.storage_cleared = (
+                row.original.storage_cleared or prior != STORAGE_INITIAL_GENERATION
+            )
+    elif isinstance(entry, (JournalFrameCheckpointed, JournalFrameCommitted)):
+        pass
+    else:
+        raise RuntimeError("unknown state-journal entry")
+
+
+def _open_checkpoint_index(state: HostState) -> int:
+    from evm.host.journal import JournalFrameCheckpointed, JournalFrameCommitted
+
+    closed = 0
+    for index in range(len(state.journal) - 1, -1, -1):
+        entry = state.journal[index]
+        if isinstance(entry, JournalFrameCommitted):
+            closed += 1
+        elif isinstance(entry, JournalFrameCheckpointed):
+            if closed == 0:
+                return index
+            closed -= 1
+    raise RuntimeError("state journal has no open checkpoint")
+
+
 def state_journal_reset() -> None:
-    get_state().checkpoints.clear()
+    get_state().journal.clear()
 
 
 def state_journal_checkpoint() -> None:
-    state = get_state()
-    state.checkpoints.append(
-        JournalSnapshot(
-            account_tx=deepcopy(state.account_tx),
-            storage_tx=deepcopy(state.storage_tx),
-            storage_cleared=set(state.storage_cleared),
-            transient=dict(state.transient),
-            warm_addresses=set(state.warm_addresses),
-            warm_slots=set(state.warm_slots),
-            logs=deepcopy(state.logs),
-            log_data=bytearray(state.log_data),
-            current_log=state.current_log,
-        )
-    )
+    from evm.host.journal import JournalFrameCheckpointed
+
+    get_state().journal.append(JournalFrameCheckpointed())
 
 
 def state_journal_revert() -> None:
     state = get_state()
-    if not state.checkpoints:
-        return
-    snapshot = state.checkpoints.pop()
-    state.account_tx = deepcopy(snapshot.account_tx)
-    state.storage_tx = deepcopy(snapshot.storage_tx)
-    state.storage_cleared = set(snapshot.storage_cleared)
-    state.transient = dict(snapshot.transient)
-    state.warm_addresses = set(snapshot.warm_addresses)
-    state.warm_slots = set(snapshot.warm_slots)
-    state.logs = deepcopy(snapshot.logs)
-    state.log_data = bytearray(snapshot.log_data)
-    state.current_log = snapshot.current_log
+    marker = _open_checkpoint_index(state)
+    for index in range(len(state.journal) - 1, marker, -1):
+        _journal_restore(state, state.journal[index])
+    del state.journal[marker:]
 
 
 def state_journal_commit() -> None:
+    from evm.host.journal import JournalFrameCommitted
+
     state = get_state()
-    if state.checkpoints:
-        state.checkpoints.pop()
+    _open_checkpoint_index(state)
+    state.journal.append(JournalFrameCommitted())
+
+
+def _storage_generation(state: HostState, key: bytes) -> int:
+    return state.storage_generations.get(key, STORAGE_INITIAL_GENERATION)
 
 
 def storage_tx_update(entry: Any) -> None:
-    get_state().storage_tx[_storage_key(entry.key)] = entry
+    from evm.host.journal import (
+        JournalStorageRowGenerationChange,
+        JournalStorageRowGenerationChanged,
+        JournalStorageValueChange,
+        JournalStorageValueChanged,
+        JournalTransactionStorageListed,
+    )
+    from evm.primitives.account import StorageValue
+
+    state = get_state()
+    canonical = _storage_key(entry.key)
+    generation = _storage_generation(state, canonical[0])
+    row = state.storage_tx.get(canonical)
+    if row is None:
+        state.journal.append(JournalTransactionStorageListed(entry.key.addr))
+        state.storage_tx[canonical] = StorageTxRow(
+            key=entry.key,
+            value=StorageValue(curr=entry.value.curr, orig=entry.value.orig),
+            generation=generation,
+        )
+        return
+    if int(row.value.curr) != int(entry.value.curr):
+        state.journal.append(
+            JournalStorageValueChanged(
+                JournalStorageValueChange(key=row.key, prior=row.value.curr)
+            )
+        )
+        row.value.curr = entry.value.curr
+    if row.generation != generation:
+        state.journal.append(
+            JournalStorageRowGenerationChanged(
+                JournalStorageRowGenerationChange(key=row.key, prior=row.generation)
+            )
+        )
+        row.generation = generation
 
 
 def storage_tx_get(key: Any) -> Any:
@@ -1035,51 +1180,70 @@ def storage_tx_get(key: Any) -> Any:
 
     state = get_state()
     canonical = _storage_key(key)
-    entry = state.storage_tx.get(canonical)
-    if entry is not None:
-        return StorageTxHit(entry.value)
-    if canonical[0] in state.storage_cleared:
+    generation = _storage_generation(state, canonical[0])
+    row = state.storage_tx.get(canonical)
+    if row is not None and row.generation == generation:
+        return StorageTxHit(row.value)
+    if generation != STORAGE_INITIAL_GENERATION:
         return StorageTxCleared()
     return StorageTxMiss()
 
 
 def storage_tx_pop() -> Any | None:
+    from evm.primitives.account import StorageEntry
+
     state = get_state()
-    if not state.storage_tx:
-        return None
-    _, entry = state.storage_tx.popitem()
-    return entry
+    while state.storage_tx:
+        (address_key, _), row = state.storage_tx.popitem()
+        if row.generation == _storage_generation(state, address_key):
+            return StorageEntry(key=row.key, value=row.value)
+    return None
 
 
 def storage_tx_clear(address: Any) -> None:
+    from evm.host.journal import (
+        JournalAccountStorageGenerationChange,
+        JournalAccountStorageGenerationChanged,
+    )
+
     state = get_state()
     key = _address_key(address)
-    state.storage_tx = {
-        storage_key: entry
-        for storage_key, entry in state.storage_tx.items()
-        if storage_key[0] != key
-    }
-    state.storage_cleared.add(key)
+    state.journal.append(
+        JournalAccountStorageGenerationChanged(
+            JournalAccountStorageGenerationChange(
+                address=address, prior=_storage_generation(state, key)
+            )
+        )
+    )
+    state.storage_next_generation += 1
+    state.storage_generations[key] = state.storage_next_generation
 
 
 def storage_tx_reset() -> None:
     state = get_state()
     state.storage_tx.clear()
-    state.storage_cleared.clear()
+    state.storage_generations.clear()
+    state.storage_next_generation = STORAGE_INITIAL_GENERATION
 
 
 def storage_has_writes(address: Any) -> bool:
     state = get_state()
     key = _address_key(address)
+    generation = _storage_generation(state, key)
     tx_writes = any(
-        storage_key[0] == key and int(entry.value.curr) != 0
-        for storage_key, entry in state.storage_tx.items()
+        storage_key[0] == key
+        and row.generation == generation
+        and int(row.value.curr) != 0
+        for storage_key, row in state.storage_tx.items()
     )
-    block_writes = any(
+    if tx_writes:
+        return True
+    if generation != STORAGE_INITIAL_GENERATION:
+        return False
+    return any(
         storage_key[0] == key and int(row.value.curr) != 0
         for storage_key, row in state.storage_block.items()
     )
-    return tx_writes or block_writes
 
 
 def storage_block_get(key: Any) -> Any | None:
@@ -1099,6 +1263,8 @@ def _storage_row_hashes(key: Any) -> tuple[Any, Any]:
 
 
 def storage_block_put(entry: Any) -> None:
+    from evm.primitives.account import StorageValue
+
     state = get_state()
     canonical = _storage_key(entry.key)
     prior = state.storage_block.get(canonical)
@@ -1106,14 +1272,13 @@ def storage_block_put(entry: Any) -> None:
         address_hash, slot_hash = _storage_row_hashes(entry.key)
         state.storage_block[canonical] = StorageBlockRow(
             key=entry.key,
-            value=entry.value,
+            value=StorageValue(curr=entry.value.curr, orig=entry.value.orig),
             address_hash=address_hash,
             slot_hash=slot_hash,
         )
         return
-    entry.value.orig = prior.value.orig
     prior.key = entry.key
-    prior.value = entry.value
+    prior.value = StorageValue(curr=entry.value.curr, orig=prior.value.orig)
 
 
 def storage_block_cache(key: Any, slot_hash: Any, value: int) -> None:
@@ -1173,22 +1338,82 @@ def acct_tx_get(address: Any) -> Any | None:
 
 
 def acct_tx_update(address: Any, value: Any) -> None:
+    from evm.host.journal import (
+        JournalAccountBalanceChange,
+        JournalAccountBalanceChanged,
+        JournalAccountCodeHashChange,
+        JournalAccountCodeHashChanged,
+        JournalAccountCreatedChange,
+        JournalAccountCreatedChanged,
+        JournalAccountExistsChange,
+        JournalAccountExistsChanged,
+        JournalAccountNonceChange,
+        JournalAccountNonceChanged,
+        JournalAccountSelfdestructedChange,
+        JournalAccountSelfdestructedChanged,
+        JournalTransactionAccountListed,
+    )
+
     state = get_state()
     key = _address_key(address)
     row = state.account_tx.get(key)
-    if row is not None:
-        row.current = value
+    if row is None:
+        block = state.account_block.get(key)
+        if block is None:
+            raise RuntimeError("transaction account update requires a cached account")
+        state.journal.append(JournalTransactionAccountListed())
+        state.account_tx[key] = AccountTxRow(
+            current=value,
+            original=deepcopy(block.value.curr),
+        )
         return
-    block = state.account_block.get(key)
-    if block is None:
-        raise RuntimeError("transaction account update requires a cached account")
-    state.account_tx[key] = AccountTxRow(
-        current=value,
-        original=deepcopy(block.value.curr),
-    )
+    prior = row.current
+    if int(prior.info.balance) != int(value.info.balance):
+        state.journal.append(
+            JournalAccountBalanceChanged(
+                JournalAccountBalanceChange(address=address, prior=prior.info.balance)
+            )
+        )
+    if int(prior.info.nonce) != int(value.info.nonce):
+        state.journal.append(
+            JournalAccountNonceChanged(
+                JournalAccountNonceChange(address=address, prior=prior.info.nonce)
+            )
+        )
+    if prior.info.code_hash != value.info.code_hash:
+        state.journal.append(
+            JournalAccountCodeHashChanged(
+                JournalAccountCodeHashChange(
+                    address=address, prior=prior.info.code_hash
+                )
+            )
+        )
+    if prior.present != value.present:
+        state.journal.append(
+            JournalAccountExistsChanged(
+                JournalAccountExistsChange(address=address, prior=prior.present)
+            )
+        )
+    if prior.created != value.created:
+        state.journal.append(
+            JournalAccountCreatedChanged(
+                JournalAccountCreatedChange(address=address, prior=prior.created)
+            )
+        )
+    if prior.selfdestructed != value.selfdestructed:
+        state.journal.append(
+            JournalAccountSelfdestructedChanged(
+                JournalAccountSelfdestructedChange(
+                    address=address, prior=prior.selfdestructed
+                )
+            )
+        )
+    row.current = value
 
 
 def _account_tx_required(address: Any) -> AccountTxRow:
+    from evm.host.journal import JournalTransactionAccountListed
+
     state = get_state()
     key = _address_key(address)
     row = state.account_tx.get(key)
@@ -1197,6 +1422,7 @@ def _account_tx_required(address: Any) -> AccountTxRow:
     block = state.account_block.get(key)
     if block is None:
         raise RuntimeError("transaction account update requires a cached account")
+    state.journal.append(JournalTransactionAccountListed())
     row = AccountTxRow(
         current=deepcopy(block.value.curr),
         original=deepcopy(block.value.curr),
@@ -1206,15 +1432,60 @@ def _account_tx_required(address: Any) -> AccountTxRow:
 
 
 def acct_tx_set_balance(address: Any, value: int) -> None:
-    _account_tx_required(address).current.info.balance = int(value)
+    from evm.host.journal import (
+        JournalAccountBalanceChange,
+        JournalAccountBalanceChanged,
+    )
+
+    state = get_state()
+    row = _account_tx_required(address)
+    if int(row.current.info.balance) != int(value):
+        state.journal.append(
+            JournalAccountBalanceChanged(
+                JournalAccountBalanceChange(
+                    address=address, prior=row.current.info.balance
+                )
+            )
+        )
+        row.current.info.balance = int(value)
 
 
 def acct_tx_set_nonce(address: Any, value: int) -> None:
-    _account_tx_required(address).current.info.nonce = int(value)
+    from evm.host.journal import (
+        JournalAccountNonceChange,
+        JournalAccountNonceChanged,
+    )
+
+    state = get_state()
+    row = _account_tx_required(address)
+    if int(row.current.info.nonce) != int(value):
+        state.journal.append(
+            JournalAccountNonceChanged(
+                JournalAccountNonceChange(
+                    address=address, prior=row.current.info.nonce
+                )
+            )
+        )
+        row.current.info.nonce = int(value)
 
 
 def acct_tx_set_code_hash(address: Any, value: Any) -> None:
-    _account_tx_required(address).current.info.code_hash = value
+    from evm.host.journal import (
+        JournalAccountCodeHashChange,
+        JournalAccountCodeHashChanged,
+    )
+
+    state = get_state()
+    row = _account_tx_required(address)
+    if row.current.info.code_hash != value:
+        state.journal.append(
+            JournalAccountCodeHashChanged(
+                JournalAccountCodeHashChange(
+                    address=address, prior=row.current.info.code_hash
+                )
+            )
+        )
+        row.current.info.code_hash = value
 
 
 def acct_tx_pop() -> Any | None:
@@ -1272,6 +1543,9 @@ def acct_block_cache(address: Any, address_hash: Any, account: Any) -> None:
 def acct_block_iter_begin() -> None:
     state = get_state()
     candidates = dict(state.account_block)
+    for storage_key in state.storage_block:
+        if storage_key[0] not in candidates:
+            raise RuntimeError("storage update candidate lacks a cached account")
     state.account_iterator = sorted(
         candidates.values(), key=lambda row: _hash_key(row.address_hash)
     )
@@ -1288,16 +1562,6 @@ def acct_block_iter_next() -> Any | None:
         entry=AcctEntry(addr=row.address, value=row.value),
         address_hash=row.address_hash,
     )
-
-
-def acct_post_storage_root_store(address: Any, value: Any) -> None:
-    get_state().post_storage_roots[_address_key(address)] = value
-
-
-def acct_post_storage_root_read(address: Any) -> Any:
-    from evm.primitives.crypto import EMPTY_TRIE_ROOT
-
-    return get_state().post_storage_roots.get(_address_key(address), EMPTY_TRIE_ROOT)
 
 
 def bal_reset() -> None:
@@ -1326,7 +1590,8 @@ def bal_account_touch(address: Any) -> None:
 
 def bal_storage_change(index: int, address: Any, slot: int, value: int) -> None:
     key = _bal_touch(address)
-    get_state().bal_storage_changes[(key, int(slot))] = (int(index), int(value))
+    changes = get_state().bal_storage_changes.setdefault((key, int(slot)), {})
+    changes[int(index)] = int(value)
 
 
 def bal_storage_read(address: Any, slot: int) -> None:
@@ -1336,17 +1601,17 @@ def bal_storage_read(address: Any, slot: int) -> None:
 
 def bal_balance_change(index: int, address: Any, value: int) -> None:
     key = _bal_touch(address)
-    get_state().bal_balance_changes[key] = (int(index), int(value))
+    get_state().bal_balance_changes.setdefault(key, {})[int(index)] = int(value)
 
 
 def bal_nonce_change(index: int, address: Any, value: int) -> None:
     key = _bal_touch(address)
-    get_state().bal_nonce_changes[key] = (int(index), int(value))
+    get_state().bal_nonce_changes.setdefault(key, {})[int(index)] = int(value)
 
 
 def bal_code_change(index: int, address: Any, value: Any) -> None:
     key = _bal_touch(address)
-    get_state().bal_code_changes[key] = (int(index), value)
+    get_state().bal_code_changes.setdefault(key, {})[int(index)] = value
 
 
 def bal_prepare_iter() -> None:
@@ -1368,41 +1633,40 @@ def bal_prepare_iter() -> None:
     events: list[Any] = []
     for address_key in sorted(state.bal_accounts):
         events.append(BalAccount(state.bal_addresses[address_key]))
-        changes = sorted(
-            (
-                (slot, index, value)
-                for (account, slot), (index, value) in state.bal_storage_changes.items()
-                if account == address_key
-            ),
-            key=lambda item: (item[0], item[1]),
-        )
-        changed_slots = {slot for slot, _, _ in changes}
-        for slot, index, value in changes:
-            events.append(
-                BalStorageChange(
-                    BalStorageChangeEntry(slot=slot, index=index, value=value)
+        slot_changes = {
+            slot: changes
+            for (account, slot), changes in state.bal_storage_changes.items()
+            if account == address_key
+        }
+        for slot in sorted(slot_changes):
+            for index in sorted(slot_changes[slot]):
+                events.append(
+                    BalStorageChange(
+                        BalStorageChangeEntry(
+                            slot=slot, index=index, value=slot_changes[slot][index]
+                        )
+                    )
                 )
-            )
         for account, slot in sorted(state.bal_storage_reads):
-            if account == address_key and slot not in changed_slots:
+            if account == address_key and slot not in slot_changes:
                 events.append(BalStorageRead(slot))
-        balance = state.bal_balance_changes.get(address_key)
-        if balance is not None:
+        balances = state.bal_balance_changes.get(address_key, {})
+        for index in sorted(balances):
             events.append(
                 BalBalanceChange(
-                    BalBalanceChangeEntry(index=balance[0], value=balance[1])
+                    BalBalanceChangeEntry(index=index, value=balances[index])
                 )
             )
-        nonce = state.bal_nonce_changes.get(address_key)
-        if nonce is not None:
+        nonces = state.bal_nonce_changes.get(address_key, {})
+        for index in sorted(nonces):
             events.append(
-                BalNonceChange(BalNonceChangeEntry(index=nonce[0], value=nonce[1]))
+                BalNonceChange(BalNonceChangeEntry(index=index, value=nonces[index]))
             )
-        code = state.bal_code_changes.get(address_key)
-        if code is not None:
+        codes = state.bal_code_changes.get(address_key, {})
+        for index in sorted(codes):
             events.append(
                 BalCodeChange(
-                    BalCodeChangeEntry(index=code[0], code_hash=code[1])
+                    BalCodeChangeEntry(index=index, code_hash=codes[index])
                 )
             )
         events.append(BalAccountEnd())
@@ -1416,27 +1680,54 @@ def bal_iter_next() -> Any:
     return state.bal_iterator.pop(0) if state.bal_iterator else BalEmpty()
 
 
-def warm_reset(capacity: int) -> None:
-    del capacity
-    state = get_state()
-    state.warm_addresses.clear()
-    state.warm_slots.clear()
+def warm_reset(epoch: int) -> None:
+    get_state().current_warm_epoch = int(epoch) + 1
 
 
 def account_is_warm(address: Any) -> bool:
-    return _address_key(address) in get_state().warm_addresses
+    state = get_state()
+    return state.warm_addresses.get(_address_key(address), 0) >= state.current_warm_epoch
 
 
 def account_mark_warm(address: Any) -> None:
-    get_state().warm_addresses.add(_address_key(address))
+    from evm.host.journal import JournalWarmAccountChange, JournalWarmAccountChanged
+
+    state = get_state()
+    key = _address_key(address)
+    stamp = state.warm_addresses.get(key, 0)
+    if stamp < state.current_warm_epoch:
+        state.journal.append(
+            JournalWarmAccountChanged(
+                JournalWarmAccountChange(address=address, prior_epoch=stamp)
+            )
+        )
+        state.warm_addresses[key] = state.current_warm_epoch
 
 
 def storage_is_warm(address: Any, slot: int) -> bool:
-    return _address_slot_key(address, slot) in get_state().warm_slots
+    state = get_state()
+    return (
+        state.warm_slots.get(_address_slot_key(address, slot), 0)
+        >= state.current_warm_epoch
+    )
 
 
 def storage_mark_warm(address: Any, slot: int) -> None:
-    get_state().warm_slots.add(_address_slot_key(address, slot))
+    from evm.host.journal import JournalWarmStorageChange, JournalWarmStorageChanged
+    from evm.primitives.account import StorageKey
+
+    state = get_state()
+    key = _address_slot_key(address, slot)
+    stamp = state.warm_slots.get(key, 0)
+    if stamp < state.current_warm_epoch:
+        state.journal.append(
+            JournalWarmStorageChanged(
+                JournalWarmStorageChange(
+                    key=StorageKey(addr=address, slot=int(slot)), prior_epoch=stamp
+                )
+            )
+        )
+        state.warm_slots[key] = state.current_warm_epoch
 
 
 def authorization_tracker_reset(capacity: int) -> None:
@@ -1483,7 +1774,10 @@ def logs_tx_reset() -> None:
 
 
 def log_begin(address: Any) -> None:
+    from evm.host.journal import JournalLogAppended
+
     state = get_state()
+    state.journal.append(JournalLogAppended())
     state.logs.append(
         LogRecord(address=address, data_offset=len(state.log_data))
     )
