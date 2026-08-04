@@ -3,19 +3,12 @@
 from __future__ import annotations
 
 from .._runtime import (
-    BitWidth,
     Bits,
     Bytes32,
     SailError,
     SailMatchFailure,
     SailThrown,
-    U8,
-    Uint,
-    sail_ediv_int,
-    sail_vector_update,
 )
-from dataclasses import dataclass
-from typing import Annotated
 from evm.HostContract import (
     code_db_lookup as _host_code_db_lookup,
     code_db_store as _host_code_db_store,
@@ -23,13 +16,11 @@ from evm.HostContract import (
     code_region_from_memory as _host_code_region_from_memory,
     code_region_from_output as _host_code_region_from_output,
     jumpdest_table_alloc as _host_jumpdest_table_alloc,
-    jumpdest_table_store_chunk as _host_jumpdest_table_store_chunk,
+    jumpdest_table_mark as _host_jumpdest_table_mark,
 )
-from evm._sail.vector import neq_bits
 from evm.prelude import hash
-from evm.primitives.quantities import code_chunk_index
 from evm.primitives.bytes import (
-    MemorySlice,
+    EvmMemorySlice,
     OutputSlice,
     StatelessInputSlice,
 )
@@ -40,12 +31,11 @@ from evm.exceptions import (
 from evm.primitives.code import (
     Code,
     CodeSlice,
-    JumpdestChunk,
     jump_table_index,
     validated_code_slice,
-    deep_stack_immediate_valid,
-    exchange_immediate_valid,
-    EMPTY_JUMPDEST_CHUNK,
+    deep_stack_operation,
+    deep_stack_operation_immediate_valid,
+    analyzed_code,
     EMPTY_JUMP_TABLE,
     EMPTY_CODE,
 )
@@ -56,84 +46,57 @@ from evm.primitives.fork import (
     Amsterdam,
 )
 
-@dataclass(slots=True)
-class CodeAnalysis:
-    chunk: JumpdestChunk
-    chunk_index: code_chunk_index
-    chunk_offset: U8
-
-def store_jumpdest_chunk(table: jump_table_index, code_len: code_chunk_index, analysis: CodeAnalysis) -> None:
-    if neq_bits(analysis.chunk, EMPTY_JUMPDEST_CHUNK):
-        stored = _host_jumpdest_table_store_chunk(table, code_len, analysis.chunk_index, analysis.chunk)
-        if not (stored):
-            raise SailError("JUMPDEST chunk store")
-        return None
-    else:
-        return None
-
-def jumpdest_bit(index: U8) -> Annotated[Bits, BitWidth(256)]:
-    chunk = EMPTY_JUMPDEST_CHUNK
-    chunk = sail_vector_update(chunk, index, Bits(1, 0b1), False)
-    return chunk
-
-def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: int, analysis: CodeAnalysis) -> None:
+def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: int) -> None:
     position = pc
     code_len = code.len
     if (int(position) < int(code_len)):
-        chunk = analysis.chunk
-        chunk_index = analysis.chunk_index
-        chunk_offset = analysis.chunk_offset
         opcode = code_slice_byte(code, position)
         if ((opcode) == (Bits(8, 0b01011011))):
-            chunk = ((chunk) | (jumpdest_bit(chunk_offset)))
+            marked = _host_jumpdest_table_mark(table, code_len, position)
+            if not (marked):
+                raise SailError("JUMPDEST mark")
         opcode_value = int(opcode)
         if (((96 <= int(opcode_value))) & ((int(opcode_value) <= 127))):
             step = (int(opcode_value) - 94)
         else:
-            if (((int(fork) >= int(Amsterdam))) & (((((opcode_value) == (230))) | (((opcode_value) == (231)))))):
-                if deep_stack_immediate_valid(code_slice_byte(code, (int(position) + 1))):
-                    step = 2
-                else:
-                    step = 1
-            else:
-                if (((int(fork) >= int(Amsterdam))) & (((opcode_value) == (232)))):
-                    if exchange_immediate_valid(code_slice_byte(code, (int(position) + 1))):
-                        step = 2
-                    else:
+            if (int(fork) >= int(Amsterdam)):
+                match deep_stack_operation(opcode_value):
+                    case (operation as _sail_some_value_0) if _sail_some_value_0 is not None:
+                        if deep_stack_operation_immediate_valid(operation, code_slice_byte(code, (int(position) + 1))):
+                            step = 2
+                        else:
+                            step = 1
+                    case None:
                         step = 1
-                else:
-                    step = 1
+                    case _:
+                        raise SailMatchFailure("no Sail match clause applied")
+            else:
+                step = 1
         if (int(step) < int((int(code_len) - int(position)))):
             added = (int(position) + int(step))
-            progressed = (int(chunk_offset) + int(step))
-            if (int(progressed) < 256):
-                return analyze_code_from(code, fork, table, added, CodeAnalysis(chunk=chunk, chunk_index=Uint(chunk_index), chunk_offset=U8(progressed)))
-            else:
-                store_jumpdest_chunk(table, code.len, CodeAnalysis(chunk=chunk, chunk_index=Uint(chunk_index), chunk_offset=U8(chunk_offset)))
-                return analyze_code_from(code, fork, table, added, CodeAnalysis(chunk=EMPTY_JUMPDEST_CHUNK, chunk_index=Uint(sail_ediv_int(added, 256)), chunk_offset=U8((int(progressed) - 256))))
+            return analyze_code_from(code, fork, table, added)
         else:
-            return store_jumpdest_chunk(table, code.len, CodeAnalysis(chunk=chunk, chunk_index=Uint(chunk_index), chunk_offset=U8(chunk_offset)))
+            return None
     else:
-        return store_jumpdest_chunk(table, code.len, analysis)
+        return None
 
 def analyze_code(code: CodeSlice, fork: Fork) -> jump_table_index:
     if ((code.len) == (0)):
         return jump_table_index(EMPTY_JUMP_TABLE)
     else:
-        length = code.len
-        table = _host_jumpdest_table_alloc(length)
+        table = _host_jumpdest_table_alloc(code)
         if not (((table) != (EMPTY_JUMP_TABLE))):
             raise SailError("JUMPDEST table allocation")
-        analyze_code_from(code, fork, table, 0, CodeAnalysis(chunk=EMPTY_JUMPDEST_CHUNK, chunk_index=Uint(0), chunk_offset=U8(0)))
+        analyze_code_from(code, fork, table, 0)
         return jump_table_index(table)
 
 def code_db_insert(code: CodeSlice, fork: Fork) -> hash:
-    return Bytes32(_host_code_db_store(code, analyze_code(code, fork)))
+    return Bytes32(_host_code_db_store(analyzed_code(code, analyze_code(code, fork))))
 
 def code_db_intern_input(bytes: StatelessInputSlice) -> CodeSlice:
     return validated_code_slice(_host_code_region_from_input(bytes))
 
-def code_db_intern_memory(bytes: MemorySlice) -> CodeSlice:
+def code_db_intern_memory(bytes: EvmMemorySlice) -> CodeSlice:
     return validated_code_slice(_host_code_region_from_memory(bytes))
 
 def code_db_intern_output(bytes: OutputSlice) -> CodeSlice:
@@ -144,7 +107,7 @@ def code_db_resolve(code_hash: hash) -> Code:
         return EMPTY_CODE
     else:
         match _host_code_db_lookup(code_hash):
-            case (code as _sail_some_value_0) if _sail_some_value_0 is not None:
+            case (code as _sail_some_value_1) if _sail_some_value_1 is not None:
                 return code
             case None:
                 raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))

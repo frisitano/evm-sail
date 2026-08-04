@@ -51,7 +51,12 @@ block_gas_limit: TypeAlias = Uint
 
 block_gas: TypeAlias = Uint
 
-receipt_cumulative_gas: TypeAlias = Uint
+class receipt_cumulative_gas(Unsigned):
+    LOWER = 0
+    UPPER = 36893488147419103230
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
 class gas_constant(Unsigned):
     LOWER = 0
@@ -68,7 +73,11 @@ state_gas_delta: TypeAlias = int
 
 transaction_state_gas_delta: TypeAlias = int
 
+transaction_state_gas_used: TypeAlias = Uint
+
 transaction_refund_divisor: TypeAlias = int
+
+BLOCK_ACCESS_LIST_ITEM_GAS: Annotated[int, IntegerRange(2000, 2000)] = 2000
 
 GAS_COST_ZERO: int = 0
 

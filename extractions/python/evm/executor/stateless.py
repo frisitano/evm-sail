@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from .._runtime import (
     SailThrown,
-    sail_ediv_int,
 )
 from dataclasses import dataclass
 from evm.HostContract import (
@@ -26,6 +25,7 @@ from evm.primitives.block import (
     logs_bloom_matches_ref,
 )
 from evm.lib.state_trie import compute_state_root
+from evm.host.debug_disabled import validation_debug_capture_block_gas
 from evm.lib.ssz.stateless_input import (
     StatelessInputRef,
     decode_stateless_input,
@@ -46,6 +46,7 @@ def validate_executed_block(block: Block, input_ref: StatelessInputRef, result: 
     if (int(profile.fork) >= int(Prague)):
         if (((not (_host_scratch_input_slices_equal(result.requests.withdrawals, input_ref.withdrawal_requests)))) | ((((not (_host_scratch_input_slices_equal(result.requests.consolidations, input_ref.consolidation_requests)))) | ((((not (_host_scratch_input_slices_equal(result.requests.builder_deposits, input_ref.builder_deposit_requests)))) | ((not (_host_scratch_input_slices_equal(result.requests.builder_exits, input_ref.builder_exit_requests))))))))):
             raise SailThrown(InvalidBlock(BlockError.InvalidExecutionRequests))
+    validation_debug_capture_block_gas(result.header_gas_used, header.gas_used, result.execution_gas_used, result.state_gas_used)
     if ((result.header_gas_used) != (header.gas_used)):
         raise SailThrown(InvalidBlock(BlockError.InvalidGasUsed))
     if (((int(profile.fork) >= int(Cancun))) & (((result.blob_gas_used) != (header.blob_gas_used)))):
@@ -58,8 +59,7 @@ def validate_executed_block(block: Block, input_ref: StatelessInputRef, result: 
     if (not (logs_bloom_matches_ref(result.logs_bloom, header.logs_bloom))):
         raise SailThrown(InvalidBlock(BlockError.InvalidLogsBloom))
     if (int(profile.fork) >= int(Amsterdam)):
-        maximum_items = sail_ediv_int(execution_profile.gas.block_limit, 2000)
-        return validate_block_access_list(block.body.block_access_list, maximum_items)
+        return validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
     else:
         return None
 

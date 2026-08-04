@@ -9,7 +9,6 @@ from .._runtime import (
     SailError,
     SailExit,
     SailMatchFailure,
-    Uint,
     VectorLength,
 )
 from typing import Annotated
@@ -31,7 +30,7 @@ from evm.prelude import (
     hash,
     word,
 )
-from evm.primitives.quantities import code_chunk_index
+from evm.primitives.quantities import code_length
 from evm.primitives.bytes import (
     LogDataSlice,
     OutputSlice,
@@ -43,18 +42,23 @@ from evm.primitives.bytes import (
     EMPTY_SCRATCH_SLICE,
 )
 
-def scratch_length_add(left: int, right: int) -> code_chunk_index:
-    return Uint((int(left) + int(right)))
+def scratch_length_add(left: int, right: int) -> code_length:
+    if (int(right) <= int((int((int((1 << 32)) - 1)) - int(left)))):
+        return code_length((int(left) + int(right)))
+    else:
+        if not (False):
+            raise SailError("scratch length overflow")
+        raise SailExit(None)
 
-def scratch_begin() -> code_chunk_index:
+def scratch_begin() -> code_length:
     arena = scratch_arena
-    return Uint(arena.len)
+    return code_length(arena.len)
 
-def scratch_reserve(sail_len: int) -> code_chunk_index:
+def scratch_reserve(sail_len: int) -> code_length:
     arena = scratch_arena
     if not (_host_host_scratch_reserve(arena.len, sail_len)):
         raise SailError("scratch reserve")
-    return Uint(arena.len)
+    return code_length(arena.len)
 
 def scratch_push_byte(data: Annotated[Bits, BitWidth(8)]) -> None:
     global scratch_arena
@@ -200,7 +204,7 @@ def scratch_push_word_be(data: word, sail_len: BoundedUint[0, 32]) -> None:
     else:
         return None
 
-def scratch_finish(start: code_chunk_index) -> ScratchSlice:
+def scratch_finish(start: code_length) -> ScratchSlice:
     start_offset = start
     arena = scratch_arena
     stop_offset = arena.len
@@ -211,7 +215,7 @@ def scratch_finish(start: code_chunk_index) -> ScratchSlice:
             raise SailError("scratch finish mark")
         raise SailExit(None)
 
-def scratch_rewind(mark: code_chunk_index) -> None:
+def scratch_rewind(mark: code_length) -> None:
     global scratch_arena
     mark_offset = mark
     arena = scratch_arena

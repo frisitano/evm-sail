@@ -19,7 +19,6 @@ from evm.HostContract import (
     mem_frame_leave as _host_mem_frame_leave,
     mem_load_word as _host_mem_load_word,
     mem_move as _host_mem_move,
-    mem_read_byte as _host_mem_read_byte,
     mem_store_word as _host_mem_store_word,
     mem_write_byte as _host_mem_write_byte,
     memory_keccak256 as _host_memory_keccak256,
@@ -33,7 +32,7 @@ from evm.HostContract import (
 )
 from evm.prelude import (
     word,
-    sail_U256,
+    u256,
     hash_to_word,
     word_low_byte,
     ZERO_WORD,
@@ -41,7 +40,7 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     MemoryRange,
-    code_chunk_index,
+    code_length,
     code_pointer,
     frame_depth,
     operand_stack_height,
@@ -50,9 +49,9 @@ from evm.primitives.quantities import (
 from evm.primitives.gas import (
     gas,
     gas_refund,
-    receipt_cumulative_gas,
     state_gas_spill,
     transaction_state_gas_delta,
+    transaction_state_gas_used,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
     GAS_REFUND_ZERO,
@@ -60,12 +59,12 @@ from evm.primitives.gas import (
 from evm.primitives.bytes import (
     CalldataSlice,
     CodeRegionSliceFields,
-    MemorySlice,
-    MemorySliceFields,
+    EvmMemorySlice,
+    EvmMemorySliceFields,
     OutputSlice,
-    memory_slice,
+    evm_memory_slice,
     memory_sub_slice,
-    EMPTY_MEMORY_SLICE,
+    EMPTY_EVM_MEMORY_SLICE,
     EMPTY_OUTPUT_SLICE,
     EMPTY_CALLDATA,
 )
@@ -84,11 +83,7 @@ from evm.primitives.code import (
     EMPTY_CODE_SLICE,
     EMPTY_CODE,
 )
-from evm.host.region_access import (
-    output_byte,
-    code_slice_copy,
-    output_slice_copy,
-)
+from evm.host.region_access import output_slice_copy
 from evm.primitives.fork import Amsterdam
 from evm.primitives.evm import (
     FrameCheckpoint,
@@ -96,7 +91,7 @@ from evm.primitives.evm import (
     DEFAULT_MESSAGE,
 )
 from evm.host.code import code_db_intern_memory
-from evm.kernel.lifecycle import k_state_checkpoint
+from evm.kernel.lifecycle import k_journal_checkpoint
 from evm.kernel import environment
 
 def validated_refund_add(left: int, right: int) -> gas_refund:
@@ -111,17 +106,17 @@ def record_refund(delta: int) -> None:
     frame_refund = validated_refund_add(frame_refund, delta)
     return None
 
-def frame_code_len() -> code_chunk_index:
-    code = frame_code.bytes
+def frame_code_len() -> code_length:
+    code = frame_code
     length = code.len
-    return Uint(length)
+    return code_length(length)
 
 def frame_jumpdest_valid(dest: int) -> bool:
-    code = frame_code.bytes
+    code = frame_code
     length = code.len
-    return _host_jumpdest_ref_contains(frame_code.jumpdests, length, dest)
+    return _host_jumpdest_ref_contains(code.jumpdests, length, dest)
 
-def conserved_gas_add(left: int, right: int) -> receipt_cumulative_gas:
+def conserved_gas_add(left: int, right: int) -> transaction_state_gas_used:
     return Uint((int(left) + int(right)))
 
 def refill_frame_state_gas() -> None:
@@ -155,6 +150,18 @@ def stack_height() -> operand_stack_height:
         raise SailError("sail/evm/machine.sail:129.32-129.33")
     return operand_stack_height(height)
 
+def validate_stack(inputs: operand_stack_height, outputs: operand_stack_height) -> bool:
+    height = stack_height()
+    if (int(height) < int(inputs)):
+        exc_halt(ExceptionKind.StackUnderflow)
+        return False
+    else:
+        if (int(STACK_LIMIT) < int((int((int(height) - int(inputs))) + int(outputs)))):
+            exc_halt(ExceptionKind.StackOverflow)
+            return False
+        else:
+            return True
+
 def peek(n: stack_index) -> word:
     return word(_host_stack_peek_word(n))
 
@@ -164,8 +171,8 @@ def push_word(w: word) -> None:
     else:
         return _host_stack_push_word(w)
 
-def push_gas(value: receipt_cumulative_gas) -> None:
-    return push_word(sail_U256(sail_tmod_int(value, (1 << 256))))
+def push_gas(value: transaction_state_gas_used) -> None:
+    return push_word(u256(sail_tmod_int(value, (1 << 256))))
 
 def pop() -> word:
     if ((stack_height()) == (0)):
@@ -194,17 +201,14 @@ def returndata_clear() -> None:
     returndata = EMPTY_OUTPUT_SLICE
     return None
 
-def returndata_size() -> code_chunk_index:
+def returndata_size() -> code_length:
     data = returndata
-    return Uint(data.len)
-
-def returndata_byte(index: code_chunk_index) -> Annotated[Bits, BitWidth(8)]:
-    return output_byte(returndata, index)
+    return code_length(data.len)
 
 def returndata_copy(dst: int, off: int, sail_len: int) -> None:
     return output_slice_copy(returndata, dst, off, sail_len)
 
-def returndata_copy_prefix(dst: code_chunk_index, want: code_chunk_index) -> None:
+def returndata_copy_prefix(dst: code_length, want: code_length) -> None:
     wanted = want
     available = returndata_size()
     if (int(wanted) < int(available)):
@@ -216,7 +220,7 @@ def returndata_copy_prefix(dst: code_chunk_index, want: code_chunk_index) -> Non
 def returndata_remaining(available: int, offset: int) -> Uint:
     return Uint((int(available) - int(offset)))
 
-def validated_returndata_copy(dst: code_chunk_index, source_offset: int, length: int) -> None:
+def validated_returndata_copy(dst: code_length, source_offset: int, length: int) -> None:
     available = returndata_size()
     if (int(source_offset) <= int(available)):
         remaining = returndata_remaining(available, source_offset)
@@ -229,21 +233,21 @@ def validated_returndata_copy(dst: code_chunk_index, source_offset: int, length:
     else:
         return exc_halt(ExceptionKind.InvalidOpcode)
 
-def returndata_copy_words(dst: code_chunk_index, source_offset: word, length: word) -> None:
+def returndata_copy_words(dst: code_length, source_offset: word, length: word) -> None:
     return validated_returndata_copy(dst, source_offset, length)
 
-def evm_memory_high_water() -> code_chunk_index:
+def evm_memory_high_water() -> code_length:
     memory = evm_memory
     length = memory.len
-    return Uint(length)
+    return code_length(length)
 
 def memory_reset() -> None:
     global evm_memory
     _host_mem_clear()
-    evm_memory = EMPTY_MEMORY_SLICE
+    evm_memory = EMPTY_EVM_MEMORY_SLICE
     return None
 
-def memory_expand_to(new_size: int) -> MemorySliceFields:
+def memory_expand_to(new_size: int) -> EvmMemorySliceFields:
     global evm_memory
     memory = evm_memory
     if (int(memory.len) < int(new_size)):
@@ -253,9 +257,9 @@ def memory_expand_to(new_size: int) -> MemorySliceFields:
     else:
         return memory_sub_slice(memory, 0, new_size)
 
-def active_memory_slice(off: int, sail_len: int) -> MemorySliceFields:
+def active_memory_slice(off: int, sail_len: int) -> EvmMemorySliceFields:
     if ((sail_len) == (0)):
-        return EMPTY_MEMORY_SLICE
+        return EMPTY_EVM_MEMORY_SLICE
     else:
         return memory_sub_slice(memory_expand_to((int(off) + int(sail_len))), off, sail_len)
 
@@ -265,21 +269,21 @@ def memory_code_slice(off: int, sail_len: int) -> CodeRegionSliceFields:
     else:
         return code_db_intern_memory(memory_sub_slice(memory_expand_to((int(off) + int(sail_len))), off, sail_len))
 
-def memory_frame_enter() -> MemorySlice:
+def memory_frame_enter() -> EvmMemorySlice:
     global evm_memory
     parent = evm_memory
     base = _host_mem_frame_enter()
-    evm_memory = memory_slice(base, 0)
+    evm_memory = evm_memory_slice(base, 0)
     return parent
 
-def memory_frame_leave(parent: MemorySlice) -> None:
+def memory_frame_leave(parent: EvmMemorySlice) -> None:
     global evm_memory
     _host_mem_frame_leave()
     evm_memory = parent
     return None
 
 def suspend_frame() -> FrameCheckpoint:
-    state = k_state_checkpoint()
+    k_journal_checkpoint()
     saved_pc = pc
     saved_gas = gas_remaining
     saved_state_gas = state_gas_remaining
@@ -292,13 +296,13 @@ def suspend_frame() -> FrameCheckpoint:
     saved_calldata = calldata
     _host_stack_enter_frame()
     saved_memory = memory_frame_enter()
-    return FrameCheckpoint(state=Uint(state), pc=Uint(saved_pc), gas_remaining=Uint(saved_gas), state_gas_remaining=Uint(saved_state_gas), state_gas_spilled=state_gas_spill(saved_state_spill), refund=saved_refund, status=saved_status, message=saved_message, call_depth=frame_depth(saved_depth), code=saved_code, calldata=saved_calldata, memory=saved_memory)
+    return FrameCheckpoint(pc=code_pointer(saved_pc), gas_remaining=gas(saved_gas), state_gas_remaining=gas(saved_state_gas), state_gas_spilled=state_gas_spill(saved_state_spill), refund=saved_refund, status=saved_status, message=saved_message, call_depth=frame_depth(saved_depth), code=saved_code, calldata=saved_calldata, memory=saved_memory)
 
 def restore_frame(checkpoint: FrameCheckpoint) -> None:
     global call_depth, calldata, frame_code, frame_refund, frame_status, gas_remaining, message, pc, state_gas_remaining, state_gas_spilled
     _host_stack_leave_frame()
     memory_frame_leave(checkpoint.memory)
-    pc = Uint(checkpoint.pc)
+    pc = code_length(checkpoint.pc)
     gas_remaining = Uint(checkpoint.gas_remaining)
     state_gas_remaining = Uint(checkpoint.state_gas_remaining)
     state_gas_spilled = state_gas_spill(checkpoint.state_gas_spilled)
@@ -310,41 +314,32 @@ def restore_frame(checkpoint: FrameCheckpoint) -> None:
     calldata = checkpoint.calldata
     return None
 
-def mem_get_byte(off: code_chunk_index) -> Annotated[Bits, BitWidth(8)]:
-    if is_running():
-        return _host_mem_read_byte(off)
-    else:
-        return Bits(8, 0b00000000)
-
-def mem_set_byte(off: code_chunk_index, v: Annotated[Bits, BitWidth(8)]) -> None:
+def mem_set_byte(off: code_length, v: Annotated[Bits, BitWidth(8)]) -> None:
     if is_running():
         return _host_mem_write_byte(off, v)
     else:
         return None
 
-def mem_load(off: code_chunk_index) -> word:
+def mem_load(off: code_length) -> word:
     if is_running():
         return word(_host_mem_load_word(off))
     else:
         return word(ZERO_WORD)
 
-def mem_store(off: code_chunk_index, w: word) -> None:
+def mem_store(off: code_length, w: word) -> None:
     if is_running():
         return _host_mem_store_word(off, w)
     else:
         return None
 
-def mem_store_byte(off: code_chunk_index, w: word) -> None:
+def mem_store_byte(off: code_length, w: word) -> None:
     return mem_set_byte(off, word_low_byte(w))
 
-def mem_mcopy(dst: code_chunk_index, src: code_chunk_index, sail_len: code_chunk_index) -> None:
+def mem_mcopy(dst: code_length, src: code_length, sail_len: code_length) -> None:
     if ((sail_len) != (0)):
         return _host_mem_move(dst, src, sail_len)
     else:
         return None
-
-def mem_codecopy(dst: code_chunk_index, off: code_chunk_index, sail_len: code_chunk_index) -> None:
-    return code_slice_copy(frame_code.bytes, dst, off, sail_len)
 
 def mem_keccak(sail_range_: MemoryRange) -> word:
     return word(hash_to_word(_host_memory_keccak256(active_memory_slice(sail_range_.off, sail_range_.len))))
@@ -373,7 +368,7 @@ calldata: CalldataSlice = EMPTY_CALLDATA
 
 returndata: OutputSlice = EMPTY_OUTPUT_SLICE
 
-evm_memory: MemorySlice = EMPTY_MEMORY_SLICE
+evm_memory: EvmMemorySlice = EMPTY_EVM_MEMORY_SLICE
 
 def _reset_registers() -> None:
     global pc, gas_remaining, state_gas_remaining, state_gas_spilled, frame_refund, frame_status, message, call_depth, frame_code, calldata, returndata, evm_memory
@@ -388,5 +383,5 @@ def _reset_registers() -> None:
     frame_code = EMPTY_CODE
     calldata = EMPTY_CALLDATA
     returndata = EMPTY_OUTPUT_SLICE
-    evm_memory = EMPTY_MEMORY_SLICE
+    evm_memory = EMPTY_EVM_MEMORY_SLICE
     return None

@@ -31,6 +31,7 @@ from .primitives.quantities import (
     MemoryRangeFields as MemoryRangeFields,
     MemoryRangeFieldsValidity as MemoryRangeFieldsValidity,
     account_nonce as account_nonce,
+    ancestor_hash_count as ancestor_hash_count,
     ancestor_index as ancestor_index,
     blake2_rounds as blake2_rounds,
     blob_fee_update_fraction as blob_fee_update_fraction,
@@ -44,23 +45,26 @@ from .primitives.quantities import (
     bloom_u64_bit as bloom_u64_bit,
     bloom_u64_index as bloom_u64_index,
     bls_discount as bls_discount,
+    calldata_length as calldata_length,
+    calldata_pointer as calldata_pointer,
     chain_identifier as chain_identifier,
-    code_chunk_index as code_chunk_index,
     code_length as code_length,
     code_pointer as code_pointer,
     deep_stack_index as deep_stack_index,
     excess_blob_gas as excess_blob_gas,
     frame_depth as frame_depth,
     host_access as host_access,
-    item_count as item_count,
-    item_index as item_index,
-    journal_checkpoint as journal_checkpoint,
+    journal_cursor as journal_cursor,
+    log_data_length as log_data_length,
+    log_data_pointer as log_data_pointer,
     log_topic_count as log_topic_count,
     memory_length as memory_length,
     memory_pointer as memory_pointer,
     merkle_depth as merkle_depth,
     opcode as opcode,
     operand_stack_height as operand_stack_height,
+    output_length as output_length,
+    output_pointer as output_pointer,
     precompile_id as precompile_id,
     precompile_selector as precompile_selector,
     protocol_deployed_code_size_limit as protocol_deployed_code_size_limit,
@@ -68,6 +72,8 @@ from .primitives.quantities import (
     protocol_transaction_regular_gas_limit as protocol_transaction_regular_gas_limit,
     protocol_transaction_total_gas_limit as protocol_transaction_total_gas_limit,
     push_width as push_width,
+    scratch_length as scratch_length,
+    scratch_pointer as scratch_pointer,
     slot_number as slot_number,
     source_length as source_length,
     source_pointer as source_pointer,
@@ -76,12 +82,16 @@ from .primitives.quantities import (
     ssz_uint as ssz_uint,
     stack_index as stack_index,
     stack_operation_index as stack_operation_index,
+    stateless_input_length as stateless_input_length,
+    stateless_input_pointer as stateless_input_pointer,
+    storage_generation as storage_generation,
     transaction_blob_count as transaction_blob_count,
     transaction_blob_gas as transaction_blob_gas,
     transaction_blob_limit as transaction_blob_limit,
     validator_index as validator_index,
     withdrawal_amount as withdrawal_amount,
     withdrawal_index as withdrawal_index,
+    word_byte_count as word_byte_count,
     y_parity as y_parity,
 )
 
@@ -109,6 +119,7 @@ from .primitives.gas import (
     transaction_gas as transaction_gas,
     transaction_refund_divisor as transaction_refund_divisor,
     transaction_state_gas_delta as transaction_state_gas_delta,
+    transaction_state_gas_used as transaction_state_gas_used,
 )
 
 from .primitives.bytes import (
@@ -116,6 +127,11 @@ from .primitives.bytes import (
     CodeRegionSlice as CodeRegionSlice,
     CodeRegionSliceFields as CodeRegionSliceFields,
     CodeRegionSliceFieldsValidity as CodeRegionSliceFieldsValidity,
+    EvmMemorySlice as EvmMemorySlice,
+    EvmMemorySliceAtLeast as EvmMemorySliceAtLeast,
+    EvmMemorySliceFields as EvmMemorySliceFields,
+    EvmMemorySliceFieldsValidity as EvmMemorySliceFieldsValidity,
+    EvmMemorySliceLength as EvmMemorySliceLength,
     InputCalldata as InputCalldata,
     LogData as LogData,
     LogDataMemory as LogDataMemory,
@@ -124,11 +140,6 @@ from .primitives.bytes import (
     LogDataSliceFieldsValidity as LogDataSliceFieldsValidity,
     LogDataWord as LogDataWord,
     MemoryCalldata as MemoryCalldata,
-    MemorySlice as MemorySlice,
-    MemorySliceAtLeast as MemorySliceAtLeast,
-    MemorySliceFields as MemorySliceFields,
-    MemorySliceFieldsValidity as MemorySliceFieldsValidity,
-    MemorySliceLength as MemorySliceLength,
     OutputSlice as OutputSlice,
     OutputSliceFields as OutputSliceFields,
     OutputSliceFieldsValidity as OutputSliceFieldsValidity,
@@ -191,8 +202,10 @@ from .primitives.ssz import (
 
 from .primitives.code import (
     Code as Code,
+    CodeFields as CodeFields,
+    CodeFieldsValidity as CodeFieldsValidity,
     CodeSlice as CodeSlice,
-    JumpdestChunk as JumpdestChunk,
+    DeepStackOperation as DeepStackOperation,
     jump_table_index as jump_table_index,
 )
 
@@ -259,6 +272,8 @@ from .primitives.tx import (
     AccessListRef as AccessListRef,
     Authorization as Authorization,
     AuthorizationListRef as AuthorizationListRef,
+    AuthorizationListRefFields as AuthorizationListRefFields,
+    AuthorizationListRefFieldsValidity as AuthorizationListRefFieldsValidity,
     BlobHashesFields as BlobHashesFields,
     BlobHashesFieldsValidity as BlobHashesFieldsValidity,
     LogSeriesRef as LogSeriesRef,
@@ -269,11 +284,16 @@ from .primitives.tx import (
     LogTopics3 as LogTopics3,
     LogTopics4 as LogTopics4,
     Receipt as Receipt,
+    ReceiptFields as ReceiptFields,
+    ReceiptFieldsValidity as ReceiptFieldsValidity,
+    ReceiptWithin as ReceiptWithin,
     Transaction as Transaction,
     TransactionFields as TransactionFields,
     TransactionFieldsValidity as TransactionFieldsValidity,
     TransactionInputSlice as TransactionInputSlice,
+    TxSignatureScheme as TxSignatureScheme,
     TxType as TxType,
+    TxTypeSemantics as TxTypeSemantics,
     log_store_index as log_store_index,
     transaction_byte_length as transaction_byte_length,
     transaction_calldata_cost as transaction_calldata_cost,
@@ -297,6 +317,7 @@ from .primitives.evm import (
     CallContinuation as CallContinuation,
     CallKind as CallKind,
     CreateContinuation as CreateContinuation,
+    CreateKind as CreateKind,
     Empty as Empty,
     FrameCheckpoint as FrameCheckpoint,
     FrameContinuation as FrameContinuation,
@@ -306,11 +327,24 @@ from .primitives.evm import (
     TransactionGasAllowance as TransactionGasAllowance,
     TransactionGasAllowanceFields as TransactionGasAllowanceFields,
     TransactionGasAllowanceFieldsValidity as TransactionGasAllowanceFieldsValidity,
+    TransactionInitialGas as TransactionInitialGas,
+    TransactionInitialGasFields as TransactionInitialGasFields,
+    TransactionInitialGasFieldsValidity as TransactionInitialGasFieldsValidity,
+    TransactionInitialGasFor as TransactionInitialGasFor,
+    TransactionInitialGasForLimits as TransactionInitialGasForLimits,
     TxEnv as TxEnv,
     TxEnvFields as TxEnvFields,
     TxEnvFieldsValidity as TxEnvFieldsValidity,
+    TxFrameGasSnapshot as TxFrameGasSnapshot,
+    TxFrameGasSnapshotFields as TxFrameGasSnapshotFields,
+    TxFrameGasSnapshotFieldsValidity as TxFrameGasSnapshotFieldsValidity,
+    TxFrameGasSnapshotForLimits as TxFrameGasSnapshotForLimits,
     TxFrameResult as TxFrameResult,
+    TxFrameResultFields as TxFrameResultFields,
+    TxFrameResultFieldsValidity as TxFrameResultFieldsValidity,
     TxValidity as TxValidity,
+    TxValidityFields as TxValidityFields,
+    TxValidityFieldsValidity as TxValidityFieldsValidity,
 )
 
 from .primitives.stateless_input import (
@@ -318,18 +352,48 @@ from .primitives.stateless_input import (
     WitnessContext as WitnessContext,
 )
 
-from .host.code import (
-    CodeAnalysis as CodeAnalysis,
-)
-
-from .lib.rlp.rlp import (
+from .lib.rlp.encoding import (
+    RlpEncoder as RlpEncoder,
     rlp_natural_size as rlp_natural_size,
     rlp_scratch_length as rlp_scratch_length,
 )
 
-from .lib.rlp.tx import (
+from .lib.rlp.codecs.transactions import (
     AccessListDecode as AccessListDecode,
     AccessListDecodeValidity as AccessListDecodeValidity,
+)
+
+from .host.journal import (
+    JournalAccountBalanceChange as JournalAccountBalanceChange,
+    JournalAccountBalanceChanged as JournalAccountBalanceChanged,
+    JournalAccountCodeHashChange as JournalAccountCodeHashChange,
+    JournalAccountCodeHashChanged as JournalAccountCodeHashChanged,
+    JournalAccountCreatedChange as JournalAccountCreatedChange,
+    JournalAccountCreatedChanged as JournalAccountCreatedChanged,
+    JournalAccountExistsChange as JournalAccountExistsChange,
+    JournalAccountExistsChanged as JournalAccountExistsChanged,
+    JournalAccountNonceChange as JournalAccountNonceChange,
+    JournalAccountNonceChanged as JournalAccountNonceChanged,
+    JournalAccountSelfdestructedChange as JournalAccountSelfdestructedChange,
+    JournalAccountSelfdestructedChanged as JournalAccountSelfdestructedChanged,
+    JournalAccountStorageGenerationChange as JournalAccountStorageGenerationChange,
+    JournalAccountStorageGenerationChanged as JournalAccountStorageGenerationChanged,
+    JournalFrameCheckpointed as JournalFrameCheckpointed,
+    JournalFrameCommitted as JournalFrameCommitted,
+    JournalLogAppended as JournalLogAppended,
+    JournalStorageRowGenerationChange as JournalStorageRowGenerationChange,
+    JournalStorageRowGenerationChanged as JournalStorageRowGenerationChanged,
+    JournalStorageValueChange as JournalStorageValueChange,
+    JournalStorageValueChanged as JournalStorageValueChanged,
+    JournalTransactionAccountListed as JournalTransactionAccountListed,
+    JournalTransactionStorageListed as JournalTransactionStorageListed,
+    JournalTransientChange as JournalTransientChange,
+    JournalTransientChanged as JournalTransientChanged,
+    JournalWarmAccountChange as JournalWarmAccountChange,
+    JournalWarmAccountChanged as JournalWarmAccountChanged,
+    JournalWarmStorageChange as JournalWarmStorageChange,
+    JournalWarmStorageChanged as JournalWarmStorageChanged,
+    StateJournalEntry as StateJournalEntry,
 )
 
 from .host.state import (
@@ -350,6 +414,10 @@ from .host.state import (
 
 from .kernel.environment import (
     EnvField as EnvField,
+)
+
+from .kernel.lifecycle import (
+    TransactionMergeSemantics as TransactionMergeSemantics,
 )
 
 from .evm.gas import (
@@ -386,7 +454,6 @@ from .evm.instructions import (
     CODECOPY as CODECOPY,
     CODESIZE as CODESIZE,
     COINBASE as COINBASE,
-    CREATE as CREATE,
     CREATE2 as CREATE2,
     DELEGATECALL as DELEGATECALL,
     DIV as DIV,
@@ -453,6 +520,12 @@ from .evm.instructions import (
     TSTORE as TSTORE,
     XOR as XOR,
     ast as ast,
+    opcode_CREATE as opcode_CREATE,
+)
+
+from .evm.interpreter import (
+    CallSemantics as CallSemantics,
+    CreateSemantics as CreateSemantics,
 )
 
 from .evm.transaction import (
@@ -460,6 +533,8 @@ from .evm.transaction import (
     TransactionCosts as TransactionCosts,
     TxUpfrontResult as TxUpfrontResult,
     amsterdam_recipient_cost as amsterdam_recipient_cost,
+    authorization_item_refund as authorization_item_refund,
+    authorization_refund as authorization_refund,
 )
 
 from .lib.mpt.primitives import (
@@ -477,21 +552,24 @@ from .lib.mpt.nodes import (
     EmptyRef as EmptyRef,
     HashRef as HashRef,
     InlineNode as InlineNode,
-    InputBranchNode as InputBranchNode,
-    InputExtensionNode as InputExtensionNode,
     InputInlineRef as InputInlineRef,
-    InputLeafNode as InputLeafNode,
     InputTrieLeaf as InputTrieLeaf,
-    InputTrieNode as InputTrieNode,
     NodeRef as NodeRef,
-    ScratchBranchNode as ScratchBranchNode,
-    ScratchExtensionNode as ScratchExtensionNode,
     ScratchInlineRef as ScratchInlineRef,
-    ScratchLeafNode as ScratchLeafNode,
     ScratchTrieLeaf as ScratchTrieLeaf,
-    ScratchTrieNode as ScratchTrieNode,
     TrieLeafValue as TrieLeafValue,
     branch_content_length as branch_content_length,
+)
+
+from .lib.mpt.codec import (
+    InputBranchNode as InputBranchNode,
+    InputExtensionNode as InputExtensionNode,
+    InputLeafNode as InputLeafNode,
+    InputTrieNode as InputTrieNode,
+    ScratchBranchNode as ScratchBranchNode,
+    ScratchExtensionNode as ScratchExtensionNode,
+    ScratchLeafNode as ScratchLeafNode,
+    ScratchTrieNode as ScratchTrieNode,
     branch_mask as branch_mask,
 )
 
@@ -520,6 +598,7 @@ from .lib.mpt.indexed import (
     RlpIndexCursorValidity as RlpIndexCursorValidity,
     RlpIndexItem as RlpIndexItem,
     RlpIndexItemValidity as RlpIndexItemValidity,
+    rlp_index as rlp_index,
     rlp_index_byte_width as rlp_index_byte_width,
 )
 
@@ -542,6 +621,9 @@ from .executor.receipts import (
 
 from .executor.block import (
     BlockExecutionResult as BlockExecutionResult,
+    BlockGasUsageFields as BlockGasUsageFields,
+    BlockGasUsageFieldsValidity as BlockGasUsageFieldsValidity,
+    BlockGasUsageFor as BlockGasUsageFor,
 )
 
 from .executor.payload import (

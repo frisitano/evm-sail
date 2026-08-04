@@ -3,146 +3,47 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bits,
-    Bytes32,
-    IntegerRange,
-    SailThrown,
+    SailMatchFailure,
 )
-from typing import Annotated
-from evm.HostContract import (
-    scratch_keccak256 as _host_scratch_keccak256,
-)
-from evm._sail.vector import neq_bits
 from evm.prelude import (
     address,
     hash,
     word,
-    word_sub_word,
     word_and,
     word_ult,
     word_ule,
-    word_div_word,
-    ZERO_WORD,
     WORD_ZERO,
     WORD_ONE,
 )
 from evm.primitives.quantities import (
-    account_nonce,
     chain_identifier,
     y_parity,
     word_of_chain_identifier,
-)
-from evm.primitives.bytes import (
-    StatelessInputSlice,
-    DOUBLE_WORD_BYTE_LENGTH,
-)
-from evm.exceptions import (
-    BlockError,
-    InvalidBlock,
-)
-from evm.kernel.scratch import (
-    scratch_reserve,
-    scratch_push_byte,
-    stateless_input_scratch_push_slice,
-    scratch_finish,
-    scratch_rewind,
 )
 from evm.primitives.crypto import (
     ecrecover_addr,
     SECP_N_HALF,
 )
-from evm.primitives.tx import (
-    TxType,
-    tx_type_byte,
-)
-from evm.lib.rlp.rlp import (
-    rlp_length_prefix_len,
-    rlp_uint_word_size,
-    rlp_addr_size,
-    rlp_list_size,
-    rlp_write_list_prefix,
-    rlp_write_uint_word,
-    rlp_write_addr,
-    rlp_finish,
-)
+from evm.primitives.tx import TxSignatureScheme
+from evm.lib.rlp.codecs.transaction_signing import legacy_sig_chain_id
 
-def legacy_sig_chain_id(v: word) -> word:
-    return word(word_div_word(word_sub_word(v, 35), 2))
-
-def tx_signing_hash(t: TxType, content_src: StatelessInputSlice, v: word) -> hash:
-    tb = tx_type_byte(t)
-    eip155 = ((((tb) == (Bits(8, 0b00000000)))) & (word_ule(35, v)))
-    if eip155:
-        chain_id = legacy_sig_chain_id(v)
-    else:
-        chain_id = ZERO_WORD
-    if eip155:
-        chain_id_length = rlp_uint_word_size(chain_id)
-        suffix_length = LEGACY_SIGNATURE_SUFFIX_LENGTH
-        suffix_len = (int(chain_id_length) + int(suffix_length))
-    else:
-        suffix_len = 0
-    if (int(content_src.len) <= int((1 << 30))):
-        content_length = content_src.len
-    else:
-        raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    suffix_length = suffix_len
-    content_len = (int(content_length) + int(suffix_length))
-    prefix_len = rlp_length_prefix_len(content_len)
-    if ((tb) == (Bits(8, 0b00000000))):
-        type_len = 0
-    else:
-        type_len = 1
-    preimage_len = (int((int(type_len) + int(prefix_len))) + int(content_len))
-    mark = scratch_reserve(preimage_len)
-    if neq_bits(tb, Bits(8, 0b00000000)):
-        scratch_push_byte(tb)
-    rlp_write_list_prefix(content_len)
-    stateless_input_scratch_push_slice(content_src)
-    if eip155:
-        rlp_write_uint_word(chain_id)
-        scratch_push_byte(Bits(8, 0b10000000))
-        scratch_push_byte(Bits(8, 0b10000000))
-    signing_hash = _host_scratch_keccak256(scratch_finish(mark))
-    scratch_rewind(mark)
-    return Bytes32(signing_hash)
-
-def auth_signing_hash(chain_id: word, addr: address, nonce: account_nonce) -> hash:
-    chain_id_length = rlp_uint_word_size(chain_id)
-    address_length = rlp_addr_size()
-    nonce_length = rlp_uint_word_size(nonce)
-    content_len = (int((int(chain_id_length) + int(address_length))) + int(nonce_length))
-    preimage_len = (1 + int(rlp_list_size(content_len)))
-    mark = scratch_reserve(preimage_len)
-    scratch_push_byte(Bits(8, 0b00000101))
-    rlp_write_list_prefix(content_len)
-    rlp_write_uint_word(chain_id)
-    rlp_write_addr(addr)
-    rlp_write_uint_word(nonce)
-    encoded = rlp_finish(mark)
-    signing_hash = _host_scratch_keccak256(encoded)
-    scratch_rewind(mark)
-    return Bytes32(signing_hash)
-
-def tx_sig_v_valid(chain_id: chain_identifier, t: TxType, v: word) -> bool:
-    match t:
-        case TxType.LegacyTx:
-            return ((((v) == (27))) | (((((v) == (28))) | (((word_ule(35, v)) & (((legacy_sig_chain_id(v)) == (word_of_chain_identifier(chain_id)))))))))
-        case _:
-            return ((((v) == (WORD_ZERO))) | (((v) == (WORD_ONE))))
-
-def tx_y_parity(t: TxType, v: word) -> y_parity:
-    match t:
-        case TxType.LegacyTx:
-            if ((word_and(v, WORD_ONE)) == (WORD_ONE)):
-                return y_parity(0)
+def tx_signature_parity(chain_id: chain_identifier, scheme: TxSignatureScheme, v: word) -> y_parity | None:
+    match scheme:
+        case TxSignatureScheme.LegacySignature:
+            if ((((v) == (27))) | (((((v) == (28))) | (((word_ule(35, v)) & (((legacy_sig_chain_id(v)) == (word_of_chain_identifier(chain_id))))))))):
+                return (0 if ((word_and(v, WORD_ONE)) == (WORD_ONE)) else 1)
             else:
-                return y_parity(1)
-        case _:
+                return None
+        case TxSignatureScheme.TypedSignature:
             if ((v) == (WORD_ZERO)):
-                return y_parity(0)
+                return 0
             else:
-                return y_parity(1)
+                if ((v) == (WORD_ONE)):
+                    return 1
+                else:
+                    return None
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
 
 def tx_auth_valid(sender: address, h: hash, parity: y_parity, r: word, s: word) -> bool:
     if word_ult(SECP_N_HALF, s):
@@ -150,7 +51,3 @@ def tx_auth_valid(sender: address, h: hash, parity: y_parity, r: word, s: word) 
     else:
         (recovered, recovered_sender) = ecrecover_addr(h, parity, r, s)
         return ((recovered) & (((recovered_sender) == (sender))))
-
-LEGACY_SIGNATURE_SUFFIX_LENGTH: Annotated[int, IntegerRange(2, 2)] = 2
-
-PUBLIC_KEY_BODY_LENGTH: Annotated[int, IntegerRange(64, 64)] = DOUBLE_WORD_BYTE_LENGTH

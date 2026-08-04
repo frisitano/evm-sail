@@ -342,7 +342,7 @@ class EXCHANGE(ast):
     value: byte
 
 @dataclass(frozen=True, slots=True)
-class CREATE(ast):
+class opcode_CREATE(ast):
     value: None = None
 
 @dataclass(frozen=True, slots=True)

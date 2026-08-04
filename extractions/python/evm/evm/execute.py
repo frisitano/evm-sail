@@ -13,7 +13,7 @@ from typing import Annotated
 from evm.prelude import (
     address,
     word,
-    sail_U256,
+    u256,
     hash_to_word,
     word_to_address,
     word_is_zero,
@@ -49,8 +49,9 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     log_topic_count,
-    push_width,
+    operand_stack_height,
     stack_operation_index,
+    word_byte_count,
     word_of_nat_byte_count,
     word_of_source_byte_count,
 )
@@ -61,7 +62,7 @@ from evm.primitives.gas import (
 from evm.primitives.bytes import (
     LogDataMemory,
     calldata_slice_length,
-    memory_slice,
+    evm_memory_slice,
 )
 from evm.exceptions import ExceptionKind
 from evm.evm.halt import (
@@ -74,6 +75,7 @@ from evm.evm.halt import (
 from evm.primitives.code import (
     deep_stack_immediate_valid,
     exchange_immediate_valid,
+    code_bytes,
 )
 from evm.host.region_access import (
     calldata_slice_load_word_offset,
@@ -94,7 +96,10 @@ from evm.primitives.tx import (
     LogTopics3,
     LogTopics4,
 )
-from evm.primitives.evm import CallKind
+from evm.primitives.evm import (
+    CallKind,
+    CreateKind,
+)
 from evm.host.output import freeze_memory_output
 from evm.kernel.environment import (
     EnvField,
@@ -103,8 +108,10 @@ from evm.kernel.environment import (
     k_blobhash,
 )
 from evm.kernel.storage import (
-    k_access_account,
+    k_account_is_warm,
+    k_account_mark_warm,
     k_slot_is_warm,
+    k_slot_mark_warm,
     k_sload,
     k_sstore,
     k_tload,
@@ -133,7 +140,7 @@ from evm.evm.machine import (
     frame_jumpdest_valid,
     refill_frame_state_gas,
     exc_halt,
-    stack_height,
+    validate_stack,
     peek,
     push_word,
     push_gas,
@@ -211,7 +218,6 @@ from evm.evm.instructions import (
     CODECOPY,
     CODESIZE,
     COINBASE,
-    CREATE,
     CREATE2,
     DELEGATECALL,
     DIV,
@@ -278,6 +284,7 @@ from evm.evm.instructions import (
     TSTORE,
     XOR,
     ast,
+    opcode_CREATE,
     decode_single_stack_index,
     decode_exchange_stack_indices,
 )
@@ -332,159 +339,263 @@ def pop_log_topics(count: log_topic_count) -> LogTopics:
             return LogTopics0(None)
 
 def execute_add() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_add(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_add(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mul() -> None:
-    charge(G_low)
-    a = pop()
-    b = pop()
-    return push_word(alu_mul(a, b))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_mul(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sub() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_sub(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_sub(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_div() -> None:
-    charge(G_low)
-    a = pop()
-    b = pop()
-    return push_word(alu_div(a, b))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_div(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sdiv() -> None:
-    charge(G_low)
-    a = pop()
-    b = pop()
-    return push_word(alu_sdiv(a, b))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_sdiv(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mod() -> None:
-    charge(G_low)
-    a = pop()
-    b = pop()
-    return push_word(alu_mod(a, b))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_mod(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_smod() -> None:
-    charge(G_low)
-    a = pop()
-    b = pop()
-    return push_word(alu_smod(a, b))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_smod(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_addmod() -> None:
-    charge(G_mid)
-    a = pop()
-    b = pop()
-    n = pop()
-    return push_word(alu_addmod(a, b, n))
+    try:
+        if (not (charge(G_mid))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        n = pop()
+        return push_word(alu_addmod(a, b, n))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mulmod() -> None:
-    charge(G_mid)
-    a = pop()
-    b = pop()
-    n = pop()
-    return push_word(alu_mulmod(a, b, n))
+    try:
+        if (not (charge(G_mid))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        n = pop()
+        return push_word(alu_mulmod(a, b, n))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_exp() -> None:
-    a = pop()
-    e = pop()
-    charge(exp_gas(e))
-    return push_word(alu_exp(a, e))
+    try:
+        a = pop()
+        e = pop()
+        if (not (charge(exp_gas(e)))):
+            raise SailReturn(None)
+        return push_word(alu_exp(a, e))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_signextend() -> None:
-    charge(G_low)
-    bi = pop()
-    v = pop()
-    return push_word(alu_signextend(bi, v))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        bi = pop()
+        v = pop()
+        return push_word(alu_signextend(bi, v))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_lt() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_lt(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_lt(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_gt() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_gt(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_gt(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_slt() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_slt(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_slt(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sgt() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_sgt(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_sgt(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_eq() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_eq(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_eq(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_iszero() -> None:
-    charge(G_verylow)
-    a = pop()
-    return push_word(alu_iszero(a))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        return push_word(alu_iszero(a))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_and() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_and(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_and(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_or() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_or(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_or(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_xor() -> None:
-    charge(G_verylow)
-    a = pop()
-    b = pop()
-    return push_word(alu_xor(a, b))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        b = pop()
+        return push_word(alu_xor(a, b))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_not() -> None:
-    charge(G_verylow)
-    a = pop()
-    return push_word(alu_not(a))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        a = pop()
+        return push_word(alu_not(a))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_byte() -> None:
-    charge(G_verylow)
-    i = pop()
-    x = pop()
-    return push_word(alu_byte(i, x))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        i = pop()
+        x = pop()
+        return push_word(alu_byte(i, x))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_shl() -> None:
-    charge(G_verylow)
-    s = pop()
-    v = pop()
-    return push_word(alu_shl(s, v))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        s = pop()
+        v = pop()
+        return push_word(alu_shl(s, v))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_shr() -> None:
-    charge(G_verylow)
-    s = pop()
-    v = pop()
-    return push_word(alu_shr(s, v))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        s = pop()
+        v = pop()
+        return push_word(alu_shr(s, v))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sar() -> None:
-    charge(G_verylow)
-    s = pop()
-    v = pop()
-    return push_word(alu_sar(s, v))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        s = pop()
+        v = pop()
+        return push_word(alu_sar(s, v))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_clz() -> None:
-    charge(G_low)
-    x = pop()
-    return push_word(alu_clz(x))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        x = pop()
+        return push_word(alu_clz(x))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_keccak256() -> None:
     offset_word = pop()
@@ -497,242 +608,374 @@ def execute_keccak256() -> None:
         return None
 
 def execute_address() -> None:
-    charge(G_base)
-    return push_word(address_to_word(self_addr()))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(address_to_word(self_addr()))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_origin() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_Origin))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_Origin))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_caller() -> None:
-    charge(G_base)
-    return push_word(address_to_word(machine.message.caller))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(address_to_word(machine.message.caller))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_callvalue() -> None:
-    charge(G_base)
-    return push_word(machine.message.value)
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(machine.message.value)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_gasprice() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_GasPrice))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_GasPrice))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_calldatasize() -> None:
-    charge(G_base)
-    input = machine.calldata
-    return push_word(word_of_source_byte_count(calldata_slice_length(input)))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        input = machine.calldata
+        return push_word(word_of_source_byte_count(calldata_slice_length(input)))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_calldataload() -> None:
-    charge(G_verylow)
-    offset_word = pop()
-    if is_running():
-        return push_word(calldata_slice_load_word_offset(machine.calldata, offset_word))
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        offset_word = pop()
+        if is_running():
+            return push_word(calldata_slice_load_word_offset(machine.calldata, offset_word))
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_calldatacopy() -> None:
-    charge(G_verylow)
-    destination_word = pop()
-    source_word = pop()
-    length_word = pop()
-    charge_copy_gas(length_word)
-    sail_range_ = charge_memory_range(destination_word, length_word)
-    if is_running():
-        return calldata_slice_copy_word_offset(machine.calldata, sail_range_.off, source_word, sail_range_.len)
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        destination_word = pop()
+        source_word = pop()
+        length_word = pop()
+        charge_copy_gas(length_word)
+        sail_range_ = charge_memory_range(destination_word, length_word)
+        if is_running():
+            return calldata_slice_copy_word_offset(machine.calldata, sail_range_.off, source_word, sail_range_.len)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_codesize() -> None:
-    charge(G_base)
-    return push_word(word_of_source_byte_count(frame_code_len()))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(word_of_source_byte_count(frame_code_len()))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_codecopy() -> None:
-    charge(G_verylow)
-    destination_word = pop()
-    source_word = pop()
-    length_word = pop()
-    charge_copy_gas(length_word)
-    sail_range_ = charge_memory_range(destination_word, length_word)
-    if is_running():
-        return code_slice_copy_word_offset(machine.frame_code.bytes, sail_range_.off, source_word, sail_range_.len)
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        destination_word = pop()
+        source_word = pop()
+        length_word = pop()
+        charge_copy_gas(length_word)
+        sail_range_ = charge_memory_range(destination_word, length_word)
+        if is_running():
+            code = machine.frame_code
+            return code_slice_copy_word_offset(code_bytes(code), sail_range_.off, source_word, sail_range_.len)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_balance() -> None:
-    a = word_to_address(pop())
-    warm = k_access_account(a)
-    charge(account_cost(warm))
-    if is_running():
+    try:
+        a = word_to_address(pop())
+        warm = k_account_is_warm(a)
+        if (not (charge(account_cost(warm)))):
+            raise SailReturn(None)
+        k_account_mark_warm(a)
         return push_word(k_get_balance(a))
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_selfbalance() -> None:
-    charge(G_low)
-    return push_word(k_get_balance(self_addr()))
+    try:
+        if (not (charge(G_low))):
+            raise SailReturn(None)
+        return push_word(k_get_balance(self_addr()))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_extcodesize() -> None:
-    a = word_to_address(pop())
-    warm = k_access_account(a)
-    charge((int(account_cost(warm)) + int(external_code_read_cost())))
-    if is_running():
+    try:
+        a = word_to_address(pop())
+        warm = k_account_is_warm(a)
+        if (not (charge((int(account_cost(warm)) + int(external_code_read_cost()))))):
+            raise SailReturn(None)
+        k_account_mark_warm(a)
         return push_word(word_of_source_byte_count(k_get_code_size(a)))
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_extcodecopy() -> None:
-    a = word_to_address(pop())
-    destination_word = pop()
-    source_word = pop()
-    length_word = pop()
-    warm = k_access_account(a)
-    charge((int(account_cost(warm)) + int(external_code_read_cost())))
-    charge_copy_gas(length_word)
-    sail_range_ = charge_memory_range(destination_word, length_word)
-    if is_running():
-        return k_code_copy(a, sail_range_.off, source_word, sail_range_.len)
-    else:
-        return None
+    try:
+        a = word_to_address(pop())
+        destination_word = pop()
+        source_word = pop()
+        length_word = pop()
+        warm = k_account_is_warm(a)
+        if (not (charge((int(account_cost(warm)) + int(external_code_read_cost()))))):
+            raise SailReturn(None)
+        charge_copy_gas(length_word)
+        sail_range_ = charge_memory_range(destination_word, length_word)
+        if is_running():
+            k_account_mark_warm(a)
+            return k_code_copy(a, sail_range_.off, source_word, sail_range_.len)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_extcodehash() -> None:
-    a = word_to_address(pop())
-    warm = k_access_account(a)
-    charge(account_cost(warm))
-    if is_running():
+    try:
+        a = word_to_address(pop())
+        warm = k_account_is_warm(a)
+        if (not (charge(account_cost(warm)))):
+            raise SailReturn(None)
+        k_account_mark_warm(a)
         return push_word(hash_to_word(k_get_codehash(a)))
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_returndatasize() -> None:
-    charge(G_base)
-    return push_word(word_of_source_byte_count(returndata_size()))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(word_of_source_byte_count(returndata_size()))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_returndatacopy() -> None:
-    charge(G_verylow)
-    destination_word = pop()
-    source_word = pop()
-    length_word = pop()
-    charge_copy_gas(length_word)
-    sail_range_ = charge_memory_range(destination_word, length_word)
-    if is_running():
-        return returndata_copy_words(sail_range_.off, source_word, length_word)
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        destination_word = pop()
+        source_word = pop()
+        length_word = pop()
+        charge_copy_gas(length_word)
+        sail_range_ = charge_memory_range(destination_word, length_word)
+        if is_running():
+            return returndata_copy_words(sail_range_.off, source_word, length_word)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_blockhash() -> None:
-    charge(20)
-    return push_word(hash_to_word(k_blockhash(pop())))
+    try:
+        if (not (charge(20))):
+            raise SailReturn(None)
+        return push_word(hash_to_word(k_blockhash(pop())))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_coinbase() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_Coinbase))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_Coinbase))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_timestamp() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_Timestamp))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_Timestamp))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_number() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_Number))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_Number))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_slotnum() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_SlotNumber))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_SlotNumber))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_prevrandao() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_PrevRandao))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_PrevRandao))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_gaslimit() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_GasLimit))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_GasLimit))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_chainid() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_ChainId))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_ChainId))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_basefee() -> None:
-    charge(G_base)
-    return push_word(k_env(EnvField.F_BaseFee))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(k_env(EnvField.F_BaseFee))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_blobbasefee() -> None:
-    charge(G_base)
-    execution_profile = environment.k_execution_profile
-    return push_word(blob_base_fee(execution_profile.protocol, environment.k_header.excess_blob_gas))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        execution_profile = environment.k_execution_profile
+        return push_word(blob_base_fee(execution_profile.protocol, environment.k_header.excess_blob_gas))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_blobhash() -> None:
-    charge(G_verylow)
-    return push_word(k_blobhash(pop()))
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        return push_word(k_blobhash(pop()))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_pop() -> None:
-    charge(G_base)
-    pop()
-    return None
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        pop()
+        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mload() -> None:
-    charge(G_verylow)
-    offset_word = pop()
-    sail_range_ = charge_memory_range(offset_word, sail_U256(32))
-    if is_running():
-        return push_word(mem_load(sail_range_.off))
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        offset_word = pop()
+        sail_range_ = charge_memory_range(offset_word, u256(32))
+        if is_running():
+            return push_word(mem_load(sail_range_.off))
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mstore() -> None:
-    charge(G_verylow)
-    offset_word = pop()
-    v = pop()
-    sail_range_ = charge_memory_range(offset_word, sail_U256(32))
-    if is_running():
-        return mem_store(sail_range_.off, v)
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        offset_word = pop()
+        v = pop()
+        sail_range_ = charge_memory_range(offset_word, u256(32))
+        if is_running():
+            return mem_store(sail_range_.off, v)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mstore8() -> None:
-    charge(G_verylow)
-    offset_word = pop()
-    v = pop()
-    sail_range_ = charge_memory_range(offset_word, WORD_ONE)
-    if is_running():
-        return mem_store_byte(sail_range_.off, v)
-    else:
-        return None
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        offset_word = pop()
+        v = pop()
+        sail_range_ = charge_memory_range(offset_word, WORD_ONE)
+        if is_running():
+            return mem_store_byte(sail_range_.off, v)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_msize() -> None:
-    charge(G_base)
-    return push_word(word_of_nat_byte_count((int(memory_word_count(evm_memory_high_water())) * 32)))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(word_of_nat_byte_count((int(memory_word_count(evm_memory_high_water())) * 32)))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_mcopy() -> None:
-    charge(G_verylow)
-    destination_word = pop()
-    source_word = pop()
-    length_word = pop()
-    charge_copy_gas(length_word)
-    if is_running():
-        available = machine.gas_remaining
-        destination = memory_access(destination_word, length_word)
-        source = memory_access(source_word, length_word)
-        if (int(destination.required_size) < int(source.required_size)):
-            required_size = source.required_size
-        else:
-            required_size = destination.required_size
-        expansion = memory_expansion(required_size, available)
-        charge(expansion.cost)
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
+        destination_word = pop()
+        source_word = pop()
+        length_word = pop()
+        charge_copy_gas(length_word)
         if is_running():
+            available = machine.gas_remaining
+            destination = memory_access(destination_word, length_word)
+            source = memory_access(source_word, length_word)
+            if (int(destination.required_size) < int(source.required_size)):
+                required_size = source.required_size
+            else:
+                required_size = destination.required_size
+            expansion = memory_expansion(required_size, available)
+            if (not (charge(expansion.cost))):
+                raise SailReturn(None)
             apply_memory_expansion(expansion)
             return mem_mcopy(destination.range.off, source.range.off, destination.range.len)
         else:
             return None
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sload() -> None:
-    s = pop()
-    warm = k_slot_is_warm(self_addr(), s)
-    charge(sload_cost(warm))
-    if is_running():
+    try:
+        s = pop()
+        warm = k_slot_is_warm(self_addr(), s)
+        if (not (charge(sload_cost(warm)))):
+            raise SailReturn(None)
+        k_slot_mark_warm(self_addr(), s)
         return push_word(k_sload(self_addr(), s).curr)
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_sstore() -> None:
     try:
@@ -758,11 +1001,13 @@ def execute_sstore() -> None:
                         check_execution_gas(sentry_cost)
                     if (not (is_running())):
                         raise SailReturn(None)
+                    k_slot_mark_warm(self_addr(), s)
                     entry = k_sload(self_addr(), s)
                     costs = sstore_costs(entry.orig, entry.curr, v, cold)
                     if ((costs.state_credit) != (0)):
                         credit_state_gas_refund(costs.state_credit)
-                    charge(costs.execution)
+                    if (not (charge(costs.execution))):
+                        raise SailReturn(None)
                     charge_state_gas(costs.state_charge)
                     if (not (((costs.refund) == (GAS_REFUND_ZERO)))):
                         record_refund(costs.refund)
@@ -776,115 +1021,146 @@ def execute_sstore() -> None:
         return _sail_return.value
 
 def execute_tload() -> None:
-    charge(G_warm_access)
-    s = pop()
-    return push_word(k_tload(self_addr(), s))
+    try:
+        if (not (charge(G_warm_access))):
+            raise SailReturn(None)
+        s = pop()
+        return push_word(k_tload(self_addr(), s))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_tstore() -> None:
-    if guard_static():
-        return None
-    else:
-        charge(G_warm_access)
-        s = pop()
-        v = pop()
-        return k_tstore(self_addr(), s, v)
+    try:
+        if guard_static():
+            return None
+        else:
+            if (not (charge(G_warm_access))):
+                raise SailReturn(None)
+            s = pop()
+            v = pop()
+            return k_tstore(self_addr(), s, v)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_jump() -> None:
-    charge(G_mid)
-    dest = pop()
-    return do_jump(dest)
+    try:
+        if (not (charge(G_mid))):
+            raise SailReturn(None)
+        dest = pop()
+        return do_jump(dest)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_jumpi() -> None:
-    charge(G_high)
-    dest = pop()
-    cond = pop()
-    if word_is_zero(cond):
-        return None
-    else:
-        return do_jump(dest)
+    try:
+        if (not (charge(G_high))):
+            raise SailReturn(None)
+        dest = pop()
+        cond = pop()
+        if word_is_zero(cond):
+            return None
+        else:
+            return do_jump(dest)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_pc() -> None:
-    charge(G_base)
-    return push_word(alu_sub(word_of_source_byte_count(machine.pc), WORD_ONE))
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_word(alu_sub(word_of_source_byte_count(machine.pc), WORD_ONE))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_gas() -> None:
-    charge(G_base)
-    return push_gas(machine.gas_remaining)
+    try:
+        if (not (charge(G_base))):
+            raise SailReturn(None)
+        return push_gas(machine.gas_remaining)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_jumpdest() -> None:
-    return charge(G_jumpdest)
+    try:
+        if (not (charge(G_jumpdest))):
+            raise SailReturn(None)
+        else:
+            return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
-def execute_push(n: push_width, v: word) -> None:
-    if ((n) == (0)):
-        charge(G_base)
-    else:
-        charge(G_verylow)
-    return push_word(v)
+def execute_push(n: word_byte_count, v: word) -> None:
+    try:
+        if ((n) == (0)):
+            if (not (charge(G_base))):
+                raise SailReturn(None)
+        else:
+            if (not (charge(G_verylow))):
+                raise SailReturn(None)
+        return push_word(v)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_dup(n: stack_operation_index) -> None:
-    charge(G_verylow)
-    if (int(stack_height()) < int(n)):
-        return exc_halt(ExceptionKind.StackUnderflow)
-    else:
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
         return push_word(peek((int(n) - 1)))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_swap(n: stack_operation_index) -> None:
-    charge(G_verylow)
-    if (int(stack_height()) < int((int(n) + 1))):
-        return exc_halt(ExceptionKind.StackUnderflow)
-    else:
+    try:
+        if (not (charge(G_verylow))):
+            raise SailReturn(None)
         top = peek(0)
         other = peek(n)
         stack_set(0, other)
         return stack_set(n, top)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_dupn(immediate: Annotated[Bits, BitWidth(8)]) -> None:
-    charge(G_verylow)
-    if is_running():
+    try:
         if (not (deep_stack_immediate_valid(immediate))):
             return exc_halt(ExceptionKind.InvalidOpcode)
         else:
+            if (not (charge(G_verylow))):
+                raise SailReturn(None)
             n = decode_single_stack_index(immediate)
-            if (int(stack_height()) < int(n)):
-                return exc_halt(ExceptionKind.StackUnderflow)
-            else:
-                return push_word(peek((int(n) - 1)))
-    else:
-        return None
+            return push_word(peek((int(n) - 1)))
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_swapn(immediate: Annotated[Bits, BitWidth(8)]) -> None:
-    charge(G_verylow)
-    if is_running():
+    try:
         if (not (deep_stack_immediate_valid(immediate))):
             return exc_halt(ExceptionKind.InvalidOpcode)
         else:
+            if (not (charge(G_verylow))):
+                raise SailReturn(None)
             n = decode_single_stack_index(immediate)
-            if (int(stack_height()) < int((int(n) + 1))):
-                return exc_halt(ExceptionKind.StackUnderflow)
-            else:
-                top = peek(0)
-                other = peek(n)
-                stack_set(0, other)
-                return stack_set(n, top)
-    else:
-        return None
+            top = peek(0)
+            other = peek(n)
+            stack_set(0, other)
+            return stack_set(n, top)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_exchange(immediate: Annotated[Bits, BitWidth(8)]) -> None:
-    charge(G_verylow)
-    if is_running():
+    try:
         if (not (exchange_immediate_valid(immediate))):
             return exc_halt(ExceptionKind.InvalidOpcode)
         else:
+            if (not (charge(G_verylow))):
+                raise SailReturn(None)
             (n, m) = decode_exchange_stack_indices(immediate)
-            if (int(stack_height()) < int((int(m) + 1))):
-                return exc_halt(ExceptionKind.StackUnderflow)
-            else:
-                first = peek(n)
-                second = peek(m)
-                stack_set(n, second)
-                return stack_set(m, first)
-    else:
-        return None
+            first = peek(n)
+            second = peek(m)
+            stack_set(n, second)
+            return stack_set(m, first)
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_log(n: log_topic_count) -> None:
     if guard_static():
@@ -897,7 +1173,7 @@ def execute_log(n: log_topic_count) -> None:
         sail_range_ = charge_memory_range(offset_word, length_word)
         if is_running():
             data = active_memory_slice(sail_range_.off, sail_range_.len)
-            return k_log(self_addr(), topics, LogDataMemory(memory_slice(data.off, data.len)))
+            return k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.bytes, data.len)))
         else:
             return None
 
@@ -931,66 +1207,75 @@ def execute_invalid() -> None:
     return exc_halt(ExceptionKind.InvalidOpcode)
 
 def execute_selfdestruct() -> None:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    if guard_static():
-        return None
-    else:
-        beneficiary = word_to_address(pop())
-        if (int(profile.fork) >= int(Amsterdam)):
-            warm = k_access_account(beneficiary)
-            access_cost = (int((0 + int(G_selfdestruct))) + int((G_zero if warm else G_amsterdam_cold_account_access)))
-            check_execution_gas(access_cost)
-            if is_running():
-                bal = k_get_balance(self_addr())
-                creates_account = ((word_nonzero(bal)) & (k_account_is_empty(beneficiary)))
-                if creates_account:
-                    execution_cost = (int(access_cost) + int(G_amsterdam_account_write))
-                else:
-                    execution_cost = access_cost
-                charge(execution_cost)
-                if ((is_running()) & (creates_account)):
-                    charge_state_gas(G_amsterdam_state_new_account)
+    try:
+        execution_profile = environment.k_execution_profile
+        profile = execution_profile.protocol
+        if guard_static():
+            return None
+        else:
+            beneficiary = word_to_address(pop())
+            if (int(profile.fork) >= int(Amsterdam)):
+                warm = k_account_is_warm(beneficiary)
+                access_cost = (int((0 + int(G_selfdestruct))) + int((G_zero if warm else G_amsterdam_cold_account_access)))
+                check_execution_gas(access_cost)
                 if is_running():
+                    k_account_mark_warm(beneficiary)
+                    bal = k_get_balance(self_addr())
+                    creates_account = ((word_nonzero(bal)) & (k_account_is_empty(beneficiary)))
+                    if creates_account:
+                        execution_cost = (int(access_cost) + int(G_amsterdam_account_write))
+                    else:
+                        execution_cost = access_cost
+                    if (not (charge(execution_cost))):
+                        raise SailReturn(None)
+                    if creates_account:
+                        charge_state_gas(G_amsterdam_state_new_account)
+                    if is_running():
+                        k_transfer(self_addr(), beneficiary, bal)
+                        if k_was_created(self_addr()):
+                            k_selfdestruct(self_addr())
+                        machine.frame_status = Halted(HaltSelfDestruct(None))
+                        return None
+                    else:
+                        return None
+                else:
+                    return None
+            else:
+                bal = k_get_balance(self_addr())
+                warm = k_account_is_warm(beneficiary)
+                if (not (charge(G_selfdestruct))):
+                    raise SailReturn(None)
+                if (not (warm)):
+                    if (not (charge(G_cold_account))):
+                        raise SailReturn(None)
+                k_account_mark_warm(beneficiary)
+                if ((word_nonzero(bal)) & (k_account_is_empty(beneficiary))):
+                    if (not (charge(G_newaccount))):
+                        raise SailReturn(None)
+                if is_running():
+                    first_selfdestruct = (not (k_is_selfdestructed(self_addr())))
+                    if (((int(profile.fork) < int(London))) & (first_selfdestruct)):
+                        record_refund(R_selfdestruct_pre_london)
                     k_transfer(self_addr(), beneficiary, bal)
-                    if k_was_created(self_addr()):
+                    if (int(profile.fork) < int(Cancun)):
+                        k_zero_balance(self_addr())
                         k_selfdestruct(self_addr())
+                    else:
+                        if k_was_created(self_addr()):
+                            k_zero_balance(self_addr())
+                            k_selfdestruct(self_addr())
                     machine.frame_status = Halted(HaltSelfDestruct(None))
                     return None
                 else:
                     return None
-            else:
-                return None
-        else:
-            bal = k_get_balance(self_addr())
-            warm = k_access_account(beneficiary)
-            charge(G_selfdestruct)
-            if (not (warm)):
-                charge(G_cold_account)
-            if ((is_running()) & (((word_nonzero(bal)) & (k_account_is_empty(beneficiary))))):
-                charge(G_newaccount)
-            if is_running():
-                first_selfdestruct = (not (k_is_selfdestructed(self_addr())))
-                if (((int(profile.fork) < int(London))) & (first_selfdestruct)):
-                    record_refund(R_selfdestruct_pre_london)
-                k_transfer(self_addr(), beneficiary, bal)
-                if (int(profile.fork) < int(Cancun)):
-                    k_zero_balance(self_addr())
-                    k_selfdestruct(self_addr())
-                else:
-                    if k_was_created(self_addr()):
-                        k_zero_balance(self_addr())
-                        k_selfdestruct(self_addr())
-                machine.frame_status = Halted(HaltSelfDestruct(None))
-                return None
-            else:
-                return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def execute_create() -> None:
-    return interpreter.run_create(False)
+    return interpreter.run_create(CreateKind.CreateByNonce)
 
 def execute_create2() -> None:
-    return interpreter.run_create(True)
+    return interpreter.run_create(CreateKind.CreateBySalt)
 
 def execute_call() -> None:
     return interpreter.run_call(CallKind.Call)
@@ -1003,6 +1288,199 @@ def execute_delegatecall() -> None:
 
 def execute_staticcall() -> None:
     return interpreter.run_call(CallKind.StaticCall)
+
+def opcode_stack_effect(op: ast) -> tuple[operand_stack_height, operand_stack_height]:
+    match op:
+        case STOP(None):
+            return (0, 0)
+        case ADD(None):
+            return (2, 1)
+        case MUL(None):
+            return (2, 1)
+        case SUB(None):
+            return (2, 1)
+        case DIV(None):
+            return (2, 1)
+        case SDIV(None):
+            return (2, 1)
+        case MOD(None):
+            return (2, 1)
+        case SMOD(None):
+            return (2, 1)
+        case ADDMOD(None):
+            return (3, 1)
+        case MULMOD(None):
+            return (3, 1)
+        case EXP(None):
+            return (2, 1)
+        case SIGNEXTEND(None):
+            return (2, 1)
+        case LT(None):
+            return (2, 1)
+        case GT(None):
+            return (2, 1)
+        case SLT(None):
+            return (2, 1)
+        case SGT(None):
+            return (2, 1)
+        case EQ(None):
+            return (2, 1)
+        case ISZERO(None):
+            return (1, 1)
+        case AND(None):
+            return (2, 1)
+        case OR(None):
+            return (2, 1)
+        case XOR(None):
+            return (2, 1)
+        case NOT(None):
+            return (1, 1)
+        case BYTE(None):
+            return (2, 1)
+        case SHL(None):
+            return (2, 1)
+        case SHR(None):
+            return (2, 1)
+        case SAR(None):
+            return (2, 1)
+        case CLZ(None):
+            return (1, 1)
+        case KECCAK256(None):
+            return (2, 1)
+        case ADDRESS(None):
+            return (0, 1)
+        case BALANCE(None):
+            return (1, 1)
+        case ORIGIN(None):
+            return (0, 1)
+        case CALLER(None):
+            return (0, 1)
+        case CALLVALUE(None):
+            return (0, 1)
+        case CALLDATALOAD(None):
+            return (1, 1)
+        case CALLDATASIZE(None):
+            return (0, 1)
+        case CALLDATACOPY(None):
+            return (3, 0)
+        case CODESIZE(None):
+            return (0, 1)
+        case CODECOPY(None):
+            return (3, 0)
+        case GASPRICE(None):
+            return (0, 1)
+        case EXTCODESIZE(None):
+            return (1, 1)
+        case EXTCODECOPY(None):
+            return (4, 0)
+        case RETURNDATASIZE(None):
+            return (0, 1)
+        case RETURNDATACOPY(None):
+            return (3, 0)
+        case EXTCODEHASH(None):
+            return (1, 1)
+        case BLOCKHASH(None):
+            return (1, 1)
+        case COINBASE(None):
+            return (0, 1)
+        case TIMESTAMP(None):
+            return (0, 1)
+        case NUMBER(None):
+            return (0, 1)
+        case PREVRANDAO(None):
+            return (0, 1)
+        case GASLIMIT(None):
+            return (0, 1)
+        case CHAINID(None):
+            return (0, 1)
+        case SELFBALANCE(None):
+            return (0, 1)
+        case BASEFEE(None):
+            return (0, 1)
+        case BLOBHASH(None):
+            return (1, 1)
+        case BLOBBASEFEE(None):
+            return (0, 1)
+        case SLOTNUM(None):
+            return (0, 1)
+        case POP(None):
+            return (1, 0)
+        case MLOAD(None):
+            return (1, 1)
+        case MSTORE(None):
+            return (2, 0)
+        case MSTORE8(None):
+            return (2, 0)
+        case SLOAD(None):
+            return (1, 1)
+        case SSTORE(None):
+            return (2, 0)
+        case JUMP(None):
+            return (1, 0)
+        case JUMPI(None):
+            return (2, 0)
+        case PC(None):
+            return (0, 1)
+        case MSIZE(None):
+            return (0, 1)
+        case GAS(None):
+            return (0, 1)
+        case JUMPDEST(None):
+            return (0, 0)
+        case TLOAD(None):
+            return (1, 1)
+        case TSTORE(None):
+            return (2, 0)
+        case MCOPY(None):
+            return (3, 0)
+        case PUSH((_, _)):
+            return (0, 1)
+        case DUP(n):
+            return (n, (int(n) + 1))
+        case SWAP(n):
+            return ((int(n) + 1), (int(n) + 1))
+        case DUPN(immediate):
+            if deep_stack_immediate_valid(immediate):
+                n = decode_single_stack_index(immediate)
+                return (n, (int(n) + 1))
+            else:
+                return (0, 0)
+        case SWAPN(immediate):
+            if deep_stack_immediate_valid(immediate):
+                n = decode_single_stack_index(immediate)
+                return ((int(n) + 1), (int(n) + 1))
+            else:
+                return (0, 0)
+        case EXCHANGE(immediate):
+            if exchange_immediate_valid(immediate):
+                (_, higher) = decode_exchange_stack_indices(immediate)
+                return ((int(higher) + 1), (int(higher) + 1))
+            else:
+                return (0, 0)
+        case LOG(n):
+            return ((int(n) + 2), 0)
+        case opcode_CREATE(None):
+            return (3, 1)
+        case CALL(None):
+            return (7, 1)
+        case CALLCODE(None):
+            return (7, 1)
+        case RETURN(None):
+            return (2, 0)
+        case DELEGATECALL(None):
+            return (6, 1)
+        case CREATE2(None):
+            return (4, 1)
+        case STATICCALL(None):
+            return (6, 1)
+        case REVERT(None):
+            return (2, 0)
+        case INVALID(None):
+            return (0, 0)
+        case SELFDESTRUCT(None):
+            return (1, 0)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
 
 def execute_opcode(op: ast) -> None:
     match op:
@@ -1162,7 +1640,7 @@ def execute_opcode(op: ast) -> None:
             return execute_exchange(immediate)
         case LOG(n):
             return execute_log(n)
-        case CREATE(None):
+        case opcode_CREATE(None):
             return execute_create()
         case CREATE2(None):
             return execute_create2()
@@ -1186,4 +1664,8 @@ def execute_opcode(op: ast) -> None:
             raise SailMatchFailure("no Sail match clause applied")
 
 def execute(op: ast) -> None:
-    return execute_opcode(op)
+    (inputs, outputs) = opcode_stack_effect(op)
+    if validate_stack(inputs, outputs):
+        return execute_opcode(op)
+    else:
+        return None

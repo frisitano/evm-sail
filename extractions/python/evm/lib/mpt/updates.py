@@ -50,6 +50,8 @@ from evm.lib.mpt.nodes import (
     NodeRef,
     ScratchTrieLeaf,
     TrieLeafValue,
+)
+from evm.lib.mpt.codec import (
     branch_mask,
     branch_mask_has,
     branch_mask_set,
@@ -195,22 +197,22 @@ class TrieItem:
     path: TriePath
     value: TrieItemValue
 
-def item_leaf(path: TriePath, value: TrieLeafValue) -> TrieItem:
+def trie_leaf(path: TriePath, value: TrieLeafValue) -> TrieItem:
     return TrieItem(path=path, value=LeafItem(value))
 
-def item_input_leaf(path: TriePath, value: StatelessInputSlice) -> TrieItem:
-    return item_leaf(path, InputTrieLeaf(value))
+def trie_input_leaf(path: TriePath, value: StatelessInputSlice) -> TrieItem:
+    return trie_leaf(path, InputTrieLeaf(value))
 
-def item_scratch_leaf(path: TriePath, value: ScratchSlice) -> TrieItem:
-    return item_leaf(path, ScratchTrieLeaf(value))
+def trie_scratch_leaf(path: TriePath, value: ScratchSlice) -> TrieItem:
+    return trie_leaf(path, ScratchTrieLeaf(value))
 
-def item_branch(path: TriePath, childref: NodeRef) -> TrieItem:
+def trie_branch(path: TriePath, childref: NodeRef) -> TrieItem:
     return TrieItem(path=path, value=BranchItem(childref))
 
-def item_subtree(path: TriePath, childref: NodeRef) -> TrieItem:
+def trie_subtree(path: TriePath, childref: NodeRef) -> TrieItem:
     return TrieItem(path=path, value=SubtreeItem(childref))
 
-def item_ref(it: TrieItem, depth: trie_path_cursor) -> NodeRef:
+def trie_child_ref(it: TrieItem, depth: trie_path_cursor) -> NodeRef:
     suffix = path_drop(it.path, depth)
     match it.value:
         case LeafItem(value):
@@ -268,7 +270,7 @@ def trie_children_add(children: TrieChildren, prefix: TriePath, index: Annotated
                 raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
             updated = children
             updated.mask = branch_mask_set(updated.mask, index)
-            updated = replace(deepcopy(updated), children=sail_vector_update(updated.children, int(index), item_ref(item, (int(depth) + 1)), False))
+            updated = replace(deepcopy(updated), children=sail_vector_update(updated.children, int(index), trie_child_ref(item, (int(depth) + 1)), False))
             updated.only = item
             updated.count = BoundedUint[0, 16]((int(child_count) + 1))
             return updated
@@ -282,13 +284,13 @@ def trie_children_finish(prefix: TriePath, children: TrieChildren) -> TrieItem |
         if ((children.count) == (1)):
             return children.only
         else:
-            return item_branch(prefix, branch_child_ref(children.mask, children.children))
+            return trie_branch(prefix, branch_child_ref(children.mask, children.children))
 
 def trie_subtree_root(subtree: TrieItem | None) -> hash:
     match subtree:
         case None:
             return Bytes32(EMPTY_TRIE_ROOT)
         case (item as _sail_some_value_6) if _sail_some_value_6 is not None:
-            return Bytes32(trie_ref_to_root(item_ref(item, 0)))
+            return Bytes32(trie_ref_to_root(trie_child_ref(item, 0)))
         case _:
             raise SailMatchFailure("no Sail match clause applied")

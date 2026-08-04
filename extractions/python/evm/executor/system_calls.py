@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bytes20,
     IntegerRange,
     SailThrown,
-    Uint,
 )
 from typing import Annotated
 from evm.HostContract import (
@@ -21,16 +19,16 @@ from evm.prelude import (
     address,
     hash,
     word,
-    sail_U256,
+    u256,
     hash_to_word,
     ZERO_WORD,
 )
 from evm.primitives.quantities import (
-    code_chunk_index,
     frame_depth,
     memory_range,
 )
 from evm.primitives.gas import (
+    gas,
     STATE_GAS_SPILL_ZERO,
     GAS_REFUND_ZERO,
 )
@@ -40,7 +38,7 @@ from evm.primitives.bytes import (
     MemoryCalldata,
     ScratchSlice,
     StatelessInputSlice,
-    memory_slice,
+    evm_memory_slice,
     stateless_input_sub_slice,
     log_data_sub_slice,
     stateless_input_slice_suffix,
@@ -83,9 +81,10 @@ from evm.host.code import code_db_resolve
 from evm.kernel.logs import read_log_data
 from evm.kernel.code import k_code_key
 from evm.kernel.lifecycle import (
-    k_state_checkpoint,
+    k_journal_checkpoint,
     k_tx_merge,
-    k_revert,
+    k_journal_revert,
+    k_journal_commit,
 )
 from evm.evm.machine import (
     returndata_clear,
@@ -102,10 +101,10 @@ from evm.evm.interpreter import (
 from evm.kernel import environment
 from evm.evm import machine
 
-def enter_system_call_frame(tgt: address, input: CalldataSlice) -> code_chunk_index:
+def enter_system_call_frame(tgt: address, input: CalldataSlice) -> None:
     execution_profile = environment.k_execution_profile
     gas_limits = execution_profile.gas
-    checkpoint = k_state_checkpoint()
+    k_journal_checkpoint()
     machine.pc = 0
     machine.call_depth = 0
     machine.gas_remaining = gas_limits.system_regular_limit
@@ -116,9 +115,9 @@ def enter_system_call_frame(tgt: address, input: CalldataSlice) -> code_chunk_in
     returndata_clear()
     machine.frame_status = Running(None)
     machine.calldata = input
-    machine.message = Message(caller=Bytes20(SYSTEM_ADDRESS), address=Bytes20(tgt), code_address=Bytes20(tgt), value=word(ZERO_WORD), state_gas_reservoir=Uint(gas_limits.system_state_limit), is_static=False, depth=frame_depth(0))
+    machine.message = Message(caller=address(SYSTEM_ADDRESS), address=address(tgt), code_address=address(tgt), value=word(ZERO_WORD), state_gas_reservoir=gas(gas_limits.system_state_limit), is_static=False, depth=frame_depth(0))
     machine.frame_code = code_db_resolve(k_code_key(tgt))
-    return Uint(checkpoint)
+    return None
 
 def system_call(tgt: address, input: hash) -> None:
     if ((k_code_key(tgt)) == (KECCAK_EMPTY)):
@@ -130,11 +129,13 @@ def system_call(tgt: address, input: hash) -> None:
         _host_mem_store_word(input_range.off, hash_to_word(input))
         input_slice = active_memory_slice(input_range.off, input_range.len)
         parent_memory = memory_frame_enter()
-        checkpoint = enter_system_call_frame(tgt, MemoryCalldata(memory_slice(input_slice.off, input_slice.len)))
+        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.bytes, input_slice.len)))
         interpret()
         memory_frame_leave(parent_memory)
         if (not (frame_succeeded())):
-            k_revert(checkpoint)
+            k_journal_revert()
+        else:
+            k_journal_commit()
         return k_tx_merge()
 
 def system_call_checked(tgt: address) -> ScratchSlice:
@@ -143,18 +144,19 @@ def system_call_checked(tgt: address) -> ScratchSlice:
     else:
         memory_reset()
         parent_memory = memory_frame_enter()
-        checkpoint = enter_system_call_frame(tgt, EMPTY_CALLDATA)
+        enter_system_call_frame(tgt, EMPTY_CALLDATA)
         output = interpret()
         if frame_succeeded():
             start = scratch_reserve(output.len)
             output_scratch_push_slice(output)
             result = scratch_finish(start)
             memory_frame_leave(parent_memory)
+            k_journal_commit()
             k_tx_merge()
             return result
         else:
             memory_frame_leave(parent_memory)
-            k_revert(checkpoint)
+            k_journal_revert()
             k_tx_merge()
             raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
@@ -167,7 +169,7 @@ def deposit_log_matches(index: log_store_index) -> bool:
 def authenticate_deposit_request(data: LogDataSlice, expected: StatelessInputSlice) -> StatelessInputSlice:
     if ((data.len) != (DEPOSIT_EVENT_DATA_LENGTH)):
         raise SailThrown(InvalidBlock(BlockError.InvalidExecutionRequests))
-    if ((((log_data_slice_load(data, DEPOSIT_PUBKEY_HEAD)) != (sail_U256(160)))) | (((((log_data_slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD)) != (sail_U256(256)))) | (((((log_data_slice_load(data, DEPOSIT_AMOUNT_HEAD)) != (sail_U256(320)))) | (((((log_data_slice_load(data, DEPOSIT_SIGNATURE_HEAD)) != (sail_U256(384)))) | (((((log_data_slice_load(data, DEPOSIT_INDEX_HEAD)) != (sail_U256(512)))) | (((((log_data_slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD)) != (sail_U256(48)))) | (((((log_data_slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD)) != (sail_U256(32)))) | (((((log_data_slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD)) != (sail_U256(8)))) | (((((log_data_slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD)) != (sail_U256(96)))) | (((log_data_slice_load(data, DEPOSIT_INDEX_LENGTH_WORD)) != (sail_U256(8))))))))))))))))))))):
+    if ((((log_data_slice_load(data, DEPOSIT_PUBKEY_HEAD)) != (u256(160)))) | (((((log_data_slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD)) != (u256(256)))) | (((((log_data_slice_load(data, DEPOSIT_AMOUNT_HEAD)) != (u256(320)))) | (((((log_data_slice_load(data, DEPOSIT_SIGNATURE_HEAD)) != (u256(384)))) | (((((log_data_slice_load(data, DEPOSIT_INDEX_HEAD)) != (u256(512)))) | (((((log_data_slice_load(data, DEPOSIT_PUBKEY_LENGTH_WORD)) != (u256(48)))) | (((((log_data_slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD)) != (u256(32)))) | (((((log_data_slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD)) != (u256(8)))) | (((((log_data_slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD)) != (u256(96)))) | (((log_data_slice_load(data, DEPOSIT_INDEX_LENGTH_WORD)) != (u256(8))))))))))))))))))))):
         raise SailThrown(InvalidBlock(BlockError.InvalidExecutionRequests))
     if (int(DEPOSIT_REQUEST_LENGTH) <= int(expected.len)):
         if (((not (_host_log_input_slices_equal(log_data_sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH), stateless_input_sub_slice(expected, DEPOSIT_REQUEST_PUBKEY, DEPOSIT_PUBKEY_LENGTH))))) | ((((not (_host_log_input_slices_equal(log_data_sub_slice(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH), stateless_input_sub_slice(expected, DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS, DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH))))) | ((((not (_host_log_input_slices_equal(log_data_sub_slice(data, DEPOSIT_AMOUNT_DATA, DEPOSIT_AMOUNT_LENGTH), stateless_input_sub_slice(expected, DEPOSIT_REQUEST_AMOUNT, DEPOSIT_AMOUNT_LENGTH))))) | ((((not (_host_log_input_slices_equal(log_data_sub_slice(data, DEPOSIT_SIGNATURE_DATA, DEPOSIT_SIGNATURE_LENGTH), stateless_input_sub_slice(expected, DEPOSIT_REQUEST_SIGNATURE, DEPOSIT_SIGNATURE_LENGTH))))) | ((not (_host_log_input_slices_equal(log_data_sub_slice(data, DEPOSIT_INDEX_DATA, DEPOSIT_INDEX_LENGTH), stateless_input_sub_slice(expected, DEPOSIT_REQUEST_INDEX, DEPOSIT_INDEX_LENGTH)))))))))))):

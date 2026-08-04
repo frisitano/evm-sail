@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bytes32,
     SailMatchFailure,
     SailReturn,
     SailThrown,
@@ -26,6 +25,7 @@ from evm.HostContract import (
 from evm._sail.flow import neq_bool
 from evm.prelude import (
     address,
+    hash,
     word,
     word_is_zero,
     alu_add,
@@ -62,7 +62,7 @@ def account_changed(c: Account, o: Account) -> bool:
 
 def account_set_info(acc: Account, info: AccountInfo) -> Account:
     if account_info_empty(info):
-        return replace(deepcopy(acc), info=replace(deepcopy(EMPTY_ACCOUNT_INFO), storage_root=Bytes32(acc.info.storage_root)), present=False, storage_cleared=True)
+        return replace(deepcopy(acc), info=replace(deepcopy(EMPTY_ACCOUNT_INFO), storage_root=hash(acc.info.storage_root)), present=False, storage_cleared=True)
     else:
         return replace(deepcopy(acc), info=info, present=True)
 
@@ -70,10 +70,10 @@ def account_clear_storage(acc: Account) -> Account:
     return replace(deepcopy(acc), storage_cleared=True)
 
 def account_delete(acc: Account) -> Account:
-    return replace(deepcopy(acc), info=replace(deepcopy(EMPTY_ACCOUNT_INFO), storage_root=Bytes32(acc.info.storage_root)), present=False, storage_cleared=True)
+    return replace(deepcopy(acc), info=replace(deepcopy(EMPTY_ACCOUNT_INFO), storage_root=hash(acc.info.storage_root)), present=False, storage_cleared=True)
 
 def account_clear_preserving_balance(acc: Account) -> Account:
-    return account_set_info(account_clear_storage(acc), replace(deepcopy(acc.info), nonce=account_nonce(0), code_hash=Bytes32(KECCAK_EMPTY)))
+    return account_set_info(account_clear_storage(acc), replace(deepcopy(acc.info), nonce=account_nonce(0), code_hash=hash(KECCAK_EMPTY)))
 
 def store_account(a: address, v: Account) -> None:
     return _host_acct_tx_update(a, v)

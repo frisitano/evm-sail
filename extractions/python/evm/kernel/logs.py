@@ -114,7 +114,7 @@ def read_logs() -> LogSeriesRef:
 def read_log_data(index: log_store_index) -> LogDataSlice:
     off = _host_log_data_offset(index)
     sail_len = _host_log_data_length(index)
-    if (int(sail_len) <= int((int((int((1 << 64)) - 1)) - int(off)))):
+    if (int(sail_len) <= int((int((int((1 << 32)) - 1)) - int(off)))):
         return log_data_slice(off, sail_len)
     else:
         if not (False):

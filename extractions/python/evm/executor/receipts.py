@@ -3,29 +3,15 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bits,
     Bytes32,
     SailThrown,
-    Uint,
-    sail_tmod_int,
 )
 from dataclasses import dataclass
 from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
-from evm.HostContract import (
-    log_address as _host_log_address,
-    log_topic as _host_log_topic,
-    log_topics_count as _host_log_topics_count,
-)
-from evm._sail.vector import neq_bits
 from evm.prelude import hash
-from evm.primitives.quantities import (
-    source_pointer,
-    ssz_uint,
-    word_of_nat_byte_count,
-)
-from evm.primitives.gas import receipt_cumulative_gas
+from evm.primitives.quantities import source_pointer
 from evm.primitives.bytes import (
     ScratchSlice,
     scratch_sub_slice,
@@ -38,167 +24,22 @@ from evm.exceptions import (
 )
 from evm.primitives.ssz import transaction_count
 from evm.kernel.scratch import (
-    scratch_length_add,
     scratch_begin,
-    scratch_reserve,
-    scratch_push_byte,
-    scratch_push_fixed_bytes_256,
     scratch_finish,
     scratch_rewind,
 )
-from evm.primitives.tx import (
-    LogSeriesRef,
-    Receipt,
-    log_store_index,
-    log_store_index_increment,
-    log_store_index_add,
-    tx_type_byte,
-)
+from evm.primitives.tx import Receipt
 from evm.primitives.block import (
     LogsBloom,
     EMPTY_LOGS_BLOOM,
 )
 from evm.lib.ssz.ssz import decode_scratch_uint
-from evm.lib.rlp.rlp import (
-    rlp_natural_size,
-    rlp_scratch_small_length,
-    rlp_scratch_length_add,
-    rlp_length_prefix_len,
-    rlp_uint_word_size,
-    rlp_word_size,
-    rlp_addr_size,
-    rlp_scratch_list_size,
-    rlp_log_scratch_slice_size,
-    rlp_write_string_prefix,
-    rlp_write_list_prefix,
-    rlp_write_log_data_slice,
-    rlp_write_uint_word,
-    rlp_write_uint_nat,
-    rlp_write_word,
-    rlp_write_addr,
-    rlp_finish,
-)
 from evm.kernel.logs import (
-    read_log_data,
     logs_bloom_for_logs,
     logs_bloom_or,
-    LOGS_BLOOM_BYTE_LENGTH,
 )
-from evm.kernel import environment
+from evm.lib.rlp.codecs.receipts import receipt_record_append
 from evm.executor import payload as executor_payload
-
-def topics_rlp_content_size(index: log_store_index) -> rlp_natural_size:
-    size = 0
-    topic = 0
-    topic_count = _host_log_topics_count(index)
-    while True:
-        if not ((int(topic) < int(topic_count))):
-            break
-        size = Uint(rlp_scratch_length_add(size, rlp_scratch_small_length(rlp_word_size())))
-        topic = log_store_index(log_store_index_increment(topic))
-    return Uint(size)
-
-def topics_rlp_size(index: log_store_index) -> rlp_natural_size:
-    return Uint(rlp_scratch_list_size(topics_rlp_content_size(index)))
-
-def log_entry_rlp_content_size(index: log_store_index) -> rlp_natural_size:
-    address_length = rlp_scratch_small_length(rlp_addr_size())
-    topics_length = topics_rlp_size(index)
-    data_length = rlp_log_scratch_slice_size(read_log_data(index))
-    return Uint(rlp_scratch_length_add(rlp_scratch_length_add(address_length, topics_length), data_length))
-
-def log_entry_rlp_size(index: log_store_index) -> rlp_natural_size:
-    return Uint(rlp_scratch_list_size(log_entry_rlp_content_size(index)))
-
-def logs_rlp_content_size(logs: LogSeriesRef) -> rlp_natural_size:
-    size = 0
-    offset = 0
-    while True:
-        if not ((int(offset) < int(logs.count))):
-            break
-        size = Uint(rlp_scratch_length_add(size, log_entry_rlp_size(log_store_index_add(logs.start, offset))))
-        offset = log_store_index(log_store_index_increment(offset))
-    return Uint(size)
-
-def logs_rlp_size(logs: LogSeriesRef) -> rlp_natural_size:
-    return Uint(rlp_scratch_list_size(logs_rlp_content_size(logs)))
-
-def rlp_write_topics(index: log_store_index) -> None:
-    rlp_write_list_prefix(topics_rlp_content_size(index))
-    topic = 0
-    topic_count = _host_log_topics_count(index)
-    while True:
-        if not ((int(topic) < int(topic_count))):
-            break
-        rlp_write_word(_host_log_topic(index, topic))
-        topic = log_store_index(log_store_index_increment(topic))
-    return None
-
-def rlp_write_log_entry(index: log_store_index) -> None:
-    rlp_write_list_prefix(log_entry_rlp_content_size(index))
-    rlp_write_addr(_host_log_address(index))
-    rlp_write_topics(index)
-    return rlp_write_log_data_slice(read_log_data(index))
-
-def rlp_write_logs(logs: LogSeriesRef) -> None:
-    rlp_write_list_prefix(logs_rlp_content_size(logs))
-    offset = 0
-    while True:
-        if not ((int(offset) < int(logs.count))):
-            break
-        rlp_write_log_entry(log_store_index_add(logs.start, offset))
-        offset = log_store_index(log_store_index_increment(offset))
-    return None
-
-def rlp_write_logs_bloom(bloom: LogsBloom) -> None:
-    rlp_write_string_prefix(LOGS_BLOOM_BYTE_LENGTH, Bits(8, 0b00000000))
-    return scratch_push_fixed_bytes_256(bloom)
-
-def receipt_write_logs_bloom(_receipt: Receipt, bloom: LogsBloom) -> None:
-    return rlp_write_logs_bloom(bloom)
-
-def receipt_payload_content_size(r: Receipt, cumulative_gas_used: receipt_cumulative_gas) -> rlp_natural_size:
-    if r.success:
-        status = 1
-    else:
-        status = 0
-    status_length = rlp_scratch_small_length(rlp_uint_word_size(status))
-    gas_word = word_of_nat_byte_count(cumulative_gas_used)
-    gas_length = rlp_scratch_small_length(rlp_uint_word_size(gas_word))
-    bloom_length = rlp_scratch_length_add(LOGS_BLOOM_BYTE_LENGTH, rlp_scratch_small_length(rlp_length_prefix_len(LOGS_BLOOM_BYTE_LENGTH)))
-    logs_length = logs_rlp_size(r.logs)
-    fixed_length = rlp_scratch_length_add(status_length, gas_length)
-    return Uint(rlp_scratch_length_add(rlp_scratch_length_add(fixed_length, bloom_length), logs_length))
-
-def receipt_encoded_length(r: Receipt, cumulative_gas_used: receipt_cumulative_gas) -> rlp_natural_size:
-    content_len = receipt_payload_content_size(r, cumulative_gas_used)
-    typed = neq_bits(tx_type_byte(r.tx_type), Bits(8, 0b00000000))
-    payload_len = rlp_scratch_list_size(content_len)
-    if typed:
-        return Uint(rlp_scratch_length_add(payload_len, 1))
-    else:
-        return Uint(payload_len)
-
-def receipt_write_encoded(r: Receipt, cumulative_gas_used: receipt_cumulative_gas, bloom: LogsBloom) -> None:
-    if r.success:
-        status = 1
-    else:
-        status = 0
-    content_len = receipt_payload_content_size(r, cumulative_gas_used)
-    typed = neq_bits(tx_type_byte(r.tx_type), Bits(8, 0b00000000))
-    if typed:
-        scratch_push_byte(tx_type_byte(r.tx_type))
-    rlp_write_list_prefix(content_len)
-    rlp_write_uint_word(status)
-    rlp_write_uint_nat(cumulative_gas_used)
-    receipt_write_logs_bloom(r, bloom)
-    return rlp_write_logs(r.logs)
-
-def receipt_encoded(r: Receipt, cumulative_gas_used: receipt_cumulative_gas, bloom: LogsBloom) -> ScratchSlice:
-    encoded_len = receipt_encoded_length(r, cumulative_gas_used)
-    start = scratch_reserve(encoded_len)
-    receipt_write_encoded(r, cumulative_gas_used, bloom)
-    return rlp_finish(start)
 
 @dataclass(slots=True)
 class ReceiptRecordsRef:
@@ -209,7 +50,6 @@ class ReceiptRecordsRef:
 class ReceiptAccumulator:
     records_start: source_pointer
     count: transaction_count
-    cumulative_gas_used: receipt_cumulative_gas
     bloom: LogsBloom
 
     @model_validator(mode="after")
@@ -219,17 +59,7 @@ class ReceiptAccumulator:
         return self
 
 def receipt_accumulator_empty() -> ReceiptAccumulator:
-    return ReceiptAccumulator(records_start=Uint(scratch_begin()), count=transaction_count(0), cumulative_gas_used=Uint(0), bloom=EMPTY_LOGS_BLOOM)
-
-def receipt_record_write_length(value: ssz_uint) -> None:
-    scratch_push_byte(Bits(8, int(value) >> 0))
-    scratch_push_byte(Bits(8, int(value) >> 8))
-    scratch_push_byte(Bits(8, int(value) >> 16))
-    scratch_push_byte(Bits(8, int(value) >> 24))
-    scratch_push_byte(Bits(8, int(value) >> 32))
-    scratch_push_byte(Bits(8, int(value) >> 40))
-    scratch_push_byte(Bits(8, int(value) >> 48))
-    return scratch_push_byte(Bits(8, int(value) >> 56))
+    return ReceiptAccumulator(records_start=source_pointer(scratch_begin()), count=transaction_count(0), bloom=EMPTY_LOGS_BLOOM)
 
 def receipt_record_pop(records: ScratchSlice) -> tuple[ScratchSlice, ScratchSlice]:
     if (int(records.len) < int(EIGHT_BYTE_LENGTH)):
@@ -240,24 +70,12 @@ def receipt_record_pop(records: ScratchSlice) -> tuple[ScratchSlice, ScratchSlic
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
     return (scratch_sub_slice(payload, 0, value_length), scratch_slice_suffix(payload, value_length))
 
-def receipt_accumulator_push(acc: ReceiptAccumulator, receipt: Receipt, next_count: transaction_count) -> ReceiptAccumulator:
+def receipt_accumulator_push(acc: ReceiptAccumulator, receipt: Receipt, cumulative_gas_used: int, next_count: transaction_count) -> ReceiptAccumulator:
     if ((next_count) != ((int(acc.count) + 1))):
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-    cumulative_value = (int(acc.cumulative_gas_used) + int(receipt.gas_used))
-    execution_profile = environment.k_execution_profile
-    if (int(execution_profile.gas.receipt_cumulative_limit) < int(cumulative_value)):
-        raise SailThrown(InvalidBlock(BlockError.InvalidGasUsed))
-    cumulative = cumulative_value
     receipt_bloom = logs_bloom_for_logs(receipt.logs)
-    encoded_length = receipt_encoded_length(receipt, cumulative)
-    if (int((int((1 << 64)) - 1)) < int(encoded_length)):
-        raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    else:
-        length = sail_tmod_int(encoded_length, (1 << 64))
-        _record_start = scratch_reserve(scratch_length_add(EIGHT_BYTE_LENGTH, encoded_length))
-        receipt_record_write_length(length)
-        receipt_write_encoded(receipt, cumulative, receipt_bloom)
-    return ReceiptAccumulator(records_start=Uint(acc.records_start), count=transaction_count(next_count), cumulative_gas_used=Uint(cumulative), bloom=logs_bloom_or(acc.bloom, receipt_bloom))
+    receipt_record_append(receipt, cumulative_gas_used, receipt_bloom)
+    return ReceiptAccumulator(records_start=source_pointer(acc.records_start), count=transaction_count(next_count), bloom=logs_bloom_or(acc.bloom, receipt_bloom))
 
 def receipt_accumulator_root(acc: ReceiptAccumulator) -> hash:
     records = scratch_finish(acc.records_start)

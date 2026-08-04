@@ -18,7 +18,7 @@ from evm.prelude import (
     address,
     hash,
     word,
-    sail_U256,
+    u256,
     address_to_word,
     ZERO_WORD,
     ZERO_ADDRESS,
@@ -26,11 +26,11 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     account_nonce,
+    ancestor_hash_count,
     block_number,
     block_timestamp,
     chain_identifier,
     excess_blob_gas,
-    item_count,
     slot_number,
     word_of_slot_number,
     word_of_block_number,
@@ -63,10 +63,8 @@ from evm.primitives.evm import (
     TxEnvFields,
     TxEnvFieldsValidity,
 )
-from evm.lib.address import (
-    create_address,
-    create2_address,
-)
+from evm.lib.rlp.codecs.address import create_address
+from evm.lib.address import create2_address
 
 class EnvField(UintEnum):
     F_Number = Uint(0)
@@ -84,17 +82,17 @@ def k_env(f: EnvField) -> word:
     active_tx = k_tx
     match f:
         case EnvField.F_Number:
-            return word(sail_U256(word_of_block_number(k_header.number)))
+            return word(u256(word_of_block_number(k_header.number)))
         case EnvField.F_Timestamp:
-            return word(sail_U256(word_of_block_timestamp(k_header.timestamp)))
+            return word(u256(word_of_block_timestamp(k_header.timestamp)))
         case EnvField.F_Coinbase:
             return word(address_to_word(k_header.fee_recipient))
         case EnvField.F_BaseFee:
             return word(k_header.base_fee)
         case EnvField.F_ChainId:
-            return word(sail_U256(word_of_chain_identifier(k_chain_id)))
+            return word(u256(word_of_chain_identifier(k_chain_id)))
         case EnvField.F_GasLimit:
-            return word(sail_U256(k_header.gas_limit))
+            return word(u256(k_header.gas_limit))
         case EnvField.F_PrevRandao:
             return word(k_header.prev_randao)
         case EnvField.F_Origin:
@@ -102,7 +100,7 @@ def k_env(f: EnvField) -> word:
         case EnvField.F_GasPrice:
             return word(active_tx.gas_price)
         case EnvField.F_SlotNumber:
-            return word(sail_U256(word_of_slot_number(k_header.slot_number)))
+            return word(u256(word_of_slot_number(k_header.slot_number)))
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
@@ -114,7 +112,7 @@ def blockhash_word_distance(current: int, number: int) -> BoundedUint[1, 1157920
 
 def k_blockhash(number_word: word) -> hash:
     current = k_header.number
-    current_word = sail_U256(word_of_block_number(current))
+    current_word = u256(word_of_block_number(current))
     if (int(number_word) < int(current_word)):
         distance_word = blockhash_word_distance(current_word, number_word)
         if (int(distance_word) <= 256):
@@ -147,25 +145,25 @@ def k_create2_addr(a: address, salt: word, inithash: hash) -> address:
 
 k_parent_state_root: hash = ZERO_HASH
 
-k_n_headers: item_count = 0
+k_n_headers: ancestor_hash_count = 0
 
 k_chain_id: chain_identifier = 1
 
 k_execution_profile: ExecutionProfile = DEFAULT_EXECUTION_PROFILE
 
-k_header: BlockHeader = BlockHeader(number=block_number(0), timestamp=block_timestamp(0), extra_data=EMPTY_STATELESS_INPUT_SLICE, gas_limit=block_gas_limit(0), gas_used=block_gas(0), prev_randao=word(ZERO_WORD), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), state_root=Bytes32(ZERO_HASH), receipts_root=Bytes32(ZERO_HASH), logs_bloom=stateless_input_slice(0, 256), fee_recipient=Bytes20(ZERO_ADDRESS), parent_hash=Bytes32(ZERO_HASH), parent_beacon_block_root=Bytes32(ZERO_HASH), slot_number=slot_number(0))
+k_header: BlockHeader = BlockHeader(number=block_number(0), timestamp=block_timestamp(0), extra_data=EMPTY_STATELESS_INPUT_SLICE, gas_limit=block_gas_limit(0), gas_used=block_gas(0), prev_randao=word(ZERO_WORD), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), state_root=hash(ZERO_HASH), receipts_root=hash(ZERO_HASH), logs_bloom=stateless_input_slice(0, 256), fee_recipient=address(ZERO_ADDRESS), parent_hash=hash(ZERO_HASH), parent_beacon_block_root=hash(ZERO_HASH), slot_number=slot_number(0))
 
-k_tx: TxEnv = TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=0), origin=Bytes20(ZERO_ADDRESS), gas_price=word(ZERO_WORD), blob_hashes=EMPTY_BLOB_HASHES)
+k_tx: TxEnv = TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=0), origin=address(ZERO_ADDRESS), gas_price=word(ZERO_WORD), blob_hashes=EMPTY_BLOB_HASHES)
 
-k_block_access_index: block_access_index = 0
+k_current_transaction_epoch: block_access_index = 0
 
 def _reset_registers() -> None:
-    global k_parent_state_root, k_n_headers, k_chain_id, k_execution_profile, k_header, k_tx, k_block_access_index
+    global k_parent_state_root, k_n_headers, k_chain_id, k_execution_profile, k_header, k_tx, k_current_transaction_epoch
     k_parent_state_root = ZERO_HASH
     k_n_headers = 0
     k_chain_id = 1
     k_execution_profile = DEFAULT_EXECUTION_PROFILE
-    k_header = BlockHeader(number=block_number(0), timestamp=block_timestamp(0), extra_data=EMPTY_STATELESS_INPUT_SLICE, gas_limit=block_gas_limit(0), gas_used=block_gas(0), prev_randao=word(ZERO_WORD), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), state_root=Bytes32(ZERO_HASH), receipts_root=Bytes32(ZERO_HASH), logs_bloom=stateless_input_slice(0, 256), fee_recipient=Bytes20(ZERO_ADDRESS), parent_hash=Bytes32(ZERO_HASH), parent_beacon_block_root=Bytes32(ZERO_HASH), slot_number=slot_number(0))
-    k_tx = TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=0), origin=Bytes20(ZERO_ADDRESS), gas_price=word(ZERO_WORD), blob_hashes=EMPTY_BLOB_HASHES)
-    k_block_access_index = 0
+    k_header = BlockHeader(number=block_number(0), timestamp=block_timestamp(0), extra_data=EMPTY_STATELESS_INPUT_SLICE, gas_limit=block_gas_limit(0), gas_used=block_gas(0), prev_randao=word(ZERO_WORD), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), state_root=hash(ZERO_HASH), receipts_root=hash(ZERO_HASH), logs_bloom=stateless_input_slice(0, 256), fee_recipient=address(ZERO_ADDRESS), parent_hash=hash(ZERO_HASH), parent_beacon_block_root=hash(ZERO_HASH), slot_number=slot_number(0))
+    k_tx = TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=0), origin=address(ZERO_ADDRESS), gas_price=word(ZERO_WORD), blob_hashes=EMPTY_BLOB_HASHES)
+    k_current_transaction_epoch = 0
     return None

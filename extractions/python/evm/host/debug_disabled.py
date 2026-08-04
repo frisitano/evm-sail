@@ -18,6 +18,9 @@ from evm.primitives.crypto import EMPTY_TRIE_ROOT
 def validation_debug_reset() -> None:
     return None
 
+def validation_debug_capture_block_gas(_actual: int, _expected: int, _execution: int, _state: int) -> None:
+    return None
+
 def validation_debug_record(_stage: validation_stage, _reason: BlockError) -> None:
     return None
 

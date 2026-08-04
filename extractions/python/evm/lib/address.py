@@ -17,7 +17,6 @@ from evm.prelude import (
     word_to_hash,
     word_to_address,
 )
-from evm.primitives.quantities import account_nonce
 from evm.primitives.bytes import WORD_BYTE_LENGTH
 from evm.kernel.scratch import (
     scratch_reserve,
@@ -27,29 +26,6 @@ from evm.kernel.scratch import (
     scratch_finish,
     scratch_rewind,
 )
-from evm.lib.rlp.rlp import (
-    rlp_uint_word_size,
-    rlp_addr_size,
-    rlp_list_size,
-    rlp_write_list_prefix,
-    rlp_write_uint_word,
-    rlp_write_addr,
-    rlp_finish,
-)
-
-def create_address(sender: address, nonce: account_nonce) -> address:
-    address_length = rlp_addr_size()
-    nonce_length = rlp_uint_word_size(nonce)
-    content_len = (int(address_length) + int(nonce_length))
-    encoded_len = rlp_list_size(content_len)
-    mark = scratch_reserve(encoded_len)
-    rlp_write_list_prefix(content_len)
-    rlp_write_addr(sender)
-    rlp_write_uint_word(nonce)
-    encoded = rlp_finish(mark)
-    address = word_to_address(hash_to_word(_host_scratch_keccak256(encoded)))
-    scratch_rewind(mark)
-    return Bytes20(address)
 
 def create2_address(sender: address, salt: word, init_hash: hash) -> address:
     mark = scratch_reserve(85)

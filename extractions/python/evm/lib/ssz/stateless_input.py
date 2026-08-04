@@ -6,7 +6,6 @@ from ..._runtime import (
     BitWidth,
     Bits,
     BoundedUint,
-    Bytes20,
     Bytes32,
     IntegerRange,
     SailThrown,
@@ -27,6 +26,7 @@ from evm.HostContract import (
 )
 from evm._sail.vector import neq_bits
 from evm.prelude import (
+    address,
     hash,
     word,
     hash_to_word,
@@ -41,6 +41,7 @@ from evm.primitives.quantities import (
     chain_identifier,
     excess_blob_gas,
     slot_number,
+    source_length,
     source_pointer,
     ssz_offset,
     ssz_offset_index,
@@ -115,8 +116,8 @@ from evm.host.code import (
 )
 from evm.lib.ssz.ssz import (
     ssz_field_offset,
-    ssz_u32_at,
     ssz_u32,
+    ssz_u32_in_slice,
     ssz_offset_to_source_pointer,
     decode_ssz_uint,
     ssz_addr,
@@ -125,7 +126,7 @@ from evm.lib.ssz.ssz import (
     SSZ_OFF_BYTES,
     SSZ_UINT_BYTES,
 )
-from evm.lib.rlp.rlp import (
+from evm.lib.rlp.decoding import (
     rlp_decode_item,
     rlp_cursor_advance,
     rlp_node_cursor,
@@ -133,7 +134,7 @@ from evm.lib.rlp.rlp import (
     rlp_decode_u256,
     rlp_decode_uint64,
 )
-from evm.lib.rlp.tx import rlp_decode_tx
+from evm.lib.rlp.codecs.transactions import rlp_decode_tx
 from evm.kernel.lifecycle import k_set_header
 from evm.kernel import environment
 
@@ -146,7 +147,7 @@ def ssz_list_cursor(items: BoundedSszListRef) -> BoundedSszListCursor:
         current = ssz_offset_to_source_pointer(ssz_u32(bytes, 0))
     else:
         current = bytes.len
-    return BoundedSszListCursor(validity=BoundedSszListCursorValidity(maximum=items.validity.maximum), items=items, index=Uint(0), current=Uint(current))
+    return BoundedSszListCursor(validity=BoundedSszListCursorValidity(maximum=items.validity.maximum), items=items, index=Uint(0), current=source_pointer(current))
 
 def ssz_list_cursor_empty(cursor: BoundedSszListCursor) -> bool:
     return (int(cursor.items.count) <= int(cursor.index))
@@ -161,7 +162,7 @@ def ssz_list_pop(cursor: BoundedSszListCursor) -> tuple[StatelessInputSlice, Bou
     bytes = items.bytes
     nat = bytes.len
     if (int(next_index) < int(items.count)):
-        next = ssz_offset_to_source_pointer(ssz_u32(bytes, ssz_offset_table_position(next_index)))
+        next = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(next_index)))
     else:
         next = nat
     current_value = cursor.current
@@ -172,7 +173,7 @@ def ssz_list_pop(cursor: BoundedSszListCursor) -> tuple[StatelessInputSlice, Bou
             if ((((items.max_item_length) != (0))) & ((int(items.max_item_length) < int(item_length)))):
                 raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
             item = stateless_input_sub_slice(bytes, current_value, item_length)
-            return (item, BoundedSszListCursor(validity=BoundedSszListCursorValidity(maximum=cursor.validity.maximum), items=items, index=Uint(next_index), current=Uint(next)))
+            return (item, BoundedSszListCursor(validity=BoundedSszListCursorValidity(maximum=cursor.validity.maximum), items=items, index=Uint(next_index), current=source_pointer(next)))
         else:
             raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     else:
@@ -184,9 +185,9 @@ def ssz_list_at(items: BoundedSszListRef, index: int) -> StatelessInputSlice:
     if (int(count) <= int(index)):
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     next_index = (int(index) + 1)
-    start = ssz_offset_to_source_pointer(ssz_u32_at(bytes, ssz_offset_table_position(index)))
+    start = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(index)))
     if (int(next_index) < int(items.count)):
-        stop = ssz_offset_to_source_pointer(ssz_u32_at(bytes, ssz_offset_table_position(next_index)))
+        stop = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(next_index)))
     else:
         stop = bytes.len
     start_value = start
@@ -225,7 +226,7 @@ def ssz_fixed_list_pop(items: BoundedSszListRef, item_size: int) -> tuple[Statel
     if (int(items_length) < int(width)):
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     item = stateless_input_sub_slice(bytes, 0, item_size)
-    rest = BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=items.validity.maximum), bytes=stateless_input_slice_suffix(bytes, width), count=Uint((int(count) - 1)), max_item_length=Uint(items.max_item_length))
+    rest = BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=items.validity.maximum), bytes=stateless_input_slice_suffix(bytes, width), count=Uint((int(count) - 1)), max_item_length=source_length(items.max_item_length))
     return (item, rest)
 
 @dataclass(slots=True)
@@ -242,7 +243,7 @@ class StatelessInputRef:
     extra_data: StatelessInputSliceAtMost
     transactions: TransactionListRef
     withdrawals: WithdrawalListRef
-    block_access_list: StatelessInputSlice
+    block_access_list: StatelessInputSliceAtMost
     witness_state: WitnessNodeListRef
     witness_codes: WitnessCodeListRef
     witness_headers: WitnessHeaderListRef
@@ -262,7 +263,7 @@ class SszContainerCursor:
     current: source_pointer
 
 def ssz_container_cursor(bytes: StatelessInputSliceFields, fixed_length: int) -> SszContainerCursor:
-    return SszContainerCursor(bytes=bytes, current=Uint(fixed_length))
+    return SszContainerCursor(bytes=bytes, current=source_pointer(fixed_length))
 
 def ssz_take(cursor: SszContainerCursor, stop: ssz_offset) -> tuple[StatelessInputSlice, SszContainerCursor]:
     current_value = cursor.current
@@ -272,7 +273,7 @@ def ssz_take(cursor: SszContainerCursor, stop: ssz_offset) -> tuple[StatelessInp
         stop_pointer = stop
         span_length = (int(stop) - int(current_value))
         span = stateless_input_sub_slice(bytes, current_value, span_length)
-        return (span, SszContainerCursor(bytes=bytes, current=Uint(stop_pointer)))
+        return (span, SszContainerCursor(bytes=bytes, current=source_pointer(stop_pointer)))
     else:
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
 
@@ -301,7 +302,7 @@ def ssz_bounded_variable_list_ref(bytes: StatelessInputSlice, maximum_count: int
     if (int(maximum_count) < int(raw_count)):
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     count = raw_count
-    return BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=int(maximum_count)), bytes=bytes, count=Uint(count), max_item_length=Uint(maximum_item_length))
+    return BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=int(maximum_count)), bytes=bytes, count=Uint(count), max_item_length=source_length(maximum_item_length))
 
 def ssz_bounded_fixed_list_ref(bytes: StatelessInputSlice, item_size: int, maximum_count: int) -> BoundedSszListRef:
     width = item_size
@@ -314,7 +315,7 @@ def ssz_bounded_fixed_list_ref(bytes: StatelessInputSlice, item_size: int, maxim
     if (int(maximum_count) < int(raw_count)):
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     count = raw_count
-    return BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=int(maximum_count)), bytes=bytes, count=Uint(count), max_item_length=Uint(item_size))
+    return BoundedSszListRef(validity=BoundedSszListRefValidity(maximum=int(maximum_count)), bytes=bytes, count=Uint(count), max_item_length=source_length(item_size))
 
 def decode_stateless_input_ref(input: StatelessInputSlice) -> StatelessInputRef:
     input_fields = input
@@ -373,12 +374,14 @@ def decode_stateless_input_ref(input: StatelessInputSlice) -> StatelessInputRef:
     transactions = ssz_bounded_variable_list_ref(transaction_bytes, MAX_TRANSACTIONS_PER_PAYLOAD, MAX_TRANSACTION_LENGTH)
     (withdrawal_bytes, payload_after_withdrawals) = ssz_take(payload_after_transactions, block_access_list_offset)
     withdrawals = ssz_bounded_fixed_list_ref(withdrawal_bytes, WD_SIZE, MAX_WITHDRAWALS_PER_PAYLOAD)
-    block_access_list = ssz_finish(payload_after_withdrawals)
+    block_access_list_bytes = ssz_finish(payload_after_withdrawals)
     if (int(extra_data_bytes.len) <= int(MAX_EXTRA_DATA_LENGTH)):
         extra_data = extra_data_bytes
     else:
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
-    if (int(MAX_BLOCK_ACCESS_LIST_LENGTH) < int(block_access_list.len)):
+    if (int(block_access_list_bytes.len) <= int(MAX_BLOCK_ACCESS_LIST_LENGTH)):
+        block_access_list = block_access_list_bytes
+    else:
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     requests_start = 0
     deposits_offset = ssz_u32(execution_requests, ssz_field_offset(requests_start, REQ_DEPOSITS_OFF))
@@ -431,7 +434,7 @@ def index_witness_nodes_cursor(cursor: WitnessNodeListCursor) -> None:
         return None
     else:
         (node, next) = ssz_list_pop(cursor)
-        _host_nodedb_insert(_host_stateless_input_keccak256(node), node.off, node.len)
+        _host_nodedb_insert(_host_stateless_input_keccak256(node), node.bytes, node.len)
         return index_witness_nodes_cursor(next)
 
 def index_witness_nodes(nodes: WitnessNodeListRef) -> None:
@@ -571,13 +574,13 @@ def index_witness_header_cursor(state: WitnessHeaderIndex) -> WitnessHeaderIndex
         return index_witness_header_cursor(result)
 
 def index_witness_headers(headers: WitnessHeaderListRef) -> WitnessContext:
-    indexed = index_witness_header_cursor(WitnessHeaderIndex(cursor=ssz_list_cursor(headers), previous_hash=Bytes32(ZERO_HASH), valid=((headers.count) != (0)), parent_state_root=Bytes32(ZERO_HASH), parent_base_fee_per_gas=word(ZERO_WORD), parent_blob_gas_used=0, parent_excess_blob_gas=excess_blob_gas(0), parent_fields_valid=False))
+    indexed = index_witness_header_cursor(WitnessHeaderIndex(cursor=ssz_list_cursor(headers), previous_hash=hash(ZERO_HASH), valid=((headers.count) != (0)), parent_state_root=hash(ZERO_HASH), parent_base_fee_per_gas=word(ZERO_WORD), parent_blob_gas_used=0, parent_excess_blob_gas=excess_blob_gas(0), parent_fields_valid=False))
     environment.k_n_headers = BoundedUint[0, 256](headers.count)
     if (not (indexed.valid)):
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
     if (not (indexed.parent_fields_valid)):
         raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    return WitnessContext(parent_hash=Bytes32(indexed.previous_hash), parent_state_root=Bytes32(indexed.parent_state_root), parent_base_fee_per_gas=word(indexed.parent_base_fee_per_gas), parent_blob_gas_used=indexed.parent_blob_gas_used, parent_excess_blob_gas=excess_blob_gas(indexed.parent_excess_blob_gas))
+    return WitnessContext(parent_hash=hash(indexed.previous_hash), parent_state_root=hash(indexed.parent_state_root), parent_base_fee_per_gas=word(indexed.parent_base_fee_per_gas), parent_blob_gas_used=indexed.parent_blob_gas_used, parent_excess_blob_gas=excess_blob_gas(indexed.parent_excess_blob_gas))
 
 def decode_payload_blob_gas_used(payload: StatelessInputSlice, profile: ProtocolProfile) -> blob_gas_used:
     value = decode_ssz_uint(payload, PL_BLOB_GAS_USED)
@@ -599,10 +602,10 @@ def decode_block_header_ssz(input_ref: StatelessInputRef) -> BlockHeader:
     payload = input_ref.execution_payload
     gas_limit_value = decode_ssz_uint(payload, PL_GAS_LIMIT)
     gas_used_value = decode_ssz_uint(payload, PL_GAS_USED)
-    return BlockHeader(number=block_number(decode_ssz_uint(payload, PL_BLOCK_NUMBER)), timestamp=block_timestamp(decode_ssz_uint(payload, PL_TIMESTAMP)), gas_limit=block_gas_limit(gas_limit_value), gas_used=block_gas(gas_used_value), prev_randao=word(hash_to_word(ssz_bytes32(payload, PL_PREV_RANDAO))), base_fee=word(ssz_u256(payload, PL_BASE_FEE)), blob_gas_used=decode_payload_blob_gas_used(payload, input_ref.protocol), excess_blob_gas=excess_blob_gas(decode_payload_excess_blob_gas(payload, input_ref.protocol)), state_root=Bytes32(ssz_bytes32(payload, PL_STATE_ROOT)), receipts_root=Bytes32(ssz_bytes32(payload, PL_RECEIPTS_ROOT)), logs_bloom=stateless_input_sub_slice(payload, PL_LOGS_BLOOM, 256), fee_recipient=Bytes20(ssz_addr(payload, PL_FEE_RECIPIENT)), parent_hash=Bytes32(ssz_bytes32(payload, 0)), parent_beacon_block_root=Bytes32(ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)), slot_number=slot_number(decode_ssz_uint(payload, PL_SLOT_NUMBER)), extra_data=input_ref.extra_data)
+    return BlockHeader(number=block_number(decode_ssz_uint(payload, PL_BLOCK_NUMBER)), timestamp=block_timestamp(decode_ssz_uint(payload, PL_TIMESTAMP)), gas_limit=block_gas_limit(gas_limit_value), gas_used=block_gas(gas_used_value), prev_randao=word(hash_to_word(ssz_bytes32(payload, PL_PREV_RANDAO))), base_fee=word(ssz_u256(payload, PL_BASE_FEE)), blob_gas_used=decode_payload_blob_gas_used(payload, input_ref.protocol), excess_blob_gas=excess_blob_gas(decode_payload_excess_blob_gas(payload, input_ref.protocol)), state_root=hash(ssz_bytes32(payload, PL_STATE_ROOT)), receipts_root=hash(ssz_bytes32(payload, PL_RECEIPTS_ROOT)), logs_bloom=stateless_input_sub_slice(payload, PL_LOGS_BLOOM, 256), fee_recipient=address(ssz_addr(payload, PL_FEE_RECIPIENT)), parent_hash=hash(ssz_bytes32(payload, 0)), parent_beacon_block_root=hash(ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)), slot_number=slot_number(decode_ssz_uint(payload, PL_SLOT_NUMBER)), extra_data=input_ref.extra_data)
 
 def decode_withdrawal(withdrawal: StatelessInputSlice) -> Withdrawal:
-    return Withdrawal(index=withdrawal_index(decode_ssz_uint(withdrawal, WD_INDEX)), validator_index=validator_index(decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)), address=Bytes20(ssz_addr(withdrawal, WD_ADDRESS)), amount=withdrawal_amount(decode_ssz_uint(withdrawal, WD_AMOUNT)))
+    return Withdrawal(index=withdrawal_index(decode_ssz_uint(withdrawal, WD_INDEX)), validator_index=validator_index(decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)), address=address(ssz_addr(withdrawal, WD_ADDRESS)), amount=withdrawal_amount(decode_ssz_uint(withdrawal, WD_AMOUNT)))
 
 def decode_chain_config(cc: StatelessInputSlice, number: withdrawal_amount, timestamp: withdrawal_amount) -> ChainConfig:
     cc_length = cc.len
@@ -620,8 +623,12 @@ def decode_chain_config(cc: StatelessInputSlice, number: withdrawal_amount, time
     activation_start = 16
     activation_fixed_end = 24
     a = 16
-    block_number_start = (int(activation_start) + int(ssz_u32(cc, ssz_field_offset(a, FA_BLOCK_NUMBER_OFF))))
-    timestamp_start = (int(activation_start) + int(ssz_u32(cc, ssz_field_offset(a, FA_TIMESTAMP_OFF))))
+    block_number_offset = ssz_u32(cc, ssz_field_offset(a, FA_BLOCK_NUMBER_OFF))
+    timestamp_offset = ssz_u32(cc, ssz_field_offset(a, FA_TIMESTAMP_OFF))
+    if (((int(block_number_offset) > int((int(cc_length) - int(activation_start))))) | ((int(timestamp_offset) > int((int(cc_length) - int(activation_start)))))):
+        raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
+    block_number_start = (int(activation_start) + int(block_number_offset))
+    timestamp_start = (int(activation_start) + int(timestamp_offset))
     if ((activation_fixed_end) != (block_number_start)):
         raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
     if (int(timestamp_start) < int(block_number_start)):
@@ -651,7 +658,7 @@ def decode_stateless_input(input_ref: StatelessInputRef) -> StatelessInput:
     k_set_header(header)
     environment.k_chain_id = chain_identifier(chain_config.chain_id)
     environment.k_execution_profile = execution_profile_for(input_ref.protocol, header.gas_limit)
-    return StatelessInput(payload=ExecutionPayload(expected_block_hash=Bytes32(ssz_bytes32(input_ref.execution_payload, PL_BLOCK_HASH)), block=Block(header=header, body=BlockBody(transactions=input_ref.transactions, withdrawals=input_ref.withdrawals, block_access_list=input_ref.block_access_list))), chain_config=chain_config)
+    return StatelessInput(payload=ExecutionPayload(expected_block_hash=hash(ssz_bytes32(input_ref.execution_payload, PL_BLOCK_HASH)), block=Block(header=header, body=BlockBody(transactions=input_ref.transactions, withdrawals=input_ref.withdrawals, block_access_list=input_ref.block_access_list))), chain_config=chain_config)
 
 def index_execution_witness(input_ref: StatelessInputRef) -> WitnessContext:
     _host_nodedb_reset()
@@ -803,4 +810,4 @@ MAX_WITNESS_HEADER_LENGTH: int = (1 << 10)
 
 MAX_PUBLIC_KEYS: int = (1 << 15)
 
-EMPTY_PARENT_HEADER_FIELDS: ParentHeaderFields = ParentHeaderFields(parent_hash=Bytes32(ZERO_HASH), state_root=Bytes32(ZERO_HASH), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), have_parent=False, have_state=False, have_base_fee=False, have_blob_gas=False, have_excess_blob_gas=False)
+EMPTY_PARENT_HEADER_FIELDS: ParentHeaderFields = ParentHeaderFields(parent_hash=hash(ZERO_HASH), state_root=hash(ZERO_HASH), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), have_parent=False, have_state=False, have_base_fee=False, have_blob_gas=False, have_excess_blob_gas=False)

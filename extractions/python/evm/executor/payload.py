@@ -7,29 +7,20 @@ from .._runtime import (
     Bytes32,
     SailMatchFailure,
     SailThrown,
-    Uint,
-    sail_tmod_int,
 )
 from dataclasses import dataclass
 from evm.HostContract import (
-    scratch_keccak256 as _host_scratch_keccak256,
     scratch_sha256 as _host_scratch_sha256,
     stateless_input_keccak256 as _host_stateless_input_keccak256,
 )
 from evm.prelude import (
     hash,
-    hash_to_word,
-    ZERO_WORD,
     ZERO_HASH,
 )
 from evm.primitives.quantities import excess_blob_gas
 from evm.primitives.bytes import (
     ScratchSlice,
-    StatelessInputSliceFields,
-    stateless_input_sub_slice,
-    ADDRESS_BYTE_LENGTH,
     WORD_BYTE_LENGTH,
-    EIGHT_BYTE_LENGTH,
     EMPTY_SCRATCH_SLICE,
 )
 from evm.exceptions import (
@@ -44,46 +35,21 @@ from evm.kernel.scratch import (
     scratch_begin,
     scratch_reserve,
     scratch_push_b256,
-    scratch_push_word_be,
     scratch_finish,
     scratch_rewind,
 )
 from evm.primitives.crypto import EMPTY_TRIE_ROOT
 from evm.primitives.fork import (
-    London,
     Paris,
     Shanghai,
     Cancun,
     Prague,
     Amsterdam,
 )
-from evm.primitives.block import (
-    BlockHeader,
-    logs_bloom_from_ref,
-    EMPTY_OMMER_HASH,
-)
 from evm.primitives.stateless_input import (
     StatelessInput,
     WitnessContext,
 )
-from evm.lib.ssz.ssz import decode_ssz_uint
-from evm.lib.rlp.rlp import (
-    rlp_scratch_length_add,
-    rlp_input_slice_size,
-    rlp_uint_word_size,
-    rlp_word_size,
-    rlp_addr_size,
-    rlp_list_size,
-    rlp_input_scratch_slice_size,
-    rlp_write_string_prefix,
-    rlp_write_list_prefix,
-    rlp_write_input_slice,
-    rlp_write_uint_word,
-    rlp_write_word,
-    rlp_write_addr,
-    rlp_finish,
-)
-from evm.kernel.logs import LOGS_BLOOM_BYTE_LENGTH
 from evm.evm.gas import next_excess_blob_gas
 from evm.lib.mpt.primitives import (
     TriePath,
@@ -101,7 +67,7 @@ from evm.lib.mpt.nodes import (
 )
 from evm.lib.mpt.updates import (
     TrieItem,
-    item_leaf,
+    trie_leaf,
     trie_children_empty,
     trie_children_add,
     trie_children_finish,
@@ -120,35 +86,11 @@ from evm.lib.ssz.stateless_input import (
     ssz_fixed_list_at,
     sha256_request_digest,
     WD_SIZE,
-    WD_INDEX,
-    WD_VALIDATOR_INDEX,
-    WD_ADDRESS,
-    WD_AMOUNT,
 )
+from evm.lib.rlp.codecs.withdrawals import withdrawal_rlp
+from evm.lib.rlp.codecs.block_header import block_header_hash
 from evm.kernel import environment
 from evm.executor import receipts as executor_receipts
-
-def withdrawal_rlp(withdrawal: StatelessInputSliceFields) -> ScratchSlice:
-    index = decode_ssz_uint(withdrawal, WD_INDEX)
-    validator_index = decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)
-    address = stateless_input_sub_slice(withdrawal, WD_ADDRESS, ADDRESS_BYTE_LENGTH)
-    amount = decode_ssz_uint(withdrawal, WD_AMOUNT)
-    index_length = rlp_uint_word_size(index)
-    validator_index_length = rlp_uint_word_size(validator_index)
-    address_length = rlp_input_slice_size(address)
-    amount_length = rlp_uint_word_size(amount)
-    content_length = (int((int((int(index_length) + int(validator_index_length))) + int(address_length))) + int(amount_length))
-    if (48 < int(content_length)):
-        raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    bounded_content_length = sail_tmod_int(content_length, 49)
-    content_len = bounded_content_length
-    start = scratch_reserve(rlp_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_uint_word(index)
-    rlp_write_uint_word(validator_index)
-    rlp_write_input_slice(address)
-    rlp_write_uint_word(amount)
-    return rlp_finish(start)
 
 class IndexedTrieSource:
     pass
@@ -224,7 +166,7 @@ def indexed_trie_pop(source: IndexedTrieSource, cursor: IndexedTrieCursor) -> tu
                 value = ScratchTrieLeaf(receipt)
         case _:
             raise SailMatchFailure("no Sail match clause applied")
-    return (item_leaf(index_item.key, value), IndexedTrieCursor(keys=next_keys, receipt_zero=cursor.receipt_zero, receipt_remaining=remaining))
+    return (trie_leaf(index_item.key, value), IndexedTrieCursor(keys=next_keys, receipt_zero=cursor.receipt_zero, receipt_remaining=remaining))
 
 def indexed_trie_subtree(source: IndexedTrieSource, cursor: IndexedTrieCursor, prefix: TriePath) -> tuple[TrieItem | None, IndexedTrieCursor]:
     if (not (indexed_trie_next_under(cursor, prefix))):
@@ -261,85 +203,6 @@ def indexed_trie_root(source: IndexedTrieSource) -> hash:
     root = trie_subtree_root(subtree)
     scratch_rewind(mark)
     return Bytes32(root)
-
-def block_header_hash(header: BlockHeader, transactions_root: hash, withdrawals_root: hash, requests_hash: hash, block_access_list_hash: hash) -> hash:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    word_length = rlp_word_size()
-    address_length = rlp_addr_size()
-    bloom_length = (3 + int(LOGS_BLOOM_BYTE_LENGTH))
-    difficulty_length = rlp_uint_word_size(0)
-    number_length = rlp_uint_word_size(header.number)
-    gas_limit_length = rlp_uint_word_size(header.gas_limit)
-    gas_used_length = rlp_uint_word_size(header.gas_used)
-    timestamp_length = rlp_uint_word_size(header.timestamp)
-    extra_data_length = rlp_input_scratch_slice_size(header.extra_data)
-    nonce_length = (1 + int(EIGHT_BYTE_LENGTH))
-    content_length = rlp_scratch_length_add((6 * int(word_length)), address_length)
-    content_length = Uint(rlp_scratch_length_add(content_length, bloom_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, difficulty_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, number_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, gas_limit_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, gas_used_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, timestamp_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, extra_data_length))
-    content_length = Uint(rlp_scratch_length_add(content_length, nonce_length))
-    if (int(profile.fork) >= int(London)):
-        field_length = rlp_uint_word_size(header.base_fee)
-        content_length = Uint(rlp_scratch_length_add(content_length, field_length))
-    if (int(profile.fork) >= int(Shanghai)):
-        content_length = Uint(rlp_scratch_length_add(content_length, word_length))
-    if (int(profile.fork) >= int(Cancun)):
-        blob_gas_used_length = rlp_uint_word_size(header.blob_gas_used)
-        excess_blob_gas_length = rlp_uint_word_size(header.excess_blob_gas)
-        content_length = Uint(rlp_scratch_length_add(content_length, blob_gas_used_length))
-        content_length = Uint(rlp_scratch_length_add(content_length, excess_blob_gas_length))
-        content_length = Uint(rlp_scratch_length_add(content_length, word_length))
-    if (int(profile.fork) >= int(Prague)):
-        content_length = Uint(rlp_scratch_length_add(content_length, word_length))
-    if (int(profile.fork) >= int(Amsterdam)):
-        slot_number_length = rlp_uint_word_size(header.slot_number)
-        content_length = Uint(rlp_scratch_length_add(content_length, word_length))
-        content_length = Uint(rlp_scratch_length_add(content_length, slot_number_length))
-    if (749 < int(content_length)):
-        raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    bounded_content_length = sail_tmod_int(content_length, 750)
-    content_len = bounded_content_length
-    mark = scratch_reserve(rlp_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_word(hash_to_word(header.parent_hash))
-    rlp_write_word(hash_to_word(EMPTY_OMMER_HASH))
-    rlp_write_addr(header.fee_recipient)
-    rlp_write_word(hash_to_word(header.state_root))
-    rlp_write_word(hash_to_word(transactions_root))
-    rlp_write_word(hash_to_word(header.receipts_root))
-    executor_receipts.rlp_write_logs_bloom(logs_bloom_from_ref(header.logs_bloom))
-    rlp_write_uint_word(0)
-    rlp_write_uint_word(header.number)
-    rlp_write_uint_word(header.gas_limit)
-    rlp_write_uint_word(header.gas_used)
-    rlp_write_uint_word(header.timestamp)
-    rlp_write_input_slice(header.extra_data)
-    rlp_write_word(header.prev_randao)
-    rlp_write_string_prefix(EIGHT_BYTE_LENGTH, Bits(8, 0b00000000))
-    scratch_push_word_be(ZERO_WORD, EIGHT_BYTE_LENGTH)
-    if (int(profile.fork) >= int(London)):
-        rlp_write_uint_word(header.base_fee)
-    if (int(profile.fork) >= int(Shanghai)):
-        rlp_write_word(hash_to_word(withdrawals_root))
-    if (int(profile.fork) >= int(Cancun)):
-        rlp_write_uint_word(header.blob_gas_used)
-        rlp_write_uint_word(header.excess_blob_gas)
-        rlp_write_word(hash_to_word(header.parent_beacon_block_root))
-    if (int(profile.fork) >= int(Prague)):
-        rlp_write_word(hash_to_word(requests_hash))
-    if (int(profile.fork) >= int(Amsterdam)):
-        rlp_write_word(hash_to_word(block_access_list_hash))
-        rlp_write_uint_word(header.slot_number)
-    encoded = rlp_finish(mark)
-    block_hash = _host_scratch_keccak256(encoded)
-    scratch_rewind(mark)
-    return Bytes32(block_hash)
 
 def transaction_trie_root(txs: TransactionListRef) -> hash:
     return Bytes32(indexed_trie_root(IndexedTransactions(txs)))

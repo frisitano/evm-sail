@@ -22,7 +22,7 @@ from typing_extensions import Self
 from evm.prelude import (
     address,
     word,
-    sail_U256,
+    u256,
     ZERO_ADDRESS,
 )
 
@@ -88,10 +88,6 @@ class ssz_offset_index(Unsigned):
 
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
-
-item_count: TypeAlias = U64
-
-item_index: TypeAlias = U64
 
 class frame_depth(Unsigned):
     LOWER = 0
@@ -197,6 +193,13 @@ class bloom_u64_bit(Unsigned):
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
 
+class ancestor_hash_count(Unsigned):
+    LOWER = 0
+    UPPER = 256
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
 ancestor_index: TypeAlias = U8
 
 def word_to_account_nonce(value: word) -> account_nonce | None:
@@ -235,7 +238,36 @@ source_pointer: TypeAlias = Uint
 
 source_length: TypeAlias = Uint
 
-journal_checkpoint: TypeAlias = Uint
+stateless_input_pointer: TypeAlias = Uint
+
+stateless_input_length: TypeAlias = Uint
+
+scratch_pointer: TypeAlias = Uint
+
+scratch_length: TypeAlias = Uint
+
+log_data_pointer: TypeAlias = Uint
+
+log_data_length: TypeAlias = Uint
+
+output_pointer: TypeAlias = Uint
+
+output_length: TypeAlias = Uint
+
+calldata_pointer: TypeAlias = Uint
+
+calldata_length: TypeAlias = Uint
+
+class word_byte_count(Unsigned):
+    LOWER = 0
+    UPPER = 32
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+journal_cursor: TypeAlias = Uint
+
+storage_generation: TypeAlias = Uint
 
 memory_pointer: TypeAlias = Uint
 
@@ -248,7 +280,7 @@ class MemoryRangeFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
             raise ValueError("MemoryRangeFieldsValidity violates Sail constraint memory_valid_range('off, 'len)")
         return self
 
@@ -276,7 +308,7 @@ class MemoryAccessFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((((0 <= self.off) and (0 <= self.len)) and ((0 <= self.required) and (((self.len == 0) and ((self.off == 0) and (self.required == 0))) or ((0 < self.len) and (self.required == (self.off + self.len))))))):
+        if not ((((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1)))) and (((0 <= self.required) and (self.required <= ((2 ** 32) - 1))) and (((self.len == 0) and ((self.off == 0) and (self.required == 0))) or ((0 < self.len) and (self.required == (self.off + self.len))))))):
             raise ValueError("MemoryAccessFieldsValidity violates Sail constraint memory_access_relation('off, 'len, 'required)")
         return self
 
@@ -301,14 +333,12 @@ code_pointer: TypeAlias = Uint
 
 code_length: TypeAlias = Uint
 
-code_chunk_index: TypeAlias = Uint
-
 def word_of_nat_byte_count(value: int) -> word:
     if (int(value) < int((1 << 256))):
-        return word(sail_U256(value))
+        return word(u256(value))
     else:
         if not (False):
-            raise SailError("sail/primitives/quantities.sail:487.20-487.21")
+            raise SailError("sail/primitives/quantities.sail:537.20-537.21")
         raise SailExit(None)
 
 def word_of_source_byte_count(value: int) -> word:

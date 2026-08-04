@@ -13,12 +13,7 @@ from typing import Annotated, TypeAlias
 from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
-from evm.primitives.quantities import (
-    blob_schedule_fee_update_fraction,
-    blob_schedule_max_count,
-    blob_schedule_target_count,
-    chain_identifier,
-)
+from evm.primitives.quantities import chain_identifier
 from evm.primitives.gas import SYSTEM_CALL_GAS_LIMIT
 from evm.primitives.fork import (
     Berlin,
@@ -80,15 +75,6 @@ amsterdam_blob_schedule: TypeAlias = BlobScheduleFields
 
 def blob_schedule(target: int, maximum: int, denominator: int) -> BlobScheduleFields:
     return BlobScheduleFields(validity=BlobScheduleFieldsValidity(target=int(target), maximum=int(maximum), denominator=int(denominator)), target=int(target), max=int(maximum), base_fee_update_fraction=int(denominator))
-
-def blob_schedule_target_of(schedule: BlobSchedule) -> blob_schedule_target_count:
-    return schedule.target
-
-def blob_schedule_maximum_of(schedule: BlobSchedule) -> blob_schedule_max_count:
-    return schedule.max
-
-def blob_schedule_denominator_of(schedule: BlobSchedule) -> blob_schedule_fee_update_fraction:
-    return schedule.base_fee_update_fraction
 
 profile_excess_blob_gas_limit: TypeAlias = int
 
@@ -154,18 +140,16 @@ ProtocolProfile: TypeAlias = ProtocolProfileFields
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class GasLimitsFieldsValidity:
-    fork: int
     block_limit: int
     profile_total_limit: int
     profile_regular_limit: int
     transaction_total_limit: int
     transaction_regular_limit: int
-    receipt_cumulative_limit: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.block_limit) and ((self.block_limit <= ((2 ** 64) - 1)) and (((self.profile_total_limit == (2 ** 24)) or (self.profile_total_limit == ((2 ** 64) - 1))) and (((self.profile_regular_limit == (2 ** 24)) or (self.profile_regular_limit == ((2 ** 64) - 1))) and ((self.transaction_total_limit == (self.block_limit if (self.block_limit < self.profile_total_limit) else self.profile_total_limit)) and ((self.transaction_regular_limit == (self.transaction_total_limit if (self.transaction_total_limit < self.profile_regular_limit) else self.profile_regular_limit)) and (self.receipt_cumulative_limit == (self.block_limit if (self.fork < 16) else (2 * self.block_limit)))))))))):
-            raise ValueError("GasLimitsFieldsValidity violates Sail constraint gas_limits_parameters('fork, 'block_limit, 'profile_total_limit, 'profile_regular_limit, 'transaction_total_limit, 'transaction_regular_limit, 'receipt_cumulative_limit)")
+        if not (((0 <= self.block_limit) and ((self.block_limit <= ((2 ** 64) - 1)) and (((self.profile_total_limit == (2 ** 24)) or (self.profile_total_limit == ((2 ** 64) - 1))) and (((self.profile_regular_limit == (2 ** 24)) or (self.profile_regular_limit == ((2 ** 64) - 1))) and ((self.transaction_total_limit == (self.block_limit if (self.block_limit < self.profile_total_limit) else self.profile_total_limit)) and (self.transaction_regular_limit == (self.transaction_total_limit if (self.transaction_total_limit < self.profile_regular_limit) else self.profile_regular_limit)))))))):
+            raise ValueError("GasLimitsFieldsValidity violates Sail constraint gas_limits_parameters('block_limit, 'profile_total_limit, 'profile_regular_limit, 'transaction_total_limit, 'transaction_regular_limit)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
@@ -174,7 +158,6 @@ class GasLimitsFields:
     block_limit: int
     transaction_total_limit: int
     transaction_regular_limit: int
-    receipt_cumulative_limit: int
     system_regular_limit: Annotated[int, IntegerRange(30000000, 30000000)]
     system_state_limit: Annotated[int, IntegerRange(0, 0)]
 
@@ -186,8 +169,6 @@ class GasLimitsFields:
             raise ValueError("GasLimitsFields.transaction_total_limit violates Sail type int('transaction_total_limit)")
         if not ((int(self.transaction_regular_limit) == self.validity.transaction_regular_limit)):
             raise ValueError("GasLimitsFields.transaction_regular_limit violates Sail type int('transaction_regular_limit)")
-        if not ((int(self.receipt_cumulative_limit) == self.validity.receipt_cumulative_limit)):
-            raise ValueError("GasLimitsFields.receipt_cumulative_limit violates Sail type int('receipt_cumulative_limit)")
         if not ((int(self.system_regular_limit) == 30000000)):
             raise ValueError("GasLimitsFields.system_regular_limit violates Sail type int(30000000)")
         if not ((int(self.system_state_limit) == 0)):
@@ -205,11 +186,7 @@ def gas_limits_for(profile: ProtocolProfileFields, block_limit: int) -> GasLimit
         transaction_regular_limit = transaction_total_limit
     else:
         transaction_regular_limit = profile.transaction_regular_gas_limit
-    if (int(profile.fork) < int(Amsterdam)):
-        receipt_cumulative_limit = block_limit
-    else:
-        receipt_cumulative_limit = (2 * int(block_limit))
-    return GasLimitsFields(validity=GasLimitsFieldsValidity(fork=profile.validity.fork, block_limit=int(block_limit), profile_total_limit=profile.validity.transaction_total_gas_limit, profile_regular_limit=profile.validity.transaction_regular_gas_limit, transaction_total_limit=(int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit), transaction_regular_limit=((int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit) if ((int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit) < profile.validity.transaction_regular_gas_limit) else profile.validity.transaction_regular_gas_limit), receipt_cumulative_limit=(int(block_limit) if (profile.validity.fork < 16) else (2 * int(block_limit)))), block_limit=int(block_limit), transaction_total_limit=int(transaction_total_limit), transaction_regular_limit=int(transaction_regular_limit), receipt_cumulative_limit=int(receipt_cumulative_limit), system_regular_limit=int(SYSTEM_CALL_GAS_LIMIT), system_state_limit=0)
+    return GasLimitsFields(validity=GasLimitsFieldsValidity(block_limit=int(block_limit), profile_total_limit=profile.validity.transaction_total_gas_limit, profile_regular_limit=profile.validity.transaction_regular_gas_limit, transaction_total_limit=(int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit), transaction_regular_limit=((int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit) if ((int(block_limit) if (int(block_limit) < profile.validity.transaction_total_gas_limit) else profile.validity.transaction_total_gas_limit) < profile.validity.transaction_regular_gas_limit) else profile.validity.transaction_regular_gas_limit)), block_limit=int(block_limit), transaction_total_limit=int(transaction_total_limit), transaction_regular_limit=int(transaction_regular_limit), system_regular_limit=int(SYSTEM_CALL_GAS_LIMIT), system_state_limit=0)
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class ExecutionProfileFieldsValidity:
@@ -226,12 +203,11 @@ class ExecutionProfileFieldsValidity:
     block_limit: int
     transaction_total_limit: int
     transaction_regular_limit: int
-    receipt_cumulative_limit: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((((self.fork == 5) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 0) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 2)))))))))) or ((((6 <= self.fork) and (self.fork <= 9)) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 0) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 5)))))))))) or (((self.fork == 10) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 5)))))))))) or (((self.fork == 11) and ((self.target == 3) and ((self.maximum == 6) and ((self.denominator == 3338477) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 12) and ((self.target == 6) and ((self.maximum == 9) and ((self.denominator == 5007716) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 9) and (self.refund_divisor == 5)))))))))) or (((self.fork == 13) and ((self.target == 6) and ((self.maximum == 9) and ((self.denominator == 5007716) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 14) and ((self.target == 10) and ((self.maximum == 15) and ((self.denominator == 8346193) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 15) and ((self.target == 14) and ((self.maximum == 21) and ((self.denominator == 11684671) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or ((self.fork == 16) and ((self.target == 14) and ((self.maximum == 21) and ((self.denominator == 11684671) and ((self.code_limit == 65536) and ((self.initcode_limit == 131072) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))))))))))) and ((0 <= self.block_limit) and ((self.block_limit <= ((2 ** 64) - 1)) and (((self.profile_total_limit == (2 ** 24)) or (self.profile_total_limit == ((2 ** 64) - 1))) and (((self.profile_regular_limit == (2 ** 24)) or (self.profile_regular_limit == ((2 ** 64) - 1))) and ((self.transaction_total_limit == (self.block_limit if (self.block_limit < self.profile_total_limit) else self.profile_total_limit)) and ((self.transaction_regular_limit == (self.transaction_total_limit if (self.transaction_total_limit < self.profile_regular_limit) else self.profile_regular_limit)) and (self.receipt_cumulative_limit == (self.block_limit if (self.fork < 16) else (2 * self.block_limit))))))))))):
-            raise ValueError("ExecutionProfileFieldsValidity violates Sail constraint execution_profile_parameters('fork, 'target, 'maximum, 'denominator, 'code_limit, 'initcode_limit, 'profile_total_limit, 'profile_regular_limit, 'transaction_blob_limit, 'refund_divisor, 'block_limit, 'transaction_total_limit, 'transaction_regular_limit, 'receipt_cumulative_limit)")
+        if not (((((self.fork == 5) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 0) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 2)))))))))) or ((((6 <= self.fork) and (self.fork <= 9)) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 0) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 5)))))))))) or (((self.fork == 10) and ((self.target == 0) and ((self.maximum == 0) and ((self.denominator == 1) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 0) and (self.refund_divisor == 5)))))))))) or (((self.fork == 11) and ((self.target == 3) and ((self.maximum == 6) and ((self.denominator == 3338477) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 12) and ((self.target == 6) and ((self.maximum == 9) and ((self.denominator == 5007716) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == ((2 ** 64) - 1)) and ((self.transaction_blob_limit == 9) and (self.refund_divisor == 5)))))))))) or (((self.fork == 13) and ((self.target == 6) and ((self.maximum == 9) and ((self.denominator == 5007716) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 14) and ((self.target == 10) and ((self.maximum == 15) and ((self.denominator == 8346193) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or (((self.fork == 15) and ((self.target == 14) and ((self.maximum == 21) and ((self.denominator == 11684671) and ((self.code_limit == 24576) and ((self.initcode_limit == 49152) and ((self.profile_total_limit == (2 ** 24)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))) or ((self.fork == 16) and ((self.target == 14) and ((self.maximum == 21) and ((self.denominator == 11684671) and ((self.code_limit == 65536) and ((self.initcode_limit == 131072) and ((self.profile_total_limit == ((2 ** 64) - 1)) and ((self.profile_regular_limit == (2 ** 24)) and ((self.transaction_blob_limit == 6) and (self.refund_divisor == 5)))))))))))))))))) and ((0 <= self.block_limit) and ((self.block_limit <= ((2 ** 64) - 1)) and (((self.profile_total_limit == (2 ** 24)) or (self.profile_total_limit == ((2 ** 64) - 1))) and (((self.profile_regular_limit == (2 ** 24)) or (self.profile_regular_limit == ((2 ** 64) - 1))) and ((self.transaction_total_limit == (self.block_limit if (self.block_limit < self.profile_total_limit) else self.profile_total_limit)) and (self.transaction_regular_limit == (self.transaction_total_limit if (self.transaction_total_limit < self.profile_regular_limit) else self.profile_regular_limit))))))))):
+            raise ValueError("ExecutionProfileFieldsValidity violates Sail constraint execution_profile_parameters('fork, 'target, 'maximum, 'denominator, 'code_limit, 'initcode_limit, 'profile_total_limit, 'profile_regular_limit, 'transaction_blob_limit, 'refund_divisor, 'block_limit, 'transaction_total_limit, 'transaction_regular_limit)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
@@ -243,7 +219,7 @@ class ExecutionProfileFields:
 ExecutionProfile: TypeAlias = ExecutionProfileFields
 
 def execution_profile_for(protocol: ProtocolProfileFields, block_limit: int) -> ExecutionProfileFields:
-    return ExecutionProfileFields(validity=ExecutionProfileFieldsValidity(fork=protocol.validity.fork, target=protocol.validity.target, maximum=protocol.validity.maximum, denominator=protocol.validity.denominator, code_limit=protocol.validity.code_limit, initcode_limit=protocol.validity.initcode_limit, profile_total_limit=protocol.validity.transaction_total_gas_limit, profile_regular_limit=protocol.validity.transaction_regular_gas_limit, transaction_blob_limit=protocol.validity.transaction_blob_limit, refund_divisor=protocol.validity.refund_divisor, block_limit=int(block_limit), transaction_total_limit=(int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit), transaction_regular_limit=((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) if ((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) < protocol.validity.transaction_regular_gas_limit) else protocol.validity.transaction_regular_gas_limit), receipt_cumulative_limit=(int(block_limit) if (protocol.validity.fork < 16) else (2 * int(block_limit)))), protocol=protocol, gas=gas_limits_for(protocol, block_limit))
+    return ExecutionProfileFields(validity=ExecutionProfileFieldsValidity(fork=protocol.validity.fork, target=protocol.validity.target, maximum=protocol.validity.maximum, denominator=protocol.validity.denominator, code_limit=protocol.validity.code_limit, initcode_limit=protocol.validity.initcode_limit, profile_total_limit=protocol.validity.transaction_total_gas_limit, profile_regular_limit=protocol.validity.transaction_regular_gas_limit, transaction_blob_limit=protocol.validity.transaction_blob_limit, refund_divisor=protocol.validity.refund_divisor, block_limit=int(block_limit), transaction_total_limit=(int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit), transaction_regular_limit=((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) if ((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) < protocol.validity.transaction_regular_gas_limit) else protocol.validity.transaction_regular_gas_limit)), protocol=protocol, gas=gas_limits_for(protocol, block_limit))
 
 def schema_protocol_profile_forwards(arg_: Annotated[Bits, BitWidth(8)]) -> ProtocolProfile:
     match arg_:

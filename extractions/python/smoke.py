@@ -151,7 +151,7 @@ def generated_code_checks() -> None:
     for function_name in (
         "word_add_word",
         "word_sub_word",
-        "word_shift_left_one",
+        "word_shift_left",
     ):
         function = getattr(evm, function_name)
         if not any(
@@ -218,13 +218,14 @@ def main() -> None:
         assert host_contract.stack_pop_word() == 7
 
         state_address = Bytes20(b"\x11" * 20)
-        assert host_contract.warm_addr_touch(state_address) is False
-        assert host_contract.warm_addr_touch(state_address) is True
+        assert host_contract.account_is_warm(state_address) is False
+        host_contract.account_mark_warm(state_address)
+        assert host_contract.account_is_warm(state_address) is True
         host_contract.transient_store(state_address, 3, 5)
-        checkpoint = host_contract.state_checkpoint()
+        host_contract.state_journal_checkpoint()
         host_contract.transient_store(state_address, 3, 9)
         assert host_contract.transient_load(state_address, 3) == 9
-        host_contract.state_revert(checkpoint)
+        host_contract.state_journal_revert()
         assert host_contract.transient_load(state_address, 3) == 5
 
         host_contract.logs_tx_reset()
@@ -247,7 +248,7 @@ def main() -> None:
     assert type(wrapped) is evm.U256
     assert adapter.word_to_int(wrapped) == 0
 
-    shifted = evm.word_shift_left_one(adapter.word(1 << 255))
+    shifted = evm.word_shift_left(adapter.word(1 << 255), 1)
     assert type(shifted) is evm.U256
     assert adapter.word_to_int(shifted) == 0
 

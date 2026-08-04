@@ -14,9 +14,9 @@ from evm.HostContract import (
 from evm.prelude import word
 from evm.primitives.bytes import (
     CalldataSlice,
+    EvmMemorySlice,
     InputCalldata,
     MemoryCalldata,
-    MemorySlice,
     OutputSlice,
     OutputSliceFields,
     StatelessInputSlice,
@@ -32,7 +32,7 @@ def output_buffer_slice(sail_len: int) -> OutputSliceFields:
     else:
         return output_slice(0, sail_len)
 
-def freeze_memory_output(data: MemorySlice) -> OutputSlice:
+def freeze_memory_output(data: EvmMemorySlice) -> OutputSlice:
     sail_len = data.len
     if ((sail_len) == (0)):
         return EMPTY_OUTPUT_SLICE

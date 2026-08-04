@@ -34,7 +34,7 @@ from evm.HostContract import (
 from evm._sail.vector import neq_bits
 from evm.prelude import (
     address,
-    sail_U256,
+    u256,
     hash_to_word,
     word_to_hash,
     word_to_address,
@@ -43,8 +43,8 @@ from evm.prelude import (
     WORD_ONE,
 )
 from evm.primitives.quantities import (
+    ancestor_hash_count,
     precompile_id,
-    precompile_selector,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
@@ -122,7 +122,7 @@ def precompile_active_at_fork(n: precompile_id) -> bool:
     p256 = ((((n) == (256))) & ((int(profile.fork) >= int(Osaka))))
     return ((base) | (((byzantium) | (((istanbul) | (((kzg) | (((bls) | (p256))))))))))
 
-def precompile_number(bytes: address) -> precompile_selector:
+def precompile_number(bytes: address) -> ancestor_hash_count:
     selector = (int((int(sail_vector_access(bytes, 18, False)) * 256)) + int(sail_vector_access(bytes, 19, False)))
     match selector:
         case 1:
@@ -220,17 +220,17 @@ def precompile_number(bytes: address) -> precompile_selector:
     if ((candidate) != (0)):
         id = candidate
         if precompile_active_at_fork(id):
-            return precompile_selector(id)
+            return ancestor_hash_count(id)
         else:
-            return precompile_selector(0)
+            return ancestor_hash_count(0)
     else:
-        return precompile_selector(0)
+        return ancestor_hash_count(0)
 
 def run_ecrecover(input: CalldataSlice) -> PrecompileResult:
     v = calldata_slice_load(input, PRECOMPILE_WORD_OFFSET)
-    valid_v = ((((v) == (sail_U256(27)))) | (((v) == (sail_U256(28)))))
+    valid_v = ((((v) == (u256(27)))) | (((v) == (u256(28)))))
     if valid_v:
-        if ((v) == (sail_U256(27))):
+        if ((v) == (u256(27))):
             parity = 0
         else:
             parity = 1
@@ -439,9 +439,9 @@ def run_precompile_slice(num: precompile_id, input: CalldataSlice) -> Precompile
 
 ACCELERATOR_INPUT_MAX: Annotated[int, IntegerRange(2097152, 2097152)] = 2097152
 
-FIELD_ELEMENTS_PER_BLOB: int = sail_U256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000)))
+FIELD_ELEMENTS_PER_BLOB: int = u256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000)))
 
-BLS_MODULUS: int = sail_U256(int(Bits(256, 0b0111001111101101101001110101001100101001100111010111110101001000001100110011100111011000000010000000100110100001110110000000010101010011101111011010010000000010111111111111111001011011111111101111111111111111111111111111111100000000000000000000000000000001)))
+BLS_MODULUS: int = u256(int(Bits(256, 0b0111001111101101101001110101001100101001100111010111110101001000001100110011100111011000000010000000100110100001110110000000010101010011101111011010010000000010111111111111111001011011111111101111111111111111111111111111111100000000000000000000000000000001)))
 
 BLAKE2F_INPUT_LENGTH: Annotated[int, IntegerRange(213, 213)] = 213
 
@@ -493,38 +493,38 @@ TWO_COMPONENTS: Annotated[int, IntegerRange(2, 2)] = 2
 
 BLS_G2_POINT_OFFSET: Annotated[int, IntegerRange(128, 128)] = 128
 
-PRECOMPILE_ADDRESS_1: address = Bytes20(word_to_address(sail_U256(1)))
+PRECOMPILE_ADDRESS_1: address = Bytes20(word_to_address(u256(1)))
 
-PRECOMPILE_ADDRESS_2: address = Bytes20(word_to_address(sail_U256(2)))
+PRECOMPILE_ADDRESS_2: address = Bytes20(word_to_address(u256(2)))
 
-PRECOMPILE_ADDRESS_3: address = Bytes20(word_to_address(sail_U256(3)))
+PRECOMPILE_ADDRESS_3: address = Bytes20(word_to_address(u256(3)))
 
-PRECOMPILE_ADDRESS_4: address = Bytes20(word_to_address(sail_U256(4)))
+PRECOMPILE_ADDRESS_4: address = Bytes20(word_to_address(u256(4)))
 
-PRECOMPILE_ADDRESS_5: address = Bytes20(word_to_address(sail_U256(5)))
+PRECOMPILE_ADDRESS_5: address = Bytes20(word_to_address(u256(5)))
 
-PRECOMPILE_ADDRESS_6: address = Bytes20(word_to_address(sail_U256(6)))
+PRECOMPILE_ADDRESS_6: address = Bytes20(word_to_address(u256(6)))
 
-PRECOMPILE_ADDRESS_7: address = Bytes20(word_to_address(sail_U256(7)))
+PRECOMPILE_ADDRESS_7: address = Bytes20(word_to_address(u256(7)))
 
-PRECOMPILE_ADDRESS_8: address = Bytes20(word_to_address(sail_U256(8)))
+PRECOMPILE_ADDRESS_8: address = Bytes20(word_to_address(u256(8)))
 
-PRECOMPILE_ADDRESS_9: address = Bytes20(word_to_address(sail_U256(9)))
+PRECOMPILE_ADDRESS_9: address = Bytes20(word_to_address(u256(9)))
 
-PRECOMPILE_ADDRESS_10: address = Bytes20(word_to_address(sail_U256(10)))
+PRECOMPILE_ADDRESS_10: address = Bytes20(word_to_address(u256(10)))
 
-PRECOMPILE_ADDRESS_11: address = Bytes20(word_to_address(sail_U256(11)))
+PRECOMPILE_ADDRESS_11: address = Bytes20(word_to_address(u256(11)))
 
-PRECOMPILE_ADDRESS_12: address = Bytes20(word_to_address(sail_U256(12)))
+PRECOMPILE_ADDRESS_12: address = Bytes20(word_to_address(u256(12)))
 
-PRECOMPILE_ADDRESS_13: address = Bytes20(word_to_address(sail_U256(13)))
+PRECOMPILE_ADDRESS_13: address = Bytes20(word_to_address(u256(13)))
 
-PRECOMPILE_ADDRESS_14: address = Bytes20(word_to_address(sail_U256(14)))
+PRECOMPILE_ADDRESS_14: address = Bytes20(word_to_address(u256(14)))
 
-PRECOMPILE_ADDRESS_15: address = Bytes20(word_to_address(sail_U256(15)))
+PRECOMPILE_ADDRESS_15: address = Bytes20(word_to_address(u256(15)))
 
-PRECOMPILE_ADDRESS_16: address = Bytes20(word_to_address(sail_U256(16)))
+PRECOMPILE_ADDRESS_16: address = Bytes20(word_to_address(u256(16)))
 
-PRECOMPILE_ADDRESS_17: address = Bytes20(word_to_address(sail_U256(17)))
+PRECOMPILE_ADDRESS_17: address = Bytes20(word_to_address(u256(17)))
 
-PRECOMPILE_ADDRESS_256: address = Bytes20(word_to_address(sail_U256(256)))
+PRECOMPILE_ADDRESS_256: address = Bytes20(word_to_address(u256(256)))

@@ -7,7 +7,7 @@ from ..._runtime import (
     Bytes20,
     Bytes32,
     IntegerRange,
-    Uint,
+    SailThrown,
     sail_range,
     sail_vector_init,
     sail_vector_update,
@@ -24,7 +24,7 @@ from evm.prelude import (
     WORD_ZERO,
 )
 from evm.primitives.quantities import (
-    code_chunk_index,
+    code_length,
     ssz_offset,
     ssz_uint,
 )
@@ -32,6 +32,10 @@ from evm.primitives.bytes import (
     ScratchSlice,
     StatelessInputSlice,
     ADDRESS_BYTE_LENGTH,
+)
+from evm.exceptions import (
+    BlockError,
+    InvalidBlock,
 )
 from evm.host.region_access import (
     stateless_input_slice_byte,
@@ -44,6 +48,9 @@ from evm.primitives.block import LogsBloom
 def ssz_field_offset(base: int, delta: int) -> int:
     return (int(base) + int(delta))
 
+def scratch_field_offset(base: int, delta: int) -> int:
+    return (int(base) + int(delta))
+
 def ssz_u32_at(input: StatelessInputSlice, offset: int) -> ssz_offset:
     b0 = (stateless_input_slice_byte(input, offset)).zero_extend(32)
     b1 = (stateless_input_slice_byte(input, ssz_field_offset(offset, 1))).zero_extend(32)
@@ -54,14 +61,20 @@ def ssz_u32_at(input: StatelessInputSlice, offset: int) -> ssz_offset:
 def ssz_u32(input: StatelessInputSlice, offset: int) -> ssz_offset:
     return ssz_offset(ssz_u32_at(input, offset))
 
-def ssz_offset_to_source_pointer(value: ssz_offset) -> code_chunk_index:
-    return Uint(value)
+def ssz_u32_in_slice(input: StatelessInputSlice, offset: ssz_offset) -> ssz_offset:
+    if (((int(offset) <= int(input.len))) & ((4 <= int((int(input.len) - int(offset)))))):
+        return ssz_offset(ssz_u32_at(input, offset))
+    else:
+        raise SailThrown(InvalidBlock(BlockError.InvalidConfig))
+
+def ssz_offset_to_source_pointer(value: ssz_offset) -> code_length:
+    return code_length(value)
 
 def decode_ssz_uint(input: StatelessInputSlice, offset: int) -> ssz_uint:
     return ssz_uint((int((int((int((int((int((int((int(stateless_input_slice_byte(input, offset)) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 1))) * int((1 << 8)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 2))) * int((1 << 16)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 3))) * int((1 << 24)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 4))) * int((1 << 32)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 5))) * int((1 << 40)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 6))) * int((1 << 48)))))) + int((int(stateless_input_slice_byte(input, ssz_field_offset(offset, 7))) * int((1 << 56))))))
 
 def decode_scratch_uint(input: ScratchSlice, offset: int) -> ssz_uint:
-    return ssz_uint((int((int((int((int((int((int((int(scratch_byte(input, offset)) + int((int(scratch_byte(input, ssz_field_offset(offset, 1))) * int((1 << 8)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 2))) * int((1 << 16)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 3))) * int((1 << 24)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 4))) * int((1 << 32)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 5))) * int((1 << 40)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 6))) * int((1 << 48)))))) + int((int(scratch_byte(input, ssz_field_offset(offset, 7))) * int((1 << 56))))))
+    return ssz_uint((int((int((int((int((int((int((int(scratch_byte(input, offset)) + int((int(scratch_byte(input, scratch_field_offset(offset, 1))) * int((1 << 8)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 2))) * int((1 << 16)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 3))) * int((1 << 24)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 4))) * int((1 << 32)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 5))) * int((1 << 40)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 6))) * int((1 << 48)))))) + int((int(scratch_byte(input, scratch_field_offset(offset, 7))) * int((1 << 56))))))
 
 def ssz_addr(input: StatelessInputSlice, offset: int) -> address:
     return Bytes20(word_to_address(stateless_input_slice_load_n(input, offset, ADDRESS_BYTE_LENGTH)))

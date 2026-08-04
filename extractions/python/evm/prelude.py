@@ -8,9 +8,7 @@ from ._runtime import (
     BoundedUint,
     Bytes20,
     Bytes32,
-    U16,
     U256,
-    U32,
     U64,
     U8,
     Unsigned,
@@ -33,7 +31,7 @@ byte: TypeAlias = Annotated[Bits, BitWidth(8)]
 
 word: TypeAlias = U256
 
-def sail_U256(value: int) -> word:
+def u256(value: int) -> word:
     return word(value)
 
 address: TypeAlias = Bytes20
@@ -125,7 +123,7 @@ def word_to_address(value: word) -> address:
     return Bytes20(result)
 
 def word_add_word(left: int, right: int) -> word:
-    return word(sail_U256(sail_tmod_int((int(left) + int(right)), (1 << 256))))
+    return word(u256(sail_tmod_int((int(left) + int(right)), (1 << 256))))
 
 def word_sub_word(left: int, right: int) -> word:
     if (int(right) <= int(left)):
@@ -135,16 +133,16 @@ def word_sub_word(left: int, right: int) -> word:
         return word((int((int(maximum) - int((int(right) - int(left))))) + 1))
 
 def word_and(left: word, right: word) -> word:
-    return word(sail_U256(int(((Bits(256, int(left) >> 0)) & (Bits(256, int(right) >> 0))))))
+    return word(u256(int(((Bits(256, int(left) >> 0)) & (Bits(256, int(right) >> 0))))))
 
 def word_or(left: word, right: word) -> word:
-    return word(sail_U256(int(((Bits(256, int(left) >> 0)) | (Bits(256, int(right) >> 0))))))
+    return word(u256(int(((Bits(256, int(left) >> 0)) | (Bits(256, int(right) >> 0))))))
 
 def word_xor(left: word, right: word) -> word:
-    return word(sail_U256(int(((Bits(256, int(left) >> 0)) ^ (Bits(256, int(right) >> 0))))))
+    return word(u256(int(((Bits(256, int(left) >> 0)) ^ (Bits(256, int(right) >> 0))))))
 
 def word_not(value: word) -> word:
-    return word(sail_U256(int((~(Bits(256, int(value) >> 0))))))
+    return word(u256(int((~(Bits(256, int(value) >> 0))))))
 
 def word_bit(value: word, index: U8) -> bit:
     return sail_vector_access(Bits(256, int(value) >> 0), index, False)
@@ -152,11 +150,8 @@ def word_bit(value: word, index: U8) -> bit:
 def word_low_byte(value: int) -> Annotated[Bits, BitWidth(8)]:
     return Bits(8, int(value) >> 0)
 
-def word_shift_left_one(value: word) -> word:
-    return word(sail_U256(sail_tmod_int((int(value) * 2), (1 << 256))))
-
 def word_shift_right_one(value: word) -> word:
-    return word(sail_U256(sail_tdiv_int(value, 2)))
+    return word(u256(sail_tdiv_int(value, 2)))
 
 def word_of_bool(b: bool) -> word:
     if b:
@@ -176,53 +171,9 @@ def word_ult(a: int, b: int) -> bool:
 def word_ule(a: int, b: int) -> bool:
     return (not (word_ult(b, a)))
 
-def byte_bit_length(value: U8) -> BoundedUint[0, 8]:
-    if (int(value) < int((1 << 4))):
-        if (int(value) < int((1 << 2))):
-            if (int(value) < int((1 << 1))):
-                return BoundedUint[0, 8](value)
-            else:
-                return BoundedUint[0, 8](2)
-        else:
-            if (int(value) < int((1 << 3))):
-                return BoundedUint[0, 8](3)
-            else:
-                return BoundedUint[0, 8](4)
-    else:
-        if (int(value) < int((1 << 6))):
-            if (int(value) < int((1 << 5))):
-                return BoundedUint[0, 8](5)
-            else:
-                return BoundedUint[0, 8](6)
-        else:
-            if (int(value) < int((1 << 7))):
-                return BoundedUint[0, 8](7)
-            else:
-                return BoundedUint[0, 8](8)
-
-def u16_bit_length(value: U16) -> BoundedUint[0, 16]:
-    if (int(value) < int((1 << 8))):
-        return BoundedUint[0, 16](byte_bit_length(value))
-    else:
-        return BoundedUint[0, 16]((8 + int(byte_bit_length(sail_tdiv_int(value, (1 << 8))))))
-
-def u32_bit_length(value: U32) -> BoundedUint[0, 32]:
-    if (int(value) < int((1 << 16))):
-        return BoundedUint[0, 32](u16_bit_length(value))
-    else:
-        return BoundedUint[0, 32]((16 + int(u16_bit_length(sail_tdiv_int(value, (1 << 16))))))
-
 def u64_bit_length(value: U64) -> BoundedUint[0, 64]:
-    if (int(value) < int((1 << 32))):
-        return BoundedUint[0, 64](u32_bit_length(value))
-    else:
-        return BoundedUint[0, 64]((32 + int(u32_bit_length(sail_tdiv_int(value, (1 << 32))))))
-
-def u128_bit_length(value: BoundedUint[0, 340282366920938463463374607431768211455]) -> BoundedUint[0, 128]:
-    if (int(value) < int((1 << 64))):
-        return BoundedUint[0, 128](u64_bit_length(value))
-    else:
-        return BoundedUint[0, 128]((64 + int(u64_bit_length(sail_tdiv_int(value, (1 << 64))))))
+    leading = (Bits(64, int(value) >> 0)).count_leading_zeros()
+    return BoundedUint[0, 64]((64 - int(leading)))
 
 def word_bit_length(value: int) -> word_bit_count:
     limb3 = int(Bits(64, int(value) >> 192))
@@ -246,19 +197,19 @@ def word_div_word(dividend: int, divisor: int) -> word:
     if ((divisor) == (0)):
         return word(WORD_ZERO)
     else:
-        return word(sail_U256(sail_tdiv_int(dividend, divisor)))
+        return word(u256(sail_tdiv_int(dividend, divisor)))
 
 def word_mod_word(dividend: int, divisor: int) -> word:
     if ((divisor) == (0)):
         return word(WORD_ZERO)
     else:
-        return word(sail_U256(sail_tmod_int(dividend, divisor)))
+        return word(u256(sail_tmod_int(dividend, divisor)))
 
 def word_greater_than_word(left: int, right: int) -> bool:
     return (int(left) > int(right))
 
 def word_shift_left(value: word, amount: word_bit_count) -> word:
-    return word(sail_U256(int(((Bits(256, int(value) >> 0)) << int(amount)))))
+    return word(u256(int(((Bits(256, int(value) >> 0)) << int(amount)))))
 
 def word_shift_right(value: word, amount: word_bit_count) -> word:
     return word(int(((Bits(256, int(value) >> 0)) >> int(amount))))
@@ -343,13 +294,13 @@ def alu_addmod(a: int, b: int, n: int) -> word:
     if ((n) == (0)):
         return word(WORD_ZERO)
     else:
-        return word(sail_U256(sail_tmod_int((int(a) + int(b)), n)))
+        return word(u256(sail_tmod_int((int(a) + int(b)), n)))
 
 def alu_mulmod(a: int, b: int, n: int) -> word:
     if ((n) == (0)):
         return word(WORD_ZERO)
     else:
-        return word(sail_U256(sail_tmod_int((int(a) * int(b)), n)))
+        return word(u256(sail_tmod_int((int(a) * int(b)), n)))
 
 def alu_exp(base: word, exponent: word) -> word:
     result = WORD_ONE
@@ -436,18 +387,18 @@ def alu_sar(shift_amt: word, v: word) -> word:
             return word(WORD_ZERO)
 
 def alu_clz(x: word) -> word:
-    return word(sail_U256((256 - int(word_bit_length(x)))))
+    return word(u256((256 - int(word_bit_length(x)))))
 
-ZERO_WORD: int = sail_U256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
+ZERO_WORD: int = u256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
 
 ZERO_ADDRESS: address = Bytes20(Address(sail_vector_init(20, Bits(8, 0b00000000))))
 
 ZERO_HASH: hash = Bytes32(B256(sail_vector_init(32, Bits(8, 0b00000000))))
 
-WORD_ZERO: int = sail_U256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
+WORD_ZERO: int = u256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
 
-WORD_ONE: int = sail_U256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)))
+WORD_ONE: int = u256(int(Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)))
 
-WORD_ALL_ONES: int = sail_U256(int(Bits(256, 0b1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111)))
+WORD_ALL_ONES: int = u256(int(Bits(256, 0b1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111)))
 
-WORD_SIGN_BIT: int = sail_U256(int(Bits(256, 0b1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
+WORD_SIGN_BIT: int = u256(int(Bits(256, 0b1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))

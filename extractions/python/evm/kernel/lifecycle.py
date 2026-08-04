@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bytes20,
     SailMatchFailure,
-    Uint,
 )
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from evm.HostContract import (
     acct_block_get as _host_acct_block_get,
     acct_block_write as _host_acct_block_write,
@@ -19,9 +17,10 @@ from evm.HostContract import (
     bal_nonce_change as _host_bal_nonce_change,
     bal_storage_change as _host_bal_storage_change,
     logs_tx_reset as _host_logs_tx_reset,
-    state_checkpoint as _host_state_checkpoint,
-    state_checkpoint_reset as _host_state_checkpoint_reset,
-    state_revert as _host_state_revert,
+    state_journal_checkpoint as _host_state_journal_checkpoint,
+    state_journal_commit as _host_state_journal_commit,
+    state_journal_reset as _host_state_journal_reset,
+    state_journal_revert as _host_state_journal_revert,
     storage_block_clear as _host_storage_block_clear,
     storage_block_put as _host_storage_block_put,
     storage_tx_clear as _host_storage_tx_clear,
@@ -30,8 +29,9 @@ from evm.HostContract import (
     transient_reset as _host_transient_reset,
     warm_reset as _host_warm_reset,
 )
-from evm.primitives.quantities import code_chunk_index
+from evm.prelude import address
 from evm.primitives.fork import (
+    Fork,
     Cancun,
     Amsterdam,
 )
@@ -49,8 +49,8 @@ from evm.kernel.accounts import (
 )
 from evm.kernel import environment
 
-def k_state_checkpoint() -> code_chunk_index:
-    return Uint(_host_state_checkpoint())
+def k_journal_checkpoint() -> None:
+    return _host_state_journal_checkpoint()
 
 def k_set_header(h: BlockHeader) -> None:
     environment.k_header = h
@@ -61,21 +61,34 @@ def k_set_tx(env: TxEnv) -> None:
     return None
 
 def k_tx_reset() -> None:
-    _host_acct_tx_reset()
     _host_storage_tx_reset()
-    _host_warm_reset()
+    _host_acct_tx_reset()
+    _host_warm_reset(environment.k_current_transaction_epoch)
     _host_transient_reset()
     _host_logs_tx_reset()
-    return _host_state_checkpoint_reset()
+    return _host_state_journal_reset()
 
-def account_deleted_at_tx_end(acc: Account) -> bool:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    return ((acc.selfdestructed) & ((((int(profile.fork) < int(Cancun))) | (acc.created))))
+@dataclass(slots=True)
+class TransactionMergeSemantics:
+    delete_only_created: bool
+    preserve_selfdestruct_balance: bool
+
+def transaction_merge_semantics(fork: Fork) -> TransactionMergeSemantics:
+    if (int(fork) >= int(Amsterdam)):
+        return TransactionMergeSemantics(delete_only_created=True, preserve_selfdestruct_balance=True)
+    else:
+        if (int(fork) >= int(Cancun)):
+            return TransactionMergeSemantics(delete_only_created=True, preserve_selfdestruct_balance=False)
+        else:
+            return TransactionMergeSemantics(delete_only_created=False, preserve_selfdestruct_balance=False)
+
+def account_deleted_at_tx_end(semantics: TransactionMergeSemantics, acc: Account) -> bool:
+    return ((acc.selfdestructed) & ((((not (semantics.delete_only_created))) | (acc.created))))
 
 def k_tx_merge() -> None:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
+    semantics = transaction_merge_semantics(profile.fork)
     more = True
     while True:
         if not (more):
@@ -83,9 +96,9 @@ def k_tx_merge() -> None:
         match _host_acct_tx_pop():
             case (e as _sail_some_value_2) if _sail_some_value_2 is not None:
                 curr = e.value.curr
-                deleted = account_deleted_at_tx_end(curr)
+                deleted = account_deleted_at_tx_end(semantics, curr)
                 if deleted:
-                    if (int(profile.fork) >= int(Amsterdam)):
+                    if semantics.preserve_selfdestruct_balance:
                         curr = account_clear_preserving_balance(curr)
                     else:
                         curr = account_delete(curr)
@@ -93,14 +106,14 @@ def k_tx_merge() -> None:
                 if ((deleted) | (((curr.storage_cleared) & ((not (e.value.orig.storage_cleared)))))):
                     _host_storage_block_clear(e.addr)
                 if ((curr.info.nonce) != (e.value.orig.info.nonce)):
-                    _host_bal_nonce_change(environment.k_block_access_index, e.addr, curr.info.nonce)
+                    _host_bal_nonce_change(environment.k_current_transaction_epoch, e.addr, curr.info.nonce)
                 if ((curr.info.balance) != (e.value.orig.info.balance)):
-                    _host_bal_balance_change(environment.k_block_access_index, e.addr, curr.info.balance)
+                    _host_bal_balance_change(environment.k_current_transaction_epoch, e.addr, curr.info.balance)
                 if ((curr.info.code_hash) != (e.value.orig.info.code_hash)):
-                    _host_bal_code_change(environment.k_block_access_index, e.addr, curr.info.code_hash)
+                    _host_bal_code_change(environment.k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 curr = replace(deepcopy(curr), created=False, selfdestructed=False)
                 if account_changed(curr, e.value.orig):
-                    _host_acct_block_write(AcctEntry(addr=Bytes20(e.addr), value=AcctValue(curr=curr, orig=e.value.orig)))
+                    _host_acct_block_write(AcctEntry(addr=address(e.addr), value=AcctValue(curr=curr, orig=e.value.orig)))
             case None:
                 more = False
             case _:
@@ -114,7 +127,7 @@ def k_tx_merge() -> None:
                 match _host_acct_block_get(e.key.addr):
                     case (acc as _sail_some_value_1) if _sail_some_value_1 is not None:
                         if ((acc.present) & (((e.value.curr) != (e.value.orig)))):
-                            _host_bal_storage_change(environment.k_block_access_index, e.key.addr, e.key.slot, e.value.curr)
+                            _host_bal_storage_change(environment.k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr)
                             _host_storage_block_put(e)
                     case None:
                         pass
@@ -124,8 +137,11 @@ def k_tx_merge() -> None:
                 more = False
             case _:
                 raise SailMatchFailure("no Sail match clause applied")
-    _host_acct_tx_reset()
-    return _host_storage_tx_reset()
+    _host_storage_tx_reset()
+    return _host_acct_tx_reset()
 
-def k_revert(checkpoint: code_chunk_index) -> None:
-    return _host_state_revert(checkpoint)
+def k_journal_revert() -> None:
+    return _host_state_journal_revert()
+
+def k_journal_commit() -> None:
+    return _host_state_journal_commit()

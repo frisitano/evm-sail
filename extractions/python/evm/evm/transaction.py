@@ -17,10 +17,7 @@ from .._runtime import (
 )
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from typing import Annotated
-from pydantic import ConfigDict, model_validator
-from pydantic.dataclasses import dataclass as pydantic_dataclass
-from typing_extensions import Self
+from typing import Annotated, TypeAlias
 from evm.HostContract import (
     authorization_tracker_commit as _host_authorization_tracker_commit,
     authorization_tracker_delegation_set as _host_authorization_tracker_delegation_set,
@@ -53,16 +50,14 @@ from evm.primitives.quantities import (
 )
 from evm.primitives.gas import (
     block_gas,
-    block_gas_limit,
+    gas,
     gas_cost,
-    gas_refund,
-    receipt_cumulative_gas,
     transaction_state_gas_delta,
+    transaction_state_gas_used,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
     GAS_REFUND_ZERO,
     FRAME_STATE_GAS_DELTA_ZERO,
-    STATE_GAS_DELTA_ZERO,
 )
 from evm.primitives.bytes import (
     InputCalldata,
@@ -92,7 +87,6 @@ from evm.host.region_access import (
 from evm.primitives.crypto import KECCAK_EMPTY
 from evm.primitives.fork import (
     Homestead,
-    Berlin,
     London,
     Shanghai,
     Cancun,
@@ -103,25 +97,30 @@ from evm.primitives.chain_config import ProtocolProfile
 from evm.primitives.tx import (
     Authorization,
     AuthorizationListRef,
-    Receipt,
+    ReceiptFields,
+    ReceiptFieldsValidity,
     Transaction,
     TransactionInputSlice,
-    TxType,
+    TxSignatureScheme,
     transaction_calldata_cost,
     transaction_calldata_floor_cost,
-    tx_is_access_list,
-    tx_is_dynamic_fee,
-    tx_is_blob,
-    tx_is_set_code,
+    tx_type_semantics,
 )
 from evm.primitives.evm import (
     Message,
     TransactionGasAllowance,
     TransactionGasAllowanceFields,
     TransactionGasAllowanceFieldsValidity,
-    TxFrameResult,
+    TransactionInitialGasFields,
+    TxFrameGasSnapshotFields,
+    TxFrameGasSnapshotFieldsValidity,
+    TxFrameResultFields,
+    TxFrameResultFieldsValidity,
     TxValidity,
+    TxValidityFields,
+    TxValidityFieldsValidity,
     tx_env,
+    transaction_initial_gas_fields,
 )
 from evm.host.code import (
     code_db_insert,
@@ -129,7 +128,7 @@ from evm.host.code import (
     code_db_intern_output,
     code_db_resolve,
 )
-from evm.lib.rlp.rlp import (
+from evm.lib.rlp.decoding import (
     rlp_decode_list,
     rlp_decode_item,
     rlp_cursor_advance,
@@ -137,18 +136,18 @@ from evm.lib.rlp.rlp import (
     rlp_decode_word,
 )
 from evm.lib.tx import (
-    tx_sig_v_valid,
-    tx_y_parity,
+    tx_signature_parity,
     tx_auth_valid,
 )
-from evm.lib.rlp.tx import decode_authorization
+from evm.lib.rlp.codecs.transactions import decode_authorization
 from evm.kernel.environment import (
     k_coinbase,
     k_create_addr,
 )
 from evm.kernel.storage import (
-    k_access_account,
-    k_slot_is_warm,
+    k_account_is_warm,
+    k_account_mark_warm,
+    k_slot_mark_warm,
 )
 from evm.kernel.logs import read_logs
 from evm.kernel.accounts import (
@@ -173,15 +172,14 @@ from evm.kernel.code import (
 )
 from evm.kernel.selfdestruct import k_mark_created
 from evm.kernel.lifecycle import (
-    k_state_checkpoint,
+    k_journal_checkpoint,
     k_set_tx,
     k_tx_reset,
     k_tx_merge,
-    k_revert,
+    k_journal_revert,
+    k_journal_commit,
 )
 from evm.evm.machine import (
-    validated_refund_add,
-    conserved_gas_add,
     frame_state_gas_used,
     exc_halt,
     is_running,
@@ -219,6 +217,20 @@ from evm.evm.interpreter import (
 from evm.kernel import environment
 from evm.evm import machine
 
+class authorization_item_refund(Unsigned):
+    LOWER = 0
+    UPPER = 12500
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+class authorization_refund(Unsigned):
+    LOWER = 0
+    UPPER = 13421772800000
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
 @dataclass(slots=True)
 class IntrinsicGasCost:
     execution: gas_cost
@@ -235,18 +247,13 @@ class TransactionCosts:
     upfront: word
 
 def transaction_initcode_slice(input: TransactionInputSlice) -> CodeSlice:
-    return code_db_intern_input(stateless_input_slice(input.off, input.len))
+    return code_db_intern_input(stateless_input_slice(input.bytes, input.len))
 
-@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+_TxUpfrontResult_authorization_refund_type: TypeAlias = authorization_refund
+@dataclass(slots=True)
 class TxUpfrontResult:
-    authorization_refund: gas_refund
+    authorization_refund: _TxUpfrontResult_authorization_refund_type
     create_target_prestate_empty: bool
-
-    @model_validator(mode="after")
-    def validate(self) -> Self:
-        if not (((-(199 * ((2 ** 64) - 1))) <= int(self.authorization_refund) <= (199 * ((2 ** 64) - 1)))):
-            raise ValueError("TxUpfrontResult.authorization_refund violates Sail type range(- (199 * (2 ^ 64 - 1)), (199 * (2 ^ 64 - 1)))")
-        return self
 
 def calldata_cost(input: TransactionInputSlice) -> transaction_calldata_cost:
     nonzeroes = slice_count_nonzero(input)
@@ -257,22 +264,14 @@ def calldata_cost(input: TransactionInputSlice) -> transaction_calldata_cost:
     else:
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
-def calldata_tokens(input: TransactionInputSlice) -> Uint:
-    nonzeroes = slice_count_nonzero(input)
-    input_len = input.len
-    if (int(nonzeroes) <= int(input_len)):
-        zeroes = (int(input_len) - int(nonzeroes))
-    else:
-        raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    return Uint((int(zeroes) + int((4 * int(nonzeroes)))))
-
-def legacy_intrinsic_gas(tx: Transaction) -> receipt_cumulative_gas:
+def legacy_intrinsic_gas(tx: Transaction) -> transaction_state_gas_used:
     data_cost = calldata_cost(tx.input_src)
     input = tx.input_src
     input_len = input.len
     address_cost = (int(G_access_list_address) * int(tx.access_list.address_count))
     slot_cost = (int(G_access_list_storage_key) * int(tx.access_list.slot_count))
-    auth_cost = (int(PER_EMPTY_ACCOUNT) * int(tx.authorizations.count))
+    authorizations = tx.authorizations
+    auth_cost = (int(PER_EMPTY_ACCOUNT) * int(authorizations.count))
     common = (int((int((int((int(data_cost) + int(G_transaction))) + int(address_cost))) + int(slot_cost))) + int(auth_cost))
     if tx.is_create:
         return Uint((int((int(common) + int(G_txcreate))) + int(transaction_initcode_gas(input_len))))
@@ -314,14 +313,15 @@ def intrinsic_gas(tx: Transaction) -> IntrinsicGasCost:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) < int(Amsterdam)):
-        return IntrinsicGasCost(execution=Uint(legacy_intrinsic_gas(tx)), state=Uint(0), calldata_floor=Uint(legacy_calldata_floor(tx.input_src)))
+        return IntrinsicGasCost(execution=gas_cost(legacy_intrinsic_gas(tx)), state=gas_cost(0), calldata_floor=gas_cost(legacy_calldata_floor(tx.input_src)))
     else:
         input = tx.input_src
         recipient = amsterdam_recipient_execution_cost(tx)
         address_count = tx.access_list.address_count
         slot_count = tx.access_list.slot_count
         access_execution = (int((int((int((int(AMSTERDAM_ACCESS_LIST_ADDRESS) * int(address_count))) + int((int(AMSTERDAM_ACCESS_LIST_SLOT) * int(slot_count))))) + int((int(AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR) * int(address_count))))) + int((int(AMSTERDAM_ACCESS_LIST_SLOT_FLOOR) * int(slot_count))))
-        authorization_execution = (int(AMSTERDAM_AUTH_BASE) * int(tx.authorizations.count))
+        authorizations = tx.authorizations
+        authorization_execution = (int(AMSTERDAM_AUTH_BASE) * int(authorizations.count))
         if tx.is_create:
             create_execution = transaction_initcode_gas(input.len)
         else:
@@ -329,7 +329,7 @@ def intrinsic_gas(tx: Transaction) -> IntrinsicGasCost:
         execution = (int((int((int((int((int(calldata_cost(tx.input_src)) + int(AMSTERDAM_TX_BASE))) + int(recipient))) + int(access_execution))) + int(authorization_execution))) + int(create_execution))
         input_length = input.len
         floor = (int((int((int((int((int(AMSTERDAM_CALLDATA_FLOOR_BYTE) * int(input_length))) + int(AMSTERDAM_TX_BASE))) + int(recipient))) + int((int(AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR) * int(address_count))))) + int((int(AMSTERDAM_ACCESS_LIST_SLOT_FLOOR) * int(slot_count))))
-        return IntrinsicGasCost(execution=Uint(execution), state=Uint(0), calldata_floor=Uint(floor))
+        return IntrinsicGasCost(execution=gas_cost(execution), state=gas_cost(0), calldata_floor=gas_cost(floor))
 
 def transaction_blob_fee(blob_price: int, blob_gas: int) -> int:
     return (int(blob_price) * int(blob_gas))
@@ -350,7 +350,7 @@ def transaction_costs(profile: ProtocolProfile, tx: Transaction, gas_limit: bloc
             raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     upfront_value = transaction_upfront_cost(tx.max_fee, gas_limit, tx.value, tx.max_blob_fee, blob_gas)
     if (((int(blob_fee_value) < int((1 << 256)))) & ((int(upfront_value) < int((1 << 256))))):
-        return TransactionCosts(intrinsic_execution=Uint(intrinsic.execution), intrinsic_state=Uint(intrinsic.state), calldata_floor=Uint(intrinsic.calldata_floor), blob_gas=blob_gas, blob_fee=word(protocol_word(blob_fee_value)), upfront=word(protocol_word(upfront_value)))
+        return TransactionCosts(intrinsic_execution=gas_cost(intrinsic.execution), intrinsic_state=gas_cost(intrinsic.state), calldata_floor=gas_cost(intrinsic.calldata_floor), blob_gas=blob_gas, blob_fee=word(protocol_word(blob_fee_value)), upfront=word(protocol_word(upfront_value)))
     else:
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
@@ -361,12 +361,32 @@ def validated_word_product(value: word, factor: int) -> word:
     else:
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
-def validated_gas_add(left_gas: receipt_cumulative_gas, right_gas: receipt_cumulative_gas) -> receipt_cumulative_gas:
-    return Uint(conserved_gas_add(left_gas, right_gas))
-
-def validated_gas_sub(left: int, right: int) -> Uint:
-    if (int(right) <= int(left)):
-        return Uint((int(left) - int(right)))
+def tx_frame_gas_snapshot(initial: TransactionInitialGasFields, execution: int, state: int, state_delta: transaction_state_gas_delta) -> TxFrameGasSnapshotFields:
+    limit = initial.admitted_limit
+    regular = initial.regular_limit
+    if (int(execution) <= int(limit)):
+        room = (int(limit) - int(execution))
+        if (int(state) <= int(room)):
+            remaining = (int(execution) + int(state))
+            spent = (int(limit) - int(remaining))
+            raw_state_used = (int(initial.intrinsic_state) + int(state_delta))
+            if (int(raw_state_used) <= 0):
+                if (int(spent) <= int(regular)):
+                    return TxFrameGasSnapshotFields(validity=TxFrameGasSnapshotFieldsValidity(limit=initial.validity.total, regular=initial.validity.regular, calldata_floor=initial.validity.calldata_floor, remaining=int(remaining), state_used=0), admitted_limit=int(limit), regular_limit=int(regular), calldata_floor=int(initial.calldata_floor), remaining=int(remaining), state_used=0)
+                else:
+                    raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
+            else:
+                positive_state_used = raw_state_used
+                if (int(positive_state_used) <= int(spent)):
+                    bounded_state_used = positive_state_used
+                    if (int((int(spent) - int(bounded_state_used))) <= int(regular)):
+                        return TxFrameGasSnapshotFields(validity=TxFrameGasSnapshotFieldsValidity(limit=initial.validity.total, regular=initial.validity.regular, calldata_floor=initial.validity.calldata_floor, remaining=int(remaining), state_used=int(bounded_state_used)), admitted_limit=int(limit), regular_limit=int(regular), calldata_floor=int(initial.calldata_floor), remaining=int(remaining), state_used=int(bounded_state_used))
+                    else:
+                        raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
+                else:
+                    raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
+        else:
+            raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     else:
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
@@ -383,7 +403,7 @@ def transaction_gas_allowance(value: int, total_limit: int, regular_limit: int) 
     else:
         return transaction_gas_allowance_fields(value, total_limit, regular_limit)
 
-def transaction_initial_gas(allowance: TransactionGasAllowanceFields, intrinsic_execution: int, intrinsic_state: int) -> tuple[receipt_cumulative_gas, receipt_cumulative_gas]:
+def transaction_initial_gas(allowance: TransactionGasAllowanceFields, intrinsic_execution: int, intrinsic_state: int, calldata_floor: int) -> TransactionInitialGasFields:
     if (int(allowance.total) < int(intrinsic_execution)):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     else:
@@ -391,21 +411,21 @@ def transaction_initial_gas(allowance: TransactionGasAllowanceFields, intrinsic_
         if (int(after_execution) < int(intrinsic_state)):
             raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
         else:
-            if (int(allowance.regular) < int(intrinsic_execution)):
+            if (((int(allowance.regular) < int(intrinsic_execution))) | ((int(allowance.regular) < int(calldata_floor)))):
                 raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
             else:
                 available = (int(after_execution) - int(intrinsic_state))
                 regular_budget = (int(allowance.regular) - int(intrinsic_execution))
                 if (int(available) < int(regular_budget)):
-                    return (available, GAS_ZERO)
+                    return transaction_initial_gas_fields(allowance.total, allowance.regular, intrinsic_execution, intrinsic_state, calldata_floor, available, 0)
                 else:
-                    return (regular_budget, (int(available) - int(regular_budget)))
+                    return transaction_initial_gas_fields(allowance.total, allowance.regular, intrinsic_execution, intrinsic_state, calldata_floor, regular_budget, (int(available) - int(regular_budget)))
 
-def process_auth(au: Authorization) -> gas_refund:
-    refund = GAS_REFUND_ZERO
+def process_auth(au: Authorization) -> authorization_item_refund:
+    refund = 0
     authority = au.authority
     if ((au.valid_sig) & (((word_is_zero(au.chain_id)) | (((au.chain_id) == (word_of_chain_identifier(environment.k_chain_id))))))):
-        k_access_account(authority)
+        k_account_mark_warm(authority)
         (is_deleg, _) = k_deleg_target(authority)
         if ((((((k_code_key(authority)) == (KECCAK_EMPTY))) | (is_deleg))) & (((k_get_nonce(authority)) == (au.nonce)))):
             existed = k_account_exists(authority)
@@ -416,51 +436,61 @@ def process_auth(au: Authorization) -> gas_refund:
             k_bump_nonce(authority)
             if existed:
                 refund = (int(PER_EMPTY_ACCOUNT) - int(PER_AUTH_BASE))
-    return refund
+    return authorization_item_refund(refund)
 
-def process_auth_cursor(cursor: RlpCursor) -> gas_refund:
-    if ((cursor.len) == (0)):
-        return GAS_REFUND_ZERO
+def process_auth_cursor(cursor: RlpCursor, count: int) -> Uint:
+    if ((count) == (0)):
+        if ((cursor.len) != (0)):
+            raise SailThrown(InvalidBlock(BlockError.RlpDecode))
+        return Uint(0)
     else:
+        if ((cursor.len) == (0)):
+            raise SailThrown(InvalidBlock(BlockError.RlpDecode))
         sail_tuple = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, sail_tuple.source.len)
-        return validated_refund_add(process_auth(decode_authorization(sail_tuple)), process_auth_cursor(next))
+        return Uint((int(process_auth(decode_authorization(sail_tuple))) + int(process_auth_cursor(next, (int(count) - 1)))))
 
-def process_auth_list(authorizations: AuthorizationListRef) -> gas_refund:
+def process_auth_list(authorizations: AuthorizationListRef) -> authorization_refund:
     encoded = authorizations.encoded
-    return process_auth_cursor(encoded)
+    count = authorizations.count
+    refund = process_auth_cursor(encoded, count)
+    return authorization_refund(refund)
 
 def process_amsterdam_auth(au: Authorization, sender: address, current_target: address, transfers_value: bool) -> None:
-    authority = au.authority
-    if ((au.valid_sig) & (((word_is_zero(au.chain_id)) | (((au.chain_id) == (word_of_chain_identifier(environment.k_chain_id))))))):
-        k_access_account(authority)
-        (currently_delegated, _) = k_deleg_target(authority)
-        if ((((((k_code_key(authority)) == (KECCAK_EMPTY))) | (currently_delegated))) & (((k_get_nonce(authority)) == (au.nonce)))):
-            seen = _host_authorization_tracker_seen(authority)
-            if seen:
-                delegated_before_tx = _host_authorization_tracker_originally_delegated(authority)
-            else:
-                delegated_before_tx = currently_delegated
-            already_written = ((seen) | (((((authority) == (sender))) | (((transfers_value) & (((authority) == (current_target))))))))
-            if (not (k_account_exists(authority))):
-                charge_state_gas(G_amsterdam_state_new_account)
-            if ((is_running()) & ((not (already_written)))):
-                charge(G_amsterdam_account_write)
-            if ((is_running()) & (((((au.address) != (ZERO_ADDRESS))) & ((((not (delegated_before_tx))) & ((not (_host_authorization_tracker_delegation_set(authority))))))))):
-                charge_state_gas(G_amsterdam_state_auth_base)
-            if is_running():
-                if ((au.address) == (ZERO_ADDRESS)):
-                    k_clear_code(authority)
+    try:
+        authority = au.authority
+        if ((au.valid_sig) & (((word_is_zero(au.chain_id)) | (((au.chain_id) == (word_of_chain_identifier(environment.k_chain_id))))))):
+            k_account_mark_warm(authority)
+            (currently_delegated, _) = k_deleg_target(authority)
+            if ((((((k_code_key(authority)) == (KECCAK_EMPTY))) | (currently_delegated))) & (((k_get_nonce(authority)) == (au.nonce)))):
+                seen = _host_authorization_tracker_seen(authority)
+                if seen:
+                    delegated_before_tx = _host_authorization_tracker_originally_delegated(authority)
                 else:
-                    k_set_delegation(authority, au.address)
-                k_bump_nonce(authority)
-                return _host_authorization_tracker_commit(authority, (((not (seen))) & (currently_delegated)), ((au.address) != (ZERO_ADDRESS)))
+                    delegated_before_tx = currently_delegated
+                already_written = ((seen) | (((((authority) == (sender))) | (((transfers_value) & (((authority) == (current_target))))))))
+                if (not (k_account_exists(authority))):
+                    charge_state_gas(G_amsterdam_state_new_account)
+                if ((is_running()) & ((not (already_written)))):
+                    if (not (charge(G_amsterdam_account_write))):
+                        raise SailReturn(None)
+                if ((is_running()) & (((((au.address) != (ZERO_ADDRESS))) & ((((not (delegated_before_tx))) & ((not (_host_authorization_tracker_delegation_set(authority))))))))):
+                    charge_state_gas(G_amsterdam_state_auth_base)
+                if is_running():
+                    if ((au.address) == (ZERO_ADDRESS)):
+                        k_clear_code(authority)
+                    else:
+                        k_set_delegation(authority, au.address)
+                    k_bump_nonce(authority)
+                    return _host_authorization_tracker_commit(authority, (((not (seen))) & (currently_delegated)), ((au.address) != (ZERO_ADDRESS)))
+                else:
+                    return None
             else:
                 return None
         else:
             return None
-    else:
-        return None
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def process_amsterdam_auth_cursor(cursor: RlpCursor, sender: address, current_target: address, transfers_value: bool) -> None:
     if ((cursor.len) == (0)):
@@ -480,7 +510,7 @@ def warm_access_list_keys(cursor: RlpCursor, addr: address) -> None:
     else:
         key = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, key.source.len)
-        k_slot_is_warm(addr, rlp_decode_word(key))
+        k_slot_mark_warm(addr, rlp_decode_word(key))
         return warm_access_list_keys(next, addr)
 
 def warm_access_list(cursor: RlpCursor) -> None:
@@ -496,27 +526,27 @@ def warm_access_list(cursor: RlpCursor) -> None:
         fields = rlp_cursor_advance(fields, keys_f.source.len)
         rlp_cursor_expect_end(fields)
         addr = word_to_address(rlp_decode_word(addr_f))
-        k_access_account(addr)
+        k_account_mark_warm(addr)
         warm_access_list_keys(rlp_decode_list(keys_f), addr)
         return warm_access_list(next)
 
 def prewarm(tx: Transaction) -> None:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    k_access_account(tx.sender)
+    k_account_mark_warm(tx.sender)
     if tx.is_create:
-        False
+        pass
     else:
-        k_access_account(tx.recipient)
+        k_account_mark_warm(tx.recipient)
     if (int(profile.fork) >= int(Shanghai)):
-        k_access_account(k_coinbase())
+        k_account_mark_warm(k_coinbase())
     precompile_addresses = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     for i in sail_range(0, 16, 1, True):
         p = sail_vector_access(precompile_addresses, i, False)
         if precompile_active_at_fork(p):
-            k_access_account(precompile_id_to_address(p))
+            k_account_mark_warm(precompile_id_to_address(p))
     if precompile_active_at_fork(256):
-        k_access_account(precompile_id_to_address(256))
+        k_account_mark_warm(precompile_id_to_address(256))
     access_list = tx.access_list.encoded
     return warm_access_list(access_list)
 
@@ -535,12 +565,17 @@ def eff_gas_price_for(base_fee: word, max_fee: word, max_priority_fee: word) -> 
         priority = ZERO_WORD
     return (price, priority)
 
-def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowance) -> TxValidity:
+def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowanceFields) -> TxValidityFields:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    if (not (tx_sig_v_valid(environment.k_chain_id, tx.tx_type, tx.sig_v))):
-        raise SailThrown(InvalidBlock(BlockError.InvalidSignature))
-    parity = tx_y_parity(tx.tx_type, tx.sig_v)
+    tx_semantics = tx_type_semantics(tx.tx_type)
+    match tx_signature_parity(environment.k_chain_id, tx_semantics.signature, tx.sig_v):
+        case (parity as _sail_some_value_1) if _sail_some_value_1 is not None:
+            parity = parity
+        case None:
+            raise SailThrown(InvalidBlock(BlockError.InvalidSignature))
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
     if (not (tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s))):
         raise SailThrown(InvalidBlock(BlockError.InvalidSignature))
     gas_limit = allowance.total
@@ -551,7 +586,7 @@ def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowan
     nonce_before = k_get_nonce(sender)
     costs = transaction_costs(profile, tx, gas_limit, environment.k_header.excess_blob_gas)
     match word_to_account_nonce(tx.nonce):
-        case (nonce as _sail_some_value_1) if _sail_some_value_1 is not None:
+        case (nonce as _sail_some_value_0) if _sail_some_value_0 is not None:
             nonce = nonce
         case None:
             raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
@@ -560,7 +595,7 @@ def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowan
     if ((nonce) != (nonce_before)):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     (sender_deleg, _) = k_deleg_target(sender)
-    if tx_is_blob(tx.tx_type):
+    if tx_semantics.blob:
         if (((int(profile.fork) < int(Cancun))) | (((((tx.blob_hashes.count) == (0))) | (tx.is_create)))):
             raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     if (((int(profile.fork) >= int(Prague))) & ((int(gas_limit) < int(costs.calldata_floor)))):
@@ -577,36 +612,29 @@ def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowan
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     if (not (word_ule(tx.max_priority_fee, tx.max_fee))):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    if ((tx_is_access_list(tx.tx_type)) & ((int(profile.fork) < int(Berlin)))):
+    if (int(profile.fork) < int(tx_semantics.minimum_fork)):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    if ((tx_is_dynamic_fee(tx.tx_type)) & ((int(profile.fork) < int(London)))):
+    if ((tx_semantics.set_code) & (tx.is_create)):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    if ((tx_is_set_code(tx.tx_type)) & (tx.is_create)):
+    authorizations = tx.authorizations
+    if ((tx_semantics.set_code) & (((authorizations.count) == (0)))):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    if ((tx_is_set_code(tx.tx_type)) & (((tx.authorizations.count) == (0)))):
-        raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    if ((tx_is_set_code(tx.tx_type)) & ((int(profile.fork) < int(Prague)))):
-        raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    match tx.tx_type:
-        case TxType.LegacyTx:
-            _sail_value_0 = False
-        case _:
-            _sail_value_0 = ((tx.chain_id) != (environment.k_chain_id))
-    if _sail_value_0:
+    if ((((tx_semantics.signature) == (TxSignatureScheme.TypedSignature))) & (((tx.chain_id) != (environment.k_chain_id)))):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
     if ((nonce_before) == ((int((1 << 64)) - 1))):
         raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-    (initial_execution_gas, initial_state_gas) = transaction_initial_gas(allowance, costs.intrinsic_execution, costs.intrinsic_state)
-    return TxValidity(sender=Bytes20(sender), nonce_before=account_nonce(nonce_before), gas_limit=block_gas_limit(gas_limit), initial_execution_gas=Uint(initial_execution_gas), initial_state_gas=Uint(initial_state_gas), intrinsic_execution_gas=Uint(costs.intrinsic_execution), intrinsic_state_gas=Uint(costs.intrinsic_state), calldata_floor=Uint(costs.calldata_floor), blob_fee=word(costs.blob_fee), gas_price=word(eff_gas_price), priority_fee=word(eff_priority_fee))
+    initial_gas = transaction_initial_gas(allowance, costs.intrinsic_execution, costs.intrinsic_state, costs.calldata_floor)
+    return TxValidityFields(validity=TxValidityFieldsValidity(limit=allowance.validity.total, regular=allowance.validity.regular), sender=address(sender), nonce_before=account_nonce(nonce_before), gas=initial_gas, blob_fee=word(costs.blob_fee), gas_price=word(eff_gas_price), priority_fee=word(eff_priority_fee))
 
 def apply_transaction_upfront_effects(tx: Transaction, v: TxValidity) -> TxUpfrontResult:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
+    initial_gas = v.gas
     if (((int(profile.fork) >= int(Amsterdam))) & (tx.is_create)):
         create_target_prestate_empty = (not (k_account_exists(k_create_addr(v.sender, v.nonce_before))))
     else:
         create_target_prestate_empty = False
-    k_sub_balance(v.sender, validated_word_product(v.gas_price, v.gas_limit))
+    k_sub_balance(v.sender, validated_word_product(v.gas_price, initial_gas.admitted_limit))
     if word_nonzero(v.blob_fee):
         k_sub_balance(v.sender, v.blob_fee)
     k_bump_nonce(v.sender)
@@ -614,16 +642,17 @@ def apply_transaction_upfront_effects(tx: Transaction, v: TxValidity) -> TxUpfro
     if (int(profile.fork) < int(Amsterdam)):
         authorization_refund = process_auth_list(tx.authorizations)
     else:
-        authorization_refund = GAS_REFUND_ZERO
-    return TxUpfrontResult(authorization_refund=authorization_refund, create_target_prestate_empty=create_target_prestate_empty)
+        authorization_refund = 0
+    return TxUpfrontResult(authorization_refund=authorization_refund(authorization_refund), create_target_prestate_empty=create_target_prestate_empty)
 
 def enter_transaction_frame(v: TxValidity) -> None:
+    initial_gas = v.gas
     machine.pc = 0
     machine.call_depth = 0
-    machine.gas_remaining = Uint(v.initial_execution_gas)
-    machine.state_gas_remaining = Uint(v.initial_state_gas)
+    machine.gas_remaining = initial_gas.execution_remaining
+    machine.state_gas_remaining = initial_gas.state_remaining
     machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-    machine.message = Message(caller=Bytes20(ZERO_ADDRESS), address=Bytes20(ZERO_ADDRESS), code_address=Bytes20(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=Uint(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
+    machine.message = Message(caller=address(ZERO_ADDRESS), address=address(ZERO_ADDRESS), code_address=address(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
     _host_stack_reset()
     memory_reset()
     returndata_clear()
@@ -634,43 +663,48 @@ def enter_transaction_frame(v: TxValidity) -> None:
     return None
 
 def prepare_amsterdam_transaction_dispatch(tx: Transaction, v: TxValidity, upfront: TxUpfrontResult) -> bool:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    if tx.is_create:
-        current_target = k_create_addr(v.sender, v.nonce_before)
-    else:
-        current_target = tx.recipient
-    machine.message = Message(caller=Bytes20(v.sender), address=Bytes20(current_target), code_address=Bytes20(current_target), value=word(tx.value), state_gas_reservoir=Uint(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
-    if tx.is_create:
-        if upfront.create_target_prestate_empty:
-            charge_state_gas(G_amsterdam_state_new_account)
-        if is_running():
-            machine.frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), profile.fork))
-        return False
-    else:
-        machine.calldata = InputCalldata(tx.input_src)
-        if ((word_nonzero(tx.value)) & (k_account_is_empty(tx.recipient))):
-            charge_state_gas(G_amsterdam_state_new_account)
-        delegated = False
-        delegate = ZERO_ADDRESS
-        if is_running():
-            (is_delegated, target) = k_deleg_target(tx.recipient)
-            delegated = is_delegated
-            delegate = Bytes20(target)
-            if delegated:
-                warm = k_access_account(delegate)
-                charge(account_cost(warm))
-        if is_running():
-            if delegated:
-                machine.message = replace(deepcopy(machine.message), code_address=Bytes20(delegate))
-            machine.frame_code = executable_code(tx.recipient, delegated, delegate)
-        return delegated
+    try:
+        execution_profile = environment.k_execution_profile
+        profile = execution_profile.protocol
+        if tx.is_create:
+            current_target = k_create_addr(v.sender, v.nonce_before)
+        else:
+            current_target = tx.recipient
+        machine.message = Message(caller=address(v.sender), address=address(current_target), code_address=address(current_target), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
+        if tx.is_create:
+            if upfront.create_target_prestate_empty:
+                charge_state_gas(G_amsterdam_state_new_account)
+            if is_running():
+                machine.frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), profile.fork))
+            return False
+        else:
+            machine.calldata = InputCalldata(tx.input_src)
+            if ((word_nonzero(tx.value)) & (k_account_is_empty(tx.recipient))):
+                charge_state_gas(G_amsterdam_state_new_account)
+            delegated = False
+            delegate = ZERO_ADDRESS
+            if is_running():
+                (is_delegated, target) = k_deleg_target(tx.recipient)
+                delegated = is_delegated
+                delegate = Bytes20(target)
+                if delegated:
+                    warm = k_account_is_warm(delegate)
+                    if (not (charge(account_cost(warm)))):
+                        raise SailReturn(False)
+                    k_account_mark_warm(delegate)
+            if is_running():
+                if delegated:
+                    machine.message = replace(deepcopy(machine.message), code_address=address(delegate))
+                machine.frame_code = executable_code(tx.recipient, delegated, delegate)
+            return delegated
+    except SailReturn as _sail_return:
+        return _sail_return.value
 
 def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before: account_nonce) -> None:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     new_addr = k_create_addr(sender, nonce_before)
-    k_access_account(new_addr)
+    k_account_mark_warm(new_addr)
     if k_account_occupied(new_addr):
         return exc_halt(ExceptionKind.AddressCollision)
     else:
@@ -680,7 +714,7 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
         if word_nonzero(tx.value):
             k_transfer(sender, new_addr, tx.value)
         if (int(profile.fork) < int(Amsterdam)):
-            machine.message = Message(caller=Bytes20(sender), address=Bytes20(new_addr), code_address=Bytes20(new_addr), value=word(tx.value), state_gas_reservoir=Uint(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
+            machine.message = Message(caller=address(sender), address=address(new_addr), code_address=address(new_addr), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
             machine.frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), profile.fork))
         deployed_code = interpret()
         if frame_succeeded():
@@ -736,17 +770,18 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
     else:
         if (int(profile.fork) < int(Amsterdam)):
             machine.calldata = InputCalldata(tx.input_src)
-            machine.message = Message(caller=Bytes20(sender), address=Bytes20(tx.recipient), code_address=Bytes20(tx.recipient), value=word(tx.value), state_gas_reservoir=Uint(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
+            machine.message = Message(caller=address(sender), address=address(tx.recipient), code_address=address(tx.recipient), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
             (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient)
             if tx_deleg:
-                k_access_account(tx_dtgt)
+                k_account_mark_warm(tx_dtgt)
                 k_aload(tx_dtgt)
             machine.frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
         interpret()
         return None
 
-def run_legacy_transaction_frame(tx: Transaction, v: TxValidity) -> TxFrameResult:
-    checkpoint = k_state_checkpoint()
+def run_legacy_transaction_frame(tx: Transaction, v: TxValidityFields) -> TxFrameResultFields:
+    initial_gas = v.gas
+    k_journal_checkpoint()
     enter_transaction_frame(v)
     if tx.is_create:
         run_create_transaction_frame(tx, v.sender, v.nonce_before)
@@ -754,47 +789,56 @@ def run_legacy_transaction_frame(tx: Transaction, v: TxValidity) -> TxFrameResul
         run_call_transaction_frame(tx, v.sender, False)
     success = frame_succeeded()
     if (not (success)):
-        k_revert(checkpoint)
-    return TxFrameResult(success=success, execution_gas_remaining=Uint(machine.gas_remaining), state_gas_remaining=Uint(machine.state_gas_remaining), state_gas_used=frame_state_gas_used(), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
+        k_journal_revert()
+    else:
+        k_journal_commit()
+    state_delta = frame_state_gas_used()
+    return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, state_delta), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
 
-def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidity, upfront: TxUpfrontResult) -> TxFrameResult:
+def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfront: TxUpfrontResult) -> TxFrameResultFields:
     try:
         enter_transaction_frame(v)
-        preparation_checkpoint = k_state_checkpoint()
+        initial_gas = v.gas
+        k_journal_checkpoint()
         preparation_reservoir = machine.state_gas_remaining
         if tx.is_create:
             current_target = k_create_addr(v.sender, v.nonce_before)
         else:
             current_target = tx.recipient
-        _host_authorization_tracker_reset(tx.authorizations.count)
-        authorizations = tx.authorizations.encoded
+        authorization_list = tx.authorizations
+        _host_authorization_tracker_reset(authorization_list.count)
+        authorizations = authorization_list.encoded
         process_amsterdam_auth_cursor(authorizations, v.sender, current_target, word_nonzero(tx.value))
         authorization_state_gas = FRAME_STATE_GAS_DELTA_ZERO
         delegated = False
         if is_running():
             authorization_state_gas = frame_state_gas_used()
-            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=Uint(machine.state_gas_remaining))
+            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=gas(machine.state_gas_remaining))
             machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
             delegated = prepare_amsterdam_transaction_dispatch(tx, v, upfront)
         if (not (is_running())):
-            k_revert(preparation_checkpoint)
-            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=Uint(preparation_reservoir))
+            k_journal_revert()
+            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=gas(preparation_reservoir))
             machine.state_gas_remaining = preparation_reservoir
             machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-            raise SailReturn(TxFrameResult(success=False, execution_gas_remaining=Uint(machine.gas_remaining), state_gas_remaining=Uint(machine.state_gas_remaining), state_gas_used=STATE_GAS_DELTA_ZERO, refund=GAS_REFUND_ZERO))
-        execution_checkpoint = k_state_checkpoint()
+            raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
+        k_journal_checkpoint()
         if tx.is_create:
             run_create_transaction_frame(tx, v.sender, v.nonce_before)
         else:
             run_call_transaction_frame(tx, v.sender, delegated)
         success = frame_succeeded()
         if (not (success)):
-            k_revert(execution_checkpoint)
-        return TxFrameResult(success=success, execution_gas_remaining=Uint(machine.gas_remaining), state_gas_remaining=Uint(machine.state_gas_remaining), state_gas_used=(int(authorization_state_gas) + int(frame_state_gas_used())), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
+            k_journal_revert()
+        else:
+            k_journal_commit()
+        k_journal_commit()
+        state_delta = (int(authorization_state_gas) + int(frame_state_gas_used()))
+        return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, state_delta), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def run_transaction_frame(tx: Transaction, v: TxValidity, upfront: TxUpfrontResult) -> TxFrameResult:
+def run_transaction_frame(tx: Transaction, v: TxValidityFields, upfront: TxUpfrontResult) -> TxFrameResultFields:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) >= int(Amsterdam)):
@@ -802,73 +846,57 @@ def run_transaction_frame(tx: Transaction, v: TxValidity, upfront: TxUpfrontResu
     else:
         return run_legacy_transaction_frame(tx, v)
 
-def capped_transaction_refund(total: gas_refund, cap: int) -> Uint:
+def remaining_gas_after_refund(_limit: int, total: int, remaining: int, cap: int) -> int:
     if (int(total) <= 0):
-        return Uint(0)
+        refund = 0
     else:
         if (int(total) <= int(cap)):
-            return Uint(total)
+            refund = total
         else:
-            return Uint(cap)
+            refund = cap
+    return (int(remaining) + int(refund))
 
-def admitted_transaction_state_gas(value: transaction_state_gas_delta) -> receipt_cumulative_gas:
-    if (int(value) <= 0):
-        return Uint(GAS_ZERO)
-    else:
-        if (int(value) <= int((int((1 << 64)) - 1))):
-            return Uint(value)
-        else:
-            raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
-
-def settle_transaction(tx: Transaction, v: TxValidity, authorization_refund: gas_refund, fr: TxFrameResult) -> Receipt:
+def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refund: authorization_refund, fr: TxFrameResultFields) -> ReceiptFields:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    gas_left0 = validated_gas_add(fr.execution_gas_remaining, fr.state_gas_remaining)
-    gas_used0 = validated_gas_sub(v.gas_limit, gas_left0)
+    gas_snapshot = fr.gas
+    gas_limit = gas_snapshot.admitted_limit
+    gas_left = gas_snapshot.remaining
+    gas_used0 = (int(gas_limit) - int(gas_left))
     refund_quotient = profile.refund_divisor
     refund_cap = sail_ediv_int(gas_used0, refund_quotient)
-    total_refund = validated_refund_add(authorization_refund, fr.refund)
-    refund = capped_transaction_refund(total_refund, refund_cap)
-    gas_left1 = validated_gas_add(gas_left0, refund)
-    gas_used1 = validated_gas_sub(v.gas_limit, gas_left1)
+    total_refund = (int(authorization_refund) + int(fr.refund))
+    gas_left = remaining_gas_after_refund(gas_limit, total_refund, gas_left, refund_cap)
+    gas_used1 = (int(gas_limit) - int(gas_left))
     if (int(profile.fork) >= int(Prague)):
-        floor_cost = v.calldata_floor
-        tx_limit = v.gas_limit
-        if (int(floor_cost) <= int(tx_limit)):
-            floor = floor_cost
-        else:
-            raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
+        floor = gas_snapshot.calldata_floor
     else:
         floor = 0
     if (int(gas_used1) < int(floor)):
         gas_used = floor
     else:
         gas_used = gas_used1
-    gas_left = validated_gas_sub(v.gas_limit, gas_used)
-    raw_state_gas = (int(fr.state_gas_used) + int(v.intrinsic_state_gas))
-    tx_state_gas = admitted_transaction_state_gas(raw_state_gas)
-    execution_before_floor = GAS_ZERO
-    if (int(tx_state_gas) <= int(gas_used0)):
-        reduced_execution_gas = validated_gas_sub(gas_used0, tx_state_gas)
-        execution_before_floor = Uint(reduced_execution_gas)
-    if (int(profile.fork) >= int(Amsterdam)):
-        if (int(execution_before_floor) < int(floor)):
-            execution_gas = floor
-        else:
-            execution_gas = execution_before_floor
+    gas_left = (int(gas_limit) - int(gas_used))
+    tx_state_gas = gas_snapshot.state_used
+    unrefunded_execution_gas = (int((int(gas_limit) - int(gas_snapshot.remaining))) - int(tx_state_gas))
+    if (int(unrefunded_execution_gas) < int(floor)):
+        execution_gas = floor
     else:
-        execution_gas = gas_used
-    if (int(profile.fork) >= int(Amsterdam)):
-        state_gas = tx_state_gas
-    else:
-        state_gas = GAS_ZERO
+        execution_gas = unrefunded_execution_gas
+    state_gas = tx_state_gas
     k_add_balance(v.sender, validated_word_product(v.gas_price, gas_left))
     k_add_balance(k_coinbase(), validated_word_product(v.priority_fee, gas_used))
     k_tx_merge()
     logs = read_logs()
-    return Receipt(tx_type=tx.tx_type, success=fr.success, gas_used=Uint(gas_used), execution_gas=Uint(execution_gas), state_gas=Uint(state_gas), logs=logs)
+    gas_used_value = gas_used
+    execution_gas_value = execution_gas
+    state_gas_value = state_gas
+    if (int(gas_used_value) <= int((int(execution_gas_value) + int(state_gas_value)))):
+        return ReceiptFields(validity=ReceiptFieldsValidity(limit=v.validity.limit, regular_limit=v.validity.regular, gas_used=int(gas_used_value), execution_gas=int(execution_gas_value), state_gas=int(state_gas_value)), tx_type=tx.tx_type, success=fr.success, gas_used=int(gas_used_value), execution_gas=int(execution_gas_value), state_gas=int(state_gas_value), logs=logs)
+    else:
+        raise SailThrown(InvalidBlock(BlockError.ExecutionInvalid))
 
-def process_transaction(tx: Transaction, allowance: TransactionGasAllowance) -> Receipt:
+def process_transaction(tx: Transaction, allowance: TransactionGasAllowanceFields) -> ReceiptFields:
     k_tx_reset()
     validity = check_transaction_validity(tx, allowance)
     k_set_tx(tx_env(tx.sender, validity.gas_price, tx.blob_hashes))

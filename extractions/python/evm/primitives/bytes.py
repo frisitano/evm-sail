@@ -7,7 +7,6 @@ from .._runtime import (
     SailError,
     SailExit,
     SailMatchFailure,
-    Uint,
 )
 from dataclasses import dataclass
 from typing import Annotated, TypeAlias
@@ -15,7 +14,7 @@ from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
 from evm.prelude import word
-from evm.primitives.quantities import code_chunk_index
+from evm.primitives.quantities import code_length
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class StatelessInputSliceFieldsValidity:
@@ -24,20 +23,20 @@ class StatelessInputSliceFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("StatelessInputSliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("StatelessInputSliceFieldsValidity violates Sail constraint stateless_input_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class StatelessInputSliceFields:
     validity: StatelessInputSliceFieldsValidity
-    off: int
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("StatelessInputSliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("StatelessInputSliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
             raise ValueError("StatelessInputSliceFields.len violates Sail type int('len)")
         return self
@@ -57,20 +56,20 @@ class ScratchSliceFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("ScratchSliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("ScratchSliceFieldsValidity violates Sail constraint scratch_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class ScratchSliceFields:
     validity: ScratchSliceFieldsValidity
-    off: int
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("ScratchSliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("ScratchSliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
             raise ValueError("ScratchSliceFields.len violates Sail type int('len)")
         return self
@@ -82,35 +81,35 @@ ScratchSliceLength: TypeAlias = ScratchSliceFields
 ScratchSliceAtLeast: TypeAlias = ScratchSliceFields
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
-class MemorySliceFieldsValidity:
+class EvmMemorySliceFieldsValidity:
     off: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("MemorySliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("EvmMemorySliceFieldsValidity violates Sail constraint memory_region_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
-class MemorySliceFields:
-    validity: MemorySliceFieldsValidity
-    off: int
+class EvmMemorySliceFields:
+    validity: EvmMemorySliceFieldsValidity
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("MemorySliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("EvmMemorySliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
-            raise ValueError("MemorySliceFields.len violates Sail type int('len)")
+            raise ValueError("EvmMemorySliceFields.len violates Sail type int('len)")
         return self
 
-MemorySlice: TypeAlias = MemorySliceFields
+EvmMemorySlice: TypeAlias = EvmMemorySliceFields
 
-MemorySliceLength: TypeAlias = MemorySliceFields
+EvmMemorySliceLength: TypeAlias = EvmMemorySliceFields
 
-MemorySliceAtLeast: TypeAlias = MemorySliceFields
+EvmMemorySliceAtLeast: TypeAlias = EvmMemorySliceFields
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class CodeRegionSliceFieldsValidity:
@@ -119,20 +118,20 @@ class CodeRegionSliceFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("CodeRegionSliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("CodeRegionSliceFieldsValidity violates Sail constraint code_region_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class CodeRegionSliceFields:
     validity: CodeRegionSliceFieldsValidity
-    off: int
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("CodeRegionSliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("CodeRegionSliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
             raise ValueError("CodeRegionSliceFields.len violates Sail type int('len)")
         return self
@@ -146,20 +145,20 @@ class LogDataSliceFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("LogDataSliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("LogDataSliceFieldsValidity violates Sail constraint log_data_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class LogDataSliceFields:
     validity: LogDataSliceFieldsValidity
-    off: int
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("LogDataSliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("LogDataSliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
             raise ValueError("LogDataSliceFields.len violates Sail type int('len)")
         return self
@@ -173,20 +172,20 @@ class OutputSliceFieldsValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not (((0 <= self.off) and (0 <= self.len))):
-            raise ValueError("OutputSliceFieldsValidity violates Sail constraint source_valid_range('off, 'len)")
+        if not (((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1))))):
+            raise ValueError("OutputSliceFieldsValidity violates Sail constraint output_region_valid_range('off, 'len)")
         return self
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class OutputSliceFields:
     validity: OutputSliceFieldsValidity
-    off: int
+    bytes: int
     len: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.off) == self.validity.off)):
-            raise ValueError("OutputSliceFields.off violates Sail type int('off)")
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("OutputSliceFields.bytes violates Sail type int('off)")
         if not ((int(self.len) == self.validity.len)):
             raise ValueError("OutputSliceFields.len violates Sail type int('len)")
         return self
@@ -202,19 +201,19 @@ class InputCalldata(CalldataSlice):
 
 @dataclass(frozen=True, slots=True)
 class MemoryCalldata(CalldataSlice):
-    value: MemorySlice
+    value: EvmMemorySlice
 
-def calldata_slice_length(s: CalldataSlice) -> code_chunk_index:
+def calldata_slice_length(s: CalldataSlice) -> code_length:
     match s:
         case InputCalldata(bytes):
-            return Uint(bytes.len)
+            return code_length(bytes.len)
         case MemoryCalldata(bytes):
-            return Uint(bytes.len)
+            return code_length(bytes.len)
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def stateless_input_slice_length(s: StatelessInputSlice) -> code_chunk_index:
-    return Uint(s.len)
+def stateless_input_slice_length(s: StatelessInputSlice) -> code_length:
+    return code_length(s.len)
 
 class ScratchRegionResult:
     # Sail type parameters: ..., ...
@@ -229,37 +228,34 @@ class ScratchRegionFailed(ScratchRegionResult):
     value: None = None
 
 def stateless_input_slice(off: int, sail_len: int) -> StatelessInputSliceFields:
-    return StatelessInputSliceFields(validity=StatelessInputSliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+    return StatelessInputSliceFields(validity=StatelessInputSliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
 def scratch_slice(off: int, sail_len: int) -> ScratchSliceFields:
-    return ScratchSliceFields(validity=ScratchSliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+    return ScratchSliceFields(validity=ScratchSliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
-def memory_slice(off: int, sail_len: int) -> MemorySliceFields:
-    return MemorySliceFields(validity=MemorySliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+def evm_memory_slice(off: int, sail_len: int) -> EvmMemorySliceFields:
+    return EvmMemorySliceFields(validity=EvmMemorySliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
 def code_region_slice(off: int, sail_len: int) -> CodeRegionSliceFields:
-    return CodeRegionSliceFields(validity=CodeRegionSliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+    return CodeRegionSliceFields(validity=CodeRegionSliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
 def log_data_slice(off: int, sail_len: int) -> LogDataSliceFields:
-    return LogDataSliceFields(validity=LogDataSliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+    return LogDataSliceFields(validity=LogDataSliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
 def output_slice(off: int, sail_len: int) -> OutputSliceFields:
-    return OutputSliceFields(validity=OutputSliceFieldsValidity(off=int(off), len=int(sail_len)), off=int(off), len=int(sail_len))
+    return OutputSliceFields(validity=OutputSliceFieldsValidity(off=int(off), len=int(sail_len)), bytes=int(off), len=int(sail_len))
 
 def stateless_input_sub_slice(s: StatelessInputSliceFields, off: int, sail_len: int) -> StatelessInputSliceFields:
-    return stateless_input_slice((int(s.off) + int(off)), sail_len)
+    return StatelessInputSliceFields(validity=StatelessInputSliceFieldsValidity(off=(s.validity.off + int(off)), len=int(sail_len)), bytes=int((int(s.bytes) + int(off))), len=int(sail_len))
 
 def scratch_sub_slice(s: ScratchSliceFields, off: int, sail_len: int) -> ScratchSliceFields:
-    return scratch_slice((int(s.off) + int(off)), sail_len)
+    return ScratchSliceFields(validity=ScratchSliceFieldsValidity(off=(s.validity.off + int(off)), len=int(sail_len)), bytes=int((int(s.bytes) + int(off))), len=int(sail_len))
 
-def memory_sub_slice(s: MemorySliceFields, off: int, sail_len: int) -> MemorySliceFields:
-    return memory_slice((int(s.off) + int(off)), sail_len)
-
-def code_region_sub_slice(s: CodeRegionSliceFields, off: int, sail_len: int) -> CodeRegionSliceFields:
-    return code_region_slice((int(s.off) + int(off)), sail_len)
+def memory_sub_slice(s: EvmMemorySliceFields, off: int, sail_len: int) -> EvmMemorySliceFields:
+    return EvmMemorySliceFields(validity=EvmMemorySliceFieldsValidity(off=(s.validity.off + int(off)), len=int(sail_len)), bytes=int((int(s.bytes) + int(off))), len=int(sail_len))
 
 def log_data_sub_slice(s: LogDataSliceFields, off: int, sail_len: int) -> LogDataSliceFields:
-    return log_data_slice((int(s.off) + int(off)), sail_len)
+    return LogDataSliceFields(validity=LogDataSliceFieldsValidity(off=(s.validity.off + int(off)), len=int(sail_len)), bytes=int((int(s.bytes) + int(off))), len=int(sail_len))
 
 def calldata_sub_slice(s: CalldataSlice, off: int, sail_len: int) -> CalldataSlice:
     match s:
@@ -281,17 +277,17 @@ def calldata_sub_slice(s: CalldataSlice, off: int, sail_len: int) -> CalldataSli
             raise SailMatchFailure("no Sail match clause applied")
 
 def stateless_input_slice_suffix(s: StatelessInputSliceFields, off: int) -> StatelessInputSliceFields:
-    return stateless_input_slice((int(s.off) + int(off)), (int(s.len) - int(off)))
+    return StatelessInputSliceFields(validity=StatelessInputSliceFieldsValidity(off=(s.validity.off + int(off)), len=(s.validity.len - int(off))), bytes=int((int(s.bytes) + int(off))), len=int((int(s.len) - int(off))))
 
 def scratch_slice_suffix(s: ScratchSliceFields, off: int) -> ScratchSliceFields:
-    return scratch_slice((int(s.off) + int(off)), (int(s.len) - int(off)))
+    return ScratchSliceFields(validity=ScratchSliceFieldsValidity(off=(s.validity.off + int(off)), len=(s.validity.len - int(off))), bytes=int((int(s.bytes) + int(off))), len=int((int(s.len) - int(off))))
 
 class LogData:
     pass
 
 @dataclass(frozen=True, slots=True)
 class LogDataMemory(LogData):
-    value: MemorySlice
+    value: EvmMemorySlice
 
 @dataclass(frozen=True, slots=True)
 class LogDataWord(LogData):
@@ -309,7 +305,7 @@ EMPTY_STATELESS_INPUT_SLICE: StatelessInputSliceFields = stateless_input_slice(0
 
 EMPTY_SCRATCH_SLICE: ScratchSliceFields = scratch_slice(0, 0)
 
-EMPTY_MEMORY_SLICE: MemorySliceFields = memory_slice(0, 0)
+EMPTY_EVM_MEMORY_SLICE: EvmMemorySliceFields = evm_memory_slice(0, 0)
 
 EMPTY_CODE_REGION_SLICE: CodeRegionSliceFields = code_region_slice(0, 0)
 

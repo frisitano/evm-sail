@@ -12,7 +12,6 @@ from ..._runtime import (
 from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
-from evm.primitives.quantities import item_index
 from evm.exceptions import (
     BlockError,
     InvalidBlock,
@@ -77,7 +76,14 @@ class rlp_index_byte_width(Unsigned):
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
 
-def rlp_index_encoded_width(value: item_index) -> rlp_index_byte_width:
+class rlp_index(Unsigned):
+    LOWER = 0
+    UPPER = 1048575
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+def rlp_index_encoded_width(value: rlp_index) -> rlp_index_byte_width:
     if (int(value) < 256):
         return rlp_index_byte_width(1)
     else:
@@ -101,7 +107,7 @@ def rlp_index_encoded_width(value: item_index) -> rlp_index_byte_width:
                             else:
                                 return rlp_index_byte_width(8)
 
-def trie_index_key(index: item_index) -> TriePath:
+def trie_index_key(index: rlp_index) -> TriePath:
     if ((index) == (0)):
         return path_append_byte(path_empty(), Bits(8, 0b10000000))
     else:

@@ -3,34 +3,21 @@
 from __future__ import annotations
 
 from ..._runtime import (
-    BitWidth,
-    Bits,
     BoundedUint,
     Bytes32,
     IntegerRange,
-    SailMatchFailure,
     SailThrown,
     Unsigned,
     VectorLength,
-    sail_range,
-    sail_tmod_int,
-    sail_vector_access,
-    sail_vector_append,
-    sail_vector_init,
-    sail_vector_update,
 )
 from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 from evm.HostContract import (
-    nodedb_lookup as _host_nodedb_lookup,
     scratch_keccak256 as _host_scratch_keccak256,
-    stateless_input_keccak256 as _host_stateless_input_keccak256,
 )
-from evm._sail.vector import neq_bits
 from evm.prelude import (
     b256,
     hash,
-    hash_to_word,
     word_to_hash,
 )
 from evm.primitives.bytes import (
@@ -38,17 +25,10 @@ from evm.primitives.bytes import (
     StatelessInputSlice,
     StatelessInputSliceAtMost,
     WORD_BYTE_LENGTH,
-    EMPTY_STATELESS_INPUT_SLICE,
 )
 from evm.exceptions import (
     BlockError,
     InvalidBlock,
-)
-from evm.primitives.rlp import (
-    RlpCursor,
-    RlpFieldRef,
-    ScratchRlpCursor,
-    ScratchRlpFieldRef,
 )
 from evm.host.region_access import (
     stateless_input_slice_load,
@@ -57,48 +37,9 @@ from evm.host.region_access import (
 from evm.kernel.scratch import (
     scratch_begin,
     scratch_reserve,
-    scratch_push_byte,
-    stateless_input_scratch_push_slice,
     scratch_push_b256,
     scratch_finish,
     scratch_rewind,
-)
-from evm.primitives.crypto import EMPTY_TRIE_ROOT
-from evm.lib.rlp.rlp import (
-    rlp_scratch_length_add,
-    rlp_word_size,
-    rlp_list_size,
-    rlp_scratch_list_size,
-    rlp_input_scratch_slice_size,
-    rlp_scratch_scratch_slice_size,
-    rlp_write_string_prefix,
-    rlp_write_list_prefix,
-    rlp_write_input_slice,
-    rlp_write_scratch_slice,
-    rlp_write_word,
-    rlp_finish,
-    rlp_decode_item,
-    rlp_cursor_advance,
-    rlp_cursor_expect_end,
-    rlp_node_cursor,
-    rlp_item_content,
-    scratch_rlp_decode_item,
-    scratch_rlp_cursor_advance,
-    scratch_rlp_cursor_expect_end,
-    scratch_rlp_node_cursor,
-    scratch_rlp_item_content,
-    scratch_rlp_decode_word,
-    rlp_decode_word,
-)
-from evm.lib.mpt.primitives import (
-    TriePath,
-    path_len,
-    path_nibble,
-    path_concat,
-    hex_prefix_encoded_length,
-    hex_prefix_first_byte,
-    hex_prefix_decode_ref,
-    scratch_hex_prefix_decode_ref,
 )
 
 @dataclass(slots=True)
@@ -121,13 +62,13 @@ def inline_node_from_scratch_slice(bytes: ScratchSlice) -> InlineNode:
     length = bytes.len
     if (int(MPT_HASH_LENGTH) <= int(length)):
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-    return InlineNode(data=Bytes32(word_to_hash(scratch_slice_load(bytes, 0))), len=BoundedUint[0, 31](length))
+    return InlineNode(data=b256(word_to_hash(scratch_slice_load(bytes, 0))), len=BoundedUint[0, 31](length))
 
 def inline_node_from_input_slice(bytes: StatelessInputSlice) -> InlineNode:
     length = bytes.len
     if (int(MPT_HASH_LENGTH) <= int(length)):
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-    return InlineNode(data=Bytes32(word_to_hash(stateless_input_slice_load(bytes, 0))), len=BoundedUint[0, 31](length))
+    return InlineNode(data=b256(word_to_hash(stateless_input_slice_load(bytes, 0))), len=BoundedUint[0, 31](length))
 
 def inline_node_slice(node: InlineNode) -> ScratchSlice:
     start = scratch_reserve(node.len)
@@ -174,391 +115,5 @@ def branch_content_length_add(current: branch_content_length, addition: BoundedU
         return branch_content_length((int(current) + int(addition)))
     else:
         raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-
-def node_ref_size(r: NodeRef) -> BoundedUint[0, 33]:
-    match r:
-        case EmptyRef(None):
-            return BoundedUint[0, 33](1)
-        case InputInlineRef(node):
-            return BoundedUint[0, 33](node.len)
-        case ScratchInlineRef(node):
-            return BoundedUint[0, 33](node.len)
-        case HashRef(_):
-            return BoundedUint[0, 33](rlp_word_size())
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-
-def rlp_write_node_ref(r: NodeRef) -> None:
-    match r:
-        case EmptyRef(None):
-            return scratch_push_byte(Bits(8, 0b10000000))
-        case InputInlineRef(node):
-            return stateless_input_scratch_push_slice(node)
-        case ScratchInlineRef(node):
-            return scratch_push_b256(node.data, node.len)
-        case HashRef(h):
-            return rlp_write_word(hash_to_word(h))
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-
-def rlp_hex_prefix_size(path: TriePath, is_leaf: bool) -> BoundedUint[1, 34]:
-    encoded_length = hex_prefix_encoded_length(path)
-    first = hex_prefix_first_byte(path, is_leaf)
-    if ((((encoded_length) == (1))) & (((sail_vector_access(first, 7, False)) == (Bits(1, 0b0))))):
-        return BoundedUint[1, 34](1)
-    else:
-        return BoundedUint[1, 34]((int(encoded_length) + 1))
-
-def rlp_write_hex_prefix(path: TriePath, is_leaf: bool) -> None:
-    length = path_len(path)
-    encoded_length = hex_prefix_encoded_length(path)
-    first = hex_prefix_first_byte(path, is_leaf)
-    rlp_write_string_prefix(encoded_length, first)
-    scratch_push_byte(first)
-    if ((sail_tmod_int(length, 2)) != (0)):
-        index = 1
-    else:
-        index = 0
-    while True:
-        if not ((int(index) < int(length))):
-            break
-        current = sail_tmod_int(index, 65)
-        next = sail_tmod_int((int(current) + 1), 65)
-        scratch_push_byte(sail_vector_append(path_nibble(path, current), path_nibble(path, next)))
-        index = (int(next) + 1)
-    return None
-
-def child_ref(encoded: ScratchSlice) -> NodeRef:
-    if (int(encoded.len) < int(MPT_HASH_LENGTH)):
-        return ScratchInlineRef(inline_node_from_scratch_slice(encoded))
-    else:
-        return HashRef(_host_scratch_keccak256(encoded))
-
-branch_mask: TypeAlias = Annotated[Bits, BitWidth(16)]
-
-def branch_mask_for(index: Annotated[Bits, BitWidth(4)]) -> Annotated[Bits, BitWidth(16)]:
-    return ((Bits(16, 0b0000000000000001)) << int(index))
-
-def branch_mask_has(mask: Annotated[Bits, BitWidth(16)], index: Annotated[Bits, BitWidth(4)]) -> bool:
-    return neq_bits(((mask) & (branch_mask_for(index))), Bits(16, 0b0000000000000000))
-
-def branch_mask_set(mask: Annotated[Bits, BitWidth(16)], index: Annotated[Bits, BitWidth(4)]) -> Annotated[Bits, BitWidth(16)]:
-    return ((mask) | (branch_mask_for(index)))
-
-def input_leaf_child_ref(key: TriePath, value: StatelessInputSlice) -> NodeRef:
-    content_len = rlp_scratch_length_add(rlp_hex_prefix_size(key, True), rlp_input_scratch_slice_size(value))
-    mark = scratch_reserve(rlp_scratch_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_hex_prefix(key, True)
-    rlp_write_input_slice(value)
-    result = child_ref(rlp_finish(mark))
-    scratch_rewind(mark)
-    return result
-
-def scratch_leaf_child_ref(key: TriePath, value: ScratchSlice) -> NodeRef:
-    content_len = rlp_scratch_length_add(rlp_hex_prefix_size(key, True), rlp_scratch_scratch_slice_size(value))
-    mark = scratch_reserve(rlp_scratch_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_hex_prefix(key, True)
-    rlp_write_scratch_slice(value)
-    result = child_ref(rlp_finish(mark))
-    scratch_rewind(mark)
-    return result
-
-def leaf_child_ref(key: TriePath, value: TrieLeafValue) -> NodeRef:
-    match value:
-        case InputTrieLeaf(bytes):
-            return input_leaf_child_ref(key, bytes)
-        case ScratchTrieLeaf(bytes):
-            return scratch_leaf_child_ref(key, bytes)
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-
-def extension_child_ref(key: TriePath, childref: NodeRef) -> NodeRef:
-    path_length = rlp_hex_prefix_size(key, False)
-    child_length = node_ref_size(childref)
-    content_len = (int(path_length) + int(child_length))
-    mark = scratch_reserve(rlp_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_hex_prefix(key, False)
-    rlp_write_node_ref(childref)
-    result = child_ref(rlp_finish(mark))
-    scratch_rewind(mark)
-    return result
-
-def branch_child_ref(mask: Annotated[Bits, BitWidth(16)], children: BranchRefs) -> NodeRef:
-    content_length = 1
-    child_bit = Bits(16, 0b0000000000000001)
-    for i in sail_range(0, 15, 1, True):
-        if neq_bits(((mask) & (child_bit)), Bits(16, 0b0000000000000000)):
-            child_length = node_ref_size(sail_vector_access(children, i, False))
-            content_length = branch_content_length(branch_content_length_add(content_length, child_length))
-        else:
-            content_length = branch_content_length(branch_content_length_add(content_length, 1))
-        child_bit = ((child_bit) << 1)
-    scratch_content_length = rlp_scratch_length_add(content_length, 0)
-    mark = scratch_reserve(rlp_scratch_list_size(scratch_content_length))
-    rlp_write_list_prefix(content_length)
-    child_bit = Bits(16, 0b0000000000000001)
-    for i in sail_range(0, 15, 1, True):
-        if neq_bits(((mask) & (child_bit)), Bits(16, 0b0000000000000000)):
-            rlp_write_node_ref(sail_vector_access(children, i, False))
-        else:
-            scratch_push_byte(Bits(8, 0b10000000))
-        child_bit = ((child_bit) << 1)
-    scratch_push_byte(Bits(8, 0b10000000))
-    result = child_ref(rlp_finish(mark))
-    scratch_rewind(mark)
-    return result
-
-def trie_ref_to_root(r: NodeRef) -> hash:
-    match r:
-        case EmptyRef(None):
-            return Bytes32(EMPTY_TRIE_ROOT)
-        case InputInlineRef(node):
-            return Bytes32(_host_stateless_input_keccak256(node))
-        case ScratchInlineRef(node):
-            return Bytes32(inline_node_hash(node))
-        case HashRef(h):
-            return Bytes32(h)
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-
-def input_node_to_ref(node: StatelessInputSlice) -> NodeRef:
-    if ((node.len) == (0)):
-        return EmptyRef(None)
-    else:
-        if (int(node.len) < int(MPT_HASH_LENGTH)):
-            return InputInlineRef(node)
-        else:
-            return HashRef(_host_stateless_input_keccak256(node))
-
-def scratch_node_to_ref(node: ScratchSlice) -> NodeRef:
-    if ((node.len) == (0)):
-        return EmptyRef(None)
-    else:
-        if (int(node.len) < int(MPT_HASH_LENGTH)):
-            return ScratchInlineRef(inline_node_from_scratch_slice(node))
-        else:
-            return HashRef(_host_scratch_keccak256(node))
-
-def node_db_lookup(h: hash) -> StatelessInputSlice:
-    return _host_nodedb_lookup(h)
-
-def branch_refs_get(children: BranchRefs, index: Annotated[Bits, BitWidth(4)]) -> NodeRef:
-    match index:
-        case _sail_bits_pattern_0 if _sail_bits_pattern_0 == Bits(4, 0b0000):
-            return sail_vector_access(children, 0, False)
-        case _sail_bits_pattern_1 if _sail_bits_pattern_1 == Bits(4, 0b0001):
-            return sail_vector_access(children, 1, False)
-        case _sail_bits_pattern_2 if _sail_bits_pattern_2 == Bits(4, 0b0010):
-            return sail_vector_access(children, 2, False)
-        case _sail_bits_pattern_3 if _sail_bits_pattern_3 == Bits(4, 0b0011):
-            return sail_vector_access(children, 3, False)
-        case _sail_bits_pattern_4 if _sail_bits_pattern_4 == Bits(4, 0b0100):
-            return sail_vector_access(children, 4, False)
-        case _sail_bits_pattern_5 if _sail_bits_pattern_5 == Bits(4, 0b0101):
-            return sail_vector_access(children, 5, False)
-        case _sail_bits_pattern_6 if _sail_bits_pattern_6 == Bits(4, 0b0110):
-            return sail_vector_access(children, 6, False)
-        case _sail_bits_pattern_7 if _sail_bits_pattern_7 == Bits(4, 0b0111):
-            return sail_vector_access(children, 7, False)
-        case _sail_bits_pattern_8 if _sail_bits_pattern_8 == Bits(4, 0b1000):
-            return sail_vector_access(children, 8, False)
-        case _sail_bits_pattern_9 if _sail_bits_pattern_9 == Bits(4, 0b1001):
-            return sail_vector_access(children, 9, False)
-        case _sail_bits_pattern_10 if _sail_bits_pattern_10 == Bits(4, 0b1010):
-            return sail_vector_access(children, 10, False)
-        case _sail_bits_pattern_11 if _sail_bits_pattern_11 == Bits(4, 0b1011):
-            return sail_vector_access(children, 11, False)
-        case _sail_bits_pattern_12 if _sail_bits_pattern_12 == Bits(4, 0b1100):
-            return sail_vector_access(children, 12, False)
-        case _sail_bits_pattern_13 if _sail_bits_pattern_13 == Bits(4, 0b1101):
-            return sail_vector_access(children, 13, False)
-        case _sail_bits_pattern_14 if _sail_bits_pattern_14 == Bits(4, 0b1110):
-            return sail_vector_access(children, 14, False)
-        case _:
-            return sail_vector_access(children, 15, False)
-
-class InputTrieNode:
-    pass
-
-@dataclass(frozen=True, slots=True)
-class InputLeafNode(InputTrieNode):
-    value: tuple[TriePath, StatelessInputSlice]
-
-@dataclass(frozen=True, slots=True)
-class InputExtensionNode(InputTrieNode):
-    value: tuple[TriePath, NodeRef]
-
-@dataclass(frozen=True, slots=True)
-class InputBranchNode(InputTrieNode):
-    value: tuple[BranchRefs, StatelessInputSlice]
-
-class ScratchTrieNode:
-    pass
-
-@dataclass(frozen=True, slots=True)
-class ScratchLeafNode(ScratchTrieNode):
-    value: tuple[TriePath, ScratchSlice]
-
-@dataclass(frozen=True, slots=True)
-class ScratchExtensionNode(ScratchTrieNode):
-    value: tuple[TriePath, NodeRef]
-
-@dataclass(frozen=True, slots=True)
-class ScratchBranchNode(ScratchTrieNode):
-    value: tuple[BranchRefs, ScratchSlice]
-
-def input_field_to_ref(f: RlpFieldRef) -> NodeRef:
-    if f.is_list:
-        if (int(f.source.len) < int(MPT_HASH_LENGTH)):
-            return InputInlineRef(f.source)
-        else:
-            raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    else:
-        if ((f.content_len) == (MPT_HASH_LENGTH)):
-            return HashRef(word_to_hash(rlp_decode_word(f)))
-        else:
-            return EmptyRef(None)
-
-def scratch_field_to_ref(f: ScratchRlpFieldRef) -> NodeRef:
-    if f.is_list:
-        return ScratchInlineRef(inline_node_from_scratch_slice(f.source))
-    else:
-        if ((f.content_len) == (MPT_HASH_LENGTH)):
-            return HashRef(word_to_hash(scratch_rlp_decode_word(f)))
-        else:
-            return EmptyRef(None)
-
-def decode_input_branch_node(cursor: RlpCursor, index: BoundedUint[2, 16], children: BranchRefs) -> InputTrieNode:
-    if (int(index) < 16):
-        child = rlp_decode_item(cursor)
-        next = rlp_cursor_advance(cursor, child.source.len)
-        updated = children
-        updated = sail_vector_update(updated, index, input_field_to_ref(child), False)
-        return decode_input_branch_node(next, (int(index) + 1), updated)
-    else:
-        value = rlp_decode_item(cursor)
-        next = rlp_cursor_advance(cursor, value.source.len)
-        rlp_cursor_expect_end(next)
-        return InputBranchNode((children, rlp_item_content(value)))
-
-def decode_scratch_branch_node(cursor: ScratchRlpCursor, index: BoundedUint[2, 16], children: BranchRefs) -> ScratchTrieNode:
-    if (int(index) < 16):
-        child = scratch_rlp_decode_item(cursor)
-        next = scratch_rlp_cursor_advance(cursor, child.source.len)
-        updated = children
-        updated = sail_vector_update(updated, index, scratch_field_to_ref(child), False)
-        return decode_scratch_branch_node(next, (int(index) + 1), updated)
-    else:
-        value = scratch_rlp_decode_item(cursor)
-        next = scratch_rlp_cursor_advance(cursor, value.source.len)
-        scratch_rlp_cursor_expect_end(next)
-        return ScratchBranchNode((children, scratch_rlp_item_content(value)))
-
-def decode_input_trie_node(node: StatelessInputSlice) -> InputTrieNode:
-    if ((node.len) == (0)):
-        raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-    fields = rlp_node_cursor(node)
-    first = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, first.source.len)
-    second = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, second.source.len)
-    if ((fields.len) == (0)):
-        (is_leaf, path) = hex_prefix_decode_ref(first)
-        if is_leaf:
-            return InputLeafNode((path, rlp_item_content(second)))
-        else:
-            if ((path_len(path)) == (0)):
-                raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-            else:
-                return InputExtensionNode((path, input_field_to_ref(second)))
-    else:
-        children = sail_vector_init(16, EmptyRef(None))
-        children = sail_vector_update(children, 0, input_field_to_ref(first), False)
-        children = sail_vector_update(children, 1, input_field_to_ref(second), False)
-        return decode_input_branch_node(fields, 2, children)
-
-def decode_scratch_trie_node(node: ScratchSlice) -> ScratchTrieNode:
-    fields = scratch_rlp_node_cursor(node)
-    first = scratch_rlp_decode_item(fields)
-    fields = scratch_rlp_cursor_advance(fields, first.source.len)
-    second = scratch_rlp_decode_item(fields)
-    fields = scratch_rlp_cursor_advance(fields, second.source.len)
-    if ((fields.len) == (0)):
-        (is_leaf, path) = scratch_hex_prefix_decode_ref(first)
-        if is_leaf:
-            return ScratchLeafNode((path, scratch_rlp_item_content(second)))
-        else:
-            if ((path_len(path)) == (0)):
-                raise SailThrown(InvalidBlock(BlockError.RlpDecode))
-            else:
-                return ScratchExtensionNode((path, scratch_field_to_ref(second)))
-    else:
-        children = sail_vector_init(16, EmptyRef(None))
-        children = sail_vector_update(children, 0, scratch_field_to_ref(first), False)
-        children = sail_vector_update(children, 1, scratch_field_to_ref(second), False)
-        return decode_scratch_branch_node(fields, 2, children)
-
-def resolve_witness_ref(r: NodeRef) -> StatelessInputSlice:
-    match r:
-        case EmptyRef(None):
-            return EMPTY_STATELESS_INPUT_SLICE
-        case InputInlineRef(node):
-            return node
-        case ScratchInlineRef(_):
-            raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-        case HashRef(h):
-            node = node_db_lookup(h)
-            if ((node.len) == (0)):
-                raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-            else:
-                return node
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-
-def merge_ext_node(prefix: TriePath, childnode: StatelessInputSlice) -> NodeRef:
-    if ((path_len(prefix)) == (0)):
-        return input_node_to_ref(childnode)
-    else:
-        if ((childnode.len) == (0)):
-            return EmptyRef(None)
-        else:
-            match decode_input_trie_node(childnode):
-                case InputLeafNode((path, value)):
-                    return input_leaf_child_ref(path_concat(prefix, path), value)
-                case InputExtensionNode((path, child)):
-                    return extension_child_ref(path_concat(prefix, path), child)
-                case _:
-                    return extension_child_ref(prefix, input_node_to_ref(childnode))
-
-def merge_ext_ref(prefix: TriePath, childref: NodeRef) -> NodeRef:
-    if ((path_len(prefix)) == (0)):
-        return childref
-    else:
-        match childref:
-            case EmptyRef(None):
-                return EmptyRef(None)
-            case HashRef(_):
-                return extension_child_ref(prefix, childref)
-            case InputInlineRef(node):
-                match decode_input_trie_node(node):
-                    case InputLeafNode((path, value)):
-                        return input_leaf_child_ref(path_concat(prefix, path), value)
-                    case InputExtensionNode((path, child)):
-                        return extension_child_ref(path_concat(prefix, path), child)
-                    case _:
-                        return extension_child_ref(prefix, childref)
-            case ScratchInlineRef(node):
-                match decode_scratch_trie_node(inline_node_slice(node)):
-                    case ScratchLeafNode((path, value)):
-                        return scratch_leaf_child_ref(path_concat(prefix, path), value)
-                    case ScratchExtensionNode((path, child)):
-                        return extension_child_ref(path_concat(prefix, path), child)
-                    case _:
-                        return extension_child_ref(prefix, childref)
-            case _:
-                raise SailMatchFailure("no Sail match clause applied")
 
 MPT_HASH_LENGTH: Annotated[int, IntegerRange(32, 32)] = WORD_BYTE_LENGTH

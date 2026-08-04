@@ -6,7 +6,6 @@ from .._runtime import (
     BitWidth,
     Bits,
     SailMatchFailure,
-    Uint,
 )
 from typing import Annotated
 from evm.HostContract import (
@@ -37,16 +36,16 @@ from evm.prelude import (
     word,
     ZERO_WORD,
 )
-from evm.primitives.quantities import code_chunk_index
+from evm.primitives.quantities import code_length
 from evm.primitives.bytes import (
     CalldataSlice,
     CodeRegionSlice,
     CodeRegionSliceFields,
+    EvmMemorySlice,
+    EvmMemorySliceFields,
     InputCalldata,
     LogDataSliceFields,
     MemoryCalldata,
-    MemorySlice,
-    MemorySliceFields,
     OutputSliceFields,
     ScratchSliceFields,
     StatelessInputSlice,
@@ -60,7 +59,7 @@ def stateless_input_slice_byte(s: StatelessInputSliceFields, off: int) -> Annota
     else:
         return Bits(8, 0b00000000)
 
-def memory_slice_byte(s: MemorySliceFields, off: int) -> Annotated[Bits, BitWidth(8)]:
+def memory_slice_byte(s: EvmMemorySliceFields, off: int) -> Annotated[Bits, BitWidth(8)]:
     if (int(off) < int(s.len)):
         return _host_memory_slice_byte_at(s, off)
     else:
@@ -99,13 +98,13 @@ def calldata_slice_byte(s: CalldataSlice, off: int) -> Annotated[Bits, BitWidth(
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def slice_count_nonzero(s: StatelessInputSlice) -> code_chunk_index:
-    return Uint(_host_stateless_input_count_nonzero(s))
+def slice_count_nonzero(s: StatelessInputSlice) -> code_length:
+    return code_length(_host_stateless_input_count_nonzero(s))
 
 def stateless_input_slice_strided_zero(s: StatelessInputSlice, start: int, stride: int, width: int, count: int) -> bool:
     return _host_stateless_input_strided_zero(s, start, stride, width, count)
 
-def memory_slice_strided_zero_value(s: MemorySlice, start: int, stride: int, width: int, count: int) -> bool:
+def memory_slice_strided_zero_value(s: EvmMemorySlice, start: int, stride: int, width: int, count: int) -> bool:
     return _host_memory_slice_strided_zero(s, start, stride, width, count)
 
 def slice_strided_zero(s: CalldataSlice, start: int, stride: int, width: int, count: int) -> bool:
@@ -123,7 +122,7 @@ def stateless_input_slice_load(s: StatelessInputSliceFields, off: int) -> word:
     else:
         return word(ZERO_WORD)
 
-def memory_slice_load(s: MemorySliceFields, off: int) -> word:
+def memory_slice_load(s: EvmMemorySliceFields, off: int) -> word:
     if (int(off) < int(s.len)):
         return word(_host_memory_slice_load_word(s, off))
     else:
@@ -168,7 +167,7 @@ def stateless_input_slice_load_word_offset(s: StatelessInputSlice, off: word) ->
     else:
         return word(ZERO_WORD)
 
-def memory_slice_load_word_offset(s: MemorySlice, off: word) -> word:
+def memory_slice_load_word_offset(s: EvmMemorySlice, off: word) -> word:
     if (int(off) < int(s.len)):
         return word(memory_slice_load(s, off))
     else:
@@ -210,7 +209,7 @@ def scratch_slice_load_n(s: ScratchSliceFields, off: int, n: int) -> word:
 def stateless_input_slice_copy(s: StatelessInputSliceFields, dst: int, off: int, sail_len: int) -> None:
     return _host_stateless_input_copy_to_memory(s, dst, off, sail_len)
 
-def memory_slice_copy(s: MemorySliceFields, dst: int, off: int, sail_len: int) -> None:
+def memory_slice_copy(s: EvmMemorySliceFields, dst: int, off: int, sail_len: int) -> None:
     return _host_memory_slice_copy_to_memory(s, dst, off, sail_len)
 
 def code_slice_copy(s: CodeRegionSliceFields, dst: int, off: int, sail_len: int) -> None:
@@ -219,25 +218,25 @@ def code_slice_copy(s: CodeRegionSliceFields, dst: int, off: int, sail_len: int)
 def output_slice_copy(s: OutputSliceFields, dst: int, off: int, sail_len: int) -> None:
     return _host_output_slice_copy_to_memory(s, dst, off, sail_len)
 
-def stateless_input_slice_copy_word_offset(s: StatelessInputSlice, dst: code_chunk_index, off: word, sail_len: code_chunk_index) -> None:
+def stateless_input_slice_copy_word_offset(s: StatelessInputSlice, dst: code_length, off: word, sail_len: code_length) -> None:
     if (int(off) < int(s.len)):
         return stateless_input_slice_copy(s, dst, off, sail_len)
     else:
         return _host_stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, 0, sail_len)
 
-def memory_slice_copy_word_offset(s: MemorySlice, dst: code_chunk_index, off: word, sail_len: code_chunk_index) -> None:
+def memory_slice_copy_word_offset(s: EvmMemorySlice, dst: code_length, off: word, sail_len: code_length) -> None:
     if (int(off) < int(s.len)):
         return memory_slice_copy(s, dst, off, sail_len)
     else:
         return _host_stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, 0, sail_len)
 
-def code_slice_copy_word_offset(s: CodeRegionSlice, dst: code_chunk_index, off: word, sail_len: code_chunk_index) -> None:
+def code_slice_copy_word_offset(s: CodeRegionSlice, dst: code_length, off: word, sail_len: code_length) -> None:
     if (int(off) < int(s.len)):
         return code_slice_copy(s, dst, off, sail_len)
     else:
         return _host_stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, 0, sail_len)
 
-def calldata_slice_copy_word_offset(s: CalldataSlice, dst: code_chunk_index, off: word, sail_len: code_chunk_index) -> None:
+def calldata_slice_copy_word_offset(s: CalldataSlice, dst: code_length, off: word, sail_len: code_length) -> None:
     match s:
         case InputCalldata(bytes):
             return stateless_input_slice_copy_word_offset(bytes, dst, off, sail_len)

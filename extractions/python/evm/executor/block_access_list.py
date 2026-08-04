@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .._runtime import (
     SailThrown,
+    Uint,
 )
 from evm.HostContract import (
     bal_iter_next as _host_bal_iter_next,
@@ -15,36 +16,28 @@ from evm.prelude import (
     word,
     word_to_address,
 )
-from evm.primitives.quantities import (
-    account_nonce,
-    item_count,
-    ssz_uint,
+from evm.primitives.quantities import account_nonce
+from evm.primitives.gas import (
+    block_gas,
+    BLOCK_ACCESS_LIST_ITEM_GAS,
 )
-from evm.primitives.bytes import (
-    StatelessInputSlice,
-    StatelessInputSliceFields,
-)
+from evm.primitives.bytes import StatelessInputSliceFields
 from evm.exceptions import (
     BlockError,
     InvalidBlock,
 )
 from evm.primitives.ssz import block_access_index
+from evm.primitives.code import code_bytes
 from evm.primitives.rlp import (
     RlpCursor,
     RlpFieldRef,
 )
 from evm.host.code import code_db_resolve
-from evm.lib.rlp.rlp import (
-    rlp_decode_list,
+from evm.lib.rlp.decoding import (
     rlp_decode_item,
     rlp_cursor_advance,
     rlp_single_ref,
-    rlp_item_content,
-    rlp_ref_framing_canonical,
-    rlp_ref_bytes_canonical,
-    rlp_item_uint_canonical,
     rlp_decode_word,
-    rlp_decode_uint64,
 )
 from evm.host.state import (
     BalAccount,
@@ -56,42 +49,13 @@ from evm.host.state import (
     BalStorageChange,
     BalStorageRead,
 )
-
-def bal_count_item(count: item_count, maximum: item_count) -> item_count:
-    if (int(count) < int(maximum)):
-        return item_count((int(count) + 1))
-    else:
-        raise SailThrown(InvalidBlock(BlockError.BlockAccessListTooLarge))
-
-def bal_ref_cursor(f: RlpFieldRef) -> StatelessInputSliceFields:
-    if ((f.is_list) & (rlp_ref_framing_canonical(f))):
-        return rlp_decode_list(f)
-    else:
-        raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-
-def bal_ref_bytes(f: RlpFieldRef) -> StatelessInputSlice:
-    if rlp_ref_bytes_canonical(f):
-        return rlp_item_content(f)
-    else:
-        raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-
-def bal_ref_word(f: RlpFieldRef) -> word:
-    if ((rlp_item_uint_canonical(f)) & ((int(f.content_len) <= 32))):
-        return word(rlp_decode_word(f))
-    else:
-        raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-
-def bal_ref_uint64(f: RlpFieldRef) -> ssz_uint:
-    if ((rlp_item_uint_canonical(f)) & ((int(f.content_len) <= 8))):
-        return ssz_uint(rlp_decode_uint64(f))
-    else:
-        raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-
-def bal_expect_end(cursor: RlpCursor) -> None:
-    if ((cursor.len) == (0)):
-        return None
-    else:
-        raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
+from evm.lib.rlp.codecs.block_access_list import (
+    bal_ref_cursor,
+    bal_ref_bytes,
+    bal_ref_word,
+    bal_ref_uint64,
+    bal_expect_end,
+)
 
 def bal_compare_index_word(pair: RlpFieldRef, index: block_access_index, value: word) -> None:
     fields = bal_ref_cursor(pair)
@@ -125,7 +89,7 @@ def bal_compare_index_code(pair: RlpFieldRef, index: block_access_index, code_ha
     fields = rlp_cursor_advance(fields, code_field.source.len)
     bal_expect_end(fields)
     code = code_db_resolve(code_hash)
-    if ((((bal_ref_uint64(index_field)) != (index))) | ((not (_host_input_code_slices_equal(bal_ref_bytes(code_field), code.bytes))))):
+    if ((((bal_ref_uint64(index_field)) != (index))) | ((not (_host_input_code_slices_equal(bal_ref_bytes(code_field), code_bytes(code)))))):
         raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
     else:
         return None
@@ -145,9 +109,9 @@ def bal_validate_storage_change_values(cursor: RlpCursor, slot: word) -> None:
                 raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
         return bal_validate_storage_change_values(next, slot)
 
-def bal_validate_storage_changes(cursor: RlpCursor, count: item_count, maximum: item_count) -> item_count:
+def bal_validate_storage_changes(cursor: RlpCursor) -> Uint:
     if ((cursor.len) == (0)):
-        return item_count(count)
+        return Uint(0)
     else:
         slot_field = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, slot_field.source.len)
@@ -162,12 +126,11 @@ def bal_validate_storage_changes(cursor: RlpCursor, count: item_count, maximum: 
             raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
         slot = bal_ref_word(slot_value)
         bal_validate_storage_change_values(changes, slot)
-        count = bal_count_item(count, maximum)
-        return item_count(bal_validate_storage_changes(next, count, maximum))
+        return Uint((1 + int(bal_validate_storage_changes(next))))
 
-def bal_validate_storage_reads(cursor: RlpCursor, count: item_count, maximum: item_count) -> item_count:
+def bal_validate_storage_reads(cursor: RlpCursor) -> Uint:
     if ((cursor.len) == (0)):
-        return item_count(count)
+        return Uint(0)
     else:
         slot_field = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, slot_field.source.len)
@@ -178,8 +141,7 @@ def bal_validate_storage_reads(cursor: RlpCursor, count: item_count, maximum: it
                     raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
             case _:
                 raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-        count = bal_count_item(count, maximum)
-        return item_count(bal_validate_storage_reads(next, count, maximum))
+        return Uint((1 + int(bal_validate_storage_reads(next))))
 
 def bal_validate_balance_changes(cursor: RlpCursor) -> None:
     if ((cursor.len) == (0)):
@@ -220,9 +182,9 @@ def bal_validate_code_changes(cursor: RlpCursor) -> None:
                 raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
         return bal_validate_code_changes(next)
 
-def bal_validate_accounts(cursor: RlpCursor, count: item_count, maximum: item_count) -> item_count:
+def bal_validate_accounts(cursor: RlpCursor) -> Uint:
     if ((cursor.len) == (0)):
-        return item_count(count)
+        return Uint(0)
     else:
         account_field = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, account_field.source.len)
@@ -250,9 +212,8 @@ def bal_validate_accounts(cursor: RlpCursor, count: item_count, maximum: item_co
                     raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
             case _:
                 raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-        count = bal_count_item(count, maximum)
-        count = bal_validate_storage_changes(bal_ref_cursor(storage_changes_field), count, maximum)
-        count = bal_validate_storage_reads(bal_ref_cursor(storage_reads_field), count, maximum)
+        storage_changes = bal_validate_storage_changes(bal_ref_cursor(storage_changes_field))
+        storage_reads = bal_validate_storage_reads(bal_ref_cursor(storage_reads_field))
         bal_validate_balance_changes(bal_ref_cursor(balance_changes_field))
         bal_validate_nonce_changes(bal_ref_cursor(nonce_changes_field))
         bal_validate_code_changes(bal_ref_cursor(code_changes_field))
@@ -261,14 +222,18 @@ def bal_validate_accounts(cursor: RlpCursor, count: item_count, maximum: item_co
                 pass
             case _:
                 raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
-        return item_count(bal_validate_accounts(next, count, maximum))
+        return Uint((int((int((1 + int(storage_changes))) + int(storage_reads))) + int(bal_validate_accounts(next))))
 
-def validate_block_access_list(bytes: StatelessInputSlice, maximum_items: item_count) -> None:
+def validate_block_access_list(bytes: StatelessInputSliceFields, block_gas_limit: block_gas) -> None:
     _host_bal_prepare_iter()
     root = rlp_single_ref(bytes)
-    bal_validate_accounts(bal_ref_cursor(root), 0, maximum_items)
+    bal_items = bal_validate_accounts(bal_ref_cursor(root))
     match _host_bal_iter_next():
         case BalEmpty(_):
-            return None
+            pass
         case _:
             raise SailThrown(InvalidBlock(BlockError.InvalidBlockAccessList))
+    if (int((int(BLOCK_ACCESS_LIST_ITEM_GAS) * int(bal_items))) > int(block_gas_limit)):
+        raise SailThrown(InvalidBlock(BlockError.BlockAccessListTooLarge))
+    else:
+        return None

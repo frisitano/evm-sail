@@ -43,7 +43,7 @@ class BoundedSszListRefValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((0 <= self.maximum)):
+        if not (((0 <= self.maximum) and (self.maximum <= ((2 ** 32) - 1)))):
             raise ValueError("BoundedSszListRefValidity violates Sail constraint source_valid_length('maximum)")
         return self
 
@@ -66,7 +66,7 @@ class BoundedSszListCursorValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((0 <= self.maximum)):
+        if not (((0 <= self.maximum) and (self.maximum <= ((2 ** 32) - 1)))):
             raise ValueError("BoundedSszListCursorValidity violates Sail constraint source_valid_length('maximum)")
         return self
 

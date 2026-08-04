@@ -9,8 +9,6 @@ from .._runtime import (
 from evm.HostContract import (
     acct_block_iter_begin as _host_acct_block_iter_begin,
     acct_block_iter_next as _host_acct_block_iter_next,
-    acct_post_storage_root_read as _host_acct_post_storage_root_read,
-    acct_post_storage_root_store as _host_acct_post_storage_root_store,
     storage_block_iter_begin as _host_storage_block_iter_begin,
     storage_block_iter_next as _host_storage_block_iter_next,
 )
@@ -18,21 +16,10 @@ from evm.prelude import (
     address,
     hash,
     word,
-    hash_to_word,
-    word_to_hash,
     word_is_zero,
     ZERO_WORD,
 )
-from evm.primitives.quantities import account_nonce
-from evm.primitives.bytes import (
-    ScratchSlice,
-    StatelessInputSlice,
-)
-from evm.kernel.scratch import scratch_reserve
-from evm.primitives.crypto import (
-    KECCAK_EMPTY,
-    EMPTY_TRIE_ROOT,
-)
+from evm.primitives.crypto import EMPTY_TRIE_ROOT
 from evm.primitives.account import (
     AccountInfo,
     AcctTrieEntry,
@@ -40,22 +27,9 @@ from evm.primitives.account import (
     StorageTrieEntry,
     StorageValue,
 )
-from evm.lib.rlp.rlp import (
-    rlp_uint_word_size,
-    rlp_word_size,
-    rlp_list_size,
-    rlp_write_list_prefix,
-    rlp_write_uint_word,
-    rlp_write_word,
-    rlp_finish,
-    rlp_decode_item,
-    rlp_cursor_advance,
-    rlp_cursor_expect_end,
+from evm.lib.rlp.decoding import (
     rlp_single_ref,
-    rlp_node_cursor,
-    rlp_decode_word,
     rlp_decode_u256,
-    rlp_decode_uint64,
 )
 from evm.lib.mpt.primitives import path_new
 from evm.lib.mpt.updates import (
@@ -64,31 +38,15 @@ from evm.lib.mpt.updates import (
     TrieDelete,
     TriePut,
 )
+from evm.lib.rlp.codecs.state import (
+    decode_state_account,
+    encode_storage_value,
+    encode_state_account,
+)
 from evm.kernel import environment
 from evm.kernel import accounts
 from evm.lib.mpt import updates
 from evm.lib.mpt import trie
-
-def decode_state_account(value: StatelessInputSlice) -> AccountInfo:
-    fields = rlp_node_cursor(value)
-    nonce = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, nonce.source.len)
-    balance = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, balance.source.len)
-    storage = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, storage.source.len)
-    code = rlp_decode_item(fields)
-    fields = rlp_cursor_advance(fields, code.source.len)
-    rlp_cursor_expect_end(fields)
-    if ((storage.content_len) == (0)):
-        storage_root = EMPTY_TRIE_ROOT
-    else:
-        storage_root = word_to_hash(rlp_decode_word(storage))
-    if ((code.content_len) == (0)):
-        code_hash = KECCAK_EMPTY
-    else:
-        code_hash = word_to_hash(rlp_decode_word(code))
-    return AccountInfo(nonce=account_nonce(rlp_decode_uint64(nonce)), balance=word(rlp_decode_u256(balance)), storage_root=Bytes32(storage_root), code_hash=Bytes32(code_hash))
 
 def stateless_account_by_key(root: hash, address_hash: hash) -> AccountInfo | None:
     value = trie.trie_lookup(root, path_new(address_hash, 64))
@@ -109,26 +67,6 @@ def storage_value_changed(value: StorageValue) -> bool:
 
 def account_value_changed(value: AcctValue) -> bool:
     return (((not (((value.curr.info.nonce) == (value.orig.info.nonce))))) | ((((not (((value.curr.info.balance) == (value.orig.info.balance))))) | ((((not (((value.curr.info.storage_root) == (value.orig.info.storage_root))))) | ((((not (((value.curr.info.code_hash) == (value.orig.info.code_hash))))) | ((((not (((value.curr.present) == (value.orig.present))))) | ((not (((value.curr.storage_cleared) == (value.orig.storage_cleared))))))))))))))
-
-def encode_storage_value(value: word) -> ScratchSlice:
-    encoded_len = rlp_uint_word_size(value)
-    start = scratch_reserve(encoded_len)
-    rlp_write_uint_word(value)
-    return rlp_finish(start)
-
-def encode_state_account(info: AccountInfo, storage_root: hash) -> ScratchSlice:
-    nonce_length = rlp_uint_word_size(info.nonce)
-    balance_length = rlp_uint_word_size(info.balance)
-    storage_root_length = rlp_word_size()
-    code_hash_length = rlp_word_size()
-    content_len = (int((int((int(nonce_length) + int(balance_length))) + int(storage_root_length))) + int(code_hash_length))
-    start = scratch_reserve(rlp_list_size(content_len))
-    rlp_write_list_prefix(content_len)
-    rlp_write_uint_word(info.nonce)
-    rlp_write_uint_word(info.balance)
-    rlp_write_word(hash_to_word(storage_root))
-    rlp_write_word(hash_to_word(info.code_hash))
-    return rlp_finish(start)
 
 def storage_update(trie_entry: StorageTrieEntry) -> updates.TrieUpdate:
     entry = trie_entry.entry
@@ -174,11 +112,12 @@ def next_storage_trie_update(addr: address) -> updates.TrieUpdate | None:
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def prepare_account_post_storage_root(trie_entry: AcctTrieEntry) -> None:
+def account_trie_update(trie_entry: AcctTrieEntry) -> tuple[updates.TrieUpdate, bool]:
     entry = trie_entry.entry
     current = entry.value.curr
     _host_storage_block_iter_begin(entry.addr)
     storage_updates = updates.trie_updates_begin(StorageTrieUpdates(entry.addr))
+    storage_changed = (not (updates.updates_empty(storage_updates)))
     if current.storage_cleared:
         base_storage_root = EMPTY_TRIE_ROOT
     else:
@@ -186,34 +125,10 @@ def prepare_account_post_storage_root(trie_entry: AcctTrieEntry) -> None:
     if (((not (current.present))) | (accounts.account_info_empty(current.info))):
         storage_root = base_storage_root
     else:
-        storage_root = trie.trie_root_cursor(base_storage_root, storage_updates).root
-    return _host_acct_post_storage_root_store(entry.addr, storage_root)
-
-def prepare_changed_account_post_storage_roots() -> None:
-    preparing = True
-    while True:
-        if not (preparing):
-            break
-        match _host_acct_block_iter_next():
-            case (entry as _sail_some_value_2) if _sail_some_value_2 is not None:
-                prepare_account_post_storage_root(entry)
-            case None:
-                preparing = False
-            case _:
-                raise SailMatchFailure("no Sail match clause applied")
-    return None
-
-def account_trie_update(trie_entry: AcctTrieEntry) -> tuple[updates.TrieUpdate, bool]:
-    entry = trie_entry.entry
-    _host_storage_block_iter_begin(entry.addr)
-    match next_changed_storage_entry(entry.addr):
-        case (_storage_entry as _sail_some_value_3) if _sail_some_value_3 is not None:
-            storage_changed = True
-        case None:
-            storage_changed = False
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
-    storage_root = _host_acct_post_storage_root_read(entry.addr)
+        if storage_changed:
+            storage_root = trie.trie_root_cursor(base_storage_root, storage_updates).root
+        else:
+            storage_root = base_storage_root
     return (account_update(trie_entry, storage_root), ((account_value_changed(entry.value)) | (storage_changed)))
 
 def next_changed_account_trie_update() -> updates.TrieUpdate | None:
@@ -223,7 +138,7 @@ def next_changed_account_trie_update() -> updates.TrieUpdate | None:
         if not (searching):
             break
         match _host_acct_block_iter_next():
-            case (entry as _sail_some_value_4) if _sail_some_value_4 is not None:
+            case (entry as _sail_some_value_2) if _sail_some_value_2 is not None:
                 (update, changed) = account_trie_update(entry)
                 if changed:
                     result = update
@@ -244,7 +159,5 @@ def trie_update_source_next(source: updates.TrieUpdateSource) -> updates.TrieUpd
             raise SailMatchFailure("no Sail match clause applied")
 
 def compute_state_root() -> hash:
-    _host_acct_block_iter_begin()
-    prepare_changed_account_post_storage_roots()
     _host_acct_block_iter_begin()
     return Bytes32(trie.trie_root(environment.k_parent_state_root, ChangedAccountTrieUpdates(None)).root)

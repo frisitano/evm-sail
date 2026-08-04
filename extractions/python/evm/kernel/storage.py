@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bytes20,
     SailMatchFailure,
     SailReturn,
 )
 from evm.HostContract import (
+    account_is_warm as _host_account_is_warm,
+    account_mark_warm as _host_account_mark_warm,
     bal_storage_read as _host_bal_storage_read,
     keccak256_word as _host_keccak256_word,
     storage_block_cache as _host_storage_block_cache,
     storage_block_get as _host_storage_block_get,
+    storage_is_warm as _host_storage_is_warm,
+    storage_mark_warm as _host_storage_mark_warm,
     storage_tx_get as _host_storage_tx_get,
     storage_tx_update as _host_storage_tx_update,
     transient_load as _host_transient_load,
     transient_store as _host_transient_store,
-    warm_addr_touch as _host_warm_addr_touch,
-    warm_slot_touch as _host_warm_slot_touch,
 )
 from evm.prelude import (
     address,
@@ -33,16 +34,29 @@ from evm.primitives.account import (
     StorageValue,
 )
 from evm.kernel.accounts import k_aload
+from evm.evm.precompiles import precompile_number
 from evm.lib.state_trie import stateless_storage_by_key
 
 def storage_key(a: address, s: word) -> StorageKey:
-    return StorageKey(addr=Bytes20(a), slot=word(s))
+    return StorageKey(addr=address(a), slot=word(s))
 
-def k_access_account(a: address) -> bool:
-    return _host_warm_addr_touch(a)
+def k_account_is_warm(a: address) -> bool:
+    if ((precompile_number(a)) != (0)):
+        return True
+    else:
+        return _host_account_is_warm(a)
+
+def k_account_mark_warm(a: address) -> None:
+    if ((precompile_number(a)) != (0)):
+        return None
+    else:
+        return _host_account_mark_warm(a)
 
 def k_slot_is_warm(a: address, s: word) -> bool:
-    return _host_warm_slot_touch(a, s)
+    return _host_storage_is_warm(a, s)
+
+def k_slot_mark_warm(a: address, s: word) -> None:
+    return _host_storage_mark_warm(a, s)
 
 def k_sload(a: address, s: word) -> StorageValue:
     try:

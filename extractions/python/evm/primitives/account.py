@@ -2,9 +2,6 @@
 # Sail source: primitives/account.sail
 from __future__ import annotations
 
-from .._runtime import (
-    Bytes32,
-)
 from dataclasses import dataclass
 from evm.prelude import (
     address,
@@ -87,6 +84,6 @@ class AcctTrieEntry:
 def account_from_info(info: AccountInfo) -> Account:
     return Account(info=info, present=True, storage_cleared=False, created=False, selfdestructed=False)
 
-EMPTY_ACCOUNT_INFO: AccountInfo = AccountInfo(nonce=account_nonce(0), balance=word(ZERO_WORD), code_hash=Bytes32(KECCAK_EMPTY), storage_root=Bytes32(EMPTY_TRIE_ROOT))
+EMPTY_ACCOUNT_INFO: AccountInfo = AccountInfo(nonce=account_nonce(0), balance=word(ZERO_WORD), code_hash=hash(KECCAK_EMPTY), storage_root=hash(EMPTY_TRIE_ROOT))
 
 EMPTY_ACCOUNT: Account = Account(info=EMPTY_ACCOUNT_INFO, present=False, storage_cleared=True, created=False, selfdestructed=False)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .._runtime import (
-    Bytes20,
     Uint,
     UintEnum,
 )
@@ -22,22 +21,18 @@ from evm.primitives.quantities import (
     account_nonce,
     code_pointer,
     frame_depth,
-    journal_checkpoint,
     memory_length,
     memory_pointer,
 )
 from evm.primitives.gas import (
-    block_gas_limit,
     gas,
-    gas_cost,
     gas_refund,
-    state_gas_delta,
     state_gas_spill,
     GAS_ZERO,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
-    MemorySlice,
+    EvmMemorySlice,
 )
 from evm.evm.halt import FrameStatus
 from evm.primitives.code import Code
@@ -63,7 +58,7 @@ class TxEnvFields:
 TxEnv: TypeAlias = TxEnvFields
 
 def tx_env(origin: address, gas_price: word, blob_hashes: BlobHashesFields) -> TxEnvFields:
-    return TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=blob_hashes.validity.limit), origin=Bytes20(origin), gas_price=word(gas_price), blob_hashes=blob_hashes)
+    return TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=blob_hashes.validity.limit), origin=address(origin), gas_price=word(gas_price), blob_hashes=blob_hashes)
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class TransactionGasAllowanceFieldsValidity:
@@ -92,39 +87,159 @@ class TransactionGasAllowanceFields:
 
 TransactionGasAllowance: TypeAlias = TransactionGasAllowanceFields
 
-@dataclass(slots=True)
-class TxValidity:
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class TransactionInitialGasFieldsValidity:
+    total: int
+    regular: int
+    intrinsic_execution: int
+    intrinsic_state: int
+    calldata_floor: int
+    execution: int
+    state: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.intrinsic_execution) and ((0 <= self.intrinsic_state) and ((0 <= self.calldata_floor) and ((self.intrinsic_execution <= self.regular) and ((self.calldata_floor <= self.regular) and ((self.regular <= self.total) and ((self.total <= ((2 ** 64) - 1)) and ((0 <= self.execution) and ((0 <= self.state) and (((((self.execution + self.state) + self.intrinsic_execution) + self.intrinsic_state) == self.total) and (self.execution <= (self.regular - self.intrinsic_execution))))))))))))):
+            raise ValueError("TransactionInitialGasFieldsValidity violates Sail constraint transaction_initial_gas_relation('total, 'regular, 'intrinsic_execution, 'intrinsic_state, 'calldata_floor, 'execution, 'state)")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class TransactionInitialGasFields:
+    validity: TransactionInitialGasFieldsValidity
+    admitted_limit: int
+    regular_limit: int
+    intrinsic_execution: int
+    intrinsic_state: int
+    calldata_floor: int
+    execution_remaining: int
+    state_remaining: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.admitted_limit) == self.validity.total)):
+            raise ValueError("TransactionInitialGasFields.admitted_limit violates Sail type int('total)")
+        if not ((int(self.regular_limit) == self.validity.regular)):
+            raise ValueError("TransactionInitialGasFields.regular_limit violates Sail type int('regular)")
+        if not ((int(self.intrinsic_execution) == self.validity.intrinsic_execution)):
+            raise ValueError("TransactionInitialGasFields.intrinsic_execution violates Sail type int('intrinsic_execution)")
+        if not ((int(self.intrinsic_state) == self.validity.intrinsic_state)):
+            raise ValueError("TransactionInitialGasFields.intrinsic_state violates Sail type int('intrinsic_state)")
+        if not ((int(self.calldata_floor) == self.validity.calldata_floor)):
+            raise ValueError("TransactionInitialGasFields.calldata_floor violates Sail type int('calldata_floor)")
+        if not ((int(self.execution_remaining) == self.validity.execution)):
+            raise ValueError("TransactionInitialGasFields.execution_remaining violates Sail type int('execution)")
+        if not ((int(self.state_remaining) == self.validity.state)):
+            raise ValueError("TransactionInitialGasFields.state_remaining violates Sail type int('state)")
+        return self
+
+TransactionInitialGas: TypeAlias = TransactionInitialGasFields
+
+TransactionInitialGasFor: TypeAlias = TransactionInitialGasFields
+
+TransactionInitialGasForLimits: TypeAlias = TransactionInitialGasFields
+
+def transaction_initial_gas_fields(total: int, regular: int, intrinsic_execution: int, intrinsic_state: int, calldata_floor: int, execution: int, state: int) -> TransactionInitialGasFields:
+    return TransactionInitialGasFields(validity=TransactionInitialGasFieldsValidity(total=int(total), regular=int(regular), intrinsic_execution=int(intrinsic_execution), intrinsic_state=int(intrinsic_state), calldata_floor=int(calldata_floor), execution=int(execution), state=int(state)), admitted_limit=int(total), regular_limit=int(regular), intrinsic_execution=int(intrinsic_execution), intrinsic_state=int(intrinsic_state), calldata_floor=int(calldata_floor), execution_remaining=int(execution), state_remaining=int(state))
+
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class TxValidityFieldsValidity:
+    limit: int
+    regular: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.regular) and ((self.regular <= self.limit) and (self.limit <= ((2 ** 64) - 1))))):
+            raise ValueError("TxValidityFieldsValidity violates Sail constraint (0 <= 'regular & ('regular <= 'limit & 'limit <= block_gas_limit_bound))")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class TxValidityFields:
+    validity: TxValidityFieldsValidity
     sender: address
     nonce_before: account_nonce
-    gas_limit: block_gas_limit
-    initial_execution_gas: gas
-    initial_state_gas: gas
-    intrinsic_execution_gas: gas_cost
-    intrinsic_state_gas: gas_cost
-    calldata_floor: gas_cost
+    gas: TransactionInitialGasForLimits
     blob_fee: word
     gas_price: word
     priority_fee: word
 
+TxValidity: TypeAlias = TxValidityFields
+
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class TxFrameGasSnapshotFieldsValidity:
+    limit: int
+    regular: int
+    calldata_floor: int
+    remaining: int
+    state_used: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.regular) and ((self.regular <= self.limit) and ((self.limit <= ((2 ** 64) - 1)) and ((0 <= self.calldata_floor) and ((self.calldata_floor <= self.regular) and ((0 <= self.remaining) and ((0 <= self.state_used) and ((self.state_used <= self.limit) and (((self.remaining + self.state_used) <= self.limit) and (((self.limit - self.remaining) - self.state_used) <= self.regular))))))))))):
+            raise ValueError("TxFrameGasSnapshotFieldsValidity violates Sail constraint tx_frame_gas_snapshot_relation('limit, 'regular, 'calldata_floor, 'remaining, 'state_used)")
+        return self
+
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
-class TxFrameResult:
+class TxFrameGasSnapshotFields:
+    validity: TxFrameGasSnapshotFieldsValidity
+    admitted_limit: int
+    regular_limit: int
+    calldata_floor: int
+    remaining: int
+    state_used: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.admitted_limit) == self.validity.limit)):
+            raise ValueError("TxFrameGasSnapshotFields.admitted_limit violates Sail type int('limit)")
+        if not ((int(self.regular_limit) == self.validity.regular)):
+            raise ValueError("TxFrameGasSnapshotFields.regular_limit violates Sail type int('regular)")
+        if not ((int(self.calldata_floor) == self.validity.calldata_floor)):
+            raise ValueError("TxFrameGasSnapshotFields.calldata_floor violates Sail type int('calldata_floor)")
+        if not ((int(self.remaining) == self.validity.remaining)):
+            raise ValueError("TxFrameGasSnapshotFields.remaining violates Sail type int('remaining)")
+        if not ((int(self.state_used) == self.validity.state_used)):
+            raise ValueError("TxFrameGasSnapshotFields.state_used violates Sail type int('state_used)")
+        return self
+
+TxFrameGasSnapshot: TypeAlias = TxFrameGasSnapshotFields
+
+TxFrameGasSnapshotForLimits: TypeAlias = TxFrameGasSnapshotFields
+
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class TxFrameResultFieldsValidity:
+    limit: int
+    regular: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.regular) and ((self.regular <= self.limit) and (self.limit <= ((2 ** 64) - 1))))):
+            raise ValueError("TxFrameResultFieldsValidity violates Sail constraint (0 <= 'regular & ('regular <= 'limit & 'limit <= block_gas_limit_bound))")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class TxFrameResultFields:
+    validity: TxFrameResultFieldsValidity
     success: bool
-    execution_gas_remaining: gas
-    state_gas_remaining: gas
-    state_gas_used: state_gas_delta
+    gas: TxFrameGasSnapshotForLimits
     refund: gas_refund
 
     @model_validator(mode="after")
     def validate(self) -> Self:
         if not (((-(199 * ((2 ** 64) - 1))) <= int(self.refund) <= (199 * ((2 ** 64) - 1)))):
-            raise ValueError("TxFrameResult.refund violates Sail type range(- (199 * (2 ^ 64 - 1)), (199 * (2 ^ 64 - 1)))")
+            raise ValueError("TxFrameResultFields.refund violates Sail type range(- (199 * (2 ^ 64 - 1)), (199 * (2 ^ 64 - 1)))")
         return self
+
+TxFrameResult: TypeAlias = TxFrameResultFields
 
 class CallKind(UintEnum):
     Call = Uint(0)
     CallCode = Uint(1)
     DelegateCall = Uint(2)
     StaticCall = Uint(3)
+
+class CreateKind(UintEnum):
+    CreateByNonce = Uint(0)
+    CreateBySalt = Uint(1)
 
 _Message_address_type: TypeAlias = address
 @dataclass(slots=True)
@@ -139,7 +254,6 @@ class Message:
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class FrameCheckpoint:
-    state: journal_checkpoint
     pc: code_pointer
     gas_remaining: gas
     state_gas_remaining: gas
@@ -150,7 +264,7 @@ class FrameCheckpoint:
     call_depth: frame_depth
     code: Code
     calldata: CalldataSlice
-    memory: MemorySlice
+    memory: EvmMemorySlice
 
     @model_validator(mode="after")
     def validate(self) -> Self:
@@ -187,4 +301,4 @@ class ResumeCall(FrameContinuation):
 class ResumeCreate(FrameContinuation):
     value: CreateContinuation
 
-DEFAULT_MESSAGE: Message = Message(caller=Bytes20(ZERO_ADDRESS), address=Bytes20(ZERO_ADDRESS), code_address=Bytes20(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=Uint(GAS_ZERO), is_static=False, depth=frame_depth(0))
+DEFAULT_MESSAGE: Message = Message(caller=address(ZERO_ADDRESS), address=address(ZERO_ADDRESS), code_address=address(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=gas(GAS_ZERO), is_static=False, depth=frame_depth(0))

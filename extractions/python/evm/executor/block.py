@@ -5,9 +5,7 @@ from __future__ import annotations
 from .._runtime import (
     Bits,
     Bytes20,
-    Bytes32,
     SailThrown,
-    Uint,
     sail_ediv_int,
 )
 from copy import deepcopy
@@ -18,6 +16,7 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
 from evm.HostContract import (
     bal_reset as _host_bal_reset,
+    warm_reset as _host_warm_reset,
 )
 from evm.prelude import (
     address,
@@ -29,10 +28,7 @@ from evm.primitives.quantities import (
     blob_gas_used,
     word_of_withdrawal_amount,
 )
-from evm.primitives.gas import (
-    gas,
-    GAS_ZERO,
-)
+from evm.primitives.gas import block_gas
 from evm.primitives.bytes import (
     StatelessInputSlice,
     stateless_input_slice_length,
@@ -67,7 +63,6 @@ from evm.primitives.block import (
 from evm.kernel.environment import k_coinbase
 from evm.kernel.accounts import k_add_balance
 from evm.kernel.lifecycle import k_tx_merge
-from evm.evm.machine import conserved_gas_add
 from evm.evm.gas import block_blob_gas_add
 from evm.evm.transaction import (
     transaction_gas_allowance,
@@ -99,9 +94,9 @@ from evm.kernel import environment
 _BlockExecutionResult_blob_gas_used_type: TypeAlias = blob_gas_used
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class BlockExecutionResult:
-    header_gas_used: gas
-    execution_gas_used: gas
-    state_gas_used: gas
+    header_gas_used: block_gas
+    execution_gas_used: block_gas
+    state_gas_used: block_gas
     blob_gas_used: _BlockExecutionResult_blob_gas_used_type
     first_tx_recipient: address
     receipts_root: hash
@@ -114,11 +109,43 @@ class BlockExecutionResult:
             raise ValueError("BlockExecutionResult.logs_bloom violates Sail type vector(256, bitvector(8))")
         return self
 
-def remaining_block_gas(limit: int, used: int) -> Uint:
-    if (int(used) <= int(limit)):
-        return Uint((int(limit) - int(used)))
-    else:
-        raise SailThrown(InvalidBlock(BlockError.GasUsedExceedsLimit))
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class BlockGasUsageFieldsValidity:
+    limit: int
+    execution: int
+    state: int
+    receipts: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.limit) and ((self.limit <= ((2 ** 64) - 1)) and ((0 <= self.execution) and ((self.execution <= self.limit) and ((0 <= self.state) and ((self.state <= self.limit) and ((0 <= self.receipts) and (self.receipts <= (self.execution + self.state)))))))))):
+            raise ValueError("BlockGasUsageFieldsValidity violates Sail constraint block_gas_usage_relation('limit, 'execution, 'state, 'receipts)")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class BlockGasUsageFields:
+    validity: BlockGasUsageFieldsValidity
+    execution: int
+    state: int
+    receipts: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.execution) == self.validity.execution)):
+            raise ValueError("BlockGasUsageFields.execution violates Sail type int('execution)")
+        if not ((int(self.state) == self.validity.state)):
+            raise ValueError("BlockGasUsageFields.state violates Sail type int('state)")
+        if not ((int(self.receipts) == self.validity.receipts)):
+            raise ValueError("BlockGasUsageFields.receipts violates Sail type int('receipts)")
+        return self
+
+BlockGasUsageFor: TypeAlias = BlockGasUsageFields
+
+def block_gas_usage_empty(_limit: int) -> BlockGasUsageFields:
+    return BlockGasUsageFields(validity=BlockGasUsageFieldsValidity(limit=int(_limit), execution=0, state=0, receipts=0), execution=0, state=0, receipts=0)
+
+def block_gas_usage_add(usage: BlockGasUsageFields, add_execution: int, add_state: int, add_receipt: int) -> BlockGasUsageFields:
+    return BlockGasUsageFields(validity=BlockGasUsageFieldsValidity(limit=usage.validity.limit, execution=(usage.validity.execution + int(add_execution)), state=(usage.validity.state + int(add_state)), receipts=(usage.validity.receipts + int(add_receipt))), execution=int((int(usage.execution) + int(add_execution))), state=int((int(usage.state) + int(add_state))), receipts=int((int(usage.receipts) + int(add_receipt))))
 
 def run_block_start_system_calls() -> None:
     execution_profile = environment.k_execution_profile
@@ -140,8 +167,7 @@ def execute_block_transactions(transactions: TransactionListRef, public_keys: St
     if ((((public_key_count_value) != (transactions.count))) | (((public_keys_length) != ((int(public_key_count_value) * int(public_key_length)))))):
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
     gas_limit = gas_limits.block_limit
-    execution_gas_acc = GAS_ZERO
-    state_gas_acc = GAS_ZERO
+    gas_usage = block_gas_usage_empty(gas_limit)
     blob_gas_acc = 0
     tx0_to = ZERO_ADDRESS
     receipts = receipt_accumulator_empty()
@@ -161,41 +187,51 @@ def execute_block_transactions(transactions: TransactionListRef, public_keys: St
         public_key = stateless_input_sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH)
         keys = stateless_input_slice_suffix(keys_fields, public_key_length)
         tx = decode_transaction(transaction, public_key)
-        environment.k_block_access_index = (int(i) + 1)
+        environment.k_current_transaction_epoch = (int(i) + 1)
         if ((i) == (0)):
             tx0_to = Bytes20(tx.recipient)
-        available_execution_gas = remaining_block_gas(gas_limit, execution_gas_acc)
-        available_state_gas = remaining_block_gas(gas_limit, state_gas_acc)
+        usage = gas_usage
+        available_execution_gas = (int(gas_limit) - int(usage.execution))
+        available_state_gas = (int(gas_limit) - int(usage.state))
         allowance = transaction_gas_allowance(tx.gas_limit, gas_limits.transaction_total_limit, gas_limits.transaction_regular_limit)
         if (int(profile.fork) >= int(Amsterdam)):
-            transaction_fits = (((int(allowance.regular) <= int(available_execution_gas))) & ((int(allowance.total) <= int(available_state_gas))))
-        else:
-            transaction_fits = (int(allowance.total) <= int(available_execution_gas))
-        if (not (transaction_fits)):
-            raise SailThrown(InvalidBlock(BlockError.GasUsedExceedsLimit))
-        else:
-            tx_blob_gas = (int((1 << 17)) * int(tx.blob_hashes.count))
-            if (int(profile.fork) < int(Cancun)):
-                next_blob_gas = blob_gas_acc
-            else:
-                next_blob_gas = block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, tx_blob_gas)
-            receipt = process_transaction(tx, allowance)
-            execution_gas_acc = Uint(conserved_gas_add(execution_gas_acc, receipt.execution_gas))
-            state_gas_acc = Uint(conserved_gas_add(state_gas_acc, receipt.state_gas))
-            if (((int(gas_limit) < int(execution_gas_acc))) | ((int(gas_limit) < int(state_gas_acc)))):
+            if (((int(available_execution_gas) < int(allowance.regular))) | ((int(available_state_gas) < int(allowance.total)))):
                 raise SailThrown(InvalidBlock(BlockError.GasUsedExceedsLimit))
-            receipts = receipt_accumulator_push(receipts, receipt, next.index)
-            if (int(profile.fork) >= int(Prague)):
-                remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
-            blob_gas_acc = next_blob_gas
+            else:
+                tx_blob_gas = (int((1 << 17)) * int(tx.blob_hashes.count))
+                next_blob_gas = block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, tx_blob_gas)
+                receipt = process_transaction(tx, allowance)
+                next_usage = block_gas_usage_add(usage, receipt.execution_gas, receipt.state_gas, receipt.gas_used)
+                gas_usage = next_usage
+                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index)
+                if (int(profile.fork) >= int(Prague)):
+                    remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
+                blob_gas_acc = next_blob_gas
+        else:
+            if (int(available_execution_gas) < int(allowance.total)):
+                raise SailThrown(InvalidBlock(BlockError.GasUsedExceedsLimit))
+            else:
+                tx_blob_gas = (int((1 << 17)) * int(tx.blob_hashes.count))
+                if (int(profile.fork) < int(Cancun)):
+                    next_blob_gas = blob_gas_acc
+                else:
+                    next_blob_gas = block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, tx_blob_gas)
+                receipt = process_transaction(tx, allowance)
+                next_usage = block_gas_usage_add(usage, receipt.gas_used, 0, receipt.gas_used)
+                gas_usage = next_usage
+                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index)
+                if (int(profile.fork) >= int(Prague)):
+                    remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
+                blob_gas_acc = next_blob_gas
     if (((int(profile.fork) >= int(Prague))) & (((stateless_input_slice_length(remaining_deposits)) != (0)))):
         raise SailThrown(InvalidBlock(BlockError.InvalidExecutionRequests))
-    if (((int(profile.fork) >= int(Amsterdam))) & ((int(execution_gas_acc) < int(state_gas_acc)))):
-        header_gas_used = state_gas_acc
+    final_usage = gas_usage
+    if (((int(profile.fork) >= int(Amsterdam))) & ((int(final_usage.execution) < int(final_usage.state)))):
+        header_gas_used = final_usage.state
     else:
-        header_gas_used = execution_gas_acc
+        header_gas_used = final_usage.execution
     receipts_root = receipt_accumulator_root(receipts)
-    return BlockExecutionResult(header_gas_used=Uint(header_gas_used), execution_gas_used=Uint(execution_gas_acc), state_gas_used=Uint(state_gas_acc), blob_gas_used=blob_gas_acc, first_tx_recipient=Bytes20(tx0_to), receipts_root=Bytes32(receipts_root), logs_bloom=receipt_accumulator_bloom(receipts), requests=EMPTY_EXECUTION_REQUESTS)
+    return BlockExecutionResult(header_gas_used=block_gas(header_gas_used), execution_gas_used=block_gas(final_usage.execution), state_gas_used=block_gas(final_usage.state), blob_gas_used=blob_gas_acc, first_tx_recipient=address(tx0_to), receipts_root=hash(receipts_root), logs_bloom=receipt_accumulator_bloom(receipts), requests=EMPTY_EXECUTION_REQUESTS)
 
 def apply_withdrawals(withdrawals: WithdrawalListRef) -> None:
     rest = withdrawals
@@ -221,11 +257,13 @@ def execute_block_body(body: BlockBody, public_keys: StatelessInputSlice, expect
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     _host_bal_reset()
-    environment.k_block_access_index = 0
+    environment.k_current_transaction_epoch = 0
+    _host_warm_reset(environment.k_current_transaction_epoch)
     run_block_start_system_calls()
     result = execute_block_transactions(body.transactions, public_keys, expected_deposits)
     post_tx_index = (int(body.transactions.count) + 1)
-    environment.k_block_access_index = post_tx_index
+    environment.k_current_transaction_epoch = post_tx_index
+    _host_warm_reset(environment.k_current_transaction_epoch)
     apply_block_end_state(body)
     if (int(profile.fork) >= int(Prague)):
         requests = collect_execution_requests(expected_deposits)

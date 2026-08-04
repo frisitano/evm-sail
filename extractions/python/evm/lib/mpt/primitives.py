@@ -97,7 +97,7 @@ def path_len(path: TriePath) -> trie_path_cursor:
     return trie_path_cursor(path.len)
 
 def path_new(data: hash, sail_len: trie_path_cursor) -> TriePath:
-    return TriePath(data=Bytes32(data), len=trie_path_len(sail_len))
+    return TriePath(data=b256(data), len=trie_path_len(sail_len))
 
 def path_empty() -> TriePath:
     return path_new(ZERO_HASH, 0)
@@ -163,27 +163,6 @@ def path_concat(a: TriePath, b: TriePath) -> TriePath:
     else:
         raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
 
-def path_take(path: TriePath, n: trie_path_cursor) -> TriePath:
-    if ((n) == (0)):
-        return path_empty()
-    else:
-        if (int(path_len(path)) <= int(n)):
-            return path
-        else:
-            result = path_empty()
-            index = 0
-            while True:
-                if not ((int(index) < int(n))):
-                    break
-                result = path_append_nibble(result, path_nibble(path, index))
-                current_index = index
-                if (int(current_index) < 64):
-                    _sail_assigned_value_1 = (int(current_index) + 1)
-                else:
-                    raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-                index = trie_path_cursor(_sail_assigned_value_1)
-            return result
-
 def path_drop(path: TriePath, n: trie_path_cursor) -> TriePath:
     length = path_len(path)
     if (int(length) <= int(n)):
@@ -203,15 +182,15 @@ def path_drop(path: TriePath, n: trie_path_cursor) -> TriePath:
                     source_index = candidate
                 else:
                     if not (False):
-                        raise SailError("sail/lib/mpt/primitives.sail:151.36-151.37")
+                        raise SailError("sail/lib/mpt/primitives.sail:128.36-128.37")
                     raise SailExit(None)
                 result = path_append_nibble(result, path_nibble(path, source_index))
                 current_offset = offset
                 if (int(current_offset) < 64):
-                    _sail_assigned_value_2 = (int(current_offset) + 1)
+                    _sail_assigned_value_1 = (int(current_offset) + 1)
                 else:
                     raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-                offset = trie_path_cursor(_sail_assigned_value_2)
+                offset = trie_path_cursor(_sail_assigned_value_1)
             return result
 
 def path_eq(a: TriePath, b: TriePath) -> bool:
@@ -235,10 +214,10 @@ def path_matches(key: TriePath, pos: trie_path_cursor, seg: TriePath) -> bool:
                 ok = False
             current_offset = offset
             if (int(current_offset) < 64):
-                _sail_assigned_value_3 = (int(current_offset) + 1)
+                _sail_assigned_value_2 = (int(current_offset) + 1)
             else:
                 raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-            offset = trie_path_cursor(_sail_assigned_value_3)
+            offset = trie_path_cursor(_sail_assigned_value_2)
         return ok
 
 def path_prefix_of(prefix: TriePath, path: TriePath) -> bool:
@@ -259,10 +238,10 @@ def common_prefix_length(a: TriePath, b: TriePath) -> trie_path_cursor:
         if ((path_nibble(a, length)) == (path_nibble(b, length))):
             current_length = length
             if (int(current_length) < 64):
-                _sail_assigned_value_4 = (int(current_length) + 1)
+                _sail_assigned_value_3 = (int(current_length) + 1)
             else:
                 raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
-            length = trie_path_cursor(_sail_assigned_value_4)
+            length = trie_path_cursor(_sail_assigned_value_3)
         else:
             matching = False
     return trie_path_cursor(length)

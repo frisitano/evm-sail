@@ -27,14 +27,19 @@ from evm.primitives.quantities import (
     chain_identifier,
     transaction_blob_count,
 )
-from evm.primitives.gas import (
-    gas,
-    transaction_gas,
-)
+from evm.primitives.gas import transaction_gas
 from evm.primitives.bytes import (
     StatelessInputSlice,
     StatelessInputSliceFields,
     EMPTY_STATELESS_INPUT_SLICE,
+)
+from evm.primitives.fork import (
+    Fork,
+    Frontier,
+    Berlin,
+    London,
+    Cancun,
+    Prague,
 )
 
 class TxType(UintEnum):
@@ -43,6 +48,92 @@ class TxType(UintEnum):
     FeeMarketTx = Uint(2)
     BlobTx = Uint(3)
     SetCodeTx = Uint(4)
+
+def tx_envelope_type_forwards(arg_: TxType) -> Annotated[Bits, BitWidth(8)]:
+    match arg_:
+        case TxType.LegacyTx:
+            return Bits(8, 0b00000000)
+        case TxType.AccessListTx:
+            return Bits(8, 0b00000001)
+        case TxType.FeeMarketTx:
+            return Bits(8, 0b00000010)
+        case TxType.BlobTx:
+            return Bits(8, 0b00000011)
+        case TxType.SetCodeTx:
+            return Bits(8, 0b00000100)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+def tx_envelope_type_backwards(arg_: Annotated[Bits, BitWidth(8)]) -> TxType:
+    match arg_:
+        case _sail_bits_pattern_0 if _sail_bits_pattern_0 == Bits(8, 0b00000000):
+            return TxType.LegacyTx
+        case _sail_bits_pattern_1 if _sail_bits_pattern_1 == Bits(8, 0b00000001):
+            return TxType.AccessListTx
+        case _sail_bits_pattern_2 if _sail_bits_pattern_2 == Bits(8, 0b00000010):
+            return TxType.FeeMarketTx
+        case _sail_bits_pattern_3 if _sail_bits_pattern_3 == Bits(8, 0b00000011):
+            return TxType.BlobTx
+        case _sail_bits_pattern_4 if _sail_bits_pattern_4 == Bits(8, 0b00000100):
+            return TxType.SetCodeTx
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+def tx_envelope_type_forwards_matches(arg_: TxType) -> bool:
+    match arg_:
+        case TxType.LegacyTx:
+            return True
+        case TxType.AccessListTx:
+            return True
+        case TxType.FeeMarketTx:
+            return True
+        case TxType.BlobTx:
+            return True
+        case TxType.SetCodeTx:
+            return True
+        case _:
+            return False
+
+def tx_envelope_type_backwards_matches(arg_: Annotated[Bits, BitWidth(8)]) -> bool:
+    match arg_:
+        case _sail_bits_pattern_5 if _sail_bits_pattern_5 == Bits(8, 0b00000000):
+            return True
+        case _sail_bits_pattern_6 if _sail_bits_pattern_6 == Bits(8, 0b00000001):
+            return True
+        case _sail_bits_pattern_7 if _sail_bits_pattern_7 == Bits(8, 0b00000010):
+            return True
+        case _sail_bits_pattern_8 if _sail_bits_pattern_8 == Bits(8, 0b00000011):
+            return True
+        case _sail_bits_pattern_9 if _sail_bits_pattern_9 == Bits(8, 0b00000100):
+            return True
+        case _:
+            return False
+
+class TxSignatureScheme(UintEnum):
+    LegacySignature = Uint(0)
+    TypedSignature = Uint(1)
+
+@dataclass(slots=True)
+class TxTypeSemantics:
+    minimum_fork: Fork
+    signature: TxSignatureScheme
+    blob: bool
+    set_code: bool
+
+def tx_type_semantics(t: TxType) -> TxTypeSemantics:
+    match t:
+        case TxType.LegacyTx:
+            return TxTypeSemantics(minimum_fork=Fork(Frontier), signature=TxSignatureScheme.LegacySignature, blob=False, set_code=False)
+        case TxType.AccessListTx:
+            return TxTypeSemantics(minimum_fork=Fork(Berlin), signature=TxSignatureScheme.TypedSignature, blob=False, set_code=False)
+        case TxType.FeeMarketTx:
+            return TxTypeSemantics(minimum_fork=Fork(London), signature=TxSignatureScheme.TypedSignature, blob=False, set_code=False)
+        case TxType.BlobTx:
+            return TxTypeSemantics(minimum_fork=Fork(Cancun), signature=TxSignatureScheme.TypedSignature, blob=True, set_code=False)
+        case TxType.SetCodeTx:
+            return TxTypeSemantics(minimum_fork=Fork(Prague), signature=TxSignatureScheme.TypedSignature, blob=False, set_code=True)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
 
 _Authorization_address_type: TypeAlias = address
 @dataclass(slots=True)
@@ -88,10 +179,32 @@ class AccessListRef:
     address_count: transaction_item_count
     slot_count: transaction_item_count
 
-@dataclass(slots=True)
-class AuthorizationListRef:
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class AuthorizationListRefFieldsValidity:
+    count: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.count) and (self.count <= (2 ** 30)))):
+            raise ValueError("AuthorizationListRefFieldsValidity violates Sail constraint (0 <= 'count & 'count <= transaction_length_bound)")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class AuthorizationListRefFields:
+    validity: AuthorizationListRefFieldsValidity
     encoded: StatelessInputSlice
-    count: transaction_item_count
+    count: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.count) == self.validity.count)):
+            raise ValueError("AuthorizationListRefFields.count violates Sail type int('count)")
+        return self
+
+AuthorizationListRef: TypeAlias = AuthorizationListRefFields
+
+def authorization_list_ref(encoded: StatelessInputSlice, count: int) -> AuthorizationListRefFields:
+    return AuthorizationListRefFields(validity=AuthorizationListRefFieldsValidity(count=int(count)), encoded=encoded, count=int(count))
 
 class transaction_byte_length(Unsigned):
     LOWER = 0
@@ -199,66 +312,48 @@ class LogSeriesRef:
     start: log_store_index
     count: log_store_index
 
-@dataclass(slots=True)
-class Receipt:
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class ReceiptFieldsValidity:
+    limit: int
+    regular_limit: int
+    gas_used: int
+    execution_gas: int
+    state_gas: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((0 <= self.limit) and ((self.limit <= ((2 ** 64) - 1)) and ((0 <= self.regular_limit) and ((self.regular_limit <= self.limit) and ((0 <= self.gas_used) and ((self.gas_used <= self.limit) and ((0 <= self.execution_gas) and ((self.execution_gas <= self.regular_limit) and ((0 <= self.state_gas) and ((self.state_gas <= self.limit) and (self.gas_used <= (self.execution_gas + self.state_gas))))))))))))):
+            raise ValueError("ReceiptFieldsValidity violates Sail constraint receipt_gas_relation('limit, 'regular_limit, 'gas_used, 'execution_gas, 'state_gas)")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class ReceiptFields:
+    validity: ReceiptFieldsValidity
     tx_type: TxType
     success: bool
-    gas_used: gas
-    execution_gas: gas
-    state_gas: gas
+    gas_used: int
+    execution_gas: int
+    state_gas: int
     logs: LogSeriesRef
 
-def tx_type_byte(t: TxType) -> Annotated[Bits, BitWidth(8)]:
-    match t:
-        case TxType.LegacyTx:
-            return Bits(8, 0b00000000)
-        case TxType.AccessListTx:
-            return Bits(8, 0b00000001)
-        case TxType.FeeMarketTx:
-            return Bits(8, 0b00000010)
-        case TxType.BlobTx:
-            return Bits(8, 0b00000011)
-        case TxType.SetCodeTx:
-            return Bits(8, 0b00000100)
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.gas_used) == self.validity.gas_used)):
+            raise ValueError("ReceiptFields.gas_used violates Sail type int('gas_used)")
+        if not ((int(self.execution_gas) == self.validity.execution_gas)):
+            raise ValueError("ReceiptFields.execution_gas violates Sail type int('execution_gas)")
+        if not ((int(self.state_gas) == self.validity.state_gas)):
+            raise ValueError("ReceiptFields.state_gas violates Sail type int('state_gas)")
+        return self
 
-def tx_is_access_list(t: TxType) -> bool:
-    match t:
-        case TxType.AccessListTx:
-            return True
-        case _:
-            return False
+ReceiptWithin: TypeAlias = ReceiptFields
 
-def tx_is_dynamic_fee(t: TxType) -> bool:
-    match t:
-        case TxType.FeeMarketTx:
-            return True
-        case TxType.BlobTx:
-            return True
-        case TxType.SetCodeTx:
-            return True
-        case _:
-            return False
-
-def tx_is_blob(t: TxType) -> bool:
-    match t:
-        case TxType.BlobTx:
-            return True
-        case _:
-            return False
-
-def tx_is_set_code(t: TxType) -> bool:
-    match t:
-        case TxType.SetCodeTx:
-            return True
-        case _:
-            return False
+Receipt: TypeAlias = ReceiptFields
 
 TransactionInputSlice: TypeAlias = StatelessInputSliceFields
 
-EMPTY_BLOB_HASHES: BlobHashesFields = BlobHashesFields(validity=BlobHashesFieldsValidity(limit=0), bytes=EMPTY_STATELESS_INPUT_SLICE, count=Uint(0))
+EMPTY_BLOB_HASHES: BlobHashesFields = BlobHashesFields(validity=BlobHashesFieldsValidity(limit=0), bytes=EMPTY_STATELESS_INPUT_SLICE, count=transaction_blob_count(0))
 
 EMPTY_ACCESS_LIST_REF: AccessListRef = AccessListRef(encoded=EMPTY_STATELESS_INPUT_SLICE, address_count=transaction_item_count(0), slot_count=transaction_item_count(0))
 
-EMPTY_AUTHORIZATION_LIST_REF: AuthorizationListRef = AuthorizationListRef(encoded=EMPTY_STATELESS_INPUT_SLICE, count=transaction_item_count(0))
+EMPTY_AUTHORIZATION_LIST_REF: AuthorizationListRefFields = authorization_list_ref(EMPTY_STATELESS_INPUT_SLICE, 0)

@@ -6,7 +6,6 @@ from ..._runtime import (
     BitWidth,
     Bits,
     BoundedUint,
-    Bytes32,
     SailMatchFailure,
     SailThrown,
     sail_range,
@@ -38,10 +37,12 @@ from evm.lib.mpt.primitives import (
 )
 from evm.lib.mpt.nodes import (
     EmptyRef,
+    NodeRef,
+)
+from evm.lib.mpt.codec import (
     InputBranchNode,
     InputExtensionNode,
     InputLeafNode,
-    NodeRef,
     node_db_lookup,
     branch_refs_get,
     decode_input_trie_node,
@@ -125,7 +126,7 @@ def updates_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: TriePath,
                 case TrieDelete(None):
                     subtree = None
                 case TriePut(value):
-                    subtree = lib_mpt_updates.item_scratch_leaf(update.key, value)
+                    subtree = lib_mpt_updates.trie_scratch_leaf(update.key, value)
                 case _:
                     raise SailMatchFailure("no Sail match clause applied")
             return (subtree, next)
@@ -170,12 +171,12 @@ def overlay_leaf_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: Trie
                 case TrieDelete(None):
                     subtree = None
                 case TriePut(updated):
-                    subtree = lib_mpt_updates.item_scratch_leaf(key, updated)
+                    subtree = lib_mpt_updates.trie_scratch_leaf(key, updated)
                 case _:
                     raise SailMatchFailure("no Sail match clause applied")
             return (subtree, next)
         else:
-            return (lib_mpt_updates.item_input_leaf(key, value), updates)
+            return (lib_mpt_updates.trie_input_leaf(key, value), updates)
     else:
         next_cursor = (int(cursor) + 1)
         leaf_nibble = path_nibble(key, cursor)
@@ -188,7 +189,7 @@ def overlay_leaf_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: Trie
             if update_under_current_prefix(remaining):
                 update_nibble = update_child_nibble(remaining)
                 if ((leaf_pending) & ((int(leaf_nibble) < int(update_nibble)))):
-                    children = lib_mpt_updates.trie_children_add(children, prefix, leaf_nibble, lib_mpt_updates.item_input_leaf(key, value))
+                    children = lib_mpt_updates.trie_children_add(children, prefix, leaf_nibble, lib_mpt_updates.trie_input_leaf(key, value))
                     leaf_pending = False
                 else:
                     child_prefix = path_concat(prefix, path_single(update_nibble))
@@ -207,7 +208,7 @@ def overlay_leaf_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: Trie
                             raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
                     remaining = rebased
             else:
-                children = lib_mpt_updates.trie_children_add(children, prefix, leaf_nibble, lib_mpt_updates.item_input_leaf(key, value))
+                children = lib_mpt_updates.trie_children_add(children, prefix, leaf_nibble, lib_mpt_updates.trie_input_leaf(key, value))
                 leaf_pending = False
         return (lib_mpt_updates.trie_children_finish(prefix, children), remaining)
 
@@ -218,7 +219,7 @@ def overlay_extension_subtree(childref: NodeRef, child_prefix: TriePath, updates
         if update_under_current_prefix(updates):
             return witness_subtree(resolve_witness_ref(childref), child_prefix, updates, cursor)
         else:
-            return (lib_mpt_updates.item_branch(child_prefix, childref), updates)
+            return (lib_mpt_updates.trie_branch(child_prefix, childref), updates)
     else:
         if ((cursor) == (64)):
             raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
@@ -234,7 +235,7 @@ def overlay_extension_subtree(childref: NodeRef, child_prefix: TriePath, updates
                 if update_under_current_prefix(remaining):
                     update_nibble = update_child_nibble(remaining)
                     if ((extension_pending) & ((int(extension_nibble) < int(update_nibble)))):
-                        children = lib_mpt_updates.trie_children_add(children, prefix, extension_nibble, lib_mpt_updates.item_branch(child_prefix, childref))
+                        children = lib_mpt_updates.trie_children_add(children, prefix, extension_nibble, lib_mpt_updates.trie_branch(child_prefix, childref))
                         extension_pending = False
                     else:
                         next_prefix = path_concat(prefix, path_single(update_nibble))
@@ -253,7 +254,7 @@ def overlay_extension_subtree(childref: NodeRef, child_prefix: TriePath, updates
                                 raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
                         remaining = rebased
                 else:
-                    children = lib_mpt_updates.trie_children_add(children, prefix, extension_nibble, lib_mpt_updates.item_branch(child_prefix, childref))
+                    children = lib_mpt_updates.trie_children_add(children, prefix, extension_nibble, lib_mpt_updates.trie_branch(child_prefix, childref))
                     extension_pending = False
             return (lib_mpt_updates.trie_children_finish(prefix, children), remaining)
 
@@ -305,7 +306,7 @@ def witness_subtree(node: StatelessInputSlice, prefix: TriePath, updates: lib_mp
                                 (child, next_updates) = updates_subtree(descended, child_prefix, next_cursor)
                         else:
                             if present:
-                                (child, next_updates) = (lib_mpt_updates.item_subtree(child_prefix, childref), remaining)
+                                (child, next_updates) = (lib_mpt_updates.trie_subtree(child_prefix, childref), remaining)
                             else:
                                 (child, next_updates) = (None, remaining)
                         built = lib_mpt_updates.trie_children_add(built, prefix, nib, child)
@@ -328,7 +329,7 @@ class TrieRootResult:
 
 def trie_root_cursor(base_root: hash, updates: lib_mpt_updates.TrieUpdateCursor) -> TrieRootResult:
     if lib_mpt_updates.updates_empty(updates):
-        return TrieRootResult(root=Bytes32(base_root), changed=False)
+        return TrieRootResult(root=hash(base_root), changed=False)
     else:
         if ((base_root) == (EMPTY_TRIE_ROOT)):
             (subtree, remaining) = updates_subtree(updates, path_empty(), 0)
@@ -339,7 +340,7 @@ def trie_root_cursor(base_root: hash, updates: lib_mpt_updates.TrieUpdateCursor)
             else:
                 (subtree, remaining) = witness_subtree(node, path_empty(), updates, 0)
         if lib_mpt_updates.updates_empty(remaining):
-            return TrieRootResult(root=Bytes32(lib_mpt_updates.trie_subtree_root(subtree)), changed=True)
+            return TrieRootResult(root=hash(lib_mpt_updates.trie_subtree_root(subtree)), changed=True)
         else:
             raise SailThrown(InvalidBlock(BlockError.WitnessDeficient))
 

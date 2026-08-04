@@ -5,17 +5,24 @@ from __future__ import annotations
 from .._runtime import (
     BitWidth,
     Bits,
+    SailError,
+    SailExit,
+    SailMatchFailure,
     U64,
+    Uint,
+    UintEnum,
 )
-from dataclasses import dataclass
 from typing import Annotated, TypeAlias
+from pydantic import ConfigDict, model_validator
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+from typing_extensions import Self
+from evm.primitives.quantities import ancestor_index
 from evm.primitives.bytes import (
     CodeRegionSlice,
     CodeRegionSliceFields,
+    CodeRegionSliceFieldsValidity,
     EMPTY_CODE_REGION_SLICE,
 )
-
-JumpdestChunk: TypeAlias = Annotated[Bits, BitWidth(256)]
 
 jump_table_index: TypeAlias = U64
 
@@ -23,7 +30,28 @@ def code_slice(bytes: CodeRegionSliceFields) -> CodeRegionSliceFields:
     return bytes
 
 def validated_code_slice(bytes: CodeRegionSlice) -> CodeSlice:
-    return code_slice(bytes)
+    if (int(bytes.len) <= int((int((int((1 << 32)) - 1)) - 32))):
+        return code_slice(bytes)
+    else:
+        if not (False):
+            raise SailError("executable code cursor headroom")
+        raise SailExit(None)
+
+class DeepStackOperation(UintEnum):
+    DeepStackDuplicate = Uint(0)
+    DeepStackSwap = Uint(1)
+    DeepStackExchange = Uint(2)
+
+def deep_stack_operation(opcode: ancestor_index) -> DeepStackOperation | None:
+    match opcode:
+        case 230:
+            return DeepStackOperation.DeepStackDuplicate
+        case 231:
+            return DeepStackOperation.DeepStackSwap
+        case 232:
+            return DeepStackOperation.DeepStackExchange
+        case _:
+            return None
 
 def deep_stack_immediate_valid(immediate: Annotated[Bits, BitWidth(8)]) -> bool:
     value = int(immediate)
@@ -33,17 +61,55 @@ def exchange_immediate_valid(immediate: Annotated[Bits, BitWidth(8)]) -> bool:
     value = int(immediate)
     return (((int(value) <= 81)) | ((128 <= int(value))))
 
-@dataclass(slots=True)
-class Code:
-    bytes: CodeSlice
+def deep_stack_operation_immediate_valid(operation: DeepStackOperation, immediate: Annotated[Bits, BitWidth(8)]) -> bool:
+    match operation:
+        case DeepStackOperation.DeepStackDuplicate:
+            return deep_stack_immediate_valid(immediate)
+        case DeepStackOperation.DeepStackSwap:
+            return deep_stack_immediate_valid(immediate)
+        case DeepStackOperation.DeepStackExchange:
+            return exchange_immediate_valid(immediate)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class CodeFieldsValidity:
+    off: int
+    len: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((((0 <= self.off) and ((0 <= self.len) and ((self.off + self.len) <= ((2 ** 32) - 1)))) and ((0 <= self.len) and ((self.len + 32) <= ((2 ** 32) - 1))))):
+            raise ValueError("CodeFieldsValidity violates Sail constraint (code_region_valid_range('off, 'len) & code_valid_length('len))")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class CodeFields:
+    validity: CodeFieldsValidity
+    bytes: int
+    len: int
     jumpdests: jump_table_index
 
-CodeSlice: TypeAlias = CodeRegionSliceFields
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not ((int(self.bytes) == self.validity.off)):
+            raise ValueError("CodeFields.bytes violates Sail type int('off)")
+        if not ((int(self.len) == self.validity.len)):
+            raise ValueError("CodeFields.len violates Sail type int('len)")
+        return self
 
-EMPTY_JUMPDEST_CHUNK: Annotated[Bits, BitWidth(256)] = Bits(256, 0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
+Code: TypeAlias = CodeFields
+
+def analyzed_code(bytes: CodeRegionSliceFields, jumpdests: jump_table_index) -> CodeFields:
+    return CodeFields(validity=CodeFieldsValidity(off=bytes.validity.off, len=bytes.validity.len), bytes=int(bytes.bytes), len=int(bytes.len), jumpdests=jump_table_index(jumpdests))
+
+def code_bytes(code: CodeFields) -> CodeRegionSliceFields:
+    return CodeRegionSliceFields(validity=CodeRegionSliceFieldsValidity(off=code.validity.off, len=code.validity.len), bytes=int(code.bytes), len=int(code.len))
+
+CodeSlice: TypeAlias = CodeRegionSliceFields
 
 EMPTY_JUMP_TABLE: int = 0
 
 EMPTY_CODE_SLICE: CodeRegionSliceFields = code_slice(EMPTY_CODE_REGION_SLICE)
 
-EMPTY_CODE: Code = Code(bytes=EMPTY_CODE_SLICE, jumpdests=jump_table_index(EMPTY_JUMP_TABLE))
+EMPTY_CODE: CodeFields = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE)

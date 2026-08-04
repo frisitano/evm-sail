@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from .._runtime import (
     Bits,
-    Bytes20,
     SailMatchFailure,
     SailReturn,
     SailThrown,
@@ -12,7 +11,7 @@ from .._runtime import (
     sail_ediv_int,
 )
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from evm.HostContract import (
     frame_stack_pop as _host_frame_stack_pop,
     frame_stack_push as _host_frame_stack_push,
@@ -31,11 +30,14 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     ancestor_index,
-    code_chunk_index,
+    code_length,
     frame_depth,
-    push_width,
+    memory_length,
+    memory_pointer,
+    word_byte_count,
 )
 from evm.primitives.gas import (
+    gas,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
     GAS_CONSTANT_ZERO,
@@ -44,7 +46,7 @@ from evm.primitives.gas import (
 from evm.primitives.bytes import (
     MemoryCalldata,
     OutputSlice,
-    memory_slice,
+    evm_memory_slice,
     EMPTY_OUTPUT_SLICE,
     EMPTY_CALLDATA,
 )
@@ -63,8 +65,10 @@ from evm.evm.halt import (
 from evm.primitives.code import (
     Code,
     CodeSlice,
-    deep_stack_immediate_valid,
-    exchange_immediate_valid,
+    DeepStackOperation,
+    deep_stack_operation,
+    deep_stack_operation_immediate_valid,
+    code_bytes,
     EMPTY_CODE_SLICE,
     EMPTY_CODE,
 )
@@ -85,6 +89,7 @@ from evm.primitives.evm import (
     CallContinuation,
     CallKind,
     CreateContinuation,
+    CreateKind,
     Empty,
     FrameContinuation,
     Message,
@@ -100,7 +105,10 @@ from evm.kernel.environment import (
     k_create_addr,
     k_create2_addr,
 )
-from evm.kernel.storage import k_access_account
+from evm.kernel.storage import (
+    k_account_is_warm,
+    k_account_mark_warm,
+)
 from evm.kernel.accounts import (
     k_aload,
     k_get_balance,
@@ -117,7 +125,10 @@ from evm.kernel.code import (
     k_deleg_target,
 )
 from evm.kernel.selfdestruct import k_mark_created
-from evm.kernel.lifecycle import k_revert
+from evm.kernel.lifecycle import (
+    k_journal_revert,
+    k_journal_commit,
+)
 from evm.evm.machine import (
     record_refund,
     conserved_gas_add,
@@ -191,7 +202,6 @@ from evm.evm.instructions import (
     CODECOPY,
     CODESIZE,
     COINBASE,
-    CREATE,
     CREATE2,
     DELEGATECALL,
     DIV,
@@ -258,12 +268,13 @@ from evm.evm.instructions import (
     TSTORE,
     XOR,
     ast,
+    opcode_CREATE,
 )
 from evm.kernel import environment
 from evm.evm import machine
 from evm.evm import execute as evm_execute
 
-def read_push(code: CodeSlice, offset: code_chunk_index, n: push_width) -> word:
+def read_push(code: CodeSlice, offset: code_length, n: word_byte_count) -> word:
     return word(code_slice_load_n(code, offset, n))
 
 def decode_simple(opcode: ancestor_index) -> ast:
@@ -446,7 +457,7 @@ def decode_simple(opcode: ancestor_index) -> ast:
                         else:
                             return INVALID(None)
                     case 240:
-                        return CREATE(None)
+                        return opcode_CREATE(None)
                     case 241:
                         return CALL(None)
                     case 242:
@@ -470,7 +481,8 @@ def fetch() -> ast:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     current = machine.pc
-    code = machine.frame_code.bytes
+    analyzed = machine.frame_code
+    code = code_bytes(analyzed)
     code_length = code.len
     if (not ((int(current) < int(code_length)))):
         return STOP(None)
@@ -486,31 +498,29 @@ def fetch() -> ast:
                 after_immediate = (int((int(current) + 1)) + int(size))
                 decoded = (after_immediate, PUSH((size, value)))
             else:
-                if (((int(profile.fork) >= int(Amsterdam))) & ((((230 <= int(opcode))) & ((int(opcode) <= 232))))):
-                    immediate = code_slice_byte(code, immediate_offset)
-                    match opcode:
-                        case 230:
-                            immediate_valid = deep_stack_immediate_valid(immediate)
-                        case 231:
-                            immediate_valid = deep_stack_immediate_valid(immediate)
-                        case 232:
-                            immediate_valid = exchange_immediate_valid(immediate)
+                if (int(profile.fork) >= int(Amsterdam)):
+                    match deep_stack_operation(opcode):
+                        case (operation as _sail_some_value_0) if _sail_some_value_0 is not None:
+                            immediate = code_slice_byte(code, immediate_offset)
+                            immediate_valid = deep_stack_operation_immediate_valid(operation, immediate)
+                            if immediate_valid:
+                                after_instruction = (int(current) + 2)
+                            else:
+                                after_instruction = (int(current) + 1)
+                            match operation:
+                                case DeepStackOperation.DeepStackDuplicate:
+                                    instruction = DUPN(immediate)
+                                case DeepStackOperation.DeepStackSwap:
+                                    instruction = SWAPN(immediate)
+                                case DeepStackOperation.DeepStackExchange:
+                                    instruction = EXCHANGE(immediate)
+                                case _:
+                                    raise SailMatchFailure("no Sail match clause applied")
+                            decoded = (after_instruction, instruction)
+                        case None:
+                            decoded = (immediate_offset, decode_simple(opcode))
                         case _:
-                            immediate_valid = False
-                    if immediate_valid:
-                        after_instruction = (int(current) + 2)
-                    else:
-                        after_instruction = (int(current) + 1)
-                    match opcode:
-                        case 230:
-                            instruction = DUPN(immediate)
-                        case 231:
-                            instruction = SWAPN(immediate)
-                        case 232:
-                            instruction = EXCHANGE(immediate)
-                        case _:
-                            instruction = INVALID(None)
-                    decoded = (after_instruction, instruction)
+                            raise SailMatchFailure("no Sail match clause applied")
                 else:
                     decoded = (immediate_offset, decode_simple(opcode))
         (next_pc, instruction) = decoded
@@ -568,47 +578,30 @@ def executable_code(target: address, dele: bool, dtgt: address) -> Code:
     else:
         return code_db_resolve(k_code_key(target))
 
-def call_takes_value(kind: CallKind) -> bool:
+@dataclass(slots=True)
+class CallSemantics:
+    takes_value: bool
+    transfers_value: bool
+    uses_target_address: bool
+    inherits_caller_and_value: bool
+    enters_static_context: bool
+
+def call_semantics(kind: CallKind) -> CallSemantics:
     match kind:
         case CallKind.Call:
-            return True
+            return CallSemantics(takes_value=True, transfers_value=True, uses_target_address=True, inherits_caller_and_value=False, enters_static_context=False)
         case CallKind.CallCode:
-            return True
-        case _:
-            return False
-
-def call_transfers_value(kind: CallKind) -> bool:
-    match kind:
-        case CallKind.Call:
-            return True
-        case _:
-            return False
-
-def call_uses_target_address(kind: CallKind) -> bool:
-    match kind:
-        case CallKind.Call:
-            return True
-        case CallKind.StaticCall:
-            return True
-        case _:
-            return False
-
-def call_is_delegate(kind: CallKind) -> bool:
-    match kind:
+            return CallSemantics(takes_value=True, transfers_value=False, uses_target_address=False, inherits_caller_and_value=False, enters_static_context=False)
         case CallKind.DelegateCall:
-            return True
-        case _:
-            return False
-
-def call_is_static(kind: CallKind) -> bool:
-    match kind:
+            return CallSemantics(takes_value=False, transfers_value=False, uses_target_address=False, inherits_caller_and_value=True, enters_static_context=False)
         case CallKind.StaticCall:
-            return True
+            return CallSemantics(takes_value=False, transfers_value=False, uses_target_address=True, inherits_caller_and_value=False, enters_static_context=True)
         case _:
-            return False
+            raise SailMatchFailure("no Sail match clause applied")
 
 def run_call(kind: CallKind) -> None:
     try:
+        semantics = call_semantics(kind)
         execution_profile = environment.k_execution_profile
         profile = execution_profile.protocol
         current_depth = machine.call_depth
@@ -616,7 +609,7 @@ def run_call(kind: CallKind) -> None:
         gas_request = pop()
         target_word = pop()
         target = word_to_address(target_word)
-        if call_takes_value(kind):
+        if semantics.takes_value:
             value = pop()
         else:
             value = WORD_ZERO
@@ -624,12 +617,10 @@ def run_call(kind: CallKind) -> None:
         args_len_word = pop()
         ret_off_word = pop()
         ret_len_word = pop()
-        if (not (is_running())):
-            raise SailReturn(None)
-        if ((call_transfers_value(kind)) & (((word_nonzero(value)) & (machine.message.is_static)))):
+        if ((semantics.transfers_value) & (((word_nonzero(value)) & (machine.message.is_static)))):
             exc_halt(ExceptionKind.WriteProtection)
             raise SailReturn(None)
-        warm = k_access_account(target)
+        warm = k_account_is_warm(target)
         target_cost = account_cost(warm)
         if word_nonzero(value):
             transfer_cost = call_value_cost()
@@ -655,14 +646,15 @@ def run_call(kind: CallKind) -> None:
         if (int(after_static_base) < int(memory_cost)):
             exc_halt(ExceptionKind.OutOfGas)
             raise SailReturn(None)
+        k_account_mark_warm(target)
         (tg_deleg, tg_target) = k_deleg_target(target)
         if tg_deleg:
-            dw = k_access_account(tg_target)
+            dw = k_account_is_warm(tg_target)
             delegation_cost = account_cost(dw)
         else:
             delegation_cost = GAS_CONSTANT_ZERO
-        new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (((word_nonzero(value)) & (((call_transfers_value(kind)) & (k_account_is_empty(target)))))))
-        if (((int(profile.fork) < int(Amsterdam))) & (((word_nonzero(value)) & (((call_transfers_value(kind)) & (k_account_is_empty(target))))))):
+        new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (((word_nonzero(value)) & (((semantics.transfers_value) & (k_account_is_empty(target)))))))
+        if (((int(profile.fork) < int(Amsterdam))) & (((word_nonzero(value)) & (((semantics.transfers_value) & (k_account_is_empty(target))))))):
             create_cost = G_newaccount
         else:
             create_cost = GAS_CONSTANT_ZERO
@@ -690,25 +682,30 @@ def run_call(kind: CallKind) -> None:
             stipend = GAS_ZERO
         base_child = GAS_ZERO
         if (int(profile.fork) >= int(Amsterdam)):
-            charge(required)
+            if (not (charge(required))):
+                raise SailReturn(None)
             if new_account_charged:
                 charge_state_gas(G_amsterdam_state_new_account)
             if is_running():
                 base_child = Uint(call_gas_cap_word(machine.gas_remaining, gas_request))
-                charge(base_child)
+                if (not (charge(base_child))):
+                    raise SailReturn(None)
         else:
             avail = machine.gas_remaining
             if (int(avail) < int(required)):
-                _sail_assigned_value_1 = GAS_ZERO
+                _sail_assigned_value_2 = GAS_ZERO
             else:
                 available_after_cost = gas_sub_or_oog(avail, required)
-                _sail_assigned_value_1 = call_gas_cap_word(available_after_cost, gas_request)
-            base_child = Uint(_sail_assigned_value_1)
-            charge(required)
-            if is_running():
-                charge(base_child)
+                _sail_assigned_value_2 = call_gas_cap_word(available_after_cost, gas_request)
+            base_child = Uint(_sail_assigned_value_2)
+            if (not (charge(required))):
+                raise SailReturn(None)
+            if (not (charge(base_child))):
+                raise SailReturn(None)
         if (not (is_running())):
             raise SailReturn(None)
+        if tg_deleg:
+            k_account_mark_warm(tg_target)
         if tg_deleg:
             code_db_resolve(k_code_key(tg_target))
             k_aload(tg_target)
@@ -717,7 +714,7 @@ def run_call(kind: CallKind) -> None:
         ret = ret_access.range
         child_gas = conserved_gas_add(base_child, stipend)
         k_aload(target)
-        if ((call_takes_value(kind)) & (((word_nonzero(value)) & ((not (word_ule(value, k_get_balance(caller)))))))):
+        if ((semantics.takes_value) & (((word_nonzero(value)) & ((not (word_ule(value, k_get_balance(caller)))))))):
             returndata_clear()
             refund_gas(child_gas)
             if new_account_charged:
@@ -736,11 +733,11 @@ def run_call(kind: CallKind) -> None:
                     number = selected_precompile
                     input = MemoryCalldata(active_memory_slice(args.off, args.len))
                     match precompile_gas(number, input, child_gas):
-                        case (used as _sail_some_value_0) if _sail_some_value_0 is not None:
+                        case (used as _sail_some_value_1) if _sail_some_value_1 is not None:
                             result = run_precompile_slice(number, input)
                             if result.success:
                                 machine.returndata = result.output
-                                if ((call_transfers_value(kind)) & (word_nonzero(value))):
+                                if ((semantics.transfers_value) & (word_nonzero(value))):
                                     k_transfer(caller, target, value)
                                 returndata_copy_prefix(ret.off, ret.len)
                                 unused = gas_sub_or_oog(child_gas, used)
@@ -762,33 +759,33 @@ def run_call(kind: CallKind) -> None:
                 else:
                     child_depth = (int(current_depth) + 1)
                     child_code = executable_code(target, tg_deleg, tg_target)
-                    if call_uses_target_address(kind):
+                    if semantics.uses_target_address:
                         child_addr = target
                     else:
                         child_addr = caller
-                    if call_is_delegate(kind):
+                    if semantics.inherits_caller_and_value:
                         child_caller = machine.message.caller
                     else:
                         child_caller = caller
-                    if call_is_delegate(kind):
+                    if semantics.inherits_caller_and_value:
                         child_value = machine.message.value
                     else:
                         child_value = value
-                    if call_is_static(kind):
+                    if semantics.enters_static_context:
                         child_static = True
                     else:
                         child_static = machine.message.is_static
                     if is_running():
                         bytes = active_memory_slice(args.off, args.len)
-                        child_calldata = MemoryCalldata(memory_slice(bytes.off, bytes.len))
+                        child_calldata = MemoryCalldata(evm_memory_slice(bytes.bytes, bytes.len))
                     else:
                         child_calldata = EMPTY_CALLDATA
                     child_state_gas = machine.state_gas_remaining
-                    checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=Uint(GAS_ZERO))
-                    _host_frame_stack_push(ResumeCall(CallContinuation(checkpoint=checkpoint, return_offset=Uint(ret.off), return_length=Uint(ret.len), new_account_charged=new_account_charged)))
-                    if ((call_transfers_value(kind)) & (word_nonzero(value))):
+                    checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=gas(GAS_ZERO))
+                    _host_frame_stack_push(ResumeCall(CallContinuation(checkpoint=checkpoint, return_offset=memory_pointer(ret.off), return_length=memory_length(ret.len), new_account_charged=new_account_charged)))
+                    if ((semantics.transfers_value) & (word_nonzero(value))):
                         k_transfer(caller, target, value)
-                    machine.message = Message(caller=Bytes20(child_caller), address=Bytes20(child_addr), code_address=Bytes20(target), value=word(child_value), state_gas_reservoir=Uint(child_state_gas), is_static=child_static, depth=frame_depth(child_depth))
+                    machine.message = Message(caller=address(child_caller), address=address(child_addr), code_address=address(target), value=word(child_value), state_gas_reservoir=gas(child_state_gas), is_static=child_static, depth=frame_depth(child_depth))
                     calldata_install(child_calldata)
                     machine.pc = 0
                     machine.gas_remaining = child_gas
@@ -803,8 +800,22 @@ def run_call(kind: CallKind) -> None:
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def run_create(is2: bool) -> None:
+@dataclass(slots=True)
+class CreateSemantics:
+    uses_salt: bool
+
+def create_semantics(kind: CreateKind) -> CreateSemantics:
+    match kind:
+        case CreateKind.CreateByNonce:
+            return CreateSemantics(uses_salt=False)
+        case CreateKind.CreateBySalt:
+            return CreateSemantics(uses_salt=True)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+def run_create(kind: CreateKind) -> None:
     try:
+        semantics = create_semantics(kind)
         execution_profile = environment.k_execution_profile
         profile = execution_profile.protocol
         current_depth = machine.call_depth
@@ -812,21 +823,20 @@ def run_create(is2: bool) -> None:
         value = pop()
         off_word = pop()
         len_word = pop()
-        if is2:
+        if semantics.uses_salt:
             salt = pop()
         else:
             salt = WORD_ZERO
-        if (not (is_running())):
-            raise SailReturn(None)
         if evm_execute.guard_static():
             raise SailReturn(None)
         initcode = charge_memory_range(off_word, len_word)
         if (not (is_running())):
             raise SailReturn(None)
-        charge(create_access_cost())
+        if (not (charge(create_access_cost()))):
+            raise SailReturn(None)
         if (int(profile.fork) >= int(Shanghai)):
             charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
-        if is2:
+        if semantics.uses_salt:
             charge_word_scaled_gas(G_keccak_word, memory_word_count_word(len_word))
         if (not (is_running())):
             raise SailReturn(None)
@@ -834,7 +844,7 @@ def run_create(is2: bool) -> None:
             return exc_halt(ExceptionKind.InitCodeTooLarge)
         else:
             nonce = k_get_nonce(creator)
-            if ((is2) & (is_running())):
+            if ((semantics.uses_salt) & (is_running())):
                 new_addr = k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode)))
             else:
                 new_addr = k_create_addr(creator, nonce)
@@ -862,7 +872,7 @@ def run_create(is2: bool) -> None:
                     return push_word(WORD_ZERO)
                 else:
                     child_depth = (int(current_depth) + 1)
-                    k_access_account(new_addr)
+                    k_account_mark_warm(new_addr)
                     new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (k_account_is_empty(new_addr)))
                     if new_account_charged:
                         charge_state_gas(G_amsterdam_state_new_account)
@@ -889,13 +899,13 @@ def run_create(is2: bool) -> None:
                             initcode = EMPTY_CODE_SLICE
                         child_code = code_db_resolve(code_db_insert(initcode, profile.fork))
                         child_state_gas = machine.state_gas_remaining
-                        checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=Uint(GAS_ZERO))
-                        _host_frame_stack_push(ResumeCreate(CreateContinuation(checkpoint=checkpoint, address=Bytes20(new_addr), new_account_charged=new_account_charged)))
+                        checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=gas(GAS_ZERO))
+                        _host_frame_stack_push(ResumeCreate(CreateContinuation(checkpoint=checkpoint, address=address(new_addr), new_account_charged=new_account_charged)))
                         k_mark_created(new_addr)
                         k_clear_storage(new_addr)
                         k_bump_nonce(new_addr)
                         k_transfer(creator, new_addr, value)
-                        machine.message = Message(caller=Bytes20(creator), address=Bytes20(new_addr), code_address=Bytes20(new_addr), value=word(value), state_gas_reservoir=Uint(child_state_gas), is_static=checkpoint.message.is_static, depth=frame_depth(child_depth))
+                        machine.message = Message(caller=address(creator), address=address(new_addr), code_address=address(new_addr), value=word(value), state_gas_reservoir=gas(child_state_gas), is_static=checkpoint.message.is_static, depth=frame_depth(child_depth))
                         calldata_install(EMPTY_CALLDATA)
                         machine.pc = 0
                         machine.gas_remaining = Uint(child_gas)
@@ -924,9 +934,10 @@ def resume_call(continuation: CallContinuation, output: OutputSlice) -> None:
     returndata_copy_prefix(continuation.return_offset, continuation.return_length)
     if succeeded:
         record_refund(child_refund)
+        k_journal_commit()
         return push_word(WORD_ONE)
     else:
-        k_revert(checkpoint.state)
+        k_journal_revert()
         if continuation.new_account_charged:
             credit_state_gas_refund(G_amsterdam_state_new_account)
         return push_word(WORD_ZERO)
@@ -945,7 +956,7 @@ def resume_create(continuation: CreateContinuation, output: OutputSlice) -> None
             exc_halt(ExceptionKind.OutOfGas)
         else:
             match code_deployment_execution_cost(deployed_length, machine.gas_remaining):
-                case (execution_deposit as _sail_some_value_2) if _sail_some_value_2 is not None:
+                case (execution_deposit as _sail_some_value_3) if _sail_some_value_3 is not None:
                     machine.gas_remaining = Uint(gas_sub_or_oog(machine.gas_remaining, execution_deposit))
                     charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
                 case None:
@@ -972,9 +983,10 @@ def resume_create(continuation: CreateContinuation, output: OutputSlice) -> None
             deployed_bytes = machine.returndata
         deployed_code = code_db_intern_output(deployed_bytes)
         k_deploy_code(continuation.address, deployed_code)
+        k_journal_commit()
         push_word(address_to_word(continuation.address))
     else:
-        k_revert(checkpoint.state)
+        k_journal_revert()
         if continuation.new_account_charged:
             credit_state_gas_refund(G_amsterdam_state_new_account)
         push_word(WORD_ZERO)

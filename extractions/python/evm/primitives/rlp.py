@@ -20,7 +20,7 @@ class RlpFieldRefValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((((0 <= self.source_off) and (0 <= self.source_len)) and ((0 <= self.content_len) and (self.content_len <= self.source_len)))):
+        if not ((((0 <= self.source_off) and ((0 <= self.source_len) and ((self.source_off + self.source_len) <= ((2 ** 32) - 1)))) and ((0 <= self.content_len) and (self.content_len <= self.source_len)))):
             raise ValueError("RlpFieldRefValidity violates Sail constraint rlp_field_ref_valid('source_off, 'source_len, 'content_len)")
         return self
 
@@ -45,7 +45,7 @@ class ScratchRlpFieldRefValidity:
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((((0 <= self.source_off) and (0 <= self.source_len)) and ((0 <= self.content_len) and (self.content_len <= self.source_len)))):
+        if not ((((0 <= self.source_off) and ((0 <= self.source_len) and ((self.source_off + self.source_len) <= ((2 ** 32) - 1)))) and ((0 <= self.content_len) and (self.content_len <= self.source_len)))):
             raise ValueError("ScratchRlpFieldRefValidity violates Sail constraint rlp_field_ref_valid('source_off, 'source_len, 'content_len)")
         return self
 

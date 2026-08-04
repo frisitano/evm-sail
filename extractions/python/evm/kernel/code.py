@@ -3,35 +3,25 @@
 from __future__ import annotations
 
 from .._runtime import (
-    BitWidth,
-    Bits,
     Bytes32,
-    SailError,
-    Uint,
-    sail_range,
-    sail_vector_access,
 )
 from copy import deepcopy
 from dataclasses import replace
-from typing import Annotated
 from evm.HostContract import (
     code_db_read_delegation as _host_code_db_read_delegation,
-    code_intern_delegation as _host_code_intern_delegation,
-    jumpdest_table_alloc as _host_jumpdest_table_alloc,
-    jumpdest_table_store_chunk as _host_jumpdest_table_store_chunk,
+    code_region_from_delegation as _host_code_region_from_delegation,
 )
-from evm._sail.vector import neq_bits
 from evm.prelude import (
     address,
     hash,
     word,
     ZERO_HASH,
 )
-from evm.primitives.quantities import code_chunk_index
+from evm.primitives.quantities import code_length
 from evm.primitives.code import (
     CodeSlice,
-    EMPTY_JUMPDEST_CHUNK,
-    EMPTY_JUMP_TABLE,
+    validated_code_slice,
+    code_bytes,
 )
 from evm.host.region_access import code_slice_copy_word_offset
 from evm.primitives.crypto import KECCAK_EMPTY
@@ -60,49 +50,28 @@ def k_deploy_code(a: address, code: CodeSlice) -> None:
     profile = execution_profile.protocol
     cur = k_aload(a)
     h = code_db_insert(code, profile.fork)
-    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=Bytes32(h)))
-
-def delegation_code_index(index: int) -> int:
-    return (3 + int(index))
-
-def delegation_jumpdest_chunk(target: address) -> Annotated[Bits, BitWidth(256)]:
-    bits = EMPTY_JUMPDEST_CHUNK
-    for k in sail_range(0, 19, 1, True):
-        b = sail_vector_access(target, k, False)
-        if ((b) == (Bits(8, 0b01011011))):
-            bits = ((bits) | ((((Bits(8, 0b00000001)).zero_extend(256)) << int(delegation_code_index(k)))))
-    return bits
+    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=hash(h)))
 
 def k_set_delegation(a: address, target: address) -> None:
     cur = k_aload(a)
-    code_len = 23
-    code_length = code_len
-    model_code_length = code_length
-    table = _host_jumpdest_table_alloc(model_code_length)
-    if not (((table) != (EMPTY_JUMP_TABLE))):
-        raise SailError("delegation JUMPDEST table allocation")
-    chunk = delegation_jumpdest_chunk(target)
-    if neq_bits(chunk, EMPTY_JUMPDEST_CHUNK):
-        stored = _host_jumpdest_table_store_chunk(table, model_code_length, 0, chunk)
-        if not (stored):
-            raise SailError("delegation JUMPDEST chunk store")
-    h = _host_code_intern_delegation(target, table)
-    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=Bytes32(h)))
+    execution_profile = environment.k_execution_profile
+    code = validated_code_slice(_host_code_region_from_delegation(target))
+    h = code_db_insert(code, execution_profile.protocol.fork)
+    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=hash(h)))
 
 def k_clear_code(a: address) -> None:
     cur = k_aload(a)
-    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=Bytes32(KECCAK_EMPTY)))
+    return store_account_info(a, cur, replace(deepcopy(cur.info), code_hash=hash(KECCAK_EMPTY)))
 
 def k_deleg_target(a: address) -> tuple[bool, address]:
     h = k_code_key(a)
     r = _host_code_db_read_delegation(h)
     return (r.success, r.address)
 
-def k_get_code_size(a: address) -> code_chunk_index:
+def k_get_code_size(a: address) -> code_length:
     code = code_db_resolve(k_code_key(a))
-    bytes = code.bytes
-    return Uint(bytes.len)
+    return code_length(code.len)
 
-def k_code_copy(a: address, dst: code_chunk_index, off: word, sail_len: code_chunk_index) -> None:
+def k_code_copy(a: address, dst: code_length, off: word, sail_len: code_length) -> None:
     code = code_db_resolve(k_code_key(a))
-    return code_slice_copy_word_offset(code.bytes, dst, off, sail_len)
+    return code_slice_copy_word_offset(code_bytes(code), dst, off, sail_len)
