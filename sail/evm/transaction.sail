@@ -563,12 +563,21 @@ function process_auth_cursor(cursor, count) =
     }
 termination_measure process_auth_cursor(cursor, count) = count
 
+/*! Closes the authorization-count existential: any per-item refund total is
+    an authorization_refund. Subsumption happens on the bound parameter, a
+    form every backend rewrite pipeline preserves (a cast directly on the
+    recursive call does not survive the Coq measure/letbind rewrites). */
+val authorization_refund_total : forall 'count, 0 <= 'count & 'count <= transaction_length_bound. (
+    int('count),
+    range(0, authorization_refund_per_item * 'count),
+) -> authorization_refund
+function authorization_refund_total(count, refund) = refund
+
 /*! Applies an authorization-list view in order. */
 function process_auth_list(authorizations : AuthorizationListRef) -> authorization_refund = {
     let encoded : StatelessInputSlice = authorizations.encoded;
     let count = authorizations.count;
-    let refund = process_auth_cursor(encoded, count);
-    refund : authorization_refund
+    authorization_refund_total(count, process_auth_cursor(encoded, count))
 }
 
 /*! Applies one Amsterdam authorization and charges its state-dependent
