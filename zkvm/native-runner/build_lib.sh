@@ -85,11 +85,14 @@ case "$(uname -s)" in
   *)      SHFLAG=(-shared); EXT=so ;;
 esac
 OUT="$BUILD/libevmsail_guest.$EXT"
-# native_test.o is the self-contained native I/O harness: it owns set_input,
-# read_input, write_output, the output buffer, and run_once. The real guest's
-# Spike I/O device adapter is never linked into host builds.
+# native_test.o owns native I/O and lifecycle. Optimized native diagnostics are
+# isolated in native_debug.o; neither object is linked into a real guest.
+NATIVE_TEST_OBJS=("$BUILD/native_test.o")
+if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
+  NATIVE_TEST_OBJS+=("$BUILD/native_debug.o")
+fi
 LINK_CMD=("$CC" "${CFLAGS[@]}" "${SHFLAG[@]}"
-    "${MODEL_OBJS[@]}" "${MODEL_BACKEND_OBJS[@]}" "$BUILD/native_test.o"
+    "${MODEL_OBJS[@]}" "${MODEL_BACKEND_OBJS[@]}" "${NATIVE_TEST_OBJS[@]}"
     "${RUNTIME_OBJS[@]}"
     -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 if [ "${EVM_BUILD_MODE:-optimized}" = standard ] || [ "${EVM_PROFILE:-off}" = on ]; then

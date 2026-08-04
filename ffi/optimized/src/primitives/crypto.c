@@ -13,12 +13,11 @@
 
 static const uint8_t hash_empty;
 
-#define DEFINE_SLICE_HASH(name, slice_type, resolver, algorithm, digest_type) \
+#define DEFINE_POINTER_SLICE_HASH(name, slice_type, algorithm, digest_type)   \
   Hash32 name(                                                   \
       struct slice_type input) {                                               \
-    const uint64_t off = input.off;                                          \
     const uint64_t len = input.len;                                          \
-    const uint8_t *bytes = resolver(off, len);                                 \
+    const uint8_t *bytes = input.bytes;                                        \
     Hash32 digest = {{0}};                            \
     _Static_assert(sizeof(digest) == sizeof(digest_type),                     \
                    "accelerator digest must be 32 bytes");                   \
@@ -30,28 +29,39 @@ static const uint8_t hash_empty;
     return digest;                                                            \
   }
 
-DEFINE_SLICE_HASH(host_keccak_stateless_input,
-                  StatelessInputSliceFields, stateless_input_ptr,
+DEFINE_POINTER_SLICE_HASH(host_keccak_stateless_input,
+                  StatelessInputSliceFields,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_scratch, ScratchSliceFields,
-                  scratch_ptr, zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_memory, EvmMemorySliceFields, memory_ptr,
+DEFINE_POINTER_SLICE_HASH(host_keccak_scratch, ScratchSliceFields,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_code, CodeRegionSliceFields, code_ptr,
+DEFINE_POINTER_SLICE_HASH(host_keccak_memory, EvmMemorySliceFields,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_output, OutputSliceFields, output_ptr,
+DEFINE_POINTER_SLICE_HASH(host_keccak_output, OutputSliceFields,
                   zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_keccak_log_data, LogDataSliceFields,
-                  log_data_ptr, zkvm_keccak256, zkvm_keccak256_hash)
-DEFINE_SLICE_HASH(host_sha256_stateless_input,
-                  StatelessInputSliceFields, stateless_input_ptr,
+DEFINE_POINTER_SLICE_HASH(host_keccak_log_data, LogDataSliceFields,
+                  zkvm_keccak256, zkvm_keccak256_hash)
+DEFINE_POINTER_SLICE_HASH(host_sha256_stateless_input,
+                  StatelessInputSliceFields,
                   zkvm_sha256, zkvm_sha256_hash)
-DEFINE_SLICE_HASH(host_sha256_scratch, ScratchSliceFields,
-                  scratch_ptr, zkvm_sha256, zkvm_sha256_hash)
-DEFINE_SLICE_HASH(host_sha256_memory, EvmMemorySliceFields, memory_ptr,
+DEFINE_POINTER_SLICE_HASH(host_sha256_scratch, ScratchSliceFields,
+                  zkvm_sha256, zkvm_sha256_hash)
+DEFINE_POINTER_SLICE_HASH(host_sha256_memory, EvmMemorySliceFields,
                   zkvm_sha256, zkvm_sha256_hash)
 
-#undef DEFINE_SLICE_HASH
+#undef DEFINE_POINTER_SLICE_HASH
+
+Hash32 host_keccak_code(struct CodeRegionSliceFields input) {
+  const uint64_t len = input.len;
+  const uint8_t *bytes = input.bytes;
+  Hash32 digest = {{0}};
+  _Static_assert(sizeof(digest) == sizeof(zkvm_keccak256_hash),
+                 "accelerator digest must be 32 bytes");
+  if ((!bytes && len != 0) || len > UINT32_MAX ||
+      zkvm_keccak256(len ? bytes : &hash_empty, (size_t)len,
+                     (zkvm_keccak256_hash *)(void *)&digest) != ZKVM_EOK)
+    memset(&digest, 0, sizeof(digest));
+  return digest;
+}
 
 Hash32 host_keccak_word(const U256 input) {
   uint8_t bytes[32];
@@ -92,9 +102,8 @@ Hash32 host_sha256_pair(
 
 /* LOG payloads are copied from active-frame memory into the log-data arena. */
 unit log_add_data_memory(struct EvmMemorySliceFields data) {
-  const uint64_t off = data.off;
   const uint64_t len = data.len;
-  const uint8_t *p = memory_ptr(off, len);
+  const uint8_t *p = data.bytes;
   if (p) log_add_data_bulk(p, len);
   return UNIT;
 }

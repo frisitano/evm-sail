@@ -309,7 +309,7 @@ unit initialize_block_access_list_state(
   bal_expected_source_len = 0;
   bal_expected_ready = false;
 
-  const uint8_t *source = stateless_input_ptr(bytes.off, bytes.len);
+  const uint8_t *source = bytes.bytes;
   if (source == NULL && bytes.len != 0) {
     bal_fail(RlpDecode, "BAL preload input");
     return UNIT;
@@ -482,10 +482,7 @@ static bool bal_code_equal(const bal_rlp_item *item,
   const uint8_t *code = NULL;
   uint64_t code_len = 0;
   if (!hash_equal(&code_hash, &EVMSAIL_KECCAK_EMPTY)) {
-    uint64_t off = 0;
-    uint64_t jumpdest_ref = 0;
-    if (!code_db_lookup_indexed(code_hash, &off, &code_len, &jumpdest_ref) ||
-        !code_db_resolve_code(off, code_len, &code, &code_len))
+    if (!code_db_lookup_view(code_hash, &code, &code_len, NULL))
       return bal_fail(WitnessDeficient,
                                 "BAL code lookup");
   }
@@ -552,7 +549,7 @@ static bool bal_validate_expected(uint32_t position,
 
 unit validate_block_access_list(struct StatelessInputSliceFields bytes,
                                 uint64_t block_gas_limit) {
-  const uint8_t *source = stateless_input_ptr(bytes.off, bytes.len);
+  const uint8_t *source = bytes.bytes;
   if (!bal_expected_ready || source != bal_expected_source ||
       bytes.len != bal_expected_source_len) {
     bal_fail(InvalidBlockAccessList, "BAL initialization");

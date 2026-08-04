@@ -21,42 +21,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-struct code_view {
-  uint64_t off;
-  uint64_t len;
-  const uint8_t *bytes;
-  bool valid;
-};
-
 static struct OutputSliceFields empty_slice(void) {
   return (struct OutputSliceFields){
       .len = 0,
-      .off = 0,
+      .bytes = NULL,
   };
 }
 
-static bool same_code(const struct code_view *view,
-                      const struct CodeRegionSliceFields *code) {
-  return view->valid && view->off == code->off && view->len == code->len;
-}
-
-static void resolve_code(struct code_view *view) {
-  const struct CodeRegionSliceFields *code = &frame_code.bytes;
-  if (same_code(view, code)) return;
-
-  const uint8_t *bytes = code_ptr(code->off, code->len);
-  if (!bytes) GUEST_ABORT();
-
-  view->off = code->off;
-  view->len = code->len;
-  view->bytes = bytes;
-  view->valid = true;
-}
-
-static U256 read_push(const struct code_view *view, uint64_t offset,
-                           uint64_t width) {
+static U256 read_push(const struct CodeFields *code, uint64_t offset,
+                      uint64_t width) {
   U256 value = {{0, 0, 0, 0}};
-  uint64_t available = offset < view->len ? view->len - offset : 0;
+  uint64_t available = offset < code->len ? code->len - offset : 0;
   if (available > width) available = width;
 
   /* EVM immediates are big-endian; U256 stores least-significant limbs
@@ -64,7 +39,7 @@ static U256 read_push(const struct code_view *view, uint64_t offset,
   for (uint64_t i = 0; i < available; i++) {
     uint64_t byte_from_low = width - 1 - i;
     value.limbs[byte_from_low / 8] |=
-        (uint64_t)view->bytes[offset + i] << (8 * (byte_from_low % 8));
+        (uint64_t)code->bytes[offset + i] << (8 * (byte_from_low % 8));
   }
   return value;
 }
@@ -525,7 +500,6 @@ static struct OutputSliceFields frame_output(void) {
 }
 
 struct OutputSliceFields interpret(unit u) {
-  struct code_view code = {0};
   (void)u;
   frame_stack_reset(UNIT);
 
@@ -533,15 +507,16 @@ struct OutputSliceFields interpret(unit u) {
     if (have_exception) return empty_slice();
 
     if (frame_status.kind == Kind_Running) {
-      resolve_code(&code);
+      const struct CodeFields *code = &frame_code;
+      if (code->bytes == NULL && code->len != 0) GUEST_ABORT();
       uint64_t current = pc;
 
-      if (current >= code.len) {
+      if (current >= code->len) {
         EXECUTE(stop);
         continue;
       }
 
-      uint8_t opcode = code.bytes[current];
+      uint8_t opcode = code->bytes[current];
       uint64_t immediate_offset = current + 1;
       pc = immediate_offset;
 
@@ -553,7 +528,7 @@ struct OutputSliceFields interpret(unit u) {
           uint64_t width = (uint64_t)opcode - 0x5f;
           pc = immediate_offset + width;
           interpreter_execute_push(width,
-                                 read_push(&code, immediate_offset, width));
+                                   read_push(code, immediate_offset, width));
         }
         continue;
       }
@@ -561,7 +536,7 @@ struct OutputSliceFields interpret(unit u) {
       if (active_fork() >= EVMSAIL_FORK_AMSTERDAM &&
           opcode >= 0xe6 && opcode <= 0xe8) {
         uint64_t immediate =
-            immediate_offset < code.len ? code.bytes[immediate_offset] : 0;
+            immediate_offset < code->len ? code->bytes[immediate_offset] : 0;
         bool valid = opcode == 0xe8
                          ? (immediate <= 81 || immediate >= 128)
                          : (immediate <= 90 || immediate >= 128);

@@ -65,7 +65,7 @@ function bal_compare_index_code forall 'source_off 'source_len 'content_len,
     let fields = rlp_cursor_advance(fields, code_field.source.len);
     bal_expect_end(fields);
     let code = code_db_resolve(code_hash);
-    if (bal_ref_uint64(index_field) != index) | not_bool(region_slices_equal(bal_ref_bytes(code_field), code.bytes)) then {
+    if (bal_ref_uint64(index_field) != index) | not_bool(region_slices_equal(bal_ref_bytes(code_field), code_bytes(code))) then {
         throw InvalidBlock(InvalidBlockAccessList)
     }
 }

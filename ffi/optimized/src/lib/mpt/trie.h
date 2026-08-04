@@ -42,7 +42,8 @@ Hash32 mpt_storage_root_hash(NodeId root_node);
  * AccountTable; storage IDs remain stable and are exposed through the shared
  * MPT order workspace for the duration of one storage-trie traversal. */
 uint32_t mpt_account_updates_prepare(void);
-uint32_t mpt_storage_updates_prepare(Address address);
+uint32_t mpt_storage_updates_prepare(AccountId account_id,
+                                     StorageGeneration *generation);
 StorageId mpt_storage_update_id_at(uint32_t index);
 
 /* One-call optimized indexing of the source-backed SSZ witness-node list. */
@@ -62,14 +63,5 @@ Hash32
 mpt_compute_state_root(
     Hash32 parent_state_root);
 Hash32 mpt_last_state_root(void);
-
-#if defined(EVMSAIL_NATIVE_DEBUG_AGGREGATES)
-/*
- * Native-only differential checks for the bottom-up state-trie reducer.
- * Each numbered case compares an incremental reduction with a canonical
- * rebuild of the same small synthetic trie.
- */
-uint64_t mpt_selftest(uint64_t scenario);
-#endif
 
 #endif

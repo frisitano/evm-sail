@@ -79,7 +79,7 @@ struct TransactionCosts = {
     enclosing SSZ transaction-envelope bound. This bound is structural and is
     deliberately independent of the active protocol deployment limit. */
 function transaction_initcode_slice(input : TransactionInputSlice) -> CodeSlice =
-    code_db_intern_input(stateless_input_slice(input.off, input.len))
+    code_db_intern_input(stateless_input_slice(input.bytes, input.len))
 
 /*! Values established before entering the top-level transaction frame. */
 struct TxUpfrontResult = {

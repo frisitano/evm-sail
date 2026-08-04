@@ -50,12 +50,11 @@ static uint64_t load_le_u64(const uint8_t *bytes) {
 
 U256 ssz_u256(struct StatelessInputSliceFields input,
                    uint32_t offset) {
-  const uint8_t *source =
-      stateless_input_ptr(input.off + offset, UINT64_C(32));
-  if (!source) {
+  if (offset > input.len || UINT64_C(32) > input.len - offset) {
     throw_invalid_block(InvalidConfig, "optimized SSZ uint256");
     return (U256){.limbs = {0, 0, 0, 0}};
   }
+  const uint8_t *source = input.bytes + offset;
   return (U256){
       .limbs = {
           load_le_u64(source),
@@ -70,7 +69,7 @@ static struct StatelessInputSliceFields source_span(
     struct StatelessInputSliceFields container, uint64_t start,
     uint64_t stop) {
   struct StatelessInputSliceFields result = {
-      .off = container.off + start,
+      .bytes = container.bytes + start,
       .len = stop - start,
   };
   return result;
@@ -154,8 +153,7 @@ struct StatelessInputRef decode_stateless_input_ref(
 
   struct StatelessInputRef result;
   memset(&result, 0, sizeof(result));
-  const uint8_t *source =
-      stateless_input_ptr(input.off, input.len);
+  const uint8_t *source = input.bytes;
   if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH ||
       source[1] != 0x01 || source[0] < 0x0a || source[0] > 0x15)
     return ssz_input_failure("optimized stateless input header");
@@ -300,8 +298,7 @@ struct Withdrawal decode_withdrawal(
     struct StatelessInputSliceFields withdrawal) {
   struct Withdrawal result;
   memset(&result, 0, sizeof(result));
-  const uint8_t *source =
-      stateless_input_ptr(withdrawal.off, withdrawal.len);
+  const uint8_t *source = withdrawal.bytes;
   if (!source || withdrawal.len != 44)
     return ssz_withdrawal_failure("optimized withdrawal");
   result.index = load_le_u64(source);
@@ -319,8 +316,7 @@ Hash32 sha256_request_digest(
   uint8_t *preimage = scratch_borrow(request_len + 1);
   if (!preimage)
     return zero_hash();
-  const uint8_t *request_bytes =
-      stateless_input_ptr(request.off, request_len);
+  const uint8_t *request_bytes = request.bytes;
   if (!request_bytes)
     return zero_hash();
   preimage[0] = (uint8_t)request_type;

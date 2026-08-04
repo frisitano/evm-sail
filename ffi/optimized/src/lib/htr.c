@@ -147,9 +147,8 @@ static int htr_subspan(const struct htr_span *span, uint64_t off, uint64_t len,
 
 static int htr_resolve(struct StatelessInputSliceFields slice,
                        struct htr_span *result) {
-  const uint64_t off = slice.off;
   const uint64_t len = slice.len;
-  result->bytes = stateless_input_ptr(off, len);
+  result->bytes = slice.bytes;
   if (!result->bytes) return 0;
   result->len = len;
   return 1;

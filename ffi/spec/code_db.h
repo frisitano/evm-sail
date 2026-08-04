@@ -11,27 +11,27 @@
 #include <stdbool.h>
 
 bool code_db_configure_capacities(uint64_t code_bytes,
-                                  uint64_t jumpdest_words);
-struct zoptionzIRCodezK;
+                                  uint64_t jumpdest_bytes);
+struct zoptionzIRCodeFieldszK;
 struct zStatelessInputSliceFields;
 struct zEvmMemorySliceFields;
 struct zOutputSliceFields;
 struct zCodeRegionSliceFields;
-void code_db_lookup(struct zoptionzIRCodezK *rop, sail_fixed_bytes_32 h);
+void code_db_lookup(struct zoptionzIRCodeFieldszK *rop,
+                    sail_fixed_bytes_32 h);
 struct zCodeRegionSliceFields code_region_from_input(
     struct zStatelessInputSliceFields input);
 struct zCodeRegionSliceFields code_region_from_memory(
     struct zEvmMemorySliceFields input);
 struct zCodeRegionSliceFields code_region_from_output(
     struct zOutputSliceFields input);
-uint64_t jumpdest_table_alloc(uint64_t code_len);
-bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
-                                uint64_t chunk_index,
-                                const sail_u256 chunk);
+struct zCodeRegionSliceFields code_region_from_delegation(
+    sail_fixed_bytes_20 address);
+uint64_t jumpdest_table_alloc(struct zCodeRegionSliceFields code);
+bool jumpdest_table_mark(uint64_t ref, uint64_t code_len,
+                         uint64_t position);
 sail_fixed_bytes_32 code_db_store_indexed_bytes(
     const uint8_t *src, uint64_t len, uint64_t jumpdest_ref);
-sail_fixed_bytes_32 code_intern_indexed_delegation(
-    sail_fixed_bytes_20 addr, uint64_t jumpdest_ref);
 int code_db_resolve_code(uint64_t off, uint64_t len,
                          const uint8_t **p, uint64_t *resolved_len);
 bool code_db_owned_contains(uint64_t pointer, uint64_t len);

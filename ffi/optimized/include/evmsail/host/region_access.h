@@ -7,8 +7,9 @@
 #include <stdint.h>
 
 /*
- * The generated model owns all aggregate layouts.  Each nominal slice carries
- * only {off, len}; its C function selects the backing region statically.
+ * The generated model owns all aggregate layouts. Optimized byte-region
+ * slices carry {pointer, len}; analyzed Code records additionally carry the
+ * completed JUMPDEST byte pointer.
  */
 struct StatelessInputSliceFields;
 struct ScratchSliceFields;
@@ -19,12 +20,11 @@ struct OutputSliceFields;
 struct ScratchRegionResult;
 struct CalldataSlice;
 
-bool stateless_input_contains(uint64_t pointer, uint64_t len);
+bool stateless_input_contains(const uint8_t *pointer, uint64_t len);
 bool stateless_input_offset(const uint8_t *pointer, uint64_t len,
                                     uint64_t *off);
 const uint8_t *stateless_input_ptr(uint64_t off, uint64_t len);
 const uint8_t *memory_ptr(uint64_t off, uint64_t len);
-const uint8_t *code_ptr(uint64_t off, uint64_t len);
 const uint8_t *scratch_ptr(uint64_t off, uint64_t len);
 const uint8_t *log_data_ptr(uint64_t off, uint64_t len);
 const uint8_t *output_ptr(uint64_t off, uint64_t len);

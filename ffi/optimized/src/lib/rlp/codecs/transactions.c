@@ -221,7 +221,7 @@ static bool quantity_u64(const rlp_item *item, uint64_t *value) {
 
 static struct StatelessInputSliceFields content_slice(const rlp_item *item) {
   struct StatelessInputSliceFields result = {
-      .off = item->content_off,
+      .bytes = (uint8_t *)(uintptr_t)item->content,
       .len = item->content_len,
   };
   return result;
@@ -365,10 +365,8 @@ struct TransactionFields decode_transaction(
   result.raw = transaction;
   result.pubkey = public_key;
 
-  const uint8_t *tx_bytes =
-      stateless_input_ptr(transaction.off, transaction.len);
-  const uint8_t *key_bytes =
-      stateless_input_ptr(public_key.off, public_key.len);
+  const uint8_t *tx_bytes = transaction.bytes;
+  const uint8_t *key_bytes = public_key.bytes;
   if (!tx_bytes || transaction.len == 0 || !key_bytes ||
       public_key.len != 65)
     return decode_failure(RlpDecode, "optimized transaction input");
@@ -382,7 +380,7 @@ struct TransactionFields decode_transaction(
   const uint64_t payload_delta = legacy ? 0 : 1;
   rlp_cursor fields;
   if (transaction.len < payload_delta ||
-      !exact_list(tx_bytes + payload_delta, transaction.off + payload_delta,
+      !exact_list(tx_bytes + payload_delta, payload_delta,
                   transaction.len - payload_delta, &fields))
     return decode_failure(RlpDecode, "optimized transaction envelope");
 
@@ -392,7 +390,7 @@ struct TransactionFields decode_transaction(
     return decode_failure(RlpDecode, "optimized transaction fields");
 
   const struct StatelessInputSliceFields public_key_body = {
-      .off = public_key.off + 1,
+      .bytes = public_key.bytes + 1,
       .len = 64,
   };
   const Hash32 sender_hash =
@@ -453,8 +451,8 @@ struct TransactionFields decode_transaction(
                           "optimized transaction authorizations");
 
   const struct StatelessInputSliceFields signing_fields = {
-      .off = first_signed->source_off,
-      .len = v->source_off - first_signed->source_off,
+      .bytes = (uint8_t *)(uintptr_t)first_signed->source,
+      .len = (uint64_t)(v->source - first_signed->source),
   };
   result.signing_hash =
       tx_signing_hash(type, signing_fields, result.sig_v);

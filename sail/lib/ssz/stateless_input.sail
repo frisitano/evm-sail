@@ -600,7 +600,7 @@ function index_witness_nodes_cursor(cursor : WitnessNodeListCursor) -> unit =
         ()
     } else {
         let (node, next) = ssz_list_pop(cursor);
-        nodedb_insert(keccak256(node), node.off, node.len);
+        nodedb_insert(keccak256(node), node.bytes, node.len);
         index_witness_nodes_cursor(next)
     }
 

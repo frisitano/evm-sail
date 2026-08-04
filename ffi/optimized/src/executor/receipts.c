@@ -43,11 +43,10 @@ unit receipt_table_reset(unit ignored) {
 }
 
 unit receipt_table_push(uint32_t index, struct ScratchSliceFields value) {
-  const uint64_t offset = value.off;
   const uint64_t length = value.len;
-  const uint8_t *source = NULL;
+  const uint8_t *source = value.bytes;
   if (index != receipt_table.count || length > SIZE_MAX ||
-      !(source = scratch_region(offset, length)) ||
+      !source ||
       receipt_table.bytes_length > SIZE_MAX - (size_t)length ||
       receipt_table.count == GUEST_RECEIPT_RECORDS ||
       (size_t)length > GUEST_RECEIPT_BYTES - receipt_table.bytes_length) {

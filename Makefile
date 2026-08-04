@@ -47,6 +47,7 @@ EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/ei
 CONTRACTS_DIR       := extractions/contracts
 C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
+C_SPEC_SPECIALIZATION_LIMIT ?= 256
 C_OPT_BUILD_DIR     := build/c-optimised
 C_OPT_GENERATED_DIR := $(C_OPT_BUILD_DIR)/generated
 C_OPT_GENERATED_INCLUDE_DIR := $(C_OPT_GENERATED_DIR)/include
@@ -94,6 +95,14 @@ C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
                               LogDataSliceFields \
                               OutputSliceFields
 C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := $(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER))
+C_OPTIMIZED_BYTE_POINTER_FLAGS := \
+	--c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at \
+	--c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at \
+	--c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at \
+	--c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at \
+	--c-optimized-byte-pointer-field CodeFields.bytes=code_at \
+	--c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at \
+	--c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at
 C_SPEC_INCLUDES     := $(foreach header,$(C_SPEC_HEADERS),--c-include $(header))
 C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve leaf_child_ref \
@@ -224,8 +233,8 @@ check-contracts:
 	grep -q "^def worldStateBoundary" $(LEAN_HOST_AXIOMS)
 	grep -q "^class HostState:" $(PYTHON_HOST_CONTRACT)
 	grep -q "^class AcceleratorContract:" $(PYTHON_HOST_CONTRACT)
-	grep -q "^def state_checkpoint(" $(PYTHON_HOST_CONTRACT)
-	grep -q "^def state_revert(" $(PYTHON_HOST_CONTRACT)
+	grep -q "^def state_journal_checkpoint(" $(PYTHON_HOST_CONTRACT)
+	grep -q "^def state_journal_revert(" $(PYTHON_HOST_CONTRACT)
 
 extract-coq: check-contracts
 	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
@@ -253,6 +262,7 @@ c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
 		$(C_SPEC_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
+		--c-specialization-limit $(C_SPEC_SPECIALIZATION_LIMIT) \
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
 	test -s $(C_SPEC_MODEL).c
 	test -s $(C_SPEC_MODEL).h
@@ -272,6 +282,7 @@ c-optimised: check-optimized-ffi
 		--c-optimized-source-root sail \
 		--c-optimized-include-dir $(C_OPTIMIZED_INCLUDE_DIR) \
 		$(C_OPTIMIZED_EXTERNAL_TYPE_FLAGS) \
+		$(C_OPTIMIZED_BYTE_POINTER_FLAGS) \
 		$(C_OPT_PRESERVE_FLAGS) --c-specialize-log \
 		$(C_OPTIMISED_SPLICE_FLAGS) \
 		$(MODEL) --variable EVM_DEBUG=off

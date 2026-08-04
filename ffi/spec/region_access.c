@@ -32,7 +32,7 @@ static bool private_input_ready;
 static const uint8_t empty_region;
 
 
-#define SLICE_OFF(slice) ((slice).zoff)
+#define SLICE_OFF(slice) ((slice).zbytes)
 #define SLICE_LEN(slice) ((slice).zlen)
 
 static void acquire_private_input(void) {
@@ -113,7 +113,7 @@ const uint8_t *evmsail_output_ptr(uint64_t off, uint64_t len) {
 
 #define DEFINE_SLICE_VALUE(name, type)                                       \
   static void name(struct type *out, uint64_t off, uint64_t len) {            \
-    out->zoff = off;                                                          \
+    out->zbytes = off;                                                        \
     out->zlen = len;                                                          \
   }
 
@@ -550,11 +550,9 @@ bool output_buffer_store_input(struct zStatelessInputSliceFields slice) {
       SLICE_LEN(slice));
 }
 
-sail_fixed_bytes_32 code_db_store_indexed(
-    struct zCodeRegionSliceFields code, uint64_t jumpdest_ref) {
+sail_fixed_bytes_32 code_db_store_indexed(struct zCodeFields code) {
   return code_db_store_indexed_bytes(
-      evmsail_code_ptr(SLICE_OFF(code), SLICE_LEN(code)), SLICE_LEN(code),
-      jumpdest_ref);
+      evmsail_code_ptr(code.zbytes, code.zlen), code.zlen, code.zjumpdests);
 }
 
 static bool calldata_span(struct zCalldataSlice input,

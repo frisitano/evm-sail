@@ -54,9 +54,7 @@ Hash32 tx_signing_hash(
   uint8_t *preimage = scratch_borrow(total);
   if (!preimage)
     return zero_hash();
-  const uint64_t content_off = content.off;
-  const uint8_t *content_bytes =
-      stateless_input_ptr(content_off, content_len);
+  const uint8_t *content_bytes = content.bytes;
   if (!content_bytes)
     return zero_hash();
 

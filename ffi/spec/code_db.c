@@ -1,13 +1,13 @@
 /* C-backed CODE for the evm-sail model: a code-hash-keyed code_db, an
- * append-only byte arena, and packed JUMPDEST-table storage.
+ * append-only byte arena, and byte-addressed JUMPDEST-table storage.
  *
  * Account code is written rarely (seeding, CREATE deploys, EIP-7702
  * delegations) and executed constantly. Each code_db entry names an absolute
  * span in the arena plus a JumpdestRef into a flat arena allocated once from
- * the code length. Standard builds populate completed 256-bit chunks from the
- * explicit Sail analysis. Optimized witness indexing may scan the same bytes
- * directly in C as one whole-operation lowering. Sail's single frame_code Code
- * register is the complete active executable state.
+ * the code length. Standard builds mark opcode-aligned program counters from
+ * the explicit Sail analysis. Optimized builds are free to use a different
+ * private representation. Sail's single frame_code Code register is the
+ * complete active executable state.
  *
  * The Sail account store remains the authoritative account-code value;
  * this is the execution mirror. */
@@ -27,15 +27,14 @@
 
 /* -------------------------- jumpdest tables ---------------------------- */
 
-static uint64_t *jumpdest_arena;
+static uint8_t *jumpdest_arena;
 static size_t jumpdest_arena_cap, jumpdest_arena_len;
 static uint8_t *code_arena;
 static size_t code_arena_cap, code_arena_len;
 
 bool code_db_configure_capacities(uint64_t code_bytes,
-                                  uint64_t jumpdest_words) {
-  if (code_bytes > SIZE_MAX || jumpdest_words > SIZE_MAX ||
-      jumpdest_words > SIZE_MAX / sizeof(*jumpdest_arena))
+                                  uint64_t jumpdest_bytes) {
+  if (code_bytes > SIZE_MAX || jumpdest_bytes > SIZE_MAX)
     return false;
   if ((size_t)code_bytes > code_arena_cap) {
     uint8_t *next =
@@ -44,14 +43,12 @@ bool code_db_configure_capacities(uint64_t code_bytes,
     code_arena = next;
     code_arena_cap = (size_t)code_bytes;
   }
-  if ((size_t)jumpdest_words > jumpdest_arena_cap) {
-    uint64_t *next = (uint64_t *)realloc(
-        jumpdest_arena,
-        jumpdest_words ? (size_t)jumpdest_words * sizeof(*jumpdest_arena)
-                       : sizeof(*jumpdest_arena));
+  if ((size_t)jumpdest_bytes > jumpdest_arena_cap) {
+    uint8_t *next = (uint8_t *)realloc(
+        jumpdest_arena, jumpdest_bytes ? (size_t)jumpdest_bytes : 1u);
     if (!next) return false;
     jumpdest_arena = next;
-    jumpdest_arena_cap = (size_t)jumpdest_words;
+    jumpdest_arena_cap = (size_t)jumpdest_bytes;
   }
   code_arena_len = 0;
   jumpdest_arena_len = 0;
@@ -59,91 +56,63 @@ bool code_db_configure_capacities(uint64_t code_bytes,
 }
 
 static int jumpdest_arena_reserve(size_t need) {
-  evmsail_capacity_observe(EVMSAIL_CAP_JUMPDEST_WORDS, (uint64_t)need);
+  evmsail_capacity_observe(EVMSAIL_CAP_JUMPDEST_BYTES, (uint64_t)need);
   if (need <= jumpdest_arena_cap) return 1;
   size_t n = jumpdest_arena_cap ? jumpdest_arena_cap : 256;
   while (n < need) {
     if (n > SIZE_MAX / 2) return 0;
     n <<= 1;
   }
-  uint64_t *p = (uint64_t *)realloc(jumpdest_arena, n * sizeof(*p));
+  uint8_t *p = (uint8_t *)realloc(jumpdest_arena, n);
   if (!p) return 0;
   jumpdest_arena = p;
   jumpdest_arena_cap = n;
   return 1;
 }
 
-static uint64_t jumpdest_word_count(uint64_t code_len) {
-  return (code_len >> 6) + ((code_len & UINT64_C(63)) != 0);
-}
-
 static int jumpdest_table_span(uint64_t ref, uint64_t code_len,
-                               size_t *base_out, uint64_t *nwords_out) {
+                               size_t *base_out, uint64_t *length_out) {
   if (!ref || !code_len || code_len > UINT32_MAX) return 0;
-  uint64_t nwords = jumpdest_word_count(code_len);
   uint64_t base64 = ref - 1;
   if (base64 > SIZE_MAX) return 0;
   size_t base = (size_t)base64;
   if (base > jumpdest_arena_len ||
-      nwords > (uint64_t)(jumpdest_arena_len - base)) return 0;
+      code_len > (uint64_t)(jumpdest_arena_len - base)) return 0;
   if (base_out) *base_out = base;
-  if (nwords_out) *nwords_out = nwords;
+  if (length_out) *length_out = code_len;
   return 1;
 }
 
 static int jumpdest_table_matches(uint64_t ref, uint32_t code_len) {
   if (!code_len) return ref == 0;
-  size_t base = 0;
-  uint64_t nwords = 0;
-  if (!jumpdest_table_span(ref, code_len, &base, &nwords)) return 0;
-  uint32_t used = code_len & 63u;
-  return !used || (jumpdest_arena[base + (size_t)nwords - 1] >> used) == 0;
+  return jumpdest_table_span(ref, code_len, NULL, NULL);
 }
 
 static uint64_t jumpdest_table_alloc_value(uint64_t code_len_value) {
   if (!code_len_value || code_len_value > UINT32_MAX) return 0;
-  uint64_t nwords = jumpdest_word_count(code_len_value);
-  if (nwords > SIZE_MAX - jumpdest_arena_len) return 0;
+  if (code_len_value > SIZE_MAX - jumpdest_arena_len) return 0;
   size_t off = jumpdest_arena_len;
-  size_t end = off + (size_t)nwords;
+  size_t end = off + (size_t)code_len_value;
   if (!jumpdest_arena_reserve(end)) return 0;
-  memset(jumpdest_arena + off, 0, (size_t)nwords * sizeof(*jumpdest_arena));
+  memset(jumpdest_arena + off, 0, (size_t)code_len_value);
   jumpdest_arena_len = end;
   return (uint64_t)off + 1;
 }
 
-/* Reserve the exact table size before Sail starts analysis. The arena is
- * zeroed so chunks without JUMPDESTs need no writes. */
-uint64_t jumpdest_table_alloc(uint64_t code_len) {
-  return jumpdest_table_alloc_value(code_len);
+/* Reserve one byte per code position before Sail starts analysis. The arena
+ * is zeroed so non-JUMPDEST positions need no writes. */
+uint64_t jumpdest_table_alloc(struct zCodeRegionSliceFields code) {
+  return jumpdest_table_alloc_value(code.zlen);
 }
 
-/* Store one completed Sail chunk. Chunk bit zero describes the first byte in
- * the corresponding 256-byte code span, hence little-endian limb order. */
-bool jumpdest_table_store_chunk(uint64_t ref, uint64_t code_len,
-                                uint64_t chunk_index,
-                                const sail_u256 chunk) {
-  uint64_t code_len_value = code_len;
-  uint64_t chunk_index_value = chunk_index;
+/* Mark one opcode-aligned program counter. */
+bool jumpdest_table_mark(uint64_t ref, uint64_t code_len,
+                         uint64_t position) {
   size_t base = 0;
-  uint64_t nwords = 0;
-  if (!jumpdest_table_span(ref, code_len_value, &base, &nwords) ||
-      chunk_index_value > UINT64_MAX / 4)
+  if (position >= code_len ||
+      !jumpdest_table_span(ref, code_len, &base, NULL))
     return false;
-  uint64_t first = chunk_index_value * 4;
-  if (first >= nwords) return false;
-
-  uint64_t words[4];
-  sail_word_to_le_words4(words, chunk);
-  uint64_t count = nwords - first;
-  if (count > 4) count = 4;
-  for (uint64_t i = count; i < 4; i++)
-    if (words[i] != 0) return false;
-  uint32_t used = (uint32_t)(code_len_value & 63u);
-  if (first + count == nwords && used && (words[count - 1] >> used) != 0)
-    return false;
-  memcpy(jumpdest_arena + base + (size_t)first, words,
-         (size_t)count * sizeof(*words));
+  jumpdest_arena[base + (size_t)position] = 1u;
   return true;
 }
 
@@ -153,9 +122,7 @@ bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
   if (ref == 0 || index_value >= code_len_value) return false;
   size_t base = 0;
   if (!jumpdest_table_span(ref, code_len_value, &base, NULL)) return false;
-  return ((jumpdest_arena[base + (size_t)(index_value >> 6)] >>
-           (index_value & 63)) &
-          UINT64_C(1));
+  return jumpdest_arena[base + (size_t)index_value] != 0;
 }
 
 /* ------------------------------ code_db -------------------------------- */
@@ -265,11 +232,11 @@ static int code_db_intern(const sail_fixed_bytes_32 *key, const uint8_t *src,
         e->jumpdest_ref == 0)
       return 0;
     size_t old_base = 0, new_base = 0;
-    uint64_t nwords = 0;
-    if (!jumpdest_table_span(e->jumpdest_ref, len, &old_base, &nwords) ||
+    uint64_t table_length = 0;
+    if (!jumpdest_table_span(e->jumpdest_ref, len, &old_base, &table_length) ||
         !jumpdest_table_span(jumpdest_ref, len, &new_base, NULL)) return 0;
     return memcmp(jumpdest_arena + old_base, jumpdest_arena + new_base,
-                  (size_t)nwords * sizeof(*jumpdest_arena)) == 0;
+                  (size_t)table_length) == 0;
   }
   if (!e->used) {
     e->used = 1;
@@ -303,7 +270,7 @@ static int code_db_intern(const sail_fixed_bytes_32 *key, const uint8_t *src,
 }
 
 /*
- * Optimized whole-witness-code lowering of analyze_code + code_db_store.
+ * Whole-witness-code host path for analyze_code + code_db_store.
  * PUSH immediate bytes are skipped exactly as in sail/host/code.sail.
  * Amsterdam's EIP-8024 immediate byte is skipped only when valid; an invalid
  * immediate remains the next opcode.
@@ -325,8 +292,7 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
     while (position < len) {
       const uint8_t opcode = src[position];
       if (opcode == 0x5b)
-        jumpdest_arena[base + (size_t)(position >> 6)] |=
-            UINT64_C(1) << (position & 63);
+        jumpdest_arena[base + (size_t)position] = 1u;
 
       uint64_t step = 1;
       if (opcode >= 0x60 && opcode <= 0x7f) {
@@ -368,22 +334,6 @@ sail_fixed_bytes_32 code_db_store_indexed_bytes(
   if (zkvm_keccak256(src, (size_t)len, &digest) == ZKVM_EOK)
     memcpy(key.bytes, digest.data, sizeof(key.bytes));
   if (!code_db_intern(&key, src, (uint32_t)len, jumpdest_ref))
-    memset(&key, 0, sizeof(key));
-  return evmsail_hash_from_be_bytes(key.bytes);
-}
-
-/* Intern the 23-byte EIP-7702 delegation designation 0xef0100 ++ addr under its
- * keccak hash with the explicit Sail analysis; return the codeHash. */
-sail_fixed_bytes_32 code_intern_indexed_delegation(
-    sail_fixed_bytes_20 addr, uint64_t jumpdest_ref) {
-  uint8_t b[23];
-  b[0] = 0xef; b[1] = 0x01; b[2] = 0x00;
-  evmsail_address_to_be_bytes(b + 3, addr);
-  sail_fixed_bytes_32 key = {{0}};
-  zkvm_keccak256_hash digest = {{0}};
-  if (zkvm_keccak256(b, sizeof(b), &digest) == ZKVM_EOK)
-    memcpy(key.bytes, digest.data, sizeof(key.bytes));
-  if (!code_db_intern(&key, b, (uint32_t)sizeof b, jumpdest_ref))
     memset(&key, 0, sizeof(key));
   return evmsail_hash_from_be_bytes(key.bytes);
 }

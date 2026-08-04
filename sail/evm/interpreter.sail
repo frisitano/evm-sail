@@ -186,7 +186,8 @@ function fetch() -> ast = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let current = pc;
-    let code = frame_code.bytes;
+    let analyzed = frame_code;
+    let code = code_bytes(analyzed);
     let code_length = code.len;
     if not_bool(current < code_length) then {
         STOP()
@@ -658,7 +659,7 @@ function run_call(kind : CallKind) -> unit = {
                 };
             let child_calldata = if is_running() then {
                     let bytes = active_memory_slice(args.off, args.len);
-                    MemoryCalldata(evm_memory_slice(bytes.off, bytes.len))
+                    MemoryCalldata(evm_memory_slice(bytes.bytes, bytes.len))
                 } else {
                     EMPTY_CALLDATA
                 };

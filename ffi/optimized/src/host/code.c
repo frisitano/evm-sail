@@ -3,15 +3,16 @@
 #include "evmsail/host/code.h"
 #include "host/code/store.h"
 #include "evmsail/host/region_access.h"
+#include "primitives/value.h"
 #include "workspace.h"
 
 #include <stdlib.h>
 #include <stdint.h>
 
-static struct CodeRegionSliceFields code_region_value(uint64_t off,
+static struct CodeRegionSliceFields code_region_value(uint8_t *bytes,
                                                        uint64_t len) {
   struct CodeRegionSliceFields out;
-  out.off = off;
+  out.bytes = bytes;
   out.len = len;
   return out;
 }
@@ -22,9 +23,9 @@ static struct CodeRegionSliceFields code_region_from_bytes(
     const uint8_t *bytes, uint64_t len) {
   if (len == 0) return code_region_value(0, 0);
   if (!bytes) GUEST_ABORT();
-  const uint64_t region = code_region_intern_copy(bytes, len);
-  if (region == 0) GUEST_ABORT();
-  return code_region_value(region, len);
+  uint8_t *stable = code_region_intern_copy(bytes, len);
+  if (!stable) GUEST_ABORT();
+  return code_region_value(stable, len);
 }
 
 /* Input-backed code is referenced in place: the row records the resolved
@@ -33,43 +34,46 @@ static struct CodeRegionSliceFields code_region_from_bytes(
  * witness deficiency. */
 struct CodeRegionSliceFields code_region_from_input(
     struct StatelessInputSliceFields input) {
-  const uint64_t off = input.off;
   const uint64_t len = input.len;
   if (len == 0) return code_region_value(0, 0);
-  const uint8_t *bytes = stateless_input_ptr(off, len);
+  const uint8_t *bytes = input.bytes;
   if (!bytes) GUEST_ABORT();
-  const uint64_t region = code_region_register(bytes, len);
-  if (region == 0) GUEST_ABORT();
-  return code_region_value(region, len);
+  return code_region_value((uint8_t *)(uintptr_t)bytes, len);
 }
 
 struct CodeRegionSliceFields code_region_from_memory(
     struct EvmMemorySliceFields input) {
-  const uint64_t off = input.off;
   const uint64_t len = input.len;
-  return code_region_from_bytes(memory_ptr(off, len), len);
+  return code_region_from_bytes(input.bytes, len);
 }
 
 struct CodeRegionSliceFields code_region_from_output(
     struct OutputSliceFields input) {
-  const uint64_t off = input.off;
   const uint64_t len = input.len;
-  return code_region_from_bytes(output_ptr(off, len), len);
+  return code_region_from_bytes(input.bytes, len);
 }
 
-struct zoptionzIRCodezK code_db_lookup(Hash32 hash) {
-  struct zoptionzIRCodezK out = {0};
-  uint64_t off = 0, len = 0, jumpdest_ref = 0;
-  if (!code_db_lookup_indexed(hash, &off, &len, &jumpdest_ref)) {
-    out.kind = Kind_zNonezIRCodezK;
-    out.variants.zNonezIRCodezK = UNIT;
+struct CodeRegionSliceFields code_region_from_delegation(Address address) {
+  uint8_t bytes[23] = {0xef, 0x01, 0x00};
+  address_to_be_bytes(bytes + 3, address);
+  return code_region_from_bytes(bytes, sizeof(bytes));
+}
+
+struct zoptionzIRCodeFieldszK code_db_lookup(Hash32 hash) {
+  struct zoptionzIRCodeFieldszK out = {0};
+  const uint8_t *bytes = NULL;
+  uint8_t *jumpdests = NULL;
+  uint64_t len = 0;
+  if (!code_db_lookup_view(hash, &bytes, &len, &jumpdests)) {
+    out.kind = Kind_zNonezIRCodeFieldszK;
+    out.variants.zNonezIRCodeFieldszK = UNIT;
     return out;
   }
-  out.kind = Kind_zSomezIRCodezK;
-  struct Code *code = &out.variants.zSomezIRCodezK;
-  code->bytes.off = off;
-  code->bytes.len = len;
-  code->jumpdests = jumpdest_ref;
+  out.kind = Kind_zSomezIRCodeFieldszK;
+  struct CodeFields *code = &out.variants.zSomezIRCodeFieldszK;
+  code->bytes = (uint8_t *)(uintptr_t)bytes;
+  code->len = len;
+  code->jumpdests = jumpdests;
   return out;
 }
 
@@ -81,12 +85,10 @@ code_db_read_delegation(Hash32 hash) {
   return result;
 }
 
-uint64_t code_db_analyze_indexed(struct CodeRegionSliceFields code,
+uint8_t *code_db_analyze_indexed(struct CodeRegionSliceFields code,
                                  bool amsterdam_or_later) {
-  const uint64_t len = code.len;
-  const uint8_t *bytes = code_ptr(code.off, len);
-  const uint64_t jumpdest_ref =
-      code_db_analyze_bytes(bytes, len, amsterdam_or_later);
-  if (len != 0 && jumpdest_ref == 0) GUEST_ABORT();
+  uint8_t *jumpdest_ref =
+      code_db_analyze_region(code, amsterdam_or_later);
+  if (code.len != 0 && !jumpdest_ref) GUEST_ABORT();
   return jumpdest_ref;
 }

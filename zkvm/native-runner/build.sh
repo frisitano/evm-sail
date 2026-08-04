@@ -42,6 +42,7 @@ export SAIL
 CC="${CC:-cc}"
 EVM_PROFILE="${EVM_PROFILE:-off}"
 EVM_BUILD_MODE="${EVM_BUILD_MODE:-optimized}"
+C_SPEC_SPECIALIZATION_LIMIT="${C_SPEC_SPECIALIZATION_LIMIT:-256}"
 case "$EVM_PROFILE" in
   off|on) ;;
   *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
@@ -85,12 +86,13 @@ MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   MODEL_HEADERS=()
   NATIVE_TEST_SOURCE="$MODEL_FFI/src/test/native.c"
+  NATIVE_DEBUG_SOURCE="$MODEL_FFI/src/test/debug.c"
   ADDRESS_RESULT_SOURCE=""
 else
   MODEL_HEADERS=(
     sail_failure.h region_access.h hash.h precompiles.h output.h scratch.h
     memory.h transient_storage.h stack.h frame_stack.h code_db.h
-    kernel_state.h trie_node_db.h state_db.h
+    kernel_state.h trie_node_db.h state_db.h native_test.h
   )
   MODEL_STATE_SOURCE="$MODEL_FFI/state.c"
   STATE_KERNEL_SOURCE="$MODEL_FFI/state_db.c"
@@ -99,6 +101,7 @@ else
   REGION_ACCESS_SOURCE="$MODEL_FFI/region_access.c"
   FRAME_STACK_SOURCE="$MODEL_FFI/frame_stack.c"
   NATIVE_TEST_SOURCE="$MODEL_FFI/native_test.c"
+  NATIVE_DEBUG_SOURCE=""
   ADDRESS_RESULT_SOURCE="$MODEL_FFI/address_result.c"
 fi
 if [ "$EVM_PROFILE" = on ]; then
@@ -137,7 +140,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
   CFLAGS+=("${GMP_CFLAGS[@]}")
 else
   CFLAGS+=(
-    -DEVMSAIL_NATIVE_DEBUG_AGGREGATES
+    -DEVMSAIL_NATIVE_TEST
     -DEVMSAIL_OPTIMIZED_FFI
     -ffunction-sections
     -fdata-sections
@@ -190,6 +193,13 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h
     --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h
     --c-optimized-external-type OutputSliceFields=evmsail/host/types.h
+    --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at
+    --c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at
+    --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at
+    --c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at
+    --c-optimized-byte-pointer-field CodeFields.bytes=code_at
+    --c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at
+    --c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at
     "${PRESERVE_FLAGS[@]}"
     "${MODEL_INCLUDE_FLAGS[@]}"
   )
@@ -198,6 +208,7 @@ else
     "$SAIL" "${SAIL_Z3_FLAGS[@]}"
     -c -O --Oconstant-fold --c-no-main --c-no-rts
     --c-specialize
+    --c-specialization-limit "$C_SPEC_SPECIALIZATION_LIMIT"
     "${PRESERVE_FLAGS[@]}"
     "${MODEL_INCLUDE_FLAGS[@]}"
   )
@@ -296,6 +307,13 @@ fi
 "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
     "$MODEL_HEADER_FLAG" \
     -c "$NATIVE_TEST_SOURCE" -o "$BUILD/native_test.o"
+NATIVE_TEST_OBJS=("$BUILD/native_test.o")
+if [ -n "$NATIVE_DEBUG_SOURCE" ]; then
+  "$CC" "${CFLAGS[@]}" -I"$BUILD" -I"$HERE" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+      "$MODEL_HEADER_FLAG" \
+      -c "$NATIVE_DEBUG_SOURCE" -o "$BUILD/native_debug.o"
+  NATIVE_TEST_OBJS+=("$BUILD/native_debug.o")
+fi
 "$CC" "${CFLAGS[@]}" -c "$HERE/main.c" -o "$BUILD/main.o"
 
 # --- 6. C host backends + direct precompile adapter -------------------------
@@ -322,7 +340,7 @@ fi
 OUT="$BUILD/zkvm_native"
 LINK_CMD=("$CC" "${CFLAGS[@]}"
     "${MODEL_OBJS[@]}" "${MODEL_BACKEND_OBJS[@]}"
-    "$BUILD/native_test.o" "$BUILD/main.o"
+    "${NATIVE_TEST_OBJS[@]}" "$BUILD/main.o"
     "${RUNTIME_OBJS[@]}"
     "${ACCEL_FLAGS[@]}")
 if [ "$EVM_BUILD_MODE" = standard ] || [ "$EVM_PROFILE" = on ]; then

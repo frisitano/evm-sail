@@ -100,7 +100,7 @@ class MemoryFrame:
 @dataclass(slots=True)
 class JumpdestTable:
     code_length: int
-    chunks: dict[int, int] = field(default_factory=dict)
+    positions: set[int] = field(default_factory=set)
 
 
 @dataclass(slots=True)
@@ -876,6 +876,10 @@ def code_region_from_output(value: Any) -> Any:
     return _append_code(_region_bytes("output", value))
 
 
+def code_region_from_delegation(address: Any) -> Any:
+    return _append_code(DELEGATION_PREFIX + _fixed_wire_bytes(address))
+
+
 def jumpdest_table_alloc(code_length: int) -> int:
     state = get_state()
     index = state.next_jumpdest_table
@@ -884,14 +888,15 @@ def jumpdest_table_alloc(code_length: int) -> int:
     return index
 
 
-def jumpdest_table_store_chunk(
-    table: int, code_length: int, chunk_index: int, chunk: Any
-) -> bool:
+def jumpdest_table_mark(table: int, code_length: int, position: int) -> bool:
     state = get_state()
     entry = state.jumpdest_tables.get(int(table))
     if entry is None or entry.code_length != int(code_length):
         return False
-    entry.chunks[int(chunk_index)] = int(chunk)
+    index = int(position)
+    if index < 0 or index >= entry.code_length:
+        return False
+    entry.positions.add(index)
     return True
 
 
@@ -902,8 +907,7 @@ def jumpdest_ref_contains(table: int, code_length: int, destination: int) -> boo
         return False
     if index < 0 or index >= entry.code_length:
         return False
-    chunk = entry.chunks.get(index // 256, 0)
-    return bool((chunk >> (index % 256)) & 1)
+    return index in entry.positions
 
 
 def code_db_store(value: Any, jumpdests: int) -> Any:
@@ -975,13 +979,12 @@ def transient_load(address: Any, slot: int) -> int:
     return get_state().transient.get(_address_slot_key(address, slot), 0)
 
 
-def state_checkpoint_reset() -> None:
+def state_journal_reset() -> None:
     get_state().checkpoints.clear()
 
 
-def state_checkpoint() -> int:
+def state_journal_checkpoint() -> None:
     state = get_state()
-    checkpoint = len(state.checkpoints)
     state.checkpoints.append(
         JournalSnapshot(
             account_tx=deepcopy(state.account_tx),
@@ -995,15 +998,13 @@ def state_checkpoint() -> int:
             current_log=state.current_log,
         )
     )
-    return checkpoint
 
 
-def state_revert(checkpoint: int) -> None:
+def state_journal_revert() -> None:
     state = get_state()
-    index = int(checkpoint)
-    if not 0 <= index < len(state.checkpoints):
+    if not state.checkpoints:
         return
-    snapshot = state.checkpoints[index]
+    snapshot = state.checkpoints.pop()
     state.account_tx = deepcopy(snapshot.account_tx)
     state.storage_tx = deepcopy(snapshot.storage_tx)
     state.storage_cleared = set(snapshot.storage_cleared)
@@ -1013,7 +1014,12 @@ def state_revert(checkpoint: int) -> None:
     state.logs = deepcopy(snapshot.logs)
     state.log_data = bytearray(snapshot.log_data)
     state.current_log = snapshot.current_log
-    del state.checkpoints[index:]
+
+
+def state_journal_commit() -> None:
+    state = get_state()
+    if state.checkpoints:
+        state.checkpoints.pop()
 
 
 def storage_tx_update(entry: Any) -> None:
@@ -1410,26 +1416,27 @@ def bal_iter_next() -> Any:
     return state.bal_iterator.pop(0) if state.bal_iterator else BalEmpty()
 
 
-def warm_reset() -> None:
+def warm_reset(capacity: int) -> None:
+    del capacity
     state = get_state()
     state.warm_addresses.clear()
     state.warm_slots.clear()
 
 
-def warm_addr_touch(address: Any) -> bool:
-    state = get_state()
-    key = _address_key(address)
-    was_warm = key in state.warm_addresses
-    state.warm_addresses.add(key)
-    return was_warm
+def account_is_warm(address: Any) -> bool:
+    return _address_key(address) in get_state().warm_addresses
 
 
-def warm_slot_touch(address: Any, slot: int) -> bool:
-    state = get_state()
-    key = _address_slot_key(address, slot)
-    was_warm = key in state.warm_slots
-    state.warm_slots.add(key)
-    return was_warm
+def account_mark_warm(address: Any) -> None:
+    get_state().warm_addresses.add(_address_key(address))
+
+
+def storage_is_warm(address: Any, slot: int) -> bool:
+    return _address_slot_key(address, slot) in get_state().warm_slots
+
+
+def storage_mark_warm(address: Any, slot: int) -> None:
+    get_state().warm_slots.add(_address_slot_key(address, slot))
 
 
 def authorization_tracker_reset(capacity: int) -> None:

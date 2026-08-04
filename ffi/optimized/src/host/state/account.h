@@ -25,26 +25,29 @@ unit acct_tx_set_nonce(Address address, uint64_t nonce);
 unit acct_tx_set_code_hash(Address address, Hash32 code_hash);
 unit acct_tx_reset(const unit u);
 
-uint64_t acct_dump_count(const unit u);
-U256 acct_dump_hkey(uint64_t index);
-Address acct_dump_address(uint64_t index);
-uint64_t acct_dump_nonce(uint64_t index);
-U256 acct_dump_balance(uint64_t index);
-U256 acct_dump_storage_root(uint64_t index);
-Hash32 acct_dump_post_storage_root(uint64_t index);
-U256 acct_dump_code_hash(uint64_t index);
+/* Minimal borrowed view used while reducing one ordered account-trie binding.
+ * Large semantic values remain module-owned and stable for the duration of a
+ * post-state-root pass. Mutations continue through the semantic setters above
+ * so this module preserves journal and generation invariants. */
+typedef struct {
+  AccountId account_id;
+  const Hash32 *secure_key;
+  NodeId storage_base_node;
+  NodeId original_storage_root_node;
+  NodeId terminal_node;
+  uint64_t nonce;
+  const U256 *balance;
+  const Hash32 *code_hash;
+  bool current_live;
+  bool original_exists;
+  bool fields_changed;
+} AccountTrieView;
 
 uint32_t account_trie_binding_count(void);
 void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node,
                                     Hash32 *secure_key);
 void account_trie_bindings_permute(uint32_t *destinations, uint32_t count);
-void acct_block_update_meta_at(
-    uint32_t index, Address *address, Hash32 *address_hash,
-    NodeId *storage_base_node, NodeId *original_storage_root_node,
-    bool *current_live, bool *original_exists, bool *fields_changed,
-    NodeId *terminal_node);
-void acct_block_update_current_at(uint32_t index, uint64_t *nonce,
-                                  U256 *balance, Hash32 *code_hash);
+bool account_trie_binding_get(uint32_t index, AccountTrieView *view);
 unit acct_block_iter_begin(const unit u);
 uint64_t acct_block_iter_next_probe(
     Address *address, uint64_t *current_nonce, U256 *current_balance,

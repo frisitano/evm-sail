@@ -1,13 +1,11 @@
 /* Native implementation of the same standard read_input/write_output ABI used
- * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
+ * by the zkVM guest, plus the reusable test-process lifecycle. */
 #include "evmsail/host/region_access.h"
 #include "evmsail/host/frame_stack.h"
 #include "evmsail/exceptions.h"
 #include "evmsail/prelude.h"
-#include "lib/mpt/trie.h"
-#include "host/state/store.h"
-#include "primitives/value.h"
 #include "workspace.h"
+#include "test/native.h"
 #include "test_utils.h"
 #include "zkvm_io.h"
 
@@ -49,6 +47,12 @@ void write_output(const uint8_t *output, size_t size)
     if (size > available) size = available;
     if (size != 0) memcpy(g_out + g_out_len, output, size);
     g_out_len += size;
+}
+
+const uint8_t *native_output_data(size_t *size)
+{
+    *size = g_out_len;
+    return g_out;
 }
 
 /* --------------------------- state resets ------------------------------- */
@@ -187,208 +191,4 @@ unsigned long guest_run(const unsigned char *in, unsigned long n,
 
     *out = g_out;
     return (unsigned long)g_out_len;
-}
-
-/* ------------------------- debug state dump ------------------------------ */
-/* An on-demand C-side dump of the model's live FFI state AFTER a run,
- * marshalled into a
- * self-describing binary blob that Python (dump_state.py) decodes into native
- * types. This is a native test utility, never linked into the real guest, and
- * normal fixture runs do not invoke it.
- *
- * Content (all multi-byte ints big-endian):
- *   'G' ok[1] root[32]               (root = compute_state_root() over the live
- *                                     post-run state; zero after an uncaught
- *                                     Sail exception)
- *       when ok=0, followed by the CAPTURED exception:
- *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
- *                                     the InvalidBlock that escaped, 0xff if
- *                                     none recorded; loc = the Sail source
- *                                     position of the throw site)
- *   'O' u32 len output[len]          (the canonical output emitted by main.sail)
- *   'V' failed[1]                    (main.sail's caught validation failure)
- *       when failed=1: scope[1] reason[1] loc_len[2] loc[loc_len]
- *   'A' u32 n_acct  { hkey[32] address[20] nonce[8] bal[32]
- *                     base_sroot[32] computed_sroot[32] chash[32]
- *                     u32 n_slot { slot[32] val[32] }* }*
- *   'S' u32 depth   { word[32] }*   (stack, top-first)
- *   'M' u32 frame_depth              (EVM memory: only the call-frame depth is
- *                                     available C-side; the logical byte length
- *                                     is a Sail register, and after a block
- *                                     memory is reset per tx -- empty post-run)
- *   'E'
- * The account/storage entries are the cumulative state touched by execution;
- * unchanged authenticated-base values are not enumerable here. */
-extern uint64_t acct_dump_count(unit);
-extern U256 acct_dump_hkey(uint64_t);
-extern Address acct_dump_address(uint64_t);
-extern uint64_t acct_dump_nonce(uint64_t);
-extern U256 acct_dump_balance(uint64_t);
-extern U256 acct_dump_storage_root(uint64_t);
-extern U256 acct_dump_code_hash(uint64_t);
-extern uint64_t storage_dump_count(U256);
-extern U256 storage_dump_slot(U256, uint64_t);
-extern U256 storage_dump_value(U256, uint64_t);
-extern uint16_t stack_depth(unit);
-extern U256 stack_peek_word(uint16_t);
-extern uint64_t hm_depth(unit);
-
-static unsigned char g_dump[1u << 22];
-static size_t g_dump_len;
-static char g_validation_location[513];
-
-unit validation_debug_capture_location(unit u)
-{
-    (void)u;
-    const char *loc =
-        exception_location ? exception_location : "";
-    size_t len = 0;
-    while (loc[len] && len < sizeof g_validation_location - 1) {
-        g_validation_location[len] = loc[len];
-        len++;
-    }
-    g_validation_location[len] = '\0';
-    return UNIT;
-}
-
-static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
-static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-static void d_u64(uint64_t v) { for (int i = 7; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-static void d_word(U256 value) {
-    uint64_t words[4];
-    sail_word_to_be_words4(words, value);
-    for (int i = 0; i < 4; i++) {
-        uint64_t limb = words[i];
-        for (int j = 0; j < 8; j++) d_byte((unsigned char)(limb >> (56 - 8 * j)));
-    }
-}
-
-static void d_address(Address value) {
-    uint8_t bytes[20];
-    address_to_be_bytes(bytes, value);
-    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
-}
-
-static void d_hash(Hash32 value)
-{
-    uint8_t bytes[32];
-    hash_to_be_bytes(bytes, value);
-    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
-}
-
-static Hash32 model_state_root(void)
-{
-    return compute_state_root(UNIT);
-}
-
-static void dispose_hash(Hash32 *value)
-{
-    (void)value;
-}
-
-unsigned long guest_debug_dump(const unsigned char **out)
-{
-    g_dump_len = 0;
-    Hash32 root = {0};
-    bool validation_failed = validation_failure_present;
-    /*
-     * Fixed-capacity optimized execution consumes its ordered account,
-     * storage, and witness streams while computing the root.  A validation
-     * failure already records the canonical reason and source location; do
-     * not attempt a second root computation from the exhausted streams while
-     * producing diagnostics.
-     */
-    bool state_available = !have_exception;
-    const char *validation_loc =
-        validation_failed ? g_validation_location : "";
-
-    if (state_available) {
-        root = validation_failed ? mpt_last_state_root()
-                                 : model_state_root();
-        state_available = !have_exception;
-    }
-    d_byte('G');
-    d_byte(state_available ? 1 : 0);
-    if (!state_available) {
-        for (int i = 0; i < 32; i++) d_byte(0);
-        d_byte(have_exception
-                   ? (unsigned char)current_exception.variants.InvalidBlock
-                   : validation_failed
-                         ? (unsigned char)validation_failure_reason
-                         : 0xff);
-        const char *loc =
-            (have_exception && exception_location)
-                ? exception_location
-                : "";
-        size_t ln = 0;
-        while (loc[ln] && ln < 512) ln++;
-        d_byte((unsigned char)(ln >> 8));
-        d_byte((unsigned char)(ln & 0xff));
-        for (size_t i = 0; i < ln; i++) d_byte((unsigned char)loc[i]);
-    } else {
-        d_hash(root);
-    }
-    dispose_hash(&root);
-
-    d_byte('O');
-    d_u32((uint32_t)g_out_len);
-    for (size_t i = 0; i < g_out_len; i++) d_byte(g_out[i]);
-
-    d_byte('V');
-    d_byte(validation_failure_present ? 1 : 0);
-    if (validation_failure_present) {
-        d_byte((unsigned char)validation_failure_scope);
-        d_byte((unsigned char)validation_failure_reason);
-        size_t ln = 0;
-        while (validation_loc[ln] && ln < 512) ln++;
-        d_byte((unsigned char)(ln >> 8));
-        d_byte((unsigned char)(ln & 0xff));
-        for (size_t i = 0; i < ln; i++)
-            d_byte((unsigned char)validation_loc[i]);
-    }
-
-    d_byte('B');
-    d_byte(validation_debug_gas_present ? 1 : 0);
-    if (validation_debug_gas_present) {
-        d_u64(validation_debug_header_gas_actual);
-        d_u64(validation_debug_header_gas_expected);
-        d_u64(validation_debug_execution_gas);
-        d_u64(validation_debug_state_gas);
-    }
-
-    d_byte('A');
-    uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
-    d_u32((uint32_t)na);
-    for (uint64_t i = 0; i < na; i++) {
-        U256 hk = acct_dump_hkey(i);
-        d_word(hk);                              /* keccak(address) */
-        Address addr = acct_dump_address(i);
-        d_address(addr);
-        d_u64(acct_dump_nonce(i));
-        d_word(acct_dump_balance(i));
-        d_word(acct_dump_storage_root(i));
-        Hash32 storage_root =
-            acct_dump_post_storage_root(i);
-        d_hash(storage_root);
-        dispose_hash(&storage_root);
-        d_word(acct_dump_code_hash(i));
-        uint64_t ns = storage_dump_count(hk);
-        d_u32((uint32_t)ns);
-        for (uint64_t j = 0; j < ns; j++) {
-            d_word(storage_dump_slot(hk, j));
-            d_word(storage_dump_value(hk, j));
-        }
-    }
-
-    d_byte('S');
-    uint64_t sd = state_available ? stack_depth(UNIT) : 0;
-    d_u32((uint32_t)sd);
-    for (uint64_t n = 0; n < sd; n++) d_word(stack_peek_word(n));
-
-    d_byte('M');
-    d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);
-
-    d_byte('E');
-    *out = g_dump;
-    return (unsigned long)g_dump_len;
 }

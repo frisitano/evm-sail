@@ -1,19 +1,13 @@
 
-/* One bit per code byte, with the lowest code offset in the least-significant
- * bit. Analysis writes one completed 256-byte chunk at a time. */
 /*md
 # Code
 
 Executable code and its PUSH-aware `JUMPDEST` analysis (YP §9.4.3).
 */
-/*! A 256-byte segment of a PUSH-aware `JUMPDEST` bitmap. Bit `i` marks byte
-    position `i`. */
-type JumpdestChunk = bits(256)
-
 /* Opaque reference to one preallocated table; zero is empty. The standard C
  * backend interprets the value as a one-based arena index. The optimized C
  * backend may lower the same bounded semantic value to the address of the
- * table's first packed word. */
+ * table's first byte. */
 /*! A reference to a code's completed `JUMPDEST` analysis; zero denotes
     the empty bitmap. */
 type jump_table_index = range(0, 2 ^ 64 - 1)
@@ -21,12 +15,9 @@ type jump_table_index = range(0, 2 ^ 64 - 1)
 /*md
 ## Constants
 
-`EMPTY_JUMPDEST_CHUNK` and `EMPTY_JUMP_TABLE` denote empty analysis;
-`EMPTY_CODE_SLICE` and `EMPTY_CODE` are the canonical executable-code
-placeholders.
+`EMPTY_JUMP_TABLE` denotes empty analysis; `EMPTY_CODE_SLICE` and `EMPTY_CODE`
+are the canonical executable-code placeholders.
 */
-let EMPTY_JUMPDEST_CHUNK : JumpdestChunk =
-    0x0000000000000000000000000000000000000000000000000000000000000000
 let EMPTY_JUMP_TABLE : jump_table_index = 0
 
 /*! A source-backed executable byte span. Its length carries the separate
@@ -106,12 +97,39 @@ function deep_stack_operation_immediate_valid(
     DeepStackExchange => exchange_immediate_valid(immediate),
 }
 
-/*! Executable code: its byte span and resolved `JUMPDEST` table. The
-    interpreter saves and restores both together; the code hash remains
-    the stable code-DB key. */
-struct Code = {
-    bytes : CodeSlice,
+/*! Executable code: its byte address, length, and resolved `JUMPDEST` table.
+    The flat dependent record keeps the byte address and length relationship
+    explicit while allowing optimized C to represent both addresses directly
+    as pointers. The interpreter saves and restores all three together; the
+    code hash remains the stable code-DB key. */
+struct CodeFields('off : Int, 'len : Int),
+    code_region_valid_range('off, 'len) & code_valid_length('len) = {
+    bytes : int('off),
+    len : int('len),
     jumpdests : jump_table_index,
 }
 
-let EMPTY_CODE : Code = struct { bytes = EMPTY_CODE_SLICE, jumpdests = EMPTY_JUMP_TABLE }
+/*! Existential executable-code value whose concrete byte address and length
+    remain correlated inside `CodeFields`. */
+type Code = {
+    'off 'len,
+    code_region_valid_range('off, 'len) & code_valid_length('len).
+    CodeFields('off, 'len)
+}
+
+/*! Combines an executable byte span with its completed analysis without
+    nesting one slice record inside another. */
+val analyzed_code : forall 'off 'len,
+    code_region_valid_range('off, 'len) & code_valid_length('len).
+    (CodeRegionSliceFields('off, 'len), jump_table_index) -> CodeFields('off, 'len)
+function analyzed_code(bytes, jumpdests) =
+    struct { bytes = bytes.bytes, len = bytes.len, jumpdests = jumpdests }
+
+/*! Reconstructs the nominal byte-span view used by generic region readers.
+    Optimized C preserves the pointer representation through this projection. */
+val code_bytes : forall 'off 'len,
+    code_region_valid_range('off, 'len) & code_valid_length('len).
+    CodeFields('off, 'len) -> CodeRegionSliceFields('off, 'len)
+function code_bytes(code) = struct { bytes = code.bytes, len = code.len }
+
+let EMPTY_CODE : Code = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE)

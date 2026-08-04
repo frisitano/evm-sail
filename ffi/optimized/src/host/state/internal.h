@@ -93,7 +93,6 @@ void account_clear_storage_generation(AccountId id);
 bool account_exists(AccountId id);
 bool account_transaction_view(const Address *address, AccountView *view);
 bool account_block_view(const Address *address, AccountView *view);
-void account_diagnostics_invalidate(AccountId id);
 void account_balance_restore(AccountId id, U256 prior);
 void account_nonce_restore(AccountId id, uint64_t prior);
 void account_code_hash_restore(AccountId id, Hash32 prior);

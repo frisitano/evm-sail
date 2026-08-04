@@ -35,7 +35,7 @@ typedef struct {
   StateJournalTag tag;
   union {
     struct {
-      Address address;
+      AccountId account_id;
       U256 slot;
       U256 prior;
     } transient;
@@ -89,9 +89,9 @@ static StateJournalEntry *push(StateJournalTag tag) {
   return entry;
 }
 
-unit state_journal_push_transient(Address address, U256 slot, U256 prior) {
+unit state_journal_push_transient(AccountId account_id, U256 slot, U256 prior) {
   StateJournalEntry *entry = push(JOURNAL_TRANSIENT_CHANGED);
-  entry->data.transient.address = address;
+  entry->data.transient.account_id = account_id;
   entry->data.transient.slot = slot;
   entry->data.transient.prior = prior;
   return UNIT;
@@ -185,7 +185,7 @@ static void revert_to(uint32_t entry_count) {
     const StateJournalEntry *entry = &entries[--count];
     switch (entry->tag) {
       case JOURNAL_TRANSIENT_CHANGED:
-        transient_storage_restore(entry->data.transient.address,
+        transient_storage_restore(entry->data.transient.account_id,
                                   entry->data.transient.slot,
                                   entry->data.transient.prior);
         break;

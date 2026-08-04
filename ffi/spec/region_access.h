@@ -136,8 +136,7 @@ bool public_output_write(struct zScratchSliceFields output);
 bool output_buffer_store_memory(struct zEvmMemorySliceFields slice);
 bool output_buffer_store_input(struct zStatelessInputSliceFields slice);
 
-sail_fixed_bytes_32 code_db_store_indexed(
-    struct zCodeRegionSliceFields code, uint64_t jumpdest_ref);
+sail_fixed_bytes_32 code_db_store_indexed(struct zCodeFields code);
 
 bool accelerator_ripemd160(struct zCalldataSlice input);
 bool accelerator_modexp(struct zCalldataSlice input, uint64_t base_len,

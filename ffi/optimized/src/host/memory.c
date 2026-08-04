@@ -51,6 +51,21 @@ static void f_establish(uint64_t end) {
   f_len[h_top] = (size_t)end;
 }
 
+/* Establish a range that the caller will overwrite completely. Only an
+ * untouched gap before the destination needs materializing as zero; bytes in
+ * the destination itself must not be cleared immediately before the write. */
+static void f_establish_write(uint64_t off, uint64_t end) {
+  if (end <= f_len[h_top]) return;
+  const size_t base = f_base[h_top];
+  const size_t established = f_len[h_top];
+  if (end > GUEST_EVM_MEMORY_BYTES ||
+      base > GUEST_EVM_MEMORY_BYTES - (size_t)end)
+    GUEST_ABORT();
+  if (off > established)
+    memset(arena + base + established, 0, (size_t)off - established);
+  f_len[h_top] = (size_t)end;
+}
+
 static uint8_t *frame_write_region(uint64_t off, uint64_t len);
 
 /* Clear back to a single empty top-level frame (called per transaction); the
@@ -113,7 +128,7 @@ uint64_t evm_memory_expand(uint64_t len) {
 static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
   if (len == 0) return NULL;
   if (off > UINT64_MAX - len) GUEST_ABORT();
-  f_establish(off + len);
+  f_establish_write(off, off + len);
   return arena + f_base[h_top] + off;
 }
 
@@ -152,8 +167,8 @@ unit mem_move(uint32_t dst, uint32_t src, uint32_t len) {
       dst_value > UINT64_MAX - len_value)
     GUEST_ABORT();
   f_establish(src_value + len_value);
-  f_establish(dst_value + len_value);
-  memmove(arena + f_base[h_top] + dst_value,
+  uint8_t *destination = frame_write_region(dst_value, len_value);
+  memmove(destination,
           arena + f_base[h_top] + src_value, len_value);
   return UNIT;
 }
@@ -161,8 +176,7 @@ unit mem_move(uint32_t dst, uint32_t src, uint32_t len) {
 /* (byte-quantity offset, bits(8) value) -> unit */
 unit mem_write_byte(uint32_t off, uint64_t v) {
   uint64_t offset = off;
-  f_establish(offset + 1);
-  arena[f_base[h_top] + offset] = (uint8_t)(v & 0xff);
+  *frame_write_region(offset, 1) = (uint8_t)(v & 0xff);
   return UNIT;
 }
 

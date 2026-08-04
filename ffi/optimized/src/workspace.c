@@ -3,14 +3,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if defined(EVMSAIL_NATIVE_DEBUG_AGGREGATES)
+#if defined(EVMSAIL_NATIVE_TEST)
 GUEST_NORETURN void native_panic(const char *file, const char *function,
                                  unsigned line);
 #endif
 
 GUEST_NORETURN void guest_panic(const char *file, const char *function,
                                 unsigned line) {
-#if defined(EVMSAIL_NATIVE_DEBUG_AGGREGATES)
+#if defined(EVMSAIL_NATIVE_TEST)
   native_panic(file, function, line);
 #else
   (void)file;

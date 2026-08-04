@@ -79,14 +79,12 @@ Hash32 block_header_hash(
   const uint8_t *extra_bytes = NULL;
   uint8_t extra_first = 0;
   if (extra_len != 0) {
-    extra_bytes = stateless_input_ptr(
-        header.extra_data.off, extra_len);
+    extra_bytes = header.extra_data.bytes;
     if (!extra_bytes)
       return zero_hash();
     extra_first = extra_bytes[0];
   }
-  const uint8_t *logs_bloom_bytes = stateless_input_ptr(
-      header.logs_bloom.off, header.logs_bloom.len);
+  const uint8_t *logs_bloom_bytes = header.logs_bloom.bytes;
   if (!logs_bloom_bytes ||
       header.logs_bloom.len != 256)
     return zero_hash();

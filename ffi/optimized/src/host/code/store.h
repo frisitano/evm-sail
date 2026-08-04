@@ -1,4 +1,4 @@
-/* C-backed code_db + packed storage for Sail-built JUMPDEST bitmaps
+/* C-backed code_db plus optimized-private byte-addressed JUMPDEST storage
  * (see code/store.c).
  * Declared here so the Sail-generated C call sites are prototyped via
  * `sail -c --c-include`. */
@@ -11,40 +11,33 @@ struct StatelessInputSliceFields;
 struct EvmMemorySliceFields;
 struct OutputSliceFields;
 struct CodeRegionSliceFields;
-struct zoptionzIRCodezK code_db_lookup(Hash32 h);
+struct CodeFields;
+struct zoptionzIRCodeFieldszK code_db_lookup(Hash32 h);
 struct CodeRegionSliceFields code_region_from_input(
     struct StatelessInputSliceFields input);
 struct CodeRegionSliceFields code_region_from_memory(
     struct EvmMemorySliceFields input);
 struct CodeRegionSliceFields code_region_from_output(
     struct OutputSliceFields input);
-uint64_t jumpdest_table_alloc(uint32_t code_len);
-bool jumpdest_table_store_chunk(uint64_t ref, uint32_t code_len,
-                                uint32_t chunk_index, U256 chunk);
+struct CodeRegionSliceFields code_region_from_delegation(Address address);
+uint8_t *jumpdest_table_alloc(struct CodeRegionSliceFields code);
+bool jumpdest_table_mark(uint8_t *table, uint32_t code_len,
+                         uint32_t position);
 
-/* A code-region reference is an opaque one-based CodeId naming a table row
- * whose byte pointer was resolved when the row was created; zero is the
- * empty region. The same value is the CodeRegionSlice offset seen by Sail. */
-uint64_t code_region_register(const uint8_t *bytes, uint64_t len);
-uint64_t code_region_intern_copy(const uint8_t *src, uint64_t len);
-Hash32 code_db_store_row(uint64_t region, uint64_t jumpdest_ref);
-int code_db_resolve_code(uint64_t off, uint64_t len,
-                         const uint8_t **p, uint64_t *resolved_len);
-bool code_db_lookup_indexed(Hash32 h, uint64_t *off, uint64_t *len,
-                            uint64_t *jumpdest_ref);
+uint8_t *code_region_intern_copy(const uint8_t *src, uint64_t len);
+Hash32 code_db_store_indexed(struct CodeFields code);
+bool code_db_lookup_view(Hash32 h, const uint8_t **bytes, uint64_t *len,
+                         uint8_t **jumpdests);
 bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
                                    bool amsterdam_or_later);
-uint64_t code_db_analyze_bytes(const uint8_t *src, uint64_t len,
-                               bool amsterdam_or_later);
-Hash32 code_intern_indexed_delegation(
-    Address addr, uint64_t jumpdest_ref);
+uint8_t *code_db_analyze_region(struct CodeRegionSliceFields code,
+                                bool amsterdam_or_later);
 struct AddressResult code_db_read_delegation(
      Hash32 h);
 bool code_db_read_delegation_address(
     Address *address,
     Hash32 h);
 
-/* JumpdestRef is an opaque table handle: the one-based JumpdestId of the
- * bitmap row. Zero is the empty analysis. */
-bool jumpdest_ref_contains(uint64_t ref, uint32_t code_len, uint32_t i);
+bool jumpdest_ref_contains(uint8_t *table, uint32_t code_len,
+                           uint32_t i);
 #endif

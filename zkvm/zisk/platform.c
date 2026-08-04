@@ -41,30 +41,10 @@ void htif_puts(const char *s)
 extern _Bool zvalidation_failure_present;
 extern uint64_t zvalidation_failure_scope;
 extern int zvalidation_failure_reason;
-extern int debug_ecrecover_status;
-extern uint64_t debug_ecrecover_parity;
-extern uint8_t debug_ecrecover_pubkey[64];
-extern uint8_t debug_ecrecover_address[20];
 
 static char hex_digit(unsigned value)
 {
     return (char)(value < 10 ? '0' + value : 'a' + value - 10);
-}
-
-static void print_hex(const char *prefix, const uint8_t *bytes, size_t size)
-{
-    char line[160];
-    size_t prefix_size = 0;
-    while (prefix[prefix_size] != '\0') {
-        line[prefix_size] = prefix[prefix_size];
-        prefix_size++;
-    }
-    for (size_t i = 0; i < size; i++) {
-        line[prefix_size + 2 * i] = hex_digit(bytes[i] >> 4);
-        line[prefix_size + 2 * i + 1] = hex_digit(bytes[i] & 0xfu);
-    }
-    line[prefix_size + 2 * size] = '\n';
-    sys_write(2, (const uint8_t *)line, prefix_size + 2 * size + 1);
 }
 
 void zisk_report_debug(void)
@@ -79,17 +59,6 @@ void zisk_report_debug(void)
     line[37] = hex_digit(reason >> 4);
     line[38] = hex_digit(reason & 0xfu);
     sys_write(2, (const uint8_t *)line, sizeof line - 1);
-
-    char recovery[] = "ecrecover_status=00 parity=00\n";
-    unsigned status = (unsigned)debug_ecrecover_status & 0xffu;
-    unsigned parity = (unsigned)debug_ecrecover_parity & 0xffu;
-    recovery[17] = hex_digit(status >> 4);
-    recovery[18] = hex_digit(status & 0xfu);
-    recovery[27] = hex_digit(parity >> 4);
-    recovery[28] = hex_digit(parity & 0xfu);
-    sys_write(2, (const uint8_t *)recovery, sizeof recovery - 1);
-    print_hex("ecrecover_pubkey=", debug_ecrecover_pubkey, 64);
-    print_hex("ecrecover_address=", debug_ecrecover_address, 20);
 }
 #endif
 

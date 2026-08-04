@@ -201,6 +201,13 @@ compile_common() {
         --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h \
         --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h \
         --c-optimized-external-type OutputSliceFields=evmsail/host/types.h \
+        --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at \
+        --c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at \
+        --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at \
+        --c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at \
+        --c-optimized-byte-pointer-field CodeFields.bytes=code_at \
+        --c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at \
+        --c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at \
         --c-preserve main --c-preserve resume_frame \
         --c-specialize-log "${MODEL_INCLUDE_FLAGS[@]}" \
         "${optimized_splice_flags[@]}" \

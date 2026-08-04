@@ -58,27 +58,6 @@ def manifest_sources() -> list[str]:
     return entries
 
 
-def without_debug_blocks(source: str) -> str:
-    """Remove native-debug-only preprocessor blocks from the production view."""
-    output: list[str] = []
-    depth = 0
-    for line in source.splitlines(keepends=True):
-        directive = line.lstrip()
-        if directive.startswith("#ifdef EVMSAIL_NATIVE_DEBUG_AGGREGATES"):
-            depth = 1
-            output.append("\n")
-            continue
-        if depth:
-            if directive.startswith(("#if", "#ifdef", "#ifndef")):
-                depth += 1
-            elif directive.startswith("#endif"):
-                depth -= 1
-            output.append("\n")
-            continue
-        output.append(line)
-    return "".join(output)
-
-
 def strip_comments_and_literals(source: str) -> str:
     """Preserve newlines while removing C comments, strings, and characters."""
     result = list(source)
@@ -168,7 +147,7 @@ def main() -> int:
             if not path.is_file():
                 continue
             source = strip_comments_and_literals(
-                without_debug_blocks(path.read_text(errors="replace"))
+                path.read_text(errors="replace")
             )
             for pattern, label in (
                 (FORBIDDEN_CALLS, "forbidden allocation/sort call"),

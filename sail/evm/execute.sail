@@ -392,7 +392,8 @@ function execute_codecopy() -> unit = {
     charge_copy_gas(length_word);
     let range = charge_memory_range(destination_word, length_word);
     if is_running() then {
-        slice_copy_word_offset(frame_code.bytes, range.off, source_word, range.len)
+        let code = frame_code;
+        slice_copy_word_offset(code_bytes(code), range.off, source_word, range.len)
     }
 }
 
@@ -789,7 +790,7 @@ function execute_log(n : log_topic_count) -> unit = {
         let range = charge_memory_range(offset_word, length_word);
         if is_running() then {
             let data = active_memory_slice(range.off, range.len);
-            k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.off, data.len)))
+            k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.bytes, data.len)))
         }
     }
 }

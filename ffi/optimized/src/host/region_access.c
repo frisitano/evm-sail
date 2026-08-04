@@ -1,9 +1,8 @@
 /*
  * Model-aware marshalling for nominal host-backed byte regions.
  *
- * The Sail values contain only {off, len}.  The function name (or the
- * CalldataSlice union arm) determines the backing allocation; there is no
- * runtime provenance tag.
+ * Sail retains semantic coordinates. Optimized C lowers every byte-region
+ * field to a direct stable pointer.
  */
 #include "evmsail/prelude.h"
 
@@ -23,22 +22,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum RegionKind {
-  REGION_STATELESS_INPUT,
-  REGION_MEMORY,
-  REGION_CODE,
-  REGION_SCRATCH,
-  REGION_LOG_DATA,
-  REGION_OUTPUT,
-};
-
 static const uint8_t *private_input;
 static size_t private_input_size;
 static bool private_input_ready;
 static const uint8_t empty_region;
 
 
-#define SLICE_OFF(slice) ((slice).off)
+#define SLICE_PTR(slice) ((slice).bytes)
 #define SLICE_LEN(slice) ((slice).len)
 
 static void acquire_private_input(void) {
@@ -62,7 +52,7 @@ const uint8_t *stateless_input_ptr(uint64_t off, uint64_t len) {
   return private_input ? private_input + off : NULL;
 }
 
-bool stateless_input_contains(uint64_t pointer, uint64_t len) {
+bool stateless_input_contains(const uint8_t *pointer, uint64_t len) {
   acquire_private_input();
   if (len == 0) return true;
   uintptr_t base = (uintptr_t)private_input;
@@ -70,6 +60,44 @@ bool stateless_input_contains(uint64_t pointer, uint64_t len) {
   return private_input && address >= base &&
          address - base <= private_input_size &&
          len <= private_input_size - (size_t)(address - base);
+}
+
+uint8_t *stateless_input_at(uint64_t off) {
+  acquire_private_input();
+  if (off > private_input_size) GUEST_ABORT();
+  if (!private_input) return (uint8_t *)(uintptr_t)&empty_region;
+  return (uint8_t *)(uintptr_t)(private_input + off);
+}
+
+uint8_t *memory_at(uint64_t off) {
+  if (off > evm_memory_capacity()) GUEST_ABORT();
+  return (uint8_t *)(uintptr_t)(evm_memory_base() + off);
+}
+
+/* Nonzero code addresses enter generated optimized C through already
+ * pointer-specialized host results. Numeric construction is used only for the
+ * canonical empty value. */
+uint8_t *code_at(uint64_t off) {
+  if (off != 0) GUEST_ABORT();
+  return NULL;
+}
+
+uint8_t *scratch_at(uint64_t off) {
+  if (off > GUEST_SCRATCH_BYTES) GUEST_ABORT();
+  return (uint8_t *)(uintptr_t)(scratch_base() + off);
+}
+
+uint8_t *log_data_at(uint64_t off) {
+  if (off > GUEST_LOG_DATA_BYTES) GUEST_ABORT();
+  return (uint8_t *)(uintptr_t)(log_data_base() + off);
+}
+
+uint8_t *output_at(uint64_t off) {
+  const uint8_t *bytes = NULL;
+  uint64_t len = 0;
+  if (!output_buffer_span(&bytes, &len) || off > GUEST_OUTPUT_BYTES)
+    GUEST_ABORT();
+  return (uint8_t *)(uintptr_t)(bytes + off);
 }
 
 bool stateless_input_offset(const uint8_t *pointer, uint64_t len,
@@ -88,16 +116,6 @@ bool stateless_input_offset(const uint8_t *pointer, uint64_t len,
 const uint8_t *memory_ptr(uint64_t off, uint64_t len) {
   if (len == 0) return &empty_region;
   const uint8_t *bytes = evm_memory_region(off, len);
-  return bytes;
-}
-
-const uint8_t *code_ptr(uint64_t off, uint64_t len) {
-  const uint8_t *bytes = NULL;
-  uint64_t resolved_len = 0;
-  if (len == 0) return &empty_region;
-  if (!code_db_resolve_code(off, len, &bytes, &resolved_len) ||
-      resolved_len != len)
-    GUEST_ABORT();
   return bytes;
 }
 
@@ -124,37 +142,18 @@ const uint8_t *output_ptr(uint64_t off, uint64_t len) {
   return bytes + off;
 }
 
-/* Region provenance is a closed semantic set. Carry a small tag through the
- * shared operations rather than an indirect C callback; constant call sites
- * are then specialized by the C compiler. */
-static const uint8_t *resolve_region(enum RegionKind kind, uint64_t off,
-                                     uint64_t len) {
-  switch (kind) {
-    case REGION_STATELESS_INPUT:
-      return stateless_input_ptr(off, len);
-    case REGION_MEMORY:
-      return memory_ptr(off, len);
-    case REGION_CODE:
-      return code_ptr(off, len);
-    case REGION_SCRATCH:
-      return scratch_ptr(off, len);
-    case REGION_LOG_DATA:
-      return log_data_ptr(off, len);
-    case REGION_OUTPUT:
-      return output_ptr(off, len);
-  }
-  return NULL;
-}
-
-#define DEFINE_SLICE_VALUE(name, type)                                       \
+#define DEFINE_SLICE_VALUE(name, type, adapter)                              \
   static void name(struct type *out, uint64_t off, uint64_t len) {            \
-    out->off = off;                                                          \
+    out->bytes = adapter(off);                                               \
     out->len = len;                                                          \
   }
 
-DEFINE_SLICE_VALUE(stateless_input_value, StatelessInputSliceFields)
-DEFINE_SLICE_VALUE(memory_slice_value, EvmMemorySliceFields)
-DEFINE_SLICE_VALUE(scratch_slice_value, ScratchSliceFields)
+DEFINE_SLICE_VALUE(stateless_input_value, StatelessInputSliceFields,
+                   stateless_input_at)
+DEFINE_SLICE_VALUE(memory_slice_value, EvmMemorySliceFields,
+                   memory_at)
+DEFINE_SLICE_VALUE(scratch_slice_value, ScratchSliceFields,
+                   scratch_at)
 
 #undef DEFINE_SLICE_VALUE
 
@@ -203,30 +202,26 @@ struct OutputSliceFields region_output_buffer_slice(uint64_t len) {
   const uint8_t *bytes = NULL;
   uint64_t total = 0;
   if (!output_buffer_span(&bytes, &total) || len > total) GUEST_ABORT();
-  out.off = 0;
+  out.bytes = output_at(0);
   out.len = len;
   return out;
 }
 
-static uint64_t region_byte_at(enum RegionKind kind, uint64_t off,
-                               uint64_t len, uint64_t index) {
+static uint64_t region_byte_at(const uint8_t *bytes, uint64_t len,
+                               uint64_t index) {
   if (index >= len) return 0;
-  const uint8_t *bytes = resolve_region(kind, off, len);
   return bytes ? bytes[index] : 0;
 }
 
-static uint64_t region_count_nonzero(enum RegionKind kind, uint64_t off,
-                                     uint64_t len) {
-  const uint8_t *bytes = resolve_region(kind, off, len);
+static uint64_t region_count_nonzero(const uint8_t *bytes, uint64_t len) {
   if (!bytes) return 0;
   uint64_t count = 0;
   for (uint64_t i = 0; i < len; ++i) count += bytes[i] != 0;
   return count;
 }
 
-static bool region_strided_zero(enum RegionKind kind, uint64_t off,
-                                uint64_t len, uint64_t start,
-                                uint64_t stride, uint64_t width,
+static bool region_strided_zero(const uint8_t *bytes, uint64_t len,
+                                uint64_t start, uint64_t stride, uint64_t width,
                                 uint64_t count) {
   if (count == 0 || width == 0) return true;
   if (start > len || width > len - start) return false;
@@ -235,7 +230,6 @@ static bool region_strided_zero(enum RegionKind kind, uint64_t off,
     return false;
   const uint64_t last = start + (count - 1) * stride;
   if (last > len || width > len - last) return false;
-  const uint8_t *bytes = resolve_region(kind, off, len);
   if (!bytes) return false;
   for (uint64_t i = 0; i < count; ++i) {
     const uint8_t *field = bytes + start + i * stride;
@@ -245,35 +239,32 @@ static bool region_strided_zero(enum RegionKind kind, uint64_t off,
   return true;
 }
 
-static U256 region_load_word(enum RegionKind kind, uint64_t off,
-                                  uint64_t len, uint64_t index) {
+static U256 region_load_word(const uint8_t *source, uint64_t len,
+                             uint64_t index) {
   uint8_t bytes[32] = {0};
   if (index < len) {
     uint64_t count = len - index;
     if (count > sizeof(bytes)) count = sizeof(bytes);
-    const uint8_t *source = resolve_region(kind, off, len);
     if (source) memcpy(bytes, source + index, (size_t)count);
   }
   return be_bytes_to_sail_word(bytes);
 }
 
-static U256 region_load_n_word(enum RegionKind kind, uint64_t off,
-                                    uint64_t len, uint64_t index,
-                                    uint64_t requested) {
+static U256 region_load_n_word(const uint8_t *source, uint64_t len,
+                               uint64_t index, uint64_t requested) {
   uint8_t bytes[32] = {0};
   const uint64_t width = requested < sizeof(bytes) ? requested : sizeof(bytes);
   if (index < len) {
     uint64_t count = len - index;
     if (count > width) count = width;
-    const uint8_t *source = resolve_region(kind, off, len);
     if (source)
       memcpy(bytes + sizeof(bytes) - width, source + index, (size_t)count);
   }
   return be_bytes_to_sail_word(bytes);
 }
 
-static unit region_copy_to_memory(enum RegionKind kind, uint64_t off,
-                                  uint64_t len, uint64_t dst, uint64_t index,
+static unit region_copy_to_memory(const uint8_t *source, uint64_t len,
+                                  uint64_t dst, uint64_t index,
                                   uint64_t requested) {
   if (requested == 0) return UNIT;
   uint8_t *destination = evm_memory_write_region(dst, requested);
@@ -282,11 +273,6 @@ static unit region_copy_to_memory(enum RegionKind kind, uint64_t off,
   if (index < len) {
     count = len - index;
     if (count > requested) count = requested;
-    /*
-     * Resolve after expanding the destination: EVM-memory expansion can move
-     * its arena and must not invalidate a memory-backed source pointer.
-     */
-    const uint8_t *source = resolve_region(kind, off, len);
     if (source)
       memmove(destination, source + index, (size_t)count);
     else
@@ -296,121 +282,121 @@ static unit region_copy_to_memory(enum RegionKind kind, uint64_t off,
   return UNIT;
 }
 
-#define DEFINE_SLICE_BYTE(prefix, type, kind)                                 \
+#define DEFINE_SLICE_BYTE(prefix, type)                                       \
   uint64_t prefix##_byte_at(struct type slice, uint32_t index) {              \
-    return region_byte_at(kind, SLICE_OFF(slice), SLICE_LEN(slice),            \
-                          index);                                              \
+    return region_byte_at(SLICE_PTR(slice), SLICE_LEN(slice), index);          \
   }
 
-#define DEFINE_SLICE_LOAD(prefix, type, kind)                                 \
-  U256 prefix##_load_word(struct type slice, uint32_t index) {            \
-    return region_load_word(kind, SLICE_OFF(slice), SLICE_LEN(slice),          \
-                            index);                                             \
+#define DEFINE_SLICE_LOAD(prefix, type)                                       \
+  U256 prefix##_load_word(struct type slice, uint32_t index) {                \
+    return region_load_word(SLICE_PTR(slice), SLICE_LEN(slice), index);        \
   }
 
-#define DEFINE_SLICE_LOAD_N(prefix, type, kind)                               \
-  U256 prefix##_load_n_word(struct type slice, uint32_t index,            \
-                                 uint8_t len) {                                \
-    return region_load_n_word(kind, SLICE_OFF(slice), SLICE_LEN(slice),        \
-                              index, len);                                      \
+#define DEFINE_SLICE_LOAD_N(prefix, type)                                     \
+  U256 prefix##_load_n_word(struct type slice, uint32_t index, uint8_t len) {  \
+    return region_load_n_word(SLICE_PTR(slice), SLICE_LEN(slice), index, len); \
   }
 
-#define DEFINE_SLICE_COPY(prefix, type, kind)                                 \
+#define DEFINE_SLICE_COPY(prefix, type)                                       \
   unit prefix##_copy_to_memory(struct type slice, uint32_t dst,                \
                                uint32_t index, uint32_t len) {                 \
     return region_copy_to_memory(                                              \
-        kind, SLICE_OFF(slice), SLICE_LEN(slice), dst, index, len);            \
+        SLICE_PTR(slice), SLICE_LEN(slice), dst, index, len);                  \
   }
 
-DEFINE_SLICE_BYTE(stateless_input, StatelessInputSliceFields,
-                  REGION_STATELESS_INPUT)
-DEFINE_SLICE_BYTE(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_BYTE(code_region, CodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_BYTE(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
-DEFINE_SLICE_BYTE(log_data_slice, LogDataSliceFields, REGION_LOG_DATA)
-DEFINE_SLICE_BYTE(output_slice, OutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_BYTE(stateless_input, StatelessInputSliceFields)
+DEFINE_SLICE_BYTE(memory_slice, EvmMemorySliceFields)
+DEFINE_SLICE_BYTE(scratch_slice, ScratchSliceFields)
+DEFINE_SLICE_BYTE(log_data_slice, LogDataSliceFields)
+DEFINE_SLICE_BYTE(output_slice, OutputSliceFields)
 
-DEFINE_SLICE_LOAD(stateless_input, StatelessInputSliceFields,
-                  REGION_STATELESS_INPUT)
-DEFINE_SLICE_LOAD(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_LOAD(code_region, CodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_LOAD(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
-DEFINE_SLICE_LOAD(log_data_slice, LogDataSliceFields, REGION_LOG_DATA)
-DEFINE_SLICE_LOAD(output_slice, OutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_LOAD(stateless_input, StatelessInputSliceFields)
+DEFINE_SLICE_LOAD(memory_slice, EvmMemorySliceFields)
+DEFINE_SLICE_LOAD(scratch_slice, ScratchSliceFields)
+DEFINE_SLICE_LOAD(log_data_slice, LogDataSliceFields)
+DEFINE_SLICE_LOAD(output_slice, OutputSliceFields)
 
-DEFINE_SLICE_LOAD_N(stateless_input, StatelessInputSliceFields,
-                    REGION_STATELESS_INPUT)
-DEFINE_SLICE_LOAD_N(code_region, CodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_LOAD_N(scratch_slice, ScratchSliceFields, REGION_SCRATCH)
+DEFINE_SLICE_LOAD_N(stateless_input, StatelessInputSliceFields)
+DEFINE_SLICE_LOAD_N(scratch_slice, ScratchSliceFields)
 
-DEFINE_SLICE_COPY(stateless_input, StatelessInputSliceFields,
-                  REGION_STATELESS_INPUT)
-DEFINE_SLICE_COPY(memory_slice, EvmMemorySliceFields, REGION_MEMORY)
-DEFINE_SLICE_COPY(code_region, CodeRegionSliceFields, REGION_CODE)
-DEFINE_SLICE_COPY(output_slice, OutputSliceFields, REGION_OUTPUT)
+DEFINE_SLICE_COPY(stateless_input, StatelessInputSliceFields)
+DEFINE_SLICE_COPY(memory_slice, EvmMemorySliceFields)
+DEFINE_SLICE_COPY(output_slice, OutputSliceFields)
 
 #undef DEFINE_SLICE_BYTE
 #undef DEFINE_SLICE_LOAD
 #undef DEFINE_SLICE_LOAD_N
 #undef DEFINE_SLICE_COPY
 
+uint64_t code_region_byte_at(struct CodeRegionSliceFields slice,
+                             uint32_t index) {
+  return region_byte_at(slice.bytes, slice.len, index);
+}
+
+U256 code_region_load_word(struct CodeRegionSliceFields slice,
+                           uint32_t index) {
+  return region_load_word(slice.bytes, slice.len, index);
+}
+
+U256 code_region_load_n_word(struct CodeRegionSliceFields slice,
+                             uint32_t index, uint8_t len) {
+  return region_load_n_word(slice.bytes, slice.len, index, len);
+}
+
+unit code_region_copy_to_memory(struct CodeRegionSliceFields slice,
+                                uint32_t dst, uint32_t index, uint32_t len) {
+  return region_copy_to_memory(slice.bytes, slice.len, dst, index, len);
+}
+
 uint32_t stateless_input_count_nonzero(
     struct StatelessInputSliceFields slice) {
-  return (uint32_t)region_count_nonzero(
-      REGION_STATELESS_INPUT, SLICE_OFF(slice), SLICE_LEN(slice));
+  return (uint32_t)region_count_nonzero(SLICE_PTR(slice), SLICE_LEN(slice));
 }
 
 bool stateless_input_strided_zero(
     struct StatelessInputSliceFields slice,
     uint32_t start, uint32_t stride, uint32_t width, uint32_t count) {
-  return region_strided_zero(
-      REGION_STATELESS_INPUT, SLICE_OFF(slice), SLICE_LEN(slice),
-      start, stride, width, count);
+  return region_strided_zero(SLICE_PTR(slice), SLICE_LEN(slice), start, stride,
+                             width, count);
 }
 
 bool memory_slice_strided_zero(
     struct EvmMemorySliceFields slice, uint32_t start, uint32_t stride,
     uint32_t width, uint32_t count) {
-  return region_strided_zero(
-      REGION_MEMORY, SLICE_OFF(slice), SLICE_LEN(slice),
-      start, stride, width, count);
+  return region_strided_zero(SLICE_PTR(slice), SLICE_LEN(slice), start, stride,
+                             width, count);
 }
 
-static bool regions_equal(enum RegionKind left_kind, uint64_t left_off,
-                          uint64_t left_len, enum RegionKind right_kind,
-                          uint64_t right_off, uint64_t right_len) {
+static bool regions_equal(const uint8_t *left, uint64_t left_len,
+                          const uint8_t *right, uint64_t right_len) {
   if (left_len != right_len) return false;
-  const uint8_t *left = resolve_region(left_kind, left_off, left_len);
-  const uint8_t *right = resolve_region(right_kind, right_off, right_len);
+  if (left_len == 0) return true;
   return left && right && memcmp(left, right, (size_t)left_len) == 0;
 }
 
 bool scratch_input_slices_equal(struct ScratchSliceFields left,
                                 struct StatelessInputSliceFields right) {
-  return regions_equal(REGION_SCRATCH, SLICE_OFF(left), SLICE_LEN(left),
-                       REGION_STATELESS_INPUT, SLICE_OFF(right),
+  return regions_equal(SLICE_PTR(left), SLICE_LEN(left), SLICE_PTR(right),
                        SLICE_LEN(right));
 }
 
 bool log_input_slices_equal(struct LogDataSliceFields left,
                             struct StatelessInputSliceFields right) {
-  return regions_equal(REGION_LOG_DATA, SLICE_OFF(left), SLICE_LEN(left),
-                       REGION_STATELESS_INPUT, SLICE_OFF(right),
+  return regions_equal(SLICE_PTR(left), SLICE_LEN(left), SLICE_PTR(right),
                        SLICE_LEN(right));
 }
 
 bool input_code_slices_equal(struct StatelessInputSliceFields left,
                              struct CodeRegionSliceFields right) {
-  return regions_equal(REGION_STATELESS_INPUT, SLICE_OFF(left),
-                       SLICE_LEN(left), REGION_CODE, SLICE_OFF(right),
-                       SLICE_LEN(right));
+  return regions_equal(SLICE_PTR(left), SLICE_LEN(left),
+                       right.bytes, right.len);
 }
 
 bool region_logs_bloom_matches_ref(
     LogsBloom computed, struct StatelessInputSliceFields reference) {
   const uint64_t reference_len = SLICE_LEN(reference);
   const uint8_t *reference_bytes =
-      stateless_input_ptr(SLICE_OFF(reference), reference_len);
+      SLICE_PTR(reference);
   if (reference_len != sizeof(computed.bytes) || !reference_bytes) return false;
 
   for (size_t word = 0; word < sizeof(computed.bytes) / sizeof(uint64_t);
@@ -454,7 +440,7 @@ struct ScratchRegionResult scratch_store_byte(uint32_t off, uint64_t data) {
 }
 
 static struct ScratchRegionResult scratch_store_region(
-    uint64_t dst, enum RegionKind kind, uint64_t off, uint64_t len) {
+    uint64_t dst, const uint8_t *source, uint64_t len) {
   if (len > UINT64_MAX - dst) {
     return scratch_result_value(false, 0);
   }
@@ -462,7 +448,6 @@ static struct ScratchRegionResult scratch_store_region(
   if (len != 0 && !out) {
     return scratch_result_value(false, 0);
   }
-  const uint8_t *source = resolve_region(kind, off, len);
   if (!source) {
     return scratch_result_value(false, 0);
   }
@@ -471,20 +456,16 @@ static struct ScratchRegionResult scratch_store_region(
   return scratch_result_value(accepted, accepted ? dst + len : 0);
 }
 
-#define DEFINE_SCRATCH_STORE(name, type, kind)                                \
+#define DEFINE_SCRATCH_STORE(name, type)                                      \
   struct ScratchRegionResult name(uint32_t off, struct type slice) {          \
-    return scratch_store_region(off, kind, SLICE_OFF(slice),                  \
-                                SLICE_LEN(slice));                            \
+    return scratch_store_region(off, SLICE_PTR(slice), SLICE_LEN(slice));     \
   }
 
 DEFINE_SCRATCH_STORE(scratch_store_stateless_input,
-                     StatelessInputSliceFields, REGION_STATELESS_INPUT)
-DEFINE_SCRATCH_STORE(scratch_store_scratch, ScratchSliceFields,
-                     REGION_SCRATCH)
-DEFINE_SCRATCH_STORE(scratch_store_log_data, LogDataSliceFields,
-                     REGION_LOG_DATA)
-DEFINE_SCRATCH_STORE(scratch_store_output, OutputSliceFields,
-                     REGION_OUTPUT)
+                     StatelessInputSliceFields)
+DEFINE_SCRATCH_STORE(scratch_store_scratch, ScratchSliceFields)
+DEFINE_SCRATCH_STORE(scratch_store_log_data, LogDataSliceFields)
+DEFINE_SCRATCH_STORE(scratch_store_output, OutputSliceFields)
 
 #undef DEFINE_SCRATCH_STORE
 
@@ -562,27 +543,18 @@ struct ScratchRegionResult scratch_store_word(uint32_t off,
 
 bool public_output_write(struct ScratchSliceFields output) {
   const uint64_t len = SLICE_LEN(output);
-  const uint8_t *bytes = scratch_ptr(SLICE_OFF(output), len);
+  const uint8_t *bytes = SLICE_PTR(output);
   if (!bytes || len > SIZE_MAX) return false;
   write_output(bytes, (size_t)len);
   return true;
 }
 
 bool output_buffer_store_memory(struct EvmMemorySliceFields slice) {
-  return output_buffer_store_bytes(
-      memory_ptr(SLICE_OFF(slice), SLICE_LEN(slice)),
-      SLICE_LEN(slice));
+  return output_buffer_store_bytes(SLICE_PTR(slice), SLICE_LEN(slice));
 }
 
 bool output_buffer_store_input(struct StatelessInputSliceFields slice) {
-  return output_buffer_store_bytes(
-      stateless_input_ptr(SLICE_OFF(slice), SLICE_LEN(slice)),
-      SLICE_LEN(slice));
-}
-
-Hash32 code_db_store_indexed(
-    struct CodeRegionSliceFields code, uint64_t jumpdest_ref) {
-  return code_db_store_row(SLICE_OFF(code), jumpdest_ref);
+  return output_buffer_store_bytes(SLICE_PTR(slice), SLICE_LEN(slice));
 }
 
 static bool calldata_span(struct CalldataSlice input,
@@ -590,13 +562,11 @@ static bool calldata_span(struct CalldataSlice input,
   switch (input.kind) {
     case Kind_InputCalldata:
       *len = SLICE_LEN(input.variants.InputCalldata);
-      *bytes = stateless_input_ptr(
-          SLICE_OFF(input.variants.InputCalldata), *len);
+      *bytes = SLICE_PTR(input.variants.InputCalldata);
       return *bytes != NULL;
     case Kind_MemoryCalldata:
       *len = SLICE_LEN(input.variants.MemoryCalldata);
-      *bytes =
-          memory_ptr(SLICE_OFF(input.variants.MemoryCalldata), *len);
+      *bytes = SLICE_PTR(input.variants.MemoryCalldata);
       return *bytes != NULL;
   }
   return false;
@@ -688,5 +658,5 @@ bool accelerator_p256_verify(struct CalldataSlice input) {
 }
 
 #undef CALL_ACCELERATOR
-#undef SLICE_OFF
+#undef SLICE_PTR
 #undef SLICE_LEN

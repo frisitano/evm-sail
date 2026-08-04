@@ -56,8 +56,10 @@ enum {
   GUEST_CODE_DB_ENTRIES = 32768u,
   GUEST_CODE_INDEX_BUCKETS = 2u * GUEST_CODE_DB_ENTRIES,
   GUEST_CODE_BYTES = 16u * 1024u * 1024u,
-  GUEST_JUMPDEST_WORDS = 512u * 1024u,
-  GUEST_JUMPDEST_TABLES = 65536u,
+  /* One byte per code position keeps JUMPDEST construction and lookup direct.
+   * The code and analysis arenas have independent cursors but identical
+   * worst-case live extents. */
+  GUEST_JUMPDEST_BYTES = GUEST_CODE_BYTES,
   /* Amsterdam charges 7,816 execution gas per authorization.  Its 2^24
    * regular-transaction gas ceiling therefore admits at most 2,146 tuples.
    * The authorization tracker uses power-of-two open addressing below 50%

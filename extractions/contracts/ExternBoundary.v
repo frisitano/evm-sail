@@ -24,8 +24,6 @@ Inductive ByteSourceKind : Type :=
 | OutputSource
 | ScratchSource.
 
-Definition jumpdest_chunk := word256.
-
 Definition byte_wf (b : byte) : Prop := 0 <= b < 256.
 Definition bytes_wf (bs : byte_seq) : Prop := Forall byte_wf bs.
 Definition uint64_wf (x : word64) : Prop := 0 <= x < 2 ^ 64.
@@ -713,7 +711,7 @@ Record WorldStateContract := {
       uint256_wf code_hash /\ bytes_wf code;
 
   jumpdest_allocation_contract : Prop;
-  jumpdest_chunk_store_contract : Prop;
+  jumpdest_mark_contract : Prop;
   jumpdest_ref_contract : Prop;
   indexed_code_lookup_contract : Prop;
   code_db_contract : Prop;
@@ -743,7 +741,7 @@ Definition reference_world_state_contract
        forall world code_hash code,
          code_lookup world code_hash = Some code ->
          uint256_wf code_hash /\ bytes_wf code)
-    (jumpdest_allocation jumpdest_chunk_store jumpdest_ref
+    (jumpdest_allocation jumpdest_mark jumpdest_ref
        indexed_code_lookup code_db code_delegation : Prop)
     : WorldStateContract :=
   {| world_checkpoint_handle := TransactionSnapshot;
@@ -778,7 +776,7 @@ Definition reference_world_state_contract
      code_lookup_ref := code_lookup;
      code_lookup_wf := code_lookup_well_formed;
      jumpdest_allocation_contract := jumpdest_allocation;
-     jumpdest_chunk_store_contract := jumpdest_chunk_store;
+     jumpdest_mark_contract := jumpdest_mark;
      jumpdest_ref_contract := jumpdest_ref;
      indexed_code_lookup_contract := indexed_code_lookup;
      code_db_contract := code_db;
@@ -990,7 +988,7 @@ Definition main_boundary (contract : GuestExternContract) : Prop :=
   world_state_boundary contract.(guest_crypto)
                        contract.(guest_world_state) /\
   jumpdest_allocation_contract contract.(guest_world_state) /\
-  jumpdest_chunk_store_contract contract.(guest_world_state) /\
+  jumpdest_mark_contract contract.(guest_world_state) /\
   jumpdest_ref_contract contract.(guest_world_state) /\
   indexed_code_lookup_contract contract.(guest_world_state) /\
   code_db_contract contract.(guest_world_state) /\

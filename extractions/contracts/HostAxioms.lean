@@ -559,7 +559,7 @@ structure MemoryFrame where
 structure JumpdestTable where
   reference : JumpdestRef
   codeLength : code_length
-  chunks : List (code_chunk_index × JumpdestChunk)
+  positions : List code_pointer
   deriving Inhabited
 
 structure JournalSnapshot where
@@ -1210,25 +1210,27 @@ def jumpdest_table_alloc (length : code_length) : SailM JumpdestRef := do
   let reference := BitVec.ofNat 64 (state.jumpdestTables.length + 1)
   set { state with
     jumpdestTables :=
-      { reference := reference, codeLength := length, chunks := [] } ::
+      { reference := reference, codeLength := length, positions := [] } ::
         state.jumpdestTables }
   pure reference
 
-def jumpdest_table_store_chunk
+def jumpdest_table_mark
     (reference : JumpdestRef) (length : code_length)
-    (index : code_chunk_index) (chunk : JumpdestChunk) : SailM Bool := do
+    (position : code_pointer) : SailM Bool := do
   let state ← get
   match state.jumpdestTables.find? (·.reference == reference) with
   | none => pure false
   | some table =>
-      let table :=
-        { table with
-          codeLength := length
-          chunks := assocPut table.chunks index chunk }
-      set { state with
-        jumpdestTables :=
-          table :: state.jumpdestTables.filter (·.reference != reference) }
-      pure true
+      if table.codeLength != length ∨ position >= length then
+        pure false
+      else
+        let table :=
+          { table with
+            positions := position :: table.positions.filter (· != position) }
+        set { state with
+          jumpdestTables :=
+            table :: state.jumpdestTables.filter (·.reference != reference) }
+        pure true
 
 private def storedCodeSlice
     (offset length : Nat) : CodeSlice :=
@@ -1248,15 +1250,13 @@ def code_db_store (slice : CodeSlice) (jumpdests : JumpdestRef) : SailM hash := 
   pure key
 
 def jumpdest_ref_contains
-    (reference : JumpdestRef) (_ : code_length) (pc : code_pointer) :
+    (reference : JumpdestRef) (length : code_length) (pc : code_pointer) :
     SailM Bool := do
   let state ← get
   match state.jumpdestTables.find? (·.reference == reference) with
   | none => pure false
   | some table =>
-      match assocGet table.chunks (pc / 256) with
-      | none => pure false
-      | some chunk => pure ((BitVec.access chunk (pc % 256)) == 1#1)
+      pure (table.codeLength == length ∧ pc < length ∧ table.positions.contains pc)
 
 def code_intern_delegation
     (target : address) (jumpdests : JumpdestRef) : SailM hash := do
