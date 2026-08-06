@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Report whether optimized C matches the repository clang-format policy.
+"""Check or explicitly format optimized C using the repository policy.
 
-The checker never rewrites generated output. Formatting defects in generated C
-belong in the Sail/JIB C emitter; handwritten optimized FFI can be formatted in
-place separately after its semantic changes have settled.
+The default mode is read-only. ``--fix`` is reserved for the explicit
+``c-optimised-clang-format`` workflow, which turns canonical compiler output
+into the pretty-C review artifact and then verifies the result.
 """
 
 from __future__ import annotations
@@ -107,6 +107,23 @@ def check_file(
     return FormatResult(path, owner, replacements)
 
 
+def format_file(
+    clang_format: str, style: Path, item: tuple[Path, str]
+) -> FormatResult:
+    path, owner = item
+    result = subprocess.run(
+        [clang_format, f"--style=file:{style}", "-i", str(path)],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        return FormatResult(path, owner, 0, result.stderr.strip() or result.stdout.strip())
+    return FormatResult(path, owner, 0)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("generated", nargs="?", type=Path, default=DEFAULT_GENERATED)
@@ -115,6 +132,11 @@ def main() -> int:
         default=os.environ.get("CLANG_FORMAT", "clang-format"),
     )
     parser.add_argument("--scope", choices=("all", "generated", "ffi"), default="all")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="format files in place before enforcing the policy",
+    )
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1))
     parser.add_argument("--max-files", type=int, default=50)
@@ -151,6 +173,44 @@ def main() -> int:
         return 2
 
     drift = [result for result in results if result.replacements]
+    if args.fix and drift:
+        items_to_format = [(result.path, result.owner) for result in drift]
+        with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as executor:
+            format_results = list(
+                executor.map(
+                    lambda item: format_file(clang_format, style, item),
+                    items_to_format,
+                )
+            )
+        format_errors = [result for result in format_results if result.error is not None]
+        if format_errors:
+            for result in format_errors:
+                print(f"{result.path}: {result.error}")
+            print(f"optimized C format: FAILED ({len(format_errors)} formatting errors)")
+            return 2
+
+        fixed_owner_counts: dict[str, int] = {}
+        for result in drift:
+            fixed_owner_counts[result.owner] = fixed_owner_counts.get(result.owner, 0) + 1
+        fixed_summary = ", ".join(
+            f"{owner}: {count} files" for owner, count in sorted(fixed_owner_counts.items())
+        )
+        print(f"optimized C format: formatted {len(drift)} files; {fixed_summary}")
+
+        with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as executor:
+            results = list(
+                executor.map(
+                    lambda item: check_file(clang_format, style, item),
+                    files,
+                )
+            )
+        errors = [result for result in results if result.error is not None]
+        if errors:
+            for result in errors:
+                print(f"{result.path}: {result.error}")
+            print(f"optimized C format: FAILED ({len(errors)} verification errors)")
+            return 2
+        drift = [result for result in results if result.replacements]
     if drift:
         print("optimized C clang-format queue:")
         displayed = drift if args.max_files == 0 else drift[: args.max_files]

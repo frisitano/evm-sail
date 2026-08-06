@@ -357,15 +357,16 @@ c-optimised-clang-tidy: c-optimised-conformance
 	$(PYTHON) tools/lint_optimised_c.py --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
 		--require-clang-tidy --strict --profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
-# Formatting is diagnostic-only for generated sources: fix their emitter and
-# regenerate instead of applying clang-format directly to build artifacts.
+# Keep the report target read-only. The explicit clang-format target produces
+# the pretty-C review artifact from canonical compiler output and verifies both
+# generated and handwritten optimized C against the same policy.
 c-optimised-format-report: c-optimised-conformance
 	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
 		--jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 c-optimised-clang-format: c-optimised-conformance
 	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
-		--strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+		--fix --strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # Source diagnostics run after type/effect checking. Post-Jib diagnostics run
 # in the common lowering, before backend presentation passes. Keep both raw
