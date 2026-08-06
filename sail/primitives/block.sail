@@ -107,22 +107,3 @@ struct ExecutionPayload = {
     expected_block_hash : hash,
     block : Block,
 }
-
-/*! Raw EIP-7685 request bodies. The request-type bytes are added only
-    while computing the header commitment; the SSZ input carries one field
-    per type. */
-struct ExecutionRequests = {
-    deposits : StatelessInputSlice,
-    withdrawals : ScratchSlice,
-    consolidations : ScratchSlice,
-    builder_deposits : ScratchSlice,
-    builder_exits : ScratchSlice,
-}
-
-let EMPTY_EXECUTION_REQUESTS : ExecutionRequests = struct {
-        deposits = EMPTY_STATELESS_INPUT_SLICE,
-        withdrawals = EMPTY_SCRATCH_SLICE,
-        consolidations = EMPTY_SCRATCH_SLICE,
-        builder_deposits = EMPTY_SCRATCH_SLICE,
-        builder_exits = EMPTY_SCRATCH_SLICE,
-    }

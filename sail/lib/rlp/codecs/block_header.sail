@@ -65,7 +65,8 @@ function block_header_hash(
      * Amsterdam header-content maximum of 749 bytes. Keep that semantic
      * bound instead of reconstructing a generic backend byte length. */
     if 749 < content_length then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let bounded_content_length : range(0, 749) = tmod_nat(content_length, 750);
     let content_len = bounded_content_length;

@@ -1,16 +1,18 @@
 /*
  * Optimized hash_tree_root for SszNewPayloadRequest.
  *
- * This translation unit is linked only into optimized C builds. It resolves
- * the already validated StatelessInputRef slices to native pointer/length
- * spans and keeps only an O(depth) Merkle frontier. The readable Sail
- * equations in lib/htr.sail remain the standard implementation and the source
- * used by proof extraction.
+ * This translation unit is linked only into optimized C builds. It consumes
+ * the already validated StatelessInputRef slices directly and keeps only an
+ * O(depth) Merkle frontier. Fixed field offsets are compile-time constants
+ * within the AtLeast-typed payload spans, and item spans are exact by
+ * construction, so only genuinely input-dependent shapes are checked here.
+ * The readable Sail equations in lib/htr.sail remain the standard
+ * implementation and the source used by proof extraction.
  */
 #include "evmsail/prelude.h"
 
-#include "evmsail/lib/htr.h"
 #include "evmsail/host/region_access.h"
+#include "evmsail/spec/lib/ssz/stateless_input.h"
 #include "primitives/value.h"
 #include "zkvm_accelerators.h"
 
@@ -25,28 +27,6 @@ enum {
 };
 
 typedef uint8_t htr_root[HTR_CHUNK_SIZE];
-
-struct htr_span {
-  const uint8_t *bytes;
-  uint64_t len;
-};
-
-struct htr_input_view {
-  struct htr_span new_payload_request;
-  struct htr_span execution_payload;
-  struct htr_span versioned_hashes;
-  struct htr_span deposits;
-  struct htr_span withdrawal_requests;
-  struct htr_span consolidation_requests;
-  struct htr_span builder_deposit_requests;
-  struct htr_span builder_exit_requests;
-  struct htr_span extra_data;
-  struct htr_span transactions;
-  struct htr_span withdrawals;
-  struct htr_span block_access_list;
-  uint64_t transaction_count;
-  uint64_t withdrawal_count;
-};
 
 struct htr_accumulator {
   htr_root frontier[HTR_MAX_DEPTH + 1];
@@ -136,59 +116,31 @@ static const htr_root htr_zero_hashes[HTR_MAX_DEPTH + 1] = {
      0x12, 0xb1, 0x61, 0x99, 0xdc, 0x15, 0x8e, 0x23, 0xb5, 0x44},
 };
 
-static int htr_subspan(const struct htr_span *span, uint64_t off, uint64_t len,
-                       struct htr_span *result) {
-  if (off > span->len || len > span->len - off)
-    return 0;
-  result->bytes = span->bytes + off;
-  result->len = len;
-  return 1;
-}
-
-static int htr_resolve(struct StatelessInputSliceFields slice,
-                       struct htr_span *result) {
-  const uint64_t len = slice.len;
-  result->bytes = slice.bytes;
-  if (!result->bytes) return 0;
-  result->len = len;
-  return 1;
-}
-
-static void htr_sha256(const uint8_t *bytes, uint64_t len, htr_root out) {
-  static const uint8_t empty[1] = {0};
+static void htr_hash_pair(const htr_root left, const htr_root right, htr_root out)
+{
+  uint8_t pair[64];
+  zkvm_sha256_hash digest;
   _Static_assert(sizeof(htr_root) == sizeof(zkvm_sha256_hash),
                  "accelerator digest must be 32 bytes");
-  const uint8_t *input = len ? bytes : empty;
-  if (!input || len > UINT32_MAX ||
-      zkvm_sha256(input, (size_t)len,
-                  (zkvm_sha256_hash *)(void *)out) != ZKVM_EOK) {
+  memcpy(pair, left, 32);
+  memcpy(pair + 32, right, 32);
+  if (zkvm_sha256(pair, sizeof(pair), &digest) != ZKVM_EOK) {
     memset(out, 0, sizeof(htr_root));
-    return;
+  } else {
+    memcpy(out, &digest, sizeof digest);
   }
 }
 
-static void htr_hash_pair(const htr_root left, const htr_root right,
-                          htr_root out) {
-  uint8_t pair[64];
-  memcpy(pair, left, 32);
-  memcpy(pair + 32, right, 32);
-  htr_sha256(pair, sizeof(pair), out);
-}
-
-static int htr_accumulator_init(struct htr_accumulator *acc, unsigned depth) {
-  if (depth > HTR_MAX_DEPTH)
-    return 0;
+/* Every caller's depth is at most HTR_MAX_DEPTH and every caller's leaf
+ * count is at most 2^depth, so the accumulator is total. */
+static void htr_accumulator_init(struct htr_accumulator *acc, unsigned depth)
+{
   memset(acc, 0, sizeof(*acc));
   acc->depth = depth;
-  return 1;
 }
 
-static int htr_accumulator_push(struct htr_accumulator *acc,
-                                const htr_root leaf) {
-  const uint64_t capacity = UINT64_C(1) << acc->depth;
-  if (acc->count >= capacity)
-    return 0;
-
+static void htr_accumulator_push(struct htr_accumulator *acc, const htr_root leaf)
+{
   htr_root carry;
   memcpy(carry, leaf, 32);
   uint64_t occupied = acc->count;
@@ -202,11 +154,10 @@ static int htr_accumulator_push(struct htr_accumulator *acc,
   }
   memcpy(acc->frontier[level], carry, 32);
   acc->count++;
-  return 1;
 }
 
-static int htr_accumulator_root(const struct htr_accumulator *acc,
-                                htr_root out) {
+static void htr_accumulator_root(const struct htr_accumulator *acc, htr_root out)
+{
   uint64_t remaining = acc->count;
   htr_root right = {0};
   bool has_right = false;
@@ -215,52 +166,46 @@ static int htr_accumulator_root(const struct htr_accumulator *acc,
     const bool occupied = (remaining & 1) != 0;
     htr_root next = {0};
     if (occupied) {
-      htr_hash_pair(acc->frontier[level],
-                    has_right ? right : htr_zero_hashes[level], next);
+      htr_hash_pair(acc->frontier[level], (int)has_right ? right : htr_zero_hashes[level], next);
     } else if (has_right) {
       htr_hash_pair(right, htr_zero_hashes[level], next);
     }
-    if (occupied || has_right)
+    if (occupied || has_right) {
       memcpy(right, next, 32);
-    has_right = has_right || occupied;
+    }
+    has_right = ((has_right || occupied) != 0);
     remaining >>= 1;
   }
 
   if (remaining == 1) {
     memcpy(out, acc->frontier[acc->depth], 32);
-    return 1;
+    return;
   }
-  if (remaining != 0)
-    return 0;
   memcpy(out, has_right ? right : htr_zero_hashes[acc->depth], 32);
-  return 1;
 }
 
-static int htr_merkleize(const htr_root *leaves, uint64_t count, unsigned depth,
-                         htr_root out) {
+static void htr_merkleize(const htr_root *leaves, uint64_t count, unsigned depth, htr_root out)
+{
   struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, depth))
-    return 0;
+  htr_accumulator_init(&acc, depth);
   for (uint64_t i = 0; i < count; i++) {
-    if (!htr_accumulator_push(&acc, leaves[i]))
-      return 0;
+    htr_accumulator_push(&acc, leaves[i]);
   }
-  return htr_accumulator_root(&acc, out);
+  htr_accumulator_root(&acc, out);
 }
 
-static void htr_length_chunk(uint64_t len, htr_root out) {
-  memset(out, 0, 32);
-  for (unsigned i = 0; i < 8; i++)
-    out[i] = (uint8_t)(len >> (8 * i));
-}
-
-static void htr_mix_in_length(const htr_root root, uint64_t len, htr_root out) {
+static void htr_mix_in_length(const htr_root root, uint64_t len, htr_root out)
+{
   htr_root length;
-  htr_length_chunk(len, length);
+  memset(length, 0, 32);
+  for (unsigned i = 0; i < 8; i++) {
+    length[i] = (uint8_t)(len >> (8 * i));
+  }
   htr_hash_pair(root, length, out);
 }
 
-static unsigned htr_clog2(uint64_t n) {
+static unsigned htr_clog2(uint64_t n)
+{
   unsigned depth = 0;
   uint64_t remaining = n == 0 ? 0 : n - 1;
   while (remaining != 0) {
@@ -270,11 +215,10 @@ static unsigned htr_clog2(uint64_t n) {
   return depth;
 }
 
-static int htr_bytes_root(const uint8_t *bytes, uint64_t len, unsigned depth,
-                          htr_root out) {
+static void htr_bytes_root(const uint8_t *bytes, uint64_t len, unsigned depth, htr_root out)
+{
   struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, depth))
-    return 0;
+  htr_accumulator_init(&acc, depth);
   const uint64_t chunks = (len + 31) / 32;
   for (uint64_t i = 0; i < chunks; i++) {
     htr_root chunk = {0};
@@ -282,328 +226,269 @@ static int htr_bytes_root(const uint8_t *bytes, uint64_t len, unsigned depth,
     const uint64_t available = len - off;
     const uint64_t take = available < 32 ? available : 32;
     memcpy(chunk, bytes + off, (size_t)take);
-    if (!htr_accumulator_push(&acc, chunk))
-      return 0;
+    htr_accumulator_push(&acc, chunk);
   }
-  return htr_accumulator_root(&acc, out);
+  htr_accumulator_root(&acc, out);
 }
 
-static int htr_bytevector(const uint8_t *bytes, uint64_t len, htr_root out) {
-  return htr_bytes_root(bytes, len, htr_clog2((len + 31) / 32), out);
-}
-
-static int htr_bytelist(const uint8_t *bytes, uint64_t len,
-                        uint64_t limit_bytes, htr_root out) {
-  if (len > limit_bytes || limit_bytes > EVMSAIL_HTR_BYTE_LIST_LIMIT)
+/* The single enforcement point for byte-list limits: transaction items reach
+ * this with an unvalidated length. */
+static int htr_bytelist(const uint8_t *bytes, uint64_t len, uint64_t limit_bytes, htr_root out)
+{
+  if (len > limit_bytes) {
     return 0;
+  }
   htr_root root;
   const uint64_t capacity_chunks = (limit_bytes + 31) / 32;
-  if (!htr_bytes_root(bytes, len, htr_clog2(capacity_chunks), root))
-    return 0;
+  htr_bytes_root(bytes, len, htr_clog2(capacity_chunks), root);
   htr_mix_in_length(root, len, out);
   return 1;
 }
 
-static int htr_bytes32(const struct htr_span *span, uint64_t off,
-                       htr_root out) {
-  struct htr_span field;
-  if (!htr_subspan(span, off, 32, &field))
-    return 0;
-  memcpy(out, field.bytes, 32);
-  return 1;
+static void htr_bytes32(const uint8_t *bytes, htr_root out)
+{
+  memcpy(out, bytes, 32);
 }
 
-static int htr_uint64(const struct htr_span *span, uint64_t off, htr_root out) {
-  struct htr_span field;
-  if (!htr_subspan(span, off, 8, &field))
-    return 0;
+static void htr_uint64(const uint8_t *bytes, htr_root out)
+{
   memset(out, 0, 32);
-  memcpy(out, field.bytes, 8);
-  return 1;
+  memcpy(out, bytes, 8);
 }
 
-static int htr_address(const struct htr_span *span, uint64_t off,
-                       htr_root out) {
-  struct htr_span field;
-  if (!htr_subspan(span, off, 20, &field))
-    return 0;
+static void htr_address(const uint8_t *bytes, htr_root out)
+{
   memset(out, 0, 32);
-  memcpy(out, field.bytes, 20);
-  return 1;
+  memcpy(out, bytes, 20);
 }
 
-static int htr_fixed_bytevector(const struct htr_span *span, uint64_t off,
-                                uint64_t len, htr_root out) {
-  struct htr_span field;
-  return htr_subspan(span, off, len, &field) &&
-         htr_bytevector(field.bytes, field.len, out);
+static void htr_fixed_bytevector(const uint8_t *bytes, uint64_t len, htr_root out)
+{
+  htr_bytes_root(bytes, len, htr_clog2((len + 31) / 32), out);
 }
 
-static uint32_t htr_load_u32(const uint8_t *bytes) {
-  return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
-         ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+static uint32_t htr_load_u32(const uint8_t *bytes)
+{
+  return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[2] << 16) |
+         ((uint32_t)bytes[3] << 24);
 }
 
-static int htr_resolve_input(struct htr_input_view *view,
-                             struct StatelessInputRef input_ref) {
-  view->transaction_count = input_ref.transactions.count;
-  view->withdrawal_count = input_ref.withdrawals.count;
-  return htr_resolve(input_ref.new_payload_request,
-                     &view->new_payload_request) &&
-         htr_resolve(input_ref.execution_payload, &view->execution_payload) &&
-         htr_resolve(input_ref.versioned_hashes, &view->versioned_hashes) &&
-         htr_resolve(input_ref.deposits, &view->deposits) &&
-         htr_resolve(input_ref.withdrawal_requests,
-                     &view->withdrawal_requests) &&
-         htr_resolve(input_ref.consolidation_requests,
-                     &view->consolidation_requests) &&
-         htr_resolve(input_ref.builder_deposit_requests,
-                     &view->builder_deposit_requests) &&
-         htr_resolve(input_ref.builder_exit_requests,
-                     &view->builder_exit_requests) &&
-         htr_resolve(input_ref.extra_data, &view->extra_data) &&
-         htr_resolve(input_ref.transactions.bytes, &view->transactions) &&
-         htr_resolve(input_ref.withdrawals.bytes, &view->withdrawals) &&
-         htr_resolve(input_ref.block_access_list, &view->block_access_list);
-}
-
-static int htr_withdrawal(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 44};
+static void htr_withdrawal(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[4];
-  return htr_uint64(&item, 0, leaves[0]) && htr_uint64(&item, 8, leaves[1]) &&
-         htr_address(&item, 16, leaves[2]) &&
-         htr_uint64(&item, 36, leaves[3]) && htr_merkleize(leaves, 4, 2, out);
+  htr_uint64(bytes, leaves[0]);
+  htr_uint64(bytes + 8, leaves[1]);
+  htr_address(bytes + 16, leaves[2]);
+  htr_uint64(bytes + 36, leaves[3]);
+  htr_merkleize(leaves, 4, 2, out);
 }
 
-static int htr_deposit(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 192};
+static void htr_deposit(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[5];
-  return htr_fixed_bytevector(&item, 0, 48, leaves[0]) &&
-         htr_bytes32(&item, 48, leaves[1]) &&
-         htr_uint64(&item, 80, leaves[2]) &&
-         htr_fixed_bytevector(&item, 88, 96, leaves[3]) &&
-         htr_uint64(&item, 184, leaves[4]) && htr_merkleize(leaves, 5, 3, out);
+  htr_fixed_bytevector(bytes, 48, leaves[0]);
+  htr_bytes32(bytes + 48, leaves[1]);
+  htr_uint64(bytes + 80, leaves[2]);
+  htr_fixed_bytevector(bytes + 88, 96, leaves[3]);
+  htr_uint64(bytes + 184, leaves[4]);
+  htr_merkleize(leaves, 5, 3, out);
 }
 
-static int htr_withdrawal_request(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 76};
+static void htr_withdrawal_request(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[3];
-  return htr_address(&item, 0, leaves[0]) &&
-         htr_fixed_bytevector(&item, 20, 48, leaves[1]) &&
-         htr_uint64(&item, 68, leaves[2]) && htr_merkleize(leaves, 3, 2, out);
+  htr_address(bytes, leaves[0]);
+  htr_fixed_bytevector(bytes + 20, 48, leaves[1]);
+  htr_uint64(bytes + 68, leaves[2]);
+  htr_merkleize(leaves, 3, 2, out);
 }
 
-static int htr_consolidation_request(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 116};
+static void htr_consolidation_request(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[3];
-  return htr_address(&item, 0, leaves[0]) &&
-         htr_fixed_bytevector(&item, 20, 48, leaves[1]) &&
-         htr_fixed_bytevector(&item, 68, 48, leaves[2]) &&
-         htr_merkleize(leaves, 3, 2, out);
+  htr_address(bytes, leaves[0]);
+  htr_fixed_bytevector(bytes + 20, 48, leaves[1]);
+  htr_fixed_bytevector(bytes + 68, 48, leaves[2]);
+  htr_merkleize(leaves, 3, 2, out);
 }
 
-static int htr_builder_deposit_request(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 184};
+static void htr_builder_deposit_request(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[4];
-  return htr_fixed_bytevector(&item, 0, 48, leaves[0]) &&
-         htr_bytes32(&item, 48, leaves[1]) &&
-         htr_uint64(&item, 80, leaves[2]) &&
-         htr_fixed_bytevector(&item, 88, 96, leaves[3]) &&
-         htr_merkleize(leaves, 4, 2, out);
+  htr_fixed_bytevector(bytes, 48, leaves[0]);
+  htr_bytes32(bytes + 48, leaves[1]);
+  htr_uint64(bytes + 80, leaves[2]);
+  htr_fixed_bytevector(bytes + 88, 96, leaves[3]);
+  htr_merkleize(leaves, 4, 2, out);
 }
 
-static int htr_builder_exit_request(const uint8_t *bytes, htr_root out) {
-  const struct htr_span item = {bytes, 68};
+static void htr_builder_exit_request(const uint8_t *bytes, htr_root out)
+{
   htr_root leaves[2];
-  return htr_address(&item, 0, leaves[0]) &&
-         htr_fixed_bytevector(&item, 20, 48, leaves[1]) &&
-         htr_merkleize(leaves, 2, 1, out);
+  htr_address(bytes, leaves[0]);
+  htr_fixed_bytevector(bytes + 20, 48, leaves[1]);
+  htr_merkleize(leaves, 2, 1, out);
 }
 
+/* The closed list-element algebra, mirroring Sail's HtrRequestKind extended
+ * with the three payload list shapes. */
 enum htr_item_kind {
   HTR_ITEM_DEPOSIT,
   HTR_ITEM_WITHDRAWAL_REQUEST,
   HTR_ITEM_CONSOLIDATION_REQUEST,
   HTR_ITEM_BUILDER_DEPOSIT_REQUEST,
   HTR_ITEM_BUILDER_EXIT_REQUEST,
+  HTR_ITEM_TRANSACTION,
+  HTR_ITEM_WITHDRAWAL,
+  HTR_ITEM_VERSIONED_HASH,
 };
 
-static int htr_item_root(enum htr_item_kind kind, const uint8_t *bytes,
-                         htr_root out) {
+static const struct {
+  uint32_t item_size;
+  uint8_t depth;
+} htr_list_layout[] = {
+    [HTR_ITEM_DEPOSIT] = {192, 13},
+    [HTR_ITEM_WITHDRAWAL_REQUEST] = {76, 4},
+    [HTR_ITEM_CONSOLIDATION_REQUEST] = {116, 1},
+    [HTR_ITEM_BUILDER_DEPOSIT_REQUEST] = {184, 6},
+    [HTR_ITEM_BUILDER_EXIT_REQUEST] = {68, 4},
+    /* Transaction items are variable-width; the driver walks the offset
+     * table instead of a fixed stride. */
+    [HTR_ITEM_TRANSACTION] = {0, 20},
+    [HTR_ITEM_WITHDRAWAL] = {44, 4},
+    [HTR_ITEM_VERSIONED_HASH] = {32, 12},
+};
+
+static int htr_item_root(enum htr_item_kind kind, const uint8_t *bytes, htr_root out)
+{
   switch (kind) {
-    case HTR_ITEM_DEPOSIT:
-      return htr_deposit(bytes, out);
-    case HTR_ITEM_WITHDRAWAL_REQUEST:
-      return htr_withdrawal_request(bytes, out);
-    case HTR_ITEM_CONSOLIDATION_REQUEST:
-      return htr_consolidation_request(bytes, out);
-    case HTR_ITEM_BUILDER_DEPOSIT_REQUEST:
-      return htr_builder_deposit_request(bytes, out);
-    case HTR_ITEM_BUILDER_EXIT_REQUEST:
-      return htr_builder_exit_request(bytes, out);
+  case HTR_ITEM_DEPOSIT:
+    htr_deposit(bytes, out);
+    return 1;
+  case HTR_ITEM_WITHDRAWAL_REQUEST:
+    htr_withdrawal_request(bytes, out);
+    return 1;
+  case HTR_ITEM_CONSOLIDATION_REQUEST:
+    htr_consolidation_request(bytes, out);
+    return 1;
+  case HTR_ITEM_BUILDER_DEPOSIT_REQUEST:
+    htr_builder_deposit_request(bytes, out);
+    return 1;
+  case HTR_ITEM_BUILDER_EXIT_REQUEST:
+    htr_builder_exit_request(bytes, out);
+    return 1;
+  case HTR_ITEM_WITHDRAWAL:
+    htr_withdrawal(bytes, out);
+    return 1;
+  case HTR_ITEM_VERSIONED_HASH:
+    htr_bytes32(bytes, out);
+    return 1;
+  case HTR_ITEM_TRANSACTION:
+    return 0;
   }
   return 0;
 }
 
-static int htr_fixed_list(const struct htr_span *span, uint64_t item_size,
-                          unsigned depth, enum htr_item_kind item_kind,
-                          htr_root out) {
-  if (item_size == 0 || span->len % item_size != 0) {
-    return 0;
-  }
-  const uint64_t count = span->len / item_size;
+/* One init -> push -> root -> mix_in_length driver for all list roots.
+ * `count` is within 2^depth at every call: request lists are checked by
+ * htr_request_list, transactions and withdrawals are bounded by their Sail
+ * list-reference types, and versioned hashes by MAX_BLOB_COMMITMENTS. */
+static int htr_list_root(enum htr_item_kind kind, struct StatelessInputSliceFields span,
+                         uint64_t count, htr_root out)
+{
   struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, depth))
-    return 0;
+  htr_accumulator_init(&acc, htr_list_layout[kind].depth);
   for (uint64_t i = 0; i < count; i++) {
     htr_root item;
-    if (!htr_item_root(item_kind, span->bytes + i * item_size, item) ||
-        !htr_accumulator_push(&acc, item)) {
+    if (kind == HTR_ITEM_TRANSACTION) {
+      const uint64_t table_off = i * 4;
+      const uint64_t start = htr_load_u32(span.bytes + table_off);
+      const uint64_t stop = i + 1 < count ? htr_load_u32(span.bytes + table_off + 4) : span.len;
+      if (start > stop || stop > span.len ||
+          !htr_bytelist(span.bytes + start, stop - start, EVMSAIL_HTR_BYTE_LIST_LIMIT, item)) {
+        return 0;
+      }
+    } else if (!htr_item_root(kind, span.bytes + (i * htr_list_layout[kind].item_size), item)) {
       return 0;
     }
+    htr_accumulator_push(&acc, item);
   }
   htr_root root;
-  if (!htr_accumulator_root(&acc, root))
-    return 0;
+  htr_accumulator_root(&acc, root);
   htr_mix_in_length(root, count, out);
   return 1;
 }
 
-static int htr_transactions(const struct htr_span *span, uint64_t count,
-                            htr_root out) {
-  if (count > (UINT64_C(1) << 20) || count > span->len / 4) {
+/* Request-list shape enforcement: this is the only bound on the raw request
+ * slices. */
+static int htr_request_list(enum htr_item_kind kind, struct StatelessInputSliceFields span,
+                            htr_root out)
+{
+  const uint64_t item_size = htr_list_layout[kind].item_size;
+  const uint64_t count = span.len / item_size;
+  if (span.len % item_size != 0 || count > (UINT64_C(1) << htr_list_layout[kind].depth)) {
     return 0;
   }
-
-  struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, 20))
-    return 0;
-  for (uint64_t i = 0; i < count; i++) {
-    const uint64_t table_off = i * 4;
-    const uint64_t start = htr_load_u32(span->bytes + table_off);
-    const uint64_t stop =
-        i + 1 < count ? htr_load_u32(span->bytes + table_off + 4) : span->len;
-    if (start > stop || stop > span->len ||
-        stop - start > EVMSAIL_HTR_BYTE_LIST_LIMIT) {
-      return 0;
-    }
-    htr_root item;
-    if (!htr_bytelist(span->bytes + start, stop - start,
-                      EVMSAIL_HTR_BYTE_LIST_LIMIT,
-                      item) ||
-        !htr_accumulator_push(&acc, item)) {
-      return 0;
-    }
-  }
-  htr_root root;
-  if (!htr_accumulator_root(&acc, root))
-    return 0;
-  htr_mix_in_length(root, count, out);
-  return 1;
+  return htr_list_root(kind, span, count, out);
 }
 
-static int htr_withdrawals(const struct htr_span *span, uint64_t count,
-                           htr_root out) {
-  if (count > 16 || count > UINT64_MAX / 44 || span->len != count * 44)
-    return 0;
-
-  struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, 4))
-    return 0;
-  for (uint64_t i = 0; i < count; i++) {
-    htr_root item;
-    if (!htr_withdrawal(span->bytes + i * 44, item) ||
-        !htr_accumulator_push(&acc, item)) {
-      return 0;
-    }
-  }
-  htr_root root;
-  if (!htr_accumulator_root(&acc, root))
-    return 0;
-  htr_mix_in_length(root, count, out);
-  return 1;
-}
-
-static int htr_versioned_hashes(const struct htr_span *span, htr_root out) {
-  if (span->len % 32 != 0)
-    return 0;
-  const uint64_t count = span->len / 32;
-  struct htr_accumulator acc;
-  if (!htr_accumulator_init(&acc, 12))
-    return 0;
-  for (uint64_t i = 0; i < count; i++) {
-    htr_root item;
-    memcpy(item, span->bytes + i * 32, 32);
-    if (!htr_accumulator_push(&acc, item))
-      return 0;
-  }
-  htr_root root;
-  if (!htr_accumulator_root(&acc, root))
-    return 0;
-  htr_mix_in_length(root, count, out);
-  return 1;
-}
-
-static int htr_execution_payload(const struct htr_input_view *input,
-                                 htr_root out) {
+static int htr_execution_payload(const struct StatelessInputRef *input, htr_root out)
+{
   htr_root leaves[19];
-  const struct htr_span *payload = &input->execution_payload;
-  return htr_bytes32(payload, 0, leaves[0]) &&
-         htr_address(payload, 32, leaves[1]) &&
-         htr_bytes32(payload, 52, leaves[2]) &&
-         htr_bytes32(payload, 84, leaves[3]) &&
-         htr_fixed_bytevector(payload, 116, 256, leaves[4]) &&
-         htr_bytes32(payload, 372, leaves[5]) &&
-         htr_uint64(payload, 404, leaves[6]) &&
-         htr_uint64(payload, 412, leaves[7]) &&
-         htr_uint64(payload, 420, leaves[8]) &&
-         htr_uint64(payload, 428, leaves[9]) &&
-         htr_bytelist(input->extra_data.bytes, input->extra_data.len, 32,
-                      leaves[10]) &&
-         htr_bytes32(payload, 440, leaves[11]) &&
-         htr_bytes32(payload, 472, leaves[12]) &&
-         htr_transactions(&input->transactions, input->transaction_count,
-                          leaves[13]) &&
-         htr_withdrawals(&input->withdrawals, input->withdrawal_count,
-                         leaves[14]) &&
-         htr_uint64(payload, 512, leaves[15]) &&
-         htr_uint64(payload, 520, leaves[16]) &&
-         htr_bytelist(input->block_access_list.bytes,
-                      input->block_access_list.len,
-                      EVMSAIL_HTR_BYTE_LIST_LIMIT,
-                      leaves[17]) &&
-         htr_uint64(payload, 532, leaves[18]) &&
-         htr_merkleize(leaves, 19, 5, out);
+  const uint8_t *payload = input->execution_payload.bytes;
+  htr_bytes32(payload, leaves[0]);
+  htr_address(payload + 32, leaves[1]);
+  htr_bytes32(payload + 52, leaves[2]);
+  htr_bytes32(payload + 84, leaves[3]);
+  htr_fixed_bytevector(payload + 116, 256, leaves[4]);
+  htr_bytes32(payload + 372, leaves[5]);
+  htr_uint64(payload + 404, leaves[6]);
+  htr_uint64(payload + 412, leaves[7]);
+  htr_uint64(payload + 420, leaves[8]);
+  htr_uint64(payload + 428, leaves[9]);
+  htr_bytes32(payload + 440, leaves[11]);
+  htr_bytes32(payload + 472, leaves[12]);
+  htr_uint64(payload + 512, leaves[15]);
+  htr_uint64(payload + 520, leaves[16]);
+  htr_uint64(payload + 532, leaves[18]);
+  if (!htr_bytelist(input->extra_data.bytes, input->extra_data.len, 32, leaves[10]) ||
+      !htr_list_root(HTR_ITEM_TRANSACTION, input->transactions.bytes, input->transactions.count,
+                     leaves[13]) ||
+      !htr_list_root(HTR_ITEM_WITHDRAWAL, input->withdrawals.bytes, input->withdrawals.count,
+                     leaves[14]) ||
+      !htr_bytelist(input->block_access_list.bytes, input->block_access_list.len,
+                    EVMSAIL_HTR_BYTE_LIST_LIMIT, leaves[17])) {
+    return 0;
+  }
+  htr_merkleize(leaves, 19, 5, out);
+  return 1;
 }
 
-static int htr_execution_requests(const struct htr_input_view *input,
-                                  htr_root out) {
+static int htr_execution_requests(const struct StatelessInputRef *input, htr_root out)
+{
   htr_root leaves[5];
-  return htr_fixed_list(&input->deposits, 192, 13, HTR_ITEM_DEPOSIT,
-                        leaves[0]) &&
-         htr_fixed_list(&input->withdrawal_requests, 76, 4,
-                        HTR_ITEM_WITHDRAWAL_REQUEST, leaves[1]) &&
-         htr_fixed_list(&input->consolidation_requests, 116, 1,
-                        HTR_ITEM_CONSOLIDATION_REQUEST, leaves[2]) &&
-         htr_fixed_list(&input->builder_deposit_requests, 184, 6,
-                        HTR_ITEM_BUILDER_DEPOSIT_REQUEST, leaves[3]) &&
-         htr_fixed_list(&input->builder_exit_requests, 68, 4,
-                        HTR_ITEM_BUILDER_EXIT_REQUEST, leaves[4]) &&
-         htr_merkleize(leaves, 5, 3, out);
+  if (!htr_request_list(HTR_ITEM_DEPOSIT, input->deposits, leaves[0]) ||
+      !htr_request_list(HTR_ITEM_WITHDRAWAL_REQUEST, input->withdrawal_requests, leaves[1]) ||
+      !htr_request_list(HTR_ITEM_CONSOLIDATION_REQUEST, input->consolidation_requests, leaves[2]) ||
+      !htr_request_list(HTR_ITEM_BUILDER_DEPOSIT_REQUEST, input->builder_deposit_requests,
+                        leaves[3]) ||
+      !htr_request_list(HTR_ITEM_BUILDER_EXIT_REQUEST, input->builder_exit_requests, leaves[4])) {
+    return 0;
+  }
+  htr_merkleize(leaves, 5, 3, out);
+  return 1;
 }
 
-Hash32 htr_new_payload_request(
-    struct StatelessInputRef input_ref) {
-  struct htr_input_view input = {0};
+Hash32 htr_new_payload_request(struct StatelessInputRef input_ref)
+{
   htr_root leaves[4] = {{0}};
   htr_root root = {0};
-  if (htr_resolve_input(&input, input_ref) &&
-      htr_execution_payload(&input, leaves[0]) &&
-      htr_versioned_hashes(&input.versioned_hashes, leaves[1]) &&
-      htr_bytes32(&input.new_payload_request, 8, leaves[2]) &&
-      htr_execution_requests(&input, leaves[3]) &&
-      htr_merkleize(leaves, 4, 2, root)) {
-    return hash_from_be_bytes(root);
+  if (htr_execution_payload(&input_ref, leaves[0]) &&
+      htr_list_root(HTR_ITEM_VERSIONED_HASH, input_ref.versioned_hashes,
+                    input_ref.versioned_hashes.len / 32, leaves[1]) &&
+      htr_execution_requests(&input_ref, leaves[3])) {
+    htr_bytes32(input_ref.new_payload_request.bytes + 8, leaves[2]);
+    htr_merkleize(leaves, 4, 2, root);
   }
   return hash_from_be_bytes(root);
 }

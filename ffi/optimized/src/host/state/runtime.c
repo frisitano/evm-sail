@@ -9,15 +9,12 @@
  * cross as scalars. Each collection owns fixed workspace storage, resets only
  * its live count, and fails closed before a write can exceed its capacity. */
 #include "host/state/runtime.h"
+#include "evmsail/prelude.h"
 #include "host/state/internal.h"
 #include "workspace.h"
 #include "primitives/value.h"
 #include <stdint.h>
 #include <string.h>
-
-/* ---------------------------- value helpers ----------------------------- */
-
-typedef Address address160;
 
 /* ------------------------------ warm sets ------------------------------- */
 /* The protocol epoch is also the BAL index: zero denotes pre-execution,
@@ -26,15 +23,17 @@ typedef Address address160;
  * sentinel without conflating it with the pre-execution system-call phase. */
 uint32_t current_warm_epoch;
 
-unit warm_reset(uint32_t current_transaction_epoch) {
-  if (current_transaction_epoch >= UINT32_MAX) GUEST_ABORT();
-  current_warm_epoch = (uint32_t)current_transaction_epoch + 1;
-  return UNIT;
+void warm_reset(uint32_t current_transaction_epoch)
+{
+  if (current_transaction_epoch >= UINT32_MAX) {
+    GUEST_ABORT();
+  }
+  current_warm_epoch = current_transaction_epoch + 1;
 }
 /* --------------------- EIP-7702 authority tracker ---------------------- */
 
 typedef struct {
-  address160 key;
+  Address key;
   uint32_t epoch;
   uint8_t originally_delegated;
   uint8_t delegation_set;
@@ -42,9 +41,10 @@ typedef struct {
 
 static auth_tracker_entry *auth_tracker;
 static uint32_t auth_tracker_limit;
-static uint32_t auth_tracker_epoch = 1u;
+static uint32_t auth_tracker_epoch = 1U;
 
-static uint64_t auth_tracker_hash(const address160 *a) {
+static uint64_t auth_tracker_hash(const Address *a)
+{
   uint64_t h = UINT64_C(1469598103934665603);
   for (unsigned i = 0; i < 20; ++i) {
     h ^= a->bytes[i];
@@ -56,69 +56,73 @@ static uint64_t auth_tracker_hash(const address160 *a) {
   return h;
 }
 
-static auth_tracker_entry *auth_tracker_find(const address160 *key,
-                                              int insert) {
-  if (auth_tracker_limit == 0) return NULL;
+static auth_tracker_entry *auth_tracker_find(const Address *key, int insert)
+{
   uint32_t slot = (uint32_t)auth_tracker_hash(key) & (auth_tracker_limit - 1);
-  for (uint32_t probes = 0; probes < auth_tracker_limit; ++probes) {
+  for (;;) {
     auth_tracker_entry *entry = &auth_tracker[slot];
     if (entry->epoch != auth_tracker_epoch) {
-      if (!insert) return NULL;
+      if (!insert) {
+        return NULL;
+      }
       entry->epoch = auth_tracker_epoch;
       entry->key = *key;
       entry->originally_delegated = 0;
       entry->delegation_set = 0;
       return entry;
     }
-    if (address_equal(&entry->key, key)) return entry;
+    if (address_equal(&entry->key, key)) {
+      return entry;
+    }
     slot = (slot + 1) & (auth_tracker_limit - 1);
   }
-  return NULL;
 }
 
-unit authorization_tracker_reset(uint32_t count_hint) {
+void authorization_tracker_reset(uint32_t count_hint)
+{
   uint64_t need = count_hint < 8 ? 16 : UINT64_C(2) * count_hint;
   uint32_t cap = 16;
-  while ((uint64_t)cap < need && cap <= UINT32_MAX / 2) cap *= 2;
-  if ((uint64_t)cap < need || cap > GUEST_AUTHORIZATION_ENTRIES) GUEST_ABORT();
+  while ((uint64_t)cap < need) {
+    cap *= 2;
+  }
   auth_tracker_limit = cap;
   auth_tracker_epoch++;
   if (auth_tracker_epoch == 0) {
-    memset(auth_tracker, 0,
-           GUEST_AUTHORIZATION_ENTRIES * sizeof(*auth_tracker));
-    auth_tracker_epoch = 1u;
+    memset(auth_tracker, 0, GUEST_AUTHORIZATION_ENTRIES * sizeof(*auth_tracker));
+    auth_tracker_epoch = 1U;
   }
-  return UNIT;
 }
 
-bool authorization_tracker_seen(Address authority) {
-  address160 key = authority;
-  return auth_tracker_find(&key, 0) != NULL;
+bool authorization_tracker_seen(Address authority)
+{
+  return auth_tracker_find(&authority, 0) != NULL;
 }
 
-bool authorization_tracker_originally_delegated(Address authority) {
-  address160 key = authority;
-  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
-  return entry != NULL && entry->originally_delegated != 0;
+bool authorization_tracker_originally_delegated(Address authority)
+{
+  auth_tracker_entry *entry = auth_tracker_find(&authority, 0);
+  return (entry != NULL && entry->originally_delegated != 0) != 0;
 }
 
-bool authorization_tracker_delegation_set(Address authority) {
-  address160 key = authority;
-  auth_tracker_entry *entry = auth_tracker_find(&key, 0);
-  return entry != NULL && entry->delegation_set != 0;
+bool authorization_tracker_delegation_set(Address authority)
+{
+  auth_tracker_entry *entry = auth_tracker_find(&authority, 0);
+  return (entry != NULL && entry->delegation_set != 0) != 0;
 }
 
-unit authorization_tracker_commit(Address authority,
-                                  bool originally_delegated,
-                                  bool sets_delegation) {
-  address160 key = authority;
-  auth_tracker_entry *entry = auth_tracker_find(&key, 1);
-  if (entry == NULL) GUEST_ABORT();
-  if (originally_delegated) entry->originally_delegated = 1;
-  if (sets_delegation) entry->delegation_set = 1;
-  return UNIT;
+void authorization_tracker_commit(Address authority, bool originally_delegated,
+                                  bool sets_delegation)
+{
+  auth_tracker_entry *entry = auth_tracker_find(&authority, 1);
+  if (originally_delegated) {
+    entry->originally_delegated = 1;
+  }
+  if (sets_delegation) {
+    entry->delegation_set = 1;
+  }
 }
 
-void state_runtime_workspace_bind(void) {
+void state_runtime_workspace_bind(void)
+{
   WORKSPACE_BIND(auth_tracker, GUEST_AUTHORIZATION_ENTRIES);
 }

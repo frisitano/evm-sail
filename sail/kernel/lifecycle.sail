@@ -76,7 +76,7 @@ function k_tx_merge() -> unit = {
     /* Each pop advances a cursor over a protocol-sized host table. */
     while more termination_measure(2 ^ 64) do {
         match acct_tx_pop() {
-            Some(e) => {
+            AcctTxPopRow(e) => {
                 var curr : Account = e.value.curr;
                 let deleted = account_deleted_at_tx_end(semantics, curr);
                 if deleted then {
@@ -109,7 +109,7 @@ function k_tx_merge() -> unit = {
                     acct_block_write(struct { addr = e.addr, value = struct { curr = curr, orig = e.value.orig } })
                 }
             },
-            None() => more = false,
+            AcctTxPopExhausted(_) => more = false,
         }
     };
     more = true;
@@ -117,16 +117,17 @@ function k_tx_merge() -> unit = {
     /* Each pop advances a cursor over a protocol-sized host table. */
     while more termination_measure(2 ^ 64) do {
         match storage_tx_pop() {
-            Some(e) => {
-                match acct_block_get(e.key.addr) {
-                    Some(acc) => if acc.present & e.value.curr != e.value.orig then {
+            StorageTxPopRow(e) => {
+                let account = acct_block_get(e.key.addr);
+                if account.found then {
+                    let acc = account.account;
+                    if acc.present & e.value.curr != e.value.orig then {
                         bal_storage_change(k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr);
                         storage_block_put(e)
-                    },
-                    None() => (),
+                    }
                 }
             },
-            None() => more = false,
+            StorageTxPopExhausted(_) => more = false,
         }
     };
     storage_tx_reset();

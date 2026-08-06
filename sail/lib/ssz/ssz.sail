@@ -51,7 +51,8 @@ function ssz_u32_in_slice(input : StatelessInputSlice, offset : ssz_offset) -> s
     if offset <= input.len & 4 <= input.len - offset then {
         ssz_u32_at(input, offset)
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 
 /*! Narrows a wire-bounded SSZ offset at the host byte-position boundary. */

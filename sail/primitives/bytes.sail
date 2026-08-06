@@ -124,6 +124,12 @@ type LogDataSlice = {
     LogDataSliceFields('off, 'len)
 }
 
+type LogDataSliceLength('required : Int) = {
+    'off,
+    log_data_valid_range('off, 'required).
+    LogDataSliceFields('off, 'required)
+}
+
 /*! A range in the frame-output buffer. */
 struct OutputSliceFields('off : Int, 'len : Int), output_region_valid_range('off, 'len) = {
     bytes : int('off),
@@ -156,13 +162,6 @@ function stateless_input_slice_length(s : StatelessInputSlice) -> source_length 
 overload region_slice_length = {
     stateless_input_slice_length,
     calldata_slice_length
-}
-
-/*! The result of extending the executor scratch arena to the requested
-    high-water mark. */
-union ScratchRegionResult('required : Int), 0 <= 'required = {
-    ScratchRegionReady : ScratchSliceLength('required),
-    ScratchRegionFailed : unit,
 }
 
 let ADDRESS_BYTE_LENGTH : int(20) = 20

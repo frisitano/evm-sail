@@ -4,10 +4,12 @@ primitives/gas.sail
 primitives/block.sail
 host/code.sail
 host/output.sail
+kernel/logs.sail
 kernel/storage.sail
 kernel/accounts.sail
 kernel/lifecycle.sail
 evm/machine.sail
+evm/gas.sail
 evm/interpreter.sail
 evm/transaction.sail
 lib/ssz/stateless_input.sail
@@ -22,4 +24,5 @@ executor/receipts.sail
 executor/payload.sail
 executor/block_access_list.sail
 executor/stateless.sail
+main.sail
 lib/rlp/codecs/block_header.sail

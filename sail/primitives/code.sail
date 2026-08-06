@@ -59,16 +59,17 @@ enum DeepStackOperation = {
     DeepStackDuplicate,
     DeepStackSwap,
     DeepStackExchange,
+    NotDeepStackOperation,
 }
 
-/*! Classifies an opcode as one of Amsterdam's immediate deep-stack
-    operations. */
-function deep_stack_operation(opcode : opcode) -> option(DeepStackOperation) =
+/*! Classifies an opcode against Amsterdam's immediate deep-stack
+    operations; every other opcode maps to the non-member. */
+function deep_stack_operation(opcode : opcode) -> DeepStackOperation =
     match opcode {
-        230 => Some(DeepStackDuplicate),
-        231 => Some(DeepStackSwap),
-        232 => Some(DeepStackExchange),
-        _ => None(),
+        230 => DeepStackDuplicate,
+        231 => DeepStackSwap,
+        232 => DeepStackExchange,
+        _ => NotDeepStackOperation,
     }
 
 /*! Whether an EIP-8024 `DUPN`/`SWAPN` immediate is valid. Invalid
@@ -95,6 +96,7 @@ function deep_stack_operation_immediate_valid(
     DeepStackDuplicate => deep_stack_immediate_valid(immediate),
     DeepStackSwap => deep_stack_immediate_valid(immediate),
     DeepStackExchange => exchange_immediate_valid(immediate),
+    NotDeepStackOperation => false,
 }
 
 /*! Executable code: its byte address, length, and resolved `JUMPDEST` table.

@@ -64,18 +64,20 @@ function path_nibble(path : TriePath, i : trie_path_cursor) -> nibble =
 /*! Appends one nibble to a path, rejecting paths already at the key bound. */
 function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
     let length = path_len(path);
-    if 64 <= length then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    let original = path.data;
-    var bytes = original;
-    let byte_index = path_byte_index(length);
-    if tmod_int(length, 2) == 0 then {
-        bytes[byte_index] = append(value, 0x0)
+    if length < 64 then {
+        let original = path.data;
+        var bytes = original;
+        let byte_index = path_byte_index(length);
+        if tmod_int(length, 2) == 0 then {
+            bytes[byte_index] = append(value, 0x0)
+        } else {
+            bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
+        };
+        path_new(B256(bytes), length + 1)
     } else {
-        bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
-    };
-    path_new(B256(bytes), length + 1)
+        fatal_error(WitnessDeficient);
+        exit(())
+    }
 }
 
 function path_append_byte(path : TriePath, value : byte) -> TriePath =
@@ -99,12 +101,14 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
             index = if current_index < 64 then {
                     current_index + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 }
         };
         result
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 }
 
@@ -133,7 +137,8 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
                 offset = if current_offset < 64 then {
                         current_offset + 1
                     } else {
-                        throw InvalidBlock(WitnessDeficient)
+                        fatal_error(WitnessDeficient);
+                        exit(())
                     }
             };
             result
@@ -166,7 +171,8 @@ function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) ->
             offset = if current_offset < 64 then {
                     current_offset + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 }
         };
         ok
@@ -190,7 +196,8 @@ function common_prefix_length(a : TriePath, b : TriePath) -> trie_path_len = {
             length = if current_length < 64 then {
                     current_length + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 }
         } else {
             matching = false
@@ -226,7 +233,8 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
     (bool, TriePath)
 ) = {
     if f.is_list then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let n = f.content_len;
     if n == 0 then {
@@ -234,7 +242,8 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
     } else {
         let maximum_length = HEX_PREFIX_MAX_LENGTH;
         if maximum_length < n then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         } else {
             let content = sub_slice(f.source, f.source.len - n, n);
             let fb = slice_byte(content, 0);
@@ -251,7 +260,8 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
                     bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
                     (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 }
             } else {
                 (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
@@ -268,7 +278,8 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
     (bool, TriePath)
 ) = {
     if f.is_list then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let n = f.content_len;
     if n == 0 then {
@@ -276,7 +287,8 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
     } else {
         let maximum_length = HEX_PREFIX_MAX_LENGTH;
         if maximum_length < n then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         } else {
             let content = sub_slice(f.source, f.source.len - n, n);
             let fb = slice_byte(content, 0);
@@ -293,7 +305,8 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
                     bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
                     (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 }
             } else {
                 (is_leaf, path_new(word_to_hash(packed), paired_nibbles))

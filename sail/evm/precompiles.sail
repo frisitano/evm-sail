@@ -114,46 +114,59 @@ function boolean_result(value : bool) -> PrecompileResult =
 function precompile_active_at_fork(n : precompile_id) -> bool = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    let base = n <= 4;
-    let byzantium = (5 <= n) & (n <= 8) & (profile.fork >= Byzantium);
-    let istanbul = (n == 9) & (profile.fork >= Istanbul);
-    let kzg = (n == 10) & (profile.fork >= Cancun);
-    let bls = (11 <= n) & (n <= 17) & (profile.fork >= Prague);
-    let p256 = (n == 256) & (profile.fork >= Osaka);
-    base | byzantium | istanbul | kzg | bls | p256
+    match n {
+        NotPrecompile => false,
+        Ecrecover => true,
+        Sha256 => true,
+        Ripemd160 => true,
+        Identity => true,
+        Modexp => profile.fork >= Byzantium,
+        Bn254Add => profile.fork >= Byzantium,
+        Bn254Mul => profile.fork >= Byzantium,
+        Bn254Pairing => profile.fork >= Byzantium,
+        Blake2f => profile.fork >= Istanbul,
+        KzgPointEvaluation => profile.fork >= Cancun,
+        BlsG1Add => profile.fork >= Prague,
+        BlsG1Msm => profile.fork >= Prague,
+        BlsG2Add => profile.fork >= Prague,
+        BlsG2Msm => profile.fork >= Prague,
+        BlsPairing => profile.fork >= Prague,
+        BlsMapFpToG1 => profile.fork >= Prague,
+        BlsMapFp2ToG2 => profile.fork >= Prague,
+        P256Verify => profile.fork >= Osaka,
+    }
 }
 
-/*! Returns the active precompile number represented by `target`, or zero
-    when it is an ordinary address at the current fork. */
-function precompile_number(bytes : address) -> precompile_selector = {
-    let selector : range(0, 2 ^ 16 - 1) =
-        unsigned(bytes[18]) * 256 + unsigned(bytes[19]);
-    let candidate : precompile_selector = match selector {
-        1 => if bytes == PRECOMPILE_ADDRESS_1 then { 1 } else { 0 },
-        2 => if bytes == PRECOMPILE_ADDRESS_2 then { 2 } else { 0 },
-        3 => if bytes == PRECOMPILE_ADDRESS_3 then { 3 } else { 0 },
-        4 => if bytes == PRECOMPILE_ADDRESS_4 then { 4 } else { 0 },
-        5 => if bytes == PRECOMPILE_ADDRESS_5 then { 5 } else { 0 },
-        6 => if bytes == PRECOMPILE_ADDRESS_6 then { 6 } else { 0 },
-        7 => if bytes == PRECOMPILE_ADDRESS_7 then { 7 } else { 0 },
-        8 => if bytes == PRECOMPILE_ADDRESS_8 then { 8 } else { 0 },
-        9 => if bytes == PRECOMPILE_ADDRESS_9 then { 9 } else { 0 },
-        10 => if bytes == PRECOMPILE_ADDRESS_10 then { 10 } else { 0 },
-        11 => if bytes == PRECOMPILE_ADDRESS_11 then { 11 } else { 0 },
-        12 => if bytes == PRECOMPILE_ADDRESS_12 then { 12 } else { 0 },
-        13 => if bytes == PRECOMPILE_ADDRESS_13 then { 13 } else { 0 },
-        14 => if bytes == PRECOMPILE_ADDRESS_14 then { 14 } else { 0 },
-        15 => if bytes == PRECOMPILE_ADDRESS_15 then { 15 } else { 0 },
-        16 => if bytes == PRECOMPILE_ADDRESS_16 then { 16 } else { 0 },
-        17 => if bytes == PRECOMPILE_ADDRESS_17 then { 17 } else { 0 },
-        256 => if bytes == PRECOMPILE_ADDRESS_256 then { 256 } else { 0 },
-        _ => 0,
-    };
-    if candidate != 0 then {
-        let id : precompile_id = candidate;
-        if precompile_active_at_fork(id) then { id } else { 0 }
+/*! Returns the active precompile represented by `target`, or
+    `NotPrecompile` when it is an ordinary address at the current fork. */
+function precompile_id_if_active(candidate : precompile_id) -> precompile_id =
+    if precompile_active_at_fork(candidate) then {
+        candidate
     } else {
-        0
+        NotPrecompile
+    }
+
+function precompile_id_for_address(bytes : address) -> precompile_id = {
+    match bytes {
+        _ if bytes == PRECOMPILE_ADDRESS_1 => precompile_id_if_active(Ecrecover),
+        _ if bytes == PRECOMPILE_ADDRESS_2 => precompile_id_if_active(Sha256),
+        _ if bytes == PRECOMPILE_ADDRESS_3 => precompile_id_if_active(Ripemd160),
+        _ if bytes == PRECOMPILE_ADDRESS_4 => precompile_id_if_active(Identity),
+        _ if bytes == PRECOMPILE_ADDRESS_5 => precompile_id_if_active(Modexp),
+        _ if bytes == PRECOMPILE_ADDRESS_6 => precompile_id_if_active(Bn254Add),
+        _ if bytes == PRECOMPILE_ADDRESS_7 => precompile_id_if_active(Bn254Mul),
+        _ if bytes == PRECOMPILE_ADDRESS_8 => precompile_id_if_active(Bn254Pairing),
+        _ if bytes == PRECOMPILE_ADDRESS_9 => precompile_id_if_active(Blake2f),
+        _ if bytes == PRECOMPILE_ADDRESS_10 => precompile_id_if_active(KzgPointEvaluation),
+        _ if bytes == PRECOMPILE_ADDRESS_11 => precompile_id_if_active(BlsG1Add),
+        _ if bytes == PRECOMPILE_ADDRESS_12 => precompile_id_if_active(BlsG1Msm),
+        _ if bytes == PRECOMPILE_ADDRESS_13 => precompile_id_if_active(BlsG2Add),
+        _ if bytes == PRECOMPILE_ADDRESS_14 => precompile_id_if_active(BlsG2Msm),
+        _ if bytes == PRECOMPILE_ADDRESS_15 => precompile_id_if_active(BlsPairing),
+        _ if bytes == PRECOMPILE_ADDRESS_16 => precompile_id_if_active(BlsMapFpToG1),
+        _ if bytes == PRECOMPILE_ADDRESS_17 => precompile_id_if_active(BlsMapFp2ToG2),
+        _ if bytes == PRECOMPILE_ADDRESS_256 => precompile_id_if_active(P256Verify),
+        _ => NotPrecompile,
     }
 }
 
@@ -413,14 +426,15 @@ function run_p256_verify(input : CalldataSlice) -> PrecompileResult = {
     been charged by the caller ([precompile_gas][]). */
 function run_precompile_slice(num : precompile_id, input : CalldataSlice) -> PrecompileResult =
     match num {
-        1 => run_ecrecover(input),
-        2 => run_sha256(input),
-        3 => run_ripemd160(input),
-        4 => copied_result(input),
-        5 => run_modexp(input),
-        6 => accelerator_result(accelerator_bn254_add(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
-        7 => accelerator_result(accelerator_bn254_mul(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
-        8 => {
+        NotPrecompile => precompile_failure(),
+        Ecrecover => run_ecrecover(input),
+        Sha256 => run_sha256(input),
+        Ripemd160 => run_ripemd160(input),
+        Identity => copied_result(input),
+        Modexp => run_modexp(input),
+        Bn254Add => accelerator_result(accelerator_bn254_add(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
+        Bn254Mul => accelerator_result(accelerator_bn254_mul(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
+        Bn254Pairing => {
             let input_length = calldata_slice_length(input);
             let item_length = BN254_PAIRING_ITEM_LENGTH;
             if input_length == (input_length / item_length) * item_length then {
@@ -429,15 +443,14 @@ function run_precompile_slice(num : precompile_id, input : CalldataSlice) -> Pre
                 precompile_failure()
             }
         },
-        9 => run_blake2f(input),
-        10 => run_kzg_point_evaluation(input),
-        11 => run_bls_g1_add(input),
-        12 => run_bls_g1_msm(input),
-        13 => run_bls_g2_add(input),
-        14 => run_bls_g2_msm(input),
-        15 => run_bls_pairing(input),
-        16 => run_bls_map_fp_to_g1(input),
-        17 => run_bls_map_fp2_to_g2(input),
-        256 => run_p256_verify(input),
-        _ => precompile_failure(),
+        Blake2f => run_blake2f(input),
+        KzgPointEvaluation => run_kzg_point_evaluation(input),
+        BlsG1Add => run_bls_g1_add(input),
+        BlsG1Msm => run_bls_g1_msm(input),
+        BlsG2Add => run_bls_g2_add(input),
+        BlsG2Msm => run_bls_g2_msm(input),
+        BlsPairing => run_bls_pairing(input),
+        BlsMapFpToG1 => run_bls_map_fp_to_g1(input),
+        BlsMapFp2ToG2 => run_bls_map_fp2_to_g2(input),
+        P256Verify => run_p256_verify(input),
     }

@@ -1,11 +1,11 @@
 /*md
 # Exceptions
 
-The failures that interrupt EVM execution or invalidate a block. An
+The failures that interrupt EVM execution or terminate payload validation. An
 [ExceptionKind][type-ExceptionKind] exceptionally halts the current frame,
 consumes its remaining gas, and reverts its state changes. A
-[BlockError][type-BlockError] rejects the entire payload and is carried by
-the model's single `exception` type.
+[FatalError][type-FatalError] rejects the entire payload and terminates the
+validator immediately.
 */
 
 /*! Exceptional halts (YP §9.4.2): each consumes all remaining gas and
@@ -40,15 +40,14 @@ enum ExceptionKind = {
 /*md
 ## The block-validation failures
 
-Every rule whose violation invalidates a block maps to one variant. The
-validator throws `InvalidBlock(reason)` at the point of detection and the
-guest catches it once at its boundary. A valid block yields no failure. Only
-the pass/fail boolean is emitted, so the reason is diagnostic (and a hook for
-future structured output).
+Every terminal validator failure maps to one variant. The validator calls
+`fatal_error(reason)` at the point of detection. That operation does not
+return, so fatal validation failures never enter Sail's recoverable control
+flow. A valid block reaches the normal success output.
 */
 /*! The reason a block fails validation; one variant per violated
     block-validity rule. */
-enum BlockError = {
+enum FatalError = {
     /* chain config: wrong fork / inactive activation */
     InvalidConfig,
     /* witness ancestor headers not contiguous */
@@ -89,22 +88,17 @@ enum BlockError = {
     InvalidExecutionRequests,
     /* a missing/inconsistent proof node (thrown at use) */
     WitnessDeficient,
+    /* an exact protocol integer exceeds its bounded execution representation */
+    NumericOverflow,
 }
+
+/*! Terminal validation failure. C binds this operation to the guest failure
+    boundary; semantic extraction retains the explicit non-returning body. */
+val fatal_error = impure { c: "fatal_error" } :
+  FatalError -> unit
+
+function fatal_error(_reason) = exit(())
 
 /*! Stable identifier for the validation stage that raised a block error.
     This diagnostic metadata is a bounded integer, not a protocol bitvector. */
 type validation_stage = range(0, 255)
-
-/*! The single Sail exception type. Block validation throws
-    `InvalidBlock(reason)` at the failure point. A checked narrowing from a
-    protocol integer raises `Overflow()` when the exact value cannot be
-    represented at its required execution boundary, matching EELS' checked
-    numeric constructors. Both propagate to `main`, where any failure yields
-    an unsuccessful validation. Sail's C backend unwinds via `have_exception`
-    return-checks (no `longjmp`), so it is zkVM-guest safe. */
-union exception = {
-    /* the block is invalid, with the failing rule */
-    InvalidBlock : BlockError,
-    /* an exact protocol integer exceeds the required bounded representation */
-    Overflow : unit,
-}

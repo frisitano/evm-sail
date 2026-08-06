@@ -97,7 +97,8 @@ function decode_access_list forall 'source_off 'source_len 'content_len,
             slot_count = decoded.slot_count,
         }
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     }
 }
 
@@ -137,15 +138,18 @@ function decode_blob_hash_items forall 'source_off 'source_len 'limit,
            != BLOB_HASH_LENGTH
            |  slice_byte(item.source, 0)
            != 0xa0 then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         };
         if slice_byte(item.source, 1) != 0x01 then {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         };
         if count < limit then {
             decode_blob_hash_items(next, limit, count + 1)
         } else {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         }
     }
 termination_measure decode_blob_hash_items(cursor, limit, count) =
@@ -213,7 +217,8 @@ function validate_auth_tuples(cursor, count) =
         if count < sizeof(transaction_length_bound) then {
             validate_auth_tuples(next, count + 1)
         } else {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         }
     }
 termination_measure validate_auth_tuples(cursor, count) =
@@ -232,7 +237,8 @@ function decode_auth_list forall 'source_off 'source_len 'content_len,
             validate_auth_tuples(rlp_decode_list(f), 0),
         )
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     }
 }
 
@@ -297,7 +303,8 @@ function tx_input_span forall 'source_off 'source_len 'content_len,
     if content.len <= sizeof(transaction_length_bound) then {
         content
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     }
 }
 
@@ -317,7 +324,8 @@ function tx_sig_span(first, signature) = {
     let start_offset = start;
     let stop_offset = stop;
     if stop_offset < start_offset then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     } else {
         stateless_input_slice(start_offset, stop_offset - start_offset)
     }
@@ -675,7 +683,8 @@ function rlp_decode_tx(tx, pubkey, blob_limit) = {
     let sender = word_to_address(hash_to_word(keccak256(sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH))));
     let tx_length = tx.len;
     let b0 : byte = if tx_length == 0 then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         } else {
             slice_byte(tx, 0)
         };
@@ -685,7 +694,8 @@ function rlp_decode_tx(tx, pubkey, blob_limit) = {
             if 1 <= tx_length then {
                 sub_slice(tx, 1, tx_length - 1)
             } else {
-                throw InvalidBlock(RlpDecode)
+                fatal_error(RlpDecode);
+                exit(())
             }
         } else {
             tx
@@ -694,14 +704,15 @@ function rlp_decode_tx(tx, pubkey, blob_limit) = {
     let fields = rlp_node_cursor(payload_input);
 
     if not_bool(tx_envelope_type_backwards_matches(ttype)) then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let tx_type : TxType = tx_envelope_type(ttype);
     match tx_type {
-        LegacyTx => decode_legacy_tx(tx, pubkey, sender, fields),
-        AccessListTx => decode_access_list_tx(tx, pubkey, sender, fields),
-        FeeMarketTx => decode_fee_market_tx(tx, pubkey, sender, fields),
-        BlobTx => decode_blob_tx(tx, pubkey, blob_limit, sender, fields),
-        SetCodeTx => decode_set_code_tx(tx, pubkey, sender, fields),
+        LegacyTx => pack_transaction(decode_legacy_tx(tx, pubkey, sender, fields)),
+        AccessListTx => pack_transaction(decode_access_list_tx(tx, pubkey, sender, fields)),
+        FeeMarketTx => pack_transaction(decode_fee_market_tx(tx, pubkey, sender, fields)),
+        BlobTx => pack_transaction(decode_blob_tx(tx, pubkey, blob_limit, sender, fields)),
+        SetCodeTx => pack_transaction(decode_set_code_tx(tx, pubkey, sender, fields)),
     }
 }

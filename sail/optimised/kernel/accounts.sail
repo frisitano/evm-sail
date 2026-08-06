@@ -8,7 +8,6 @@
  * tables in one crossing.
  */
 
-$[c_throws]
 val optimized_k_aload = impure { c: "k_aload" } : (hash, address) -> Account
 
 val optimized_store_account = impure { c: "store_account" } : (address, Account) -> unit

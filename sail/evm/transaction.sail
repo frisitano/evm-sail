@@ -97,7 +97,8 @@ function calldata_cost(input : TransactionInputSlice) -> transaction_calldata_co
         let zeroes = input_len - nonzeroes;
         G_txdatazero * zeroes + G_txdatanonzero * nonzeroes
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -129,7 +130,8 @@ function legacy_calldata_floor(input : TransactionInputSlice) -> transaction_cal
         let zeroes = input_len - nonzeroes;
         10 * zeroes + 40 * nonzeroes + G_transaction
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -274,7 +276,8 @@ function transaction_costs(
             if blob_price <= tx.max_blob_fee then {
                 transaction_blob_fee(blob_price, blob_gas)
             } else {
-                throw InvalidBlock(ExecutionInvalid)
+                fatal_error(ExecutionInvalid);
+                exit(())
             }
         };
     let upfront_value = transaction_upfront_cost(tx.max_fee, gas_limit, tx.value, tx.max_blob_fee, blob_gas);
@@ -288,7 +291,8 @@ function transaction_costs(
             upfront = protocol_word(upfront_value),
         }
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -303,7 +307,8 @@ function validated_word_product(value, factor) = {
     if product < sizeof(word_modulus) then {
         protocol_word(product)
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -350,16 +355,16 @@ function tx_frame_gas_snapshot(initial, execution, state, state_delta) = {
                 initial.intrinsic_state + state_delta;
             if raw_state_used <= 0 then {
                 if spent <= regular then {
-                    struct {
-                        admitted_limit = limit,
-                        regular_limit = regular,
-                        calldata_floor = initial.calldata_floor,
-                        remaining = remaining,
-                        state_used = 0,
-                    } :
-                        TxFrameGasSnapshotFields('limit, 'regular, 'calldata_floor, 'remaining, 0)
+                    tx_frame_gas_snapshot_fields(
+                        limit,
+                        regular,
+                        initial.calldata_floor,
+                        remaining,
+                        0,
+                    )
                 } else {
-                    throw InvalidBlock(ExecutionInvalid)
+                    fatal_error(ExecutionInvalid);
+                    exit(())
                 }
             } else {
                 let positive_state_used : transaction_state_gas_used =
@@ -373,26 +378,29 @@ function tx_frame_gas_snapshot(initial, execution, state, state_delta) = {
                     let (bounded_state_used as 'bounded_state_used) : range(0, 'limit - 'remaining) =
                         positive_state_used;
                     if spent - bounded_state_used <= regular then {
-                        struct {
-                            admitted_limit = limit,
-                            regular_limit = regular,
-                            calldata_floor = initial.calldata_floor,
-                            remaining = remaining,
-                            state_used = bounded_state_used,
-                        } :
-                            TxFrameGasSnapshotFields('limit, 'regular, 'calldata_floor, 'remaining, 'bounded_state_used)
+                        tx_frame_gas_snapshot_fields(
+                            limit,
+                            regular,
+                            initial.calldata_floor,
+                            remaining,
+                            bounded_state_used,
+                        )
                     } else {
-                        throw InvalidBlock(ExecutionInvalid)
+                        fatal_error(ExecutionInvalid);
+                        exit(())
                     }
                 } else {
-                    throw InvalidBlock(ExecutionInvalid)
+                    fatal_error(ExecutionInvalid);
+                    exit(())
                 }
             }
         } else {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         }
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -432,7 +440,8 @@ val transaction_gas_allowance : forall 'value 'total_limit 'regular_limit,
                                   <= block_gas_limit_bound. (int('value), int('total_limit), int('regular_limit)) -> TransactionGasAllowance
 function transaction_gas_allowance(value, total_limit, regular_limit) =
     if total_limit < value then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     } else {
         transaction_gas_allowance_fields(value, total_limit, regular_limit)
     }
@@ -458,17 +467,20 @@ val transaction_initial_gas : forall 'total 'regular 'intrinsic_execution 'intri
         int('intrinsic_execution),
         int('intrinsic_state),
         int('calldata_floor),
-    ) -> TransactionInitialGasFor('total)
+    ) -> TransactionInitialGasForLimits('total, 'regular)
 function transaction_initial_gas(allowance, intrinsic_execution, intrinsic_state, calldata_floor) = {
     if allowance.total < intrinsic_execution then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     } else {
         let after_execution = allowance.total - intrinsic_execution;
         if after_execution < intrinsic_state then {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         } else {
             if (allowance.regular < intrinsic_execution) | (allowance.regular < calldata_floor) then {
-                throw InvalidBlock(ExecutionInvalid)
+                fatal_error(ExecutionInvalid);
+                exit(())
             } else {
                 let available = after_execution - intrinsic_state;
                 let regular_budget = allowance.regular - intrinsic_execution;
@@ -537,38 +549,54 @@ function process_auth(au : Authorization) -> authorization_item_refund = {
     refund
 }
 
+/*! Adds one authorization refund to the transaction-wide accumulator. The
+    decoded authorization count proves this guard unreachable in valid input;
+    spelling it at the narrowing boundary keeps proof extraction independent
+    of the Coq backend's treatment of existential range indices. */
+function authorization_refund_add(
+    item : authorization_item_refund,
+    accumulated : authorization_refund,
+) -> authorization_refund = {
+    let bound = sizeof(authorization_refund_per_item) * sizeof(transaction_length_bound);
+    if accumulated <= bound - item then {
+        item + accumulated
+    } else {
+        fatal_error(ExecutionInvalid);
+        exit(())
+    }
+}
+
 /*! Applies source-backed authorizations in wire order. */
-val process_auth_cursor : forall 'source_off 'source_len 'count,
-                               source_valid_range('source_off, 'source_len)
-                            &  0
-                            <= 'count
-                            &  'count
-                            <= transaction_length_bound. (RlpCursor('source_off, 'source_len), int('count)) -> range(
-        0,
-        authorization_refund_per_item * 'count,
-    )
+val process_auth_cursor : forall 'source_off 'source_len,
+                               source_valid_range('source_off, 'source_len). (
+        RlpCursor('source_off, 'source_len),
+        transaction_item_count,
+    ) -> authorization_refund
 function process_auth_cursor(cursor, count) =
     if count == 0 then {
         if cursor.len != 0 then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         };
         0
     } else {
         if cursor.len == 0 then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         };
         let tuple = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, tuple.source.len);
-        process_auth(decode_authorization(tuple)) + process_auth_cursor(next, count - 1)
+        authorization_refund_add(
+            process_auth(decode_authorization(tuple)),
+            process_auth_cursor(next, count - 1),
+        )
     }
 termination_measure process_auth_cursor(cursor, count) = count
 
 /*! Applies an authorization-list view in order. */
 function process_auth_list(authorizations : AuthorizationListRef) -> authorization_refund = {
     let encoded : StatelessInputSlice = authorizations.encoded;
-    let count = authorizations.count;
-    let refund = process_auth_cursor(encoded, count);
-    refund : authorization_refund
+    process_auth_cursor(encoded, authorizations.count)
 }
 
 /*! Applies one Amsterdam authorization and charges its state-dependent
@@ -580,9 +608,7 @@ function process_amsterdam_auth(
     sender : address,
     current_target : address,
     transfers_value : bool,
-) -> (
-    unit
-) = {
+) -> bool = {
     let authority = au.authority;
 
     if au.valid_sig & (word_is_zero(au.chain_id) | (au.chain_id == word_of_chain_identifier(k_chain_id))) then {
@@ -599,33 +625,31 @@ function process_amsterdam_auth(
             let already_written = seen | (authority == sender) | (transfers_value & (authority == current_target));
 
             if not_bool(k_account_exists(authority)) then {
-                charge_state_gas(G_amsterdam_state_new_account)
+                if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then { return false }
             };
-            if is_running() & not_bool(already_written) then {
-                if not_bool(charge(G_amsterdam_account_write)) then { return () }
+            if not_bool(already_written) then {
+                if not_bool(charge(G_amsterdam_account_write)) then { return false }
             };
-            if   is_running()
-               & (au.address != ZERO_ADDRESS)
+            if   (au.address != ZERO_ADDRESS)
                & not_bool(delegated_before_tx)
                & not_bool(authorization_tracker_delegation_set(authority)) then {
-                charge_state_gas(G_amsterdam_state_auth_base)
+                if not_bool(charge_state_gas(G_amsterdam_state_auth_base)) then { return false }
             };
 
-            if is_running() then {
-                if au.address == ZERO_ADDRESS then {
-                    k_clear_code(authority)
-                } else {
-                    k_set_delegation(authority, au.address)
-                };
-                k_bump_nonce(authority);
-                authorization_tracker_commit(
-                    authority,
-                    not_bool(seen) & currently_delegated,
-                    au.address != ZERO_ADDRESS,
-                )
-            }
+            if au.address == ZERO_ADDRESS then {
+                k_clear_code(authority)
+            } else {
+                k_set_delegation(authority, au.address)
+            };
+            k_bump_nonce(authority);
+            authorization_tracker_commit(
+                authority,
+                not_bool(seen) & currently_delegated,
+                au.address != ZERO_ADDRESS,
+            )
         }
-    }
+    };
+    true
 }
 
 /*! Applies Amsterdam authorizations in wire order, stopping immediately when
@@ -635,16 +659,17 @@ val process_amsterdam_auth_cursor : forall 'source_off 'source_len, source_valid
         address,
         address,
         bool,
-    ) -> unit
+    ) -> bool
 function process_amsterdam_auth_cursor(cursor, sender, current_target, transfers_value) =
     if cursor.len == 0 then {
-        ()
+        true
     } else {
         let tuple = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, tuple.source.len);
-        process_amsterdam_auth(decode_authorization(tuple), sender, current_target, transfers_value);
-        if is_running() then {
+        if process_amsterdam_auth(decode_authorization(tuple), sender, current_target, transfers_value) then {
             process_amsterdam_auth_cursor(next, sender, current_target, transfers_value)
+        } else {
+            false
         }
     }
 termination_measure process_amsterdam_auth_cursor(cursor, sender, current_target, transfers_value) = cursor.len
@@ -690,9 +715,9 @@ function warm_access_list(cursor) =
 termination_measure warm_access_list(cursor) = cursor.len
 
 /*! Pre-warms the accessed-address set (EIP-2929): the sender, the call
-    target, the active fork's precompiles, and the access list
-    (EIP-2930); EIP-3651 additionally warms the coinbase from Shanghai
-    onward. */
+    target, and the access list (EIP-2930); EIP-3651 additionally warms the
+    coinbase from Shanghai onward. Active precompiles are a fork-derived warm
+    class in [k_account_is_warm][] and therefore need no table entries. */
 function prewarm(tx : Transaction) -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
@@ -706,19 +731,6 @@ function prewarm(tx : Transaction) -> unit = {
         k_account_mark_warm(k_coinbase())
     };
 
-    /* pre-warm the active fork's precompile set only (EIP-2929 seeds
-       accessed_addresses with PRE_COMPILED_CONTRACTS, which GROWS by fork:
-       Cancun 0x01-0x0a, Prague +BLS 0x0b-0x11, Osaka +0x100 P256VERIFY). */
-    let precompile_addresses : vector(17, precompile_id) = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-    foreach (i from 0 to 16) {
-        let p = precompile_addresses[i];
-        if precompile_active_at_fork(p) then {
-            k_account_mark_warm(precompile_id_to_address(p))
-        }
-    };
-    if precompile_active_at_fork(256) then {
-        k_account_mark_warm(precompile_id_to_address(256)) /* P256VERIFY */
-    };
     let access_list : StatelessInputSlice = tx.access_list.encoded;
     warm_access_list(access_list)
 }
@@ -760,7 +772,7 @@ val check_transaction_validity : forall 'total 'regular,
                                    0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound. (
         Transaction,
         TransactionGasAllowanceFields('total, 'regular),
-    ) -> TxValidityFields('total, 'regular)
+    ) -> TxValidityForLimits('total, 'regular)
 function check_transaction_validity(tx, allowance) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
@@ -770,12 +782,10 @@ function check_transaction_validity(tx, allowance) = {
        the address derived from the witnessed public key. A forged key or bad
        v/r/s makes the whole BLOCK invalid, regardless of the validity verdict
        below. */
-    let parity : y_parity = match tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v) {
-        Some(parity) => parity,
-        None() => throw InvalidBlock(InvalidSignature),
-    };
+    let parity = tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v);
     if not_bool(tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s)) then {
-        throw InvalidBlock(InvalidSignature)
+        fatal_error(InvalidSignature);
+        exit(())
     };
     let gas_limit = allowance.total;
 
@@ -786,12 +796,9 @@ function check_transaction_validity(tx, allowance) = {
     let input_len = input.len;
     let nonce_before = k_get_nonce(sender);
     let costs = transaction_costs(profile, tx, gas_limit, k_header.excess_blob_gas);
-    let nonce : account_nonce = match word_to_account_nonce(tx.nonce) {
-        Some(nonce) => nonce,
-        None() => throw InvalidBlock(ExecutionInvalid),
-    };
-    if nonce != nonce_before then {
-        throw InvalidBlock(ExecutionInvalid)
+    if tx.nonce != word_of_account_nonce(nonce_before) then {
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
 
     /* Transaction validity: an invalid tx is REJECTED with no state change at all
@@ -805,48 +812,61 @@ function check_transaction_validity(tx, allowance) = {
        at least one blob and must not create a contract. */
     if tx_semantics.blob then {
         if (profile.fork < Cancun) | (tx.blob_hashes.count == 0) | tx.is_create then {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         }
     };
 
     /* EIP-7623 (Prague+): the calldata floor is ALSO a validity bound -- a tx whose
        gas limit cannot cover 21000 + 10*tokens is rejected outright. */
     if (profile.fork >= Prague) & (gas_limit < costs.calldata_floor) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if not_bool(word_ule(costs.upfront, k_get_balance(sender))) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if not_bool((k_code_key(sender) == KECCAK_EMPTY) | sender_deleg) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if allowance.regular < costs.calldata_floor then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if not_bool(word_ule(k_header.base_fee, tx.max_fee)) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if tx.is_create & not_bool(initcode_size_allowed(input_len)) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if not_bool(word_ule(tx.max_priority_fee, tx.max_fee)) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if profile.fork < tx_semantics.minimum_fork then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if tx_semantics.set_code & tx.is_create then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     let authorizations = tx.authorizations;
     if tx_semantics.set_code & (authorizations.count == 0) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if (tx_semantics.signature == TypedSignature) & (tx.chain_id != k_chain_id) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     if nonce_before == sizeof(account_nonce_bound) then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     };
     let initial_gas = transaction_initial_gas(
         allowance,
@@ -854,15 +874,14 @@ function check_transaction_validity(tx, allowance) = {
         costs.intrinsic_state,
         costs.calldata_floor,
     );
-    struct {
-        sender = sender,
-        nonce_before = nonce_before,
-        gas = initial_gas,
-        blob_fee = costs.blob_fee,
-        gas_price = eff_gas_price,
-        priority_fee = eff_priority_fee,
-    } :
-        TxValidityFields('total, 'regular)
+    tx_validity_fields(
+        sender,
+        nonce_before,
+        initial_gas,
+        costs.blob_fee,
+        eff_gas_price,
+        eff_priority_fee,
+    )
 }
 
 /*! The upfront effects, taken before the execution snapshot so they persist
@@ -931,7 +950,12 @@ function enter_transaction_frame(v : TxValidity) -> unit = {
     revertible account mutation: its state-gas charges are therefore refilled
     if the subsequently dispatched frame fails. The result records whether a
     call recipient delegated, which disables direct precompile dispatch. */
-function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity, upfront : TxUpfrontResult) -> bool = {
+struct TransactionPreparation = {
+    ready : bool,
+    delegated : bool,
+}
+
+function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity, upfront : TxUpfrontResult) -> TransactionPreparation = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let current_target = if tx.is_create then {
@@ -952,37 +976,33 @@ function prepare_amsterdam_transaction_dispatch(tx : Transaction, v : TxValidity
 
     if tx.is_create then {
         if upfront.create_target_prestate_empty then {
-            charge_state_gas(G_amsterdam_state_new_account)
+            if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then {
+                return struct { ready = false, delegated = false }
+            }
         };
-        if is_running() then {
-            frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), profile.fork))
-        };
-        false
+        frame_code = code_db_resolve(code_db_insert(transaction_initcode_slice(tx.input_src), profile.fork));
+        struct { ready = true, delegated = false }
     } else {
         calldata = InputCalldata(tx.input_src);
         if word_nonzero(tx.value) & k_account_is_empty(tx.recipient) then {
-            charge_state_gas(G_amsterdam_state_new_account)
-        };
-
-        var delegated : bool = false;
-        var delegate = ZERO_ADDRESS;
-        if is_running() then {
-            let (is_delegated, target) = k_deleg_target(tx.recipient);
-            delegated = is_delegated;
-            delegate = target;
-            if delegated then {
-                let warm = k_account_is_warm(delegate);
-                if not_bool(charge(account_cost(warm))) then { return false };
-                k_account_mark_warm(delegate)
+            if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then {
+                return struct { ready = false, delegated = false }
             }
         };
-        if is_running() then {
-            if delegated then {
-                message = { message with code_address = delegate }
+
+        let (delegated, delegate) = k_deleg_target(tx.recipient);
+        if delegated then {
+            let warm = k_account_is_warm(delegate);
+            if not_bool(charge(account_cost(warm))) then {
+                return struct { ready = false, delegated = false }
             };
-            frame_code = executable_code(tx.recipient, delegated, delegate)
+            k_account_mark_warm(delegate)
         };
-        delegated
+        if delegated then {
+            message = { message with code_address = delegate }
+        };
+        frame_code = executable_code(tx.recipient, delegated, delegate);
+        struct { ready = true, delegated = delegated }
     }
 }
 
@@ -1027,15 +1047,15 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
             let deployed_length = dep_len;
             if deployed_code_size_allowed(deployed_length) &
                 ((profile.fork < London) | (deployed_length == 0) | (slice_byte(deployed_code, 0) != 0xef)) then {
-                match code_deployment_execution_cost(dep_len, gas_remaining) {
-                    Some(execution_deposit) => {
-                        gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
-                        charge_deployment_state_gas(code_deployment_state_cost(dep_len));
+                let deployment_charge = code_deployment_execution_cost(dep_len, gas_remaining);
+                if deployment_charge.affordable then {
+                        let execution_deposit = deployment_charge.cost;
+                        gas_remaining = gas_sub(gas_remaining, execution_deposit);
+                        let _ = charge_deployment_state_gas(code_deployment_state_cost(dep_len));
                         if frame_succeeded() then {
                             k_deploy_code(new_addr, code_db_intern_output(deployed_code))
                         }
-                    },
-                    None() => {
+                    } else {
                         if profile.fork < Homestead then {
                             /* Frontier consumes the remaining gas and keeps the
                              * created account with empty code. */
@@ -1044,8 +1064,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                         } else {
                             exc_halt(OutOfGas)
                         }
-                    },
-                }
+                    }
             } else {
                 exc_halt(OutOfGas)
             } /* failed deploy */
@@ -1069,29 +1088,27 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
     if word_nonzero(tx.value) then {
         k_transfer(sender, tx.recipient, tx.value)
     };
-    let selected_precompile = precompile_number(tx.recipient);
-    if not_bool(delegated) & (selected_precompile != 0) then {
-        let number : precompile_id = selected_precompile;
+    let selected_precompile = precompile_id_for_address(tx.recipient);
+    if not_bool(delegated) & (selected_precompile != NotPrecompile) then {
 
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
            exceptional halt (all gas consumed, value transfer reverted). */
         let input_src : StatelessInputSlice = tx.input_src;
         let precompile_input = InputCalldata(input_src);
-        match precompile_gas(number, precompile_input, gas_remaining) {
-            Some(used) => {
-                let result = run_precompile_slice(number, precompile_input);
+        let precompile_charge = precompile_gas(selected_precompile, precompile_input, gas_remaining);
+        if precompile_charge.affordable then {
+                let used = precompile_charge.cost;
+                let result = run_precompile_slice(selected_precompile, precompile_input);
                 if result.success then {
-                    gas_remaining = gas_sub_or_oog(gas_remaining, used);
-                    if is_running() then {
-                        frame_status = Halted(HaltReturn(result.output))
-                    }
+                    gas_remaining = gas_sub(gas_remaining, used);
+                    frame_status = Halted(HaltReturn(result.output))
                 } else {
                     exc_halt(OutOfGas)
                 }
-            },
-            _ => exc_halt(OutOfGas),
-        }
+            } else {
+                exc_halt(OutOfGas)
+            }
     } else {
         if profile.fork < Amsterdam then {
             calldata = InputCalldata(tx.input_src);
@@ -1124,7 +1141,7 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
 val run_legacy_transaction_frame : forall 'limit 'regular,
                                      0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound. (
         Transaction,
-        TxValidityFields('limit, 'regular),
+        TxValidityForLimits('limit, 'regular),
     ) -> TxFrameResultFields('limit, 'regular)
 function run_legacy_transaction_frame(tx, v) = {
     let initial_gas = v.gas;
@@ -1158,7 +1175,7 @@ function run_legacy_transaction_frame(tx, v) = {
 val run_amsterdam_transaction_frame : forall 'limit 'regular,
                                         0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound. (
         Transaction,
-        TxValidityFields('limit, 'regular),
+        TxValidityForLimits('limit, 'regular),
         TxUpfrontResult,
     ) -> TxFrameResultFields('limit, 'regular)
 function run_amsterdam_transaction_frame(tx, v, upfront) = {
@@ -1175,18 +1192,25 @@ function run_amsterdam_transaction_frame(tx, v, upfront) = {
     let authorization_list = tx.authorizations;
     authorization_tracker_reset(authorization_list.count);
     let authorizations : StatelessInputSlice = authorization_list.encoded;
-    process_amsterdam_auth_cursor(authorizations, v.sender, current_target, word_nonzero(tx.value));
+    var preparation_ready = process_amsterdam_auth_cursor(
+        authorizations,
+        v.sender,
+        current_target,
+        word_nonzero(tx.value),
+    );
 
     var authorization_state_gas : frame_state_gas_delta = FRAME_STATE_GAS_DELTA_ZERO;
     var delegated : bool = false;
-    if is_running() then {
+    if preparation_ready then {
         authorization_state_gas = frame_state_gas_used();
         message = { message with state_gas_reservoir = state_gas_remaining };
         state_gas_spilled = STATE_GAS_SPILL_ZERO;
-        delegated = prepare_amsterdam_transaction_dispatch(tx, v, upfront)
+        let preparation = prepare_amsterdam_transaction_dispatch(tx, v, upfront);
+        preparation_ready = preparation.ready;
+        delegated = preparation.delegated
     };
 
-    if not_bool(is_running()) then {
+    if not_bool(preparation_ready) then {
         k_journal_revert();
         message = { message with state_gas_reservoir = preparation_reservoir };
         state_gas_remaining = preparation_reservoir;
@@ -1226,7 +1250,7 @@ function run_amsterdam_transaction_frame(tx, v, upfront) = {
 val run_transaction_frame : forall 'limit 'regular,
                               0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound. (
         Transaction,
-        TxValidityFields('limit, 'regular),
+        TxValidityForLimits('limit, 'regular),
         TxUpfrontResult,
     ) -> TxFrameResultFields('limit, 'regular)
 function run_transaction_frame(tx, v, upfront) = {
@@ -1281,7 +1305,7 @@ function remaining_gas_after_refund(_limit, total, remaining, cap) = {
     transaction into the block layer, and emits the receipt. */
 val settle_transaction : forall 'limit 'regular, 0 <= 'regular & 'regular <= 'limit & 'limit <= block_gas_limit_bound. (
         Transaction,
-        TxValidityFields('limit, 'regular),
+        TxValidityForLimits('limit, 'regular),
         authorization_refund,
         TxFrameResultFields('limit, 'regular),
     ) -> ReceiptWithin('limit, 'regular)
@@ -1339,21 +1363,23 @@ function settle_transaction(tx, v, authorization_refund, fr) = {
     let (execution_gas_value as 'execution_gas) = execution_gas;
     let (state_gas_value as 'state_gas) = state_gas;
     if gas_used_value <= execution_gas_value + state_gas_value then {
-        struct {
-            tx_type = tx.tx_type,
-            success = fr.success,
-            gas_used = gas_used_value,
-            execution_gas = execution_gas_value,
-            state_gas = state_gas_value,
-            logs = logs,
-        } :
-            ReceiptFields('limit, 'regular, 'gas_used, 'execution_gas, 'state_gas)
+        receipt_within(
+            gas_limit,
+            gas_snapshot.regular_limit,
+            tx.tx_type,
+            fr.success,
+            gas_used_value,
+            execution_gas_value,
+            state_gas_value,
+            logs,
+        )
     } else {
         /* A violation would mean the frame snapshot failed to conserve the
            two admitted gas reservoirs. This is the one transaction boundary
            that validates that internal invariant; block and receipt
            accumulation consume its dependent proof without rechecking it. */
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 

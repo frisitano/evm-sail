@@ -363,6 +363,32 @@ type ProtocolProfile = {
     )
 }
 
+val pack_protocol_profile : forall 'fork 'target 'maximum 'denominator 'code_limit 'initcode_limit 'transaction_total_gas_limit 'transaction_regular_gas_limit 'transaction_blob_limit 'refund_divisor,
+                                protocol_profile_parameters(
+                                    'fork,
+                                    'target,
+                                    'maximum,
+                                    'denominator,
+                                    'code_limit,
+                                    'initcode_limit,
+                                    'transaction_total_gas_limit,
+                                    'transaction_regular_gas_limit,
+                                    'transaction_blob_limit,
+                                    'refund_divisor,
+                                ). ProtocolProfileFields(
+        'fork,
+        'target,
+        'maximum,
+        'denominator,
+        'code_limit,
+        'initcode_limit,
+        'transaction_total_gas_limit,
+        'transaction_regular_gas_limit,
+        'transaction_blob_limit,
+        'refund_divisor,
+    ) -> ProtocolProfile
+function pack_protocol_profile(profile) = profile
+
 /*! The gas limits which become concrete once a correlated protocol profile
     is paired with the executing block header. `transaction_total_limit`
     bounds the transaction's complete reservoir; `transaction_regular_limit`
@@ -732,11 +758,11 @@ function execution_profile_for(protocol, block_limit) =
         gas = gas_limits_for(protocol, block_limit),
     }
 
-/*! The schema's stable fork byte and complete protocol profile form one
-    declarative Sail mapping. The mapping clauses are the sole table of
-    admitted schema/profile combinations. */
-mapping schema_protocol_profile : byte <-> ProtocolProfile = {
-    forwards 0x0a => (struct {
+/*! The schema's stable fork byte selects one complete protocol profile. The
+    branches are the sole table of admitted schema/profile combinations. */
+function schema_protocol_profile(schema_fork : byte) -> ProtocolProfile =
+  match schema_fork {
+    0x0a => pack_protocol_profile(struct {
         fork = Berlin,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -770,7 +796,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         pre_london_refund_divisor,
     )),
-    forwards 0x0b => (struct {
+    0x0b => pack_protocol_profile(struct {
         fork = London,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -804,7 +830,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         post_london_refund_divisor,
     )),
-    forwards 0x0c => (struct {
+    0x0c => pack_protocol_profile(struct {
         fork = ArrowGlacier,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -838,7 +864,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         post_london_refund_divisor,
     )),
-    forwards 0x0d => (struct {
+    0x0d => pack_protocol_profile(struct {
         fork = GrayGlacier,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -872,7 +898,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         post_london_refund_divisor,
     )),
-    forwards 0x0e => (struct {
+    0x0e => pack_protocol_profile(struct {
         fork = Paris,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -906,7 +932,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         post_london_refund_divisor,
     )),
-    forwards 0x0f => (struct {
+    0x0f => pack_protocol_profile(struct {
         fork = Shanghai,
         blob_schedule = blob_schedule(
             sizeof(blob_schedule_inactive_count),
@@ -940,7 +966,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         blob_schedule_inactive_count,
         post_london_refund_divisor,
     )),
-    forwards 0x10 => (struct {
+    0x10 => pack_protocol_profile(struct {
         fork = Cancun,
         blob_schedule = blob_schedule(
             sizeof(cancun_blob_target_count),
@@ -974,7 +1000,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         cancun_blob_max_count,
         post_london_refund_divisor,
     )),
-    forwards 0x11 => (struct {
+    0x11 => pack_protocol_profile(struct {
         fork = Prague,
         blob_schedule = blob_schedule(
             sizeof(prague_blob_target_count),
@@ -1007,7 +1033,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         prague_blob_max_count,
         post_london_refund_divisor,
     )),
-    forwards 0x12 => (struct {
+    0x12 => pack_protocol_profile(struct {
         fork = Osaka,
         blob_schedule = blob_schedule(
             sizeof(prague_blob_target_count),
@@ -1040,7 +1066,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         cancun_blob_max_count,
         post_london_refund_divisor,
     )),
-    forwards 0x13 => (struct {
+    0x13 => pack_protocol_profile(struct {
         fork = BPO1,
         blob_schedule = blob_schedule(
             sizeof(bpo1_blob_target_count),
@@ -1073,7 +1099,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         cancun_blob_max_count,
         post_london_refund_divisor,
     )),
-    forwards 0x14 => (struct {
+    0x14 => pack_protocol_profile(struct {
         fork = BPO2,
         blob_schedule = blob_schedule(
             sizeof(bpo2_blob_target_count),
@@ -1106,7 +1132,7 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         cancun_blob_max_count,
         post_london_refund_divisor,
     )),
-    forwards 0x15 => (struct {
+    _ => pack_protocol_profile(struct {
         fork = Amsterdam,
         blob_schedule = blob_schedule(
             sizeof(bpo2_blob_target_count),
@@ -1139,7 +1165,22 @@ mapping schema_protocol_profile : byte <-> ProtocolProfile = {
         cancun_blob_max_count,
         post_london_refund_divisor,
     )),
-}
+  }
+
+/*! Whether a schema fork byte has a protocol-profile branch. */
+function schema_protocol_profile_forwards_matches(schema_fork : byte) -> bool =
+       (schema_fork == 0x0a)
+    |  (schema_fork == 0x0b)
+    |  (schema_fork == 0x0c)
+    |  (schema_fork == 0x0d)
+    |  (schema_fork == 0x0e)
+    |  (schema_fork == 0x0f)
+    |  (schema_fork == 0x10)
+    |  (schema_fork == 0x11)
+    |  (schema_fork == 0x12)
+    |  (schema_fork == 0x13)
+    |  (schema_fork == 0x14)
+    |  (schema_fork == 0x15)
 
 /*! The Amsterdam mapping entry initializes the kernel before input decoding. */
 let DEFAULT_PROTOCOL_PROFILE : ProtocolProfile = schema_protocol_profile(0x15)

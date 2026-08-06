@@ -15,13 +15,15 @@ function execute_block_transactions(
     let public_key_count_value = public_keys_length / public_key_length;
     if (public_key_count_value != transactions.count) |
         (public_keys_length != public_key_count_value * public_key_length) then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     let (gas_limit as 'gas_limit) = gas_limits.block_limit;
     var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
-    var receipts = receipt_accumulator_empty();
+    let records_start = receipt_store_begin();
+    let logs_start = log_store_index_add(logs_tx_start(), logs_tx_count());
     var remaining_deposits : StatelessInputSlice = expected_deposits;
     var cursor = ssz_list_cursor(transactions);
     var keys : StatelessInputSlice = public_keys;
@@ -30,10 +32,12 @@ function execute_block_transactions(
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
         let keys_fields = keys;
-        let keys_length = keys_fields.len;
-        if keys_length < public_key_length then {
-            throw InvalidBlock(WitnessDeficient)
-        };
+        let keys_fields : StatelessInputSliceAtLeast(65) = if public_key_length <= keys_fields.len then {
+                keys_fields
+            } else {
+                fatal_error(WitnessDeficient);
+                exit(())
+            };
         let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
         keys = slice_suffix(keys_fields, public_key_length);
         cycle_scope_start(10);
@@ -53,7 +57,8 @@ function execute_block_transactions(
         );
         if profile.fork >= Amsterdam then {
             if (available_execution_gas < allowance.regular) | (available_state_gas < allowance.total) then {
-                throw InvalidBlock(GasUsedExceedsLimit)
+                fatal_error(GasUsedExceedsLimit);
+                exit(())
             } else {
                 let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
                 let next_blob_gas : blob_gas_used = block_blob_gas_add(
@@ -64,7 +69,7 @@ function execute_block_transactions(
                 let receipt = process_transaction(tx, allowance);
                 let next_usage = block_gas_usage_add(usage, receipt.execution_gas, receipt.state_gas, receipt.gas_used);
                 gas_usage = next_usage;
-                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                receipt_store_append(receipt, next_usage.receipts, i);
                 if profile.fork >= Prague then {
                     remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
                 };
@@ -72,7 +77,8 @@ function execute_block_transactions(
             }
         } else {
             if available_execution_gas < allowance.total then {
-                throw InvalidBlock(GasUsedExceedsLimit)
+                fatal_error(GasUsedExceedsLimit);
+                exit(())
             } else {
                 let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
                 let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
@@ -83,7 +89,7 @@ function execute_block_transactions(
                 let receipt = process_transaction(tx, allowance);
                 let next_usage = block_gas_usage_add(usage, receipt.gas_used, 0, receipt.gas_used);
                 gas_usage = next_usage;
-                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                receipt_store_append(receipt, next_usage.receipts, i);
                 if profile.fork >= Prague then {
                     remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
                 };
@@ -92,7 +98,8 @@ function execute_block_transactions(
         }
     };
     if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
-        throw InvalidBlock(InvalidExecutionRequests)
+        fatal_error(InvalidExecutionRequests);
+        exit(())
     };
     let final_usage = gas_usage;
     let header_gas_used = if (profile.fork >= Amsterdam) & (final_usage.execution < final_usage.state) then {
@@ -101,8 +108,14 @@ function execute_block_transactions(
             final_usage.execution
         };
     cycle_scope_start(16);
-    let receipts_root = receipt_accumulator_root(receipts);
+    let receipts_root = receipt_store_root(records_start, transactions.count);
     cycle_scope_end(16);
+    let retained = log_store_index_add(logs_tx_start(), logs_tx_count());
+    let logs_count : log_store_index = if logs_start <= retained then {
+            retained - logs_start
+        } else {
+            0
+        };
     struct {
         header_gas_used = header_gas_used,
         execution_gas_used = final_usage.execution,
@@ -110,15 +123,13 @@ function execute_block_transactions(
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
         receipts_root = receipts_root,
-        logs_bloom = receipt_accumulator_bloom(receipts),
-        requests = EMPTY_EXECUTION_REQUESTS,
+        logs = struct { start = logs_start, count = logs_count },
     }
 }
 
 function execute_block_body(
     body : BlockBody,
-    public_keys : StatelessInputSlice,
-    expected_deposits : StatelessInputSlice,
+    input_ref : StatelessInputRef,
 ) -> (
     BlockExecutionResult
 ) = {
@@ -131,7 +142,7 @@ function execute_block_body(
     run_block_start_system_calls();
     cycle_scope_end(8);
     cycle_scope_start(9);
-    let result = execute_block_transactions(body.transactions, public_keys, expected_deposits);
+    let result = execute_block_transactions(body.transactions, input_ref.public_keys, input_ref.deposits);
     cycle_scope_end(9);
     let post_tx_index = body.transactions.count + 1;
     k_current_transaction_epoch = post_tx_index;
@@ -140,11 +151,9 @@ function execute_block_body(
     apply_block_end_state(body);
     cycle_scope_end(17);
     cycle_scope_start(18);
-    let requests = if profile.fork >= Prague then {
-            collect_execution_requests(expected_deposits)
-        } else {
-            EMPTY_EXECUTION_REQUESTS
-        };
+    if profile.fork >= Prague then {
+        validate_execution_requests(input_ref)
+    };
     cycle_scope_end(18);
-    { result with requests = requests }
+    result
 }

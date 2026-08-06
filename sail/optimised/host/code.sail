@@ -8,5 +8,11 @@
 val optimized_analyze_code = impure { c: "code_db_analyze_indexed" } :
     (CodeSlice, bool) -> jump_table_index
 
+val optimized_code_db_resolve = impure { c: "code_db_resolve_indexed" } :
+    hash -> Code
+
 function analyze_code(code : CodeSlice, fork : Fork) -> jump_table_index =
     optimized_analyze_code(code, fork >= Amsterdam)
+
+function code_db_resolve(code_hash : hash) -> Code =
+    optimized_code_db_resolve(code_hash)

@@ -7,19 +7,21 @@
 #include "value_convert.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
-static void storage_value_out(struct zoptionzIRStorageValuezK *out,
-                              sail_fixed_bytes_20 addr,
-                              sail_u256 slot) {
+static struct zStorageBlockRow storage_value_out(sail_fixed_bytes_20 addr,
+                                                 sail_u256 slot) {
+  struct zStorageBlockRow out;
   sail_u256 curr, orig;
   if (storage_row_probe(1, addr, slot, &curr, &orig)) {
-    out->kind = Kind_zSomezIRStorageValuezK;
-    out->variants.zSomezIRStorageValuezK.zcurr = curr;
-    out->variants.zSomezIRStorageValuezK.zorig = orig;
+    out.zfound = true;
+    out.zvalue.zcurr = curr;
+    out.zvalue.zorig = orig;
   } else {
-    out->kind = Kind_zNonezIRStorageValuezK;
-    out->variants.zNonezIRStorageValuezK = UNIT;
+    out.zfound = false;
+    memset(&out.zvalue, 0, sizeof(out.zvalue));
   }
+  return out;
 }
 
 void storage_tx_get(struct zStorageTxLookup *out, struct zStorageKey key) {
@@ -39,41 +41,42 @@ void storage_tx_get(struct zStorageTxLookup *out, struct zStorageKey key) {
   }
 }
 
-void storage_block_get(struct zoptionzIRStorageValuezK *out,
-                       struct zStorageKey key) {
-  storage_value_out(out, key.zaddr, key.zslot);
+struct zStorageBlockRow storage_block_get(struct zStorageKey key) {
+  return storage_value_out(key.zaddr, key.zslot);
 }
 
-void storage_block_iter_next(struct zoptionzIRStorageTrieEntryzK *out,
+void storage_block_iter_next(struct zStorageBlockIterResult *out,
                              const sail_fixed_bytes_20 addr) {
   struct zStorageTrieEntry *trie_entry =
-      &out->variants.zSomezIRStorageTrieEntryzK;
+      &out->variants.zStorageBlockIterRow;
   struct zStorageEntry *entry = &trie_entry->zentry;
   if (storage_block_iter_next_probe(
           addr, &entry->zkey.zslot, &entry->zvalue.zcurr,
           &entry->zvalue.zorig, &trie_entry->zaddress_hash,
           &trie_entry->zslot_hash)) {
     evmsail_address_assign(&entry->zkey.zaddr, addr);
-    out->kind = Kind_zSomezIRStorageTrieEntryzK;
+    out->kind = Kind_zStorageBlockIterRow;
   } else {
-    out->kind = Kind_zNonezIRStorageTrieEntryzK;
-    out->variants.zNonezIRStorageTrieEntryzK = UNIT;
+    out->kind = Kind_zStorageBlockIterExhausted;
+    out->variants.zStorageBlockIterExhausted = UNIT;
   }
 }
 
-static void account_out(struct zoptionzIRAccountzK *out, uint64_t layer,
-                        const sail_fixed_bytes_20 addr) {
-  struct zAccount *account = &out->variants.zSomezIRAccountzK;
+static struct zAccountRow account_out(uint64_t layer,
+                                      const sail_fixed_bytes_20 addr) {
+  struct zAccountRow out;
+  struct zAccount *account = &out.zaccount;
   if (acct_row_probe(layer, addr, &account->zinfo.znonce,
                      &account->zinfo.zbalance, &account->zinfo.zstorage_root,
                      &account->zinfo.zcode_hash, &account->zpresent,
                      &account->zstorage_cleared, &account->zcreated,
                      &account->zselfdestructed)) {
-    out->kind = Kind_zSomezIRAccountzK;
+    out.zfound = true;
   } else {
-    out->kind = Kind_zNonezIRAccountzK;
-    out->variants.zNonezIRAccountzK = UNIT;
+    out.zfound = false;
+    memset(account, 0, sizeof(*account));
   }
+  return out;
 }
 
 unit storage_tx_update(struct zStorageEntry entry) {
@@ -91,20 +94,19 @@ unit storage_block_cache(struct zStorageKey key, const sail_fixed_bytes_32 slot_
   return storage_block_cache_raw(key.zaddr, key.zslot, slot_hash, value);
 }
 
-void acct_tx_get(struct zoptionzIRAccountzK *out, const sail_fixed_bytes_20 addr) {
-  account_out(out, 0, addr);
+struct zAccountRow acct_tx_get(const sail_fixed_bytes_20 addr) {
+  return account_out(0, addr);
 }
 
-void acct_block_get(struct zoptionzIRAccountzK *out,
-                    const sail_fixed_bytes_20 addr) {
-  account_out(out, 1, addr);
+struct zAccountRow acct_block_get(const sail_fixed_bytes_20 addr) {
+  return account_out(1, addr);
 }
 
-void acct_block_iter_next(struct zoptionzIRAcctTrieEntryzK *out,
+void acct_block_iter_next(struct zAcctBlockIterResult *out,
                           const unit u) {
   (void)u;
   struct zAcctTrieEntry *trie_entry =
-      &out->variants.zSomezIRAcctTrieEntryzK;
+      &out->variants.zAcctBlockIterRow;
   struct zAcctEntry *entry = &trie_entry->zentry;
   struct zAccount *curr = &entry->zvalue.zcurr;
   struct zAccount *orig = &entry->zvalue.zorig;
@@ -117,10 +119,10 @@ void acct_block_iter_next(struct zoptionzIRAcctTrieEntryzK *out,
           &orig->zinfo.zstorage_root, &orig->zinfo.zcode_hash, &orig->zpresent,
           &orig->zstorage_cleared, &orig->zcreated,
           &orig->zselfdestructed, &trie_entry->zaddress_hash)) {
-    out->kind = Kind_zSomezIRAcctTrieEntryzK;
+    out->kind = Kind_zAcctBlockIterRow;
   } else {
-    out->kind = Kind_zNonezIRAcctTrieEntryzK;
-    out->variants.zNonezIRAcctTrieEntryzK = UNIT;
+    out->kind = Kind_zAcctBlockIterExhausted;
+    out->variants.zAcctBlockIterExhausted = UNIT;
   }
 }
 
@@ -150,22 +152,22 @@ unit acct_block_cache(const sail_fixed_bytes_20 addr, const sail_fixed_bytes_32 
       account.zstorage_cleared);
 }
 
-void storage_tx_pop(struct zoptionzIRStorageEntryzK *out, unit u) {
+void storage_tx_pop(struct zStorageTxPopResult *out, unit u) {
   (void)u;
-  struct zStorageEntry *entry = &out->variants.zSomezIRStorageEntryzK;
+  struct zStorageEntry *entry = &out->variants.zStorageTxPopRow;
   if (storage_tx_pop_probe(
           &entry->zkey.zaddr, &entry->zkey.zslot,
           &entry->zvalue.zcurr, &entry->zvalue.zorig)) {
-    out->kind = Kind_zSomezIRStorageEntryzK;
+    out->kind = Kind_zStorageTxPopRow;
   } else {
-    out->kind = Kind_zNonezIRStorageEntryzK;
-    out->variants.zNonezIRStorageEntryzK = UNIT;
+    out->kind = Kind_zStorageTxPopExhausted;
+    out->variants.zStorageTxPopExhausted = UNIT;
   }
 }
 
-void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
+void acct_tx_pop(struct zAcctTxPopResult *out, unit u) {
   (void)u;
-  struct zAcctEntry *entry = &out->variants.zSomezIRAcctEntryzK;
+  struct zAcctEntry *entry = &out->variants.zAcctTxPopRow;
   struct zAccount *curr = &entry->zvalue.zcurr;
   struct zAccount *orig = &entry->zvalue.zorig;
   if (acct_tx_pop_probe(
@@ -175,10 +177,10 @@ void acct_tx_pop(struct zoptionzIRAcctEntryzK *out, unit u) {
           &orig->zinfo.znonce, &orig->zinfo.zbalance, &orig->zinfo.zstorage_root,
           &orig->zinfo.zcode_hash, &orig->zpresent, &orig->zstorage_cleared,
           &orig->zcreated, &orig->zselfdestructed)) {
-    out->kind = Kind_zSomezIRAcctEntryzK;
+    out->kind = Kind_zAcctTxPopRow;
   } else {
-    out->kind = Kind_zNonezIRAcctEntryzK;
-    out->variants.zNonezIRAcctEntryzK = UNIT;
+    out->kind = Kind_zAcctTxPopExhausted;
+    out->variants.zAcctTxPopExhausted = UNIT;
   }
 }
 

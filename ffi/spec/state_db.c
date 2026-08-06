@@ -1507,10 +1507,9 @@ unit acct_block_cache_raw(sail_fixed_bytes_20 a, sail_fixed_bytes_32 address_has
 }
 
 /* --- reads (overlay only; a miss => Sail asks eest_account / resolver) --- */
-/* per-layer account probe (layer 0 = tx, 1 = block) for the Sail
-   option(Account) adapter: returns presence; the field words
-   land in the out params (untouched when absent). The tx-over-block
-   precedence lives in Sail (account_lookup). */
+/* Per-layer account probe (layer 0 = tx, 1 = block): returns presence and
+   writes the explicit AccountRow payload fields when present. The tx-over-
+   block precedence lives in Sail (account_lookup). */
 uint64_t acct_row_probe(uint64_t layer, sail_fixed_bytes_20 a, uint64_t *nonce,
                         sail_u256 *bal, sail_fixed_bytes_32 *sroot, sail_fixed_bytes_32 *chash,
                         bool *exists, bool *storage_cleared,

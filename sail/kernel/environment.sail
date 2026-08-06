@@ -115,7 +115,8 @@ function k_blockhash(number_word : word) -> hash = {
         if distance_word <= 256 then {
             let distance : range(1, 256) = distance_word;
             if k_n_headers < distance then {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             } else {
                 let index : ancestor_index = distance - 1;
                 ancestor_hash_read(index)

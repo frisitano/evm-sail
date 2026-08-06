@@ -3,8 +3,6 @@
 
 #include "evmsail/prelude.h"
 
-Hash32 tx_signing_hash(
-    uint8_t envelope_type, struct StatelessInputSliceFields content,
-    U256 v);
+Hash32 tx_signing_hash(uint8_t envelope_type, struct StatelessInputSliceFields content, U256 v);
 
 #endif

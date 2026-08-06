@@ -9,14 +9,9 @@
 
 #include "host/state/internal.h"
 
-void state_journal_workspace_bind(void);
+void state_journal_workspace_bind(uint32_t capacity);
 
-unit state_journal_reset(unit ignored);
-unit state_journal_checkpoint(unit ignored);
-unit state_journal_revert(unit ignored);
-unit state_journal_commit(unit ignored);
-
-unit state_journal_push_transient(AccountId account_id, U256 slot, U256 prior);
+void state_journal_push_transient(AccountId account_id, U256 slot, U256 prior);
 void state_journal_push_warm_account(AccountId id, uint32_t prior_epoch);
 void state_journal_push_warm_storage(StorageId id, uint32_t prior_epoch);
 void state_journal_push_account_balance(AccountId id, U256 prior);
@@ -29,9 +24,7 @@ void state_journal_push_account_transaction_listed(void);
 void state_journal_push_account_storage_listed(AccountId id);
 void state_journal_push_log_appended(void);
 void state_journal_push_storage_value(StorageId id, U256 prior);
-void state_journal_push_storage_row_generation(StorageId id,
-                                               StorageGeneration prior);
-void state_journal_push_account_storage_generation(
-    AccountId account_id, StorageGeneration prior);
+void state_journal_push_storage_row_generation(StorageId id, StorageGeneration prior);
+void state_journal_push_account_storage_generation(AccountId account_id, StorageGeneration prior);
 
 #endif

@@ -205,7 +205,8 @@ function fetch() -> ast = {
                 } else {
                     if profile.fork >= Amsterdam then {
                         match deep_stack_operation(opcode) {
-                            Some(operation) => {
+                            NotDeepStackOperation => (immediate_offset, decode_simple(opcode)),
+                            operation => {
                                 let immediate = slice_byte(code, immediate_offset);
                                 let immediate_valid = deep_stack_operation_immediate_valid(
                                     operation,
@@ -220,10 +221,10 @@ function fetch() -> ast = {
                                     DeepStackDuplicate => DUPN(immediate),
                                     DeepStackSwap => SWAPN(immediate),
                                     DeepStackExchange => EXCHANGE(immediate),
+                                    NotDeepStackOperation => decode_simple(opcode),
                                 };
                                 (after_instruction, instruction)
                             },
-                            None() => (immediate_offset, decode_simple(opcode)),
                         }
                     } else {
                         (immediate_offset, decode_simple(opcode))
@@ -296,7 +297,7 @@ function frame_succeeded() -> bool =
 function executable_code(target : address, dele : bool, dtgt : address) -> Code =
     if dele then {
         let delegate_code = code_db_resolve(k_code_key(dtgt));
-        if precompile_number(dtgt) != 0 then { EMPTY_CODE } else { delegate_code }
+        if precompile_id_for_address(dtgt) != NotPrecompile then { EMPTY_CODE } else { delegate_code }
     } else {
         code_db_resolve(k_code_key(target))
     }
@@ -408,41 +409,27 @@ function run_call(kind : CallKind) -> unit = {
             GAS_CONSTANT_ZERO
         };
 
-    /* Narrow the two word-addressed ranges at the point where memory OOG is
-       sequenced. The planner itself halts if the requested high-water mark is
-       outside the executable memory domain. */
-    let available = gas_remaining;
-    let args_access = memory_access(args_off_word, args_len_word);
-    let ret_access = memory_access(ret_off_word, ret_len_word);
+    /* Compute the mathematical endpoints before narrowing either host range.
+       Optimized C saturates only its endpoint representation, to a charge
+       which is greater than every representable live-gas value. */
+    let args_required = memory_required_size(args_off_word, args_len_word);
+    let ret_required = memory_required_size(ret_off_word, ret_len_word);
     let required_size =
-        if args_access.required_size < ret_access.required_size then {
-            ret_access.required_size
+        if args_required < ret_required then {
+            ret_required
         } else {
-            args_access.required_size
+            args_required
         };
-    let memory = memory_expansion(required_size, available);
-    if not_bool(is_running()) then {
-        return ()
-    };
-    let memory_cost = memory.cost;
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
 
-    /* Static gas is checked before any state access: the
-       target's access + value-transfer + memory cost is checked BEFORE reading
+    /* Static gas is charged before any state access: the
+       target's access + value-transfer cost is checked AFTER memory gas and BEFORE reading
        any of the target's state. A frame that cannot afford it halts here, having
        touched no account -- so the stateless witness need not prove the target.
        (Resolving the EIP-7702 delegation or the empty-account check below reads
        the target's account, which an OOG-before-access tx must never do.) */
     let static_base : gas_cost = target_cost + transfer_cost;
-    let before_static = gas_remaining;
-    if before_static < static_base then {
-        exc_halt(OutOfGas);
-        return ()
-    };
-    let after_static_base : gas = before_static - static_base;
-    if after_static_base < memory_cost then {
-        exc_halt(OutOfGas);
-        return ()
-    };
+    if not_bool(charge(static_base)) then { return () };
 
     /* The target access happens once the static charge is affordable. Mark it
        before pricing EIP-7702's delegation target: a self-delegation therefore
@@ -471,68 +458,27 @@ function run_call(kind : CallKind) -> unit = {
             G_newaccount
         } else {
             GAS_CONSTANT_ZERO
-        };
+    };
     let additional_cost : gas_cost = delegation_cost + create_cost;
-    let before_required = gas_remaining;
-    if before_required < static_base then {
-        exc_halt(OutOfGas);
-        return ()
-    };
-    let after_required_base : gas = before_required - static_base;
-    if after_required_base < memory_cost then {
-        exc_halt(OutOfGas);
-        return ()
-    };
-    let after_static_cost : gas = after_required_base - memory_cost;
-    if after_static_cost < additional_cost then {
-        exc_halt(OutOfGas);
-        return ()
-    };
-    let after_required : gas = after_static_cost - additional_cost;
-    let required : gas_cost = if after_required <= before_required then {
-            before_required - after_required
-        } else {
-            throw InvalidBlock(ExecutionInvalid)
-        };
+    if not_bool(charge(additional_cost)) then { return () };
     let stipend : gas = if word_nonzero(value) then { G_callstipend } else { GAS_ZERO };
 
     /* Forwarded child gas, per the EIP-150
-       calculate_message_call_gas. If the frame cannot even afford
-       extra gas plus memory expansion, the call is charged the FULL requested gas (not the
-       63/64-capped value), which forces the out-of-gas exceptional halt below.
-       Otherwise the EIP-150 63/64ths cap applies to the gas left after
-       subtracting the memory and extra costs. */
+       calculate_message_call_gas. The EIP-150 63/64ths cap applies to the gas
+       left after the access, value-transfer, memory, and new-account costs. */
     var base_child : gas = GAS_ZERO;
     if profile.fork >= Amsterdam then {
         /* Amsterdam charges execution work, then state growth, before
            applying EIP-150 to the execution gas left for the child. */
-        if not_bool(charge(required)) then { return () };
         if new_account_charged then {
-            charge_state_gas(G_amsterdam_state_new_account)
+            if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then { return () }
         };
-        if is_running() then {
-            base_child = call_gas_cap_word(gas_remaining, gas_request);
-            if not_bool(charge(base_child)) then { return () }
-        }
+        base_child = call_gas_cap_word(gas_remaining, gas_request);
+        if not_bool(charge(base_child)) then { return () }
     } else {
-        let avail = gas_remaining;
-        base_child =
-            if avail < required then {
-                GAS_ZERO
-            } else {
-                let available_after_cost = gas_sub_or_oog(avail, required);
-                call_gas_cap_word(available_after_cost, gas_request)
-            };
-
-        /* Legacy message-call charging combines the child allocation with
-           access, value-transfer, new-account, and memory costs. */
-        if not_bool(charge(required)) then { return () };
+        base_child = call_gas_cap_word(gas_remaining, gas_request);
         if not_bool(charge(base_child)) then { return () }
     };
-    if not_bool(is_running()) then {
-        return ()
-    };
-
     if tg_deleg then {
         k_account_mark_warm(tg_target)
     };
@@ -549,7 +495,15 @@ function run_call(kind : CallKind) -> unit = {
            delegate is touched (kept in the BAL account set). */
         let _ = k_aload(tg_target)
     };
-    apply_memory_expansion(memory);
+    let args_access = memory_access(args_off_word, args_len_word);
+    let ret_access = memory_access(ret_off_word, ret_len_word);
+    let materialized_required_size =
+        if args_access.required_size < ret_access.required_size then {
+            ret_access.required_size
+        } else {
+            args_access.required_size
+        };
+    expand_memory(materialized_required_size);
     let args = args_access.range;
     let ret = ret_access.range;
     let child_gas : gas = conserved_gas_add(base_child, stipend);
@@ -563,18 +517,10 @@ function run_call(kind : CallKind) -> unit = {
     /* call-failure guards (checked AFTER gas is charged): the depth ceiling
        (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
        caller's balance covering the transfer. */
-    if semantics.takes_value & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller))) then {
-        returndata_clear();
-        refund_gas(child_gas);
-        if new_account_charged then {
-            credit_state_gas_refund(G_amsterdam_state_new_account)
-        };
-        push(WORD_ZERO)
-    } else if current_depth >= sizeof(call_depth_limit) then {
-        /* Keeping the successful child arm immediately under this guard
-           retains the proof that `call_depth + 1` is representable. */
-        /* the call does not happen: the child gas (including stipend) is
-           refunded to the caller and CALL pushes 0. */
+    if
+           (semantics.takes_value & word_nonzero(value) & not_bool(word_ule(value, k_get_balance(caller))))
+        |  (current_depth == sizeof(call_depth_limit))
+    then {
         returndata_clear();
         refund_gas(child_gas);
         if new_account_charged then {
@@ -582,9 +528,8 @@ function run_call(kind : CallKind) -> unit = {
         };
         push(WORD_ZERO)
     } else {
-        let selected_precompile = precompile_number(target);
-        if selected_precompile != 0 then {
-            let number : precompile_id = selected_precompile;
+        let selected_precompile = precompile_id_for_address(target);
+        if selected_precompile != NotPrecompile then {
 
             /* PRECOMPILE call. The precompile set is fork-gated (the highest is
                0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
@@ -596,9 +541,10 @@ function run_call(kind : CallKind) -> unit = {
             /* Gas is checked before execution: an unpayable/OOG precompile call
              * must not execute (a BLAKE2F request may carry an enormous round
              * count). Failure consumes all child gas and exposes no returndata. */
-            match precompile_gas(number, input, child_gas) {
-                Some(used) => {
-                    let result = run_precompile_slice(number, input);
+            let precompile_charge = precompile_gas(selected_precompile, input, child_gas);
+            if precompile_charge.affordable then {
+                    let used = precompile_charge.cost;
+                    let result = run_precompile_slice(selected_precompile, input);
                     if result.success then {
                         returndata = result.output;
 
@@ -607,11 +553,9 @@ function run_call(kind : CallKind) -> unit = {
                             k_transfer(caller, target, value)
                         };
                         returndata_copy_prefix(ret.off, ret.len);
-                        let unused = gas_sub_or_oog(child_gas, used);
-                        if is_running() then {
-                            refund_gas(unused);
-                            push(WORD_ONE)
-                        }
+                        let unused : gas = gas_sub(child_gas, used);
+                        refund_gas(unused);
+                        push(WORD_ONE)
                     } else {
                         returndata_clear();
                         if new_account_charged then {
@@ -619,15 +563,13 @@ function run_call(kind : CallKind) -> unit = {
                         };
                         push(WORD_ZERO)
                     }
-                },
-                _ => {
+                } else {
                     returndata_clear();
                     if new_account_charged then {
                         credit_state_gas_refund(G_amsterdam_state_new_account)
                     };
                     push(WORD_ZERO)
-                },
-            }
+                }
         } else {
             /* CODE call. Snapshot the world (so a reverting child can be rolled
                back), then perform the CALL value transfer up front. */
@@ -657,12 +599,8 @@ function run_call(kind : CallKind) -> unit = {
                 } else {
                     message.is_static
                 };
-            let child_calldata = if is_running() then {
-                    let bytes = active_memory_slice(args.off, args.len);
-                    MemoryCalldata(evm_memory_slice(bytes.bytes, bytes.len))
-                } else {
-                    EMPTY_CALLDATA
-                };
+            let bytes = active_memory_slice(args.off, args.len);
+            let child_calldata = MemoryCalldata(evm_memory_slice(bytes.bytes, bytes.len));
             let child_state_gas = state_gas_remaining;
             let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
             frame_stack_push(
@@ -748,26 +686,21 @@ function run_create(kind : CreateKind) -> unit = {
     if guard_static() then {
         return ()
     };
-    let initcode = charge_memory_range(off_word, len_word);
-    if not_bool(is_running()) then {
-        return ()
-    };
+    let required_size = memory_required_size(off_word, len_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let initcode_access = memory_access(off_word, len_word);
+    expand_memory(initcode_access.required_size);
+    let initcode = initcode_access.range;
 
     /* up-front charges: memory expansion over the initcode, the CREATE base
        cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
        only -- the keccak word cost of hashing the initcode for the address. */
     if not_bool(charge(create_access_cost())) then { return () };
     if profile.fork >= Shanghai then {
-        charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))
+        if not_bool(charge_word_scaled_gas(G_initcode_word, memory_word_count_word(len_word))) then { return () }
     };
     if semantics.uses_salt then {
-        charge_word_scaled_gas(G_keccak_word, memory_word_count_word(len_word))
-    };
-
-    /* an out-of-gas during those charges is an exceptional halt (all gas
-       consumed); bail before any nonce bump or child allocation. */
-    if not_bool(is_running()) then {
-        return ()
+        if not_bool(charge_word_scaled_gas(G_keccak_word, memory_word_count_word(len_word))) then { return () }
     };
 
     /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
@@ -778,7 +711,7 @@ function run_create(kind : CreateKind) -> unit = {
         /* derive the new contract address: keccak(0xff, creator, salt,
            keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
         let nonce = k_get_nonce(creator);
-        let new_addr : address = if semantics.uses_salt & is_running() then {
+        let new_addr : address = if semantics.uses_salt then {
                 k_create2_addr(creator, salt, word_to_hash(mem_keccak(initcode)))
             } else {
                 k_create_addr(creator, nonce)
@@ -792,11 +725,8 @@ function run_create(kind : CreateKind) -> unit = {
         if profile.fork < Amsterdam then {
             let avail = gas_remaining;
             let retained_gas : gas = avail / 64;
-            child_gas = gas_sub_or_oog(avail, retained_gas);
+            child_gas = gas_sub(avail, retained_gas);
             gas_remaining = retained_gas
-        };
-        if not_bool(is_running()) then {
-            return ()
         };
 
         /* EIP-214: a CREATE in a static
@@ -815,13 +745,8 @@ function run_create(kind : CreateKind) -> unit = {
            incrementable). */
         if   not_bool(word_ule(value, k_get_balance(creator)))
            | (nonce == sizeof(account_nonce_bound)) /* EIP-2681 */
+           | (current_depth == sizeof(call_depth_limit))
         then {
-            returndata_clear();
-            if profile.fork < Amsterdam then {
-                refund_gas(child_gas)
-            };
-            push(WORD_ZERO)
-        } else if current_depth >= sizeof(call_depth_limit) then {
             returndata_clear();
             if profile.fork < Amsterdam then {
                 refund_gas(child_gas)
@@ -836,19 +761,13 @@ function run_create(kind : CreateKind) -> unit = {
             k_account_mark_warm(new_addr);
             let new_account_charged = (profile.fork >= Amsterdam) & k_account_is_empty(new_addr);
             if new_account_charged then {
-                charge_state_gas(G_amsterdam_state_new_account)
-            };
-            if not_bool(is_running()) then {
-                return ()
+                if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then { return () }
             };
             if profile.fork >= Amsterdam then {
                 let avail = gas_remaining;
                 let retained_gas : gas = avail / 64;
-                child_gas = gas_sub_or_oog(avail, retained_gas);
+                child_gas = gas_sub(avail, retained_gas);
                 gas_remaining = retained_gas
-            };
-            if not_bool(is_running()) then {
-                return ()
             };
             let occupied : bool = k_account_occupied(new_addr);
             returndata_clear();
@@ -865,12 +784,8 @@ function run_create(kind : CreateKind) -> unit = {
                 /* Freeze the initcode while parent memory is active, then
                    suspend the complete parent before mutating the new account.
                    The child frame has no calldata. */
-                let initcode = if is_running() then {
-                        memory_code_slice(initcode.off, initcode.len)
-                    } else {
-                        EMPTY_CODE_SLICE
-                    };
-                let child_code = code_db_resolve(code_db_insert(initcode, profile.fork));
+                let initcode_bytes = memory_code_slice(initcode.off, initcode.len);
+                let child_code = code_db_resolve(code_db_insert(initcode_bytes, profile.fork));
                 let child_state_gas = state_gas_remaining;
                 let checkpoint = { suspend_frame() with state_gas_remaining = GAS_ZERO };
                 frame_stack_push(
@@ -961,12 +876,12 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
              * Frontier/Homestead in a way that reaches this branch. */
             exc_halt(OutOfGas)
         } else {
-            match code_deployment_execution_cost(deployed_length, gas_remaining) {
-                Some(execution_deposit) => {
-                    gas_remaining = gas_sub_or_oog(gas_remaining, execution_deposit);
-                    charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
-                },
-                None() => {
+            let deployment_charge = code_deployment_execution_cost(deployed_length, gas_remaining);
+            if deployment_charge.affordable then {
+                    let execution_deposit = deployment_charge.cost;
+                    gas_remaining = gas_sub(gas_remaining, execution_deposit);
+                    let _ = charge_deployment_state_gas(code_deployment_state_cost(deployed_length))
+                } else {
                     if profile.fork < Homestead then {
                         /* Frontier consumed the remaining child gas but kept the
                          * creation successful with empty deployed code. EIP-2
@@ -976,8 +891,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
                     } else {
                         exc_halt(OutOfGas)
                     }
-                },
-            }
+                }
         }
     };
     let deploy_succeeds = initcode_succeeded & frame_succeeded();
@@ -1015,7 +929,7 @@ function resume_create(continuation : CreateContinuation, output : OutputSlice) 
 /*! Applies the pending operation for one completed child frame. */
 function resume_frame(continuation : FrameContinuation, output : OutputSlice) -> unit =
     match continuation {
-        Empty() => throw InvalidBlock(ExecutionInvalid),
+        Empty() => { fatal_error(ExecutionInvalid); exit(()) },
         ResumeCall(call) => resume_call(call, output),
         ResumeCreate(create) => resume_create(create, output),
     }

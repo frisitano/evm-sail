@@ -3,7 +3,6 @@
 /* Decode the complete fixed-width SSZ uint256 at its semantic boundary.  The
  * specification retains the byte-wise Horner equation; optimized C loads the
  * same little-endian value directly into the numeric word carrier. */
-$[c_throws]
 val optimized_ssz_u256 = impure { c: "ssz_u256" } :
     forall 'offset, stateless_input_valid_range('offset, 32).
     (StatelessInputSlice, int('offset)) -> word
@@ -17,7 +16,6 @@ function ssz_u256(input, offset) =
  * source-backed spans and bounded list references without materializing any
  * variable-length field.
  */
-$[c_throws]
 val optimized_decode_stateless_input_ref =
     impure { c: "decode_stateless_input_ref" } :
     StatelessInputSlice -> StatelessInputRef
@@ -26,7 +24,6 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     optimized_decode_stateless_input_ref(input)
 
 /*! Decode one fixed-width withdrawal without four separate source accesses. */
-$[c_throws]
 val optimized_decode_withdrawal =
     impure { c: "decode_withdrawal" } :
     StatelessInputSlice -> Withdrawal
@@ -46,7 +43,6 @@ function sha256_request_digest(request_type : byte, request : StatelessInputSlic
  * Index source-backed witness nodes in one operation. The standard model
  * retains the explicit SSZ cursor and per-node hash equation.
  */
-$[c_throws]
 val optimized_index_witness_nodes = impure { c: "index_witness_nodes" } : WitnessNodeListRef -> unit
 
 function index_witness_nodes(nodes : WitnessNodeListRef) -> unit =
@@ -57,7 +53,6 @@ function index_witness_nodes(nodes : WitnessNodeListRef) -> unit =
  * the optimized build to consume and index the complete source-backed code
  * list in one call.
  */
-$[c_throws]
 val optimized_index_witness_codes = impure { c: "index_witness_codes" } : (WitnessCodeListRef, bool) -> unit
 
 function index_witness_codes(codes : WitnessCodeListRef) -> unit = {

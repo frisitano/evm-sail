@@ -17,9 +17,8 @@ field reference retains the complete encoded item as a source slice and its
 content length without copying; the content is always the corresponding
 suffix.
 
-Malformed RLP is a normal invalid-block outcome: the decoders throw
-`InvalidBlock(RlpDecode)` at the point of detection, caught once at the
-guest top level.
+Malformed RLP terminates validation with `fatal_error(RlpDecode)` at the
+point where the invalid encoding is detected.
 */
 /*md
 ## Constants
@@ -59,7 +58,8 @@ function rlp_scratch_length_add(left, right) =
     if right <= sizeof(scratch_region_bound) - left then {
         left + right
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     }
 
 /*md
@@ -370,7 +370,8 @@ function rlp_write_uint_nat(n) =
     if n < sizeof(word_modulus) then {
         rlp_write_uint_word(u256(n))
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 
 /*! Appends a uint64-range protocol quantity as a minimal RLP integer. */

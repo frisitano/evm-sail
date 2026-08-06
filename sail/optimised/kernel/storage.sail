@@ -8,9 +8,8 @@
  * tables in one crossing.
  */
 
-$[c_throws]
 val optimized_k_sload = impure { c: "k_sload" } : (hash, address, word) -> StorageValue
-val optimized_k_sstore = impure { c: "k_sstore" } : (address, word, word, word) -> unit
+val optimized_k_sstore = impure { c: "host_storage_update" } : (address, word, word, word) -> unit
 
 function k_sload(a : address, s : word) -> StorageValue =
     optimized_k_sload(k_parent_state_root, a, s)

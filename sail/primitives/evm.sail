@@ -237,18 +237,36 @@ function transaction_initial_gas_fields(
 
 /*! The values established by successful up-front transaction validation
     (YP §6.2): sender, pre-state nonce, intrinsic gas, blob fee, and the
-    EIP-1559 effective gas and priority prices. Invalid transactions throw
+    EIP-1559 effective gas and priority prices. Invalid transactions terminate
     before this value is constructed. */
 struct TxValidityFields(
     'limit : Int,
     'regular : Int,
-),
-       0 <= 'regular
-    &  'regular <= 'limit
-    &  'limit <= block_gas_limit_bound = {
+    'intrinsic_execution : Int,
+    'intrinsic_state : Int,
+    'calldata_floor : Int,
+    'execution : Int,
+    'state : Int,
+), transaction_initial_gas_relation(
+    'limit,
+    'regular,
+    'intrinsic_execution,
+    'intrinsic_state,
+    'calldata_floor,
+    'execution,
+    'state,
+) = {
     sender : address,
     nonce_before : account_nonce,
-    gas : TransactionInitialGasForLimits('limit, 'regular),
+    gas : TransactionInitialGasFields(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ),
     blob_fee : word,
     /* effective gas price (EIP-1559, from the caps + base fee) */
     gas_price : word,
@@ -256,13 +274,107 @@ struct TxValidityFields(
     priority_fee : word,
 }
 
+val tx_validity_fields : forall 'limit 'regular 'intrinsic_execution 'intrinsic_state 'calldata_floor 'execution 'state,
+                              transaction_initial_gas_relation(
+                                  'limit,
+                                  'regular,
+                                  'intrinsic_execution,
+                                  'intrinsic_state,
+                                  'calldata_floor,
+                                  'execution,
+                                  'state,
+                              ). (
+        address,
+        account_nonce,
+        TransactionInitialGasFields(
+            'limit,
+            'regular,
+            'intrinsic_execution,
+            'intrinsic_state,
+            'calldata_floor,
+            'execution,
+            'state,
+        ),
+        word,
+        word,
+        word,
+    ) -> TxValidityFields(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+function tx_validity_fields(sender, nonce_before, gas, blob_fee, gas_price, priority_fee) =
+    struct {
+        sender = sender,
+        nonce_before = nonce_before,
+        gas = gas,
+        blob_fee = blob_fee,
+        gas_price = gas_price,
+        priority_fee = priority_fee,
+    }
+
+/*! A validity result retaining the transaction's admitted total and regular
+    gas limits while hiding the internal initial split. */
+type TxValidityForLimits(
+    'limit : Int,
+    'regular : Int,
+) = {
+    'intrinsic_execution
+    'intrinsic_state
+    'calldata_floor
+    'execution
+    'state,
+    transaction_initial_gas_relation(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ).
+    TxValidityFields(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
+}
+
 /*! A validity result whose limit is not needed by the consumer. */
 type TxValidity = {
-    'limit 'regular,
-       0 <= 'regular
-    &  'regular <= 'limit
-    &  'limit <= block_gas_limit_bound.
-    TxValidityFields('limit, 'regular)
+    'limit
+    'regular
+    'intrinsic_execution
+    'intrinsic_state
+    'calldata_floor
+    'execution
+    'state,
+    transaction_initial_gas_relation(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    ).
+    TxValidityFields(
+        'limit,
+        'regular,
+        'intrinsic_execution,
+        'intrinsic_state,
+        'calldata_floor,
+        'execution,
+        'state,
+    )
 }
 
 /*! The transaction gas conserved at the top-level frame boundary. The
@@ -309,6 +421,38 @@ struct TxFrameGasSnapshotFields(
     remaining : int('remaining),
     state_used : int('state_used),
 }
+
+/*! Constructs a frame snapshot with each conserved gas quantity tied to its
+    own index. Keeping this boundary explicit also lets proof backends retain
+    the five distinct existential witnesses when the snapshot is packed. */
+val tx_frame_gas_snapshot_fields : forall 'limit 'regular 'calldata_floor 'remaining 'state_used,
+                                        tx_frame_gas_snapshot_relation(
+                                            'limit,
+                                            'regular,
+                                            'calldata_floor,
+                                            'remaining,
+                                            'state_used,
+                                        ). (
+        int('limit),
+        int('regular),
+        int('calldata_floor),
+        int('remaining),
+        int('state_used),
+    ) -> TxFrameGasSnapshotFields(
+        'limit,
+        'regular,
+        'calldata_floor,
+        'remaining,
+        'state_used,
+    )
+function tx_frame_gas_snapshot_fields(limit, regular, calldata_floor, remaining, state_used) =
+    struct {
+        admitted_limit = limit,
+        regular_limit = regular,
+        calldata_floor = calldata_floor,
+        remaining = remaining,
+        state_used = state_used,
+    }
 
 /*! A top-level frame gas snapshot with existentially hidden gas totals. */
 type TxFrameGasSnapshot = {

@@ -6,6 +6,4 @@
 #endif
 #include EVMSAIL_MODEL_H
 
-unit validation_debug_capture_location(unit u);
-
 #endif

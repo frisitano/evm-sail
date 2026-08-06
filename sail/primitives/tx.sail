@@ -225,6 +225,12 @@ type Transaction = {
     TransactionFields('blob_limit)
 }
 
+/*! Packs a transaction whose concrete blob limit is still in scope into the
+    existential transaction surface used by envelope dispatch. */
+function pack_transaction forall 'blob_limit, transaction_blob_limit_value('blob_limit). (
+    tx : TransactionFields('blob_limit)
+) -> Transaction = tx
+
 /*! The bounded topic operands of one `LOG0`–`LOG4` instruction. Keeping the
     arity in the constructor avoids allocating a Sail list for at most four
     stack words. */
@@ -325,13 +331,48 @@ struct ReceiptFields(
     logs : LogSeriesRef,
 }
 
+/*! Constructs a receipt while keeping each consumed-gas quantity tied to its
+    own dependent index when proof backends pack the result existentially. */
+val receipt_fields : forall 'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
+                          receipt_gas_relation(
+                              'limit,
+                              'regular_limit,
+                              'gas_used,
+                              'execution_gas,
+                              'state_gas,
+                          ). (
+        int('limit),
+        int('regular_limit),
+        TxType,
+        bool,
+        int('gas_used),
+        int('execution_gas),
+        int('state_gas),
+        LogSeriesRef,
+    ) -> ReceiptFields(
+        'limit,
+        'regular_limit,
+        'gas_used,
+        'execution_gas,
+        'state_gas,
+    )
+function receipt_fields(_limit, _regular_limit, tx_type, success, gas_used, execution_gas, state_gas, logs) =
+    struct {
+        tx_type = tx_type,
+        success = success,
+        gas_used = gas_used,
+        execution_gas = execution_gas,
+        state_gas = state_gas,
+        logs = logs,
+    }
+
 /*! A receipt retaining the transaction limits that bounded each gas
     contribution. */
 type ReceiptWithin(
     'limit : Int,
     'regular_limit : Int,
 ) = {
-    'gas_used 'execution_gas 'state_gas,
+    'state_gas 'execution_gas 'gas_used,
     receipt_gas_relation(
         'limit,
         'regular_limit,
@@ -348,9 +389,31 @@ type ReceiptWithin(
     )
 }
 
+/*! Packs a fully related receipt behind its three hidden gas witnesses at one
+    named boundary. */
+val receipt_within : forall 'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
+                          receipt_gas_relation(
+                              'limit,
+                              'regular_limit,
+                              'gas_used,
+                              'execution_gas,
+                              'state_gas,
+                          ). (
+        int('limit),
+        int('regular_limit),
+        TxType,
+        bool,
+        int('gas_used),
+        int('execution_gas),
+        int('state_gas),
+        LogSeriesRef,
+    ) -> ReceiptWithin('limit, 'regular_limit)
+function receipt_within(limit, regular_limit, tx_type, success, gas_used, execution_gas, state_gas, logs) =
+    receipt_fields(limit, regular_limit, tx_type, success, gas_used, execution_gas, state_gas, logs)
+
 /*! A receipt whose originating transaction limit is not needed. */
 type Receipt = {
-    'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
+    'state_gas 'execution_gas 'gas_used 'regular_limit 'limit,
     receipt_gas_relation(
         'limit,
         'regular_limit,

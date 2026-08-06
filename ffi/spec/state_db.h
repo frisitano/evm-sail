@@ -19,37 +19,36 @@
  * operations already live in host/state.sail; these declarations only fix the
  * generated C calling convention for aggregate arguments and results. */
 struct zStorageTxLookup;
-struct zoptionzIRStorageValuezK;
-struct zoptionzIRStorageEntryzK;
-struct zoptionzIRStorageTrieEntryzK;
+struct zStorageBlockRow;
+struct zStorageTxPopResult;
+struct zStorageBlockIterResult;
 struct zStorageKey;
 struct zStorageEntry;
 struct zBalIterEntry;
 void storage_tx_get(struct zStorageTxLookup *result, struct zStorageKey key);
-void storage_block_get(struct zoptionzIRStorageValuezK *result,
-                       struct zStorageKey key);
-void storage_block_iter_next(struct zoptionzIRStorageTrieEntryzK *result,
+struct zStorageBlockRow storage_block_get(struct zStorageKey key);
+void storage_block_iter_next(struct zStorageBlockIterResult *result,
                              sail_fixed_bytes_20 address);
 unit storage_tx_update(struct zStorageEntry entry);
 unit storage_block_put(struct zStorageEntry entry);
 unit storage_block_cache(struct zStorageKey key, sail_fixed_bytes_32 slot_hash,
                          const sail_u256 value);
 
-struct zoptionzIRAccountzK;
-struct zoptionzIRAcctEntryzK;
-struct zoptionzIRAcctTrieEntryzK;
+struct zAccountRow;
+struct zAcctTxPopResult;
+struct zAcctBlockIterResult;
 struct zAccount;
 struct zAcctEntry;
-void acct_tx_get(struct zoptionzIRAccountzK *result, sail_fixed_bytes_20 address);
-void acct_block_get(struct zoptionzIRAccountzK *result, sail_fixed_bytes_20 address);
-void acct_block_iter_next(struct zoptionzIRAcctTrieEntryzK *result, unit u);
+struct zAccountRow acct_tx_get(sail_fixed_bytes_20 address);
+struct zAccountRow acct_block_get(sail_fixed_bytes_20 address);
+void acct_block_iter_next(struct zAcctBlockIterResult *result, unit u);
 unit acct_tx_update(sail_fixed_bytes_20 address, struct zAccount account);
 unit acct_block_write(struct zAcctEntry entry);
 unit acct_block_cache(sail_fixed_bytes_20 address, sail_fixed_bytes_32 address_hash,
                       struct zAccount account);
 
-void storage_tx_pop(struct zoptionzIRStorageEntryzK *result, unit u);
-void acct_tx_pop(struct zoptionzIRAcctEntryzK *result, unit u);
+void storage_tx_pop(struct zStorageTxPopResult *result, unit u);
+void acct_tx_pop(struct zAcctTxPopResult *result, unit u);
 
 /* Shared persistent-storage rows with transaction and cumulative projections. */
 unit storage_db_reset(const unit u);

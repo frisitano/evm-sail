@@ -108,9 +108,13 @@ if [ "$EVM_PROFILE" = on ]; then
   MODEL_HEADERS+=(cycle_scopes.h)
 fi
 MODEL_INCLUDE_FLAGS=()
-for header in "${MODEL_HEADERS[@]}"; do
-  MODEL_INCLUDE_FLAGS+=(--c-include "$header")
-done
+# Bash 3.2 with `set -u` rejects expansion of an explicitly empty array. The
+# optimized, profile-off build deliberately injects no legacy model headers.
+if [ "$EVM_BUILD_MODE" != optimized ] || [ "$EVM_PROFILE" = on ]; then
+  for header in "${MODEL_HEADERS[@]}"; do
+    MODEL_INCLUDE_FLAGS+=(--c-include "$header")
+  done
+fi
 
 # --- 1. accel-host crypto cdylib (idempotent) ------------------------------
 ACCEL="$ROOT/zkvm/accel-host"
@@ -174,6 +178,8 @@ done
 PRESERVE_FLAGS=(
   --c-preserve main
   --c-preserve resume_frame
+  --c-preserve validation_debug_record
+  --c-preserve write_invalid_result
 )
 if [ "$EVM_BUILD_MODE" = standard ]; then
   PRESERVE_FLAGS+=(--c-preserve debug_account_storage_root)
@@ -193,15 +199,14 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h
     --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h
     --c-optimized-external-type OutputSliceFields=evmsail/host/types.h
-    --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at
-    --c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at
-    --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at
-    --c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at
-    --c-optimized-byte-pointer-field CodeFields.bytes=code_at
-    --c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at
-    --c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at
+    --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct
+    --c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct
+    --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct
+    --c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=__direct
+    --c-optimized-byte-pointer-field CodeFields.bytes=__direct
+    --c-optimized-byte-pointer-field LogDataSliceFields.bytes=__direct
+    --c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct
     "${PRESERVE_FLAGS[@]}"
-    "${MODEL_INCLUDE_FLAGS[@]}"
   )
 else
   SAIL_CMD=(
@@ -210,8 +215,10 @@ else
     --c-specialize
     --c-specialization-limit "$C_SPEC_SPECIALIZATION_LIMIT"
     "${PRESERVE_FLAGS[@]}"
-    "${MODEL_INCLUDE_FLAGS[@]}"
   )
+fi
+if [ "$EVM_BUILD_MODE" != optimized ] || [ "$EVM_PROFILE" = on ]; then
+  SAIL_CMD+=("${MODEL_INCLUDE_FLAGS[@]}")
 fi
 if [ "${EVM_SAIL_LOG:-off}" = on ]; then
   SAIL_CMD+=(--c-specialize-log)

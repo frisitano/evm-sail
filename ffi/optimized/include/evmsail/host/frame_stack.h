@@ -7,8 +7,7 @@
 
 struct FrameContinuation;
 
-unit frame_stack_reset(unit u);
-unit frame_stack_push(struct FrameContinuation continuation);
-void frame_stack_pop(struct FrameContinuation *out, unit u);
+void frame_stack_reset(void);
+void frame_stack_pop(struct FrameContinuation *out);
 
 #endif

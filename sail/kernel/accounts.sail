@@ -6,7 +6,7 @@ block) with the witness as base, plus the EIP-161/EIP-684 predicates and
 value transfer.
 */
 
-val stateless_account_by_key : (hash, hash) -> option(AccountInfo)
+val stateless_account_by_key : (hash, hash) -> Account
 
 /*! Field-wise inequality of account tuples. */
 function account_info_changed(c : AccountInfo, o : AccountInfo) -> bool =
@@ -93,24 +93,15 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
     before consulting block-scoped state. */
 function k_aload(a : address) -> Account = {
     let tx_account = acct_tx_get(a);
-    match tx_account {
-        Some(acc) => return acc,
-        None() => (),
-    };
+    if tx_account.found then return tx_account.account;
 
     bal_account_touch(a);
 
     let block_account = acct_block_get(a);
-    match block_account {
-        Some(acc) => return acc,
-        None() => (),
-    };
+    if block_account.found then return block_account.account;
 
     let address_hash = keccak256_address(a);
-    let account : Account = match stateless_account_by_key(k_parent_state_root, address_hash) {
-        Some(info) => account_from_info(info),
-        None() => EMPTY_ACCOUNT,
-    };
+    let account = stateless_account_by_key(k_parent_state_root, address_hash);
     acct_block_cache(a, address_hash, account);
     account
 }
@@ -173,7 +164,8 @@ function k_bump_nonce(a : address) -> unit = {
     if nonce < sizeof(account_nonce_bound) then {
         store_account_info(a, cur, { cur.info with nonce = nonce + 1 })
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 

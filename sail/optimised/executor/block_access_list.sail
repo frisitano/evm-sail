@@ -6,18 +6,17 @@
  * constructing generated iterator unions for every row.
  */
 
-$[c_throws]
 val optimized_initialize_block_access_list_state =
     impure { c: "initialize_block_access_list_state" } :
-    (StatelessInputSliceAtMost(block_access_list_length_bound), hash) -> unit
+    (StatelessInputSliceAtMost(block_access_list_length_bound), hash, transaction_count) -> unit
 
 function initialize_block_access_list_state(
     bytes : StatelessInputSliceAtMost(block_access_list_length_bound),
     parent_state_root : hash,
+    transaction_count : transaction_count,
 ) -> unit =
-    optimized_initialize_block_access_list_state(bytes, parent_state_root)
+    optimized_initialize_block_access_list_state(bytes, parent_state_root, transaction_count)
 
-$[c_throws]
 val optimized_validate_block_access_list =
     impure { c: "validate_block_access_list" } :
     (StatelessInputSliceAtMost(block_access_list_length_bound), block_gas_limit) -> unit

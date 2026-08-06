@@ -149,10 +149,12 @@ function ssz_list_pop forall ('maximum : Int), source_valid_length('maximum) & '
 ) = {
     let count = cursor.items.count;
     let index = cursor.index;
-    if count <= index then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    let next_index : range(0, 'maximum) = index + 1;
+    let next_index : range(0, 'maximum) = if index < count then {
+            index + 1
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     let items = cursor.items;
     let bytes = items.bytes;
     let nat = bytes.len;
@@ -163,19 +165,17 @@ function ssz_list_pop forall ('maximum : Int), source_valid_length('maximum) & '
         };
     let current_value = cursor.current;
     let next_value = next;
-    if current_value <= next_value then {
-        if next_value <= nat then {
-            let item_length = next_value - current_value;
-            if (items.max_item_length != 0) & (items.max_item_length < item_length) then {
-                throw InvalidBlock(InvalidConfig)
-            };
-            let item = sub_slice(bytes, current_value, item_length);
-            (item, struct { items = items, index = next_index, current = next })
-        } else {
-            throw InvalidBlock(InvalidConfig)
-        }
+    if (current_value <= next_value) & (next_value <= nat) then {
+        let item_length = next_value - current_value;
+        if (items.max_item_length != 0) & (items.max_item_length < item_length) then {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
+        let item = sub_slice(bytes, current_value, item_length);
+        (item, struct { items = items, index = next_index, current = next })
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -189,31 +189,32 @@ function ssz_list_at forall ('maximum : Int) ('index : Int),
 ) = {
     let bytes = items.bytes;
     let count = items.count;
-    if count <= index then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    let next_index : range(0, 'maximum) = index + 1;
-    let start = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(index)));
+    let item_index : range(0, 'maximum - 1) = if index < count then {
+            index
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
+    let next_index : range(0, 'maximum) = item_index + 1;
+    let start = ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(item_index)));
     let stop : source_pointer = if next_index < items.count then {
             ssz_offset_to_source_pointer(ssz_u32_in_slice(bytes, ssz_offset_table_position(next_index)))
         } else {
             bytes.len
-        };
+    };
     let start_value = start;
     let stop_value = stop;
     let items_length = bytes.len;
-    if start_value <= stop_value then {
-        if stop_value <= items_length then {
-            let item_length = stop_value - start_value;
-            if (items.max_item_length != 0) & (items.max_item_length < item_length) then {
-                throw InvalidBlock(InvalidConfig)
-            };
-            sub_slice(bytes, start, item_length)
-        } else {
-            throw InvalidBlock(InvalidConfig)
-        }
+    if (start_value <= stop_value) & (stop_value <= items_length) then {
+        let item_length = stop_value - start_value;
+        if (items.max_item_length != 0) & (items.max_item_length < item_length) then {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
+        sub_slice(bytes, start, item_length)
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -227,16 +228,14 @@ val ssz_fixed_list_at : forall 'maximum 'item_size 'index,
 
 function ssz_fixed_list_at(items, index, item_size) = {
     let bytes = items.bytes;
-    if items.count <= index then {
-        throw InvalidBlock(InvalidConfig)
-    };
     let width_value = item_size;
     let offset_value = index * width_value;
     let items_length = bytes.len;
-    if offset_value + width_value <= items_length then {
+    if (index < items.count) & (offset_value + width_value <= items_length) then {
         sub_slice(bytes, offset_value, width_value)
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -251,19 +250,18 @@ function ssz_fixed_list_pop(items, item_size) = {
     let items_length = bytes.len;
     let width = item_size;
     let count = items.count;
-    if count == 0 then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    if items_length < width then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    let item = sub_slice(bytes, 0, item_size);
-    let rest : BoundedSszListRef('maximum) = struct {
-            bytes = slice_suffix(bytes, width),
-            count = count - 1,
-            max_item_length = items.max_item_length,
-        };
-    (item, rest)
+    if (0 < count) & (width <= items_length) then {
+        let item = sub_slice(bytes, 0, item_size);
+        let rest : BoundedSszListRef('maximum) = struct {
+                bytes = slice_suffix(bytes, width),
+                count = count - 1,
+                max_item_length = items.max_item_length,
+            };
+        (item, rest)
+    } else {
+        fatal_error(InvalidConfig);
+        exit(())
+    }
 }
 
 /*! Every variable region of the input, resolved once before decoding.
@@ -300,7 +298,8 @@ function ssz_container_bytes(bytes, minimum) = {
     if minimum <= fields.len then {
         fields
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -332,7 +331,8 @@ function ssz_take(cursor : SszContainerCursor, stop : ssz_offset) -> (StatelessI
         let span = sub_slice(bytes, current_value, span_length);
         (span, struct { bytes = bytes, current = stop_pointer })
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -346,7 +346,8 @@ function ssz_finish(cursor : SszContainerCursor) -> StatelessInputSlice = {
         let remaining = container_length - current_value;
         sub_slice(bytes, current_value, remaining)
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -366,19 +367,23 @@ function ssz_bounded_variable_list_ref forall ('maximum : Int) ('item_length : I
             0
         } else {
             if span < SSZ_OFF_BYTES then {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             };
             let first_offset = ssz_u32(bytes, 0);
             let count : ssz_offset_index = tdiv_nat(first_offset, 4);
             if (tmod_int(first_offset, 4) != 0) | (count == 0) | first_offset > span then {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             };
             count
         };
-    if maximum_count < raw_count then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    let count : range(0, 'maximum) = raw_count;
+    let count : range(0, 'maximum) = if raw_count <= maximum_count then {
+            raw_count
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     struct { bytes = bytes, count = count, max_item_length = maximum_item_length }
 }
 
@@ -391,19 +396,24 @@ function ssz_bounded_fixed_list_ref forall ('maximum : Int) ('item_size : Int),
 ) -> (
     BoundedSszListRef('maximum)
 ) = {
-    let width = item_size;
-    if width == 0 then {
-        throw InvalidBlock(InvalidConfig)
-    };
+    let width : range(1, 'item_size) = if 0 < item_size then {
+            item_size
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     let span = bytes.len;
     let raw_count = span / width;
     if span != raw_count * width then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
-    if maximum_count < raw_count then {
-        throw InvalidBlock(InvalidConfig)
-    };
-    let count : range(0, 'maximum) = raw_count;
+    let count : range(0, 'maximum) = if raw_count <= maximum_count then {
+            raw_count
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     struct { bytes = bytes, count = count, max_item_length = item_size }
 }
 
@@ -411,19 +421,23 @@ function ssz_bounded_fixed_list_ref forall ('maximum : Int) ('item_size : Int),
     [StatelessInputRef][type-StatelessInputRef], validating the schema id
     and every region bound; a malformed frame is `InvalidConfig`. */
 function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInputRef = {
-    let input_fields = input;
-    let input_length = input_fields.len;
     let fixed_length = STATELESS_INPUT_FIXED_LENGTH;
     let body_offset_value = SSZ_BODY;
-    if input_length < fixed_length then {
-        throw InvalidBlock(InvalidConfig)
-    };
+    let input_fields : StatelessInputSliceAtLeast(18) =
+        if fixed_length <= input.len then {
+            input
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     if slice_byte(input_fields, 1) != 0x01 then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let schema_fork = slice_byte(input_fields, 0);
     if not_bool(schema_protocol_profile_forwards_matches(schema_fork)) then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let protocol : ProtocolProfile = schema_protocol_profile(schema_fork);
     let body_bytes = slice_suffix(input_fields, body_offset_value);
@@ -436,7 +450,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let public_keys_offset = ssz_u32(body, ssz_field_offset(container_start, IN_PUBLIC_KEYS_OFF));
     let body_fixed_length = STATELESS_INPUT_BODY_FIXED_LENGTH;
     if new_payload_request_offset != body_fixed_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let body_cursor = ssz_container_cursor(body, STATELESS_INPUT_BODY_FIXED_LENGTH);
     let (new_payload_request_bytes, body_after_payload_request) = ssz_take(body_cursor, witness_offset);
@@ -452,7 +467,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let requests_offset = ssz_u32(new_payload_request, ssz_field_offset(npr_start, NPR_REQUESTS_OFF));
     let npr_fixed_length = NEW_PAYLOAD_REQUEST_FIXED_LENGTH;
     if payload_offset != npr_fixed_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let npr_cursor = ssz_container_cursor(new_payload_request, NEW_PAYLOAD_REQUEST_FIXED_LENGTH);
     let (execution_payload_bytes, npr_after_payload) = ssz_take(npr_cursor, versioned_hashes_offset);
@@ -468,7 +484,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let block_access_list_offset = ssz_u32(execution_payload, ssz_field_offset(payload_start, PL_BAL_OFF));
     let payload_fixed_length = EXECUTION_PAYLOAD_FIXED_LENGTH;
     if extra_data_offset != payload_fixed_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let payload_cursor = ssz_container_cursor(execution_payload, EXECUTION_PAYLOAD_FIXED_LENGTH);
     let (extra_data_bytes, payload_after_extra_data) = ssz_take(payload_cursor, transactions_offset);
@@ -485,13 +502,15 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
         if extra_data_bytes.len <= MAX_EXTRA_DATA_LENGTH then {
             extra_data_bytes
         } else {
-            throw InvalidBlock(InvalidConfig)
+            fatal_error(InvalidConfig);
+            exit(())
         };
     let block_access_list : StatelessInputSliceAtMost(block_access_list_length_bound) =
         if block_access_list_bytes.len <= MAX_BLOCK_ACCESS_LIST_LENGTH then {
             block_access_list_bytes
         } else {
-            throw InvalidBlock(InvalidConfig)
+            fatal_error(InvalidConfig);
+            exit(())
         };
 
     let requests_start : int(0) = 0;
@@ -511,7 +530,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     );
     let requests_fixed_length = EXECUTION_REQUESTS_FIXED_LENGTH;
     if deposits_offset != requests_fixed_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let requests_cursor = ssz_container_cursor(execution_requests, EXECUTION_REQUESTS_FIXED_LENGTH);
     let (deposits, requests_after_deposits) = ssz_take(requests_cursor, withdrawal_requests_offset);
@@ -535,7 +555,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let witness_headers_offset = ssz_u32(execution_witness, ssz_field_offset(witness_start, WIT_HEADERS_OFF));
     let witness_fixed_length = EXECUTION_WITNESS_FIXED_LENGTH;
     if witness_state_offset != witness_fixed_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let witness_cursor = ssz_container_cursor(execution_witness, EXECUTION_WITNESS_FIXED_LENGTH);
     let (witness_state_bytes, witness_after_state) = ssz_take(witness_cursor, witness_codes_offset);
@@ -552,10 +573,12 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let public_key_length = PUBLIC_KEY_LENGTH;
     let public_key_count = public_key_bytes / public_key_length;
     if public_key_bytes != public_key_count * public_key_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     if MAX_PUBLIC_KEYS < public_key_count then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let _ = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, MAX_BLOB_COMMITMENTS_PER_BLOCK);
 
@@ -627,7 +650,8 @@ function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit = {
          * independently of the active fork's deployment limit. */
         let code_length = code.len;
         if MAX_WITNESS_CODE_LENGTH < code_length then {
-            throw InvalidBlock(InvalidConfig)
+            fatal_error(InvalidConfig);
+            exit(())
         };
         let executable = code_db_intern_input(code);
         let _ = code_db_insert(executable, profile.fork);
@@ -726,7 +750,8 @@ function decode_parent_header_fields forall 'source_off 'source_len, source_vali
                                 sizeof(gas_per_blob_value) * count;
                             decoded.have_blob_gas = true
                         } else {
-                            throw InvalidBlock(RlpDecode)
+                            fatal_error(RlpDecode);
+                            exit(())
                         }
                     } else {
                         if field_index == 18 then {
@@ -738,7 +763,8 @@ function decode_parent_header_fields forall 'source_off 'source_len, source_vali
                                 decoded.excess_blob_gas = value;
                                 decoded.have_excess_blob_gas = true
                             } else {
-                                throw InvalidBlock(RlpDecode)
+                                fatal_error(RlpDecode);
+                                exit(())
                             }
                         }
                     }
@@ -799,7 +825,8 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         let distance : range(0, witness_header_count_bound) = if next_index <= header_count then {
                 header_count - next_index
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             };
         if distance < 256 then {
             let ancestor : ancestor_index = distance;
@@ -833,10 +860,12 @@ function index_witness_headers(headers : WitnessHeaderListRef) -> WitnessContext
     );
     k_n_headers = headers.count;
     if not_bool(indexed.valid) then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     if not_bool(indexed.parent_fields_valid) then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     struct {
         parent_hash = indexed.previous_hash,
@@ -864,7 +893,8 @@ function decode_payload_blob_gas_used(
     then {
         sizeof(gas_per_blob_value) * count
     } else {
-        throw InvalidBlock(InvalidBlobGasUsed)
+        fatal_error(InvalidBlobGasUsed);
+        exit(())
     }
 }
 
@@ -881,7 +911,8 @@ function decode_payload_excess_blob_gas(
     if value <= limit then {
         value
     } else {
-        throw InvalidBlock(InvalidExcessBlobGas)
+        fatal_error(InvalidExcessBlobGas);
+        exit(())
     }
 }
 
@@ -937,58 +968,73 @@ function decode_chain_config(
     let header_length = CHAIN_CONFIG_HEADER_LENGTH;
     let minimum_length = CHAIN_CONFIG_MIN_LENGTH;
     if cc_length < header_length then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let f_offset = ssz_u32(cc, CC_ACTIVE_FORK_OFF);
     if (f_offset != 12) | (cc_length < minimum_length) then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let f : int(12) = 12;
     let activation_offset = ssz_u32(cc, ssz_field_offset(f, FC_ACTIVATION_OFF));
     if activation_offset != 4 then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let activation_start : int(16) = 16;
     let activation_fixed_end : int(24) = 24;
     let a : int(16) = 16;
     let block_number_offset = ssz_u32(cc, ssz_field_offset(a, FA_BLOCK_NUMBER_OFF));
     let timestamp_offset = ssz_u32(cc, ssz_field_offset(a, FA_TIMESTAMP_OFF));
-    if (block_number_offset > cc_length - activation_start)
-        | (timestamp_offset > cc_length - activation_start)
-    then {
-        throw InvalidBlock(InvalidConfig)
-    };
     let block_number_start : stateless_input_pointer =
-        activation_start + block_number_offset;
+        if block_number_offset <= cc_length - activation_start then {
+            activation_start + block_number_offset
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     let timestamp_start : stateless_input_pointer =
-        activation_start + timestamp_offset;
+        if timestamp_offset <= cc_length - activation_start then {
+            activation_start + timestamp_offset
+        } else {
+            fatal_error(InvalidConfig);
+            exit(())
+        };
     if activation_fixed_end != block_number_start then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     if timestamp_start < block_number_start then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     if cc_length < timestamp_start then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     let bn_length = timestamp_start - block_number_start;
     let ts_length = cc_length - timestamp_start;
     if ((bn_length != 0) & (bn_length != SSZ_UINT_BYTES)) | ((ts_length != 0) & (ts_length != SSZ_UINT_BYTES)) then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     if (bn_length == 0) & (ts_length == 0) then {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     };
     if bn_length == SSZ_UINT_BYTES then {
         let activation_block : block_number = decode_ssz_uint(cc, block_number_start);
         if number < activation_block then {
-            throw InvalidBlock(InvalidConfig)
+            fatal_error(InvalidConfig);
+            exit(())
         }
     };
     if ts_length == SSZ_UINT_BYTES then {
         let activation_timestamp : block_timestamp = decode_ssz_uint(cc, timestamp_start);
         if timestamp < activation_timestamp then {
-            throw InvalidBlock(InvalidConfig)
+            fatal_error(InvalidConfig);
+            exit(())
         }
     };
     struct { chain_id = decode_ssz_uint(cc, CC_CHAIN_ID) }
@@ -1052,6 +1098,7 @@ function decode_transaction(transaction, public_key) = {
             profile.transaction_blob_limit,
         )
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }

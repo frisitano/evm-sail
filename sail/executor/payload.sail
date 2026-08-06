@@ -103,19 +103,19 @@ function indexed_trie_subtree(
     cursor : IndexedTrieCursor,
     prefix : TriePath,
 ) -> (
-    (option(TrieItem), IndexedTrieCursor)
+    (TrieItem, IndexedTrieCursor)
 ) = {
     if not_bool(indexed_trie_next_under(cursor, prefix)) then {
-        (None(), cursor)
+        (trie_empty_subtree(), cursor)
     } else {
         let key = indexed_trie_cursor_key(cursor);
         if path_eq(key, prefix) then {
-            let (leaf, next) = indexed_trie_pop(source, cursor);
-            (Some(leaf), next)
+            indexed_trie_pop(source, cursor)
         } else {
             let depth = path_len(prefix);
             if 64 <= depth then {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             };
             var children = trie_children_empty();
             var remaining = cursor;
@@ -145,7 +145,8 @@ function indexed_trie_root(source : IndexedTrieSource) -> hash = {
     let (subtree, remaining) = indexed_trie_subtree(source, initial, path_empty());
     let retained = remaining.receipt_remaining;
     if not_bool(indexed_trie_cursor_empty(remaining)) | retained.len != 0 then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     let root = trie_subtree_root(subtree);
     scratch_rewind(mark);
@@ -255,13 +256,16 @@ function validate_execution_payload(
     let header = block.header;
     let body = block.body;
     if header.gas_limit < header.gas_used then {
-        throw InvalidBlock(InvalidGasUsed)
+        fatal_error(InvalidGasUsed);
+        exit(())
     };
     if witness.parent_hash != header.parent_hash then {
-        throw InvalidBlock(InvalidParentHash)
+        fatal_error(InvalidParentHash);
+        exit(())
     };
     if (profile.fork >= Cancun) & (header.excess_blob_gas != expected_payload_excess_blob_gas(witness)) then {
-        throw InvalidBlock(InvalidExcessBlobGas)
+        fatal_error(InvalidExcessBlobGas);
+        exit(())
     };
     if profile.fork >= Paris then {
         let transactions_root = transaction_trie_root(body.transactions);
@@ -288,7 +292,8 @@ function validate_execution_payload(
             block_access_list_hash,
         );
         if computed_block_hash != payload.expected_block_hash then {
-            throw InvalidBlock(InvalidBlockHash)
+            fatal_error(InvalidBlockHash);
+            exit(())
         }
     }
 }

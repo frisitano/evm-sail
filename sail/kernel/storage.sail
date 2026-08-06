@@ -7,19 +7,19 @@ and transient storage (EIP-1153), over the host state stores.
 
 val k_aload : address -> Account
 val stateless_storage_by_key : (hash, hash) -> word
-val precompile_number : address -> precompile_selector
+val precompile_id_for_address : address -> precompile_id
 
 function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, slot = s }
 
 /*! Returns the address's EIP-2929 warm bit without changing state. Active
     precompiles are warm independently of the BAL-derived account table. */
 function k_account_is_warm(a : address) -> bool =
-    if precompile_number(a) != 0 then { true } else { account_is_warm(a) }
+    if precompile_id_for_address(a) != NotPrecompile then { true } else { account_is_warm(a) }
 
 /*! Marks an address warm after the caller has established that its access gas
     is affordable. Active precompiles need no host-table entry. */
 function k_account_mark_warm(a : address) -> unit =
-    if precompile_number(a) != 0 then { () } else { account_mark_warm(a) }
+    if precompile_id_for_address(a) != NotPrecompile then { () } else { account_mark_warm(a) }
 
 /*! Returns a storage slot's EIP-2929 warm bit without changing state. */
 function k_slot_is_warm(a : address, s : word) -> bool = storage_is_warm(a, s)
@@ -56,9 +56,8 @@ function k_sload(a : address, s : word) -> StorageValue = {
     };
 
     let block_value = storage_block_get(key);
-    match block_value {
-        Some(entry) => return struct { curr = entry.curr, orig = entry.curr },
-        None() => (),
+    if block_value.found then {
+        return struct { curr = block_value.value.curr, orig = block_value.value.curr }
     };
 
     let acc = k_aload(a);

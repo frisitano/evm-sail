@@ -19,11 +19,13 @@ struct RlpIndexItem('maximum : Int), rlp_index_valid_maximum('maximum) = {
 }
 
 /*! The item count, next canonical-key position, and its cached lookup
-    descriptor. Each `rlp(index)` key is therefore constructed exactly once. */
+    descriptor. Each `rlp(index)` key is therefore constructed exactly once.
+    `current` is meaningful iff `position < count`; the pair already carries
+    the exhaustion state, so no separate presence wrapper exists. */
 struct RlpIndexCursor('maximum : Int), rlp_index_valid_maximum('maximum) = {
     count : range(0, 'maximum),
     position : range(0, 'maximum),
-    current : option(RlpIndexItem('maximum)),
+    current : RlpIndexItem('maximum),
 }
 
 /*! The minimal nonzero byte width of a supported RLP list index. */
@@ -76,7 +78,8 @@ function trie_index_key(index : rlp_index) -> TriePath =
                 let byte_offset : range(0, 7) = if 0 < current_remaining then {
                         current_remaining - 1
                     } else {
-                        throw InvalidBlock(WitnessDeficient)
+                        fatal_error(WitnessDeficient);
+                        exit(())
                     };
                 let shift : range(0, 56) = byte_offset * 8;
                 path = path_append_byte(path, get_slice_int(8, index, shift));
@@ -102,18 +105,26 @@ function rlp_index_at_position forall ('maximum : Int), rlp_index_valid_maximum(
             if position == single_count then { 0 } else { position }
         }
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 }
+
+/*! The inert cached item of an exhausted cursor. */
+function rlp_index_item_exhausted forall ('maximum : Int), rlp_index_valid_maximum('maximum). (_ : unit) -> (
+    RlpIndexItem('maximum)
+) =
+    struct { index = 0, key = path_empty() }
 
 /*! Starts canonical RLP-index traversal for a bounded collection. */
 function rlp_index_cursor forall ('maximum : Int), rlp_index_valid_maximum('maximum). (count : range(0, 'maximum)) -> (
     RlpIndexCursor('maximum)
 ) = {
-    var cursor : RlpIndexCursor('maximum) = struct { count = count, position = 0, current = None() };
+    var cursor : RlpIndexCursor('maximum) =
+        struct { count = count, position = 0, current = rlp_index_item_exhausted() };
     if count != 0 then {
         let index = rlp_index_at_position(cursor);
-        cursor.current = Some(struct { index = index, key = trie_index_key(index) })
+        cursor.current = struct { index = index, key = trie_index_key(index) }
     };
     cursor
 }
@@ -123,19 +134,18 @@ function rlp_index_cursor_empty forall ('maximum : Int), rlp_index_valid_maximum
     RlpIndexCursor('maximum)) -> (
     bool
 ) =
-    match cursor.current {
-        None() => true,
-        Some(_) => false,
-    }
+    cursor.position == cursor.count
 
 /*! Returns the cached numeric index and trie key without advancing. */
 function rlp_index_cursor_peek forall ('maximum : Int), rlp_index_valid_maximum('maximum). (cursor :
     RlpIndexCursor('maximum)) -> (
     RlpIndexItem('maximum)
 ) =
-    match cursor.current {
-        Some(item) => item,
-        None() => throw InvalidBlock(WitnessDeficient),
+    if cursor.position < cursor.count then {
+        cursor.current
+    } else {
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 
 /*! Consumes the current position and returns its fully populated successor. */
@@ -146,14 +156,16 @@ function rlp_index_cursor_advance forall ('maximum : Int), rlp_index_valid_maxim
     let count = cursor.count;
     let position = cursor.position;
     if position < count then {
-        var next : RlpIndexCursor('maximum) = struct { count = count, position = position + 1, current = None() };
+        var next : RlpIndexCursor('maximum) =
+            struct { count = count, position = position + 1, current = rlp_index_item_exhausted() };
         if next.position < count then {
             let index = rlp_index_at_position(next);
-            next.current = Some(struct { index = index, key = trie_index_key(index) })
+            next.current = struct { index = index, key = trie_index_key(index) }
         };
         next
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 }
 

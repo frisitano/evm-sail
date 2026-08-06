@@ -1,7 +1,6 @@
 /* Optimized whole-envelope override for
    `sail/lib/rlp/codecs/transactions.sail`. */
 
-$[c_throws]
 val optimized_rlp_decode_tx =
     impure { c: "decode_transaction" } :
     forall 'tx_off 'tx_len 'public_key_off 'blob_limit,

@@ -57,12 +57,34 @@ struct StorageKey = { addr : address, slot : word }
     enumerated at transaction-end merge. */
 struct StorageEntry = { key : StorageKey, value : StorageValue }
 
+/*! A block-layer storage lookup. `value` is meaningful exactly when `found`
+    is true; the explicit bit keeps a real all-zero row distinct from a miss. */
+struct StorageBlockRow = { found : bool, value : StorageValue }
+
+/*! One transaction-layer storage row, or exhaustion of the destructive
+    transaction-end drain. */
+union StorageTxPopResult = {
+    StorageTxPopRow : StorageEntry,
+    StorageTxPopExhausted : unit,
+}
+
 /*! An account's current and original (transaction-start) states. */
 struct AcctValue = { curr : Account, orig : Account }
 
 /*! An overlay account row: the form in which account entries are
     enumerated at transaction-end merge. */
 struct AcctEntry = { addr : address, value : AcctValue }
+
+/*! An account-layer lookup. `account` is meaningful exactly when `found` is
+    true; [EMPTY_ACCOUNT][] is the payload sentinel for a miss. */
+struct AccountRow = { found : bool, account : Account }
+
+/*! One transaction-layer account row, or exhaustion of the destructive
+    transaction-end drain. */
+union AcctTxPopResult = {
+    AcctTxPopRow : AcctEntry,
+    AcctTxPopExhausted : unit,
+}
 
 /*! A host storage row prepared for secure-trie traversal. The semantic row
     remains [StorageEntry][type-StorageEntry]; these cached digests are derived
@@ -73,10 +95,22 @@ struct StorageTrieEntry = {
     slot_hash : hash,
 }
 
+/*! One block-layer storage iterator row, or iterator exhaustion. */
+union StorageBlockIterResult = {
+    StorageBlockIterRow : StorageTrieEntry,
+    StorageBlockIterExhausted : unit,
+}
+
 /*! A host account row prepared for secure-trie traversal. */
 struct AcctTrieEntry = {
     entry : AcctEntry,
     address_hash : hash,
+}
+
+/*! One block-layer account iterator row, or iterator exhaustion. */
+union AcctBlockIterResult = {
+    AcctBlockIterRow : AcctTrieEntry,
+    AcctBlockIterExhausted : unit,
 }
 
 /*! The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code

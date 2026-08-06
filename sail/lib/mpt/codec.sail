@@ -239,7 +239,8 @@ function input_field_to_ref forall 'source_off 'source_len 'content_len,
         if f.source.len < MPT_HASH_LENGTH then {
             InputInlineRef(f.source)
         } else {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         }
     } else {
         if f.content_len == MPT_HASH_LENGTH then {
@@ -311,7 +312,8 @@ termination_measure decode_scratch_branch_node(cursor, index, children) = 16 - i
     (2 = leaf or extension by the HP flag; 17 = branch). */
 function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
     if node.len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let fields = rlp_node_cursor(node);
     let first = rlp_decode_item(fields);
@@ -324,7 +326,8 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
             InputLeafNode(path, rlp_item_content(second))
         } else {
             if path_len(path) == 0 then {
-                throw InvalidBlock(RlpDecode)
+                fatal_error(RlpDecode);
+                exit(())
             } else {
                 InputExtensionNode(path, input_field_to_ref(second))
             }
@@ -349,7 +352,8 @@ function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
             ScratchLeafNode(path, scratch_rlp_item_content(second))
         } else {
             if path_len(path) == 0 then {
-                throw InvalidBlock(RlpDecode)
+                fatal_error(RlpDecode);
+                exit(())
             } else {
                 ScratchExtensionNode(path, scratch_field_to_ref(second))
             }
@@ -363,17 +367,18 @@ function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
 }
 
 /*! Resolves a reference to node bytes. Resolving a missing hash is a
-    deficient witness (`InvalidBlock(WitnessDeficient)`), never an empty
+    deficient witness (`fatal_error(WitnessDeficient)`), never an empty
     subtree. */
 function resolve_witness_ref(r : NodeRef) -> StatelessInputSlice =
     match r {
         EmptyRef() => EMPTY_STATELESS_INPUT_SLICE,
         InputInlineRef(node) => node,
-        ScratchInlineRef(_) => throw InvalidBlock(WitnessDeficient),
+        ScratchInlineRef(_) => { fatal_error(WitnessDeficient); exit(()) },
         HashRef(h) => {
             let node = node_db_lookup(h);
             if node.len == 0 then {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             } else {
                 node
             }

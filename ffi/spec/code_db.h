@@ -12,13 +12,12 @@
 
 bool code_db_configure_capacities(uint64_t code_bytes,
                                   uint64_t jumpdest_bytes);
-struct zoptionzIRCodeFieldszK;
+struct zCodeFields;
 struct zStatelessInputSliceFields;
 struct zEvmMemorySliceFields;
 struct zOutputSliceFields;
 struct zCodeRegionSliceFields;
-void code_db_lookup(struct zoptionzIRCodeFieldszK *rop,
-                    sail_fixed_bytes_32 h);
+struct zCodeFields code_db_lookup(sail_fixed_bytes_32 h);
 struct zCodeRegionSliceFields code_region_from_input(
     struct zStatelessInputSliceFields input);
 struct zCodeRegionSliceFields code_region_from_memory(

@@ -383,57 +383,36 @@ bool evmsail_logs_bloom_matches_ref(
   return true;
 }
 
-static void scratch_result_value(struct zScratchRegionResult *result,
-                                 bool accepted, uint64_t end) {
-  if (!accepted) {
-    result->kind = Kind_zScratchRegionFailed;
-    result->variants.zScratchRegionFailed = UNIT;
-    return;
-  }
-  result->kind = Kind_zScratchRegionReady;
-  scratch_slice_value(
-      &result->variants.zScratchRegionReady,
-      0,
-      end);
+static void scratch_result_value(struct zScratchSliceFields *result,
+                                 uint64_t end) {
+  scratch_slice_value(result, 0, end);
 }
 
-void scratch_store_byte(struct zScratchRegionResult *result, uint64_t off,
+void scratch_store_byte(struct zScratchSliceFields *result, uint64_t off,
                         uint64_t data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 1);
-  if (!out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!out) abort();
   out[0] = (uint8_t)data;
-  const bool accepted = scratch_commit(dst, 1);
-  scratch_result_value(result, accepted, accepted ? dst + 1 : 0);
+  if (!scratch_commit(dst, 1)) abort();
+  scratch_result_value(result, dst + 1);
 }
 
-static void scratch_store_region(struct zScratchRegionResult *result,
+static void scratch_store_region(struct zScratchSliceFields *result,
                                  uint64_t dst, span_resolver resolve,
                                  uint64_t off, uint64_t len) {
-  if (len > UINT64_MAX - dst) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len > UINT64_MAX - dst) abort();
   uint8_t *out = scratch_prepare(dst, len);
-  if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len != 0 && !out) abort();
   const uint8_t *source = resolve(off, len);
-  if (!source) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!source) abort();
   if (len != 0) memmove(out, source, (size_t)len);
-  const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  if (!scratch_commit(dst, len)) abort();
+  scratch_result_value(result, dst + len);
 }
 
 #define DEFINE_SCRATCH_STORE(name, type, resolver)                            \
-  void name(struct zScratchRegionResult *result,                              \
+  void name(struct zScratchSliceFields *result,                               \
             uint64_t off, struct type slice) {                                \
     scratch_store_region(result, off, resolver,                               \
                          SLICE_OFF(slice), SLICE_LEN(slice));                  \
@@ -450,84 +429,63 @@ DEFINE_SCRATCH_STORE(scratch_store_output, zOutputSliceFields,
 
 #undef DEFINE_SCRATCH_STORE
 
-void scratch_store_address(struct zScratchRegionResult *result,
+void scratch_store_address(struct zScratchSliceFields *result,
                            uint64_t off, sail_fixed_bytes_20 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
-  if (!out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!out) abort();
   memcpy(out, data.bytes, 20);
-  const bool accepted = scratch_commit(dst, 20);
-  scratch_result_value(result, accepted, accepted ? dst + 20 : 0);
+  if (!scratch_commit(dst, 20)) abort();
+  scratch_result_value(result, dst + 20);
 }
 
-void scratch_store_b256(struct zScratchRegionResult *result,
+void scratch_store_b256(struct zScratchSliceFields *result,
                         uint64_t off, sail_fixed_bytes_32 data,
                         uint64_t len) {
   const uint64_t dst = off;
-  if (len > 32) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len > 32) abort();
   uint8_t *out = scratch_prepare(dst, len);
-  if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len != 0 && !out) abort();
   if (len != 0) memcpy(out, data.bytes, (size_t)len);
-  const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  if (!scratch_commit(dst, len)) abort();
+  scratch_result_value(result, dst + len);
 }
 
-void scratch_store_fixed_bytes_256(struct zScratchRegionResult *result,
+void scratch_store_fixed_bytes_256(struct zScratchSliceFields *result,
                                    uint64_t off,
                                    sail_fixed_bytes_256 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
-  if (!out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (!out) abort();
   for (size_t i = 0; i < 256; ++i) out[i] = data.bytes[255 - i];
-  const bool accepted = scratch_commit(dst, 256);
-  scratch_result_value(result, accepted, accepted ? dst + 256 : 0);
+  if (!scratch_commit(dst, 256)) abort();
+  scratch_result_value(result, dst + 256);
 }
 
 void scratch_store_receipt_logs_bloom(
-    struct zScratchRegionResult *result,
+    struct zScratchSliceFields *result,
     uint64_t off, uint64_t start, uint64_t count) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
-  if (!out || !evmsail_receipt_logs_bloom_write(start, count, out)) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
-  const bool accepted = scratch_commit(dst, 256);
-  scratch_result_value(result, accepted, accepted ? dst + 256 : 0);
+  if (!out || !evmsail_receipt_logs_bloom_write(start, count, out)) abort();
+  if (!scratch_commit(dst, 256)) abort();
+  scratch_result_value(result, dst + 256);
 }
 
-void scratch_store_word(struct zScratchRegionResult *result,
+void scratch_store_word(struct zScratchSliceFields *result,
                         uint64_t off,
                         const sail_u256 data, uint64_t len) {
   const uint64_t dst = off;
-  if (len > 32) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len > 32) abort();
   uint8_t *out = scratch_prepare(dst, len);
-  if (len != 0 && !out) {
-    scratch_result_value(result, false, 0);
-    return;
-  }
+  if (len != 0 && !out) abort();
   for (uint64_t i = 0; i < len; ++i) {
     const uint64_t byte_from_low = len - 1 - i;
     out[i] = (uint8_t)((data).limbs[byte_from_low / 8] >>
                        (8 * (byte_from_low % 8)));
   }
-  const bool accepted = scratch_commit(dst, len);
-  scratch_result_value(result, accepted, accepted ? dst + len : 0);
+  if (!scratch_commit(dst, len)) abort();
+  scratch_result_value(result, dst + len);
 }
 
 bool public_output_write(struct zScratchSliceFields output) {

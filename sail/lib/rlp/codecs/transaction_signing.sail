@@ -43,7 +43,8 @@ function tx_signing_hash(t : TxType, content_src : StatelessInputSlice, v : word
     let content_length : transaction_byte_length = if content_src.len <= sizeof(transaction_length_bound) then {
             content_src.len
         } else {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode);
+            exit(())
         };
     let suffix_length = suffix_len;
     let content_len : range(0, transaction_length_bound + 35) = content_length + suffix_length;

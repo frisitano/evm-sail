@@ -31,23 +31,23 @@ slices.
     prefix. This inspects only the relation already carried by the cursor; it
     never pulls or compares another source key. */
 function update_under_current_prefix(updates : TrieUpdateCursor) -> bool =
-    match updates.current {
-        None() => false,
-        Some(_) => match updates.relation {
-            UpdateUnderPrefix(_) => true,
-            UpdateBeyondPrefix(_) => false,
-        },
+    match updates.relation {
+        UpdateUnderPrefix(_) => true,
+        UpdateBeyondPrefix(_) => false,
+        UpdateSourceExhausted(_) => false,
     }
 
 /*! The active update's next child nibble. */
 function update_child_nibble(updates : TrieUpdateCursor) -> nibble =
     match updates.relation {
         UpdateUnderPrefix(path_postfix) => if path_len(path_postfix) == 0 then {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         } else {
             path_nibble(path_postfix, 0)
         },
-        UpdateBeyondPrefix(_) => throw InvalidBlock(WitnessDeficient),
+        UpdateBeyondPrefix(_) => { fatal_error(WitnessDeficient); exit(()) },
+        UpdateSourceExhausted(_) => { fatal_error(WitnessDeficient); exit(()) },
     }
 
 /*! Remaining sibling-key order after the active update's child nibble.
@@ -90,28 +90,32 @@ function updates_subtree(
     prefix : TriePath,
     cursor : trie_path_cursor,
 ) -> (
-    (option(TrieItem), TrieUpdateCursor)
+    (TrieItem, TrieUpdateCursor)
 ) = {
     if path_len(prefix) != cursor then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     if not_bool(update_under_current_prefix(updates)) then {
-        (None(), updates)
+        (trie_empty_subtree(), updates)
     } else {
         if cursor == 64 then {
             match updates.relation {
                 UpdateUnderPrefix(path_postfix) => if path_len(path_postfix) != 0 then {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 },
-                UpdateBeyondPrefix(_) => throw InvalidBlock(WitnessDeficient),
+                UpdateBeyondPrefix(_) => { fatal_error(WitnessDeficient); exit(()) },
+                UpdateSourceExhausted(_) => { fatal_error(WitnessDeficient); exit(()) },
             };
             let (update, next) = trie_updates_pop(updates);
             if not_bool(path_eq(update.key, prefix)) then {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             };
-            let subtree : option(TrieItem) = match update.change {
-                TrieDelete() => None(),
-                TriePut(value) => Some(trie_scratch_leaf(update.key, value)),
+            let subtree : TrieItem = match update.change {
+                TrieDelete() => trie_empty_subtree(),
+                TriePut(value) => trie_scratch_leaf(update.key, value),
             };
             (subtree, next)
         } else {
@@ -127,7 +131,8 @@ function updates_subtree(
                 let rebased = trie_updates_rebase(next, prefix);
                 if update_under_current_prefix(rebased) then {
                     if unsigned(update_child_nibble(rebased)) <= unsigned(nib) then {
-                        throw InvalidBlock(WitnessDeficient)
+                        fatal_error(WitnessDeficient);
+                        exit(())
                     }
                 };
                 remaining = rebased
@@ -148,33 +153,38 @@ function overlay_leaf_subtree(
     value : StatelessInputSlice,
     cursor : trie_path_cursor,
 ) -> (
-    (option(TrieItem), TrieUpdateCursor)
+    (TrieItem, TrieUpdateCursor)
 ) = {
     if path_len(prefix) != cursor | not_bool(path_prefix_of(prefix, key)) then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     if cursor == 64 then {
         if not_bool(path_eq(prefix, key)) then {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         };
         if update_under_current_prefix(updates) then {
             match updates.relation {
                 UpdateUnderPrefix(path_postfix) => if path_len(path_postfix) != 0 then {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 },
-                UpdateBeyondPrefix(_) => throw InvalidBlock(WitnessDeficient),
+                UpdateBeyondPrefix(_) => { fatal_error(WitnessDeficient); exit(()) },
+                UpdateSourceExhausted(_) => { fatal_error(WitnessDeficient); exit(()) },
             };
             let (update, next) = trie_updates_pop(updates);
             if not_bool(path_eq(update.key, key)) then {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             };
-            let subtree : option(TrieItem) = match update.change {
-                TrieDelete() => None(),
-                TriePut(updated) => Some(trie_scratch_leaf(key, updated)),
+            let subtree : TrieItem = match update.change {
+                TrieDelete() => trie_empty_subtree(),
+                TriePut(updated) => trie_scratch_leaf(key, updated),
             };
             (subtree, next)
         } else {
-            (Some(trie_input_leaf(key, value)), updates)
+            (trie_input_leaf(key, value), updates)
         }
     } else {
         let next_cursor : trie_path_cursor = cursor + 1;
@@ -188,7 +198,7 @@ function overlay_leaf_subtree(
             if update_under_current_prefix(remaining) then {
                 let update_nibble = update_child_nibble(remaining);
                 if leaf_pending & (unsigned(leaf_nibble) < unsigned(update_nibble)) then {
-                    children = trie_children_add(children, prefix, leaf_nibble, Some(trie_input_leaf(key, value)));
+                    children = trie_children_add(children, prefix, leaf_nibble, trie_input_leaf(key, value));
                     leaf_pending = false
                 } else {
                     let child_prefix = path_concat(prefix, path_single(update_nibble));
@@ -206,13 +216,14 @@ function overlay_leaf_subtree(
                     let rebased = trie_updates_rebase(next, prefix);
                     if update_under_current_prefix(rebased) then {
                         if unsigned(update_child_nibble(rebased)) <= unsigned(update_nibble) then {
-                            throw InvalidBlock(WitnessDeficient)
+                            fatal_error(WitnessDeficient);
+                            exit(())
                         }
                     };
                     remaining = rebased
                 }
             } else {
-                children = trie_children_add(children, prefix, leaf_nibble, Some(trie_input_leaf(key, value)));
+                children = trie_children_add(children, prefix, leaf_nibble, trie_input_leaf(key, value));
                 leaf_pending = false
             }
         };
@@ -224,7 +235,7 @@ termination_measure overlay_leaf_subtree(updates, prefix, key, value, cursor) = 
 /*! Recursive witness walk signature, declared before extension expansion
     because an extension's terminal child resumes the decoded-node walk. */
 val witness_subtree : (StatelessInputSlice, TriePath, TrieUpdateCursor, trie_path_cursor) -> (
-        option(TrieItem),
+        TrieItem,
         TrieUpdateCursor,
     )
 
@@ -237,20 +248,22 @@ function overlay_extension_subtree(
     prefix : TriePath,
     cursor : trie_path_cursor,
 ) -> (
-    (option(TrieItem), TrieUpdateCursor)
+    (TrieItem, TrieUpdateCursor)
 ) = {
     if path_len(prefix) != cursor | not_bool(path_prefix_of(prefix, child_prefix)) then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     if path_eq(prefix, child_prefix) then {
         if update_under_current_prefix(updates) then {
             witness_subtree(resolve_witness_ref(childref), child_prefix, updates, cursor)
         } else {
-            (Some(trie_branch(child_prefix, childref)), updates)
+            (trie_branch(child_prefix, childref), updates)
         }
     } else {
         if cursor == 64 then {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         } else {
             let next_cursor : trie_path_cursor = cursor + 1;
             let extension_nibble = path_nibble(child_prefix, cursor);
@@ -267,7 +280,7 @@ function overlay_extension_subtree(
                             children,
                             prefix,
                             extension_nibble,
-                            Some(trie_branch(child_prefix, childref)),
+                            trie_branch(child_prefix, childref),
                         );
                         extension_pending = false
                     } else {
@@ -286,7 +299,8 @@ function overlay_extension_subtree(
                         let rebased = trie_updates_rebase(next, prefix);
                         if update_under_current_prefix(rebased) then {
                             if unsigned(update_child_nibble(rebased)) <= unsigned(update_nibble) then {
-                                throw InvalidBlock(WitnessDeficient)
+                                fatal_error(WitnessDeficient);
+                                exit(())
                             }
                         };
                         remaining = rebased
@@ -296,7 +310,7 @@ function overlay_extension_subtree(
                         children,
                         prefix,
                         extension_nibble,
-                        Some(trie_branch(child_prefix, childref)),
+                        trie_branch(child_prefix, childref),
                     );
                     extension_pending = false
                 }
@@ -311,7 +325,8 @@ termination_measure overlay_extension_subtree(childref, child_prefix, updates, p
     post-update structural item. */
 function witness_subtree(node, prefix, updates, cursor) = {
     if path_len(prefix) != cursor then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     if node.len == 0 then {
         updates_subtree(updates, prefix, cursor)
@@ -325,14 +340,16 @@ function witness_subtree(node, prefix, updates, cursor) = {
                 let extension_len = path_len(path);
                 let next_cursor = cursor + extension_len;
                 if extension_len == 0 | 64 < next_cursor then {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 } else {
                     overlay_extension_subtree(childref, path_concat(prefix, path), updates, prefix, cursor)
                 }
             },
             InputBranchNode(children, value) => {
                 if value.len != 0 | 64 <= cursor then {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 } else {
                     let next_cursor = cursor + 1;
                     var built = trie_children_empty();
@@ -348,7 +365,8 @@ function witness_subtree(node, prefix, updates, cursor) = {
                         let update_here = if update_under_current_prefix(remaining) then {
                                 let update_nibble = update_child_nibble(remaining);
                                 if unsigned(update_nibble) < unsigned(nib) then {
-                                    throw InvalidBlock(WitnessDeficient)
+                                    fatal_error(WitnessDeficient);
+                                    exit(())
                                 };
                                 update_nibble == nib
                             } else {
@@ -363,9 +381,9 @@ function witness_subtree(node, prefix, updates, cursor) = {
                                 }
                             } else {
                                 if present then {
-                                    (Some(trie_subtree(child_prefix, childref)), remaining)
+                                    (trie_subtree(child_prefix, childref), remaining)
                                 } else {
-                                    (None(), remaining)
+                                    (trie_empty_subtree(), remaining)
                                 }
                             };
                         built = trie_children_add(built, prefix, nib, child);
@@ -378,7 +396,8 @@ function witness_subtree(node, prefix, updates, cursor) = {
                         nib = add_bits(nib, 0x1)
                     };
                     if update_under_current_prefix(remaining) then {
-                        throw InvalidBlock(WitnessDeficient)
+                        fatal_error(WitnessDeficient);
+                        exit(())
                     };
                     (trie_children_finish(prefix, built), remaining)
                 }
@@ -394,8 +413,8 @@ termination_measure witness_subtree(node, prefix, updates, cursor) = 64 - cursor
 /*! The root of the trie anchored at `base_root` after applying the
     ordered update stream. This is the only public root computation:
     witness-native and fail-closed — the walker resolves every touched
-    hash reference in the witness node-db and any missing node throws
-    `InvalidBlock(WitnessDeficient)`; otherwise the builder recomposes the
+    hash reference in the witness node-db and any missing node calls
+    `fatal_error(WitnessDeficient)`; otherwise the builder recomposes the
     emitted stream canonically.
 
     Theorem-shaped remark: restricted to an empty base
@@ -418,7 +437,8 @@ function trie_root_cursor(base_root : hash, updates : TrieUpdateCursor) -> TrieR
             } else {
                 let node = node_db_lookup(base_root);
                 if node.len == 0 then {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 } else {
                     witness_subtree(node, path_empty(), updates, 0)
                 }
@@ -426,7 +446,8 @@ function trie_root_cursor(base_root : hash, updates : TrieUpdateCursor) -> TrieR
         if updates_empty(remaining) then {
             struct { root = trie_subtree_root(subtree), changed = true }
         } else {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         }
     }
 }
@@ -490,7 +511,8 @@ function trie_lookup(root : hash, key : TriePath) -> StatelessInputSlice = {
     } else {
         let node = node_db_lookup(root);
         if node.len == 0 then {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         } else {
             trie_walk(node, key, 0)
         }

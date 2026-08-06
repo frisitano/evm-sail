@@ -26,9 +26,9 @@ val storage_tx_update = impure { c: "storage_tx_update" } : StorageEntry -> unit
 /*! Resolves a transaction-layer storage key, distinguishing an actual cached
     row from an uncached slot made known-zero by an account storage clear. */
 val storage_tx_get = impure { c: "storage_tx_get" } : StorageKey -> StorageTxLookup
-/*! Removes and returns one row of the transaction-layer overlay, or
-    `None` when it is empty; the drain loop of the transaction-end merge. */
-val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> option(StorageEntry)
+/*! Removes and returns one row of the transaction-layer overlay, or reports
+    exhaustion; the drain loop of the transaction-end merge. */
+val storage_tx_pop = impure { c: "storage_tx_pop" } : unit -> StorageTxPopResult
 /*! Drops every transaction-layer storage row of an address — the
     storage side of an account collapsing to empty or clearing its storage. */
 val storage_tx_clear = impure { c: "storage_tx_clear" } : address -> unit
@@ -40,9 +40,9 @@ val storage_tx_reset = impure { c: "storage_tx_reset" } : unit -> unit
 val storage_has_writes = impure { c: "storage_has_writes" } : address -> bool
 
 /* block-layer storage overlay (drained by the state-root computation) */
-/*! The block-layer row for a storage key, or `None` when no earlier
+/*! The block-layer row for a storage key. `found` is false when no earlier
     transaction in the block has read or written it. */
-val storage_block_get = impure { c: "storage_block_get" } : StorageKey -> option(StorageValue)
+val storage_block_get = impure { c: "storage_block_get" } : StorageKey -> StorageBlockRow
 /*! Writes a merged row into the block-layer overlay (transaction-end
     merge of a changed slot). */
 val storage_block_put = impure { c: "storage_block_put" } : StorageEntry -> unit
@@ -56,13 +56,13 @@ val storage_block_clear = impure { c: "storage_block_clear" } : address -> unit
     for an address. The iterator is valid until the block layer is mutated. */
 val storage_block_iter_begin = impure { c: "storage_block_iter_begin" } : address -> unit
 /*! Returns the next materialized storage row and its cached secure keys in
-    ascending slot-key order, or `None` when traversal is complete. */
-val storage_block_iter_next = impure { c: "storage_block_iter_next" } : address -> option(StorageTrieEntry)
+    ascending slot-key order, or reports traversal exhaustion. */
+val storage_block_iter_next = impure { c: "storage_block_iter_next" } : address -> StorageBlockIterResult
 
 /* transaction-layer account overlay */
-/*! The transaction-layer account row for an address, or `None` when
+/*! The transaction-layer account row for an address. `found` is false when
     this transaction has not touched it. */
-val acct_tx_get = impure { c: "acct_tx_get" } : address -> option(Account)
+val acct_tx_get = impure { c: "acct_tx_get" } : address -> AccountRow
 /*! Inserts or overwrites the transaction-layer account row for an
     address. */
 val acct_tx_update = impure { c: "acct_tx_update" } : (address, Account) -> unit
@@ -74,16 +74,16 @@ val acct_tx_set_nonce = impure { c: "acct_tx_set_nonce" } : (address, account_no
 /*! Code-hash-only fast path into the transaction-layer row. */
 val acct_tx_set_code_hash = impure { c: "acct_tx_set_code_hash" } : (address, hash) -> unit
 /*! Returns the next transaction-layer account row in insertion order, or
-    `None` when the layer is empty. Merge order is not protocol-visible. */
-val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> option(AcctEntry)
+    reports exhaustion. Merge order is not protocol-visible. */
+val acct_tx_pop = impure { c: "acct_tx_pop" } : unit -> AcctTxPopResult
 /*! Empties the transaction-layer account overlay (per-transaction
     reset). */
 val acct_tx_reset = impure { c: "acct_tx_reset" } : unit -> unit
 
 /* block-layer account overlay */
-/*! The block-layer account row for an address, or `None` when no
+/*! The block-layer account row for an address. `found` is false when no
     earlier transaction in the block has loaded it. */
-val acct_block_get = impure { c: "acct_block_get" } : address -> option(Account)
+val acct_block_get = impure { c: "acct_block_get" } : address -> AccountRow
 /*! Writes a merged current/original account pair into the block layer
     (transaction-end merge). */
 val acct_block_write = impure { c: "acct_block_write" } : AcctEntry -> unit
@@ -97,8 +97,8 @@ val acct_block_cache = impure { c: "acct_block_cache" } : (address, hash, Accoun
     iterator is valid until the block layer is mutated. */
 val acct_block_iter_begin = impure { c: "acct_block_iter_begin" } : unit -> unit
 /*! Returns the next account update candidate and its cached secure key in
-    ascending secure-key order, or `None` when traversal is complete. */
-val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> option(AcctTrieEntry)
+    ascending secure-key order, or reports traversal exhaustion. */
+val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> AcctBlockIterResult
 /* EIP-7928 block-access-list recorder */
 /*! Clears the block-access-list recorder (start of block execution). */
 val bal_reset = impure { c: "bal_reset" } : unit -> unit

@@ -1,0 +1,27 @@
+---
+# Broad C review profile for generated optimized C and its handwritten
+# fixed-layout FFI. Keep fix-its disabled: diagnostics must be addressed in
+# Sail/JIB lowering or in the owning handwritten source, never patched into
+# generated output. Do not use `*`: clang-tidy ships mutually incompatible
+# vendor, embedded-HLS, C++, and project-specific style guides.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-magic-numbers,
+  -portability-avoid-pragma-once
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|.*/)(ffi/optimized|build/c-optimised/generated)/'
+FormatStyle: none
+...

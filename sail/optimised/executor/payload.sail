@@ -12,9 +12,7 @@ function execution_requests_hash(input_ref : StatelessInputRef) -> hash =
  * references directly. The standard model retains the explicit RLP(index)
  * cursor, withdrawal encoding, and recursive subtree equations.
  */
-$[c_throws]
 val optimized_transaction_trie_root = impure { c: "transaction_trie_root" } : TransactionListRef -> hash
-$[c_throws]
 val optimized_withdrawals_trie_root = impure { c: "withdrawals_trie_root" } : WithdrawalListRef -> hash
 
 function transaction_trie_root(txs : TransactionListRef) -> hash =

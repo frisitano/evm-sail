@@ -16,7 +16,8 @@ function bal_ref_cursor(f) =
     if f.is_list & rlp_ref_framing_canonical(f) then {
         rlp_decode_list(f)
     } else {
-        throw InvalidBlock(InvalidBlockAccessList)
+        fatal_error(InvalidBlockAccessList);
+        exit(())
     }
 
 /*! Requires a canonical RLP byte string and returns its content slice. */
@@ -28,7 +29,8 @@ function bal_ref_bytes forall 'source_off 'source_len 'content_len,
     if rlp_ref_bytes_canonical(f) then {
         rlp_item_content(f)
     } else {
-        throw InvalidBlock(InvalidBlockAccessList)
+        fatal_error(InvalidBlockAccessList);
+        exit(())
     }
 
 /*! Requires a canonical RLP integer in the EVM-word domain. */
@@ -40,7 +42,8 @@ function bal_ref_word forall 'source_off 'source_len 'content_len,
     if rlp_item_uint_canonical(f) & (f.content_len <= 32) then {
         rlp_decode_word(f)
     } else {
-        throw InvalidBlock(InvalidBlockAccessList)
+        fatal_error(InvalidBlockAccessList);
+        exit(())
     }
 
 /*! Requires a canonical RLP integer in the host-index/nonce domain. */
@@ -52,7 +55,8 @@ function bal_ref_uint64 forall 'source_off 'source_len 'content_len,
     if rlp_item_uint_canonical(f) & (f.content_len <= 8) then {
         rlp_decode_uint64(f)
     } else {
-        throw InvalidBlock(InvalidBlockAccessList)
+        fatal_error(InvalidBlockAccessList);
+        exit(())
     }
 
 /*! Requires that a decoded list has no unconsumed children. */
@@ -63,5 +67,6 @@ function bal_expect_end forall 'source_off 'source_len, source_valid_range('sour
     if cursor.len == 0 then {
         ()
     } else {
-        throw InvalidBlock(InvalidBlockAccessList)
+        fatal_error(InvalidBlockAccessList);
+        exit(())
     }

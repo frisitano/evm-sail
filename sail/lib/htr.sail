@@ -199,7 +199,8 @@ function merkleize_vector_subtree(leaves, start, count, depth) =
             if (count == 1) & (start < length(leaves)) then {
                 leaves[length(leaves) - 1 - start]
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;
@@ -225,7 +226,8 @@ function merkleize(leaves, depth) = {
     if count <= htr_leaf_capacity(depth) then {
         merkleize_vector_subtree(leaves, 0, count, depth)
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 }
 
@@ -338,7 +340,8 @@ function clog2(n : htr_leaf_count) -> htr_depth = {
             depth = if current_depth < 25 then {
                     current_depth + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient);
+                    exit(())
                 };
             remaining = tdiv_nat(remaining, 2)
         }
@@ -353,7 +356,8 @@ function htr_chunk(bytes, chunk_index) =
         let offset : source_pointer = chunk_index * WORD_BYTE_LENGTH;
         word_to_hash(slice_load(bytes, offset))
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 
 /*! Returns the number of 32-byte chunks needed to contain `byte_len` bytes. */
@@ -362,7 +366,8 @@ function htr_chunk_count(byte_len) =
     if byte_len <= HTR_BYTE_LIST_LIMIT then {
         (byte_len + 31) / 32
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     }
 
 /*! Recursively merkleizes the live chunk prefix of a byte span. */
@@ -375,7 +380,8 @@ function htr_bytes_subtree(bytes, start, count, depth) =
             if count == 1 then {
                 htr_chunk(bytes, start)
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;
@@ -400,7 +406,8 @@ function htr_bytes_root(bytes : StatelessInputSlice, depth : htr_depth) -> hash 
     if count <= htr_leaf_capacity(depth) then {
             htr_bytes_subtree(bytes, 0, count, depth)
         } else {
-            throw InvalidBlock(WitnessDeficient)
+            fatal_error(WitnessDeficient);
+            exit(())
         }
 }
 
@@ -444,7 +451,8 @@ function htr_ssz_bytevector(bytes, offset, len) = {
     if offset + len <= bytes.len then {
         htr_bytevector(sub_slice(bytes, offset, len))
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig);
+        exit(())
     }
 }
 
@@ -482,7 +490,8 @@ function htr_transactions_subtree(transactions, start, count, depth) =
             if count == 1 then {
                 htr_bytelist(ssz_list_at(transactions, start), HTR_BYTE_LIST_LIMIT)
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;
@@ -518,7 +527,8 @@ function htr_withdrawals_subtree(withdrawals, start, count, depth) =
             if count == 1 then {
                 htr_withdrawal(ssz_fixed_list_at(withdrawals, start, WD_SIZE))
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;
@@ -587,7 +597,8 @@ function htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) =
             if count == 1 then {
                 htr_chunk(versioned_hashes, start)
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;
@@ -697,7 +708,8 @@ function htr_request_leaf(requests, index, kind) =
             if offset + HTR_DEPOSIT_LENGTH <= requests.len then {
                 htr_deposit(sub_slice(requests, offset, HTR_DEPOSIT_LENGTH))
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             }
         },
         HtrWithdrawalRequest => {
@@ -705,7 +717,8 @@ function htr_request_leaf(requests, index, kind) =
             if offset + HTR_WITHDRAWAL_REQUEST_LENGTH <= requests.len then {
                 htr_withdrawal_request(sub_slice(requests, offset, HTR_WITHDRAWAL_REQUEST_LENGTH))
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             }
         },
         HtrConsolidationRequest => {
@@ -713,7 +726,8 @@ function htr_request_leaf(requests, index, kind) =
             if offset + HTR_CONSOLIDATION_REQUEST_LENGTH <= requests.len then {
                 htr_consolidation_request(sub_slice(requests, offset, HTR_CONSOLIDATION_REQUEST_LENGTH))
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             }
         },
         HtrBuilderDepositRequest => {
@@ -721,7 +735,8 @@ function htr_request_leaf(requests, index, kind) =
             if offset + HTR_BUILDER_DEPOSIT_LENGTH <= requests.len then {
                 htr_builder_deposit_request(sub_slice(requests, offset, HTR_BUILDER_DEPOSIT_LENGTH))
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             }
         },
         HtrBuilderExitRequest => {
@@ -729,7 +744,8 @@ function htr_request_leaf(requests, index, kind) =
             if offset + HTR_BUILDER_EXIT_LENGTH <= requests.len then {
                 htr_builder_exit_request(sub_slice(requests, offset, HTR_BUILDER_EXIT_LENGTH))
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig);
+                exit(())
             }
         },
     }
@@ -750,7 +766,8 @@ function htr_requests_subtree(requests, kind, start, count, depth) =
             if count == 1 then {
                 htr_request_leaf(requests, start, kind)
             } else {
-                throw InvalidBlock(WitnessDeficient)
+                fatal_error(WitnessDeficient);
+                exit(())
             }
         } else {
             let child_depth : htr_depth = depth - 1;

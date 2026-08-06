@@ -8,8 +8,10 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules.
 */
-/*! The stored code for a content hash, or `None` when not witnessed. */
-val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
+/*! The stored code for a content hash, or [EMPTY_CODE][] when not witnessed.
+    Nonempty hashes cannot identify empty code, so length zero is an
+    unambiguous miss sentinel at this boundary. */
+val code_db_lookup = impure { c: "code_db_lookup" } : hash -> Code
 /*! Copies immutable input bytes into the executable-code arena and returns
     their stable arena span. */
 val code_region_from_input = impure { c: "code_region_from_input" } : StatelessInputSlice -> CodeRegionSlice
@@ -56,16 +58,13 @@ function analyze_code_from(code, fork, table, pc) = {
                 opcode_value - 94
             } else {
                 if fork >= Amsterdam then {
-                    match deep_stack_operation(opcode_value) {
-                        Some(operation) => if deep_stack_operation_immediate_valid(
-                            operation,
-                            slice_byte(code, position + 1),
-                        ) then {
-                            2
-                        } else {
-                            1
-                        },
-                        None() => 1,
+                    if deep_stack_operation_immediate_valid(
+                        deep_stack_operation(opcode_value),
+                        slice_byte(code, position + 1),
+                    ) then {
+                        2
+                    } else {
+                        1
                     }
                 } else {
                     1
@@ -117,8 +116,11 @@ function code_db_resolve(code_hash : hash) -> Code =
     if code_hash == KECCAK_EMPTY then {
         EMPTY_CODE
     } else {
-        match code_db_lookup(code_hash) {
-            Some(code) => code,
-            None() => throw InvalidBlock(WitnessDeficient),
+        let code = code_db_lookup(code_hash);
+        if code.len == 0 then {
+            fatal_error(WitnessDeficient);
+            exit(())
+        } else {
+            code
         }
     }

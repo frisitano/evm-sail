@@ -32,6 +32,6 @@ function validation_debug_capture_block_gas(
 
 /*! Records the failing validation stage and reason for host
     inspection; a later record overwrites an earlier one. */
-function validation_debug_record(_stage : validation_stage, _reason : BlockError) -> unit = ()
+function validation_debug_record(_stage : validation_stage, _reason : FatalError) -> unit = ()
 
 function debug_account_storage_root(_a : address) -> hash = EMPTY_TRIE_ROOT

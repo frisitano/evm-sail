@@ -1,0 +1,22 @@
+---
+# Optimized C is source for review, not merely a compiler intermediate.  Keep
+# this policy deliberately small and C-oriented so compiler upgrades do not
+# silently change the presentation contract.
+Language: Cpp
+BasedOnStyle: LLVM
+ColumnLimit: 100
+IndentWidth: 2
+ContinuationIndentWidth: 4
+UseTab: Never
+PointerAlignment: Right
+DerivePointerAlignment: false
+SortIncludes: Never
+ReflowComments: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+...

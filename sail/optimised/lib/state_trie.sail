@@ -7,5 +7,4 @@
  * The optimized ABI raises the same Sail InvalidBlock exception on witness or
  * RLP failure as the standard implementation.
  */
-$[c_throws]
 val compute_state_root = impure { c: "compute_state_root" } : unit -> hash

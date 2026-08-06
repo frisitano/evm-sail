@@ -6,7 +6,9 @@ accounting, withdrawals, and block-end request collection.
 */
 
 /*! Everything block validation needs from a successfully executed body: gas
-    and blob-gas totals, receipts, and the collected EIP-7685 requests. */
+    and blob-gas totals, the post-execution receipts root, and the block's
+    retained receipt-log range. EIP-7685 requests are validated where they
+    are collected rather than carried in the result. */
 struct BlockExecutionResult = {
     header_gas_used : block_gas,
     execution_gas_used : block_gas,
@@ -14,8 +16,7 @@ struct BlockExecutionResult = {
     blob_gas_used : blob_gas_used,
     first_tx_recipient : address,
     receipts_root : hash,
-    logs_bloom : LogsBloom,
-    requests : ExecutionRequests,
+    logs : LogSeriesRef,
 }
 
 /*! The two independent block gas dimensions introduced by Amsterdam. Earlier
@@ -132,13 +133,15 @@ function execute_block_transactions(
     let public_key_count_value = public_keys_length / public_key_length;
     if (public_key_count_value != transactions.count) |
         (public_keys_length != public_key_count_value * public_key_length) then {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient);
+        exit(())
     };
     let (gas_limit as 'gas_limit) = gas_limits.block_limit;
     var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
-    var receipts = receipt_accumulator_empty();
+    let records_start = receipt_store_begin();
+    let logs_start = log_store_index_add(logs_tx_start(), logs_tx_count());
     var remaining_deposits : StatelessInputSlice = expected_deposits;
     var cursor = ssz_list_cursor(transactions);
     var keys : StatelessInputSlice = public_keys;
@@ -147,10 +150,12 @@ function execute_block_transactions(
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
         let keys_fields = keys;
-        let keys_length = keys_fields.len;
-        if keys_length < public_key_length then {
-            throw InvalidBlock(WitnessDeficient)
-        };
+        let keys_fields : StatelessInputSliceAtLeast(65) = if public_key_length <= keys_fields.len then {
+                keys_fields
+            } else {
+                fatal_error(WitnessDeficient);
+                exit(())
+            };
         let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
         keys = slice_suffix(keys_fields, public_key_length);
         let tx = decode_transaction(transaction, public_key);
@@ -171,7 +176,8 @@ function execute_block_transactions(
         );
         if profile.fork >= Amsterdam then {
             if (available_execution_gas < allowance.regular) | (available_state_gas < allowance.total) then {
-                throw InvalidBlock(GasUsedExceedsLimit)
+                fatal_error(GasUsedExceedsLimit);
+                exit(())
             } else {
                 let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
                 let next_blob_gas : blob_gas_used = block_blob_gas_add(
@@ -182,7 +188,7 @@ function execute_block_transactions(
                 let receipt = process_transaction(tx, allowance);
                 let next_usage = block_gas_usage_add(usage, receipt.execution_gas, receipt.state_gas, receipt.gas_used);
                 gas_usage = next_usage;
-                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                receipt_store_append(receipt, next_usage.receipts, i);
                 if profile.fork >= Prague then {
                     remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
                 };
@@ -190,7 +196,8 @@ function execute_block_transactions(
             }
         } else {
             if available_execution_gas < allowance.total then {
-                throw InvalidBlock(GasUsedExceedsLimit)
+                fatal_error(GasUsedExceedsLimit);
+                exit(())
             } else {
                 let tx_blob_gas : transaction_blob_gas = sizeof(gas_per_blob_value) * tx.blob_hashes.count;
                 let next_blob_gas : blob_gas_used = if profile.fork < Cancun then {
@@ -201,7 +208,7 @@ function execute_block_transactions(
                 let receipt = process_transaction(tx, allowance);
                 let next_usage = block_gas_usage_add(usage, receipt.gas_used, 0, receipt.gas_used);
                 gas_usage = next_usage;
-                receipts = receipt_accumulator_push(receipts, receipt, next_usage.receipts, next.index);
+                receipt_store_append(receipt, next_usage.receipts, i);
                 if profile.fork >= Prague then {
                     remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits)
                 };
@@ -210,7 +217,8 @@ function execute_block_transactions(
         }
     };
     if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
-        throw InvalidBlock(InvalidExecutionRequests)
+        fatal_error(InvalidExecutionRequests);
+        exit(())
     };
     let final_usage = gas_usage;
     let header_gas_used = if (profile.fork >= Amsterdam) & (final_usage.execution < final_usage.state) then {
@@ -218,7 +226,13 @@ function execute_block_transactions(
         } else {
             final_usage.execution
         };
-    let receipts_root = receipt_accumulator_root(receipts);
+    let receipts_root = receipt_store_root(records_start, transactions.count);
+    let retained = log_store_index_add(logs_tx_start(), logs_tx_count());
+    let logs_count : log_store_index = if logs_start <= retained then {
+            retained - logs_start
+        } else {
+            0
+        };
     struct {
         header_gas_used = header_gas_used,
         execution_gas_used = final_usage.execution,
@@ -226,8 +240,7 @@ function execute_block_transactions(
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
         receipts_root = receipts_root,
-        logs_bloom = receipt_accumulator_bloom(receipts),
-        requests = EMPTY_EXECUTION_REQUESTS,
+        logs = struct { start = logs_start, count = logs_count },
     }
 }
 
@@ -259,13 +272,12 @@ function apply_block_end_state(body : BlockBody) -> unit = {
 }
 
 /*! Executes a block body end to end: block-start system calls, the
-    transaction loop, block-end state effects, and request collection;
+    transaction loop, block-end state effects, and request validation;
     invalid execution throws immediately, while successful execution returns
     the accumulated [BlockExecutionResult][type-BlockExecutionResult]. */
 function execute_block_body(
     body : BlockBody,
-    public_keys : StatelessInputSlice,
-    expected_deposits : StatelessInputSlice,
+    input_ref : StatelessInputRef,
 ) -> (
     BlockExecutionResult
 ) = {
@@ -275,15 +287,13 @@ function execute_block_body(
     k_current_transaction_epoch = 0;
     warm_reset(k_current_transaction_epoch);
     run_block_start_system_calls();
-    let result = execute_block_transactions(body.transactions, public_keys, expected_deposits);
+    let result = execute_block_transactions(body.transactions, input_ref.public_keys, input_ref.deposits);
     let post_tx_index = body.transactions.count + 1;
     k_current_transaction_epoch = post_tx_index;
     warm_reset(k_current_transaction_epoch);
     apply_block_end_state(body);
-    let requests = if profile.fork >= Prague then {
-            collect_execution_requests(expected_deposits)
-        } else {
-            EMPTY_EXECUTION_REQUESTS
-        };
-    { result with requests = requests }
+    if profile.fork >= Prague then {
+        validate_execution_requests(input_ref)
+    };
+    result
 }

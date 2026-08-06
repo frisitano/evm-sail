@@ -13,7 +13,8 @@ function validated_word_product(value, factor) = {
         if word_ule(value, word_div(WORD_ALL_ONES, factor)) then {
             word_mul(value, factor)
         } else {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         }
     }
 }
@@ -40,7 +41,8 @@ function transaction_costs(
             if word_ule(blob_price, tx.max_blob_fee) then {
                 validated_word_product(blob_price, blob_gas)
             } else {
-                throw InvalidBlock(ExecutionInvalid)
+                fatal_error(ExecutionInvalid);
+                exit(())
             }
         };
     let execution_cap = validated_word_product(tx.max_fee, gas_limit);
@@ -48,12 +50,14 @@ function transaction_costs(
     let execution_and_value : word = if word_ule(tx.value, word_sub(WORD_ALL_ONES, execution_cap)) then {
             word_add(execution_cap, tx.value)
         } else {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         };
     let upfront : word = if word_ule(blob_cap, word_sub(WORD_ALL_ONES, execution_and_value)) then {
             word_add(execution_and_value, blob_cap)
         } else {
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         };
     struct {
         intrinsic_execution = intrinsic.execution,

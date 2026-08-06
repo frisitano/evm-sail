@@ -16,11 +16,9 @@ typedef struct {
 
 NibblePath nibble_path_empty(void);
 NibblePath nibble_path_from_secure_key(const Hash32 *hash);
-bool nibble_path_concat(const NibblePath *a,
-                        const NibblePath *b, NibblePath *out);
+bool nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *out);
 NibblePath nibble_path_drop(const NibblePath *path, unsigned count);
-NibblePath nibble_path_slice(const NibblePath *path, unsigned start,
-                             unsigned len);
+NibblePath nibble_path_slice(const NibblePath *path, unsigned start, unsigned len);
 NibblePath nibble_path_single(unsigned nibble);
 bool nibble_path_equal(const NibblePath *a, const NibblePath *b);
 bool nibble_path_less(const NibblePath *a, const NibblePath *b);
@@ -29,7 +27,6 @@ unsigned nibble_path_common(const NibblePath *a, const NibblePath *b);
 
 /* Secure-key nibble access without materializing the full path. */
 uint8_t mpt_hash_nibble(const Hash32 *key, unsigned position);
-bool mpt_key_matches(const Hash32 *key, unsigned position,
-                     const NibblePath *path);
+bool mpt_key_matches(const Hash32 *key, unsigned position, const NibblePath *path);
 
 #endif

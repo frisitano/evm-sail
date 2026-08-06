@@ -1,8 +1,9 @@
 /*md
-# Receipt accumulation and the receipts trie
+# Receipt retention and the receipts trie
 
-Execution-ordered retention and block-wide receipt aggregates. Canonical wire
-encoding is owned by the receipt RLP codec.
+Execution-ordered retention of encoded receipts and the post-execution
+block-wide receipt reductions. Canonical wire encoding is owned by the
+receipt RLP codec.
 */
 
 /*! One execution-ordered sequence of length-prefixed encoded receipts in the
@@ -19,54 +20,50 @@ struct ReceiptRecordsRef = {
     all three indexed tries share one recursive construction. */
 val indexed_receipt_trie_root : ReceiptRecordsRef -> hash
 
-/*! The retained receipt-record region and block-wide receipt aggregates. */
-struct ReceiptAccumulator = {
-    records_start : source_pointer,
-    count : transaction_count,
-    bloom : LogsBloom,
-}
-
-/*! Constructs an empty receipts-trie accumulator. */
-function receipt_accumulator_empty() -> ReceiptAccumulator =
-    struct { records_start = scratch_begin(), count = 0, bloom = EMPTY_LOGS_BLOOM }
+/*! Opens the execution-ordered receipt record region for one block. */
+function receipt_store_begin() -> source_pointer =
+    scratch_begin()
 
 /*! Splits the first retained record from an execution-ordered record span. */
 function receipt_record_pop(records : ScratchSlice) -> (ScratchSlice, ScratchSlice) = {
-    if records.len < EIGHT_BYTE_LENGTH then {
-        throw InvalidBlock(WitnessDeficient)
+    let records : ScratchSliceAtLeast(8) = if EIGHT_BYTE_LENGTH <= records.len then {
+            records
+        } else {
+            fatal_error(WitnessDeficient);
+            exit(())
     };
     let value_length = decode_scratch_uint(records, 0);
     let payload = slice_suffix(records, EIGHT_BYTE_LENGTH);
-    if payload.len < value_length then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    (sub_slice(payload, 0, value_length), slice_suffix(payload, value_length))
+    if value_length <= payload.len then {
+        (sub_slice(payload, 0, value_length), slice_suffix(payload, value_length))
+    } else {
+        fatal_error(WitnessDeficient);
+        exit(())
+    }
 }
 
-/*! Adds the next numeric receipt as one persistent scratch record. */
-val receipt_accumulator_push : forall 'cumulative, 0 <= 'cumulative & 'cumulative <= 2 * block_gas_limit_bound. (
-        ReceiptAccumulator,
+/*! Retains the next numeric receipt as one persistent scratch record. The
+    zero-based `index` restates the receipt's execution order for backends
+    that store records outside the scratch stream. */
+val receipt_store_append : forall 'cumulative, 0 <= 'cumulative & 'cumulative <= 2 * block_gas_limit_bound. (
         Receipt,
         int('cumulative),
         transaction_count,
-    ) -> ReceiptAccumulator
-function receipt_accumulator_push(acc, receipt, cumulative_gas_used, next_count) = {
-    if next_count != acc.count + 1 then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    let receipt_bloom = logs_bloom_for_logs(receipt.logs);
-    receipt_record_append(receipt, cumulative_gas_used, receipt_bloom);
-    struct { records_start = acc.records_start, count = next_count, bloom = logs_bloom_or(acc.bloom, receipt_bloom) }
-}
+    ) -> unit
+function receipt_store_append(receipt, cumulative_gas_used, _index) =
+    receipt_record_append(receipt, cumulative_gas_used)
 
-/*! Computes the canonical receipts root, then releases the retained records. */
-function receipt_accumulator_root(acc : ReceiptAccumulator) -> hash = {
-    let records = scratch_finish(acc.records_start);
-    let root = indexed_receipt_trie_root(struct { bytes = records, count = acc.count });
-    scratch_rewind(acc.records_start);
+/*! Computes the canonical receipts root over the retained records after the
+    last transaction has executed, then releases the retained region. */
+function receipt_store_root(records_start : source_pointer, count : transaction_count) -> hash = {
+    let records = scratch_finish(records_start);
+    let root = indexed_receipt_trie_root(struct { bytes = records, count = count });
+    scratch_rewind(records_start);
     root
 }
 
-/*! Returns the block-wide logs bloom accumulated from all receipts. */
-function receipt_accumulator_bloom(acc : ReceiptAccumulator) -> LogsBloom =
-    acc.bloom
+/*! Compares the block logs bloom of one consecutive retained log range with
+    the payload-header commitment (YP §4.4.1). The range covers exactly the
+    logs retained by the block's transaction receipts. */
+function block_logs_bloom_matches(logs : LogSeriesRef, reference : LogsBloomRef) -> bool =
+    logs_bloom_matches_ref(bloom_add_logs(EMPTY_LOGS_BLOOM, logs), reference)

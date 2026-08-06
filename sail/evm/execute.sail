@@ -13,7 +13,7 @@ Pure compute is done here; every world effect is a kernel syscall
 via the kernel's returned warm bit (EIP-2929), decides whether an effect
 happens, and issues the syscall only for real effects (a no-op `SSTORE`
 charges gas but issues no host write). Memory-touching opcodes pay the
-quadratic expansion cost via [charge_memory_range][] before acting.
+quadratic expansion cost via [memory_expansion_cost][] before acting.
 Sub-calls and creates delegate to [run_call][] / [run_create][], which
 install a child frame and save its parent continuation. The non-recursive
 opcode bodies live in [execute_opcode][].
@@ -311,11 +311,12 @@ function execute_clz() -> unit = {
 function execute_keccak256() -> unit = {
     let offset_word = pop();
     let length_word = pop();
-    charge_keccak_gas(length_word);
-    let range = charge_memory_range(offset_word, length_word);
-    if is_running() then {
-        push(mem_keccak(range))
-    }
+    if not_bool(charge_keccak_gas(length_word)) then { return () };
+    let required_size = memory_required_size(offset_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, length_word);
+    expand_memory(access.required_size);
+    push(mem_keccak(access.range))
 }
 
 /*! Implements `ADDRESS`. */
@@ -359,9 +360,7 @@ function execute_calldatasize() -> unit = {
 function execute_calldataload() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
-    if is_running() then {
-        push(slice_load_word_offset(calldata, offset_word))
-    }
+    push(slice_load_word_offset(calldata, offset_word))
 }
 
 /*! Implements `CALLDATACOPY`. */
@@ -370,11 +369,13 @@ function execute_calldatacopy() -> unit = {
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    charge_copy_gas(length_word);
-    let range = charge_memory_range(destination_word, length_word);
-    if is_running() then {
-        slice_copy_word_offset(calldata, range.off, source_word, range.len)
-    }
+    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let required_size = memory_required_size(destination_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(destination_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    slice_copy_word_offset(calldata, range.off, source_word, range.len)
 }
 
 /*! Implements `CODESIZE`. */
@@ -389,12 +390,14 @@ function execute_codecopy() -> unit = {
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    charge_copy_gas(length_word);
-    let range = charge_memory_range(destination_word, length_word);
-    if is_running() then {
-        let code = frame_code;
-        slice_copy_word_offset(code_bytes(code), range.off, source_word, range.len)
-    }
+    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let required_size = memory_required_size(destination_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(destination_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    let code = frame_code;
+    slice_copy_word_offset(code_bytes(code), range.off, source_word, range.len)
 }
 
 /*! Implements `BALANCE`, including warm/cold account access. */
@@ -429,12 +432,14 @@ function execute_extcodecopy() -> unit = {
     let length_word = pop();
     let warm = k_account_is_warm(a);
     if not_bool(charge(account_cost(warm) + external_code_read_cost())) then { return () };
-    charge_copy_gas(length_word);
-    let range = charge_memory_range(destination_word, length_word);
-    if is_running() then {
-        k_account_mark_warm(a);
-        k_code_copy(a, range.off, source_word, range.len)
-    }
+    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let required_size = memory_required_size(destination_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(destination_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    k_account_mark_warm(a);
+    k_code_copy(a, range.off, source_word, range.len)
 }
 
 /*! Implements `EXTCODEHASH`, including warm/cold account access. */
@@ -458,11 +463,13 @@ function execute_returndatacopy() -> unit = {
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    charge_copy_gas(length_word);
-    let range = charge_memory_range(destination_word, length_word);
-    if is_running() then {
-        returndata_copy_words(range.off, source_word, length_word)
-    }
+    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let required_size = memory_required_size(destination_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(destination_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    returndata_copy_words(range.off, source_word, length_word)
 }
 
 /*! Implements `BLOCKHASH`. */
@@ -542,10 +549,11 @@ function execute_pop() -> unit = {
 function execute_mload() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
-    let range = charge_memory_range(offset_word, u256(32));
-    if is_running() then {
-        push(mem_load(range.off))
-    }
+    let required_size = memory_required_size(offset_word, u256(32));
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, u256(32));
+    expand_memory(access.required_size);
+    push(mem_load(access.range.off))
 }
 
 /*! Implements `MSTORE`. */
@@ -553,10 +561,11 @@ function execute_mstore() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let v = pop();
-    let range = charge_memory_range(offset_word, u256(32));
-    if is_running() then {
-        mem_store(range.off, v)
-    }
+    let required_size = memory_required_size(offset_word, u256(32));
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, u256(32));
+    expand_memory(access.required_size);
+    mem_store(access.range.off, v)
 }
 
 /*! Implements `MSTORE8`. */
@@ -564,10 +573,11 @@ function execute_mstore8() -> unit = {
     if not_bool(charge(G_verylow)) then { return () };
     let offset_word = pop();
     let v = pop();
-    let range = charge_memory_range(offset_word, WORD_ONE);
-    if is_running() then {
-        mem_store_byte(range.off, v)
-    }
+    let required_size = memory_required_size(offset_word, WORD_ONE);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, WORD_ONE);
+    expand_memory(access.required_size);
+    mem_store_byte(access.range.off, v)
 }
 
 /*! Implements `MSIZE`. */
@@ -583,26 +593,30 @@ function execute_mcopy() -> unit = {
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    charge_copy_gas(length_word);
-    if is_running() then {
-        let available = gas_remaining;
-        let destination = memory_access(destination_word, length_word);
-        let source = memory_access(source_word, length_word);
-        let required_size =
+    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let destination_required = memory_required_size(destination_word, length_word);
+    let source_required = memory_required_size(source_word, length_word);
+    let required_size =
+            if destination_required < source_required then {
+                source_required
+            } else {
+                destination_required
+            };
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let destination = memory_access(destination_word, length_word);
+    let source = memory_access(source_word, length_word);
+    let materialized_required_size =
             if destination.required_size < source.required_size then {
                 source.required_size
             } else {
                 destination.required_size
             };
-        let expansion = memory_expansion(required_size, available);
-        if not_bool(charge(expansion.cost)) then { return () };
-        apply_memory_expansion(expansion);
-        mem_mcopy(
-            destination.range.off,
-            source.range.off,
-            destination.range.len,
-        )
-    }
+    expand_memory(materialized_required_size);
+    mem_mcopy(
+        destination.range.off,
+        source.range.off,
+        destination.range.len,
+    )
 }
 
 /*! Implements `SLOAD`, including warm/cold access gas. */
@@ -627,31 +641,26 @@ function execute_sstore() -> unit = {
         } else {
             let s = pop();
             let v = pop();
-            if is_running() then {
-                let warm = k_slot_is_warm(self_addr(), s);
-                let cold = not_bool(warm);
-                if profile.fork >= Amsterdam then {
-                    let access_cost = amsterdam_storage_access_cost(cold);
-                    let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
-                    check_execution_gas(sentry_cost)
-                };
-                if not_bool(is_running()) then {
-                    return ()
-                };
-                k_slot_mark_warm(self_addr(), s);
-                let entry = k_sload(self_addr(), s);
-                let costs = sstore_costs(entry.orig, entry.curr, v, cold);
-                if costs.state_credit != 0 then {
-                    credit_state_gas_refund(costs.state_credit)
-                };
-                if not_bool(charge(costs.execution)) then { return () };
-                charge_state_gas(costs.state_charge);
-                if not_bool(costs.refund == GAS_REFUND_ZERO) then {
-                    record_refund(costs.refund)
-                };
-                if is_running() & (entry.curr != v) then {
-                    k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
-                }
+            let warm = k_slot_is_warm(self_addr(), s);
+            let cold = not_bool(warm);
+            if profile.fork >= Amsterdam then {
+                let access_cost = amsterdam_storage_access_cost(cold);
+                let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
+                if not_bool(check_execution_gas(sentry_cost)) then { return () }
+            };
+            k_slot_mark_warm(self_addr(), s);
+            let entry = k_sload(self_addr(), s);
+            let costs = sstore_costs(entry.orig, entry.curr, v, cold);
+            if costs.state_credit != 0 then {
+                credit_state_gas_refund(costs.state_credit)
+            };
+            if not_bool(charge(costs.execution)) then { return () };
+            if not_bool(charge_state_gas(costs.state_charge)) then { return () };
+            if not_bool(costs.refund == GAS_REFUND_ZERO) then {
+                record_refund(costs.refund)
+            };
+            if entry.curr != v then {
+                k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
             }
         }
     }
@@ -786,12 +795,14 @@ function execute_log(n : log_topic_count) -> unit = {
         let offset_word = pop();
         let length_word = pop();
         let topics = pop_log_topics(n);
-        charge_log_gas(n, length_word);
-        let range = charge_memory_range(offset_word, length_word);
-        if is_running() then {
-            let data = active_memory_slice(range.off, range.len);
-            k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.bytes, data.len)))
-        }
+        if not_bool(charge_log_gas(n, length_word)) then { return () };
+        let required_size = memory_required_size(offset_word, length_word);
+        if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+        let access = memory_access(offset_word, length_word);
+        expand_memory(access.required_size);
+        let range = access.range;
+        let data = active_memory_slice(range.off, range.len);
+        k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.bytes, data.len)))
     }
 }
 
@@ -802,10 +813,12 @@ function execute_stop() -> unit = frame_status = Halted(HaltStop())
 function execute_return() -> unit = {
     let offset_word = pop();
     let length_word = pop();
-    let range = charge_memory_range(offset_word, length_word);
-    if is_running() then {
-        frame_status = Halted(HaltReturn(freeze_output(active_memory_slice(range.off, range.len))))
-    }
+    let required_size = memory_required_size(offset_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    frame_status = Halted(HaltReturn(freeze_output(active_memory_slice(range.off, range.len))))
 }
 
 /*! Implements rollback-carrying `REVERT` (EIP-140). */
@@ -813,11 +826,13 @@ function execute_revert() -> unit = {
     /* EIP-140 */
     let offset_word = pop();
     let length_word = pop();
-    let range = charge_memory_range(offset_word, length_word);
-    if is_running() then {
-        refill_frame_state_gas();
-        frame_status = Halted(HaltRevert(freeze_output(active_memory_slice(range.off, range.len))))
-    }
+    let required_size = memory_required_size(offset_word, length_word);
+    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let access = memory_access(offset_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    refill_frame_state_gas();
+    frame_status = Halted(HaltRevert(freeze_output(active_memory_slice(range.off, range.len))))
 }
 
 /*! Implements exceptional invalid-opcode termination. */
@@ -837,8 +852,7 @@ function execute_selfdestruct() -> unit = {
         if profile.fork >= Amsterdam then {
             let warm = k_account_is_warm(beneficiary);
             let access_cost = 0 + G_selfdestruct + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
-            check_execution_gas(access_cost);
-            if is_running() then {
+            if not_bool(check_execution_gas(access_cost)) then { return () };
                 k_account_mark_warm(beneficiary);
                 let bal = k_get_balance(self_addr());
                 let creates_account = word_nonzero(bal) & k_account_is_empty(beneficiary);
@@ -848,17 +862,14 @@ function execute_selfdestruct() -> unit = {
                         access_cost
                     };
                 if not_bool(charge(execution_cost)) then { return () };
-                if creates_account then {
-                    charge_state_gas(G_amsterdam_state_new_account)
-                };
-                if is_running() then {
-                    k_transfer(self_addr(), beneficiary, bal);
-                    if k_was_created(self_addr()) then {
-                        k_selfdestruct(self_addr())
-                    };
-                    frame_status = Halted(HaltSelfDestruct())
-                }
-            }
+            if creates_account then {
+                if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then { return () }
+            };
+            k_transfer(self_addr(), beneficiary, bal);
+            if k_was_created(self_addr()) then {
+                k_selfdestruct(self_addr())
+            };
+            frame_status = Halted(HaltSelfDestruct())
         } else {
             let bal = k_get_balance(self_addr());
             let warm = k_account_is_warm(beneficiary);
@@ -870,23 +881,21 @@ function execute_selfdestruct() -> unit = {
             if word_nonzero(bal) & k_account_is_empty(beneficiary) then {
                 if not_bool(charge(G_newaccount)) then { return () }
             };
-            if is_running() then {
-                let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
-                if (profile.fork < London) & first_selfdestruct then {
-                    record_refund(R_selfdestruct_pre_london)
-                };
-                k_transfer(self_addr(), beneficiary, bal);
-                if profile.fork < Cancun then {
+            let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
+            if (profile.fork < London) & first_selfdestruct then {
+                record_refund(R_selfdestruct_pre_london)
+            };
+            k_transfer(self_addr(), beneficiary, bal);
+            if profile.fork < Cancun then {
+                k_zero_balance(self_addr());
+                k_selfdestruct(self_addr())
+            } else {
+                if k_was_created(self_addr()) then {
                     k_zero_balance(self_addr());
                     k_selfdestruct(self_addr())
-                } else {
-                    if k_was_created(self_addr()) then {
-                        k_zero_balance(self_addr());
-                        k_selfdestruct(self_addr())
-                    }
-                };
-                frame_status = Halted(HaltSelfDestruct())
-            }
+                }
+            };
+            frame_status = Halted(HaltSelfDestruct())
         }
     }
 }

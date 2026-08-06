@@ -177,7 +177,7 @@ unsigned long guest_run(const unsigned char *in, unsigned long n,
  *                                     post-run state; zero after an uncaught
  *                                     Sail exception)
  *       when ok=0, followed by the CAPTURED exception:
- *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
+ *       err[1] loc_len[2] loc[loc_len]   (err = the FatalError enum value of
  *                                     the InvalidBlock that escaped, 0xff if
  *                                     none recorded; loc = the Sail source
  *                                     position of the throw site)
@@ -212,20 +212,6 @@ extern uint64_t hm_depth(unit);
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
 static char g_validation_location[513];
-
-unit validation_debug_capture_location(unit u)
-{
-    (void)u;
-    const char *loc =
-        (throw_location && *throw_location) ? *throw_location : "";
-    size_t len = 0;
-    while (loc[len] && len < sizeof g_validation_location - 1) {
-        g_validation_location[len] = loc[len];
-        len++;
-    }
-    g_validation_location[len] = '\0';
-    return UNIT;
-}
 
 static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
 static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }

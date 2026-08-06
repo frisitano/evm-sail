@@ -130,7 +130,8 @@ function system_call(tgt : address, input : hash) -> unit = {
     throws immediately; a successful call returns the dequeued requests. */
 function system_call_checked(tgt : address) -> ScratchSlice = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     } else {
         memory_reset();
         let parent_memory = memory_frame_enter();
@@ -148,7 +149,8 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
             memory_frame_leave(parent_memory);
             k_journal_revert();
             k_tx_merge();
-            throw InvalidBlock(ExecutionInvalid)
+            fatal_error(ExecutionInvalid);
+            exit(())
         }
     }
 }
@@ -166,9 +168,12 @@ function deposit_log_matches(index : log_store_index) -> bool =
     consensus-layer deposit request and returns the unconsumed request
     suffix (EIP-6110). */
 function authenticate_deposit_request(data : LogDataSlice, expected : StatelessInputSlice) -> StatelessInputSlice = {
-    if data.len != DEPOSIT_EVENT_DATA_LENGTH then {
-        throw InvalidBlock(InvalidExecutionRequests)
-    };
+    let data : LogDataSliceLength(576) = if data.len == DEPOSIT_EVENT_DATA_LENGTH then {
+            data
+        } else {
+            fatal_error(InvalidExecutionRequests);
+            exit(())
+        };
     if   (slice_load(data, DEPOSIT_PUBKEY_HEAD) != u256(160))
        | (slice_load(data, DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD) != u256(256))
        | (slice_load(data, DEPOSIT_AMOUNT_HEAD) != u256(320))
@@ -179,7 +184,8 @@ function authenticate_deposit_request(data : LogDataSlice, expected : StatelessI
        | (slice_load(data, DEPOSIT_AMOUNT_LENGTH_WORD) != u256(8))
        | (slice_load(data, DEPOSIT_SIGNATURE_LENGTH_WORD) != u256(96))
        | (slice_load(data, DEPOSIT_INDEX_LENGTH_WORD) != u256(8)) then {
-        throw InvalidBlock(InvalidExecutionRequests)
+        fatal_error(InvalidExecutionRequests);
+        exit(())
     };
     if DEPOSIT_REQUEST_LENGTH <= expected.len then {
         if   not_bool(
@@ -212,11 +218,13 @@ function authenticate_deposit_request(data : LogDataSlice, expected : StatelessI
                      sub_slice(expected, DEPOSIT_REQUEST_INDEX, DEPOSIT_INDEX_LENGTH),
                  ),
              ) then {
-            throw InvalidBlock(InvalidExecutionRequests)
+            fatal_error(InvalidExecutionRequests);
+            exit(())
         };
         slice_suffix(expected, DEPOSIT_REQUEST_LENGTH)
     } else {
-        throw InvalidBlock(InvalidExecutionRequests)
+        fatal_error(InvalidExecutionRequests);
+        exit(())
     }
 }
 
@@ -237,30 +245,35 @@ function authenticate_deposit_logs(logs : LogSeriesRef, expected : StatelessInpu
 
 /* Request types are processed in ascending order, stopping immediately when
  * a checked system call is missing or fails. */
-/*! Collects the EIP-7685 execution requests at block end in request-type
-    order: deposits from logs (EIP-6110), withdrawal (EIP-7002),
-    consolidation (EIP-7251), and, from Amsterdam, builder deposit and
-    builder exit (EIP-8282). */
-function collect_execution_requests(deposits : StatelessInputSlice) -> ExecutionRequests = {
+/*! Dequeues one block-end request stream and validates it byte for byte
+    against the input's committed request bytes. */
+function validate_request_stream(tgt : address, expected : StatelessInputSlice) -> unit = {
+    let dequeued = system_call_checked(tgt);
+    if not_bool(region_slices_equal(dequeued, expected)) then {
+        fatal_error(InvalidExecutionRequests);
+        exit(())
+    }
+}
+
+/*! Validates the EIP-7685 execution requests at block end in request-type
+    order against the input's committed request bytes: withdrawal
+    (EIP-7002), consolidation (EIP-7251), and, from Amsterdam, builder
+    deposit and builder exit (EIP-8282). Before Amsterdam the input must
+    commit to empty builder request streams. Deposits (EIP-6110) are
+    authenticated inline against the transaction receipt logs. */
+function validate_execution_requests(input_ref : StatelessInputRef) -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    let withdrawals = system_call_checked(WITHDRAWAL_REQUEST_ADDR);
-    let consolidations = system_call_checked(CONSOLIDATION_REQUEST_ADDR);
-    let builder_deposits : ScratchSlice = if profile.fork >= Amsterdam then {
-            system_call_checked(BUILDER_DEPOSIT_REQUEST_ADDR)
-        } else {
-            EMPTY_SCRATCH_SLICE
-        };
-    let builder_exits : ScratchSlice = if profile.fork >= Amsterdam then {
-            system_call_checked(BUILDER_EXIT_REQUEST_ADDR)
-        } else {
-            EMPTY_SCRATCH_SLICE
-        };
-    struct {
-        deposits = deposits,
-        withdrawals = withdrawals,
-        consolidations = consolidations,
-        builder_deposits = builder_deposits,
-        builder_exits = builder_exits,
+    validate_request_stream(WITHDRAWAL_REQUEST_ADDR, input_ref.withdrawal_requests);
+    validate_request_stream(CONSOLIDATION_REQUEST_ADDR, input_ref.consolidation_requests);
+    if profile.fork >= Amsterdam then {
+        validate_request_stream(BUILDER_DEPOSIT_REQUEST_ADDR, input_ref.builder_deposit_requests);
+        validate_request_stream(BUILDER_EXIT_REQUEST_ADDR, input_ref.builder_exit_requests)
+    } else {
+        if   (region_slice_length(input_ref.builder_deposit_requests) != 0)
+           | (region_slice_length(input_ref.builder_exit_requests) != 0) then {
+            fatal_error(InvalidExecutionRequests);
+            exit(())
+        }
     }
 }

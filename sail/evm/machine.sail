@@ -51,7 +51,8 @@ function validated_refund_add(left, right) = {
     if (-sizeof(gas_refund_bound) <= total) & (total <= sizeof(gas_refund_bound)) then {
         total
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid);
+        exit(())
     }
 }
 
@@ -406,27 +407,18 @@ function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
     calldata = checkpoint.calldata
 }
 
-/*! Writes one memory byte and raises the high-water mark; a no-op when
-    halted. */
+/*! Writes one memory byte and raises the high-water mark. */
 function mem_set_byte(off : memory_pointer, v : byte) -> unit =
-    if is_running() then {
-        mem_write_byte(off, v)
-    }
+    mem_write_byte(off, v)
 
-/*! `MLOAD`: the big-endian word at `off`; zero when halted. */
+/*! `MLOAD`: the big-endian word at `off`. */
 function mem_load(off : memory_pointer) -> word =
-    if is_running() then {
-        mem_load_word(off)
-    } else {
-        ZERO_WORD
-    }
+    mem_load_word(off)
 
 /*! `MSTORE`: writes the big-endian word at `off` and raises the
     high-water mark. */
 function mem_store(off : memory_pointer, w : word) -> unit =
-    if is_running() then {
-        mem_store_word(off, w)
-    }
+    mem_store_word(off, w)
 
 /*! `MSTORE8`: writes the low byte of `w`. */
 function mem_store_byte(off : memory_pointer, w : word) -> unit =

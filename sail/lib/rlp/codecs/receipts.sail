@@ -81,15 +81,16 @@ function rlp_write_logs_bloom(bloom : LogsBloom) -> unit = {
     scratch_push_fixed_bytes_256(bloom)
 }
 
-/*! Writes the bloom belonging to one receipt. Keeping this small semantic
-    hook separate lets an optimized backend populate the already-reserved RLP
-    span directly from its log-store accumulator. */
-function receipt_write_logs_bloom(_receipt : Receipt, bloom : LogsBloom) -> unit =
-    rlp_write_logs_bloom(bloom)
+/*! Writes the bloom belonging to one receipt, constructed from its retained
+    log range (YP §4.4.1). Keeping this small semantic hook separate lets an
+    optimized backend populate the already-reserved RLP span directly from its
+    log-store accumulator without materializing a Sail bloom value. */
+function receipt_write_logs_bloom(receipt : Receipt) -> unit =
+    rlp_write_logs_bloom(logs_bloom_for_logs(receipt.logs))
 
 /*! Sizes a receipt payload from status, gas, bloom, and logs. */
 val receipt_payload_content_size : forall 'cumulative,
-    receipt_cumulative_gas_valid('cumulative).
+    receipt_cumulative_gas_value_valid('cumulative).
     (Receipt, int('cumulative)) -> rlp_scratch_length
 function receipt_payload_content_size(r, cumulative_gas_used) = {
     let status : range(0, 1) = if r.success then { 1 } else { 0 };
@@ -109,7 +110,7 @@ function receipt_payload_content_size(r, cumulative_gas_used) = {
     prefixed by the envelope type byte for typed transactions
     (EIP-2718). */
 val receipt_encoded_length : forall 'cumulative,
-    receipt_cumulative_gas_valid('cumulative).
+    receipt_cumulative_gas_value_valid('cumulative).
     (Receipt, int('cumulative)) -> rlp_scratch_length
 function receipt_encoded_length(r, cumulative_gas_used) = {
     let content_len = receipt_payload_content_size(r, cumulative_gas_used);
@@ -123,12 +124,11 @@ function receipt_encoded_length(r, cumulative_gas_used) = {
     }
 }
 
-/*! Writes one already-sized receipt and its precomputed bloom at the current
-    scratch cursor. */
+/*! Writes one already-sized receipt at the current scratch cursor. */
 val receipt_write_encoded : forall 'cumulative,
-    receipt_cumulative_gas_valid('cumulative).
-    (Receipt, int('cumulative), LogsBloom) -> unit
-function receipt_write_encoded(r, cumulative_gas_used, bloom) = {
+    receipt_cumulative_gas_value_valid('cumulative).
+    (Receipt, int('cumulative)) -> unit
+function receipt_write_encoded(r, cumulative_gas_used) = {
     let status : range(0, 1) = if r.success then { 1 } else { 0 };
     let content_len = receipt_payload_content_size(r, cumulative_gas_used);
     let envelope_type : byte = tx_envelope_type(r.tx_type);
@@ -139,17 +139,17 @@ function receipt_write_encoded(r, cumulative_gas_used, bloom) = {
     rlp_write_list_prefix(content_len);
     rlp_write_uint(status);
     rlp_write_uint(cumulative_gas_used);
-    receipt_write_logs_bloom(r, bloom);
+    receipt_write_logs_bloom(r);
     rlp_write_logs(r.logs)
 }
 
 val receipt_encoded : forall 'cumulative,
-    receipt_cumulative_gas_valid('cumulative).
-    (Receipt, int('cumulative), LogsBloom) -> ScratchSlice
-function receipt_encoded(r, cumulative_gas_used, bloom) = {
+    receipt_cumulative_gas_value_valid('cumulative).
+    (Receipt, int('cumulative)) -> ScratchSlice
+function receipt_encoded(r, cumulative_gas_used) = {
     let encoded_len = receipt_encoded_length(r, cumulative_gas_used);
     let encoder = rlp_encoder_begin(encoded_len);
-    receipt_write_encoded(r, cumulative_gas_used, bloom);
+    receipt_write_encoded(r, cumulative_gas_used);
     rlp_encoder_finish(encoder)
 }
 
@@ -172,18 +172,19 @@ function receipt_record_write_length(value) = {
     stream. The codec owns both the outer record reservation and the exact
     RLP-body reservation, so callers never manipulate encoding storage. */
 val receipt_record_append : forall 'cumulative,
-    receipt_cumulative_gas_valid('cumulative).
-    (Receipt, int('cumulative), LogsBloom) -> unit
-function receipt_record_append(r, cumulative_gas_used, bloom) = {
+    receipt_cumulative_gas_value_valid('cumulative).
+    (Receipt, int('cumulative)) -> unit
+function receipt_record_append(r, cumulative_gas_used) = {
     let encoded_len = receipt_encoded_length(r, cumulative_gas_used);
     if 2 ^ 64 - 1 < encoded_len then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode);
+        exit(())
     };
     let record_len = scratch_length_add(EIGHT_BYTE_LENGTH, encoded_len);
     let _record_start = scratch_reserve(record_len);
     receipt_record_write_length(encoded_len);
     let encoder = rlp_encoder_begin(encoded_len);
-    receipt_write_encoded(r, cumulative_gas_used, bloom);
+    receipt_write_encoded(r, cumulative_gas_used);
     let _encoded = rlp_encoder_finish(encoder);
     ()
 }

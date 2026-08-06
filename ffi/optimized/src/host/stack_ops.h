@@ -23,8 +23,7 @@ enum stack_rewrite_status stack_validate(uint32_t inputs, uint32_t outputs);
 /* Replace the top `inputs` rows with `outputs` rows and return a pointer to
  * the deepest input/output row. Old input rows remain readable until callers
  * overwrite them. */
-enum stack_rewrite_status stack_rewrite(
-    uint32_t inputs, uint32_t outputs, U256 **rows);
+enum stack_rewrite_status stack_rewrite(uint32_t inputs, uint32_t outputs, U256 **rows);
 
 /* Duplicate the one-based `depth` row onto the top of the stack. */
 enum stack_rewrite_status stack_dup(uint32_t depth);
@@ -33,7 +32,6 @@ enum stack_rewrite_status stack_dup(uint32_t depth);
 enum stack_rewrite_status stack_swap(uint32_t other_depth);
 
 /* Exchange two zero-based stack depths. */
-enum stack_rewrite_status stack_exchange(uint32_t left_depth,
-                                                         uint32_t right_depth);
+enum stack_rewrite_status stack_exchange(uint32_t left_depth, uint32_t right_depth);
 
 #endif
