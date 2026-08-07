@@ -612,6 +612,7 @@ function alu_exp(base : word, exponent : word) -> word = {
     var result : word = WORD_ONE;
     var b : word = base;
     var e : word = exponent;
+
     /* Square-and-multiply over exactly the exponent's significant bits:
        every round beyond the bit length multiplies by one and squares a
        dead base. The final squaring feeds no later round and is skipped. */
@@ -626,7 +627,12 @@ function alu_exp(base : word, exponent : word) -> word = {
             b = word_mul(b, b)
         };
         e = word_shift_right_one(e);
-        remaining = if rounds_left > 0 then rounds_left - 1 else 0
+        remaining =
+            if rounds_left > 0 then {
+                rounds_left - 1
+            } else {
+                0
+            }
     };
     result
 }
