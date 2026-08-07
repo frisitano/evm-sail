@@ -131,7 +131,7 @@ uint8_t *jumpdest_table_alloc(Bytes code)
   if (len == 0) {
     return NULL;
   }
-  if (!code.bytes || len > UINT32_MAX || len > GUEST_JUMPDEST_BYTES - code_arena.jumpdests_len) {
+  if (len > GUEST_JUMPDEST_BYTES - code_arena.jumpdests_len) {
     return NULL;
   }
   uint8_t *table = code_arena.jumpdests + code_arena.jumpdests_len;
@@ -143,7 +143,9 @@ uint8_t *jumpdest_table_alloc(Bytes code)
 // NOLINTNEXTLINE(readability-non-const-parameter)
 bool jumpdest_ref_contains(uint8_t *table, uint32_t code_len, uint32_t i)
 {
-  return (table != NULL && i < code_len && table[i] != 0) != 0;
+  /* i < code_len implies a nonempty analyzed row, whose table is non-NULL;
+   * i >= code_len is genuine implicit-STOP semantics, not a guard. */
+  return (i < code_len && table[i] != 0) != 0;
 }
 
 /* Copies unstable source bytes into stable code-arena storage, or NULL when
@@ -247,7 +249,7 @@ static bytes32 code_db_store_view(const uint8_t *bytes, uint32_t len, uint8_t *j
     }
     return result;
   }
-  if (!bytes || !jumpdests || !code_keccak_bytes(bytes, (size_t)len, &result)) {
+  if (!code_keccak_bytes(bytes, (size_t)len, &result)) {
     return result;
   }
 
@@ -296,9 +298,6 @@ static uint8_t *code_db_analyze_region(Bytes code, bool amsterdam_or_later)
 {
   const uint64_t len = code.len;
   if (len == 0) {
-    return NULL;
-  }
-  if (len > UINT32_MAX || !code.bytes) {
     return NULL;
   }
   uint8_t *jumpdests = jumpdest_table_alloc(code);

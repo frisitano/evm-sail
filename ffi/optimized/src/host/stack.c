@@ -52,11 +52,10 @@ void stack_reset(void)
   operand_stack.frames[0].height = 0;
 }
 
+/* The Sail-enforced 1024 call-depth limit keeps depth below
+ * GUEST_OPERAND_FRAMES. */
 void operand_stack_push_empty_frame(void)
 {
-  if (operand_stack.depth + 1U >= GUEST_OPERAND_FRAMES) {
-    GUEST_ABORT();
-  }
   operand_stack.depth++;
   operand_stack.frames[operand_stack.depth].height = 0;
 }

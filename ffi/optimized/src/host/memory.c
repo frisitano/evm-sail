@@ -80,9 +80,6 @@ void mem_clear(void)
  * mem_expand only if the frame later establishes memory. */
 Bytes mem_frame_enter_slice(void)
 {
-  if (h_top + 1 >= MEMORY_MAXDEPTH) {
-    GUEST_ABORT();
-  }
   h_top++;
   f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
   f_len[h_top] = 0;
@@ -167,9 +164,6 @@ void mem_move(uint32_t dst, uint32_t src, uint32_t len)
   if (!len_value) {
     return;
   }
-  if (src_value > UINT64_MAX - len_value || dst_value > UINT64_MAX - len_value) {
-    GUEST_ABORT();
-  }
   f_establish_write(src_value + len_value, src_value + len_value);
   uint8_t *destination = frame_write_region(dst_value, len_value);
   memmove(destination, arena + f_base[h_top] + src_value, len_value);
@@ -180,16 +174,6 @@ void mem_write_byte(uint32_t off, uint64_t v)
 {
   uint64_t offset = off;
   *frame_write_region(offset, 1) = (uint8_t)(v & 0xff);
-}
-
-/* Read an absolute span minted by subslicing an active or suspended Sail
- * EVM-memory frame pointer. */
-const uint8_t *evm_memory_region(uint64_t off, uint64_t len)
-{
-  if (len == 0 || off > GUEST_EVM_MEMORY_BYTES || len > GUEST_EVM_MEMORY_BYTES - off) {
-    return NULL;
-  }
-  return arena + off;
 }
 
 const uint8_t *evm_memory_base(void)

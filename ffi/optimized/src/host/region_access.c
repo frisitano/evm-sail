@@ -87,10 +87,8 @@ Bytes stateless_input(void)
 Bytes mem_expand(uint32_t len)
 {
   Bytes out;
+  /* f_establish_write already aborted unless base + len <= capacity. */
   const uint64_t base = evm_memory_expand(len);
-  if (base > evm_memory_capacity() || len > evm_memory_capacity() - base) {
-    GUEST_ABORT();
-  }
   out.bytes = len == 0 ? NULL : evm_memory_base() + base;
   out.len = len;
   return out;
@@ -101,11 +99,9 @@ Bytes nodedb_lookup(bytes32 hash)
   Bytes out;
   uint32_t off = 0;
   uint32_t len = 0;
+  /* Spans were validated against the input at insert time. */
   nodedb_lookup_span(hash, &off, &len);
   acquire_private_input();
-  if (off > private_input_size || len > private_input_size - off) {
-    GUEST_ABORT();
-  }
   out.bytes = len == 0 ? NULL : private_input + off;
   out.len = len;
   return out;
@@ -138,14 +134,12 @@ static bool region_strided_zero(const uint8_t *bytes, uint64_t len, uint64_t sta
   if (start > len || width > len - start) {
     return false;
   }
-  if (count > 1 && (stride == 0 || count - 1 > (UINT64_MAX - start) / stride)) {
+  /* stride == 0 with count > 1 stays false for spec-backend parity. */
+  if (count > 1 && stride == 0) {
     return false;
   }
   const uint64_t last = start + ((count - 1) * stride);
   if (last > len || width > len - last) {
-    return false;
-  }
-  if (!bytes) {
     return false;
   }
   for (uint64_t i = 0; i < count; ++i) {
@@ -193,20 +187,14 @@ static void region_copy_to_memory(const uint8_t *source, uint64_t len, uint64_t 
     return;
   }
   uint8_t *destination = evm_memory_write_region(dst, requested);
-  if (!destination) {
-    return;
-  }
   uint64_t count = 0;
   if (index < len) {
+    /* index < len means the slice is nonempty, so source is resolved. */
     count = len - index;
     if (count > requested) {
       count = requested;
     }
-    if (source) {
-      memmove(destination, source + index, (size_t)count);
-    } else {
-      count = 0;
-    }
+    memmove(destination, source + index, (size_t)count);
   }
   memset(destination + count, 0, (size_t)(requested - count));
 }
@@ -323,11 +311,9 @@ bool input_code_slices_equal(Bytes left, Bytes right)
   return regions_equal(SLICE_PTR(left), SLICE_LEN(left), right.bytes, right.len);
 }
 
+/* end <= GUEST_SCRATCH_BYTES (16 MiB), proved by scratch_prepare. */
 static Bytes scratch_result_value(uint64_t end)
 {
-  if (end > UINT32_MAX) {
-    fatal_error(InvalidConfig);
-  }
   return (Bytes){
       .bytes = end == 0 ? NULL : scratch_base(),
       .len = (uint32_t)end,
@@ -342,24 +328,20 @@ Bytes scratch_store_byte(uint32_t off, uint64_t data)
     fatal_error(InvalidConfig);
   }
   out[0] = (uint8_t)data;
-  if (!scratch_commit(dst, 1)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, 1);
   return scratch_result_value(dst + 1);
 }
 
 static Bytes scratch_store_region(uint64_t dst, const uint8_t *source, uint64_t len)
 {
   uint8_t *out = scratch_prepare(dst, len);
-  if (len != 0 && (!out || !source)) {
+  if (len != 0 && !out) {
     fatal_error(InvalidConfig);
   }
   if (len != 0) {
     memmove(out, source, (size_t)len);
   }
-  if (!scratch_commit(dst, len)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, len);
   return scratch_result_value(dst + len);
 }
 
@@ -384,9 +366,7 @@ Bytes scratch_store_address(uint32_t off, bytes20 data)
     fatal_error(InvalidConfig);
   }
   memcpy(out, bytes20_data(&data), 20);
-  if (!scratch_commit(dst, 20)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, 20);
   return scratch_result_value(dst + 20);
 }
 
@@ -401,9 +381,7 @@ Bytes scratch_store_b256(uint32_t off, bytes32 data, uint8_t len)
   if (len != 0) {
     memcpy(out, bytes32_data(&data), (size_t)len);
   }
-  if (!scratch_commit(dst, len)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, len);
   return scratch_result_value(dst + len);
 }
 
@@ -417,9 +395,7 @@ Bytes scratch_store_fixed_bytes_256(uint64_t off, bytes256 data)
   for (size_t i = 0; i < 256; ++i) {
     out[i] = data.bytes[255 - i];
   }
-  if (!scratch_commit(dst, 256)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, 256);
   return scratch_result_value(dst + 256);
 }
 
@@ -430,9 +406,7 @@ Bytes region_scratch_store_receipt_logs_bloom(uint64_t off, uint64_t start, uint
   if (!out || !receipt_runtime_bloom_write(start, count, out)) {
     fatal_error(InvalidConfig);
   }
-  if (!scratch_commit(dst, 256)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, 256);
   return scratch_result_value(dst + 256);
 }
 
@@ -448,9 +422,7 @@ Bytes scratch_store_word(uint32_t off, const u256 data, uint8_t len)
     const uint64_t byte_from_low = len - 1 - i;
     out[i] = (uint8_t)(data.limbs[byte_from_low / 8] >> (8 * (byte_from_low % 8)));
   }
-  if (!scratch_commit(dst, len)) {
-    fatal_error(InvalidConfig);
-  }
+  scratch_commit(dst, len);
   return scratch_result_value(dst + len);
 }
 

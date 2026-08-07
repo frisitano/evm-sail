@@ -25,9 +25,6 @@ static Bytes code_region_from_bytes(const uint8_t *bytes, uint32_t len)
   if (len == 0) {
     return code_region_value(0, 0);
   }
-  if (!bytes) {
-    GUEST_ABORT();
-  }
   uint8_t *stable = code_region_intern_copy(bytes, len);
   if (!stable) {
     GUEST_ABORT();
@@ -36,20 +33,15 @@ static Bytes code_region_from_bytes(const uint8_t *bytes, uint32_t len)
 }
 
 /* Input-backed code is referenced in place: the row records the resolved
- * input pointer and the bytes are never copied. A slice that fails
- * re-validation against the live input is structural corruption, not a
- * witness deficiency. */
+ * input pointer and the bytes are never copied. A nonempty slice always
+ * carries a resolved pointer. */
 Bytes code_region_from_input(Bytes input)
 {
   const uint32_t len = input.len;
   if (len == 0) {
     return code_region_value(0, 0);
   }
-  const uint8_t *bytes = input.bytes;
-  if (!bytes) {
-    GUEST_ABORT();
-  }
-  return code_region_value(bytes, len);
+  return code_region_value(input.bytes, len);
 }
 
 #define DEFINE_CODE_REGION_FROM(name)                                                              \

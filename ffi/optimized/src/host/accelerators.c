@@ -147,9 +147,7 @@ static bool accelerator_bn254_mul_bytes(const uint8_t *bytes, uint64_t len)
 static uint8_t accelerator_bn254_pairing_bytes(const uint8_t *bytes, uint64_t len)
 {
   bool verified = false;
-  if (len % 192 != 0) {
-    return 0;
-  }
+  /* Sail's dispatch (sail/evm/precompiles.sail) enforces len % 192 == 0. */
   const AcceleratorInput input = resolve_input(bytes, len);
   uint8_t *encoded = materialize(&input, len);
   if (encoded == NULL) {
@@ -171,13 +169,11 @@ static bool accelerator_blake2f_bytes(const uint8_t *bytes, uint64_t len, uint64
   _Alignas(uint64_t) uint8_t blake_state[64];
   _Alignas(uint64_t) uint8_t blake_message[128];
   _Alignas(uint64_t) uint8_t offset_counter[16];
-  if (len != 213) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
-  copy_padded(&input, blake_state, 4, sizeof blake_state);
-  copy_padded(&input, blake_message, 68, sizeof blake_message);
-  copy_padded(&input, offset_counter, 196, sizeof offset_counter);
+  /* Sail's dispatch enforces len == 213, so these slices are in bounds. */
+  memcpy(blake_state, input.bytes + 4, sizeof blake_state);
+  memcpy(blake_message, input.bytes + 68, sizeof blake_message);
+  memcpy(offset_counter, input.bytes + 196, sizeof offset_counter);
   uint8_t *out = output_buffer_reserve(64);
   if (!out) {
     return output_failed();
@@ -198,14 +194,12 @@ static bool accelerator_kzg_point_evaluation_bytes(const uint8_t *bytes, uint64_
   _Alignas(uint64_t) uint8_t y[32];
   _Alignas(uint64_t) uint8_t proof[48];
   bool verified = false;
-  if (len != 192) {
-    return false;
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
-  copy_padded(&input, z, 32, sizeof z);
-  copy_padded(&input, y, 64, sizeof y);
-  copy_padded(&input, commitment, 96, sizeof commitment);
-  copy_padded(&input, proof, 144, sizeof proof);
+  /* Sail's dispatch enforces len == 192, so these slices are in bounds. */
+  memcpy(z, input.bytes + 32, sizeof z);
+  memcpy(y, input.bytes + 64, sizeof y);
+  memcpy(commitment, input.bytes + 96, sizeof commitment);
+  memcpy(proof, input.bytes + 144, sizeof proof);
   return (zkvm_kzg_point_eval((const zkvm_kzg_commitment *)commitment,
                               (const zkvm_kzg_field_element *)z, (const zkvm_kzg_field_element *)y,
                               (const zkvm_kzg_proof *)proof, &verified) == ZKVM_EOK &&
@@ -216,7 +210,9 @@ static bool accelerator_kzg_point_evaluation_bytes(const uint8_t *bytes, uint64_
  * 48-byte values. Sail validates the zero padding before these adapters run. */
 static void compact_fp(const AcceleratorInput *input, uint8_t *out, uint64_t off)
 {
-  copy_padded(input, out, off + 16, 48);
+  /* Sail's dispatch fixes each caller's exact input length, so
+   * [off + 16, off + 64) lies within the contiguous calldata span. */
+  memcpy(out, input->bytes + off + 16, 48);
 }
 
 static void pad_fp(uint8_t *out, uint64_t off, const uint8_t *compact)
@@ -258,9 +254,8 @@ static uint8_t *reserve_bls(uint64_t count, uint64_t item_size) __attribute__((a
 
 static uint8_t *reserve_bls(uint64_t count, uint64_t item_size)
 {
-  if (count && item_size > UINT64_MAX / count) {
-    return NULL;
-  }
+  /* count < 2^27 (32-bit calldata length / item stride) and item_size <= 288,
+   * so the product cannot overflow. */
   return count * item_size <= GUEST_ACCELERATOR_WORK_BYTES ? bls_scratch : NULL;
 }
 
@@ -268,9 +263,6 @@ static bool accelerator_bls_g1_add_bytes(const uint8_t *bytes, uint64_t len)
 {
   _Alignas(uint64_t) uint8_t encoded[192];
   _Alignas(uint64_t) uint8_t compact_result[96];
-  if (len != 256) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
   compact_g1(&input, encoded, 0);
   compact_g1(&input, encoded + 96, 128);
@@ -290,10 +282,8 @@ static bool accelerator_bls_g1_add_bytes(const uint8_t *bytes, uint64_t len)
 static bool accelerator_bls_g1_msm_bytes(const uint8_t *bytes, uint64_t len)
 {
   _Alignas(uint64_t) uint8_t compact_result[96];
-  if (len == 0 || len % 160 != 0) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
+  /* Sail's dispatch enforces len != 0 and len % 160 == 0. */
   uint64_t count = len / 160;
   uint8_t *pairs = reserve_bls(count, 128);
   if (!pairs) {
@@ -322,9 +312,6 @@ static bool accelerator_bls_g2_add_bytes(const uint8_t *bytes, uint64_t len)
 {
   _Alignas(uint64_t) uint8_t encoded[384];
   _Alignas(uint64_t) uint8_t compact_result[192];
-  if (len != 512) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
   compact_g2(&input, encoded, 0);
   compact_g2(&input, encoded + 192, 256);
@@ -344,10 +331,8 @@ static bool accelerator_bls_g2_add_bytes(const uint8_t *bytes, uint64_t len)
 static bool accelerator_bls_g2_msm_bytes(const uint8_t *bytes, uint64_t len)
 {
   _Alignas(uint64_t) uint8_t compact_result[192];
-  if (len == 0 || len % 288 != 0) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
+  /* Sail's dispatch enforces len != 0 and len % 288 == 0. */
   uint64_t count = len / 288;
   uint8_t *pairs = reserve_bls(count, 224);
   if (!pairs) {
@@ -375,10 +360,8 @@ static bool accelerator_bls_g2_msm_bytes(const uint8_t *bytes, uint64_t len)
 static uint8_t accelerator_bls_pairing_bytes(const uint8_t *bytes, uint64_t len)
 {
   bool verified = false;
-  if (len == 0 || len % 384 != 0) {
-    return 0;
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
+  /* Sail's dispatch enforces len != 0 and len % 384 == 0. */
   uint64_t count = len / 384;
   uint8_t *pairs = reserve_bls(count, 288);
   if (!pairs) {
@@ -401,9 +384,6 @@ static bool accelerator_bls_map_fp_to_g1_bytes(const uint8_t *bytes, uint64_t le
 {
   _Alignas(uint64_t) uint8_t field[48];
   _Alignas(uint64_t) uint8_t compact_result[96];
-  if (len != 64) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
   compact_fp(&input, field, 0);
   uint8_t *out = output_buffer_reserve(128);
@@ -422,9 +402,6 @@ static bool accelerator_bls_map_fp2_to_g2_bytes(const uint8_t *bytes, uint64_t l
 {
   _Alignas(uint64_t) uint8_t field[96];
   _Alignas(uint64_t) uint8_t compact_result[192];
-  if (len != 128) {
-    return output_failed();
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
   compact_fp(&input, field, 0);
   compact_fp(&input, field + 48, 64);
@@ -443,9 +420,6 @@ static bool accelerator_bls_map_fp2_to_g2_bytes(const uint8_t *bytes, uint64_t l
 static bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len)
 {
   bool verified = false;
-  if (len != 160) {
-    return false;
-  }
   const AcceleratorInput input = resolve_input(bytes, len);
   uint8_t *encoded = materialize(&input, 160);
   if (encoded == NULL) {

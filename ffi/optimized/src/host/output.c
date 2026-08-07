@@ -21,9 +21,10 @@ void output_workspace_bind(void)
   WORKSPACE_BIND(buffer, 1);
 }
 
+/* A nonempty slice always carries a resolved source pointer. */
 bool output_buffer_store_bytes(const uint8_t *source, uint64_t len)
 {
-  if ((len && !source) || len > GUEST_OUTPUT_BYTES) {
+  if (len > GUEST_OUTPUT_BYTES) {
     buffer->length = 0;
     return false;
   }

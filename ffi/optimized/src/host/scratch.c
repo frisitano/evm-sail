@@ -9,7 +9,6 @@
 
 static uint8_t *scratch_bytes;
 static uint64_t scratch_top;
-static const uint8_t scratch_empty = 0;
 
 void scratch_workspace_bind(void)
 {
@@ -32,13 +31,12 @@ uint8_t *scratch_prepare(uint64_t off, uint64_t len)
   return scratch_bytes + off;
 }
 
-bool scratch_commit(uint64_t off, uint64_t len)
+/* Every commit is paired with a scratch_prepare(off, len) that already proved
+ * off == scratch_top and off + len <= capacity; scratch_top cannot change in
+ * between, so the advance is unconditional. */
+void scratch_commit(uint64_t off, uint64_t len)
 {
-  if (off != scratch_top || off > GUEST_SCRATCH_BYTES || len > GUEST_SCRATCH_BYTES - off) {
-    return false;
-  }
   scratch_top = off + len;
-  return true;
 }
 
 uint8_t *scratch_borrow(uint64_t len)
@@ -54,23 +52,11 @@ bool scratch_reserve_at(uint32_t off, uint32_t len)
   return scratch_prepare(off, len) != NULL;
 }
 
+/* The Sail rewind guard and the mirrored arena length keep len <= scratch_top,
+ * so the assignment cannot raise the cursor. */
 void scratch_truncate(uint32_t len)
 {
-  uint64_t len_value = len;
-  if (len_value <= scratch_top) {
-    scratch_top = len_value;
-  }
-}
-
-const uint8_t *scratch_region(uint64_t off, uint64_t len)
-{
-  if (len == 0) {
-    return &scratch_empty;
-  }
-  if (off > scratch_top || len > scratch_top - off) {
-    return NULL;
-  }
-  return scratch_bytes + off;
+  scratch_top = len;
 }
 
 const uint8_t *scratch_base(void)
