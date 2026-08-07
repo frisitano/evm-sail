@@ -73,6 +73,10 @@ static AccountId *bal_account_order;
 static uint32_t bal_account_order_n = 0;
 static StorageId *bal_storage_order;
 static uint32_t bal_storage_order_n = 0;
+/* Cached numeric sort keys travelling with the order arrays during
+ * bal_prepare_iter; dead outside that sort. */
+static uint64_t *bal_account_sort_keys;
+static uint64_t *bal_storage_sort_keys;
 static uint32_t bal_account_cursor = 0;
 static uint32_t bal_storage_cursor = 0;
 static AccountId bal_active_account_index = BAL_NO_HISTORY;
@@ -91,6 +95,8 @@ void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_c
   WORKSPACE_BIND(bal_storage, storage_count);
   WORKSPACE_BIND(bal_account_order, account_count);
   WORKSPACE_BIND(bal_storage_order, storage_count);
+  WORKSPACE_BIND(bal_account_sort_keys, account_count);
+  WORKSPACE_BIND(bal_storage_sort_keys, storage_count);
 }
 
 /* Exact BAL rows are initialized as their account/storage schema identity is
@@ -244,16 +250,70 @@ static int bal_order_compare(enum BalOrderKind kind, uint32_t left, uint32_t rig
                                    : bal_storage_order_compare(left, right);
 }
 
-static void sort_index_order(uint32_t *order, uint32_t length, enum BalOrderKind kind)
+/* The first eight canonical address bytes as a numeric key. The lanes are
+ * little-endian, so a byte swap of the low lane restores lexicographic
+ * address order; almost every comparison then resolves on one integer
+ * compare without re-deriving addresses from the state tables. */
+static uint64_t bal_order_sort_key(enum BalOrderKind kind, uint32_t id)
 {
-  for (uint32_t i = 1; i < length; i++) {
-    const uint32_t candidate = order[i];
-    uint32_t position = i;
-    while (position != 0 && bal_order_compare(kind, candidate, order[position - 1]) < 0) {
-      order[position] = order[position - 1];
-      position--;
+  const AccountId account_id = kind == BAL_ORDER_ACCOUNT ? id : bal_storage[id].account_id;
+  return bswap64(account_id_address(account_id)->lanes[0]);
+}
+
+static bool bal_order_less(enum BalOrderKind kind, const uint64_t *keys, const uint32_t *order,
+                           uint32_t left, uint32_t right)
+{
+  if (keys[left] != keys[right]) {
+    return keys[left] < keys[right];
+  }
+  return bal_order_compare(kind, order[left], order[right]) < 0;
+}
+
+static void bal_order_swap(uint64_t *keys, uint32_t *order, uint32_t left, uint32_t right)
+{
+  const uint64_t key = keys[left];
+  keys[left] = keys[right];
+  keys[right] = key;
+  const uint32_t id = order[left];
+  order[left] = order[right];
+  order[right] = id;
+}
+
+static void bal_order_sift_down(enum BalOrderKind kind, uint64_t *keys, uint32_t *order,
+                                uint32_t start, uint32_t end)
+{
+  if (end < 2) {
+    return;
+  }
+  uint32_t root = start;
+  while (root <= (end - 2U) / 2U) {
+    uint32_t child = (2U * root) + 1U;
+    if (child + 1U < end && bal_order_less(kind, keys, order, child, child + 1U)) {
+      ++child;
     }
-    order[position] = candidate;
+    if (!bal_order_less(kind, keys, order, root, child)) {
+      return;
+    }
+    bal_order_swap(keys, order, root, child);
+    root = child;
+  }
+}
+
+/* Heapsort mirroring mpt_order_sort. The comparator is a strict total order
+ * (activation appends each account/slot identity once), so the sorted order
+ * is unique and instability is unobservable. */
+static void sort_index_order(uint32_t *order, uint64_t *keys, uint32_t length,
+                             enum BalOrderKind kind)
+{
+  for (uint32_t i = 0; i < length; i++) {
+    keys[i] = bal_order_sort_key(kind, order[i]);
+  }
+  for (uint32_t start = length / 2U; start != 0; --start) {
+    bal_order_sift_down(kind, keys, order, start - 1U, length);
+  }
+  for (uint32_t end = length; end > 1U; --end) {
+    bal_order_swap(keys, order, 0, end - 1U);
+    bal_order_sift_down(kind, keys, order, 0, end - 1U);
   }
 }
 
@@ -289,8 +349,10 @@ void bal_prepare_iter(void)
    * preparation sorts only actual BAL members instead of rescanning the
    * larger state caches.
    */
-  sort_index_order(bal_account_order, bal_account_order_n, BAL_ORDER_ACCOUNT);
-  sort_index_order(bal_storage_order, bal_storage_order_n, BAL_ORDER_STORAGE);
+  sort_index_order(bal_account_order, bal_account_sort_keys, bal_account_order_n,
+                   BAL_ORDER_ACCOUNT);
+  sort_index_order(bal_storage_order, bal_storage_sort_keys, bal_storage_order_n,
+                   BAL_ORDER_STORAGE);
   bal_reset_cursors();
 }
 
