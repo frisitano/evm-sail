@@ -210,20 +210,21 @@ static void pad_g1(uint8_t *out, const uint8_t *compact) {
   pad_fp(out, 64, compact + 48);
 }
 
-/* blst serializes Fp2 components c1||c0 while the EVM layout is c0||c1. */
+/* The accelerator G2 layout matches EIP-2537 component order (c0 then c1),
+ * so padded EVM words and compact accelerator bytes copy straight through. */
 static void compact_g2(const AcceleratorInput *input, uint8_t *out,
                        uint64_t off) {
-  compact_fp(input, out + 48, off);
-  compact_fp(input, out, off + 64);
-  compact_fp(input, out + 144, off + 128);
-  compact_fp(input, out + 96, off + 192);
+  compact_fp(input, out, off);
+  compact_fp(input, out + 48, off + 64);
+  compact_fp(input, out + 96, off + 128);
+  compact_fp(input, out + 144, off + 192);
 }
 
 static void pad_g2(uint8_t *out, const uint8_t *compact) {
-  pad_fp(out, 0, compact + 48);
-  pad_fp(out, 64, compact);
-  pad_fp(out, 128, compact + 144);
-  pad_fp(out, 192, compact + 96);
+  pad_fp(out, 0, compact);
+  pad_fp(out, 64, compact + 48);
+  pad_fp(out, 128, compact + 96);
+  pad_fp(out, 192, compact + 144);
 }
 
 static uint8_t *reserve_bls(uint64_t count, uint64_t item_size) {

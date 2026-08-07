@@ -118,7 +118,13 @@ typedef struct {
     zkvm_bn254_g2_point g2;
 } zkvm_bn254_pairing_pair;
 
-/* BLS12-381 types */
+/* BLS12-381 types.
+ *
+ * Fp2 values and G2 point coordinates use EIP-2537 component order: the
+ * real component c0 first, then c1. A G2 point is
+ * x_c0 || x_c1 || y_c0 || y_c1 as 48-byte big-endian field elements
+ * (ziskos zisklib shares this layout; blst's c1-first serialization is a
+ * provider-internal detail that must not cross this ABI). */
 typedef zkvm_bytes_96 zkvm_bls12_381_g1_point;
 typedef zkvm_bytes_192 zkvm_bls12_381_g2_point;
 typedef zkvm_bytes_32 zkvm_bls12_381_scalar;

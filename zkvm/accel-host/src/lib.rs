@@ -381,14 +381,16 @@ mod bls {
             else { blst_p1_affine_serialize(out.as_mut_ptr(), a); }
         }
     }
-    /* b is blst serialization order: x = c1||c0, y = c1||c0 (imaginary first). */
+    /* b is EIP-2537 component order: x = c0||c1, y = c0||c1 (real first).
+     * This is the zkvm_accelerators.h zkvm_bls12_381_g2_point layout shared
+     * with ziskos zisklib; blst's own serialization (c1 first) is not used. */
     pub fn rd_g2(b: &[u8], subgroup: bool) -> Option<blst_p2_affine> {
         unsafe {
             let mut a = blst_p2_affine::default();
-            a.x.fp[1] = rd_fp(&b[0..48])?;
-            a.x.fp[0] = rd_fp(&b[48..96])?;
-            a.y.fp[1] = rd_fp(&b[96..144])?;
-            a.y.fp[0] = rd_fp(&b[144..192])?;
+            a.x.fp[0] = rd_fp(&b[0..48])?;
+            a.x.fp[1] = rd_fp(&b[48..96])?;
+            a.y.fp[0] = rd_fp(&b[96..144])?;
+            a.y.fp[1] = rd_fp(&b[144..192])?;
             if !b.iter().all(|&x| x == 0) {
                 if !blst_p2_affine_on_curve(&a) { return None; }
             }
@@ -399,7 +401,12 @@ mod bls {
     pub fn wr_g2(a: &blst_p2_affine, out: &mut [u8]) {
         unsafe {
             if blst_p2_affine_is_inf(a) { out.iter_mut().for_each(|x| *x = 0); }
-            else { blst_p2_affine_serialize(out.as_mut_ptr(), a); }
+            else {
+                blst_bendian_from_fp(out[0..48].as_mut_ptr(), &a.x.fp[0]);
+                blst_bendian_from_fp(out[48..96].as_mut_ptr(), &a.x.fp[1]);
+                blst_bendian_from_fp(out[96..144].as_mut_ptr(), &a.y.fp[0]);
+                blst_bendian_from_fp(out[144..192].as_mut_ptr(), &a.y.fp[1]);
+            }
         }
     }
     pub fn g1_add(p1: &[u8], p2: &[u8], out: &mut [u8]) -> bool {
@@ -668,7 +675,7 @@ mod tests {
             assert_eq!(add, mul, "2G via add == via msm");
             // pairing e(G,H)*e(-G,H) == 1
             let ha = BLS12_381_G2;   // affine generator
-            let mut hb = [0u8; 192]; blst_p2_affine_serialize(hb.as_mut_ptr(), &ha);
+            let mut hb = [0u8; 192]; bls::wr_g2(&ha, &mut hb);
             let mut gj = blst_p1::default(); blst_p1_from_affine(&mut gj, &ga);
             blst_p1_cneg(&mut gj, true);
             let mut nega = blst_p1_affine::default(); blst_p1_to_affine(&mut nega, &gj);
