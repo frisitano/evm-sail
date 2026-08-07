@@ -55,7 +55,7 @@ void receipt_table_push(uint32_t index, Bytes value)
 {
   const uint64_t length = value.len;
   const uint8_t *source = value.bytes;
-  if (index != receipt_table.count || length > SIZE_MAX || !source ||
+  if (index != receipt_table.count || !source ||
       receipt_table.bytes_length > SIZE_MAX - (size_t)length ||
       receipt_table.count >= receipt_table.record_capacity ||
       (size_t)length > receipt_table.bytes_capacity - receipt_table.bytes_length) {

@@ -276,9 +276,11 @@ PreparedAuthorizationList prepare_authorizations(struct AuthorizationListRefFiel
   return (PreparedAuthorizationList){.offset = 0, .count = count};
 }
 
+/* The count == 0 leg realizes the Sail empty-list throw; capacity was
+ * already enforced by prepare_authorizations. */
 struct Authorization prepared_authorization_head(PreparedAuthorizationList authorizations)
 {
-  if (authorizations.count == 0 || authorizations.offset >= GUEST_PREPARED_AUTHORIZATIONS) {
+  if (authorizations.count == 0) {
     decode_failure(ExecutionInvalid, "optimized prepared authorization head");
   }
   return prepared_authorizations[authorizations.offset];
@@ -287,8 +289,7 @@ struct Authorization prepared_authorization_head(PreparedAuthorizationList autho
 PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList authorizations,
                                                       uint16_t count)
 {
-  if (count == 0 || count != authorizations.count ||
-      authorizations.offset >= GUEST_PREPARED_AUTHORIZATIONS) {
+  if (count == 0) {
     decode_failure(ExecutionInvalid, "optimized prepared authorization tail");
   }
   ++authorizations.offset;

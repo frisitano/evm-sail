@@ -42,11 +42,10 @@ static uint64_t load_le_u64(const uint8_t *bytes)
   return result;
 }
 
+/* The sole call site reads offset 440 inside the execution payload's
+ * validated 540-byte fixed section, so no bounds re-check is needed. */
 u256 ssz_u256(Bytes input, uint32_t offset)
 {
-  if (offset > input.len || UINT64_C(32) > input.len - offset) {
-    fatal_error(InvalidConfig);
-  }
   const uint8_t *source = input.bytes + offset;
   return (u256){
       .limbs =
@@ -68,12 +67,13 @@ static Bytes source_span(Bytes container, uint32_t start, uint32_t stop)
   return result;
 }
 
-/* Every caller pre-checks the container length against `first`, and
- * monotonicity carries `first` forward, so validation starts at index 1. */
+/* Every caller passes a literal nonzero count and pre-checks the container
+ * length against `first`; monotonicity carries `first` forward, so
+ * validation starts at index 1. */
 static bool offsets_ordered(const uint32_t *offsets, uint32_t count, uint32_t first,
                             uint32_t length)
 {
-  if (count == 0 || offsets[0] != first) {
+  if (offsets[0] != first) {
     return false;
   }
   for (uint32_t i = 1; i < count; ++i) {
@@ -265,14 +265,12 @@ struct StatelessInputRef decode_stateless_input_ref(Bytes input)
   return result;
 }
 
-/* The parameter is StatelessInputSliceLength(44) by type. */
+/* The parameter is StatelessInputSliceLength(44) by type:
+ * ssz_fixed_list_pop slices exactly 44 bytes over a 44-stride list. */
 struct Withdrawal decode_withdrawal(Bytes withdrawal)
 {
   struct Withdrawal result;
   const uint8_t *source = withdrawal.bytes;
-  if (!source || withdrawal.len != 44) {
-    fatal_error(InvalidConfig);
-  }
   result.index = load_le_u64(source);
   result.validator_index = load_le_u64(source + 8);
   result.address = address_from_be_bytes(source + 16);

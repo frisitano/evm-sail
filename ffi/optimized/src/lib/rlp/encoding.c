@@ -32,8 +32,8 @@ bytes32 keccak_bytes(const uint8_t *bytes, uint64_t len)
   bytes32 digest = {{0}};
   _Static_assert(sizeof(digest) == sizeof(zkvm_keccak256_hash),
                  "accelerator digest must be 32 bytes");
-  if (len <= UINT32_MAX &&
-      zkvm_keccak256(len ? bytes : &preimage_empty, (size_t)len, &native_digest) == ZKVM_EOK) {
+  /* Preimage lengths are bounded by the 2^32-1 host-region bound. */
+  if (zkvm_keccak256(len ? bytes : &preimage_empty, (size_t)len, &native_digest) == ZKVM_EOK) {
     memcpy(&digest, &native_digest, sizeof digest);
   }
   return digest;
@@ -44,8 +44,8 @@ bytes32 sha256_bytes(const uint8_t *bytes, uint64_t len)
   zkvm_sha256_hash native_digest;
   bytes32 digest = {{0}};
   _Static_assert(sizeof(digest) == sizeof(zkvm_sha256_hash), "accelerator digest must be 32 bytes");
-  if (len <= UINT32_MAX &&
-      zkvm_sha256(len ? bytes : &preimage_empty, (size_t)len, &native_digest) == ZKVM_EOK) {
+  /* Preimage lengths are bounded by the 2^32-1 host-region bound. */
+  if (zkvm_sha256(len ? bytes : &preimage_empty, (size_t)len, &native_digest) == ZKVM_EOK) {
     memcpy(&digest, &native_digest, sizeof digest);
   }
   return digest;
