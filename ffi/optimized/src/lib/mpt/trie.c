@@ -109,6 +109,10 @@ typedef struct {
   TrieBranchFrame frames[MPT_SECURE_KEY_NIBBLES];
   uint8_t frame_count;
   PendingNode root;
+  /* Owned copy of the root pending leaf's value. The root pending is the
+   * only PendingNode that outlives its insert call, so a leaf value borrowed
+   * from a caller-owned TrieEntry must be copied here before retention. */
+  uint8_t root_value[MPT_ENCODED_VALUE_MAX];
   bool complete;
 } OrderedTrieBuilder;
 
@@ -942,6 +946,12 @@ static bool ordered_trie_builder_insert(OrderedTrieBuilder *builder, const TrieE
   if (builder->frame_count == 0) {
     if (!trie_entry_pending(item, 0, &builder->root)) {
       return false;
+    }
+    /* The item may be caller-stack-owned and dead by finish(); leaf bytes
+     * borrowed from its inline value buffer must move to builder storage. */
+    if (builder->root.kind == PENDING_NODE_LEAF && builder->root.value == item->value) {
+      memcpy(builder->root_value, builder->root.value, builder->root.value_len);
+      builder->root.value = builder->root_value;
     }
     builder->complete = true;
     return true;
