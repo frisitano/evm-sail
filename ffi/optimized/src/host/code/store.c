@@ -296,6 +296,16 @@ bytes32 code_db_store_indexed(struct CodeFields code)
  */
 static uint8_t *code_db_analyze_region(Bytes code, bool amsterdam_or_later)
 {
+  /* Immediate widths per opcode: PUSH1-PUSH32 skip 1-32 immediate bytes and
+   * every other opcode advances by one. Amsterdam's conditional-immediate
+   * opcodes (0xe6-0xe8) are the sole case resolved outside the table. */
+  static const uint8_t immediate_widths[256] = {
+      [0x60] = 1,  [0x61] = 2,  [0x62] = 3,  [0x63] = 4,  [0x64] = 5,  [0x65] = 6,  [0x66] = 7,
+      [0x67] = 8,  [0x68] = 9,  [0x69] = 10, [0x6a] = 11, [0x6b] = 12, [0x6c] = 13, [0x6d] = 14,
+      [0x6e] = 15, [0x6f] = 16, [0x70] = 17, [0x71] = 18, [0x72] = 19, [0x73] = 20, [0x74] = 21,
+      [0x75] = 22, [0x76] = 23, [0x77] = 24, [0x78] = 25, [0x79] = 26, [0x7a] = 27, [0x7b] = 28,
+      [0x7c] = 29, [0x7d] = 30, [0x7e] = 31, [0x7f] = 32,
+  };
   const uint64_t len = code.len;
   if (len == 0) {
     return NULL;
@@ -306,31 +316,32 @@ static uint8_t *code_db_analyze_region(Bytes code, bool amsterdam_or_later)
   }
 
   const uint8_t *src = code.bytes;
-  uint64_t position = 0;
-  while (position < len) {
-    const uint8_t opcode = src[position];
-    if (opcode == 0x5b) {
+  if (amsterdam_or_later) {
+    uint64_t position = 0;
+    while (position < len) {
+      const uint8_t opcode = src[position];
+      if (opcode == 0x5b) {
+        jumpdests[position] = 1;
+      }
+      uint64_t step = 1 + (uint64_t)immediate_widths[opcode];
+      if (opcode >= 0xe6 && opcode <= 0xe8) {
+        const uint8_t immediate = position + 1 < len ? src[position + 1] : 0;
+        const bool valid = (opcode == 0xe8 ? (immediate <= 81 || immediate >= 128)
+                                           : (immediate <= 90 || immediate >= 128)) != 0;
+        if (valid) {
+          step = 2;
+        }
+      }
+      position += step;
+    }
+    return jumpdests;
+  }
+  for (uint64_t position = 0; position < len;
+       position += 1 + (uint64_t)immediate_widths[src[position]]) {
+    if (src[position] == 0x5b) {
       jumpdests[position] = 1;
     }
-
-    uint64_t step = 1;
-    if (opcode >= 0x60 && opcode <= 0x7f) {
-      step = (uint64_t)opcode - 0x5e;
-    } else if (amsterdam_or_later && (opcode == 0xe6 || opcode == 0xe7 || opcode == 0xe8)) {
-      const uint8_t immediate = position + 1 < len ? src[position + 1] : 0;
-      const bool valid = (opcode == 0xe8 ? (immediate <= 81 || immediate >= 128)
-                                         : (immediate <= 90 || immediate >= 128)) != 0;
-      if (valid) {
-        step = 2;
-      }
-    }
-
-    if (step >= len - position) {
-      break;
-    }
-    position += step;
   }
-
   return jumpdests;
 }
 
