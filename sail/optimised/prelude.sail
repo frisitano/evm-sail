@@ -47,3 +47,108 @@ val word_exp_ladder = pure { c: "word_exp_ladder" } : (word, word) -> word
 
 function alu_exp(base : word, exponent : word) -> word =
     word_exp_ladder(base, exponent)
+
+/*
+ * Nonzero-divisor 256-bit division and modular arithmetic are closed
+ * word-level operations executed by the platform bigint provider
+ * (ffi/zkvm_bigint.h); on ZisK each costs an arith256 precompile call
+ * instead of a limb-level software routine. The EVM's zero-divisor rules
+ * (DIV/MOD/SDIV/SMOD/ADDMOD/MULMOD yield 0) stay here in Sail, so the
+ * provider's nonzero precondition always holds at the boundary.
+ */
+val word_div_nonzero = pure { c: "word_div_nonzero" } : (word, word) -> word
+
+val word_mod_nonzero = pure { c: "word_mod_nonzero" } : (word, word) -> word
+
+val word_mulmod_nonzero = pure { c: "word_mulmod_nonzero" } : (word, word, word) -> word
+
+val word_addmod_nonzero = pure { c: "word_addmod_nonzero" } : (word, word, word) -> word
+
+function alu_div(a : word, b : word) -> word = {
+    /* DIV */
+    let divisor_is_zero = word_is_zero(b);
+    if divisor_is_zero then {
+        WORD_ZERO
+    } else {
+        word_div_nonzero(a, b)
+    }
+}
+
+function alu_mod(a : word, b : word) -> word = {
+    /* MOD */
+    let modulus_is_zero = word_is_zero(b);
+    if modulus_is_zero then {
+        WORD_ZERO
+    } else {
+        word_mod_nonzero(a, b)
+    }
+}
+
+/* Canonical SDIV sign logic (sail/prelude.sail) with the unsigned magnitude
+   division routed through the nonzero provider: a nonzero divisor has a
+   nonzero magnitude, and SDIV(min, -1) truncates through the unsigned
+   magnitudes exactly as in the base equations. */
+function alu_sdiv(a : word, b : word) -> word = {
+    /* SDIV */
+    let divisor_is_zero = word_is_zero(b);
+    if divisor_is_zero then {
+        WORD_ZERO
+    } else {
+        let dividend_magnitude = word_abs(a);
+        let divisor_magnitude = word_abs(b);
+        let quotient = word_div_nonzero(dividend_magnitude, divisor_magnitude);
+        let dividend_sign = word_bit(a, 255);
+        let divisor_sign = word_bit(b, 255);
+        if (dividend_sign == bitone) != (divisor_sign == bitone) then {
+            word_negate(quotient)
+        } else {
+            quotient
+        }
+    }
+}
+
+/* Canonical SMOD sign logic with the magnitude remainder routed through the
+   nonzero provider. */
+function alu_smod(a : word, b : word) -> word = {
+    /* SMOD */
+    let modulus_is_zero = word_is_zero(b);
+    if modulus_is_zero then {
+        WORD_ZERO
+    } else {
+        let dividend_magnitude = word_abs(a);
+        let modulus_magnitude = word_abs(b);
+        let remainder = word_mod_nonzero(dividend_magnitude, modulus_magnitude);
+        let dividend_sign = word_bit(a, 255);
+        if dividend_sign == bitone then {
+            word_negate(remainder)
+        } else {
+            remainder
+        }
+    }
+}
+
+/* NOTE: the custom compiler currently intercepts alu_addmod/alu_mulmod at
+   the u256 ABI (specialized_function_external in c_backend.ml) and lowers
+   both -- including these spliced bodies -- to its built-in software
+   u256_addmod/u256_mulmod support routines, so the two overrides below do
+   not reach the bigint provider yet. They are kept as the intended routing:
+   once the intrinsic defers to a spliced override (or itself targets the
+   zkvm_bigint.h contract), ADDMOD/MULMOD join DIV/MOD/SDIV/SMOD on the
+   platform provider without further model changes. */
+function alu_addmod(a, b, n) = {
+    /* ADDMOD */
+    if n == 0 then {
+        WORD_ZERO
+    } else {
+        word_addmod_nonzero(a, b, n)
+    }
+}
+
+function alu_mulmod(a, b, n) = {
+    /* MULMOD */
+    if n == 0 then {
+        WORD_ZERO
+    } else {
+        word_mulmod_nonzero(a, b, n)
+    }
+}

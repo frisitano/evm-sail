@@ -4,6 +4,7 @@
 #include "evmsail/prelude.h"
 
 #include "evmsail/primitives/word.h"
+#include "zkvm_bigint.h"
 #include <stdint.h>
 
 u256 hash_to_word(bytes32 bytes)
@@ -56,6 +57,40 @@ u256 address_to_word(bytes20 bytes)
               0,
           },
   };
+}
+
+/* Nonzero-divisor division and modular arithmetic cross to the platform
+ * bigint provider (ffi/zkvm_bigint.h). u256 limbs and the contract's limb
+ * arrays are both least-significant first, so operands pass through
+ * directly. Sail has already rejected zero divisors/moduli. */
+u256 word_div_nonzero(u256 a, u256 b)
+{
+  u256 quotient;
+  u256 remainder;
+  zkvm_u256_divrem(a.limbs, b.limbs, quotient.limbs, remainder.limbs);
+  return quotient;
+}
+
+u256 word_mod_nonzero(u256 a, u256 b)
+{
+  u256 quotient;
+  u256 remainder;
+  zkvm_u256_divrem(a.limbs, b.limbs, quotient.limbs, remainder.limbs);
+  return remainder;
+}
+
+u256 word_mulmod_nonzero(u256 a, u256 b, u256 n)
+{
+  u256 result;
+  zkvm_u256_mulmod(a.limbs, b.limbs, n.limbs, result.limbs);
+  return result;
+}
+
+u256 word_addmod_nonzero(u256 a, u256 b, u256 n)
+{
+  u256 result;
+  zkvm_u256_addmod(a.limbs, b.limbs, n.limbs, result.limbs);
+  return result;
 }
 
 /* 256-bit low product over 64-bit limbs; the standard schoolbook carry
