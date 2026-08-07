@@ -45,8 +45,11 @@ struct StorageValue = { curr : word, orig : word }
     not a slot-row hit: it resolves the value to zero, but the caller must
     still record the first EIP-7928 read of that slot. */
 union StorageTxLookup = {
+    /* the slot's transaction-layer current/original value pair */
     StorageTxHit : StorageValue,
+    /* a clear generation covers the slot: it reads as zero */
     StorageTxCleared : unit,
+    /* the transaction layer holds nothing for the slot */
     StorageTxMiss : unit,
 }
 
@@ -64,7 +67,9 @@ struct StorageBlockRow = { found : bool, value : StorageValue }
 /*! One transaction-layer storage row, or exhaustion of the destructive
     transaction-end drain. */
 union StorageTxPopResult = {
+    /* the next drained transaction-layer storage row */
     StorageTxPopRow : StorageEntry,
+    /* the drain has yielded every row */
     StorageTxPopExhausted : unit,
 }
 
@@ -82,7 +87,9 @@ struct AccountRow = { found : bool, account : Account }
 /*! One transaction-layer account row, or exhaustion of the destructive
     transaction-end drain. */
 union AcctTxPopResult = {
+    /* the next drained transaction-layer account row */
     AcctTxPopRow : AcctEntry,
+    /* the drain has yielded every row */
     AcctTxPopExhausted : unit,
 }
 
@@ -97,7 +104,9 @@ struct StorageTrieEntry = {
 
 /*! One block-layer storage iterator row, or iterator exhaustion. */
 union StorageBlockIterResult = {
+    /* the next block-layer storage row, with its cached traversal digests */
     StorageBlockIterRow : StorageTrieEntry,
+    /* the iterator has yielded every row */
     StorageBlockIterExhausted : unit,
 }
 
@@ -109,7 +118,9 @@ struct AcctTrieEntry = {
 
 /*! One block-layer account iterator row, or iterator exhaustion. */
 union AcctBlockIterResult = {
+    /* the next block-layer account row, with its cached address digest */
     AcctBlockIterRow : AcctTrieEntry,
+    /* the iterator has yielded every row */
     AcctBlockIterExhausted : unit,
 }
 

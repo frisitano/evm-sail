@@ -42,6 +42,8 @@ val host_scratch_store_stateless_input = impure { c: "scratch_store_stateless_in
         int('dst),
         StatelessInputSliceFields('off, 'len),
     ) -> ScratchSliceLength('dst + 'len)
+/*! Stores an existing arena-backed slice at an explicit arena offset; the
+    result carries the new arena high-water mark. */
 val host_scratch_store_scratch = impure { c: "scratch_store_scratch" } : forall 'dst 'off 'len,
                                                                               0
                                                                            <= 'dst
@@ -51,6 +53,8 @@ val host_scratch_store_scratch = impure { c: "scratch_store_scratch" } : forall 
         int('dst),
         ScratchSliceFields('off, 'len),
     ) -> ScratchSliceLength('dst + 'len)
+/*! Stores a retained-log-data slice at an explicit arena offset; the result
+    carries the new arena high-water mark. */
 val host_scratch_store_log_data = impure { c: "scratch_store_log_data" } : forall 'dst 'off 'len,
                                                                                 0
                                                                              <= 'dst
@@ -60,6 +64,8 @@ val host_scratch_store_log_data = impure { c: "scratch_store_log_data" } : foral
         int('dst),
         LogDataSliceFields('off, 'len),
     ) -> ScratchSliceLength('dst + 'len)
+/*! Stores an output-buffer-backed slice at an explicit arena offset; the
+    result carries the new arena high-water mark. */
 val host_scratch_store_output = impure { c: "scratch_store_output" } : forall 'dst 'off 'len,
                                                                             0
                                                                          <= 'dst

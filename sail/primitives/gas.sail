@@ -137,6 +137,7 @@ type block_gas = range(0, block_gas_limit_bound)
     state gas together, so the execution profile supplies the tighter
     header-dependent bound. */
 type receipt_cumulative_gas = range(0, 2 * block_gas_limit_bound)
+/*! Whether a value lies in the receipt cumulative-gas domain. */
 type receipt_cumulative_gas_value_valid('value : Int) -> Bool =
     0 <= 'value & 'value <= 2 * block_gas_limit_bound
 
@@ -192,8 +193,11 @@ type transaction_state_gas_used = nat
 /* The transaction refund cap is `gas_used / 2` before London and
  * `gas_used / 5` from London onward.  Keep the exact protocol alternatives
  * in the type instead of a generic implementation-sized divisor range. */
+/*! The pre-London refund divisor: refunds are capped at `gas_used / 2`. */
 type pre_london_refund_divisor : Int = 2
+/*! The London refund divisor: EIP-3529 caps refunds at `gas_used / 5`. */
 type post_london_refund_divisor : Int = 5
+/*! Whether a value is one of the two protocol refund divisors. */
 type transaction_refund_divisor_value('value : Int) -> Bool =
        'value == pre_london_refund_divisor
     |  'value == post_london_refund_divisor

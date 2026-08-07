@@ -626,10 +626,15 @@ function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> ha
     request-list recursion. [htr_request_leaf][] interprets it at depth zero,
     replacing a higher-order leaf function without duplicating merkleization. */
 enum HtrRequestKind = {
+    /* a validator deposit request (EIP-6110) */
     HtrDeposit,
+    /* a validator withdrawal request (EIP-7002) */
     HtrWithdrawalRequest,
+    /* a validator consolidation request (EIP-7251) */
     HtrConsolidationRequest,
+    /* a builder deposit request */
     HtrBuilderDepositRequest,
+    /* a builder exit request */
     HtrBuilderExitRequest,
 }
 

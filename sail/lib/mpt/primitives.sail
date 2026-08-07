@@ -84,6 +84,7 @@ function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
     }
 }
 
+/*! Appends both nibbles of a byte to a path, high nibble first. */
 function path_append_byte(path : TriePath, value : byte) -> TriePath = {
     let high_nibble = path_append_nibble(path, value[7 .. 4]);
     path_append_nibble(high_nibble, value[3 .. 0])

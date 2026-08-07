@@ -78,11 +78,13 @@ function branch_mask_for(index : nibble) -> branch_mask = {
     sail_shiftleft(0x0001, shift)
 }
 
+/*! Whether the mask records a child at the given nibble. */
 function branch_mask_has(mask : branch_mask, index : nibble) -> bool = {
     let index_mask = branch_mask_for(index);
     and_vec(mask, index_mask) != 0x0000
 }
 
+/*! Returns the mask with the child at the given nibble marked present. */
 function branch_mask_set(mask : branch_mask, index : nibble) -> branch_mask = {
     let index_mask = branch_mask_for(index);
     or_vec(mask, index_mask)
@@ -108,6 +110,8 @@ function input_leaf_child_ref(key : TriePath, value : StatelessInputSlice) -> No
     result
 }
 
+/*! [input_leaf_child_ref][] for a leaf value encoded in the scratch
+    arena (YP Appendix D, Eq. 208). */
 function scratch_leaf_child_ref(key : TriePath, value : ScratchSlice) -> NodeRef = {
     let path_size = rlp_hex_prefix_size(key, true);
     let value_size = rlp_scratch_slice_size(value);
@@ -123,6 +127,8 @@ function scratch_leaf_child_ref(key : TriePath, value : ScratchSlice) -> NodeRef
     result
 }
 
+/*! The child reference of a leaf, selecting the encoder for the value's
+    backing region. */
 function leaf_child_ref(key : TriePath, value : TrieLeafValue) -> NodeRef =
     match value {
         InputTrieLeaf(bytes) => input_leaf_child_ref(key, bytes),
@@ -245,15 +251,21 @@ function branch_refs_get(children : BranchRefs, index : nibble) -> NodeRef = mat
 /*! A decoded authenticated node. Every borrowed field remains a stateless
     input slice, including fields reached through an input-inline child. */
 union InputTrieNode = {
+    /* a two-field leaf: its path and value bytes */
     InputLeafNode : (TriePath, StatelessInputSlice),
+    /* a two-field extension: its path and single child reference */
     InputExtensionNode : (TriePath, NodeRef),
+    /* a seventeen-field branch: sixteen children and the value bytes */
     InputBranchNode : (BranchRefs, StatelessInputSlice),
 }
 
 /*! A decoded node freshly encoded in scratch during canonical rebuilding. */
 union ScratchTrieNode = {
+    /* a two-field leaf: its path and scratch value bytes */
     ScratchLeafNode : (TriePath, ScratchSlice),
+    /* a two-field extension: its path and single child reference */
     ScratchExtensionNode : (TriePath, NodeRef),
+    /* a seventeen-field branch: sixteen children and the value bytes */
     ScratchBranchNode : (BranchRefs, ScratchSlice),
 }
 
@@ -278,6 +290,8 @@ function input_field_to_ref forall 'source_off 'source_len 'content_len,
         EmptyRef()
     }
 
+/*! [input_field_to_ref][] for a scratch-backed child field; an inline
+    list is copied into a self-contained inline node. */
 function scratch_field_to_ref forall 'source_off 'source_len 'content_len,
                                 rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
@@ -317,6 +331,7 @@ function decode_input_branch_node forall 'source_off 'source_len, source_valid_r
     }
 termination_measure decode_input_branch_node(cursor, index, children) = 16 - index
 
+/*! [decode_input_branch_node][] over the scratch cursor family. */
 function decode_scratch_branch_node forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     cursor : ScratchRlpCursor('source_off, 'source_len),
     index : range(2, 16),
@@ -373,6 +388,7 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
     }
 }
 
+/*! [decode_input_trie_node][] over freshly encoded scratch node bytes. */
 function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
     let fields = scratch_rlp_node_cursor(node);
     let first = scratch_rlp_decode_item(fields);

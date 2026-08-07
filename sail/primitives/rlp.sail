@@ -81,6 +81,8 @@ struct ScratchRlpFieldRef(
     content_len : int('content_len),
 }
 
+/*! A one-pass RLP cursor over a scratch-arena node encoding, nominally
+    distinct from the stateless-input cursor. */
 type ScratchRlpCursor('source_off : Int, 'source_len : Int),
     source_valid_range('source_off, 'source_len) =
     ScratchSliceFields('source_off, 'source_len)
@@ -90,6 +92,8 @@ type ScratchRlpCursor('source_off : Int, 'source_len : Int),
     exception; this result distinguishes a well-formed value outside the
     requested field domain. */
 union RlpResult('value : Type) = {
+    /* the decoded value satisfies the requested field domain */
     RlpOk : 'value,
+    /* well-formed RLP whose value falls outside the field domain */
     RlpInvalidValue : unit
 }

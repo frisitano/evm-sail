@@ -6,7 +6,7 @@ commitment checks over their recomputed roots.
 */
 
 /*md
-## Recursive indexed tries
+## The indexed tries
 
 Transactions, withdrawals, and receipts all use `rlp(index)` keys. Their
 values come from different source-backed regions, but their trie shape is the
@@ -19,8 +19,11 @@ collection-sized vector is involved.
     value operations, allowing one recursive trie builder without storing
     function values or duplicating the traversal. */
 union IndexedTrieSource = {
+    /* the block body's transaction list */
     IndexedTransactions : TransactionListRef,
+    /* the block body's withdrawal list */
     IndexedWithdrawals : WithdrawalListRef,
+    /* the executed block's encoded receipt records */
     IndexedReceipts : ReceiptRecordsRef,
 }
 

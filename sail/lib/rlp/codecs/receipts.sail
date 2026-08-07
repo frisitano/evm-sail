@@ -19,6 +19,7 @@ function topics_rlp_content_size(index : log_store_index) -> rlp_scratch_length 
     size
 }
 
+/*! Sizes one retained record's topic list with its list prefix. */
 function topics_rlp_size(index : log_store_index) -> rlp_scratch_length = {
     let content_size = topics_rlp_content_size(index);
     rlp_scratch_list_size(content_size)
@@ -35,6 +36,7 @@ function log_entry_rlp_content_size(index : log_store_index) -> rlp_scratch_leng
     rlp_scratch_length_add(address_and_topics_length, data_length)
 }
 
+/*! Sizes one retained log entry with its list prefix. */
 function log_entry_rlp_size(index : log_store_index) -> rlp_scratch_length = {
     let content_size = log_entry_rlp_content_size(index);
     rlp_scratch_list_size(content_size)
@@ -53,6 +55,7 @@ function logs_rlp_content_size(logs : LogSeriesRef) -> rlp_scratch_length = {
     size
 }
 
+/*! Sizes a retained log range with its list prefix. */
 function logs_rlp_size(logs : LogSeriesRef) -> rlp_scratch_length = {
     let content_size = logs_rlp_content_size(logs);
     rlp_scratch_list_size(content_size)
@@ -172,6 +175,8 @@ function receipt_write_encoded(r, cumulative_gas_used) = {
     rlp_write_logs(r.logs)
 }
 
+/*! Encodes one receipt into an exact scratch reservation and retains
+    the encoded bytes. */
 val receipt_encoded : forall 'cumulative, receipt_cumulative_gas_value_valid('cumulative). (Receipt, int('cumulative)) -> ScratchSlice
 function receipt_encoded(r, cumulative_gas_used) = {
     let encoded_len = receipt_encoded_length(r, cumulative_gas_used);

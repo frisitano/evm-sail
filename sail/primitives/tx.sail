@@ -103,13 +103,14 @@ type transaction_item_count = range(0, transaction_length_bound)
     Successful transaction validity therefore proves that no executable
     authorization list can contain more entries than this bound. */
 type prepared_authorization_count_bound : Int = div(eip7825_transaction_gas_limit, 7816)
+/*! The number of authorization tuples admitted by one valid transaction. */
 type prepared_authorization_count = range(0, prepared_authorization_count_bound)
 
+$[c_repr { representation = external, name = PreparedAuthorizationList }]
 /*! Authorizations decoded and signature-recovered after transaction validity
     but before any world-state mutation. The semantic model retains an
     immutable list. Optimized C represents the same ordered collection as a
     cursor into a fixed-capacity transaction workspace. */
-$[c_repr { representation = external, name = PreparedAuthorizationList }]
 struct PreparedAuthorizationList = {
     entries : list(Authorization),
     count : prepared_authorization_count,
@@ -139,6 +140,8 @@ struct AuthorizationListRefFields(
     count : int('count),
 }
 
+/*! An authorization-list reference packing its admitted tuple count
+    existentially. */
 type AuthorizationListRef = {
     'count,
     0 <= 'count & 'count <= transaction_length_bound.
@@ -244,6 +247,7 @@ union LogTopics = {
     not an EVM quantity; the host rejects positions outside the current
     block's retained log series. */
 type log_store_index_bound : Int = 2 ^ 64 - 1
+/*! A position in the block-lifetime host log store. */
 type log_store_index = range(0, log_store_index_bound)
 
 /*! Advances a valid log cursor without fixed-width wrapping. */

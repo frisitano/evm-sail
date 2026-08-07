@@ -20,7 +20,9 @@ let MPT_HASH_LENGTH : int(32) = WORD_BYTE_LENGTH
     transaction leaves borrow immutable input bytes; newly encoded state,
     receipt, and withdrawal leaves borrow the scratch arena. */
 union TrieLeafValue = {
+    /* a leaf borrowing immutable stateless input bytes */
     InputTrieLeaf : StatelessInputSlice,
+    /* a leaf borrowing freshly encoded scratch bytes */
     ScratchTrieLeaf : ScratchSlice,
 }
 
@@ -35,6 +37,7 @@ function inline_node_from_scratch_slice(bytes : ScratchSlice) -> InlineNode = {
     }
 }
 
+/*! Copies a sub-32-byte input node encoding into an inline node value. */
 function inline_node_from_input_slice(bytes : StatelessInputSlice) -> InlineNode = {
     let length = bytes.len;
     if length < MPT_HASH_LENGTH then {

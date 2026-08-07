@@ -45,14 +45,23 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     }
 }
 
-/* Stable stage identifiers for optional native validation diagnostics. These
-   are validation metadata, not performance instrumentation. */
+/*md
+## Constants
+
+Stable stage identifiers for optional native validation diagnostics. These
+are validation metadata, not performance instrumentation.
+*/
 let VALIDATION_STAGE_DECODE_INPUT : validation_stage = 1
 let VALIDATION_STAGE_INDEX_WITNESS : validation_stage = 2
 let VALIDATION_STAGE_VALIDATE_PAYLOAD : validation_stage = 3
 let VALIDATION_STAGE_EXECUTE_BLOCK : validation_stage = 4
 let VALIDATION_STAGE_VALIDATE_RESULT : validation_stage = 5
 
+/*md
+## The verification pipeline
+
+The single entry called for every stateless input.
+*/
 /*! The stateless verification pipeline: decode the semantic envelope,
     index the witness, validate the payload commitments, execute the
     block body one transaction at a time, and validate the execution results.

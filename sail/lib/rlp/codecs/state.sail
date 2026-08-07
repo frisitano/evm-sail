@@ -43,7 +43,7 @@ function decode_state_account(value : StatelessInputSlice) -> AccountInfo = {
 }
 
 /*md
-## State leaf encoding
+## The leaf encoders
 */
 /*! Encodes a nonzero storage value as its minimal RLP integer leaf payload. */
 function encode_storage_value(value : word) -> ScratchSlice = {

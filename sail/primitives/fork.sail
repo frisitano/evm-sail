@@ -18,25 +18,55 @@ type Fork = range(0, 16)
     identities named lets dependent profile constraints refer to protocol
     forks without repeating their wire-order integers. */
 type frontier_fork_value : Int = 0
+/*! `Homestead`'s position in the activation order. */
 type homestead_fork_value : Int = 1
+/*! `Byzantium`'s position in the activation order. */
 type byzantium_fork_value : Int = 2
+/*! `Constantinople`'s position in the activation order. */
 type constantinople_fork_value : Int = 3
+/*! `Istanbul`'s position in the activation order. */
 type istanbul_fork_value : Int = 4
+/*! `Berlin`'s position in the activation order. */
 type berlin_fork_value : Int = 5
+/*! `London`'s position in the activation order. */
 type london_fork_value : Int = 6
+/*! `ArrowGlacier`'s position in the activation order. */
 type arrow_glacier_fork_value : Int = 7
+/*! `GrayGlacier`'s position in the activation order. */
 type gray_glacier_fork_value : Int = 8
+/*! `Paris`'s position in the activation order. */
 type paris_fork_value : Int = 9
+/*! `Shanghai`'s position in the activation order. */
 type shanghai_fork_value : Int = 10
 /*! First fork at which blob gas is active. Kept as a type-level singleton so
     profile equations and the runtime `Cancun` value share one boundary. */
 type first_blob_fork_value : Int = 11
+/*! `Prague`'s position in the activation order. */
 type prague_fork_value : Int = 12
+/*! `Osaka`'s position in the activation order. */
 type osaka_fork_value : Int = 13
+/*! `BPO1`'s position in the activation order. */
 type bpo1_fork_value : Int = 14
+/*! `BPO2`'s position in the activation order. */
 type bpo2_fork_value : Int = 15
+/*! `Amsterdam`'s position in the activation order. */
 type amsterdam_fork_value : Int = 16
 
+/*md
+## Constants
+
+The runtime fork values, one per supported fork. Each constant carries its
+type-level index as a singleton type, so comparing two fork values compares
+their activation order.
+
+| Constants | Values | Character |
+| --------- | ------ | --------- |
+| `Frontier` … `Shanghai` | 0 – 10 | the pre-blob protocol and schema forks |
+| `Cancun` | 11 | the first fork with an active blob schedule |
+| `Prague`, `Osaka` | 12, 13 | blob-era execution forks |
+| `BPO1`, `BPO2` | 14, 15 | blob-parameter-only schema forks |
+| `Amsterdam` | 16 | the newest supported fork |
+*/
 /*! Launch protocol. */
 let Frontier : int(frontier_fork_value) = sizeof(frontier_fork_value)
 /*! EIP-2 create rules, EIP-7 DELEGATECALL. */

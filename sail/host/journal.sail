@@ -6,6 +6,10 @@ mutation records exactly the semantic field needed to restore its predecessor;
 checkpoint and commit markers encode the nesting structure in the same ordered
 stream. Backends may refine addresses and storage keys to dense identifiers,
 but may not introduce rollback behavior outside these variants.
+
+!!! note "Non-normative"
+    This page documents the model's host interface — internal contracts
+    of the executable specification, not protocol rules.
 */
 
 /*! A prior transient-storage value restored by frame rollback. */
@@ -83,14 +87,24 @@ struct JournalAccountStorageGenerationChange = {
 
 /*! One append-only state-journal record. */
 union StateJournalEntry = {
+    /*! Restores the prior transient-storage value on rollback. */
     JournalTransientChanged : JournalTransientChange,
+    /*! Restores an account's prior warm epoch on rollback. */
     JournalWarmAccountChanged : JournalWarmAccountChange,
+    /*! Restores a storage location's prior warm epoch on rollback. */
     JournalWarmStorageChanged : JournalWarmStorageChange,
+    /*! Restores the prior account balance on rollback. */
     JournalAccountBalanceChanged : JournalAccountBalanceChange,
+    /*! Restores the prior account nonce on rollback. */
     JournalAccountNonceChanged : JournalAccountNonceChange,
+    /*! Restores the prior account code hash on rollback. */
     JournalAccountCodeHashChanged : JournalAccountCodeHashChange,
+    /*! Restores the prior account-existence flag on rollback. */
     JournalAccountExistsChanged : JournalAccountExistsChange,
+    /*! Restores the prior same-transaction account-creation flag on
+        rollback. */
     JournalAccountCreatedChanged : JournalAccountCreatedChange,
+    /*! Restores the prior selfdestruction flag on rollback. */
     JournalAccountSelfdestructedChanged : JournalAccountSelfdestructedChange,
     /*! Removes the most recently appended transaction account on rollback. */
     JournalTransactionAccountListed : unit,

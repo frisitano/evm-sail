@@ -51,6 +51,8 @@ function freeze_memory_output(data : EvmMemorySlice) -> OutputSlice = {
     }
 }
 
+/*! Copies stateless-input-backed output into the host buffer so it survives
+    frame teardown. */
 function freeze_input_output(data : StatelessInputSlice) -> OutputSlice = {
     let len = data.len;
     if len == 0 then {
@@ -65,6 +67,8 @@ function freeze_input_output(data : StatelessInputSlice) -> OutputSlice = {
     }
 }
 
+/*! Freezes an output taken directly from calldata, dispatching on whether the
+    calldata is input-backed or memory-backed. */
 function freeze_calldata_output(data : CalldataSlice) -> OutputSlice =
     match data {
         InputCalldata(bytes) => freeze_input_output(bytes),

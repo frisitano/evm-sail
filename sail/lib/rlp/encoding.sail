@@ -152,12 +152,14 @@ function rlp_materialized_slice_size(length : rlp_scratch_length, first : byte) 
         rlp_scratch_length_add(length, prefix_length)
     }
 
+/*! Returns the materializable RLP width of a scratch-backed byte slice. */
 function rlp_scratch_region_size(data : ScratchSlice) -> rlp_scratch_length = {
     let first =
         if data.len == 0 then 0x00 else slice_byte(data, 0);
     rlp_materialized_slice_size(data.len, first)
 }
 
+/*! Returns the materializable RLP width of a retained log-data slice. */
 function rlp_log_data_size(data : LogDataSlice) -> rlp_scratch_length = {
     let first =
         if data.len == 0 then 0x00 else slice_byte(data, 0);
@@ -250,6 +252,7 @@ function rlp_input_scratch_slice_size(data : StatelessInputSlice) -> rlp_scratch
 function rlp_scratch_scratch_slice_size(data : ScratchSlice) -> rlp_scratch_length =
     rlp_scratch_region_size(data)
 
+/*! Sizes a retained log-data slice for the materializable overload. */
 function rlp_log_scratch_slice_size(data : LogDataSlice) -> rlp_scratch_length =
     rlp_log_data_size(data)
 
@@ -304,6 +307,7 @@ function rlp_write_input_slice(data : StatelessInputSlice) -> unit = {
     scratch_push_slice(data)
 }
 
+/*! Appends a scratch-backed byte slice as an RLP string. */
 function rlp_write_scratch_slice(data : ScratchSlice) -> unit = {
     let first =
         if data.len == 0 then 0x00 else slice_byte(data, 0);
@@ -311,6 +315,7 @@ function rlp_write_scratch_slice(data : ScratchSlice) -> unit = {
     scratch_push_slice(data)
 }
 
+/*! Appends a retained log-data slice as an RLP string. */
 function rlp_write_log_data_slice(data : LogDataSlice) -> unit = {
     let first =
         if data.len == 0 then 0x00 else slice_byte(data, 0);
@@ -365,7 +370,7 @@ function rlp_write_addr(a : address) -> unit = {
 }
 
 /*md
-## Exact scratch encoding
+## The scratch encoder
 
 An encoder reserves its complete output before the first write. The expected
 length is checked once at the boundary, keeping allocation and scratch lifetime

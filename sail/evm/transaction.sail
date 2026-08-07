@@ -931,16 +931,18 @@ function enter_transaction_frame(v : TxValidity) -> unit = {
     frame_status = Running()
 }
 
-/*! Charges Amsterdam's state-dependent top-level dispatch costs and installs
-    the code selected for execution. This phase deliberately performs no
-    revertible account mutation: its state-gas charges are therefore refilled
-    if the subsequently dispatched frame fails. The result records whether a
-    call recipient delegated, which disables direct precompile dispatch. */
+/*! The outcome of top-level dispatch preparation: whether the frame is
+    ready to run, and whether a call recipient delegated, which disables
+    direct precompile dispatch. */
 struct TransactionPreparation = {
     ready : bool,
     delegated : bool,
 }
 
+/*! Charges Amsterdam's state-dependent top-level dispatch costs and installs
+    the code selected for execution. This phase deliberately performs no
+    revertible account mutation: its state-gas charges are therefore refilled
+    if the subsequently dispatched frame fails. */
 function prepare_amsterdam_transaction_dispatch(
     tx : Transaction,
     v : TxValidity,

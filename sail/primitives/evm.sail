@@ -14,6 +14,8 @@ struct TxEnvFields('blob_limit : Int), transaction_blob_limit_value('blob_limit)
     blob_hashes : BlobHashesFields('blob_limit),
 }
 
+/*! A transaction environment packing its fork-selected blob-count limit
+    existentially. */
 type TxEnv = {
     'blob_limit,
     transaction_blob_limit_value('blob_limit).
@@ -42,6 +44,8 @@ struct TransactionGasAllowanceFields(
     regular : int('regular),
 }
 
+/*! A transaction gas allowance with existentially hidden total and regular
+    budgets. */
 type TransactionGasAllowance = {
     'total 'regular,
     0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound.
@@ -73,6 +77,8 @@ type transaction_initial_gas_relation(
     &  'execution + 'state + 'intrinsic_execution + 'intrinsic_state == 'total
     &  'execution <= 'regular - 'intrinsic_execution
 
+/*! The concrete post-intrinsic gas record whose indices retain the
+    transaction conservation relation. */
 struct TransactionInitialGasFields(
     'total : Int,
     'regular : Int,
@@ -99,6 +105,8 @@ struct TransactionInitialGasFields(
     state_remaining : int('state),
 }
 
+/*! The initial gas state with every conserved quantity hidden
+    existentially. */
 type TransactionInitialGas = {
     'total
     'regular
@@ -274,6 +282,8 @@ struct TxValidityFields(
     priority_fee : word,
 }
 
+/*! Constructs the validity record once up-front transaction validation has
+    established the initial-gas conservation relation. */
 val tx_validity_fields : forall 'limit 'regular 'intrinsic_execution 'intrinsic_state 'calldata_floor 'execution 'state,
                            transaction_initial_gas_relation(
                                'limit,

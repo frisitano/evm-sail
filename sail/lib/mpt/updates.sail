@@ -1,6 +1,6 @@
 
 /*md
-# Trie updates and canonical subtree assembly
+# Trie updates and subtree assembly
 
 Ordered leaf updates, their structural items, and the recursive assembly that
 recomposes canonical nodes (YP Appendix D).
@@ -139,7 +139,7 @@ function trie_updates_descend(updates : TrieUpdateCursor) -> TrieUpdateCursor =
     }
 
 /*md
-## Structural items
+## The structural items
 
 The walker merges updates into structural items. Recursive parent calls turn
 those items back into canonical trie nodes while untouched subtrees stay
@@ -171,11 +171,13 @@ function trie_empty_subtree() -> TrieItem =
 function trie_leaf(path : TriePath, value : TrieLeafValue) -> TrieItem =
     struct { path = path, value = LeafItem(value) }
 
+/*! Constructs a leaf item over immutable input bytes. */
 function trie_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem = {
     let leaf_value = InputTrieLeaf(value);
     trie_leaf(path, leaf_value)
 }
 
+/*! Constructs a leaf item over freshly encoded scratch bytes. */
 function trie_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem = {
     let leaf_value = ScratchTrieLeaf(value);
     trie_leaf(path, leaf_value)
@@ -222,7 +224,7 @@ function trie_child_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
 }
 
 /*md
-## Recursive subtree assembly
+## The subtree assembly
 
 The canonical builder (YP Appendix D) is expressed as a recursive partition
 of the key space. Each recursive call returns either no subtree or one

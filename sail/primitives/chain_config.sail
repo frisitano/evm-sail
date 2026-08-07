@@ -7,9 +7,7 @@ so the resulting value only carries the chain id. The schema prefix selects the
 protocol profile, so neither the fork identifier nor its blob schedule is
 repeated inside the SSZ body. Pure data — no registers, no externs.
 */
-/*! The five protocol-defined blob schedules. Keeping the fields related
-    excludes cross-products of individually valid constants which are not a
-    schedule used by any fork. */
+/*! The base-fee update fractions used by some supported blob schedule. */
 type blob_fee_update_fraction_parameter('denominator : Int) -> Bool =
        'denominator == inactive_blob_fee_update_fraction
     |  'denominator == cancun_blob_fee_update_fraction
@@ -17,6 +15,9 @@ type blob_fee_update_fraction_parameter('denominator : Int) -> Bool =
     |  'denominator == bpo1_blob_fee_update_fraction
     |  'denominator == bpo2_blob_fee_update_fraction
 
+/*! The five protocol-defined blob schedules. Keeping the fields related
+    excludes cross-products of individually valid constants which are not a
+    schedule used by any fork. */
 type blob_schedule_parameters(
     'target : Int,
     'maximum : Int,
@@ -62,6 +63,8 @@ struct BlobScheduleFields('target : Int, 'maximum : Int, 'denominator : Int),
     base_fee_update_fraction : int('denominator),
 }
 
+/*! An admitted blob schedule with its three parameters packed
+    existentially. */
 type BlobSchedule = {
     'target 'maximum 'denominator,
     blob_schedule_parameters('target, 'maximum, 'denominator).
@@ -75,26 +78,33 @@ type cancun_blob_schedule = BlobScheduleFields(
     cancun_blob_max_count,
     cancun_blob_fee_update_fraction,
 )
+/*! The exact schedule type of the Prague fork (EIP-7691). */
 type prague_blob_schedule = BlobScheduleFields(
     prague_blob_target_count,
     prague_blob_max_count,
     prague_blob_fee_update_fraction,
 )
+/*! The exact schedule type of the Osaka fork, which retains Prague's blob
+    parameters. */
 type osaka_blob_schedule = BlobScheduleFields(
     prague_blob_target_count,
     prague_blob_max_count,
     prague_blob_fee_update_fraction,
 )
+/*! The exact schedule type of the first blob-parameter-only fork. */
 type bpo1_blob_schedule = BlobScheduleFields(
     bpo1_blob_target_count,
     bpo1_blob_max_count,
     bpo1_blob_fee_update_fraction,
 )
+/*! The exact schedule type of the second blob-parameter-only fork. */
 type bpo2_blob_schedule = BlobScheduleFields(
     bpo2_blob_target_count,
     bpo2_blob_max_count,
     bpo2_blob_fee_update_fraction,
 )
+/*! The exact schedule type of the Amsterdam fork, which retains BPO2's blob
+    parameters. */
 type amsterdam_blob_schedule = BlobScheduleFields(
     bpo2_blob_target_count,
     bpo2_blob_max_count,
@@ -255,6 +265,8 @@ type profile_excess_blob_gas_limit(
         + ('maximum - 'target) * gas_per_blob_value
 )
 
+/*! Computes [profile_excess_blob_gas_limit][] from a profile's concrete
+    fork and schedule values. */
 val compute_profile_excess_blob_gas_limit : forall 'fork 'target 'maximum 'denominator,
                                                  0
                                               <= 'fork
@@ -314,6 +326,8 @@ struct ProtocolProfileFields(
     refund_divisor : int('refund_divisor),
 }
 
+/*! A protocol profile with its parameter tuple packed existentially;
+    unpacking recovers the admitted combination's equations. */
 type ProtocolProfile = {
     'fork
     'target
@@ -405,6 +419,9 @@ type gas_limits_parameters(
         else
             'profile_regular_limit)
 
+/*! The concrete gas ceilings for the executing block: the header's block
+    limit, the derived per-transaction total and regular limits, and the
+    fixed system-call limits. */
 struct GasLimitsFields(
     'block_limit : Int,
     'profile_total_limit : Int,
@@ -425,6 +442,7 @@ struct GasLimitsFields(
     system_state_limit : int(0),
 }
 
+/*! Gas limits with their five indices packed existentially. */
 type GasLimits = {
     'block_limit
     'profile_total_limit
@@ -543,6 +561,9 @@ type execution_profile_parameters(
            'transaction_regular_limit,
        )
 
+/*! The static protocol profile paired with the gas limits derived from it
+    for the executing block, sharing the profile indices so the pair cannot
+    disagree. */
 struct ExecutionProfileFields(
     'fork : Int,
     'target : Int,
@@ -593,6 +614,7 @@ struct ExecutionProfileFields(
     ),
 }
 
+/*! An execution profile with its thirteen indices packed existentially. */
 type ExecutionProfile = {
     'fork
     'target

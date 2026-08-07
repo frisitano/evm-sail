@@ -204,6 +204,7 @@ Canonical MPT construction can embed a freshly encoded child in its parent.
 Those sub-32-byte encodings live in scratch, so they use a separate cursor
 family rather than a generic source-tagged RLP cursor.
 */
+/*! [rlp_uint64_width][] over a scratch-backed content slice. */
 function scratch_rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
     content : ScratchSlice,
     width : int('n),
@@ -219,6 +220,7 @@ function scratch_rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
     }
 termination_measure scratch_rlp_uint64_width(content, width) = width
 
+/*! [rlp_ref_hdr][] over a scratch-backed source slice. */
 function scratch_rlp_ref_hdr(b : ScratchSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
     let source_len = b.len;
     if source_len == 0 then {
@@ -251,6 +253,7 @@ function scratch_rlp_ref_hdr(b : ScratchSlice) -> (bool, source_pointer, range(0
     }
 }
 
+/*! [rlp_decode_list][] over the scratch cursor family. */
 val scratch_rlp_decode_list : forall 'source_off 'source_len 'content_len,
                                 rlp_field_ref_valid('source_off, 'source_len, 'content_len). ScratchRlpFieldRef(
         'source_off,
@@ -264,6 +267,7 @@ function scratch_rlp_decode_list(f) =
         fatal_error(RlpDecode)
     }
 
+/*! [rlp_decode_item][] over the scratch cursor family. */
 val scratch_rlp_decode_item : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
         'source_off,
         'source_len,
@@ -305,6 +309,7 @@ val scratch_rlp_cursor_advance : forall 'source_off 'source_len 'consumed,
 function scratch_rlp_cursor_advance(cursor, consumed) =
     slice_suffix(cursor, consumed)
 
+/*! [rlp_cursor_expect_end][] over the scratch cursor family. */
 val scratch_rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
         'source_off,
         'source_len,
@@ -316,6 +321,7 @@ function scratch_rlp_cursor_expect_end(cursor) = {
     fatal_error(RlpDecode)
 }
 
+/*! [rlp_single_ref][] over a scratch-backed byte sequence. */
 val scratch_rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchSliceFields(
         'source_off,
         'source_len,
@@ -342,6 +348,7 @@ function scratch_rlp_single_ref(item) = {
     }
 }
 
+/*! [rlp_node_cursor][] over a freshly encoded scratch node. */
 function scratch_rlp_node_cursor(node : ScratchSlice) -> (
     {'source_off 'source_len,
      source_valid_range('source_off, 'source_len).
@@ -350,6 +357,7 @@ function scratch_rlp_node_cursor(node : ScratchSlice) -> (
     let item = scratch_rlp_single_ref(node) in
     scratch_rlp_decode_list(item)
 
+/*! [rlp_item_content][] for a scratch-backed field. */
 function scratch_rlp_item_content forall 'source_off 'source_len 'content_len,
                                     rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (
@@ -357,6 +365,7 @@ function scratch_rlp_item_content forall 'source_off 'source_len 'content_len,
 ) =
     sub_slice(f.source, f.source.len - f.content_len, f.content_len)
 
+/*! [rlp_decode_word][] for a scratch-backed field. */
 function scratch_rlp_decode_word forall 'source_off 'source_len 'content_len,
                                    rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
     ScratchRlpFieldRef('source_off, 'source_len, 'content_len)) -> (

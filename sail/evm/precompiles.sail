@@ -154,6 +154,9 @@ function precompile_id_if_active(candidate : precompile_id) -> precompile_id = {
     }
 }
 
+/*! Maps an address to its active precompile identifier; any other address,
+    including one whose precompile is not yet active at the current fork,
+    is `NotPrecompile`. */
 function precompile_id_for_address(bytes : address) -> precompile_id = {
     match bytes {
         _ if bytes == PRECOMPILE_ADDRESS_1 => precompile_id_if_active(Ecrecover),

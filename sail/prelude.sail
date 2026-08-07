@@ -225,6 +225,7 @@ let WORD_SIGN_BIT : word = word_from_bits(0x800000000000000000000000000000000000
 /* Keep every operation on the nominal EVM word inside this small algebra.
  * Arithmetic is stated over mathematical integers and reduced exactly once
  * at the EVM word boundary. */
+/*! Word addition: the integer sum reduced modulo `2^256`. */
 val word_add_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
         int('right),
@@ -234,6 +235,8 @@ function word_add_word(left, right) = {
     u256(reduced)
 }
 
+/*! Word subtraction: the integer difference modulo `2^256`, computed
+    without a negative intermediate. */
 val word_sub_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
         int('right),
@@ -246,6 +249,7 @@ function word_sub_word(left, right) =
         (maximum - (right - left)) + 1
     }
 
+/*! Bitwise conjunction of two words. */
 function word_and(left : word, right : word) -> word = {
     let left_bits = get_slice_int(256, left, 0);
     let right_bits = get_slice_int(256, right, 0);
@@ -253,6 +257,7 @@ function word_and(left : word, right : word) -> word = {
     let result = unsigned(result_bits);
     u256(result)
 }
+/*! Bitwise disjunction of two words. */
 function word_or(left : word, right : word) -> word = {
     let left_bits = get_slice_int(256, left, 0);
     let right_bits = get_slice_int(256, right, 0);
@@ -260,6 +265,7 @@ function word_or(left : word, right : word) -> word = {
     let result = unsigned(result_bits);
     u256(result)
 }
+/*! Bitwise exclusive-or of two words. */
 function word_xor(left : word, right : word) -> word = {
     let left_bits = get_slice_int(256, left, 0);
     let right_bits = get_slice_int(256, right, 0);
@@ -267,6 +273,7 @@ function word_xor(left : word, right : word) -> word = {
     let result = unsigned(result_bits);
     u256(result)
 }
+/*! Bitwise complement of a word. */
 function word_not(value : word) -> word = {
     let value_bits = get_slice_int(256, value, 0);
     let result_bits = not_vec(value_bits);
@@ -277,6 +284,8 @@ function word_bit(value : word, index : range(0, 255)) -> bit = get_slice_int(25
 val word_low_byte : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> byte
 function word_low_byte(value) = get_slice_int(8, value, 0)
 
+/*! Logical right shift by one bit position, as truncating division by
+    two. */
 function word_shift_right_one(value : word) -> word = {
     let shifted = tdiv_nat(value, 2);
     u256(shifted)
@@ -296,6 +305,7 @@ function word_of_bool(b : bool) -> word = if b then {
 val word_is_zero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
 function word_is_zero(w) = w == WORD_ZERO
 
+/*! Whether the word differs from zero. */
 val word_nonzero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
 function word_nonzero(w) = {
     let is_zero = word_is_zero(w);
@@ -310,6 +320,8 @@ val word_ult : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right &
     ) -> bool
 function word_ult(a, b) = a < b
 
+/*! Unsigned less-than-or-equal, the complement of the reversed strict
+    order. */
 val word_ule : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
         int('right),
@@ -667,23 +679,28 @@ function alu_signextend(byte_index : word, value : word) -> word = {
 
 Each comparison pushes `1` or `0`.
 */
+/*! `LT`: `1` when `a` is strictly below `b`, unsigned. */
 function alu_lt(a : word, b : word) -> word = {
     let result = word_ult(a, b);
     word_of_bool(result)
 }
+/*! `GT`: `1` when `a` is strictly above `b`, unsigned. */
 function alu_gt(a : word, b : word) -> word = {
     let result = word_ult(b, a);
     word_of_bool(result)
 }
+/*! `SLT`: `1` when `a` is strictly below `b`, two's-complement signed. */
 function alu_slt(a : word, b : word) -> word = {
     let result = word_slt(a, b);
     word_of_bool(result)
 }
+/*! `SGT`: `1` when `a` is strictly above `b`, two's-complement signed. */
 function alu_sgt(a : word, b : word) -> word = {
     let result = word_slt(b, a);
     word_of_bool(result)
 }
 function alu_eq(a : word, b : word) -> word = word_of_bool(a == b)
+/*! `ISZERO`: `1` exactly when the operand is zero. */
 function alu_iszero(a : word) -> word = {
     let result = word_is_zero(a);
     word_of_bool(result)

@@ -51,23 +51,34 @@ The slice's nominal type selects its backing region without a runtime source
 tag. RLP hashing writes the domain, list prefix, and payload into one
 scratch-backed preimage.
 */
+/*! KECCAK-256 of a range of the immutable stateless input. */
 val stateless_input_keccak256 = impure { c: "host_keccak_stateless_input" } : StatelessInputSlice -> hash
+/*! KECCAK-256 of a scratch-arena range — the composite-preimage path. */
 val scratch_keccak256 = impure { c: "host_keccak_scratch" } : ScratchSlice -> hash
+/*! KECCAK-256 of an EVM-memory range (the `KECCAK256` opcode's input). */
 val memory_keccak256 = impure { c: "host_keccak_memory" } : EvmMemorySlice -> hash
+/*! KECCAK-256 of a code-region range. */
 val code_keccak256 = impure { c: "host_keccak_code" } : CodeRegionSlice -> hash
+/*! KECCAK-256 of a frame-output range. */
 val output_keccak256 = impure { c: "host_keccak_output" } : OutputSlice -> hash
+/*! KECCAK-256 of a retained log-data range. */
 val log_data_keccak256 = impure { c: "host_keccak_log_data" } : LogDataSlice -> hash
 
+/*! SHA-256 of a range of the immutable stateless input. */
 val stateless_input_sha256 = impure { c: "host_sha256_stateless_input" } : StatelessInputSlice -> hash
+/*! SHA-256 of a scratch-arena range. */
 val scratch_sha256 = impure { c: "host_sha256_scratch" } : ScratchSlice -> hash
+/*! SHA-256 of an EVM-memory range. */
 val memory_sha256 = impure { c: "host_sha256_memory" } : EvmMemorySlice -> hash
 
+/*! KECCAK-256 of a calldata slice, dispatching on its provenance. */
 function calldata_keccak256(input : CalldataSlice) -> hash =
     match input {
         InputCalldata(bytes) => stateless_input_keccak256(bytes),
         MemoryCalldata(bytes) => memory_keccak256(bytes),
     }
 
+/*! SHA-256 of a calldata slice, dispatching on its provenance. */
 function calldata_sha256(input : CalldataSlice) -> hash =
     match input {
         InputCalldata(bytes) => stateless_input_sha256(bytes),

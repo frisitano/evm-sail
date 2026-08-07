@@ -57,6 +57,7 @@ function stateless_input_scratch_push_slice(data : StatelessInputSlice) -> unit 
     }
 }
 
+/*! Appends an existing arena-backed slice at the cursor. */
 function scratch_scratch_push_slice(data : ScratchSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
@@ -64,6 +65,7 @@ function scratch_scratch_push_slice(data : ScratchSlice) -> unit = {
     }
 }
 
+/*! Appends a retained-log-data slice at the cursor. */
 function log_data_scratch_push_slice(data : LogDataSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
@@ -71,6 +73,7 @@ function log_data_scratch_push_slice(data : LogDataSlice) -> unit = {
     }
 }
 
+/*! Appends an output-buffer-backed slice at the cursor. */
 function output_scratch_push_slice(data : OutputSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;

@@ -48,8 +48,9 @@ function protocol_word(value) = u256(value)
     The schedule is an explicit argument so its correlated target, maximum,
     and update fraction remain visible to specialization. Every mutable value
     is bounded by equations over those singleton parameters. The one-word
-    observation is semantic: execution-specs likewise converts the arbitrary
-    precision result with a checked `u256` constructor. */
+    observation is semantic: the protocol's `u256` blob-base-fee arithmetic
+    requires exactly this checked conversion of the arbitrary-precision
+    result, rejecting rather than truncating an oversized value. */
 val fake_exponential_word : forall 'target 'maximum 'denominator 'numerator,
                                  blob_schedule_parameters('target, 'maximum, 'denominator)
                               &  0
@@ -471,6 +472,8 @@ type memory_word_count_relation('byte_len : Int, 'words : Int) -> Bool =
     & 'byte_len <= 32 * 'words
     & 32 * 'words <= 'byte_len + 31
 
+/*! Computes the covering word count by exact ceiling division; the
+    dependent result carries `memory_word_count_relation`. */
 val memory_word_count : forall 'byte_len, 0 <= 'byte_len. int('byte_len) -> {'words,
                                                                              memory_word_count_relation(
                                                                                  'byte_len,
@@ -516,6 +519,9 @@ type memory_cost_relation('words : Int, 'cost : Int) -> Bool =
     0 <= 'words
     & 'cost == 3 * 'words + div('words * 'words, 512)
 
+/*! Evaluates `C_mem` for `words` words: the linear term plus the quadratic
+    term `⌊words²/512⌋`, with the singleton result related by
+    `memory_cost_relation`. */
 val mem_cost : forall 'words, memory_cost_input('words). int('words) -> {'cost,
                                                                          memory_cost_relation('words, 'cost).
                                                                          int('cost)}
@@ -787,6 +793,8 @@ function pc_word_after_declared_field(input, prefix, declared_length, byte_count
     }
 }
 
+/*! Reads the `BLAKE2F` rounds count: the big-endian 32-bit value in the
+    input's first four bytes (EIP-152). */
 function pc_blake2_rounds(input : CalldataSlice) -> blake2_rounds = {
     let rounds_word = pc_word(input, 0, 4);
     tmod_nat(rounds_word, 2 ^ 32)

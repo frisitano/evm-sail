@@ -46,13 +46,21 @@ type block_timestamp = range(0, ssz_uint_bound)
 type gas_per_blob_value : Int = 2 ^ 17
 /*! Named blob-schedule constants retained by the profile domains below. */
 type blob_schedule_inactive_count : Int = 0
+/*! Cancun's per-block blob target of 3 (EIP-4844). */
 type cancun_blob_target_count : Int = 3
+/*! Prague's per-block blob target of 6 (EIP-7691). */
 type prague_blob_target_count : Int = 6
+/*! The BPO1 per-block blob target of 10. */
 type bpo1_blob_target_count : Int = 10
+/*! The BPO2 per-block blob target of 14. */
 type bpo2_blob_target_count : Int = 14
+/*! Cancun's per-block blob maximum of 6 (EIP-4844). */
 type cancun_blob_max_count : Int = 6
+/*! Prague's per-block blob maximum of 9 (EIP-7691). */
 type prague_blob_max_count : Int = 9
+/*! The BPO1 per-block blob maximum of 15. */
 type bpo1_blob_max_count : Int = 15
+/*! The BPO2 per-block blob maximum of 21. */
 type bpo2_blob_max_count : Int = 21
 
 /*! Largest fee-update fraction in the supported blob schedules: BPO2's
@@ -62,6 +70,8 @@ type blob_fee_update_fraction_bound : Int = 11684671
     fit in the EVM's 256-bit word domain: `e^256 > 2^256`. */
 type blob_fee_word_exponent_limit : Int = 256
 
+/*! Whether a value is the inactive zero or one of the supported schedules'
+    per-block blob targets. */
 type blob_schedule_target_value('value : Int) -> Bool =
        'value == blob_schedule_inactive_count
     |  'value == cancun_blob_target_count
@@ -69,6 +79,8 @@ type blob_schedule_target_value('value : Int) -> Bool =
     |  'value == bpo1_blob_target_count
     |  'value == bpo2_blob_target_count
 
+/*! Whether a value is the inactive zero or one of the supported schedules'
+    per-block blob maxima. */
 type blob_schedule_max_value('value : Int) -> Bool =
        'value == blob_schedule_inactive_count
     |  'value == cancun_blob_max_count
@@ -96,6 +108,8 @@ type transaction_blob_limit_value('value : Int) -> Bool =
        'value == blob_schedule_inactive_count
     |  'value == cancun_blob_max_count
     |  'value == prague_blob_max_count
+/*! A fork-selected per-transaction blob limit drawn from the supported
+    schedules; zero for profiles before blob transactions activate. */
 type transaction_blob_limit = {
     'value,
     transaction_blob_limit_value('value).
@@ -132,14 +146,15 @@ type transaction_blob_gas = {
     stateless SSZ payload encode the field as `uint64`. */
 type excess_blob_gas_wire_bound : Int = ssz_uint_bound
 
-/* Union ceiling of the fork-indexed inductive equations retained by
- * `ProtocolProfile`. The expression deliberately uses the largest admitted
- * denominator and block growth rather than embedding a precomputed result. */
+/*! Union ceiling of the fork-indexed inductive equations retained by
+    `ProtocolProfile`. The expression deliberately uses the largest admitted
+    denominator and block growth rather than embedding a precomputed result. */
 type excess_blob_gas_reachable_bound : Int =
     blob_fee_word_exponent_limit * blob_fee_update_fraction_bound
     + bpo2_blob_max_count * gas_per_blob_value
 /*! The supported-fork reachable accumulated excess-blob-gas value. */
 type excess_blob_gas_bound : Int = excess_blob_gas_reachable_bound
+/*! The accumulated excess blob gas carried between headers (EIP-4844). */
 type excess_blob_gas = range(0, excess_blob_gas_bound)
 
 /*! The positive denominator governing excess-blob-gas fee adjustment. */
@@ -147,11 +162,17 @@ type blob_fee_update_fraction = range(1, blob_fee_update_fraction_bound)
 
 /*! Named EIP-4844/BPO fee-update fractions. */
 type inactive_blob_fee_update_fraction : Int = 1
+/*! Cancun's `BLOB_BASE_FEE_UPDATE_FRACTION` (EIP-4844). */
 type cancun_blob_fee_update_fraction : Int = 3338477
+/*! Prague's `BLOB_BASE_FEE_UPDATE_FRACTION` (EIP-7691). */
 type prague_blob_fee_update_fraction : Int = 5007716
+/*! The BPO1 blob-fee update fraction. */
 type bpo1_blob_fee_update_fraction : Int = 8346193
+/*! The BPO2 blob-fee update fraction (EIP-8135). */
 type bpo2_blob_fee_update_fraction : Int = 11684671
 
+/*! Whether a value is the inactive unit denominator or one of the supported
+    schedules' fee-update fractions. */
 type blob_schedule_fee_update_fraction_value('value : Int) -> Bool =
        'value == inactive_blob_fee_update_fraction
     |  'value == cancun_blob_fee_update_fraction
@@ -172,43 +193,60 @@ type blob_schedule_fee_update_fraction = {
     without a stricter transaction-gas cap admits the complete SSZ `uint64`
     block-gas domain; the concrete header limit is applied separately. */
 type pre_amsterdam_deployed_code_size_limit : Int = 24576
+/*! Amsterdam's raised deployed-code size limit of 65,536 bytes. */
 type amsterdam_deployed_code_size_limit : Int = 65536
+/*! The zero initcode limit for profiles before EIP-3860 activates. */
 type inactive_initcode_size_limit : Int = 0
+/*! The EIP-3860 initcode size limit of 49,152 bytes. */
 type pre_amsterdam_initcode_size_limit : Int = 49152
+/*! Amsterdam's raised initcode size limit of 131,072 bytes. */
 type amsterdam_initcode_size_limit : Int = 131072
+/*! The EIP-7825 per-transaction gas cap of `2^24`. */
 type eip7825_transaction_gas_limit : Int = 2 ^ 24
 
+/*! Whether a value is one of the supported deployed-code size limits. */
 type protocol_deployed_code_size_limit_value('value : Int) -> Bool =
        'value == pre_amsterdam_deployed_code_size_limit
     |  'value == amsterdam_deployed_code_size_limit
+/*! The fork-selected deployed-code size limit. */
 type protocol_deployed_code_size_limit = {
     'value,
     protocol_deployed_code_size_limit_value('value).
     int('value)
 }
 
+/*! Whether a value is the inactive zero or one of the supported initcode
+    size limits. */
 type protocol_initcode_size_limit_value('value : Int) -> Bool =
        'value == inactive_initcode_size_limit
     |  'value == pre_amsterdam_initcode_size_limit
     |  'value == amsterdam_initcode_size_limit
+/*! The fork-selected initcode size limit. Zero denotes a profile before
+    EIP-3860 activates. */
 type protocol_initcode_size_limit = {
     'value,
     protocol_initcode_size_limit_value('value).
     int('value)
 }
 
+/*! Whether a value is a supported per-transaction total-gas ceiling: the
+    EIP-7825 cap or the unrestricted SSZ block-gas domain. */
 type protocol_transaction_total_gas_limit_value('value : Int) -> Bool =
        'value == eip7825_transaction_gas_limit
     |  'value == ssz_uint_bound
+/*! The fork-selected per-transaction total-gas ceiling. */
 type protocol_transaction_total_gas_limit = {
     'value,
     protocol_transaction_total_gas_limit_value('value).
     int('value)
 }
 
+/*! Whether a value is a supported per-transaction regular-gas ceiling: the
+    EIP-7825 cap or the unrestricted SSZ block-gas domain. */
 type protocol_transaction_regular_gas_limit_value('value : Int) -> Bool =
        'value == eip7825_transaction_gas_limit
     |  'value == ssz_uint_bound
+/*! The fork-selected per-transaction regular-gas ceiling. */
 type protocol_transaction_regular_gas_limit = {
     'value,
     protocol_transaction_regular_gas_limit_value('value).
@@ -273,17 +311,24 @@ type opcode = range(0, 255)
     gas pricing, and execution are separate interpreters of this identifier so
     their protocol equations remain explicit without function-valued records. */
 enum PrecompileId = {
+    /* the closed sentinel: the address is not a precompiled contract */
     NotPrecompile,
+    /* addresses 0x01-0x04: the original Frontier precompiles */
     Ecrecover,
     Sha256,
     Ripemd160,
     Identity,
+    /* address 0x05: EIP-198 modular exponentiation */
     Modexp,
+    /* addresses 0x06-0x08: the EIP-196/EIP-197 BN254 curve precompiles */
     Bn254Add,
     Bn254Mul,
     Bn254Pairing,
+    /* address 0x09: EIP-152 BLAKE2 compression */
     Blake2f,
+    /* address 0x0a: EIP-4844 KZG point evaluation */
     KzgPointEvaluation,
+    /* addresses 0x0b-0x11: the EIP-2537 BLS12-381 precompiles */
     BlsG1Add,
     BlsG1Msm,
     BlsG2Add,
@@ -291,8 +336,11 @@ enum PrecompileId = {
     BlsPairing,
     BlsMapFpToG1,
     BlsMapFp2ToG2,
+    /* address 0x100: EIP-7951 secp256r1 signature verification */
     P256Verify,
 }
+/*! The quantity alias carried by the precompile interpreters for the closed
+    selector above. */
 type precompile_id = PrecompileId
 /*! The round count supplied to the BLAKE2 compression precompile. */
 type blake2_rounds = range(0, 2 ^ 32 - 1)
@@ -358,16 +406,28 @@ type host_valid_range('off : Int, 'len : Int) -> Bool =
     operations. Nominal slices retain their region-specific invariant. */
 type source_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= default_host_region_bound
+/*! Whether an offset/length pair is contained by the immutable
+    stateless-input envelope. */
 type stateless_input_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= stateless_input_region_bound
+/*! Whether an offset/length pair is contained by the executor scratch
+    arena. */
 type scratch_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= scratch_region_bound
+/*! Whether an offset/length pair is contained by the shared EVM-memory
+    arena. */
 type memory_region_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= memory_region_bound
+/*! Whether an offset/length pair is contained by the executable-code
+    arena. */
 type code_region_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= code_region_bound
+/*! Whether an offset/length pair is contained by retained log-data
+    storage. */
 type log_data_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= log_data_region_bound
+/*! Whether an offset/length pair is contained by the guest output
+    region. */
 type output_region_valid_range('off : Int, 'len : Int) -> Bool =
     0 <= 'off & 0 <= 'len & 'off + 'len <= output_region_bound
 /*! Whether one host byte quantity is representable. Unlike

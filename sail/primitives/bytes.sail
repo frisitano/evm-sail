@@ -17,131 +17,150 @@ is coordinate addition in both builds, and the nominal type retains provenance.
 
 The fixed lengths identify addresses, words, limbs, and double words.
 */
+$[c_repr { representation = external, name = Bytes }]
 /*! A range in the immutable stateless-input envelope. Its source is carried
     by the nominal type rather than a runtime field. */
-$[c_repr { representation = external, name = Bytes }]
 struct StatelessInputSliceFields('off : Int, 'len : Int), stateless_input_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! A stateless-input range with its coordinate and length packed
+    existentially. */
 type StatelessInputSlice = {
     'off 'len,
     stateless_input_valid_range('off, 'len).
     StatelessInputSliceFields('off, 'len)
 }
 
+/*! A stateless-input range of exactly `'required` bytes. */
 type StatelessInputSliceLength('required : Int) = {
     'off 'len,
     stateless_input_valid_range('off, 'len) & 'len == 'required.
     StatelessInputSliceFields('off, 'len)
 }
 
+/*! A stateless-input range of at least `'minimum` bytes. */
 type StatelessInputSliceAtLeast('minimum : Int) = {
     'off 'len,
     stateless_input_valid_range('off, 'len) & 0 <= 'minimum & 'minimum <= 'len.
     StatelessInputSliceFields('off, 'len)
 }
 
+/*! A stateless-input range of at most `'maximum` bytes. */
 type StatelessInputSliceAtMost('maximum : Int) = {
     'off 'len,
     stateless_input_valid_range('off, 'len) & 0 <= 'maximum & 'len <= 'maximum.
     StatelessInputSliceFields('off, 'len)
 }
 
+$[c_repr { representation = external, name = Bytes }]
 /*! A range in the executor's reusable scratch arena. Its source is carried by
     the nominal type rather than a runtime field. */
-$[c_repr { representation = external, name = Bytes }]
 struct ScratchSliceFields('off : Int, 'len : Int), scratch_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! A scratch-arena range with its coordinate and length packed
+    existentially. */
 type ScratchSlice = {
     'off 'len,
     scratch_valid_range('off, 'len).
     ScratchSliceFields('off, 'len)
 }
 
+/*! A scratch-arena range of exactly `'required` bytes. */
 type ScratchSliceLength('required : Int) = {
     'off 'len,
     scratch_valid_range('off, 'len) & 'len == 'required.
     ScratchSliceFields('off, 'len)
 }
 
+/*! A scratch-arena range of at least `'minimum` bytes. */
 type ScratchSliceAtLeast('minimum : Int) = {
     'off 'len,
     scratch_valid_range('off, 'len) & 0 <= 'minimum & 'minimum <= 'len.
     ScratchSliceFields('off, 'len)
 }
 
+$[c_repr { representation = external, name = Bytes }]
 /*! A range in the shared EVM-memory arena. Its coordinate is absolute within
     the arena (an offset in the standard ABI and a stable pointer in the
     optimized ABI), so a suspended parent's range remains valid while a child
     frame is active. */
-$[c_repr { representation = external, name = Bytes }]
 struct EvmMemorySliceFields('off : Int, 'len : Int), memory_region_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! An EVM-memory range with its coordinate and length packed
+    existentially. */
 type EvmMemorySlice = {
     'off 'len,
     memory_region_valid_range('off, 'len).
     EvmMemorySliceFields('off, 'len)
 }
 
+/*! An EVM-memory range of exactly `'required` bytes. */
 type EvmMemorySliceLength('required : Int) = {
     'off 'len,
     memory_region_valid_range('off, 'len) & 'len == 'required.
     EvmMemorySliceFields('off, 'len)
 }
 
+/*! An EVM-memory range of at least `'minimum` bytes. */
 type EvmMemorySliceAtLeast('minimum : Int) = {
     'off 'len,
     memory_region_valid_range('off, 'len) & 0 <= 'minimum & 'minimum <= 'len.
     EvmMemorySliceFields('off, 'len)
 }
 
-/*! A range in the content-addressed executable-code arena. */
 $[c_repr { representation = external, name = Bytes }]
+/*! A range in the content-addressed executable-code arena. */
 struct CodeRegionSliceFields('off : Int, 'len : Int), code_region_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! A code-region range with its coordinate and length packed
+    existentially. */
 type CodeRegionSlice = {
     'off 'len,
     code_region_valid_range('off, 'len).
     CodeRegionSliceFields('off, 'len)
 }
 
-/*! A range in the transaction-log data arena. */
 $[c_repr { representation = external, name = Bytes }]
+/*! A range in the transaction-log data arena. */
 struct LogDataSliceFields('off : Int, 'len : Int), log_data_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! A log-data range with its coordinate and length packed existentially. */
 type LogDataSlice = {
     'off 'len,
     log_data_valid_range('off, 'len).
     LogDataSliceFields('off, 'len)
 }
 
+/*! A log-data range of exactly `'required` bytes. */
 type LogDataSliceLength('required : Int) = {
     'off,
     log_data_valid_range('off, 'required).
     LogDataSliceFields('off, 'required)
 }
 
-/*! A range in the frame-output buffer. */
 $[c_repr { representation = external, name = Bytes }]
+/*! A range in the frame-output buffer. */
 struct OutputSliceFields('off : Int, 'len : Int), output_region_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),
 }
 
+/*! A frame-output range with its coordinate and length packed
+    existentially. */
 type OutputSlice = {
     'off 'len,
     output_region_valid_range('off, 'len).
@@ -152,16 +171,20 @@ type OutputSlice = {
     range of the suspended caller's memory. The variants state the only two
     protocol-valid provenances instead of exposing the host's region enum. */
 union CalldataSlice = {
+    /* the immutable top-level transaction input */
     InputCalldata : StatelessInputSlice,
+    /* a frozen range of the suspended caller's memory */
     MemoryCalldata : EvmMemorySlice,
 }
 
+/*! The byte length of a calldata slice, independent of its provenance. */
 function calldata_slice_length(s : CalldataSlice) -> source_length =
     match s {
         InputCalldata(bytes) => bytes.len,
         MemoryCalldata(bytes) => bytes.len,
     }
 
+/*! The byte length of a stateless-input slice. */
 function stateless_input_slice_length(s : StatelessInputSlice) -> source_length =
     s.len
 
@@ -325,6 +348,7 @@ val stateless_input_slice_suffix : forall 'base 'source_len 'relative,
 function stateless_input_slice_suffix(s, off) =
     struct { bytes = s.bytes + off, len = s.len - off }
 
+/*! The suffix of a scratch slice beginning at a contained relative offset. */
 val scratch_slice_suffix : forall 'base 'source_len 'relative,
                              scratch_valid_range('base, 'source_len) & 0 <= 'relative & 'relative <= 'source_len. (
         ScratchSliceFields('base, 'source_len),
