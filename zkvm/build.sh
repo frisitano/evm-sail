@@ -115,13 +115,19 @@ fi
 # EVM_LTO=on compiles every C object as LTO bitcode; cmd_zisk_lib then runs
 # the link-time optimization in a gcc partial link so the final Rust link
 # consumes one ordinary machine-code object (rust-lld cannot read GIMPLE).
+# EVM_LTO=full keeps bitcode all the way into the archive for a final link
+# that is itself gcc -flto (the C-direct guest); the entry objects then
+# participate in whole-program optimization too.
 EVM_LTO="${EVM_LTO:-off}"
 case "$EVM_LTO" in
-  on|off) ;;
-  *) echo "error: EVM_LTO must be off or on" >&2; exit 2 ;;
+  on|full|off) ;;
+  *) echo "error: EVM_LTO must be off, on, or full" >&2; exit 2 ;;
 esac
-if [ "$EVM_LTO" = on ]; then
+if [ "$EVM_LTO" != off ]; then
   CFLAGS+=(-flto)
+fi
+if [ "$EVM_LTO" = full ]; then
+  AR="${AR_FULL_LTO:-riscv64-unknown-elf-gcc-ar}"
 fi
 # --gc-sections drops the unused Sail diagnostic/format surface (and its
 # gmp_printf/asprintf references).
@@ -365,12 +371,17 @@ cmd_zisk_lib() {
   compile_common
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
-  # The platform entry points are called only from the later Rust link, so
-  # keep these two objects out of LTO: as machine code they root the LTO
-  # symbol graph and stop zkvm_start/heap_region from being internalized.
-  "$GCC" "${CFLAGS[@]}" -fno-lto -I"$lib" -Wall -Wextra \
+  # In partial-LTO mode the platform entry points are called only from the
+  # later Rust link, so those two objects stay out of LTO: as machine code
+  # they root the symbol graph and stop zkvm_start/heap_region from being
+  # internalized. A full-LTO link roots from libziskos.a's _start instead.
+  entry_lto=()
+  if [ "$EVM_LTO" = on ]; then
+    entry_lto=(-fno-lto)
+  fi
+  "$GCC" "${CFLAGS[@]}" ${entry_lto[@]+"${entry_lto[@]}"} -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
-  "$GCC" "${CFLAGS[@]}" -fno-lto -I"$lib" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" ${entry_lto[@]+"${entry_lto[@]}"} -I"$lib" -Wall -Wextra \
       -c "$HERE/zisk/platform.c" -o "$BUILD/zisk_platform.o"
   compile_profile_scope
   # `ar crs` updates an existing archive without removing members that are no

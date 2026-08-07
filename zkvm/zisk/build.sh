@@ -68,11 +68,19 @@ build_guest_c() {
     fi
 
     local gcc="${GCC:-riscv64-unknown-elf-gcc}"
+    # EVM_LTO=full performs whole-program LTO at this link; the machine-code
+    # _start in libziskos.a roots the symbol graph through main.
+    local lto_flags=()
+    if [ "${EVM_LTO:-off}" = full ]; then
+        lto_flags=(-flto -O2)
+    fi
     "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0 \
         -O2 -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -fno-pic -mno-relax \
+        ${lto_flags[@]+"${lto_flags[@]}"} \
         -Wall -Wextra -c "$HERE/main.c" -o "$BUILD/zisk_cmain.o"
     "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -mno-relax \
         -nostdlib -static -T "$HERE/link_main.ld" \
+        ${lto_flags[@]+"${lto_flags[@]}"} \
         -Wl,--no-relax -Wl,--gc-sections \
         "$BUILD/zisk_cmain.o" \
         "$BUILD/libevmsail_zisk.a" "$ziskos_lib" -lgcc \
