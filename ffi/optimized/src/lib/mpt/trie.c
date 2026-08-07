@@ -1373,31 +1373,6 @@ static bool mpt_collect_ordered_updates(MptUpdateSource source, TrieUpdateBuffer
 /* Reusable frontier of canonical entries for the bottom-up subtree merge. */
 static TrieEntryBuffer mpt_merge_entries;
 
-static size_t trie_update_lower_bound(const TrieUpdateBuffer *updates, const NibblePath *prefix)
-{
-  size_t lo = 0;
-  size_t hi = updates->count;
-  while (lo < hi) {
-    const size_t mid = lo + ((hi - lo) / 2);
-    if (nibble_path_less(&updates->entries[mid].key, prefix)) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
-
-static void trie_update_range(const TrieUpdateBuffer *updates, const NibblePath *prefix,
-                              size_t *begin, size_t *end)
-{
-  *begin = trie_update_lower_bound(updates, prefix);
-  *end = *begin;
-  while (*end < updates->count && nibble_path_prefix(prefix, &updates->entries[*end].key)) {
-    ++*end;
-  }
-}
-
 static void mpt_authenticate_absent(TrieUpdate *update)
 {
   if (update->authenticated || update->original_present) {
@@ -1502,11 +1477,12 @@ static bool mpt_build_subtree_reference(size_t begin, NodeReference *root)
 }
 
 static bool mpt_merge_node(ByteSpan encoded, uint32_t node_id, const NibblePath *prefix,
-                           TrieUpdateBuffer *updates, SubtreeMergeResult *result);
+                           TrieUpdateBuffer *updates, size_t begin, size_t end,
+                           SubtreeMergeResult *result);
 
 static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t node_id,
                                    const NibblePath *prefix, TrieUpdateBuffer *updates,
-                                   SubtreeMergeResult *result);
+                                   size_t begin, size_t end, SubtreeMergeResult *result);
 
 /*
  * Follow one changed edge in the immutable original trie. The first traversal
@@ -1524,13 +1500,14 @@ static void mpt_follow_original_child(WitnessChild *expected, ByteSpan *encoded,
 /* Trie merging descends a 64-nibble secure-key path, so recursion is bounded. */
 // NOLINTNEXTLINE(misc-no-recursion)
 static void mpt_merge_original_child(WitnessChild *original, const NibblePath *prefix,
-                                     TrieUpdateBuffer *updates, PendingNode *updated, bool *changed)
+                                     TrieUpdateBuffer *updates, size_t begin, size_t end,
+                                     PendingNode *updated, bool *changed)
 {
   ByteSpan encoded;
   uint32_t node_id = MPT_NODE_ID_UNLINKED;
   SubtreeMergeResult reduced;
   mpt_follow_original_child(original, &encoded, &node_id);
-  if (!mpt_merge_node(encoded, node_id, prefix, updates, &reduced) ||
+  if (!mpt_merge_node(encoded, node_id, prefix, updates, begin, end, &reduced) ||
       !mpt_node_reference_matches_witness(&reduced.original, original)) {
     fatal_error(WitnessDeficient);
   }
@@ -1540,26 +1517,30 @@ static void mpt_merge_original_child(WitnessChild *original, const NibblePath *p
 
 // NOLINTNEXTLINE(misc-no-recursion)
 static bool mpt_merge_node(ByteSpan encoded, uint32_t node_id, const NibblePath *prefix,
-                           TrieUpdateBuffer *updates, SubtreeMergeResult *result)
+                           TrieUpdateBuffer *updates, size_t begin, size_t end,
+                           SubtreeMergeResult *result)
 {
   DecodedNode *node = NULL;
   mpt_decode_cached_node(node_id, &node);
-  return mpt_merge_decoded_node(node, encoded, node_id, prefix, updates, result);
+  return mpt_merge_decoded_node(node, encoded, node_id, prefix, updates, begin, end, result);
 }
 
+/*
+ * The walk threads each node's update range [begin, end) down the recursion.
+ * Every update key is a full secure key carrying prefix, so a parent
+ * partitions its own range across children with the key material directly
+ * below prefix instead of re-running full binary searches per child.
+ */
 // NOLINTNEXTLINE(misc-no-recursion)
 static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t node_id,
                                    const NibblePath *prefix, TrieUpdateBuffer *updates,
-                                   SubtreeMergeResult *result)
+                                   size_t begin, size_t end, SubtreeMergeResult *result)
 {
   memset(result, 0, sizeof(*result));
   mpt_node_reference(encoded, node_id, &result->original);
   const size_t item_begin = mpt_merge_entries.count;
   bool node_changed = false;
 
-  size_t begin = 0;
-  size_t end = 0;
-  trie_update_range(updates, prefix, &begin, &end);
   if (node->kind == DECODED_NODE_LEAF) {
     NibblePath key;
     nibble_path_concat(prefix, &node->path, &key);
@@ -1603,16 +1584,35 @@ static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t
     if (node->path.len == 0) {
       fatal_error(WitnessDeficient);
     }
-    size_t child_begin = 0;
-    size_t child_end = 0;
-    trie_update_range(updates, &child_prefix, &child_begin, &child_end);
+    /* The sorted range splits around the extension segment in one linear
+     * pass: keys below it, keys carrying it (the child range), keys above. */
+    size_t child_begin = begin;
+    size_t child_end = begin;
+    for (size_t index = begin; index < end; ++index) {
+      const uint8_t *key_nibbles = updates->entries[index].key.nibbles;
+      int relation = 0;
+      for (unsigned i = 0; i < node->path.len && relation == 0; ++i) {
+        const uint8_t key_nibble = key_nibbles[prefix->len + i];
+        if (key_nibble != node->path.nibbles[i]) {
+          relation = key_nibble < node->path.nibbles[i] ? -1 : 1;
+        }
+      }
+      if (relation > 0) {
+        break;
+      }
+      child_end = index + 1;
+      if (relation < 0) {
+        child_begin = index + 1;
+      }
+    }
     const bool child_has_updates = child_begin != child_end;
     WitnessChild original_child = mpt_decoded_child(node, 0);
     const NodeReference owned_child = mpt_copy_witness_reference(&original_child);
     PendingNode child = pending_node_reference(&owned_child);
     if (child_has_updates) {
       bool changed = false;
-      mpt_merge_original_child(&original_child, &child_prefix, updates, &child, &changed);
+      mpt_merge_original_child(&original_child, &child_prefix, updates, child_begin, child_end,
+                               &child, &changed);
       node_changed |= changed;
     }
     for (size_t index = begin; index < child_begin; ++index) {
@@ -1640,13 +1640,23 @@ static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t
     if (node->value.len != 0 || prefix->len >= MPT_SECURE_KEY_NIBBLES) {
       fatal_error(WitnessDeficient);
     }
+    /* One linear pass assigns the sorted range to the 16 children by the
+     * single nibble directly below prefix. */
+    size_t child_bounds[17];
+    child_bounds[0] = begin;
+    size_t cursor = begin;
+    for (unsigned nibble = 0; nibble < 16; ++nibble) {
+      while (cursor < end && updates->entries[cursor].key.nibbles[prefix->len] == nibble) {
+        ++cursor;
+      }
+      child_bounds[nibble + 1] = cursor;
+    }
     for (unsigned nibble = 0; nibble < 16; ++nibble) {
       const NibblePath one = nibble_path_single(nibble);
       NibblePath child_prefix;
       nibble_path_concat(prefix, &one, &child_prefix);
-      size_t child_begin = 0;
-      size_t child_end = 0;
-      trie_update_range(updates, &child_prefix, &child_begin, &child_end);
+      const size_t child_begin = child_bounds[nibble];
+      const size_t child_end = child_bounds[nibble + 1];
       WitnessChild original_child = mpt_decoded_child(node, nibble);
       const NodeReference owned_child = mpt_copy_witness_reference(&original_child);
       PendingNode child = pending_node_reference(&owned_child);
@@ -1663,7 +1673,8 @@ static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t
           continue;
         }
         bool changed = false;
-        mpt_merge_original_child(&original_child, &child_prefix, updates, &child, &changed);
+        mpt_merge_original_child(&original_child, &child_prefix, updates, child_begin, child_end,
+                                 &child, &changed);
         node_changed |= changed;
       }
       if (child_begin != child_end) {
@@ -1743,7 +1754,7 @@ static bool mpt_merge_collected_updates_from_node(NodeId base_node, const bytes3
 
   const NibblePath empty = nibble_path_empty();
   SubtreeMergeResult reduced;
-  if (!mpt_merge_node(encoded, base_node, &empty, updates, &reduced)) {
+  if (!mpt_merge_node(encoded, base_node, &empty, updates, 0, updates->count, &reduced)) {
     return false;
   }
   for (size_t index = 0; index < updates->count; ++index) {
