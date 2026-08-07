@@ -365,16 +365,22 @@ uint32_t storage_trie_candidates(AccountId account_id, StorageId *begin,
   return count;
 }
 
-bool storage_trie_binding_order_key(StorageId storage_id, StorageGeneration generation,
-                                    NodeId *terminal_node, bytes32 *secure_key)
+/* Split sort-key accessors: candidate filtering checks generation liveness
+ * exactly once, after which the sorter reads terminal nodes unchecked and
+ * borrows the 32-byte secure keys only on terminal-node ties. */
+bool storage_trie_binding_live(StorageId storage_id, StorageGeneration generation)
 {
-  const StorageTrieBinding *binding = &storage_table.trie_bindings[storage_id];
-  if (storage_table.states[storage_id].storage_generation != generation) {
-    return false;
-  }
-  *terminal_node = binding->terminal_node;
-  *secure_key = binding->secure_key;
-  return true;
+  return storage_table.states[storage_id].storage_generation == generation;
+}
+
+NodeId storage_trie_binding_terminal_node(StorageId storage_id)
+{
+  return storage_table.trie_bindings[storage_id].terminal_node;
+}
+
+const bytes32 *storage_trie_binding_secure_key(StorageId storage_id)
+{
+  return &storage_table.trie_bindings[storage_id].secure_key;
 }
 
 bool storage_trie_binding_get(StorageId storage_id, StorageGeneration generation,

@@ -589,13 +589,18 @@ uint32_t account_trie_binding_count(void)
   return acct_table.count - 1U;
 }
 
-/* Exposes only the compact sort key needed by the MPT-owned sorter. Before the
- * final permutation, index is the binding-array position, not an AccountId. */
-void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, bytes32 *secure_key)
+/* Split sort-key accessors for the MPT-owned sorter: node order decides almost
+ * every comparison, so the 32-byte secure key is borrowed only on terminal-node
+ * ties (keys sharing one witness terminal via non-inclusion). Before the final
+ * permutation, index is the binding-array position, not an AccountId. */
+NodeId account_trie_binding_terminal_node(uint32_t index)
 {
-  const AccountTrieBinding *binding = &acct_table.trie_bindings[index];
-  *terminal_node = binding->terminal_node;
-  *secure_key = binding->secure_key;
+  return acct_table.trie_bindings[index].terminal_node;
+}
+
+const bytes32 *account_trie_binding_secure_key(uint32_t index)
+{
+  return &acct_table.trie_bindings[index].secure_key;
 }
 
 /* MPT finalization owns ordering and supplies a source-index-to-destination

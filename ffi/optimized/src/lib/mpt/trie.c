@@ -1173,31 +1173,34 @@ static bool mpt_order_less(MptOrderKind kind, const TrieUpdateBuffer *updates, u
 {
   NodeId left_node;
   NodeId right_node;
-  bytes32 left_key;
-  bytes32 right_key;
   switch (kind) {
   case MPT_ORDER_ACCOUNT_BINDINGS:
-    account_trie_binding_order_key(left, &left_node, &left_key);
-    account_trie_binding_order_key(right, &right_node, &right_key);
-    break;
-  case MPT_ORDER_STORAGE_BINDINGS:
-    if (!storage_trie_binding_order_key(left, order_workspace.storage_generation, &left_node,
-                                        &left_key) ||
-        !storage_trie_binding_order_key(right, order_workspace.storage_generation, &right_node,
-                                        &right_key)) {
-      GUEST_ABORT();
+    left_node = account_trie_binding_terminal_node(left);
+    right_node = account_trie_binding_terminal_node(right);
+    if (left_node != right_node) {
+      return left_node < right_node;
     }
-    break;
+    /* Distinct keys can share one witness terminal via non-inclusion, so ties
+     * are real; the 32-byte keys are borrowed only on this rare path. */
+    return hash_compare(account_trie_binding_secure_key(left),
+                        account_trie_binding_secure_key(right)) < 0;
+  case MPT_ORDER_STORAGE_BINDINGS:
+    /* Candidate filtering already established generation liveness for every
+     * sorted id, so the sort reads bindings unchecked. */
+    left_node = storage_trie_binding_terminal_node(left);
+    right_node = storage_trie_binding_terminal_node(right);
+    if (left_node != right_node) {
+      return left_node < right_node;
+    }
+    return hash_compare(storage_trie_binding_secure_key(left),
+                        storage_trie_binding_secure_key(right)) < 0;
   case MPT_ORDER_TRIE_UPDATES:
     if (updates == NULL || left >= updates->count || right >= updates->count) {
       GUEST_ABORT();
     }
     return nibble_path_less(&updates->entries[left].key, &updates->entries[right].key);
   }
-  if (left_node != right_node) {
-    return left_node < right_node;
-  }
-  return hash_compare(&left_key, &right_key) < 0;
+  GUEST_ABORT();
 }
 
 static void mpt_order_sift_down(MptOrderKind kind, const TrieUpdateBuffer *updates, uint32_t start,
@@ -1278,10 +1281,7 @@ uint32_t mpt_storage_updates_prepare(AccountId account_id, StorageGeneration *ge
   }
   uint32_t count = 0;
   for (StorageId id = begin; id < begin + candidates; ++id) {
-    NodeId terminal_node;
-    bytes32 secure_key;
-    if (storage_trie_binding_order_key(id, order_workspace.storage_generation, &terminal_node,
-                                       &secure_key)) {
+    if (storage_trie_binding_live(id, order_workspace.storage_generation)) {
       order_workspace.order[count++] = id;
     }
   }

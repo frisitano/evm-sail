@@ -41,7 +41,8 @@ typedef struct {
 } AccountTrieView;
 
 uint32_t account_trie_binding_count(void);
-void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, bytes32 *secure_key);
+NodeId account_trie_binding_terminal_node(uint32_t index);
+const bytes32 *account_trie_binding_secure_key(uint32_t index);
 void account_trie_bindings_permute(uint32_t *destinations, uint32_t count);
 bool account_trie_binding_get(uint32_t index, AccountTrieView *view);
 void account_block_initialize(AccountId account_id, bytes32 address_hash, uint64_t nonce,
