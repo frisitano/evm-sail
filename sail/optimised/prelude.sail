@@ -37,3 +37,13 @@ val u64_bit_length_native = pure { c: "u64_bit_length" } : range(0, 2 ^ 64 - 1) 
 
 function u64_bit_length(value : range(0, 2 ^ 64 - 1)) -> range(0, 64) =
     u64_bit_length_native(value)
+
+/*
+ * The exponentiation ladder is one closed word-level operation; optimized C
+ * executes it directly over 64-bit limbs so each round costs native
+ * multiplications instead of generic word helper calls.
+ */
+val word_exp_ladder = pure { c: "word_exp_ladder" } : (word, word) -> word
+
+function alu_exp(base : word, exponent : word) -> word =
+    word_exp_ladder(base, exponent)

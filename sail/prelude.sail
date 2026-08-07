@@ -612,13 +612,21 @@ function alu_exp(base : word, exponent : word) -> word = {
     var result : word = WORD_ONE;
     var b : word = base;
     var e : word = exponent;
-    foreach (_step from 0 to 255) {
+    /* Square-and-multiply over exactly the exponent's significant bits:
+       every round beyond the bit length multiplies by one and squares a
+       dead base. The final squaring feeds no later round and is skipped. */
+    var remaining : word_bit_count = word_bit_length(exponent);
+    while remaining > 0 termination_measure(remaining) do {
+        let rounds_left = remaining;
         let low_bit = word_bit(e, 0);
         if low_bit == bitone then {
             result = word_mul(result, b)
         };
-        b = word_mul(b, b);
-        e = word_shift_right_one(e)
+        if rounds_left > 1 then {
+            b = word_mul(b, b)
+        };
+        e = word_shift_right_one(e);
+        remaining = if rounds_left > 0 then rounds_left - 1 else 0
     };
     result
 }

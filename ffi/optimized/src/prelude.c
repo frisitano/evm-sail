@@ -11,10 +11,10 @@ u256 hash_to_word(bytes32 bytes)
   return (u256){
       .limbs =
           {
-              __builtin_bswap64(bytes.lanes[3]),
-              __builtin_bswap64(bytes.lanes[2]),
-              __builtin_bswap64(bytes.lanes[1]),
-              __builtin_bswap64(bytes.lanes[0]),
+              bswap64(bytes.lanes[3]),
+              bswap64(bytes.lanes[2]),
+              bswap64(bytes.lanes[1]),
+              bswap64(bytes.lanes[0]),
           },
   };
 }
@@ -24,10 +24,10 @@ bytes32 word_to_hash(u256 value)
   return (bytes32){
       .lanes =
           {
-              __builtin_bswap64(value.limbs[3]),
-              __builtin_bswap64(value.limbs[2]),
-              __builtin_bswap64(value.limbs[1]),
-              __builtin_bswap64(value.limbs[0]),
+              bswap64(value.limbs[3]),
+              bswap64(value.limbs[2]),
+              bswap64(value.limbs[1]),
+              bswap64(value.limbs[0]),
           },
   };
 }
@@ -50,10 +50,51 @@ u256 address_to_word(bytes20 bytes)
   return (u256){
       .limbs =
           {
-              __builtin_bswap64((lane1 >> 32) | (lane2 << 32)),
-              __builtin_bswap64((lane0 >> 32) | (lane1 << 32)),
-              __builtin_bswap32((uint32_t)lane0),
+              bswap64((lane1 >> 32) | (lane2 << 32)),
+              bswap64((lane0 >> 32) | (lane1 << 32)),
+              bswap32((uint32_t)lane0),
               0,
           },
   };
+}
+
+/* 256-bit low product over 64-bit limbs; the standard schoolbook carry
+ * bound keeps every partial sum inside 128 bits. */
+static u256 word_mul_low(const u256 *a, const u256 *b)
+{
+  uint64_t out[4] = {0, 0, 0, 0};
+  for (unsigned i = 0; i < 4; i++) {
+    unsigned __int128 carry = 0;
+    for (unsigned j = 0; i + j < 4; j++) {
+      carry += (unsigned __int128)a->limbs[i] * b->limbs[j] + out[i + j];
+      out[i + j] = (uint64_t)carry;
+      carry >>= 64;
+    }
+  }
+  return (u256){.limbs = {out[0], out[1], out[2], out[3]}};
+}
+
+/* Square-and-multiply over exactly the exponent's significant bits; the
+ * final squaring feeds no later round and is skipped. Matches the canonical
+ * alu_exp ladder in sail/prelude.sail. */
+u256 word_exp_ladder(u256 base, u256 exponent)
+{
+  u256 result = {.limbs = {1, 0, 0, 0}};
+  u256 b = base;
+  int top = -1;
+  for (int limb = 3; limb >= 0; limb--) {
+    if (exponent.limbs[limb] != 0) {
+      top = limb * 64 + 63 - __builtin_clzll(exponent.limbs[limb]);
+      break;
+    }
+  }
+  for (int bit = 0; bit <= top; bit++) {
+    if ((exponent.limbs[bit >> 6] >> (bit & 63)) & UINT64_C(1)) {
+      result = word_mul_low(&result, &b);
+    }
+    if (bit < top) {
+      b = word_mul_low(&b, &b);
+    }
+  }
+  return result;
 }
