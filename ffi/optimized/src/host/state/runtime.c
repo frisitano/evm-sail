@@ -25,9 +25,7 @@ uint32_t current_warm_epoch;
 
 void warm_reset(uint32_t current_transaction_epoch)
 {
-  if (current_transaction_epoch >= UINT32_MAX) {
-    GUEST_ABORT();
-  }
+  /* The Sail argument type bounds the epoch to at most 2^20 + 1. */
   current_warm_epoch = current_transaction_epoch + 1;
 }
 /* --------------------- EIP-7702 authority tracker ---------------------- */

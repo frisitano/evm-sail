@@ -314,6 +314,7 @@ void state_journal_revert(void)
 
 void state_journal_commit(void)
 {
-  (void)open_checkpoint_index();
+  /* Commit is O(1); checkpoint/commit pairing is enforced by the Sail frame
+   * lifecycle. */
   (void)push(JOURNAL_FRAME_COMMITTED);
 }

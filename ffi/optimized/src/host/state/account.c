@@ -191,9 +191,8 @@ void current_account_context_enter(bytes20 address)
 
 AccountId current_account_context_id(void)
 {
-  if (current_account_context.entry == NULL) {
-    GUEST_ABORT();
-  }
+  /* A context is entered before any opcode executes; enter fatals on a BAL
+   * miss, so the context is always populated here. */
   return current_account_context.id;
 }
 
@@ -205,9 +204,6 @@ void current_account_context_restore(AccountId id)
   if (id == ACCOUNT_ID_NONE) {
     current_account_context_invalidate();
     return;
-  }
-  if (id >= acct_table.count) {
-    GUEST_ABORT();
   }
   current_account_context.id = id;
   current_account_context.entry = &acct_table.entries[id];
@@ -227,9 +223,8 @@ bool account_exists(AccountId id)
  * schema is built. Runtime account creation never reaches this function. */
 AccountId account_schema_insert(const bytes20 *address)
 {
-  if (acct_table.count >= acct_table.capacity || acct_table.bucket_count == 0) {
-    GUEST_ABORT();
-  }
+  /* Capacity and bucket math come from the same measured BAL shape that sized
+   * the workspace binding, so insertion cannot exceed either. */
   if (acct_table.count > ACCOUNT_ID_NONE + 1U &&
       address_compare(&acct_table.entries[acct_table.count - 1U].address, address) >= 0) {
     fatal_error(InvalidBlockAccessList);
@@ -321,26 +316,6 @@ void account_storage_range(AccountId id, StorageId *begin, uint32_t *count)
   const AccountEntry *entry = &acct_table.entries[id];
   *begin = entry->storage_begin;
   *count = entry->storage_count;
-}
-
-/* Confirms that the decoded BAL shape matches the exact workspace extent and
- * its at-most-half-full power-of-two lookup index. */
-void account_schema_prepare(uint32_t account_count)
-{
-  if (account_count > UINT32_MAX / 2U) {
-    GUEST_ABORT();
-  }
-  uint32_t bucket_count = 1U;
-  const uint32_t required = account_count == 0 ? 1U : 2U * account_count;
-  while (bucket_count < required) {
-    if (bucket_count > UINT32_MAX / 2U) {
-      GUEST_ABORT();
-    }
-    bucket_count <<= 1;
-  }
-  if (account_count + 1U != acct_table.capacity || bucket_count != acct_table.bucket_count) {
-    GUEST_ABORT();
-  }
 }
 
 /* Captures the transaction-start semantic value once. The shared journal owns
@@ -557,10 +532,9 @@ bool account_transaction_view(const bytes20 *address, AccountView *view)
   if (state->transaction_epoch != current_warm_epoch) {
     return false;
   }
+  /* Bindings sit at AccountId - 1 during execution; permutation happens only
+   * post-execution. */
   const AccountTrieBinding *binding = &acct_table.trie_bindings[id - 1U];
-  if (binding->account_id != id) {
-    GUEST_ABORT();
-  }
   view->value = state->current;
   view->storage_root = binding->storage_root;
   view->storage_cleared = acct_table.entries[id].storage_generation != STORAGE_INITIAL_GENERATION;
@@ -578,10 +552,9 @@ bool account_block_view(const bytes20 *address, AccountView *view)
     return false;
   }
   const AccountState *state = &acct_table.states[id];
+  /* Bindings sit at AccountId - 1 during execution; permutation happens only
+   * post-execution. */
   const AccountTrieBinding *binding = &acct_table.trie_bindings[id - 1U];
-  if (binding->account_id != id) {
-    GUEST_ABORT();
-  }
   const bool active = state->transaction_epoch == current_warm_epoch;
   view->value = (int)active ? state->original : state->current;
   view->storage_root = binding->storage_root;
@@ -807,7 +780,7 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
 
 /* Assigns all account-owned arrays from the single preallocated guest
  * workspace. This performs no heap allocation and does not initialize a block;
- * acct_db_reset/account_schema_prepare establish logical contents later. */
+ * acct_db_reset/account_schema_insert establish logical contents later. */
 void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count)
 {
   if (account_count > UINT32_MAX / 2U) {

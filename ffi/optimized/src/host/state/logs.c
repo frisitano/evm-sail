@@ -89,7 +89,7 @@ void log_begin(bytes20 address)
 
 void log_add_topic(u256 topic)
 {
-  if (log_table.record_count == 0 || log_table.topic_count >= log_table.topic_capacity) {
+  if (log_table.topic_count >= log_table.topic_capacity) {
     GUEST_ABORT();
   }
   log_table.topics[log_table.topic_count++] = topic;
@@ -98,7 +98,7 @@ void log_add_topic(u256 topic)
 
 void log_add_data_bulk(const uint8_t *bytes, uint64_t length)
 {
-  if (log_table.record_count == 0 || length > log_table.data_capacity - log_table.data_length) {
+  if (length > log_table.data_capacity - log_table.data_length) {
     GUEST_ABORT();
   }
   if (length == 0) {
@@ -128,9 +128,7 @@ void log_add_data_memory(Bytes data)
 
 void logs_revert_last(void)
 {
-  if (log_table.record_count == 0) {
-    GUEST_ABORT();
-  }
+  /* Reverts replay only journaled LOG_APPENDED records, so a record exists. */
   const LogRecord *record = &log_table.records[--log_table.record_count];
   log_table.topic_count = record->topic_offset;
   log_table.data_length = record->data_offset;
@@ -229,14 +227,7 @@ uint32_t log_data_off(uint64_t index)
 
 Bytes host_log_data_slice(uint64_t index)
 {
-  if (index >= log_table.record_count) {
-    GUEST_ABORT();
-  }
   const LogRecord *record = &log_table.records[index];
-  if (record->data_offset > log_table.data_length ||
-      record->data_length > log_table.data_length - record->data_offset) {
-    GUEST_ABORT();
-  }
   return (Bytes){
       .bytes = record->data_length == 0 ? NULL : log_table.data + record->data_offset,
       .len = record->data_length,

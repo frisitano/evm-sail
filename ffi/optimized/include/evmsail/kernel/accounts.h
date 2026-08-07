@@ -8,7 +8,7 @@
 
 /* Materializes one authenticated block account into the AccountId assigned by
  * BAL schema construction, without recording an EVM/BAL access. */
-bool account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 address_hash,
+void account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 address_hash,
                      struct Account *account, NodeId *storage_root_node);
 
 #endif

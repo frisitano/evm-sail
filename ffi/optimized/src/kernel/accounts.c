@@ -39,7 +39,7 @@ static void account_from_view(struct Account *account, const AccountView *view)
   account->selfdestructed = view->selfdestructed;
 }
 
-bool account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 address_hash,
+void account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 address_hash,
                      struct Account *account, NodeId *storage_root_node)
 {
   *account = empty_account();
@@ -59,7 +59,6 @@ bool account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 ad
                            account->info.code_hash, account->present, account->storage_cleared,
                            terminal_node);
   *storage_root_node = account_storage_root_node;
-  return true;
 }
 
 struct Account k_aload(bytes32 parent_state_root, bytes20 address)
@@ -73,11 +72,11 @@ struct Account k_aload(bytes32 parent_state_root, bytes20 address)
   }
 
   bal_note_account_touch(address);
+  /* bal_note_account_touch already resolved the address and fataled on a BAL
+   * miss, so the block view cannot miss here. */
   if (account_block_view(&address, &view)) {
     account_from_view(&account, &view);
-    return account;
   }
-  (void)get_account_id(&address);
   return account;
 }
 

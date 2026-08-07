@@ -112,7 +112,6 @@ typedef union {
 } AccountRestorePrior;
 
 uint32_t account_id_count(void);
-void account_schema_prepare(uint32_t account_count);
 AccountId account_schema_insert(const bytes20 *address);
 const bytes20 *account_id_address(AccountId id);
 AccountId lookup_account_id(const bytes20 *address);

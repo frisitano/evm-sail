@@ -9,7 +9,7 @@
 /* Materializes one authenticated block storage value without recording an
  * EVM/BAL access. The BAL initialization pass uses this to construct the
  * block-local storage table before execution begins. */
-bool storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
+void storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
                      StorageId *storage_id, struct StorageValue *value);
 
 #endif

@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string.h>
 
-bool storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
+void storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
                      StorageId *storage_id, struct StorageValue *value)
 {
   memset(value, 0, sizeof(*value));
@@ -33,7 +33,6 @@ bool storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
   value->orig = value->curr;
   storage_block_initialize(account_id, id, value->curr, terminal_node, prestate_exists);
   *storage_id = id;
-  return true;
 }
 
 struct StorageValue storage_load_by_id(bytes32 parent_state_root, bytes20 address, u256 slot,

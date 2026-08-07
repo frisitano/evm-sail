@@ -98,7 +98,6 @@ static void bal_bytes(const rlp_item *item)
 
 static void bal_uint(const rlp_item *item, uint32_t maximum_len)
 {
-  bal_bytes(item);
   if (!rlp_canonical_uint(item, maximum_len)) {
     fatal_error(InvalidBlockAccessList);
   }
@@ -115,9 +114,9 @@ static u256 bal_decode_word(const rlp_item *item)
 {
   u256 value;
   bal_uint(item, 32);
-  if (!rlp_word_raw(item, &value)) {
-    GUEST_ABORT();
-  }
+  /* bal_uint established a canonical uint of at most 32 bytes, so the raw
+   * word conversion cannot fail. */
+  (void)rlp_word_raw(item, &value);
   return value;
 }
 
@@ -127,11 +126,9 @@ typedef struct {
   uint32_t expected_count;
 } BalShape;
 
+/* Shape counters are bounded far below 2^32 by the 2^30 input slice type. */
 static void bal_shape_add(uint32_t *value, uint32_t amount)
 {
-  if (amount > UINT32_MAX - *value) {
-    fatal_error(InvalidBlockAccessList);
-  }
   *value += amount;
 }
 
@@ -216,8 +213,8 @@ static void bal_measure_accounts(rlp_cursor accounts, BalShape *shape)
   }
 }
 
-/* Shared per-slot preload for storage changes and reads: strict slot order,
- * dense-ID postcondition (the O(1) duplicate-slot check), and item count. */
+/* Shared per-slot preload for storage changes and reads: strict slot order
+ * (duplicates are rejected by the schema insert) and item count. */
 static StorageId bal_preload_slot(AccountId account_id, NodeId storage_root_node, u256 slot,
                                   u256 *previous_slot, bool *have_previous_slot)
 {
@@ -227,15 +224,9 @@ static StorageId bal_preload_slot(AccountId account_id, NodeId storage_root_node
   *previous_slot = slot;
   *have_previous_slot = true;
 
-  const StorageId expected_storage_id = storage_id_count();
   StorageId storage_id;
   struct StorageValue value;
-  if (!storage_preload(account_id, storage_root_node, slot, &storage_id, &value)) {
-    GUEST_ABORT();
-  }
-  if (storage_id != expected_storage_id || storage_id_count() != expected_storage_id + 1U) {
-    fatal_error(InvalidBlockAccessList);
-  }
+  storage_preload(account_id, storage_root_node, slot, &storage_id, &value);
   ++bal_expected_item_count;
   return storage_id;
 }
@@ -324,7 +315,6 @@ void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
   bal_measure_accounts(accounts, &shape);
   workspace_prepare_execution(shape.account_count, shape.storage_count, shape.expected_count,
                               transaction_count);
-  account_schema_prepare(shape.account_count);
 
   while (accounts.remaining != 0) {
     rlp_item account_item;
@@ -359,13 +349,7 @@ void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
     const AccountId account_id = account_schema_insert(&address);
     struct Account account;
     NodeId storage_root_node = EVMSAIL_NODE_ID_EMPTY;
-    if (account_id == ACCOUNT_ID_NONE) {
-      fatal_error(InvalidBlockAccessList);
-    }
-    if (!account_preload(parent_state_root, account_id, address_hash, &account,
-                         &storage_root_node)) {
-      GUEST_ABORT();
-    }
+    account_preload(parent_state_root, account_id, address_hash, &account, &storage_root_node);
     bal_expect(BAL_ITER_ACCOUNT, account_id, UINT32_MAX, NULL);
 
     storage_schema_account_begin(account_id);

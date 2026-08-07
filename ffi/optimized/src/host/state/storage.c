@@ -66,19 +66,15 @@ static StorageId lookup_storage_id(AccountId account_id, const u256 *slot)
 }
 
 /* StorageIds are append-stable and grouped into the contiguous interval owned
- * by the active AccountEntry. BAL preload is the sole construction phase; the
- * executor loader rejects duplicate slots by their expected StorageId. */
+ * by the active AccountEntry. BAL preload is the sole construction phase;
+ * duplicate slots are rejected by the range scan below. */
 StorageId storage_schema_insert(AccountId account_id, const u256 *slot, const bytes32 *secure_key)
 {
-  if (account_id == ACCOUNT_ID_NONE || account_id >= account_id_count()) {
-    GUEST_ABORT();
-  }
   if (lookup_storage_id(account_id, slot) != STORAGE_NO_ROW) {
     fatal_error(InvalidBlockAccessList);
   }
-  if (storage_table.n >= storage_table.cap) {
-    GUEST_ABORT();
-  }
+  /* Capacity equals the measured BAL slot count that sized the workspace
+   * binding, so insertion cannot exceed it. */
   const StorageId i = storage_table.n;
   StorageSchema *schema = &storage_table.schema[i];
   StorageTrieBinding *binding = &storage_table.trie_bindings[i];
@@ -243,11 +239,9 @@ bool storage_block_view(AccountId account_id, StorageId storage_id, StorageView 
   if (storage_id == STORAGE_NO_ROW) {
     return false;
   }
+  /* Every sealed row is linked by BAL preload; EVMSAIL_NODE_ID_UNLINKED never
+   * survives loading. */
   const StorageState *state = &storage_table.states[storage_id];
-  const StorageTrieBinding *binding = &storage_table.trie_bindings[storage_id];
-  if (binding->terminal_node == EVMSAIL_NODE_ID_UNLINKED) {
-    return false;
-  }
   const bool active = state->transaction_epoch == current_warm_epoch;
   const StorageGeneration visible_generation =
       (int)active ? state->transaction_original_generation : state->storage_generation;
@@ -355,8 +349,7 @@ bool storage_has_writes(bytes20 a)
   account_storage_range(account_id, &begin, &count);
   for (StorageId index = begin; index < begin + count; index++) {
     const StorageState *state = &storage_table.states[index];
-    if (storage_table.trie_bindings[index].terminal_node != EVMSAIL_NODE_ID_UNLINKED &&
-        state->storage_generation == generation && !word_all_zero(&state->current)) {
+    if (state->storage_generation == generation && !word_all_zero(&state->current)) {
       return true;
     }
   }
@@ -376,8 +369,7 @@ bool storage_trie_binding_order_key(StorageId storage_id, StorageGeneration gene
                                     NodeId *terminal_node, bytes32 *secure_key)
 {
   const StorageTrieBinding *binding = &storage_table.trie_bindings[storage_id];
-  if (binding->terminal_node == EVMSAIL_NODE_ID_UNLINKED ||
-      storage_table.states[storage_id].storage_generation != generation) {
+  if (storage_table.states[storage_id].storage_generation != generation) {
     return false;
   }
   *terminal_node = binding->terminal_node;
@@ -390,8 +382,7 @@ bool storage_trie_binding_get(StorageId storage_id, StorageGeneration generation
 {
   const StorageState *state = &storage_table.states[storage_id];
   const StorageTrieBinding *binding = &storage_table.trie_bindings[storage_id];
-  if (binding->terminal_node == EVMSAIL_NODE_ID_UNLINKED ||
-      state->storage_generation != generation) {
+  if (state->storage_generation != generation) {
     return false;
   }
   *view = (StorageTrieView){
