@@ -8,27 +8,21 @@
 
 #include "evmsail/host/environment.h"
 #include "workspace.h"
+#include <stdint.h>
 
-#include <string.h>
+static bytes32 *ancestor_hashes;
 
-static Hash32 *ancestor_hashes;
-
-void environment_workspace_bind(void) {
+void environment_workspace_bind(void)
+{
   WORKSPACE_BIND(ancestor_hashes, GUEST_ANCESTOR_HASHES);
 }
 
-unit environment_reset(const unit u) {
-  (void)u;
-  memset(ancestor_hashes, 0,
-         GUEST_ANCESTOR_HASHES * sizeof(*ancestor_hashes));
-  return UNIT;
-}
-
-unit ancestor_hash_write(uint8_t index, Hash32 hash) {
+void ancestor_hash_write(uint8_t index, bytes32 hash)
+{
   ancestor_hashes[index] = hash;
-  return UNIT;
 }
 
-Hash32 ancestor_hash_read(uint8_t index) {
+bytes32 ancestor_hash_read(uint8_t index)
+{
   return ancestor_hashes[index];
 }

@@ -120,9 +120,17 @@ function hash_to_word(bytes : hash) -> word =
         @ bytes[31],
     )
 
+/*! Interprets one full-width bitvector as an EVM word. This named boundary
+    keeps protocol constants readable without hiding conversion chains. */
+function word_from_bits(value : bits(256)) -> word = {
+    let natural_value = unsigned(value);
+    u256(natural_value)
+}
+
 /*! Serializes an EVM word as a 32-byte big-endian digest. */
 function word_to_hash(value : word) -> hash = {
-    var result : hash = B256(vector_init(32, 0x00));
+    let zero_bytes = vector_init(32, 0x00);
+    var result : hash = B256(zero_bytes);
     result[0] = get_slice_int(8, value, 248);
     result[1] = get_slice_int(8, value, 240);
     result[2] = get_slice_int(8, value, 232);
@@ -160,7 +168,8 @@ function word_to_hash(value : word) -> hash = {
 
 /*! Converts a word to its low 160-bit address in canonical byte order. */
 function word_to_address(value : word) -> address = {
-    var result : address = Address(vector_init(20, 0x00));
+    let zero_bytes = vector_init(20, 0x00);
+    var result : address = Address(zero_bytes);
     result[0] = get_slice_int(8, value, 152);
     result[1] = get_slice_int(8, value, 144);
     result[2] = get_slice_int(8, value, 136);
@@ -184,15 +193,34 @@ function word_to_address(value : word) -> address = {
     result
 }
 
-/* the all-zero word / address constants */
-let ZERO_WORD : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
-let ZERO_ADDRESS : address = Address(vector_init(20, 0x00))
-let ZERO_HASH : hash = B256(vector_init(32, 0x00))
+/*! Interprets canonical full-width bits directly as a digest. */
+function hash_from_bits(value : bits(256)) -> hash = {
+    let word_value = word_from_bits(value);
+    word_to_hash(word_value)
+}
 
-let WORD_ZERO : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000000))
-let WORD_ONE : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000000001))
-let WORD_ALL_ONES : word = u256(unsigned(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
-let WORD_SIGN_BIT : word = u256(unsigned(0x8000000000000000000000000000000000000000000000000000000000000000))
+/*! Interprets the low 160 bits of full-width bits as an address. */
+function address_from_bits(value : bits(256)) -> address = {
+    let word_value = word_from_bits(value);
+    word_to_address(word_value)
+}
+
+/*! Constructs a small protocol address through the canonical word path. */
+val address_from_nat : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> address
+function address_from_nat(value) = {
+    let word_value = u256(value);
+    word_to_address(word_value)
+}
+
+/* the all-zero word / address constants */
+let ZERO_WORD : word = word_from_bits(0x0000000000000000000000000000000000000000000000000000000000000000)
+let ZERO_ADDRESS : address = address_from_bits(0x0000000000000000000000000000000000000000000000000000000000000000)
+let ZERO_HASH : hash = hash_from_bits(0x0000000000000000000000000000000000000000000000000000000000000000)
+
+let WORD_ZERO : word = word_from_bits(0x0000000000000000000000000000000000000000000000000000000000000000)
+let WORD_ONE : word = word_from_bits(0x0000000000000000000000000000000000000000000000000000000000000001)
+let WORD_ALL_ONES : word = word_from_bits(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+let WORD_SIGN_BIT : word = word_from_bits(0x8000000000000000000000000000000000000000000000000000000000000000)
 
 /* Keep every operation on the nominal EVM word inside this small algebra.
  * Arithmetic is stated over mathematical integers and reduced exactly once
@@ -201,8 +229,10 @@ val word_add_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'ri
         int('left),
         int('right),
     ) -> word
-function word_add_word(left, right) =
-    u256(tmod_nat(left + right, sizeof(word_modulus)))
+function word_add_word(left, right) = {
+    let reduced = tmod_nat(left + right, sizeof(word_modulus));
+    u256(reduced)
+}
 
 val word_sub_word : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right & 'right < 2 ^ 256. (
         int('left),
@@ -216,19 +246,41 @@ function word_sub_word(left, right) =
         (maximum - (right - left)) + 1
     }
 
-function word_and(left : word, right : word) -> word =
-    u256(unsigned(and_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
-function word_or(left : word, right : word) -> word =
-    u256(unsigned(or_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
-function word_xor(left : word, right : word) -> word =
-    u256(unsigned(xor_vec(get_slice_int(256, left, 0), get_slice_int(256, right, 0))))
-function word_not(value : word) -> word = u256(unsigned(not_vec(get_slice_int(256, value, 0))))
+function word_and(left : word, right : word) -> word = {
+    let left_bits = get_slice_int(256, left, 0);
+    let right_bits = get_slice_int(256, right, 0);
+    let result_bits = and_vec(left_bits, right_bits);
+    let result = unsigned(result_bits);
+    u256(result)
+}
+function word_or(left : word, right : word) -> word = {
+    let left_bits = get_slice_int(256, left, 0);
+    let right_bits = get_slice_int(256, right, 0);
+    let result_bits = or_vec(left_bits, right_bits);
+    let result = unsigned(result_bits);
+    u256(result)
+}
+function word_xor(left : word, right : word) -> word = {
+    let left_bits = get_slice_int(256, left, 0);
+    let right_bits = get_slice_int(256, right, 0);
+    let result_bits = xor_vec(left_bits, right_bits);
+    let result = unsigned(result_bits);
+    u256(result)
+}
+function word_not(value : word) -> word = {
+    let value_bits = get_slice_int(256, value, 0);
+    let result_bits = not_vec(value_bits);
+    let result = unsigned(result_bits);
+    u256(result)
+}
 function word_bit(value : word, index : range(0, 255)) -> bit = get_slice_int(256, value, 0)[index]
 val word_low_byte : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> byte
 function word_low_byte(value) = get_slice_int(8, value, 0)
 
-function word_shift_right_one(value : word) -> word =
-    u256(tdiv_nat(value, 2))
+function word_shift_right_one(value : word) -> word = {
+    let shifted = tdiv_nat(value, 2);
+    u256(shifted)
+}
 
 /*md
 ## Helpers
@@ -236,12 +288,19 @@ function word_shift_right_one(value : word) -> word =
 ### Integer ↔ word conversion
 */
 /*! `1` if the condition holds, else `0` — the EVM boolean convention. */
-function word_of_bool(b : bool) -> word = if b then { WORD_ONE } else { WORD_ZERO }
+function word_of_bool(b : bool) -> word = if b then {
+    WORD_ONE
+} else {
+    WORD_ZERO
+}
 val word_is_zero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
 function word_is_zero(w) = w == WORD_ZERO
 
 val word_nonzero : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> bool
-function word_nonzero(w) = not_bool(word_is_zero(w))
+function word_nonzero(w) = {
+    let is_zero = word_is_zero(w);
+    not_bool(is_zero)
+}
 
 /*! Unsigned word order.  Narrower natural ranges are word subtypes, so the
     same functions also accept statically bounded operands. */
@@ -255,34 +314,43 @@ val word_ule : forall 'left 'right, 0 <= 'left & 'left < 2 ^ 256 & 0 <= 'right &
         int('left),
         int('right),
     ) -> bool
-function word_ule(a, b) = not_bool(word_ult(b, a))
+function word_ule(a, b) = {
+    let greater = word_ult(b, a);
+    not_bool(greater)
+}
 
 /*! Returns the position above a 64-bit value's most significant set bit.
     Sail defines leading-zero count over fixed bitvectors in every semantic
     backend; subtracting it from the vector width also gives zero for zero. */
-function u64_bit_length(value : range(0, 2 ^ 64 - 1)) -> range(0, 64) =
-    let leading : range(0, 64) =
-        count_leading_zeros(get_slice_int(64, value, 0))
-    in 64 - leading
+function u64_bit_length(value : range(0, 2 ^ 64 - 1)) -> range(0, 64) = {
+    let value_bits = get_slice_int(64, value, 0);
+    let leading : range(0, 64) = count_leading_zeros(value_bits);
+    64 - leading
+}
 
 /*! Returns the position above a word's most significant set bit.  The
     logarithmic decomposition keeps both the mathematical specification and
     native execution bounded without scanning all 256 bit positions. */
 val word_bit_length : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> word_bit_count
 function word_bit_length(value) = {
-    let limb3 = unsigned(get_slice_int(64, value, 192));
+    let limb3_bits = get_slice_int(64, value, 192);
+    let limb3 = unsigned(limb3_bits);
     if limb3 != 0 then {
         192 + u64_bit_length(limb3)
     } else {
-        let limb2 = unsigned(get_slice_int(64, value, 128));
+        let limb2_bits = get_slice_int(64, value, 128);
+        let limb2 = unsigned(limb2_bits);
         if limb2 != 0 then {
             128 + u64_bit_length(limb2)
         } else {
-            let limb1 = unsigned(get_slice_int(64, value, 64));
+            let limb1_bits = get_slice_int(64, value, 64);
+            let limb1 = unsigned(limb1_bits);
             if limb1 != 0 then {
                 64 + u64_bit_length(limb1)
             } else {
-                u64_bit_length(unsigned(get_slice_int(64, value, 0)))
+                let limb0_bits = get_slice_int(64, value, 0);
+                let limb0 = unsigned(limb0_bits);
+                u64_bit_length(limb0)
             }
         }
     }
@@ -313,7 +381,8 @@ function word_div_word(dividend, divisor) = {
     if divisor == 0 then {
         WORD_ZERO
     } else {
-        u256(tdiv_nat(dividend, divisor))
+        let quotient = tdiv_nat(dividend, divisor);
+        u256(quotient)
     }
 }
 
@@ -329,7 +398,8 @@ function word_mod_word(dividend, divisor) = {
     if divisor == 0 then {
         WORD_ZERO
     } else {
-        u256(tmod_nat(dividend, divisor))
+        let remainder = tmod_nat(dividend, divisor);
+        u256(remainder)
     }
 }
 overload word_mod = {word_mod_word}
@@ -343,12 +413,18 @@ function word_greater_than_word(left, right) = left > right
 
 /*! Shifts a word left by a bounded count, yielding zero at the width. */
 function word_shift_left(value : word, amount : word_bit_count) -> word = {
-    u256(unsigned(sail_shiftleft(get_slice_int(256, value, 0), amount)))
+    let value_bits = get_slice_int(256, value, 0);
+    let shifted_bits = sail_shiftleft(value_bits, amount);
+    let shifted = unsigned(shifted_bits);
+    u256(shifted)
 }
 
 /*! Shifts a word right logically by a bounded count. */
-function word_shift_right(value : word, amount : word_bit_count) -> word =
-    unsigned(sail_shiftright(get_slice_int(256, value, 0), amount))
+function word_shift_right(value : word, amount : word_bit_count) -> word = {
+    let value_bits = get_slice_int(256, value, 0);
+    let shifted_bits = sail_shiftright(value_bits, amount);
+    unsigned(shifted_bits)
+}
 
 /*! Returns the number of significant bytes in a word. */
 val word_byte_length : forall 'value, 0 <= 'value & 'value < 2 ^ 256. int('value) -> range(0, 32)
@@ -364,7 +440,8 @@ function word_byte_length(value) = {
 /*! Shifts a two's-complement word right while extending its sign bit. */
 function word_arithmetic_shift_right(value : word, amount : word_bit_count) -> word = {
     let shifted = word_shift_right(value, amount);
-    if word_bit(value, 255) == bitone then {
+    let sign_bit = word_bit(value, 255);
+    if sign_bit == bitone then {
         let sign_fill = word_shift_left(WORD_ALL_ONES, 256 - amount);
         word_or(shifted, sign_fill)
     } else {
@@ -400,12 +477,14 @@ function address_to_word(bytes : address) -> word =
 function word_negate(value : word) -> word = word_sub(WORD_ZERO, value)
 
 /*! Returns the unsigned magnitude of a two's-complement word. */
-function word_abs(value : word) -> word =
-    if word_bit(value, 255) == bitone then {
+function word_abs(value : word) -> word = {
+    let sign_bit = word_bit(value, 255);
+    if sign_bit == bitone then {
         word_negate(value)
     } else {
         value
     }
+}
 
 /*! Signed (two's-complement) 256-bit less-than: sign bits decide when they
     differ, otherwise the unsigned order applies. */
@@ -418,12 +497,10 @@ function word_slt(a : word, b : word) -> bool = {
         } else {
             true
         }
+    } else if b_neg then {
+        false
     } else {
-        if b_neg then {
-            false
-        } else {
-            word_ult(a, b)
-        }
+        word_ult(a, b)
     }
 }
 
@@ -458,11 +535,16 @@ function alu_mod(a : word, b : word) -> word =
     yields `0`. */
 function alu_sdiv(a : word, b : word) -> word = {
     /* SDIV */
-    if word_is_zero(b) then {
+    let divisor_is_zero = word_is_zero(b);
+    if divisor_is_zero then {
         WORD_ZERO
     } else {
-        let quotient = word_div(word_abs(a), word_abs(b));
-        if (word_bit(a, 255) == bitone) != (word_bit(b, 255) == bitone) then {
+        let dividend_magnitude = word_abs(a);
+        let divisor_magnitude = word_abs(b);
+        let quotient = word_div(dividend_magnitude, divisor_magnitude);
+        let dividend_sign = word_bit(a, 255);
+        let divisor_sign = word_bit(b, 255);
+        if (dividend_sign == bitone) != (divisor_sign == bitone) then {
             word_negate(quotient)
         } else {
             quotient
@@ -474,11 +556,15 @@ function alu_sdiv(a : word, b : word) -> word = {
     yields `0`. */
 function alu_smod(a : word, b : word) -> word = {
     /* SMOD */
-    if word_is_zero(b) then {
+    let modulus_is_zero = word_is_zero(b);
+    if modulus_is_zero then {
         WORD_ZERO
     } else {
-        let remainder = word_mod(word_abs(a), word_abs(b));
-        if word_bit(a, 255) == bitone then {
+        let dividend_magnitude = word_abs(a);
+        let modulus_magnitude = word_abs(b);
+        let remainder = word_mod(dividend_magnitude, modulus_magnitude);
+        let dividend_sign = word_bit(a, 255);
+        if dividend_sign == bitone then {
             word_negate(remainder)
         } else {
             remainder
@@ -498,7 +584,8 @@ function alu_addmod(a, b, n) = {
     if n == 0 then {
         WORD_ZERO
     } else {
-        u256(tmod_nat(a + b, n))
+        let remainder = tmod_nat(a + b, n);
+        u256(remainder)
     }
 }
 
@@ -514,7 +601,8 @@ function alu_mulmod(a, b, n) = {
     if n == 0 then {
         WORD_ZERO
     } else {
-        u256(tmod_nat(a * b, n))
+        let remainder = tmod_nat(a * b, n);
+        u256(remainder)
     }
 }
 
@@ -525,7 +613,8 @@ function alu_exp(base : word, exponent : word) -> word = {
     var b : word = base;
     var e : word = exponent;
     foreach (_step from 0 to 255) {
-        if word_bit(e, 0) == bitone then {
+        let low_bit = word_bit(e, 0);
+        if low_bit == bitone then {
             result = word_mul(result, b)
         };
         b = word_mul(b, b);
@@ -542,10 +631,15 @@ function alu_signextend(byte_index : word, value : word) -> word = {
         let index : range(0, 31) = byte_index;
         let width : word_bit_count = index * 8 + 8;
         let sign_shift : word_bit_count = index * 8 + 7;
-        let sign_set = word_and(word_shift_right(value, sign_shift), WORD_ONE) == WORD_ONE;
-        let low_mask = word_sub(word_shift_left(WORD_ONE, width), WORD_ONE);
+        let shifted_sign = word_shift_right(value, sign_shift);
+        let isolated_sign = word_and(shifted_sign, WORD_ONE);
+        let sign_set = isolated_sign == WORD_ONE;
+        let low_mask_end = word_shift_left(WORD_ONE, width);
+        let low_mask = word_sub(low_mask_end, WORD_ONE);
         if sign_set then {
-            word_or(word_and(value, low_mask), word_not(low_mask))
+            let low_value = word_and(value, low_mask);
+            let high_mask = word_not(low_mask);
+            word_or(low_value, high_mask)
         } else {
             word_and(value, low_mask)
         }
@@ -559,12 +653,27 @@ function alu_signextend(byte_index : word, value : word) -> word = {
 
 Each comparison pushes `1` or `0`.
 */
-function alu_lt(a : word, b : word) -> word = word_of_bool(word_ult(a, b))
-function alu_gt(a : word, b : word) -> word = word_of_bool(word_ult(b, a))
-function alu_slt(a : word, b : word) -> word = word_of_bool(word_slt(a, b))
-function alu_sgt(a : word, b : word) -> word = word_of_bool(word_slt(b, a))
+function alu_lt(a : word, b : word) -> word = {
+    let result = word_ult(a, b);
+    word_of_bool(result)
+}
+function alu_gt(a : word, b : word) -> word = {
+    let result = word_ult(b, a);
+    word_of_bool(result)
+}
+function alu_slt(a : word, b : word) -> word = {
+    let result = word_slt(a, b);
+    word_of_bool(result)
+}
+function alu_sgt(a : word, b : word) -> word = {
+    let result = word_slt(b, a);
+    word_of_bool(result)
+}
 function alu_eq(a : word, b : word) -> word = word_of_bool(a == b)
-function alu_iszero(a : word) -> word = word_of_bool(word_is_zero(a))
+function alu_iszero(a : word) -> word = {
+    let result = word_is_zero(a);
+    word_of_bool(result)
+}
 
 /*md
 ### Bitwise
@@ -580,7 +689,9 @@ function alu_byte(i : word, x : word) -> word = {
     if i < 32 then {
         let index : range(0, 31) = i;
         let shift : word_bit_count = (31 - index) * 8;
-        unsigned(word_low_byte(word_shift_right(x, shift)))
+        let shifted = word_shift_right(x, shift);
+        let result_byte = word_low_byte(shifted);
+        unsigned(result_byte)
     } else {
         WORD_ZERO
     }
@@ -617,9 +728,17 @@ function alu_sar(shift_amt : word, v : word) -> word = {
     if shift_amt < 256 then {
         word_arithmetic_shift_right(v, shift_amt)
     } else {
-        if word_bit(v, 255) == bitone then { WORD_ALL_ONES } else { WORD_ZERO }
+        let sign_bit = word_bit(v, 255);
+        if sign_bit == bitone then {
+            WORD_ALL_ONES
+        } else {
+            WORD_ZERO
+        }
     }
 }
 
 /*! `CLZ`: the count of leading zero bits of a 256-bit word (EIP-7939). */
-function alu_clz(x : word) -> word = u256(256 - word_bit_length(x))
+function alu_clz(x : word) -> word = {
+    let bit_length = word_bit_length(x);
+    u256(256 - bit_length)
+}

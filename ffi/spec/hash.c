@@ -14,7 +14,7 @@
 static const uint8_t hash_empty;
 
 #define DEFINE_SLICE_HASH(name, slice_type, resolver, algorithm, digest_type) \
-  sail_fixed_bytes_32 name(                                                   \
+  fixed_bytes_32 name(                                                   \
       struct slice_type input) {                                               \
     const uint64_t off = input.zbytes;                                        \
     const uint64_t len = input.zlen;                                          \
@@ -50,7 +50,7 @@ DEFINE_SLICE_HASH(host_sha256_memory, zEvmMemorySliceFields, evmsail_memory_ptr,
 
 #undef DEFINE_SLICE_HASH
 
-sail_fixed_bytes_32 host_keccak_word(const sail_u256 input) {
+fixed_bytes_32 host_keccak_word(const u256 input) {
   uint8_t bytes[32];
   zkvm_keccak256_hash digest = {{0}};
   sail_word_to_be_bytes(bytes, (input));
@@ -59,15 +59,15 @@ sail_fixed_bytes_32 host_keccak_word(const sail_u256 input) {
   return evmsail_hash_from_be_bytes(digest.data);
 }
 
-sail_fixed_bytes_32 host_keccak_address(sail_fixed_bytes_20 input) {
+fixed_bytes_32 host_keccak_address(fixed_bytes_20 input) {
   zkvm_keccak256_hash digest = {{0}};
   if (zkvm_keccak256(input.bytes, sizeof(input.bytes), &digest) != ZKVM_EOK)
     memset(&digest, 0, sizeof(digest));
   return evmsail_hash_from_be_bytes(digest.data);
 }
 
-sail_fixed_bytes_32 host_sha256_pair(
-    sail_fixed_bytes_32 left, sail_fixed_bytes_32 right) {
+fixed_bytes_32 host_sha256_pair(
+    fixed_bytes_32 left, fixed_bytes_32 right) {
   uint8_t bytes[64];
   zkvm_sha256_hash digest = {{0}};
   memcpy(bytes, left.bytes, sizeof(left.bytes));

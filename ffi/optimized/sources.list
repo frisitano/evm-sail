@@ -3,6 +3,8 @@
 # Builds must consume this manifest verbatim. Test and debug translation units
 # are selected explicitly by their owning harness and never belong here.
 workspace.c
+exceptions.c
+evm/execute.c
 evm/interpreter.c
 executor/block_access_list.c
 executor/payload.c
@@ -21,7 +23,6 @@ host/stack.c
 host/state/journal.c
 host/state/logs.c
 host/state/runtime.c
-host/state/store.c
 host/state/account.c
 host/state/storage.c
 host/state/block_access_list.c
@@ -39,6 +40,7 @@ lib/rlp/codecs/block_header.c
 lib/rlp/codecs/receipts.c
 lib/rlp/codecs/transaction_signing.c
 lib/rlp/codecs/transactions.c
+lib/rlp/decoding.c
 lib/rlp/encoding.c
 lib/ssz/stateless_input.c
 lib/state_trie.c

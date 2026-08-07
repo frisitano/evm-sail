@@ -144,7 +144,7 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len) {
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-sail_u256 mem_load_word(uint64_t off) {
+u256 mem_load_word(uint64_t off) {
   uint64_t offset = off;
   uint8_t buf[32];
   for (int i = 0; i < 32; i++) {
@@ -157,7 +157,7 @@ sail_u256 mem_load_word(uint64_t off) {
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-unit mem_store_word(uint64_t off, const sail_u256 w) {
+unit mem_store_word(uint64_t off, const u256 w) {
   uint8_t buf[32];
   sail_word_to_be_bytes(buf, (w));
   uint8_t *d = frame_write_region(off, 32);

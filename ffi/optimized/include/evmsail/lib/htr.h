@@ -8,8 +8,4 @@
  * htr_new_payload_request equation. This declaration is injected only into
  * optimized generated C; standard C and proof extraction use the Sail body.
  */
-struct StatelessInputRef;
-Hash32 htr_new_payload_request(
-    struct StatelessInputRef input_ref);
-
 #endif

@@ -29,8 +29,7 @@ type block_gas_limit_bound : Int = ssz_uint_bound
 
 /*! EIP-7928 charges one BAL item against each 2,000 units of block gas. */
 type block_access_list_item_gas : Int = 2000
-let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) =
-    sizeof(block_access_list_item_gas)
+let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) = sizeof(block_access_list_item_gas)
 
 /*! Available gas in a running EVM frame. */
 type gas = nat
@@ -53,6 +52,28 @@ type transaction_gas = range(0, block_gas_limit_bound)
 type gas_cost = nat
 
 let GAS_COST_ZERO : gas_cost = 0
+
+/*! Exact exclusive byte endpoint used by the canonical memory-expansion
+    equation. The optimized C splice may replace endpoints beyond its
+    materializable arena with one proven-unaffordable sentinel. */
+type memory_required_endpoint = nat
+
+/*! Exact incremental memory charge. Optimized C retains one additional
+    sentinel value above every representable live-gas value so `charge`
+    remains the sole out-of-gas decision. */
+type memory_expansion_charge = nat
+
+/*! One affordability decision together with its bounded cost. The payload is
+    meaningful only when `affordable` is true. */
+struct GasCharge = {
+    affordable : bool,
+    cost : gas_cost,
+}
+
+let GAS_CHARGE_UNAFFORDABLE : GasCharge = struct { affordable = false, cost = GAS_COST_ZERO }
+
+function gas_charge(cost : gas_cost) -> GasCharge =
+    struct { affordable = true, cost = cost }
 
 /*! Intermediate MODEXP affordability factors.  The canonical model keeps
     their exact natural values; production splices bound them from the live
@@ -90,8 +111,9 @@ type transaction_execution_gas_limit_value : Int = eip7825_transaction_gas_limit
     EIP-7825 per-transaction cap. */
 type transaction_execution_gas = range(0, transaction_execution_gas_limit_value)
 
-let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value) =
-    sizeof(transaction_execution_gas_limit_value)
+let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value) = sizeof(
+    transaction_execution_gas_limit_value
+)
 
 /*! Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
     draws spill only from the regular-gas pool, which is capped by EIP-7825. */
@@ -115,7 +137,7 @@ type block_gas = range(0, block_gas_limit_bound)
     state gas together, so the execution profile supplies the tighter
     header-dependent bound. */
 type receipt_cumulative_gas = range(0, 2 * block_gas_limit_bound)
-type receipt_cumulative_gas_valid('value : Int) -> Bool =
+type receipt_cumulative_gas_value_valid('value : Int) -> Bool =
     0 <= 'value & 'value <= 2 * block_gas_limit_bound
 
 let GAS_ZERO : gas = 0

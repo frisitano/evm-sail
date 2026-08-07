@@ -5,8 +5,8 @@
 The per-frame EVM operand stack (YP §9.1, μ_s): up to 1024 words, LIFO.
 The EVM layer ([push_word][] / [pop][] in the machine module) enforces the
 depth bounds and charges nothing here — this is pure mechanism. Frames
-form a stack of stacks: [stack_enter_frame][] on a sub-call,
-[stack_leave_frame][] on return, [stack_reset][] per transaction. The
+form a stack of stacks: [operand_stack_push_empty_frame][] on a sub-call,
+[operand_stack_pop_frame][] on return, [stack_reset][] per transaction. The
 words live behind the host interface (the corresponding `stack.c` in
 `ffi/spec/` or `ffi/optimized/`) as per-frame flat arrays for O(1) access;
 proof targets see the `val`s as bodyless axioms over an abstract per-frame
@@ -19,9 +19,9 @@ list-of-words model.
 /*! Resets to a single empty operand stack (per-transaction reset). */
 val stack_reset = impure { c: "stack_reset" } : unit -> unit
 /*! Pushes a fresh, empty operand stack for a sub-call frame. */
-val stack_enter_frame = impure { c: "stack_enter_frame" } : unit -> unit
+val operand_stack_push_empty_frame = impure { c: "operand_stack_push_empty_frame" } : unit -> unit
 /*! Pops the current frame's stack, restoring the caller's. */
-val stack_leave_frame = impure { c: "stack_leave_frame" } : unit -> unit
+val operand_stack_pop_frame = impure { c: "operand_stack_pop_frame" } : unit -> unit
 /*! The number of words on the current frame's stack; the 1024-item
     bound is enforced by the EVM layer. */
 val stack_depth = impure { c: "stack_depth" } : unit -> operand_stack_height

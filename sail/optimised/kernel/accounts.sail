@@ -8,17 +8,16 @@
  * tables in one crossing.
  */
 
-$[c_throws]
-val optimized_k_aload = impure { c: "k_aload" } : (hash, address) -> Account
+val account_load_from_root = impure { c: "k_aload" } : (hash, address) -> Account
 
-val optimized_store_account = impure { c: "store_account" } : (address, Account) -> unit
-val optimized_store_account_info = impure { c: "store_account_info" } : (address, Account, AccountInfo) -> unit
+val account_store_record = impure { c: "store_account" } : (address, Account) -> unit
+val account_store_record_info = impure { c: "store_account_info" } : (address, Account, AccountInfo) -> unit
 
 function k_aload(a : address) -> Account =
-    optimized_k_aload(k_parent_state_root, a)
+    account_load_from_root(k_parent_state_root, a)
 
 function store_account(a : address, account : Account) -> unit =
-    optimized_store_account(a, account)
+    account_store_record(a, account)
 
 function store_account_info(a : address, account : Account, info : AccountInfo) -> unit =
-    optimized_store_account_info(a, account, info)
+    account_store_record_info(a, account, info)

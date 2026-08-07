@@ -38,7 +38,8 @@ function path_empty() -> TriePath =
 /*! Maps a nibble cursor to the corresponding canonical-order path byte. */
 function path_byte_index(i : trie_path_cursor) -> b256_index = {
     let quotient = tdiv_nat(i, 2);
-    let natural_index : b256_index = if (0 <= quotient) & (quotient <= 31) then {
+    let natural_index : b256_index =
+        if (0 <= quotient) & (quotient <= 31) then {
             quotient
         } else {
             assert(false);
@@ -49,12 +50,14 @@ function path_byte_index(i : trie_path_cursor) -> b256_index = {
 
 /*! The `i`-th nibble, most significant first; out of range yields `0`. */
 function path_nibble(path : TriePath, i : trie_path_cursor) -> nibble =
-    if path_len(path) <= i then {
+    let length = path_len(path) in
+    if length <= i then {
         0x0
     } else {
         let bytes = path.data;
         let byte_index = path_byte_index(i);
-        if tmod_int(i, 2) == 0 then {
+        let parity = tmod_int(i, 2);
+        if parity == 0 then {
             bytes[byte_index][7 .. 4]
         } else {
             bytes[byte_index][3 .. 0]
@@ -64,26 +67,33 @@ function path_nibble(path : TriePath, i : trie_path_cursor) -> nibble =
 /*! Appends one nibble to a path, rejecting paths already at the key bound. */
 function path_append_nibble(path : TriePath, value : nibble) -> TriePath = {
     let length = path_len(path);
-    if 64 <= length then {
-        throw InvalidBlock(WitnessDeficient)
-    };
-    let original = path.data;
-    var bytes = original;
-    let byte_index = path_byte_index(length);
-    if tmod_int(length, 2) == 0 then {
-        bytes[byte_index] = append(value, 0x0)
+    if length < 64 then {
+        let original = path.data;
+        var bytes = original;
+        let byte_index = path_byte_index(length);
+        let parity = tmod_int(length, 2);
+        if parity == 0 then {
+            bytes[byte_index] = append(value, 0x0)
+        } else {
+            bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
+        };
+        let path_data = B256(bytes);
+        path_new(path_data, length + 1)
     } else {
-        bytes[byte_index] = append(bytes[byte_index][7 .. 4], value)
-    };
-    path_new(B256(bytes), length + 1)
+        fatal_error(WitnessDeficient)
+    }
 }
 
-function path_append_byte(path : TriePath, value : byte) -> TriePath =
-    path_append_nibble(path_append_nibble(path, value[7 .. 4]), value[3 .. 0])
+function path_append_byte(path : TriePath, value : byte) -> TriePath = {
+    let high_nibble = path_append_nibble(path, value[7 .. 4]);
+    path_append_nibble(high_nibble, value[3 .. 0])
+}
 
 /*! A one-nibble path. */
-function path_single(n : nibble) -> TriePath =
-    path_append_nibble(path_empty(), n)
+function path_single(n : nibble) -> TriePath = {
+    let empty_path = path_empty();
+    path_append_nibble(empty_path, n)
+}
 
 /*! Path concatenation; over 64 nibbles is a witness fault. */
 function path_concat(a : TriePath, b : TriePath) -> TriePath = {
@@ -94,17 +104,19 @@ function path_concat(a : TriePath, b : TriePath) -> TriePath = {
         var result = a;
         var index : trie_path_len = 0;
         while index < blen termination_measure(blen - index) do {
-            result = path_append_nibble(result, path_nibble(b, index));
+            let nibble = path_nibble(b, index);
+            result = path_append_nibble(result, nibble);
             let current_index = index;
-            index = if current_index < 64 then {
+            index =
+                if current_index < 64 then {
                     current_index + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 }
         };
         result
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient)
     }
 }
 
@@ -113,31 +125,32 @@ function path_drop(path : TriePath, n : trie_path_len) -> TriePath = {
     let length = path_len(path);
     if length <= n then {
         path_empty()
+    } else if n == 0 then {
+        path
     } else {
-        if n == 0 then {
-            path
-        } else {
-            let remain : trie_path_len = length - n;
-            var result = path_empty();
-            var offset : trie_path_len = 0;
-            while offset < remain termination_measure(remain - offset) do {
-                let candidate = n + offset;
-                let source_index : trie_path_cursor = if (0 <= candidate) & (candidate <= 64) then {
-                        candidate
-                    } else {
-                        assert(false);
-                        0
-                    };
-                result = path_append_nibble(result, path_nibble(path, source_index));
-                let current_offset = offset;
-                offset = if current_offset < 64 then {
-                        current_offset + 1
-                    } else {
-                        throw InvalidBlock(WitnessDeficient)
-                    }
-            };
-            result
-        }
+        let remain : trie_path_len = length - n;
+        var result = path_empty();
+        var offset : trie_path_len = 0;
+        while offset < remain termination_measure(remain - offset) do {
+            let candidate = n + offset;
+            let source_index : trie_path_cursor =
+                if (0 <= candidate) & (candidate <= 64) then {
+                    candidate
+                } else {
+                    assert(false);
+                    0
+                };
+            let nibble = path_nibble(path, source_index);
+            result = path_append_nibble(result, nibble);
+            let current_offset = offset;
+            offset =
+                if current_offset < 64 then {
+                    current_offset + 1
+                } else {
+                    fatal_error(WitnessDeficient)
+                }
+        };
+        result
     }
 }
 
@@ -147,26 +160,31 @@ function path_eq(a : TriePath, b : TriePath) -> bool =
 
 /*! Whether `seg` occurs in `key` at nibble position `pos`. */
 function path_matches(key : TriePath, pos : trie_path_cursor, seg : TriePath) -> bool = {
-    let stop = pos + path_len(seg);
-    if path_len(key) < stop then {
+    let segment_len = path_len(seg);
+    let key_len = path_len(key);
+    let stop = pos + segment_len;
+    if key_len < stop then {
         false
     } else {
         var ok : bool = true;
         var offset : trie_path_len = 0;
-        while ok & offset < path_len(seg) termination_measure(path_len(seg) - offset) do {
+        while ok & offset < segment_len termination_measure(segment_len - offset) do {
             let key_index = pos + offset;
             if key_index <= 64 then {
-                if path_nibble(key, key_index) != path_nibble(seg, offset) then {
+                let key_nibble = path_nibble(key, key_index);
+                let segment_nibble = path_nibble(seg, offset);
+                if key_nibble != segment_nibble then {
                     ok = false
                 }
             } else {
                 ok = false
             };
             let current_offset = offset;
-            offset = if current_offset < 64 then {
+            offset =
+                if current_offset < 64 then {
                     current_offset + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 }
         };
         ok
@@ -181,16 +199,20 @@ function path_prefix_of(prefix : TriePath, path : TriePath) -> bool =
 function common_prefix_length(a : TriePath, b : TriePath) -> trie_path_len = {
     let alen = path_len(a);
     let blen = path_len(b);
-    let stop = if alen < blen then { alen } else { blen };
+    let stop =
+        if alen < blen then alen else blen;
     var length : trie_path_len = 0;
     var matching : bool = true;
     while matching & length < stop termination_measure(stop - length) do {
-        if path_nibble(a, length) == path_nibble(b, length) then {
+        let a_nibble = path_nibble(a, length);
+        let b_nibble = path_nibble(b, length);
+        if a_nibble == b_nibble then {
             let current_length = length;
-            length = if current_length < 64 then {
+            length =
+                if current_length < 64 then {
                     current_length + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 }
         } else {
             matching = false
@@ -210,9 +232,11 @@ function hex_prefix_encoded_length(path : TriePath) -> range(1, 33) = {
 function hex_prefix_first_byte(path : TriePath, is_leaf : bool) -> byte = {
     let length : trie_path_len = path_len(path);
     let odd = tmod_nat(length, 2) != 0;
-    let flag : nibble = if is_leaf then { 0x2 } else { 0x0 };
+    let flag : nibble =
+        if is_leaf then 0x2 else 0x0;
     if odd then {
-        append(flag | 0x1, path_nibble(path, 0))
+        let first_nibble = path_nibble(path, 0);
+        append(flag | 0x1, first_nibble)
     } else {
         append(flag, 0x0)
     }
@@ -226,7 +250,7 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
     (bool, TriePath)
 ) = {
     if f.is_list then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let n = f.content_len;
     if n == 0 then {
@@ -234,7 +258,7 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
     } else {
         let maximum_length = HEX_PREFIX_MAX_LENGTH;
         if maximum_length < n then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode)
         } else {
             let content = sub_slice(f.source, f.source.len - n, n);
             let fb = slice_byte(content, 0);
@@ -247,14 +271,19 @@ function hex_prefix_decode_ref forall 'source_off 'source_len 'content_len,
             let paired_nibbles : range(0, 64) = tail_length * 2;
             if odd then {
                 if paired_nibbles < 64 then {
-                    var bytes = word_to_hash(word_shift_right(packed, 4));
+                    let shifted = word_shift_right(packed, 4);
+                    var bytes = word_to_hash(shifted);
                     bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
-                    (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
+                    let path_data = B256(bytes);
+                    let path = path_new(path_data, paired_nibbles + 1);
+                    (is_leaf, path)
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 }
             } else {
-                (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
+                let path_data = word_to_hash(packed);
+                let path = path_new(path_data, paired_nibbles);
+                (is_leaf, path)
             }
         }
     }
@@ -268,7 +297,7 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
     (bool, TriePath)
 ) = {
     if f.is_list then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let n = f.content_len;
     if n == 0 then {
@@ -276,7 +305,7 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
     } else {
         let maximum_length = HEX_PREFIX_MAX_LENGTH;
         if maximum_length < n then {
-            throw InvalidBlock(RlpDecode)
+            fatal_error(RlpDecode)
         } else {
             let content = sub_slice(f.source, f.source.len - n, n);
             let fb = slice_byte(content, 0);
@@ -289,14 +318,19 @@ function scratch_hex_prefix_decode_ref forall 'source_off 'source_len 'content_l
             let paired_nibbles : range(0, 64) = tail_length * 2;
             if odd then {
                 if paired_nibbles < 64 then {
-                    var bytes = word_to_hash(word_shift_right(packed, 4));
+                    let shifted = word_shift_right(packed, 4);
+                    var bytes = word_to_hash(shifted);
                     bytes[0] = append(fb[3 .. 0], bytes[0][3 .. 0]);
-                    (is_leaf, path_new(B256(bytes), paired_nibbles + 1))
+                    let path_data = B256(bytes);
+                    let path = path_new(path_data, paired_nibbles + 1);
+                    (is_leaf, path)
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 }
             } else {
-                (is_leaf, path_new(word_to_hash(packed), paired_nibbles))
+                let path_data = word_to_hash(packed);
+                let path = path_new(path_data, paired_nibbles);
+                (is_leaf, path)
             }
         }
     }

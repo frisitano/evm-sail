@@ -3,7 +3,4 @@
 
 #include "evmsail/prelude.h"
 
-struct ScratchRegionResult scratch_store_receipt_logs_bloom(
-    uint32_t off, uint64_t start, uint64_t count);
-
 #endif

@@ -1,6 +1,7 @@
 /* Native implementation of the same standard read_input/write_output ABI used
  * by the zkVM guest, plus the reusable test-process lifecycle and dump hooks. */
 #include "region_access.h"
+#include "exceptions.h"
 #include "frame_stack.h"
 #include EVMSAIL_MODEL_H
 #include "value_convert.h"
@@ -66,6 +67,7 @@ extern unit code_db_reset(unit);             /* content-addressed code store (mi
  * every piece of guest state that persists across in-process runs. */
 static void reset_world(void)
 {
+    fatal_error_reset();
     /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
     acct_db_reset(UNIT);
     storage_db_reset(UNIT);
@@ -177,7 +179,7 @@ unsigned long guest_run(const unsigned char *in, unsigned long n,
  *                                     post-run state; zero after an uncaught
  *                                     Sail exception)
  *       when ok=0, followed by the CAPTURED exception:
- *       err[1] loc_len[2] loc[loc_len]   (err = the BlockError enum value of
+ *       err[1] loc_len[2] loc[loc_len]   (err = the FatalError enum value of
  *                                     the InvalidBlock that escaped, 0xff if
  *                                     none recorded; loc = the Sail source
  *                                     position of the throw site)
@@ -196,41 +198,27 @@ unsigned long guest_run(const unsigned char *in, unsigned long n,
  * The account/storage entries are the cumulative state touched by execution;
  * unchanged authenticated-base values are not enumerable here. */
 extern uint64_t acct_dump_count(unit);
-extern sail_u256 acct_dump_hkey(uint64_t);
-extern sail_fixed_bytes_20 acct_dump_address(uint64_t);
+extern u256 acct_dump_hkey(uint64_t);
+extern fixed_bytes_20 acct_dump_address(uint64_t);
 extern uint64_t acct_dump_nonce(uint64_t);
-extern sail_u256 acct_dump_balance(uint64_t);
-extern sail_u256 acct_dump_storage_root(uint64_t);
-extern sail_u256 acct_dump_code_hash(uint64_t);
-extern uint64_t storage_dump_count(sail_u256);
-extern sail_u256 storage_dump_slot(sail_u256, uint64_t);
-extern sail_u256 storage_dump_value(sail_u256, uint64_t);
+extern u256 acct_dump_balance(uint64_t);
+extern u256 acct_dump_storage_root(uint64_t);
+extern u256 acct_dump_code_hash(uint64_t);
+extern uint64_t storage_dump_count(u256);
+extern u256 storage_dump_slot(u256, uint64_t);
+extern u256 storage_dump_value(u256, uint64_t);
 extern uint64_t stack_depth(unit);
-extern sail_u256 stack_peek_word(uint64_t);
+extern u256 stack_peek_word(uint64_t);
 extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
 static char g_validation_location[513];
 
-unit validation_debug_capture_location(unit u)
-{
-    (void)u;
-    const char *loc =
-        (throw_location && *throw_location) ? *throw_location : "";
-    size_t len = 0;
-    while (loc[len] && len < sizeof g_validation_location - 1) {
-        g_validation_location[len] = loc[len];
-        len++;
-    }
-    g_validation_location[len] = '\0';
-    return UNIT;
-}
-
 static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
 static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
 static void d_u64(uint64_t v) { for (int i = 7; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-static void d_word(sail_u256 value) {
+static void d_word(u256 value) {
     uint64_t words[4];
     sail_word_to_be_words4(words, value);
     for (int i = 0; i < 4; i++) {
@@ -239,30 +227,30 @@ static void d_word(sail_u256 value) {
     }
 }
 
-static void d_address(sail_fixed_bytes_20 value) {
+static void d_address(fixed_bytes_20 value) {
     uint8_t bytes[20];
     evmsail_address_to_be_bytes(bytes, value);
     for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
 }
 
-static void d_hash(sail_fixed_bytes_32 value)
+static void d_hash(fixed_bytes_32 value)
 {
     uint8_t bytes[32];
     evmsail_hash_to_be_bytes(bytes, value);
     for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
 }
 
-static sail_fixed_bytes_32 model_state_root(void)
+static fixed_bytes_32 model_state_root(void)
 {
     return zcompute_state_root(UNIT);
 }
 
-static sail_fixed_bytes_32 model_account_storage_root(sail_fixed_bytes_20 address)
+static fixed_bytes_32 model_account_storage_root(fixed_bytes_20 address)
 {
     return zdebug_account_storage_root(address);
 }
 
-static void dispose_hash(sail_fixed_bytes_32 *value)
+static void dispose_hash(fixed_bytes_32 *value)
 {
     (void)value;
 }
@@ -270,7 +258,7 @@ static void dispose_hash(sail_fixed_bytes_32 *value)
 unsigned long guest_debug_dump(const unsigned char **out)
 {
     g_dump_len = 0;
-    sail_fixed_bytes_32 root = {0};
+    fixed_bytes_32 root = {0};
     bool validation_failed = zvalidation_failure_present;
     bool state_available = !have_exception;
     const char *validation_loc =
@@ -333,14 +321,14 @@ unsigned long guest_debug_dump(const unsigned char **out)
     uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
     d_u32((uint32_t)na);
     for (uint64_t i = 0; i < na; i++) {
-        sail_u256 hk = acct_dump_hkey(i);
+        u256 hk = acct_dump_hkey(i);
         d_word(hk);                              /* keccak(address) */
-        sail_fixed_bytes_20 addr = acct_dump_address(i);
+        fixed_bytes_20 addr = acct_dump_address(i);
         d_address(addr);
         d_u64(acct_dump_nonce(i));
         d_word(acct_dump_balance(i));
         d_word(acct_dump_storage_root(i));
-        sail_fixed_bytes_32 storage_root = model_account_storage_root(addr);
+        fixed_bytes_32 storage_root = model_account_storage_root(addr);
         if (have_exception) {
             for (int j = 0; j < 32; j++) d_byte(0);
         } else {

@@ -38,57 +38,43 @@ function scratch_begin() -> source_pointer = {
 val scratch_reserve : forall 'len, source_valid_length('len). int('len) -> source_pointer
 function scratch_reserve(len) = {
     let arena = scratch_arena;
-    assert(host_scratch_reserve(arena.len, len), "scratch reserve");
+    let reserved = host_scratch_reserve(arena.len, len);
+    assert(reserved, "scratch reserve");
     arena.len
 }
 
 /*! Appends one byte without constructing a Sail list. */
 function scratch_push_byte(data : byte) -> unit = {
     let arena = scratch_arena;
-    match host_scratch_store_byte(arena.len, data) {
-        ScratchRegionReady(expanded) => scratch_arena = expanded,
-        ScratchRegionFailed() => assert(false, "scratch byte append"),
-    }
+    scratch_arena = host_scratch_store_byte(arena.len, data)
 }
 
 /*! Appends a source-backed slice at the cursor. */
 function stateless_input_scratch_push_slice(data : StatelessInputSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_stateless_input(arena.len, data) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch slice append"),
-        }
+        scratch_arena = host_scratch_store_stateless_input(arena.len, data)
     }
 }
 
 function scratch_scratch_push_slice(data : ScratchSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_scratch(arena.len, data) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch slice append"),
-        }
+        scratch_arena = host_scratch_store_scratch(arena.len, data)
     }
 }
 
 function log_data_scratch_push_slice(data : LogDataSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_log_data(arena.len, data) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch slice append"),
-        }
+        scratch_arena = host_scratch_store_log_data(arena.len, data)
     }
 }
 
 function output_scratch_push_slice(data : OutputSlice) -> unit = {
     if data.len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_output(arena.len, data) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch slice append"),
-        }
+        scratch_arena = host_scratch_store_output(arena.len, data)
     }
 }
 
@@ -102,40 +88,28 @@ overload scratch_push_slice = {
 /*! Appends a fixed 20-byte address at the cursor. */
 function scratch_push_address(data : address) -> unit = {
     let arena = scratch_arena;
-    match host_scratch_store_address(arena.len, data) {
-        ScratchRegionReady(expanded) => scratch_arena = expanded,
-        ScratchRegionFailed() => assert(false, "scratch address append"),
-    }
+    scratch_arena = host_scratch_store_address(arena.len, data)
 }
 
 /*! Appends a prefix of a fixed 32-byte value at the cursor. */
 function scratch_push_b256(data : b256, len : range(0, 32)) -> unit = {
     if len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_b256(arena.len, data, len) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch fixed-byte append"),
-        }
+        scratch_arena = host_scratch_store_b256(arena.len, data, len)
     }
 }
 
 /*! Appends a decreasing fixed 256-byte vector in canonical wire order. */
 function scratch_push_fixed_bytes_256(data : vector(256, dec, byte)) -> unit = {
     let arena = scratch_arena;
-    match host_scratch_store_fixed_bytes_256(arena.len, data) {
-        ScratchRegionReady(expanded) => scratch_arena = expanded,
-        ScratchRegionFailed() => assert(false, "scratch fixed-byte append"),
-    }
+    scratch_arena = host_scratch_store_fixed_bytes_256(arena.len, data)
 }
 
 /*! Appends the low `len` bytes of a word in canonical big-endian order. */
 function scratch_push_word_be(data : word, len : range(0, 32)) -> unit = {
     if len != 0 then {
         let arena = scratch_arena;
-        match host_scratch_store_word(arena.len, data, len) {
-            ScratchRegionReady(expanded) => scratch_arena = expanded,
-            ScratchRegionFailed() => assert(false, "scratch word append"),
-        }
+        scratch_arena = host_scratch_store_word(arena.len, data, len)
     }
 }
 

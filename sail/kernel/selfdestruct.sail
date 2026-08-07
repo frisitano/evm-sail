@@ -9,7 +9,8 @@ The per-transaction account lifecycle flags behind `SELFDESTRUCT`
     at transaction end per EIP-6780). */
 function k_selfdestruct(a : address) -> unit = {
     let cur = k_aload(a);
-    if not_bool(cur.selfdestructed) then {
+    let active = not_bool(cur.selfdestructed);
+    if active then {
         store_account(a, { cur with selfdestructed = true })
     }
 }
@@ -31,9 +32,9 @@ function k_was_created(a : address) -> bool = k_aload(a).created
     self-beneficiary). */
 function k_zero_balance(a : address) -> unit = {
     let cur = k_aload(a);
-    if word_is_zero(cur.info.balance) then {
-        ()
-    } else {
-        store_account_info(a, cur, { cur.info with balance = ZERO_WORD })
-    }
+    let balance_is_zero = word_is_zero(cur.info.balance);
+    if balance_is_zero then {
+        return ()
+    };
+    store_account_info(a, cur, { cur.info with balance = ZERO_WORD })
 }

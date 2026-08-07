@@ -278,6 +278,15 @@ and `SAIL_Z3_MEMO_PATH` overrides it in the build scripts. Ordinary
 `make clean` preserves this cache; use `make clear-z3-memo` only when compiler,
 constraints, or solver changes require invalidating it.
 
+An optimized splice that replaces a canonical Sail function with one C
+operation must still define the canonical function: a same-named `val` alone
+does not replace the base function body and can leave its generic call graph
+reachable during C specialization. Bind the C operation under a name that
+describes its semantic boundary, then keep the smallest canonical wrapper that
+calls it. Do not use a generic `optimized_*` prefix. Wrappers may additionally
+adapt arguments or results, check conditions, access registers, or compose
+operations when that work is part of the refinement.
+
 Run from repo root unless noted:
 
 ```sh

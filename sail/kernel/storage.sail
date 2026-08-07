@@ -7,25 +7,40 @@ and transient storage (EIP-1153), over the host state stores.
 
 val k_aload : address -> Account
 val stateless_storage_by_key : (hash, hash) -> word
-val precompile_number : address -> precompile_selector
+val precompile_id_for_address : address -> precompile_id
 
 function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, slot = s }
 
 /*! Returns the address's EIP-2929 warm bit without changing state. Active
     precompiles are warm independently of the BAL-derived account table. */
-function k_account_is_warm(a : address) -> bool =
-    if precompile_number(a) != 0 then { true } else { account_is_warm(a) }
+function k_account_is_warm(a : address) -> bool = {
+    let precompile_id = precompile_id_for_address(a);
+    if precompile_id != NotPrecompile then {
+        true
+    } else {
+        account_is_warm(a)
+    }
+}
 
 /*! Marks an address warm after the caller has established that its access gas
     is affordable. Active precompiles need no host-table entry. */
-function k_account_mark_warm(a : address) -> unit =
-    if precompile_number(a) != 0 then { () } else { account_mark_warm(a) }
+function k_account_mark_warm(a : address) -> unit = {
+    let precompile_id = precompile_id_for_address(a);
+    if precompile_id != NotPrecompile then {
+        return ()
+    };
+    account_mark_warm(a)
+}
 
 /*! Returns a storage slot's EIP-2929 warm bit without changing state. */
 function k_slot_is_warm(a : address, s : word) -> bool = storage_is_warm(a, s)
 
 /*! Marks a storage slot warm after the caller has paid its access charge. */
 function k_slot_mark_warm(a : address, s : word) -> unit = storage_mark_warm(a, s)
+
+/*! Warms an explicitly addressed storage slot while preparing a transaction's
+    access list, before any EVM frame owns the execution context. */
+function k_prewarm_slot(a : address, s : word) -> unit = storage_mark_warm(a, s)
 
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose
  * mutations are recorded between k_journal_checkpoint / k_journal_revert boundaries --- */
@@ -56,18 +71,14 @@ function k_sload(a : address, s : word) -> StorageValue = {
     };
 
     let block_value = storage_block_get(key);
-    match block_value {
-        Some(entry) => return struct { curr = entry.curr, orig = entry.curr },
-        None() => (),
+    if block_value.found then {
+        return struct { curr = block_value.value.curr, orig = block_value.value.curr }
     };
 
     let acc = k_aload(a);
     let slot_hash = keccak256_word(s);
-    let value = if acc.storage_cleared then {
-            ZERO_WORD
-        } else {
-            stateless_storage_by_key(acc.info.storage_root, slot_hash)
-        };
+    let value =
+        if acc.storage_cleared then ZERO_WORD else stateless_storage_by_key(acc.info.storage_root, slot_hash);
     storage_block_cache(key, slot_hash, value);
     struct { curr = value, orig = value }
 }
@@ -75,8 +86,10 @@ function k_sload(a : address, s : word) -> StorageValue = {
 /*! `SSTORE`: creates or updates the live transaction row. The preceding
     [k_sload][] supplies the transaction-original value; the host keeps
     clear generations and frame undo history private. */
-function k_sstore(a : address, s : word, v : StorageValue) -> unit =
-    storage_tx_update(struct { key = storage_key(a, s), value = v })
+function k_sstore(a : address, s : word, v : StorageValue) -> unit = {
+    let key = storage_key(a, s);
+    storage_tx_update(struct { key = key, value = v })
+}
 
 /*! `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
     discarded at transaction end and is not part of the state trie. */

@@ -42,7 +42,8 @@ function freeze_memory_output(data : EvmMemorySlice) -> OutputSlice = {
     if len == 0 then {
         EMPTY_OUTPUT_SLICE
     } else {
-        if output_buffer_store_memory(data) then {
+        let stored = output_buffer_store_memory(data);
+        if stored then {
             output_buffer_slice(len)
         } else {
             EMPTY_OUTPUT_SLICE
@@ -55,7 +56,8 @@ function freeze_input_output(data : StatelessInputSlice) -> OutputSlice = {
     if len == 0 then {
         EMPTY_OUTPUT_SLICE
     } else {
-        if output_buffer_store_input(data) then {
+        let stored = output_buffer_store_input(data);
+        if stored then {
             output_buffer_slice(len)
         } else {
             EMPTY_OUTPUT_SLICE
@@ -73,7 +75,8 @@ overload freeze_output = {freeze_memory_output, freeze_calldata_output}
 
 /*! Stores one word as the output (32-byte precompile results). */
 function output_buffer_word(value : word) -> OutputSlice = {
-    if output_buffer_store_word(value) then {
+    let stored = output_buffer_store_word(value);
+    if stored then {
         output_buffer_slice(WORD_BYTE_LENGTH)
     } else {
         EMPTY_OUTPUT_SLICE
@@ -83,7 +86,8 @@ function output_buffer_word(value : word) -> OutputSlice = {
 /*! Stores two words as the output (64-byte precompile results, e.g.
     `ecrecover`-style pairs). */
 function output_buffer_words(first : word, second : word) -> OutputSlice = {
-    if output_buffer_store_words(first, second) then {
+    let stored = output_buffer_store_words(first, second);
+    if stored then {
         output_buffer_slice(DOUBLE_WORD_BYTE_LENGTH)
     } else {
         EMPTY_OUTPUT_SLICE

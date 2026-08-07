@@ -8,8 +8,10 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules.
 */
-/*! The stored code for a content hash, or `None` when not witnessed. */
-val code_db_lookup = impure { c: "code_db_lookup" } : hash -> option(Code)
+/*! The stored code for a content hash, or [EMPTY_CODE][] when not witnessed.
+    Nonempty hashes cannot identify empty code, so length zero is an
+    unambiguous miss sentinel at this boundary. */
+val code_db_lookup = impure { c: "code_db_lookup" } : hash -> Code
 /*! Copies immutable input bytes into the executable-code arena and returns
     their stable arena span. */
 val code_region_from_input = impure { c: "code_region_from_input" } : StatelessInputSlice -> CodeRegionSlice
@@ -23,11 +25,7 @@ val code_region_from_delegation = impure { c: "code_region_from_delegation" } : 
 /*! Allocates a JUMPDEST bitmap large enough for a code body. */
 val jumpdest_table_alloc = impure { c: "jumpdest_table_alloc" } : CodeSlice -> jump_table_index
 /*! Marks one opcode-aligned program counter in an allocated JUMPDEST table. */
-val jumpdest_table_mark = impure { c: "jumpdest_table_mark" } : (
-        jump_table_index,
-        code_length,
-        code_pointer,
-    ) -> bool
+val jumpdest_table_mark = impure { c: "jumpdest_table_mark" } : (jump_table_index, code_length, code_pointer) -> bool
 /*! Stores code with its precomputed `JUMPDEST` bitmap under its
     KECCAK-256 hash and returns that hash. */
 val code_db_store = impure { c: "code_db_store_indexed" } : Code -> hash
@@ -52,25 +50,22 @@ function analyze_code_from(code, fork, table, pc) = {
             assert(marked, "JUMPDEST mark")
         };
         let opcode_value = unsigned(opcode);
-        let step : range(1, 33) = if (96 <= opcode_value) & (opcode_value <= 127) then {
-                opcode_value - 94
-            } else {
-                if fork >= Amsterdam then {
-                    match deep_stack_operation(opcode_value) {
-                        Some(operation) => if deep_stack_operation_immediate_valid(
-                            operation,
-                            slice_byte(code, position + 1),
-                        ) then {
-                            2
-                        } else {
-                            1
-                        },
-                        None() => 1,
-                    }
+        let step : range(1, 33) =
+            if (96 <= opcode_value) & (opcode_value <= 127)
+            then opcode_value - 94
+            else if fork >= Amsterdam then {
+                let operation = deep_stack_operation(opcode_value);
+                let immediate = slice_byte(code, position + 1);
+                let immediate_valid = deep_stack_operation_immediate_valid(operation, immediate);
+                if immediate_valid then {
+                    2
                 } else {
                     1
                 }
+            } else {
+                1
             };
+
         if step < code_len - position then {
             let added = position + step;
             analyze_code_from(code, fork, table, added)
@@ -96,20 +91,29 @@ function analyze_code(code : CodeSlice, fork : Fork) -> jump_table_index =
     }
 
 /*! Analyzes and stores code, returning its content hash. */
-function code_db_insert(code : CodeSlice, fork : Fork) -> hash =
-    code_db_store(analyzed_code(code, analyze_code(code, fork)))
+function code_db_insert(code : CodeSlice, fork : Fork) -> hash = {
+    let jumpdest_table = analyze_code(code, fork);
+    let analyzed = analyzed_code(code, jumpdest_table);
+    code_db_store(analyzed)
+}
 
 /*! Normalizes stateless-input code into the code arena before analysis. */
-function code_db_intern_input(bytes : StatelessInputSlice) -> CodeSlice =
-    validated_code_slice(code_region_from_input(bytes))
+function code_db_intern_input(bytes : StatelessInputSlice) -> CodeSlice = {
+    let region = code_region_from_input(bytes);
+    validated_code_slice(region)
+}
 
 /*! Normalizes memory-backed initcode into the code arena before analysis. */
-function code_db_intern_memory(bytes : EvmMemorySlice) -> CodeSlice =
-    validated_code_slice(code_region_from_memory(bytes))
+function code_db_intern_memory(bytes : EvmMemorySlice) -> CodeSlice = {
+    let region = code_region_from_memory(bytes);
+    validated_code_slice(region)
+}
 
 /*! Normalizes frozen creation output into the code arena before deployment. */
-function code_db_intern_output(bytes : OutputSlice) -> CodeSlice =
-    validated_code_slice(code_region_from_output(bytes))
+function code_db_intern_output(bytes : OutputSlice) -> CodeSlice = {
+    let region = code_region_from_output(bytes);
+    validated_code_slice(region)
+}
 
 /*! The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and
     an unwitnessed hash is a deficient witness. */
@@ -117,8 +121,10 @@ function code_db_resolve(code_hash : hash) -> Code =
     if code_hash == KECCAK_EMPTY then {
         EMPTY_CODE
     } else {
-        match code_db_lookup(code_hash) {
-            Some(code) => code,
-            None() => throw InvalidBlock(WitnessDeficient),
+        let code = code_db_lookup(code_hash);
+        if code.len == 0 then {
+            fatal_error(WitnessDeficient)
+        } else {
+            code
         }
     }

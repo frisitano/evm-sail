@@ -19,11 +19,9 @@ typedef struct {
   bool list;
 } RlpItem;
 
+/* Span-checked pop of one RLP item from a digest-authenticated cursor;
+ * minimal-encoding validation is not repeated (see codec.c). */
 bool mpt_rlp_pop(ByteSpan *cursor, RlpItem *item);
-bool mpt_rlp_pop_trusted_node(ByteSpan *cursor,
-                              RlpItem *item);
-bool mpt_decode_compact(const RlpItem *field, bool *leaf,
-                        NibblePath *path);
 
 /* ======================================================================== */
 /* CHILD REFERENCES AND DECODED NODES                                       */
@@ -48,18 +46,9 @@ typedef struct {
   uint8_t encoded_len;
 } WitnessChild;
 
-WitnessChild mpt_empty_witness_child(NodeId *node_id);
-WitnessChild mpt_hashed_witness_child(const uint8_t *digest, NodeId *node_id);
-WitnessChild mpt_inline_witness_child(const uint8_t *encoded, size_t len,
-                                      NodeId *node_id);
 NodeReferenceKind mpt_witness_child_kind(const WitnessChild *ref);
-bool mpt_witness_child_valid(const WitnessChild *ref);
 
-typedef enum {
-  DECODED_NODE_LEAF,
-  DECODED_NODE_EXTENSION,
-  DECODED_NODE_BRANCH
-} DecodedNodeKind;
+typedef enum { DECODED_NODE_LEAF, DECODED_NODE_EXTENSION, DECODED_NODE_BRANCH } DecodedNodeKind;
 
 /*
  * Structural view of one encoded node.
@@ -81,10 +70,11 @@ typedef struct {
 
 WitnessChild mpt_decoded_child(DecodedNode *node, unsigned nibble);
 
-/* Full-validation decode for freshly generated or untrusted encodings. */
-bool mpt_decode_node(ByteSpan encoded, DecodedNode *node);
-/* Span-checked decode for witness nodes later authenticated by digest. */
-bool mpt_decode_trusted_state_node(ByteSpan encoded,
-                                   DecodedNode *node);
+/*
+ * Span-checked, non-fatal decode for witness nodes later authenticated by
+ * digest. Index construction may probe unreachable malformed nodes; callers
+ * that actually traverse a false result must raise fatal_error directly.
+ */
+bool mpt_decode_trusted_state_node(ByteSpan encoded, DecodedNode *node);
 
 #endif

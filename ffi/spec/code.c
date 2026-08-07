@@ -1,4 +1,4 @@
-/* Generated option(CodeFields) adapters for the specification ABI. */
+/* Generated CodeFields adapters for the specification ABI. */
 #include EVMSAIL_MODEL_H
 #include "code_db.h"
 #include "region_access.h"
@@ -46,23 +46,20 @@ struct zCodeRegionSliceFields code_region_from_output(
 }
 
 struct zCodeRegionSliceFields code_region_from_delegation(
-    sail_fixed_bytes_20 address) {
+    fixed_bytes_20 address) {
   uint8_t bytes[23] = {0xef, 0x01, 0x00};
   evmsail_address_to_be_bytes(bytes + 3, address);
   return code_region_from_bytes(bytes, sizeof(bytes));
 }
 
-void code_db_lookup(struct zoptionzIRCodeFieldszK *out,
-                    sail_fixed_bytes_32 hash) {
+struct zCodeFields code_db_lookup(fixed_bytes_32 hash) {
+  struct zCodeFields out = {0};
   uint64_t off = 0, len = 0, jumpdest_ref = 0;
   if (!code_db_lookup_indexed(hash, &off, &len, &jumpdest_ref)) {
-    out->kind = Kind_zNonezIRCodeFieldszK;
-    out->variants.zNonezIRCodeFieldszK = UNIT;
-    return;
+    return out;
   }
-  out->kind = Kind_zSomezIRCodeFieldszK;
-  struct zCodeFields *code = &out->variants.zSomezIRCodeFieldszK;
-  code->zbytes = off;
-  code->zlen = len;
-  code->zjumpdests = jumpdest_ref;
+  out.zbytes = off;
+  out.zlen = len;
+  out.zjumpdests = jumpdest_ref;
+  return out;
 }

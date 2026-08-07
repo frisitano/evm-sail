@@ -17,130 +17,6 @@ Definition bit : Type := mword 1.
 
 Definition bits (n : Z) : Type := mword n.
 
-Inductive Fork :=
-  | Frontier
-  | Homestead
-  | Byzantium
-  | Constantinople
-  | Istanbul
-  | Berlin
-  | London
-  | Paris
-  | Shanghai
-  | Cancun
-  | Prague
-  | Osaka
-  | Amsterdam.
-Definition num_of_Fork (arg_ : Fork) : Z :=
-   match arg_ with
-   | Frontier => 0
-   | Homestead => 1
-   | Byzantium => 2
-   | Constantinople => 3
-   | Istanbul => 4
-   | Berlin => 5
-   | London => 6
-   | Paris => 7
-   | Shanghai => 8
-   | Cancun => 9
-   | Prague => 10
-   | Osaka => 11
-   | Amsterdam => 12
-   end.
-
-Definition Fork_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 12)*) : Fork :=
-   let l__0 := arg_ in
-   if Z.eqb (l__0) (0) then Frontier
-   else if Z.eqb (l__0) (1) then Homestead
-   else if Z.eqb (l__0) (2) then Byzantium
-   else if Z.eqb (l__0) (3) then Constantinople
-   else if Z.eqb (l__0) (4) then Istanbul
-   else if Z.eqb (l__0) (5) then Berlin
-   else if Z.eqb (l__0) (6) then London
-   else if Z.eqb (l__0) (7) then Paris
-   else if Z.eqb (l__0) (8) then Shanghai
-   else if Z.eqb (l__0) (9) then Cancun
-   else if Z.eqb (l__0) (10) then Prague
-   else if Z.eqb (l__0) (11) then Osaka
-   else Amsterdam.
-
-Lemma Fork_num_of_roundtrip (x : Fork) : Fork_of_num (num_of_Fork x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_Fork_injective (x y : Fork) : num_of_Fork x = num_of_Fork y -> x = y.
-  intro.
-  rewrite <- (Fork_num_of_roundtrip x).
-  rewrite <- (Fork_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition Fork_eq_dec (x y : Fork) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_Fork x) (num_of_Fork y) with
-  | left e => left (num_of_Fork_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition Fork_beq (x y : Fork) : bool :=
-  Z.eqb (num_of_Fork x) (num_of_Fork y).
-Lemma Fork_beq_iff x y : Fork_beq x y = true <-> x = y.
-  unfold Fork_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_Fork_injective | congruence].
-Qed.
-Lemma Fork_beq_refl x : Fork_beq x x = true.
-apply Fork_beq_iff; reflexivity.
-Qed.
-#[export]
-Instance Decidable_eq_Fork : EqDecision Fork := Fork_eq_dec.
-#[export]
-Instance Countable_Fork : Countable Fork.
-refine {|
-  encode x := encode (num_of_Fork x);
-  decode x := z ← decode x; mret (Fork_of_num z);
-|}.
-abstract (
-  intro s; rewrite decode_encode;
-  simpl;
-  rewrite Fork_num_of_roundtrip;
-  reflexivity).
-Defined.
-#[export]
-Instance dummy_Fork : Inhabited Fork := { inhabitant := Frontier }.
-
-
-Record protocol_fork_index := { protocol_fork_index_value : Z; }.
-Arguments protocol_fork_index : clear implicits.
-#[export]
-Instance Decidable_eq_protocol_fork_index : EqDecision protocol_fork_index.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_protocol_fork_index : Countable protocol_fork_index.
-refine {|
-  encode x := encode (protocol_fork_index_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_protocol_fork_index x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'protocol_fork_index_value' := e ]}" :=
-  {| protocol_fork_index_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_protocol_fork_index : Inhabited (protocol_fork_index) := {
-  inhabitant := {| protocol_fork_index_value := inhabitant
-|} }.
-
-
-Definition protocol_fork_index_valid (x : protocol_fork_index) : Prop :=
-0 <= x.(protocol_fork_index_value) /\ x.(protocol_fork_index_value) <= 12.
-
 Definition byte : Type := bits 8.
 
 Record word := { word_value : Z; }.
@@ -287,188 +163,149 @@ Instance dummy_account_nonce : Inhabited (account_nonce) := {
 Definition account_nonce_valid (x : account_nonce) : Prop :=
 0 <= x.(account_nonce_value) /\ x.(account_nonce_value) <= (2 ^ 64 - 1).
 
-Definition block_number : Type := Z.
+Definition ssz_uint_bound : Z := (2 ^ 64 - 1).
+#[export] Hint Unfold ssz_uint_bound : sail.
 
-Definition block_timestamp : Type := Z.
+Record block_number := { block_number_value : Z; }.
+Arguments block_number : clear implicits.
+#[export]
+Instance Decidable_eq_block_number : EqDecision block_number.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_block_number : Countable block_number.
+refine {|
+  encode x := encode (block_number_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_block_number x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition blob_count_bound : Z := 21.
-#[export] Hint Unfold blob_count_bound : sail.
+Notation "{[ r 'with' 'block_number_value' := e ]}" :=
+  {| block_number_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_block_number : Inhabited (block_number) := {
+  inhabitant := {| block_number_value := inhabitant
+|} }.
 
-Definition transaction_blob_count_bound : Z := 9.
-#[export] Hint Unfold transaction_blob_count_bound : sail.
 
-Definition blob_target_count_bound : Z := 14.
-#[export] Hint Unfold blob_target_count_bound : sail.
+Definition block_number_valid (x : block_number) : Prop :=
+0 <= x.(block_number_value) /\ x.(block_number_value) <= (2 ^ 64 - 1).
+
+Record block_timestamp := { block_timestamp_value : Z; }.
+Arguments block_timestamp : clear implicits.
+#[export]
+Instance Decidable_eq_block_timestamp : EqDecision block_timestamp.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_block_timestamp : Countable block_timestamp.
+refine {|
+  encode x := encode (block_timestamp_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_block_timestamp x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'block_timestamp_value' := e ]}" :=
+  {| block_timestamp_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_block_timestamp : Inhabited (block_timestamp) := {
+  inhabitant := {| block_timestamp_value := inhabitant
+|} }.
+
+
+Definition block_timestamp_valid (x : block_timestamp) : Prop :=
+0 <= x.(block_timestamp_value) /\ x.(block_timestamp_value) <= (2 ^ 64 - 1).
 
 Definition gas_per_blob_value : Z := (2 ^ 17).
 #[export] Hint Unfold gas_per_blob_value : sail.
 
-Record blob_count := { blob_count_value : Z; }.
-Arguments blob_count : clear implicits.
-#[export]
-Instance Decidable_eq_blob_count : EqDecision blob_count.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_blob_count : Countable blob_count.
-refine {|
-  encode x := encode (blob_count_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_blob_count x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition blob_schedule_inactive_count : Z := 0.
+#[export] Hint Unfold blob_schedule_inactive_count : sail.
 
-Notation "{[ r 'with' 'blob_count_value' := e ]}" :=
-  {| blob_count_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_blob_count : Inhabited (blob_count) := {
-  inhabitant := {| blob_count_value := inhabitant
-|} }.
+Definition cancun_blob_target_count : Z := 3.
+#[export] Hint Unfold cancun_blob_target_count : sail.
 
+Definition prague_blob_target_count : Z := 6.
+#[export] Hint Unfold prague_blob_target_count : sail.
 
-Definition blob_count_valid (x : blob_count) : Prop :=
-0 <= x.(blob_count_value) /\ x.(blob_count_value) <= 21.
+Definition bpo1_blob_target_count : Z := 10.
+#[export] Hint Unfold bpo1_blob_target_count : sail.
 
-Record blob_target_count := { blob_target_count_value : Z; }.
-Arguments blob_target_count : clear implicits.
-#[export]
-Instance Decidable_eq_blob_target_count : EqDecision blob_target_count.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_blob_target_count : Countable blob_target_count.
-refine {|
-  encode x := encode (blob_target_count_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_blob_target_count x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition bpo2_blob_target_count : Z := 14.
+#[export] Hint Unfold bpo2_blob_target_count : sail.
 
-Notation "{[ r 'with' 'blob_target_count_value' := e ]}" :=
-  {| blob_target_count_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_blob_target_count : Inhabited (blob_target_count) := {
-  inhabitant := {| blob_target_count_value := inhabitant
-|} }.
+Definition cancun_blob_max_count : Z := 6.
+#[export] Hint Unfold cancun_blob_max_count : sail.
 
+Definition prague_blob_max_count : Z := 9.
+#[export] Hint Unfold prague_blob_max_count : sail.
 
-Definition blob_target_count_valid (x : blob_target_count) : Prop :=
-0 <= x.(blob_target_count_value) /\ x.(blob_target_count_value) <= 14.
+Definition bpo1_blob_max_count : Z := 15.
+#[export] Hint Unfold bpo1_blob_max_count : sail.
 
-Record transaction_blob_count := { transaction_blob_count_value : Z; }.
-Arguments transaction_blob_count : clear implicits.
-#[export]
-Instance Decidable_eq_transaction_blob_count : EqDecision transaction_blob_count.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_transaction_blob_count : Countable transaction_blob_count.
-refine {|
-  encode x := encode (transaction_blob_count_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_transaction_blob_count x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition bpo2_blob_max_count : Z := 21.
+#[export] Hint Unfold bpo2_blob_max_count : sail.
 
-Notation "{[ r 'with' 'transaction_blob_count_value' := e ]}" :=
-  {| transaction_blob_count_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_transaction_blob_count : Inhabited (transaction_blob_count) := {
-  inhabitant := {| transaction_blob_count_value := inhabitant
-|} }.
+Definition blob_fee_update_fraction_bound : Z := 11684671.
+#[export] Hint Unfold blob_fee_update_fraction_bound : sail.
 
+Definition blob_fee_word_exponent_limit : Z := 256.
+#[export] Hint Unfold blob_fee_word_exponent_limit : sail.
 
-Definition transaction_blob_count_valid (x : transaction_blob_count) : Prop :=
-0 <= x.(transaction_blob_count_value) /\ x.(transaction_blob_count_value) <= 9.
+Definition blob_schedule_target_value (value : Z) : bool :=
+  (value =? blob_schedule_inactive_count) ||
+    ((value =? cancun_blob_target_count) ||
+      ((value =? prague_blob_target_count) ||
+        ((value =? bpo1_blob_target_count) || (value =? bpo2_blob_target_count)))).
+#[export] Hint Unfold blob_schedule_target_value : sail.
 
-Record blob_gas_used_typ := { blob_gas_used_value : Z; }.
-Arguments blob_gas_used_typ : clear implicits.
-#[export]
-Instance Decidable_eq_blob_gas_used_typ : EqDecision blob_gas_used_typ.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_blob_gas_used_typ : Countable blob_gas_used_typ.
-refine {|
-  encode x := encode (blob_gas_used_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_blob_gas_used_typ x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition blob_schedule_max_value (value : Z) : bool :=
+  (value =? blob_schedule_inactive_count) ||
+    ((value =? cancun_blob_max_count) ||
+      ((value =? prague_blob_max_count) ||
+        ((value =? bpo1_blob_max_count) || (value =? bpo2_blob_max_count)))).
+#[export] Hint Unfold blob_schedule_max_value : sail.
 
-Notation "{[ r 'with' 'blob_gas_used_value' := e ]}" :=
-  {| blob_gas_used_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_blob_gas_used_typ : Inhabited (blob_gas_used_typ) := {
-  inhabitant := {| blob_gas_used_value := inhabitant
-|} }.
+Definition blob_schedule_target_count : Type := Z.
 
+Definition blob_schedule_max_count : Type := Z.
 
-Definition blob_gas_used_typ_valid (x : blob_gas_used_typ) : Prop :=
-0 <= x.(blob_gas_used_value) /\ x.(blob_gas_used_value) <= (21 * 2 ^ 17).
+Definition transaction_blob_limit_value (value : Z) : bool :=
+  (value =? blob_schedule_inactive_count) ||
+    ((value =? cancun_blob_max_count) || (value =? prague_blob_max_count)).
+#[export] Hint Unfold transaction_blob_limit_value : sail.
 
-Record transaction_blob_gas := { transaction_blob_gas_value : Z; }.
-Arguments transaction_blob_gas : clear implicits.
-#[export]
-Instance Decidable_eq_transaction_blob_gas : EqDecision transaction_blob_gas.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_transaction_blob_gas : Countable transaction_blob_gas.
-refine {|
-  encode x := encode (transaction_blob_gas_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_transaction_blob_gas x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition transaction_blob_limit_typ : Type := Z.
 
-Notation "{[ r 'with' 'transaction_blob_gas_value' := e ]}" :=
-  {| transaction_blob_gas_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_transaction_blob_gas : Inhabited (transaction_blob_gas) := {
-  inhabitant := {| transaction_blob_gas_value := inhabitant
-|} }.
+Definition transaction_blob_count (limit : Z) : Type := Z.
 
+Definition blob_gas_used_typ : Type := Z.
 
-Definition transaction_blob_gas_valid (x : transaction_blob_gas) : Prop :=
-0 <= x.(transaction_blob_gas_value) /\ x.(transaction_blob_gas_value) <= (9 * 2 ^ 17).
+Definition transaction_blob_gas : Type := Z.
 
-Definition excess_blob_gas_bound : Z := (2 ^ 64 - 1).
+Definition excess_blob_gas_wire_bound : Z := (2 ^ 64 - 1).
+#[export] Hint Unfold excess_blob_gas_wire_bound : sail.
+
+Definition excess_blob_gas_reachable_bound : Z := (256 * 11684671 + 21 * 2 ^ 17).
+#[export] Hint Unfold excess_blob_gas_reachable_bound : sail.
+
+Definition excess_blob_gas_bound : Z := (256 * 11684671 + 21 * 2 ^ 17).
 #[export] Hint Unfold excess_blob_gas_bound : sail.
 
 Record excess_blob_gas_typ := { excess_blob_gas_value : Z; }.
@@ -502,10 +339,7 @@ Instance dummy_excess_blob_gas_typ : Inhabited (excess_blob_gas_typ) := {
 
 
 Definition excess_blob_gas_typ_valid (x : excess_blob_gas_typ) : Prop :=
-0 <= x.(excess_blob_gas_value) /\ x.(excess_blob_gas_value) <= (2 ^ 64 - 1).
-
-Definition blob_fee_update_fraction_bound : Z := 11684671.
-#[export] Hint Unfold blob_fee_update_fraction_bound : sail.
+0 <= x.(excess_blob_gas_value) /\ x.(excess_blob_gas_value) <= (256 * 11684671 + 21 * 2 ^ 17).
 
 Record blob_fee_update_fraction := { blob_fee_update_fraction_value : Z; }.
 Arguments blob_fee_update_fraction : clear implicits.
@@ -539,6 +373,73 @@ Instance dummy_blob_fee_update_fraction : Inhabited (blob_fee_update_fraction) :
 
 Definition blob_fee_update_fraction_valid (x : blob_fee_update_fraction) : Prop :=
 1 <= x.(blob_fee_update_fraction_value) /\ x.(blob_fee_update_fraction_value) <= 11684671.
+
+Definition inactive_blob_fee_update_fraction : Z := 1.
+#[export] Hint Unfold inactive_blob_fee_update_fraction : sail.
+
+Definition cancun_blob_fee_update_fraction : Z := 3338477.
+#[export] Hint Unfold cancun_blob_fee_update_fraction : sail.
+
+Definition prague_blob_fee_update_fraction : Z := 5007716.
+#[export] Hint Unfold prague_blob_fee_update_fraction : sail.
+
+Definition bpo1_blob_fee_update_fraction : Z := 8346193.
+#[export] Hint Unfold bpo1_blob_fee_update_fraction : sail.
+
+Definition bpo2_blob_fee_update_fraction : Z := 11684671.
+#[export] Hint Unfold bpo2_blob_fee_update_fraction : sail.
+
+Definition blob_schedule_fee_update_fraction_value (value : Z) : bool :=
+  (value =? inactive_blob_fee_update_fraction) ||
+    ((value =? cancun_blob_fee_update_fraction) ||
+      ((value =? prague_blob_fee_update_fraction) ||
+        ((value =? bpo1_blob_fee_update_fraction) || (value =? bpo2_blob_fee_update_fraction)))).
+#[export] Hint Unfold blob_schedule_fee_update_fraction_value : sail.
+
+Definition blob_schedule_fee_update_fraction : Type := Z.
+
+Definition pre_amsterdam_deployed_code_size_limit : Z := 24576.
+#[export] Hint Unfold pre_amsterdam_deployed_code_size_limit : sail.
+
+Definition amsterdam_deployed_code_size_limit : Z := 65536.
+#[export] Hint Unfold amsterdam_deployed_code_size_limit : sail.
+
+Definition inactive_initcode_size_limit : Z := 0.
+#[export] Hint Unfold inactive_initcode_size_limit : sail.
+
+Definition pre_amsterdam_initcode_size_limit : Z := 49152.
+#[export] Hint Unfold pre_amsterdam_initcode_size_limit : sail.
+
+Definition amsterdam_initcode_size_limit : Z := 131072.
+#[export] Hint Unfold amsterdam_initcode_size_limit : sail.
+
+Definition eip7825_transaction_gas_limit : Z := (2 ^ 24).
+#[export] Hint Unfold eip7825_transaction_gas_limit : sail.
+
+Definition protocol_deployed_code_size_limit_value (value : Z) : bool :=
+  (value =? pre_amsterdam_deployed_code_size_limit) || (value =? amsterdam_deployed_code_size_limit).
+#[export] Hint Unfold protocol_deployed_code_size_limit_value : sail.
+
+Definition protocol_deployed_code_size_limit : Type := Z.
+
+Definition protocol_initcode_size_limit_value (value : Z) : bool :=
+  (value =? inactive_initcode_size_limit) ||
+    ((value =? pre_amsterdam_initcode_size_limit) || (value =? amsterdam_initcode_size_limit)).
+#[export] Hint Unfold protocol_initcode_size_limit_value : sail.
+
+Definition protocol_initcode_size_limit : Type := Z.
+
+Definition protocol_transaction_total_gas_limit_value (value : Z) : bool :=
+  (value =? eip7825_transaction_gas_limit) || (value =? ssz_uint_bound).
+#[export] Hint Unfold protocol_transaction_total_gas_limit_value : sail.
+
+Definition protocol_transaction_total_gas_limit : Type := Z.
+
+Definition protocol_transaction_regular_gas_limit_value (value : Z) : bool :=
+  (value =? eip7825_transaction_gas_limit) || (value =? ssz_uint_bound).
+#[export] Hint Unfold protocol_transaction_regular_gas_limit_value : sail.
+
+Definition protocol_transaction_regular_gas_limit : Type := Z.
 
 Definition chain_identifier_bound : Z := (2 ^ 64 - 1).
 #[export] Hint Unfold chain_identifier_bound : sail.
@@ -806,71 +707,8 @@ Instance dummy_ssz_offset_index : Inhabited (ssz_offset_index) := {
 Definition ssz_offset_index_valid (x : ssz_offset_index) : Prop :=
 0 <= x.(ssz_offset_index_value) /\ x.(ssz_offset_index_value) <= (2 ^ 30 - 1).
 
-Record item_count := { item_count_value : Z; }.
-Arguments item_count : clear implicits.
-#[export]
-Instance Decidable_eq_item_count : EqDecision item_count.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_item_count : Countable item_count.
-refine {|
-  encode x := encode (item_count_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_item_count x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'item_count_value' := e ]}" :=
-  {| item_count_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_item_count : Inhabited (item_count) := {
-  inhabitant := {| item_count_value := inhabitant
-|} }.
-
-
-Definition item_count_valid (x : item_count) : Prop :=
-0 <= x.(item_count_value) /\ x.(item_count_value) <= (2 ^ 64 - 1).
-
-Record item_index := { item_index_value : Z; }.
-Arguments item_index : clear implicits.
-#[export]
-Instance Decidable_eq_item_index : EqDecision item_index.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_item_index : Countable item_index.
-refine {|
-  encode x := encode (item_index_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_item_index x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'item_index_value' := e ]}" :=
-  {| item_index_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_item_index : Inhabited (item_index) := {
-  inhabitant := {| item_index_value := inhabitant
-|} }.
-
-
-Definition item_index_valid (x : item_index) : Prop :=
-0 <= x.(item_index_value) /\ x.(item_index_value) <= (2 ^ 64 - 1).
+Definition call_depth_limit : Z := 1024.
+#[export] Hint Unfold call_depth_limit : sail.
 
 Record frame_depth := { frame_depth_value : Z; }.
 Arguments frame_depth : clear implicits.
@@ -1198,74 +1036,116 @@ Instance dummy_opcode : Inhabited (opcode) := { inhabitant := {| opcode_value :=
 Definition opcode_valid (x : opcode) : Prop :=
 0 <= x.(opcode_value) /\ x.(opcode_value) <= 255.
 
-Definition precompile_id_bound : Z := 256.
-#[export] Hint Unfold precompile_id_bound : sail.
+Inductive PrecompileId :=
+  | NotPrecompile
+  | Ecrecover
+  | Sha256
+  | Ripemd160
+  | Identity
+  | Modexp
+  | Bn254Add
+  | Bn254Mul
+  | Bn254Pairing
+  | Blake2f
+  | KzgPointEvaluation
+  | BlsG1Add
+  | BlsG1Msm
+  | BlsG2Add
+  | BlsG2Msm
+  | BlsPairing
+  | BlsMapFpToG1
+  | BlsMapFp2ToG2
+  | P256Verify.
+Definition num_of_PrecompileId (arg_ : PrecompileId) : Z :=
+   match arg_ with
+   | NotPrecompile => 0
+   | Ecrecover => 1
+   | Sha256 => 2
+   | Ripemd160 => 3
+   | Identity => 4
+   | Modexp => 5
+   | Bn254Add => 6
+   | Bn254Mul => 7
+   | Bn254Pairing => 8
+   | Blake2f => 9
+   | KzgPointEvaluation => 10
+   | BlsG1Add => 11
+   | BlsG1Msm => 12
+   | BlsG2Add => 13
+   | BlsG2Msm => 14
+   | BlsPairing => 15
+   | BlsMapFpToG1 => 16
+   | BlsMapFp2ToG2 => 17
+   | P256Verify => 18
+   end.
 
-Record precompile_id := { precompile_id_value : Z; }.
-Arguments precompile_id : clear implicits.
-#[export]
-Instance Decidable_eq_precompile_id : EqDecision precompile_id.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
+Definition PrecompileId_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 18)*) : PrecompileId :=
+   let l__0 := arg_ in
+   if Z.eqb (l__0) (0) then NotPrecompile
+   else if Z.eqb (l__0) (1) then Ecrecover
+   else if Z.eqb (l__0) (2) then Sha256
+   else if Z.eqb (l__0) (3) then Ripemd160
+   else if Z.eqb (l__0) (4) then Identity
+   else if Z.eqb (l__0) (5) then Modexp
+   else if Z.eqb (l__0) (6) then Bn254Add
+   else if Z.eqb (l__0) (7) then Bn254Mul
+   else if Z.eqb (l__0) (8) then Bn254Pairing
+   else if Z.eqb (l__0) (9) then Blake2f
+   else if Z.eqb (l__0) (10) then KzgPointEvaluation
+   else if Z.eqb (l__0) (11) then BlsG1Add
+   else if Z.eqb (l__0) (12) then BlsG1Msm
+   else if Z.eqb (l__0) (13) then BlsG2Add
+   else if Z.eqb (l__0) (14) then BlsG2Msm
+   else if Z.eqb (l__0) (15) then BlsPairing
+   else if Z.eqb (l__0) (16) then BlsMapFpToG1
+   else if Z.eqb (l__0) (17) then BlsMapFp2ToG2
+   else P256Verify.
+
+Lemma PrecompileId_num_of_roundtrip (x : PrecompileId) : PrecompileId_of_num (num_of_PrecompileId x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_PrecompileId_injective (x y : PrecompileId) : num_of_PrecompileId x = num_of_PrecompileId y -> x = y.
+  intro.
+  rewrite <- (PrecompileId_num_of_roundtrip x).
+  rewrite <- (PrecompileId_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition PrecompileId_eq_dec (x y : PrecompileId) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_PrecompileId x) (num_of_PrecompileId y) with
+  | left e => left (num_of_PrecompileId_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
 Defined.
+Definition PrecompileId_beq (x y : PrecompileId) : bool :=
+  Z.eqb (num_of_PrecompileId x) (num_of_PrecompileId y).
+Lemma PrecompileId_beq_iff x y : PrecompileId_beq x y = true <-> x = y.
+  unfold PrecompileId_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_PrecompileId_injective | congruence].
+Qed.
+Lemma PrecompileId_beq_refl x : PrecompileId_beq x x = true.
+apply PrecompileId_beq_iff; reflexivity.
+Qed.
 #[export]
-Instance Countable_precompile_id : Countable precompile_id.
+Instance Decidable_eq_PrecompileId : EqDecision PrecompileId := PrecompileId_eq_dec.
+#[export]
+Instance Countable_PrecompileId : Countable PrecompileId.
 refine {|
-  encode x := encode (precompile_id_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_precompile_id x0)
+  encode x := encode (num_of_PrecompileId x);
+  decode x := z ← decode x; mret (PrecompileId_of_num z);
 |}.
 abstract (
-  intros [x0];
-  rewrite decode_encode;
+  intro s; rewrite decode_encode;
+  simpl;
+  rewrite PrecompileId_num_of_roundtrip;
   reflexivity).
 Defined.
-
-Notation "{[ r 'with' 'precompile_id_value' := e ]}" :=
-  {| precompile_id_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_precompile_id : Inhabited (precompile_id) := {
-  inhabitant := {| precompile_id_value := inhabitant
-|} }.
+Instance dummy_PrecompileId : Inhabited PrecompileId := { inhabitant := NotPrecompile }.
 
 
-Definition precompile_id_valid (x : precompile_id) : Prop :=
-1 <= x.(precompile_id_value) /\ x.(precompile_id_value) <= 256.
-
-Record precompile_selector := { precompile_selector_value : Z; }.
-Arguments precompile_selector : clear implicits.
-#[export]
-Instance Decidable_eq_precompile_selector : EqDecision precompile_selector.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_precompile_selector : Countable precompile_selector.
-refine {|
-  encode x := encode (precompile_selector_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_precompile_selector x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'precompile_selector_value' := e ]}" :=
-  {| precompile_selector_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_precompile_selector : Inhabited (precompile_selector) := {
-  inhabitant := {| precompile_selector_value := inhabitant
-|} }.
-
-
-Definition precompile_selector_valid (x : precompile_selector) : Prop :=
-0 <= x.(precompile_selector_value) /\ x.(precompile_selector_value) <= 256.
+Definition precompile_id : Type := PrecompileId.
 
 Record blake2_rounds := { blake2_rounds_value : Z; }.
 Arguments blake2_rounds : clear implicits.
@@ -1432,6 +1312,39 @@ Instance dummy_bloom_u64_bit : Inhabited (bloom_u64_bit) := {
 Definition bloom_u64_bit_valid (x : bloom_u64_bit) : Prop :=
 0 <= x.(bloom_u64_bit_value) /\ x.(bloom_u64_bit_value) <= 63.
 
+Record ancestor_hash_count := { ancestor_hash_count_value : Z; }.
+Arguments ancestor_hash_count : clear implicits.
+#[export]
+Instance Decidable_eq_ancestor_hash_count : EqDecision ancestor_hash_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_ancestor_hash_count : Countable ancestor_hash_count.
+refine {|
+  encode x := encode (ancestor_hash_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_ancestor_hash_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'ancestor_hash_count_value' := e ]}" :=
+  {| ancestor_hash_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_ancestor_hash_count : Inhabited (ancestor_hash_count) := {
+  inhabitant := {| ancestor_hash_count_value := inhabitant
+|} }.
+
+
+Definition ancestor_hash_count_valid (x : ancestor_hash_count) : Prop :=
+0 <= x.(ancestor_hash_count_value) /\ x.(ancestor_hash_count_value) <= 256.
+
 Record ancestor_index := { ancestor_index_value : Z; }.
 Arguments ancestor_index : clear implicits.
 #[export]
@@ -1465,21 +1378,82 @@ Instance dummy_ancestor_index : Inhabited (ancestor_index) := {
 Definition ancestor_index_valid (x : ancestor_index) : Prop :=
 0 <= x.(ancestor_index_value) /\ x.(ancestor_index_value) <= 255.
 
-Record protocol_divisor := { protocol_divisor_value : Z; }.
-Arguments protocol_divisor : clear implicits.
+Definition default_host_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold default_host_region_bound : sail.
+
+Definition stateless_input_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold stateless_input_region_bound : sail.
+
+Definition scratch_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold scratch_region_bound : sail.
+
+Definition memory_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold memory_region_bound : sail.
+
+Definition code_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold code_region_bound : sail.
+
+Definition log_data_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold log_data_region_bound : sail.
+
+Definition output_region_bound : Z := (2 ^ 32 - 1).
+#[export] Hint Unfold output_region_bound : sail.
+
+Definition host_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? default_host_region_bound)).
+#[export] Hint Unfold host_valid_range : sail.
+
+Definition source_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? default_host_region_bound)).
+#[export] Hint Unfold source_valid_range : sail.
+
+Definition stateless_input_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? stateless_input_region_bound)).
+#[export] Hint Unfold stateless_input_valid_range : sail.
+
+Definition scratch_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? scratch_region_bound)).
+#[export] Hint Unfold scratch_valid_range : sail.
+
+Definition memory_region_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? memory_region_bound)).
+#[export] Hint Unfold memory_region_valid_range : sail.
+
+Definition code_region_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? code_region_bound)).
+#[export] Hint Unfold code_region_valid_range : sail.
+
+Definition log_data_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? log_data_region_bound)).
+#[export] Hint Unfold log_data_valid_range : sail.
+
+Definition output_region_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? output_region_bound)).
+#[export] Hint Unfold output_region_valid_range : sail.
+
+Definition host_valid_access (value : Z) : bool :=
+  (0 <=? value) && (value <=? default_host_region_bound).
+#[export] Hint Unfold host_valid_access : sail.
+
+Definition source_valid_length (value : Z) : bool :=
+  (0 <=? value) && (value <=? default_host_region_bound).
+#[export] Hint Unfold source_valid_length : sail.
+
+Record host_access := { host_access_value : Z; }.
+Arguments host_access : clear implicits.
 #[export]
-Instance Decidable_eq_protocol_divisor : EqDecision protocol_divisor.
+Instance Decidable_eq_host_access : EqDecision host_access.
    intros [x0].
    intros [y0].
   cmp_record_field x0 y0.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_protocol_divisor : Countable protocol_divisor.
+Instance Countable_host_access : Countable host_access.
 refine {|
-  encode x := encode (protocol_divisor_value x);
+  encode x := encode (host_access_value x);
   decode x := '(x0) ← decode x;
-              mret (Build_protocol_divisor x0)
+              mret (Build_host_access x0)
 |}.
 abstract (
   intros [x0];
@@ -1487,43 +1461,608 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'protocol_divisor_value' := e ]}" :=
-  {| protocol_divisor_value := e |} (at level 1, only parsing).
+Notation "{[ r 'with' 'host_access_value' := e ]}" :=
+  {| host_access_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_protocol_divisor : Inhabited (protocol_divisor) := {
-  inhabitant := {| protocol_divisor_value := inhabitant
+Instance dummy_host_access : Inhabited (host_access) := {
+  inhabitant := {| host_access_value := inhabitant
 |} }.
 
 
-Definition protocol_divisor_valid (x : protocol_divisor) : Prop :=
-1 <= x.(protocol_divisor_value) /\ x.(protocol_divisor_value) <= 256.
+Definition host_access_valid (x : host_access) : Prop :=
+0 <= x.(host_access_value) /\ x.(host_access_value) <= (2 ^ 32 - 1).
 
-Definition host_valid_range (off : Z) (len : Z) : bool := (0 <=? off) && (0 <=? len).
-#[export] Hint Unfold host_valid_range : sail.
+Record source_pointer := { source_pointer_value : Z; }.
+Arguments source_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_source_pointer : EqDecision source_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_source_pointer : Countable source_pointer.
+refine {|
+  encode x := encode (source_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_source_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition source_valid_range (off : Z) (len : Z) : bool := (0 <=? off) && (0 <=? len).
-#[export] Hint Unfold source_valid_range : sail.
+Notation "{[ r 'with' 'source_pointer_value' := e ]}" :=
+  {| source_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_source_pointer : Inhabited (source_pointer) := {
+  inhabitant := {| source_pointer_value := inhabitant
+|} }.
 
-Definition host_valid_access (value : Z) : bool := 0 <=? value.
-#[export] Hint Unfold host_valid_access : sail.
 
-Definition source_valid_length (value : Z) : bool := 0 <=? value.
-#[export] Hint Unfold source_valid_length : sail.
+Definition source_pointer_valid (x : source_pointer) : Prop :=
+0 <= x.(source_pointer_value) /\ x.(source_pointer_value) <= (2 ^ 32 - 1).
 
-Definition host_access : Type := Z.
+Record source_length := { source_length_value : Z; }.
+Arguments source_length : clear implicits.
+#[export]
+Instance Decidable_eq_source_length : EqDecision source_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_source_length : Countable source_length.
+refine {|
+  encode x := encode (source_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_source_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition source_pointer : Type := Z.
+Notation "{[ r 'with' 'source_length_value' := e ]}" :=
+  {| source_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_source_length : Inhabited (source_length) := {
+  inhabitant := {| source_length_value := inhabitant
+|} }.
 
-Definition source_length : Type := Z.
 
-Definition journal_checkpoint : Type := Z.
+Definition source_length_valid (x : source_length) : Prop :=
+0 <= x.(source_length_value) /\ x.(source_length_value) <= (2 ^ 32 - 1).
 
-Definition memory_pointer : Type := Z.
+Record stateless_input_pointer := { stateless_input_pointer_value : Z; }.
+Arguments stateless_input_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_stateless_input_pointer : EqDecision stateless_input_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_stateless_input_pointer : Countable stateless_input_pointer.
+refine {|
+  encode x := encode (stateless_input_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_stateless_input_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition memory_length : Type := Z.
+Notation "{[ r 'with' 'stateless_input_pointer_value' := e ]}" :=
+  {| stateless_input_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_stateless_input_pointer : Inhabited (stateless_input_pointer) := {
+  inhabitant := {| stateless_input_pointer_value := inhabitant
+|} }.
 
-Definition memory_valid_range (off : Z) (len : Z) : bool := (0 <=? off) && (0 <=? len).
+
+Definition stateless_input_pointer_valid (x : stateless_input_pointer) : Prop :=
+0 <= x.(stateless_input_pointer_value) /\ x.(stateless_input_pointer_value) <= (2 ^ 32 - 1).
+
+Record stateless_input_length := { stateless_input_length_value : Z; }.
+Arguments stateless_input_length : clear implicits.
+#[export]
+Instance Decidable_eq_stateless_input_length : EqDecision stateless_input_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_stateless_input_length : Countable stateless_input_length.
+refine {|
+  encode x := encode (stateless_input_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_stateless_input_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'stateless_input_length_value' := e ]}" :=
+  {| stateless_input_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_stateless_input_length : Inhabited (stateless_input_length) := {
+  inhabitant := {| stateless_input_length_value := inhabitant
+|} }.
+
+
+Definition stateless_input_length_valid (x : stateless_input_length) : Prop :=
+0 <= x.(stateless_input_length_value) /\ x.(stateless_input_length_value) <= (2 ^ 32 - 1).
+
+Record scratch_pointer := { scratch_pointer_value : Z; }.
+Arguments scratch_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_scratch_pointer : EqDecision scratch_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_scratch_pointer : Countable scratch_pointer.
+refine {|
+  encode x := encode (scratch_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_scratch_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'scratch_pointer_value' := e ]}" :=
+  {| scratch_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_scratch_pointer : Inhabited (scratch_pointer) := {
+  inhabitant := {| scratch_pointer_value := inhabitant
+|} }.
+
+
+Definition scratch_pointer_valid (x : scratch_pointer) : Prop :=
+0 <= x.(scratch_pointer_value) /\ x.(scratch_pointer_value) <= (2 ^ 32 - 1).
+
+Record scratch_length := { scratch_length_value : Z; }.
+Arguments scratch_length : clear implicits.
+#[export]
+Instance Decidable_eq_scratch_length : EqDecision scratch_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_scratch_length : Countable scratch_length.
+refine {|
+  encode x := encode (scratch_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_scratch_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'scratch_length_value' := e ]}" :=
+  {| scratch_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_scratch_length : Inhabited (scratch_length) := {
+  inhabitant := {| scratch_length_value := inhabitant
+|} }.
+
+
+Definition scratch_length_valid (x : scratch_length) : Prop :=
+0 <= x.(scratch_length_value) /\ x.(scratch_length_value) <= (2 ^ 32 - 1).
+
+Record log_data_pointer := { log_data_pointer_value : Z; }.
+Arguments log_data_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_log_data_pointer : EqDecision log_data_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_log_data_pointer : Countable log_data_pointer.
+refine {|
+  encode x := encode (log_data_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_log_data_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'log_data_pointer_value' := e ]}" :=
+  {| log_data_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_log_data_pointer : Inhabited (log_data_pointer) := {
+  inhabitant := {| log_data_pointer_value := inhabitant
+|} }.
+
+
+Definition log_data_pointer_valid (x : log_data_pointer) : Prop :=
+0 <= x.(log_data_pointer_value) /\ x.(log_data_pointer_value) <= (2 ^ 32 - 1).
+
+Record log_data_length := { log_data_length_value : Z; }.
+Arguments log_data_length : clear implicits.
+#[export]
+Instance Decidable_eq_log_data_length : EqDecision log_data_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_log_data_length : Countable log_data_length.
+refine {|
+  encode x := encode (log_data_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_log_data_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'log_data_length_value' := e ]}" :=
+  {| log_data_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_log_data_length : Inhabited (log_data_length) := {
+  inhabitant := {| log_data_length_value := inhabitant
+|} }.
+
+
+Definition log_data_length_valid (x : log_data_length) : Prop :=
+0 <= x.(log_data_length_value) /\ x.(log_data_length_value) <= (2 ^ 32 - 1).
+
+Record output_pointer := { output_pointer_value : Z; }.
+Arguments output_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_output_pointer : EqDecision output_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_output_pointer : Countable output_pointer.
+refine {|
+  encode x := encode (output_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_output_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'output_pointer_value' := e ]}" :=
+  {| output_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_output_pointer : Inhabited (output_pointer) := {
+  inhabitant := {| output_pointer_value := inhabitant
+|} }.
+
+
+Definition output_pointer_valid (x : output_pointer) : Prop :=
+0 <= x.(output_pointer_value) /\ x.(output_pointer_value) <= (2 ^ 32 - 1).
+
+Record output_length := { output_length_value : Z; }.
+Arguments output_length : clear implicits.
+#[export]
+Instance Decidable_eq_output_length : EqDecision output_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_output_length : Countable output_length.
+refine {|
+  encode x := encode (output_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_output_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'output_length_value' := e ]}" :=
+  {| output_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_output_length : Inhabited (output_length) := {
+  inhabitant := {| output_length_value := inhabitant
+|} }.
+
+
+Definition output_length_valid (x : output_length) : Prop :=
+0 <= x.(output_length_value) /\ x.(output_length_value) <= (2 ^ 32 - 1).
+
+Record calldata_pointer := { calldata_pointer_value : Z; }.
+Arguments calldata_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_calldata_pointer : EqDecision calldata_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_calldata_pointer : Countable calldata_pointer.
+refine {|
+  encode x := encode (calldata_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_calldata_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'calldata_pointer_value' := e ]}" :=
+  {| calldata_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_calldata_pointer : Inhabited (calldata_pointer) := {
+  inhabitant := {| calldata_pointer_value := inhabitant
+|} }.
+
+
+Definition calldata_pointer_valid (x : calldata_pointer) : Prop :=
+0 <= x.(calldata_pointer_value) /\ x.(calldata_pointer_value) <= (2 ^ 32 - 1).
+
+Record calldata_length := { calldata_length_value : Z; }.
+Arguments calldata_length : clear implicits.
+#[export]
+Instance Decidable_eq_calldata_length : EqDecision calldata_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_calldata_length : Countable calldata_length.
+refine {|
+  encode x := encode (calldata_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_calldata_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'calldata_length_value' := e ]}" :=
+  {| calldata_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_calldata_length : Inhabited (calldata_length) := {
+  inhabitant := {| calldata_length_value := inhabitant
+|} }.
+
+
+Definition calldata_length_valid (x : calldata_length) : Prop :=
+0 <= x.(calldata_length_value) /\ x.(calldata_length_value) <= (2 ^ 32 - 1).
+
+Record word_byte_count := { word_byte_count_value : Z; }.
+Arguments word_byte_count : clear implicits.
+#[export]
+Instance Decidable_eq_word_byte_count : EqDecision word_byte_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_word_byte_count : Countable word_byte_count.
+refine {|
+  encode x := encode (word_byte_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_word_byte_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'word_byte_count_value' := e ]}" :=
+  {| word_byte_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_word_byte_count : Inhabited (word_byte_count) := {
+  inhabitant := {| word_byte_count_value := inhabitant
+|} }.
+
+
+Definition word_byte_count_valid (x : word_byte_count) : Prop :=
+0 <= x.(word_byte_count_value) /\ x.(word_byte_count_value) <= 32.
+
+Record journal_cursor := { journal_cursor_value : Z; }.
+Arguments journal_cursor : clear implicits.
+#[export]
+Instance Decidable_eq_journal_cursor : EqDecision journal_cursor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_journal_cursor : Countable journal_cursor.
+refine {|
+  encode x := encode (journal_cursor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_journal_cursor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'journal_cursor_value' := e ]}" :=
+  {| journal_cursor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_journal_cursor : Inhabited (journal_cursor) := {
+  inhabitant := {| journal_cursor_value := inhabitant
+|} }.
+
+
+Definition journal_cursor_valid (x : journal_cursor) : Prop :=
+0 <= x.(journal_cursor_value) /\ x.(journal_cursor_value) <= (2 ^ 32 - 1).
+
+Record storage_generation := { storage_generation_value : Z; }.
+Arguments storage_generation : clear implicits.
+#[export]
+Instance Decidable_eq_storage_generation : EqDecision storage_generation.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_storage_generation : Countable storage_generation.
+refine {|
+  encode x := encode (storage_generation_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_storage_generation x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'storage_generation_value' := e ]}" :=
+  {| storage_generation_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_storage_generation : Inhabited (storage_generation) := {
+  inhabitant := {| storage_generation_value := inhabitant
+|} }.
+
+
+Definition storage_generation_valid (x : storage_generation) : Prop :=
+0 <= x.(storage_generation_value) /\ x.(storage_generation_value) <= (2 ^ 32 - 1).
+
+Record memory_pointer := { memory_pointer_value : Z; }.
+Arguments memory_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_memory_pointer : EqDecision memory_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_memory_pointer : Countable memory_pointer.
+refine {|
+  encode x := encode (memory_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_memory_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'memory_pointer_value' := e ]}" :=
+  {| memory_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_memory_pointer : Inhabited (memory_pointer) := {
+  inhabitant := {| memory_pointer_value := inhabitant
+|} }.
+
+
+Definition memory_pointer_valid (x : memory_pointer) : Prop :=
+0 <= x.(memory_pointer_value) /\ x.(memory_pointer_value) <= (2 ^ 32 - 1).
+
+Record memory_length := { memory_length_value : Z; }.
+Arguments memory_length : clear implicits.
+#[export]
+Instance Decidable_eq_memory_length : EqDecision memory_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_memory_length : Countable memory_length.
+refine {|
+  encode x := encode (memory_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_memory_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'memory_length_value' := e ]}" :=
+  {| memory_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_memory_length : Inhabited (memory_length) := {
+  inhabitant := {| memory_length_value := inhabitant
+|} }.
+
+
+Definition memory_length_valid (x : memory_length) : Prop :=
+0 <= x.(memory_length_value) /\ x.(memory_length_value) <= (2 ^ 32 - 1).
+
+Definition memory_expansion_proof_gas_ceiling : Z := (2 ^ 64 - 1).
+#[export] Hint Unfold memory_expansion_proof_gas_ceiling : sail.
+
+Definition memory_unaffordable_word_threshold : Z := (2 ^ 37).
+#[export] Hint Unfold memory_unaffordable_word_threshold : sail.
+
+Definition memory_affordable_word_bound : Z := (2 ^ 37 - 1).
+#[export] Hint Unfold memory_affordable_word_bound : sail.
+
+Definition memory_affordable_byte_bound : Z := (32 * (2 ^ 37 - 1)).
+#[export] Hint Unfold memory_affordable_byte_bound : sail.
+
+Definition memory_region_word_bound : Z := (2 ^ 27).
+#[export] Hint Unfold memory_region_word_bound : sail.
+
+Definition memory_cost_input (words : Z) : bool := 0 <=? words.
+#[export] Hint Unfold memory_cost_input : sail.
+
+Definition memory_valid_range (off : Z) (len : Z) : bool :=
+  (0 <=? off) && ((0 <=? len) && ((off + len) <=? memory_region_bound)).
 #[export] Hint Unfold memory_valid_range : sail.
+
+Definition memory_expansion_endpoint (required : Z) : bool := 0 <=? required.
+#[export] Hint Unfold memory_expansion_endpoint : sail.
+
+Definition memory_access_relation (off : Z) (len : Z) (required : Z) : bool :=
+  memory_valid_range off len &&
+    (memory_expansion_endpoint required &&
+      ((len =? 0) && ((off =? 0) && (required =? 0)) || (0 <? len) && (required =? (off + len)))).
+#[export] Hint Unfold memory_access_relation : sail.
 
 Record MemoryRangeFields {off : Z} {len : Z} (*memory_valid_range off len*) := {
   MemoryRangeFields_off : Z;
@@ -1568,26 +2107,207 @@ Instance dummy_MemoryRangeFields {off : Z} {len : Z} (*memory_valid_range off le
 
 Definition MemoryRange : Type := {len & {off & (MemoryRangeFields off len)}}%type.
 
-Definition code_pointer : Type := Z.
+Record MemoryAccessFields {off : Z} {len : Z} {required : Z}
+(*memory_access_relation off len required*) := {
+  MemoryAccessFields_range : MemoryRangeFields off len;
+  MemoryAccessFields_required_size : Z;
+}.
+Arguments MemoryAccessFields : clear implicits.
+#[export]
+Instance Decidable_eq_MemoryAccessFields {off : Z} {len : Z} {required : Z}
+  (*memory_access_relation off len required*) : EqDecision (MemoryAccessFields off len required).
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_MemoryAccessFields {off : Z} {len : Z} {required : Z}
+  (*memory_access_relation off len required*) : Countable (MemoryAccessFields off len required).
+refine {|
+  encode x := encode (MemoryAccessFields_range x, MemoryAccessFields_required_size x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_MemoryAccessFields off len required x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition code_length : Type := Z.
+Notation "{[ r 'with' 'MemoryAccessFields_range' := e ]}" :=
+  match r with Build_MemoryAccessFields _ _ _ _ (_ as f1) =>
+    Build_MemoryAccessFields _ _ _ e f1 end (at level 1).
+Notation "{[ r 'with' 'MemoryAccessFields_required_size' := e ]}" :=
+  match r with Build_MemoryAccessFields _ _ _ (_ as f0) _ =>
+    Build_MemoryAccessFields _ _ _ f0 e end (at level 1).
+#[export]
+Instance dummy_MemoryAccessFields {off : Z} {len : Z} {required : Z}
+  (*memory_access_relation off len required*) : Inhabited (MemoryAccessFields off len required) := {
+  inhabitant := {|
+    MemoryAccessFields_range := inhabitant;
+    MemoryAccessFields_required_size := inhabitant
+|} }.
 
-Definition code_valid_length (len : Z) : bool := 0 <=? len.
+
+Definition MemoryAccess : Type :=
+  {required & {len & {off & (MemoryAccessFields off len required)}}}%type.
+
+Record code_pointer := { code_pointer_value : Z; }.
+Arguments code_pointer : clear implicits.
+#[export]
+Instance Decidable_eq_code_pointer : EqDecision code_pointer.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_code_pointer : Countable code_pointer.
+refine {|
+  encode x := encode (code_pointer_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_code_pointer x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'code_pointer_value' := e ]}" :=
+  {| code_pointer_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_code_pointer : Inhabited (code_pointer) := {
+  inhabitant := {| code_pointer_value := inhabitant
+|} }.
+
+
+Definition code_pointer_valid (x : code_pointer) : Prop :=
+0 <= x.(code_pointer_value) /\ x.(code_pointer_value) <= (2 ^ 32 - 1).
+
+Record code_length := { code_length_value : Z; }.
+Arguments code_length : clear implicits.
+#[export]
+Instance Decidable_eq_code_length : EqDecision code_length.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_code_length : Countable code_length.
+refine {|
+  encode x := encode (code_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_code_length x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'code_length_value' := e ]}" :=
+  {| code_length_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_code_length : Inhabited (code_length) := {
+  inhabitant := {| code_length_value := inhabitant
+|} }.
+
+
+Definition code_length_valid (x : code_length) : Prop :=
+0 <= x.(code_length_value) /\ x.(code_length_value) <= (2 ^ 32 - 1).
+
+Definition code_valid_length (len : Z) : bool := (0 <=? len) && ((len + 32) <=? code_region_bound).
 #[export] Hint Unfold code_valid_length : sail.
-
-Definition code_chunk_index : Type := Z.
 
 Definition block_gas_limit_bound : Z := (2 ^ 64 - 1).
 #[export] Hint Unfold block_gas_limit_bound : sail.
 
-Definition gas : Type := Z.
+Definition block_access_list_item_gas : Z := 2000.
+#[export] Hint Unfold block_access_list_item_gas : sail.
+
+Definition gas_typ : Type := Z.
 
 Definition live_gas_valid (value : Z) : bool := 0 <=? value.
 #[export] Hint Unfold live_gas_valid : sail.
 
-Definition transaction_gas : Type := Z.
+Record transaction_gas := { transaction_gas_value : Z; }.
+Arguments transaction_gas : clear implicits.
+#[export]
+Instance Decidable_eq_transaction_gas : EqDecision transaction_gas.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_transaction_gas : Countable transaction_gas.
+refine {|
+  encode x := encode (transaction_gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_transaction_gas x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'transaction_gas_value' := e ]}" :=
+  {| transaction_gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_transaction_gas : Inhabited (transaction_gas) := {
+  inhabitant := {| transaction_gas_value := inhabitant
+|} }.
+
+
+Definition transaction_gas_valid (x : transaction_gas) : Prop :=
+0 <= x.(transaction_gas_value) /\ x.(transaction_gas_value) <= (2 ^ 64 - 1).
 
 Definition gas_cost : Type := Z.
+
+Definition memory_required_endpoint : Type := Z.
+
+Definition memory_expansion_charge : Type := Z.
+
+Record GasCharge := {
+  GasCharge_affordable : bool;
+  GasCharge_cost : gas_cost;
+}.
+Arguments GasCharge : clear implicits.
+#[export]
+Instance Decidable_eq_GasCharge : EqDecision GasCharge.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_GasCharge : Countable GasCharge.
+refine {|
+  encode x := encode (GasCharge_affordable x, GasCharge_cost x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_GasCharge x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'GasCharge_affordable' := e ]}" :=
+  match r with Build_GasCharge _ (_ as f1) => Build_GasCharge e f1 end (at level 1).
+Notation "{[ r 'with' 'GasCharge_cost' := e ]}" :=
+  match r with Build_GasCharge (_ as f0) _ => Build_GasCharge f0 e end (at level 1).
+#[export]
+Instance dummy_GasCharge : Inhabited (GasCharge) := {
+  inhabitant := {| GasCharge_affordable := inhabitant; GasCharge_cost := inhabitant
+|} }.
+
 
 Definition modexp_factor : Type := Z.
 
@@ -1609,6 +2329,39 @@ Definition linear_gas_product : Type := Z.
 
 Definition transaction_execution_gas_limit_value : Z := (2 ^ 24).
 #[export] Hint Unfold transaction_execution_gas_limit_value : sail.
+
+Record transaction_execution_gas := { transaction_execution_gas_value : Z; }.
+Arguments transaction_execution_gas : clear implicits.
+#[export]
+Instance Decidable_eq_transaction_execution_gas : EqDecision transaction_execution_gas.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_transaction_execution_gas : Countable transaction_execution_gas.
+refine {|
+  encode x := encode (transaction_execution_gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_transaction_execution_gas x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'transaction_execution_gas_value' := e ]}" :=
+  {| transaction_execution_gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_transaction_execution_gas : Inhabited (transaction_execution_gas) := {
+  inhabitant := {| transaction_execution_gas_value := inhabitant
+|} }.
+
+
+Definition transaction_execution_gas_valid (x : transaction_execution_gas) : Prop :=
+0 <= x.(transaction_execution_gas_value) /\ x.(transaction_execution_gas_value) <= (2 ^ 24).
 
 Record state_gas_spill := { state_gas_spill_value : Z; }.
 Arguments state_gas_spill : clear implicits.
@@ -1676,7 +2429,74 @@ Instance dummy_block_gas_limit : Inhabited (block_gas_limit) := {
 Definition block_gas_limit_valid (x : block_gas_limit) : Prop :=
 0 <= x.(block_gas_limit_value) /\ x.(block_gas_limit_value) <= (2 ^ 64 - 1).
 
-Definition block_gas : Type := Z.
+Record block_gas := { block_gas_value : Z; }.
+Arguments block_gas : clear implicits.
+#[export]
+Instance Decidable_eq_block_gas : EqDecision block_gas.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_block_gas : Countable block_gas.
+refine {|
+  encode x := encode (block_gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_block_gas x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'block_gas_value' := e ]}" :=
+  {| block_gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_block_gas : Inhabited (block_gas) := { inhabitant := {| block_gas_value := inhabitant
+|} }.
+
+
+Definition block_gas_valid (x : block_gas) : Prop :=
+0 <= x.(block_gas_value) /\ x.(block_gas_value) <= (2 ^ 64 - 1).
+
+Record receipt_cumulative_gas := { receipt_cumulative_gas_value : Z; }.
+Arguments receipt_cumulative_gas : clear implicits.
+#[export]
+Instance Decidable_eq_receipt_cumulative_gas : EqDecision receipt_cumulative_gas.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_receipt_cumulative_gas : Countable receipt_cumulative_gas.
+refine {|
+  encode x := encode (receipt_cumulative_gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_receipt_cumulative_gas x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'receipt_cumulative_gas_value' := e ]}" :=
+  {| receipt_cumulative_gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_receipt_cumulative_gas : Inhabited (receipt_cumulative_gas) := {
+  inhabitant := {| receipt_cumulative_gas_value := inhabitant
+|} }.
+
+
+Definition receipt_cumulative_gas_valid (x : receipt_cumulative_gas) : Prop :=
+0 <= x.(receipt_cumulative_gas_value) /\ x.(receipt_cumulative_gas_value) <= (2 * (2 ^ 64 - 1)).
+
+Definition receipt_cumulative_gas_value_valid (value : Z) : bool :=
+  (0 <=? value) && (value <=? (2 * block_gas_limit_bound)).
+#[export] Hint Unfold receipt_cumulative_gas_value_valid : sail.
 
 Record gas_constant := { gas_constant_value : Z; }.
 Arguments gas_constant : clear implicits.
@@ -1753,47 +2573,28 @@ Definition state_gas_delta : Type := Z.
 
 Definition transaction_state_gas_delta : Type := Z.
 
-Record gas_divisor := { gas_divisor_value : Z; }.
-Arguments gas_divisor : clear implicits.
-#[export]
-Instance Decidable_eq_gas_divisor : EqDecision gas_divisor.
-   intros [x0].
-   intros [y0].
-  cmp_record_field x0 y0.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_gas_divisor : Countable gas_divisor.
-refine {|
-  encode x := encode (gas_divisor_value x);
-  decode x := '(x0) ← decode x;
-              mret (Build_gas_divisor x0)
-|}.
-abstract (
-  intros [x0];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition transaction_state_gas_used : Type := Z.
 
-Notation "{[ r 'with' 'gas_divisor_value' := e ]}" :=
-  {| gas_divisor_value := e |} (at level 1, only parsing).
-#[export]
-Instance dummy_gas_divisor : Inhabited (gas_divisor) := {
-  inhabitant := {| gas_divisor_value := inhabitant
-|} }.
+Definition pre_london_refund_divisor : Z := 2.
+#[export] Hint Unfold pre_london_refund_divisor : sail.
 
+Definition post_london_refund_divisor : Z := 5.
+#[export] Hint Unfold post_london_refund_divisor : sail.
 
-Definition gas_divisor_valid (x : gas_divisor) : Prop :=
-1 <= x.(gas_divisor_value) /\ x.(gas_divisor_value) <= 2000.
+Definition transaction_refund_divisor_value (value : Z) : bool :=
+  (value =? pre_london_refund_divisor) || (value =? post_london_refund_divisor).
+#[export] Hint Unfold transaction_refund_divisor_value : sail.
 
-Record StatelessInputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  StatelessInputSliceFields_off : Z;
+Definition transaction_refund_divisor : Type := Z.
+
+Record StatelessInputSliceFields {off : Z} {len : Z} (*stateless_input_valid_range off len*) := {
+  StatelessInputSliceFields_bytes : Z;
   StatelessInputSliceFields_len : Z;
 }.
 Arguments StatelessInputSliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_StatelessInputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  EqDecision (StatelessInputSliceFields off len).
+Instance Decidable_eq_StatelessInputSliceFields {off : Z} {len : Z}
+  (*stateless_input_valid_range off len*) : EqDecision (StatelessInputSliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -1801,10 +2602,10 @@ Instance Decidable_eq_StatelessInputSliceFields {off : Z} {len : Z} (*source_val
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_StatelessInputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  Countable (StatelessInputSliceFields off len).
+Instance Countable_StatelessInputSliceFields {off : Z} {len : Z}
+  (*stateless_input_valid_range off len*) : Countable (StatelessInputSliceFields off len).
 refine {|
-  encode x := encode (StatelessInputSliceFields_off x, StatelessInputSliceFields_len x);
+  encode x := encode (StatelessInputSliceFields_bytes x, StatelessInputSliceFields_len x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_StatelessInputSliceFields off len x0 x1)
 |}.
@@ -1814,17 +2615,17 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'StatelessInputSliceFields_off' := e ]}" :=
+Notation "{[ r 'with' 'StatelessInputSliceFields_bytes' := e ]}" :=
   match r with Build_StatelessInputSliceFields _ _ _ (_ as f1) =>
     Build_StatelessInputSliceFields _ _ e f1 end (at level 1).
 Notation "{[ r 'with' 'StatelessInputSliceFields_len' := e ]}" :=
   match r with Build_StatelessInputSliceFields _ _ (_ as f0) _ =>
     Build_StatelessInputSliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_StatelessInputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  Inhabited (StatelessInputSliceFields off len) := {
+Instance dummy_StatelessInputSliceFields {off : Z} {len : Z} (*stateless_input_valid_range off len*)
+  : Inhabited (StatelessInputSliceFields off len) := {
   inhabitant := {|
-    StatelessInputSliceFields_off := inhabitant;
+    StatelessInputSliceFields_bytes := inhabitant;
     StatelessInputSliceFields_len := inhabitant
 |} }.
 
@@ -1840,13 +2641,13 @@ Definition StatelessInputSliceAtLeast (minimum : Z) : Type :=
 Definition StatelessInputSliceAtMost (maximum : Z) : Type :=
   {len & {off & (StatelessInputSliceFields off len)}}%type.
 
-Record ScratchSliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  ScratchSliceFields_off : Z;
+Record ScratchSliceFields {off : Z} {len : Z} (*scratch_valid_range off len*) := {
+  ScratchSliceFields_bytes : Z;
   ScratchSliceFields_len : Z;
 }.
 Arguments ScratchSliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_ScratchSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance Decidable_eq_ScratchSliceFields {off : Z} {len : Z} (*scratch_valid_range off len*) :
   EqDecision (ScratchSliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
@@ -1855,10 +2656,10 @@ Instance Decidable_eq_ScratchSliceFields {off : Z} {len : Z} (*source_valid_rang
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_ScratchSliceFields {off : Z} {len : Z} (*source_valid_range off len*) : Countable
-  (ScratchSliceFields off len).
+Instance Countable_ScratchSliceFields {off : Z} {len : Z} (*scratch_valid_range off len*) :
+  Countable (ScratchSliceFields off len).
 refine {|
-  encode x := encode (ScratchSliceFields_off x, ScratchSliceFields_len x);
+  encode x := encode (ScratchSliceFields_bytes x, ScratchSliceFields_len x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_ScratchSliceFields off len x0 x1)
 |}.
@@ -1868,16 +2669,16 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'ScratchSliceFields_off' := e ]}" :=
+Notation "{[ r 'with' 'ScratchSliceFields_bytes' := e ]}" :=
   match r with Build_ScratchSliceFields _ _ _ (_ as f1) =>
     Build_ScratchSliceFields _ _ e f1 end (at level 1).
 Notation "{[ r 'with' 'ScratchSliceFields_len' := e ]}" :=
   match r with Build_ScratchSliceFields _ _ (_ as f0) _ =>
     Build_ScratchSliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_ScratchSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance dummy_ScratchSliceFields {off : Z} {len : Z} (*scratch_valid_range off len*) :
   Inhabited (ScratchSliceFields off len) := {
-  inhabitant := {| ScratchSliceFields_off := inhabitant; ScratchSliceFields_len := inhabitant
+  inhabitant := {| ScratchSliceFields_bytes := inhabitant; ScratchSliceFields_len := inhabitant
 |} }.
 
 
@@ -1889,14 +2690,14 @@ Definition ScratchSliceLength (required : Z) : Type :=
 Definition ScratchSliceAtLeast (minimum : Z) : Type :=
   {len & {off & (ScratchSliceFields off len)}}%type.
 
-Record MemorySliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  MemorySliceFields_off : Z;
-  MemorySliceFields_len : Z;
+Record EvmMemorySliceFields {off : Z} {len : Z} (*memory_region_valid_range off len*) := {
+  EvmMemorySliceFields_bytes : Z;
+  EvmMemorySliceFields_len : Z;
 }.
-Arguments MemorySliceFields : clear implicits.
+Arguments EvmMemorySliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_MemorySliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  EqDecision (MemorySliceFields off len).
+Instance Decidable_eq_EvmMemorySliceFields {off : Z} {len : Z} (*memory_region_valid_range off len*)
+  : EqDecision (EvmMemorySliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -1904,12 +2705,12 @@ Instance Decidable_eq_MemorySliceFields {off : Z} {len : Z} (*source_valid_range
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_MemorySliceFields {off : Z} {len : Z} (*source_valid_range off len*) : Countable
-  (MemorySliceFields off len).
+Instance Countable_EvmMemorySliceFields {off : Z} {len : Z} (*memory_region_valid_range off len*) :
+  Countable (EvmMemorySliceFields off len).
 refine {|
-  encode x := encode (MemorySliceFields_off x, MemorySliceFields_len x);
+  encode x := encode (EvmMemorySliceFields_bytes x, EvmMemorySliceFields_len x);
   decode x := '(x0, x1) ← decode x;
-              mret (Build_MemorySliceFields off len x0 x1)
+              mret (Build_EvmMemorySliceFields off len x0 x1)
 |}.
 abstract (
   intros [x0 x1];
@@ -1917,35 +2718,35 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'MemorySliceFields_off' := e ]}" :=
-  match r with Build_MemorySliceFields _ _ _ (_ as f1) =>
-    Build_MemorySliceFields _ _ e f1 end (at level 1).
-Notation "{[ r 'with' 'MemorySliceFields_len' := e ]}" :=
-  match r with Build_MemorySliceFields _ _ (_ as f0) _ =>
-    Build_MemorySliceFields _ _ f0 e end (at level 1).
+Notation "{[ r 'with' 'EvmMemorySliceFields_bytes' := e ]}" :=
+  match r with Build_EvmMemorySliceFields _ _ _ (_ as f1) =>
+    Build_EvmMemorySliceFields _ _ e f1 end (at level 1).
+Notation "{[ r 'with' 'EvmMemorySliceFields_len' := e ]}" :=
+  match r with Build_EvmMemorySliceFields _ _ (_ as f0) _ =>
+    Build_EvmMemorySliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_MemorySliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  Inhabited (MemorySliceFields off len) := {
-  inhabitant := {| MemorySliceFields_off := inhabitant; MemorySliceFields_len := inhabitant
+Instance dummy_EvmMemorySliceFields {off : Z} {len : Z} (*memory_region_valid_range off len*) :
+  Inhabited (EvmMemorySliceFields off len) := {
+  inhabitant := {| EvmMemorySliceFields_bytes := inhabitant; EvmMemorySliceFields_len := inhabitant
 |} }.
 
 
-Definition MemorySlice : Type := {len & {off & (MemorySliceFields off len)}}%type.
+Definition EvmMemorySlice : Type := {len & {off & (EvmMemorySliceFields off len)}}%type.
 
-Definition MemorySliceLength (required : Z) : Type :=
-  {len & {off & (MemorySliceFields off len)}}%type.
+Definition EvmMemorySliceLength (required : Z) : Type :=
+  {len & {off & (EvmMemorySliceFields off len)}}%type.
 
-Definition MemorySliceAtLeast (minimum : Z) : Type :=
-  {len & {off & (MemorySliceFields off len)}}%type.
+Definition EvmMemorySliceAtLeast (minimum : Z) : Type :=
+  {len & {off & (EvmMemorySliceFields off len)}}%type.
 
-Record CodeRegionSliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  CodeRegionSliceFields_off : Z;
+Record CodeRegionSliceFields {off : Z} {len : Z} (*code_region_valid_range off len*) := {
+  CodeRegionSliceFields_bytes : Z;
   CodeRegionSliceFields_len : Z;
 }.
 Arguments CodeRegionSliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_CodeRegionSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
-  EqDecision (CodeRegionSliceFields off len).
+Instance Decidable_eq_CodeRegionSliceFields {off : Z} {len : Z} (*code_region_valid_range off len*)
+  : EqDecision (CodeRegionSliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -1953,10 +2754,10 @@ Instance Decidable_eq_CodeRegionSliceFields {off : Z} {len : Z} (*source_valid_r
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_CodeRegionSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance Countable_CodeRegionSliceFields {off : Z} {len : Z} (*code_region_valid_range off len*) :
   Countable (CodeRegionSliceFields off len).
 refine {|
-  encode x := encode (CodeRegionSliceFields_off x, CodeRegionSliceFields_len x);
+  encode x := encode (CodeRegionSliceFields_bytes x, CodeRegionSliceFields_len x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_CodeRegionSliceFields off len x0 x1)
 |}.
@@ -1966,28 +2767,30 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'CodeRegionSliceFields_off' := e ]}" :=
+Notation "{[ r 'with' 'CodeRegionSliceFields_bytes' := e ]}" :=
   match r with Build_CodeRegionSliceFields _ _ _ (_ as f1) =>
     Build_CodeRegionSliceFields _ _ e f1 end (at level 1).
 Notation "{[ r 'with' 'CodeRegionSliceFields_len' := e ]}" :=
   match r with Build_CodeRegionSliceFields _ _ (_ as f0) _ =>
     Build_CodeRegionSliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_CodeRegionSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance dummy_CodeRegionSliceFields {off : Z} {len : Z} (*code_region_valid_range off len*) :
   Inhabited (CodeRegionSliceFields off len) := {
-  inhabitant := {| CodeRegionSliceFields_off := inhabitant; CodeRegionSliceFields_len := inhabitant
+  inhabitant := {|
+    CodeRegionSliceFields_bytes := inhabitant;
+    CodeRegionSliceFields_len := inhabitant
 |} }.
 
 
 Definition CodeRegionSlice : Type := {len & {off & (CodeRegionSliceFields off len)}}%type.
 
-Record LogDataSliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  LogDataSliceFields_off : Z;
+Record LogDataSliceFields {off : Z} {len : Z} (*log_data_valid_range off len*) := {
+  LogDataSliceFields_bytes : Z;
   LogDataSliceFields_len : Z;
 }.
 Arguments LogDataSliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_LogDataSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance Decidable_eq_LogDataSliceFields {off : Z} {len : Z} (*log_data_valid_range off len*) :
   EqDecision (LogDataSliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
@@ -1996,10 +2799,10 @@ Instance Decidable_eq_LogDataSliceFields {off : Z} {len : Z} (*source_valid_rang
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_LogDataSliceFields {off : Z} {len : Z} (*source_valid_range off len*) : Countable
-  (LogDataSliceFields off len).
+Instance Countable_LogDataSliceFields {off : Z} {len : Z} (*log_data_valid_range off len*) :
+  Countable (LogDataSliceFields off len).
 refine {|
-  encode x := encode (LogDataSliceFields_off x, LogDataSliceFields_len x);
+  encode x := encode (LogDataSliceFields_bytes x, LogDataSliceFields_len x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_LogDataSliceFields off len x0 x1)
 |}.
@@ -2009,28 +2812,31 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'LogDataSliceFields_off' := e ]}" :=
+Notation "{[ r 'with' 'LogDataSliceFields_bytes' := e ]}" :=
   match r with Build_LogDataSliceFields _ _ _ (_ as f1) =>
     Build_LogDataSliceFields _ _ e f1 end (at level 1).
 Notation "{[ r 'with' 'LogDataSliceFields_len' := e ]}" :=
   match r with Build_LogDataSliceFields _ _ (_ as f0) _ =>
     Build_LogDataSliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_LogDataSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance dummy_LogDataSliceFields {off : Z} {len : Z} (*log_data_valid_range off len*) :
   Inhabited (LogDataSliceFields off len) := {
-  inhabitant := {| LogDataSliceFields_off := inhabitant; LogDataSliceFields_len := inhabitant
+  inhabitant := {| LogDataSliceFields_bytes := inhabitant; LogDataSliceFields_len := inhabitant
 |} }.
 
 
 Definition LogDataSlice : Type := {len & {off & (LogDataSliceFields off len)}}%type.
 
-Record OutputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) := {
-  OutputSliceFields_off : Z;
+Definition LogDataSliceLength (required : Z) : Type :=
+  {off & (LogDataSliceFields off required)}%type.
+
+Record OutputSliceFields {off : Z} {len : Z} (*output_region_valid_range off len*) := {
+  OutputSliceFields_bytes : Z;
   OutputSliceFields_len : Z;
 }.
 Arguments OutputSliceFields : clear implicits.
 #[export]
-Instance Decidable_eq_OutputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance Decidable_eq_OutputSliceFields {off : Z} {len : Z} (*output_region_valid_range off len*) :
   EqDecision (OutputSliceFields off len).
    intros [x0 x1].
    intros [y0 y1].
@@ -2039,10 +2845,10 @@ Instance Decidable_eq_OutputSliceFields {off : Z} {len : Z} (*source_valid_range
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_OutputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) : Countable
-  (OutputSliceFields off len).
+Instance Countable_OutputSliceFields {off : Z} {len : Z} (*output_region_valid_range off len*) :
+  Countable (OutputSliceFields off len).
 refine {|
-  encode x := encode (OutputSliceFields_off x, OutputSliceFields_len x);
+  encode x := encode (OutputSliceFields_bytes x, OutputSliceFields_len x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_OutputSliceFields off len x0 x1)
 |}.
@@ -2052,16 +2858,16 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'OutputSliceFields_off' := e ]}" :=
+Notation "{[ r 'with' 'OutputSliceFields_bytes' := e ]}" :=
   match r with Build_OutputSliceFields _ _ _ (_ as f1) =>
     Build_OutputSliceFields _ _ e f1 end (at level 1).
 Notation "{[ r 'with' 'OutputSliceFields_len' := e ]}" :=
   match r with Build_OutputSliceFields _ _ (_ as f0) _ =>
     Build_OutputSliceFields _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_OutputSliceFields {off : Z} {len : Z} (*source_valid_range off len*) :
+Instance dummy_OutputSliceFields {off : Z} {len : Z} (*output_region_valid_range off len*) :
   Inhabited (OutputSliceFields off len) := {
-  inhabitant := {| OutputSliceFields_off := inhabitant; OutputSliceFields_len := inhabitant
+  inhabitant := {| OutputSliceFields_bytes := inhabitant; OutputSliceFields_len := inhabitant
 |} }.
 
 
@@ -2069,7 +2875,7 @@ Definition OutputSlice : Type := {len & {off & (OutputSliceFields off len)}}%typ
 
 Inductive CalldataSlice :=
 | InputCalldata : StatelessInputSlice -> CalldataSlice
-| MemoryCalldata : MemorySlice -> CalldataSlice.
+| MemoryCalldata : EvmMemorySlice -> CalldataSlice.
 Arguments CalldataSlice : clear implicits.
 
 Definition sail_CalldataSlice_encode (x : CalldataSlice) := match x with
@@ -2100,48 +2906,8 @@ Instance Countable_CalldataSlice : Countable CalldataSlice := {|
 Instance dummy_CalldataSlice : Inhabited (CalldataSlice) := { inhabitant := InputCalldata inhabitant
 }.
 
-Inductive ScratchRegionResult {required : Z} (*0 <=? required*) :=
-| ScratchRegionReady : ScratchSliceLength required -> ScratchRegionResult
-| ScratchRegionFailed : unit -> ScratchRegionResult.
-Arguments ScratchRegionResult : clear implicits.
-
-Definition sail_ScratchRegionResult_encode {required : Z} (*0 <=? required*)
-  (x : (ScratchRegionResult required)) := match x with
-  | ScratchRegionReady x' => encode (0, encode x')
-  | ScratchRegionFailed x' => encode (1, encode x') end.
-Definition sail_ScratchRegionResult_decode {required : Z} (*0 <=? required*) x
-  : option (ScratchRegionResult required) := match decode x with
-  | Some (0, x') => ScratchRegionReady <$> decode x'
-  | Some (1, x') => ScratchRegionFailed <$> decode x'
-  | _ => None end.
-Lemma sail_ScratchRegionResult_decode_encode {required : Z} (*0 <=? required*) :
-  forall (x : (ScratchRegionResult required)), sail_ScratchRegionResult_decode
-  (sail_ScratchRegionResult_encode x)  = Some x.
-Proof.
-  unfold sail_ScratchRegionResult_decode, sail_ScratchRegionResult_encode;
-  intros [x|x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_ScratchRegionResult {required : Z} (*0 <=? required*) :
-  EqDecision (ScratchRegionResult required) := decode_encode_eq_dec sail_ScratchRegionResult_encode
-  sail_ScratchRegionResult_decode sail_ScratchRegionResult_decode_encode .
-
-#[export]
-Instance Countable_ScratchRegionResult {required : Z} (*0 <=? required*) : Countable
-  (ScratchRegionResult required) := {|
-  encode := sail_ScratchRegionResult_encode;
-  decode := sail_ScratchRegionResult_decode;
-  decode_encode := sail_ScratchRegionResult_decode_encode
-|}.
-#[export]
-Instance dummy_ScratchRegionResult {required : Z} (*0 <=? required*) :
-  Inhabited (ScratchRegionResult required) := {
-  inhabitant := ScratchRegionReady inhabitant
-}.
-
 Inductive LogData :=
-| LogDataMemory : MemorySlice -> LogData
+| LogDataMemory : EvmMemorySlice -> LogData
 | LogDataWord : word -> LogData.
 Arguments LogData : clear implicits.
 
@@ -2260,7 +3026,7 @@ Defined.
 Instance dummy_ExceptionKind : Inhabited ExceptionKind := { inhabitant := StackUnderflow }.
 
 
-Inductive BlockError :=
+Inductive FatalError :=
   | InvalidConfig
   | HeaderChainBroken
   | RlpDecode
@@ -2280,8 +3046,9 @@ Inductive BlockError :=
   | BlockAccessListTooLarge
   | InvalidBlockAccessList
   | InvalidExecutionRequests
-  | WitnessDeficient.
-Definition num_of_BlockError (arg_ : BlockError) : Z :=
+  | WitnessDeficient
+  | NumericOverflow.
+Definition num_of_FatalError (arg_ : FatalError) : Z :=
    match arg_ with
    | InvalidConfig => 0
    | HeaderChainBroken => 1
@@ -2303,9 +3070,10 @@ Definition num_of_BlockError (arg_ : BlockError) : Z :=
    | InvalidBlockAccessList => 17
    | InvalidExecutionRequests => 18
    | WitnessDeficient => 19
+   | NumericOverflow => 20
    end.
 
-Definition BlockError_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 19)*) : BlockError :=
+Definition FatalError_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 20)*) : FatalError :=
    let l__0 := arg_ in
    if Z.eqb (l__0) (0) then InvalidConfig
    else if Z.eqb (l__0) (1) then HeaderChainBroken
@@ -2326,50 +3094,51 @@ Definition BlockError_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 19)*) : Bloc
    else if Z.eqb (l__0) (16) then BlockAccessListTooLarge
    else if Z.eqb (l__0) (17) then InvalidBlockAccessList
    else if Z.eqb (l__0) (18) then InvalidExecutionRequests
-   else WitnessDeficient.
+   else if Z.eqb (l__0) (19) then WitnessDeficient
+   else NumericOverflow.
 
-Lemma BlockError_num_of_roundtrip (x : BlockError) : BlockError_of_num (num_of_BlockError x) = x.
+Lemma FatalError_num_of_roundtrip (x : FatalError) : FatalError_of_num (num_of_FatalError x) = x.
   destruct x; reflexivity.
 Qed.
-Lemma num_of_BlockError_injective (x y : BlockError) : num_of_BlockError x = num_of_BlockError y -> x = y.
+Lemma num_of_FatalError_injective (x y : FatalError) : num_of_FatalError x = num_of_FatalError y -> x = y.
   intro.
-  rewrite <- (BlockError_num_of_roundtrip x).
-  rewrite <- (BlockError_num_of_roundtrip y).
+  rewrite <- (FatalError_num_of_roundtrip x).
+  rewrite <- (FatalError_num_of_roundtrip y).
   congruence.
 Qed.
-Definition BlockError_eq_dec (x y : BlockError) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_BlockError x) (num_of_BlockError y) with
-  | left e => left (num_of_BlockError_injective x y e)
+Definition FatalError_eq_dec (x y : FatalError) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_FatalError x) (num_of_FatalError y) with
+  | left e => left (num_of_FatalError_injective x y e)
   | right ne => right _
   end).
   congruence.
 Defined.
-Definition BlockError_beq (x y : BlockError) : bool :=
-  Z.eqb (num_of_BlockError x) (num_of_BlockError y).
-Lemma BlockError_beq_iff x y : BlockError_beq x y = true <-> x = y.
-  unfold BlockError_beq.
+Definition FatalError_beq (x y : FatalError) : bool :=
+  Z.eqb (num_of_FatalError x) (num_of_FatalError y).
+Lemma FatalError_beq_iff x y : FatalError_beq x y = true <-> x = y.
+  unfold FatalError_beq.
   rewrite Z.eqb_eq.
-  split; [apply num_of_BlockError_injective | congruence].
+  split; [apply num_of_FatalError_injective | congruence].
 Qed.
-Lemma BlockError_beq_refl x : BlockError_beq x x = true.
-apply BlockError_beq_iff; reflexivity.
+Lemma FatalError_beq_refl x : FatalError_beq x x = true.
+apply FatalError_beq_iff; reflexivity.
 Qed.
 #[export]
-Instance Decidable_eq_BlockError : EqDecision BlockError := BlockError_eq_dec.
+Instance Decidable_eq_FatalError : EqDecision FatalError := FatalError_eq_dec.
 #[export]
-Instance Countable_BlockError : Countable BlockError.
+Instance Countable_FatalError : Countable FatalError.
 refine {|
-  encode x := encode (num_of_BlockError x);
-  decode x := z ← decode x; mret (BlockError_of_num z);
+  encode x := encode (num_of_FatalError x);
+  decode x := z ← decode x; mret (FatalError_of_num z);
 |}.
 abstract (
   intro s; rewrite decode_encode;
   simpl;
-  rewrite BlockError_num_of_roundtrip;
+  rewrite FatalError_num_of_roundtrip;
   reflexivity).
 Defined.
 #[export]
-Instance dummy_BlockError : Inhabited BlockError := { inhabitant := InvalidConfig }.
+Instance dummy_FatalError : Inhabited FatalError := { inhabitant := InvalidConfig }.
 
 
 Record validation_stage := { validation_stage_value : Z; }.
@@ -2404,35 +3173,6 @@ Instance dummy_validation_stage : Inhabited (validation_stage) := {
 
 Definition validation_stage_valid (x : validation_stage) : Prop :=
 0 <= x.(validation_stage_value) /\ x.(validation_stage_value) <= 255.
-
-Inductive exception :=
-| InvalidBlock : BlockError -> exception.
-Arguments exception : clear implicits.
-
-Definition sail_exception_encode (x : exception) := match x with
-  | InvalidBlock x' => encode (0, encode x') end.
-Definition sail_exception_decode x : option exception := match decode x with
-  | Some (0, x') => InvalidBlock <$> decode x'
-  | _ => None end.
-Lemma sail_exception_decode_encode : forall (x : exception), sail_exception_decode
-  (sail_exception_encode x)  = Some x.
-Proof.
-  unfold sail_exception_decode, sail_exception_encode;
-  intros [x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_exception : EqDecision exception := decode_encode_eq_dec sail_exception_encode
-  sail_exception_decode sail_exception_decode_encode .
-
-#[export]
-Instance Countable_exception : Countable exception := {|
-  encode := sail_exception_encode;
-  decode := sail_exception_decode;
-  decode_encode := sail_exception_decode_encode
-|}.
-#[export]
-Instance dummy_exception : Inhabited (exception) := { inhabitant := InvalidBlock inhabitant }.
 
 Inductive HaltKind :=
 | HaltStop : unit -> HaltKind
@@ -2778,8 +3518,6 @@ Definition WitnessHeaderListRef : Type := BoundedSszListRef (2 ^ 8).
 
 Definition WitnessHeaderListCursor : Type := BoundedSszListCursor (2 ^ 8).
 
-Definition JumpdestChunk : Type := bits 256.
-
 Record jump_table_index := { jump_table_index_value : Z; }.
 Arguments jump_table_index : clear implicits.
 #[export]
@@ -2815,41 +3553,122 @@ Definition jump_table_index_valid (x : jump_table_index) : Prop :=
 
 Definition CodeSlice : Type := {len & {off & (CodeRegionSliceFields off len)}}%type.
 
-Record Code := {
-  Code_bytes : CodeSlice;
-  Code_jumpdests : jump_table_index;
-}.
-Arguments Code : clear implicits.
+Inductive DeepStackOperation :=
+  | DeepStackDuplicate | DeepStackSwap | DeepStackExchange | NotDeepStackOperation.
+Definition num_of_DeepStackOperation (arg_ : DeepStackOperation) : Z :=
+   match arg_ with
+   | DeepStackDuplicate => 0
+   | DeepStackSwap => 1
+   | DeepStackExchange => 2
+   | NotDeepStackOperation => 3
+   end.
+
+Definition DeepStackOperation_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 3)*)
+: DeepStackOperation :=
+   let l__0 := arg_ in
+   if Z.eqb (l__0) (0) then DeepStackDuplicate
+   else if Z.eqb (l__0) (1) then DeepStackSwap
+   else if Z.eqb (l__0) (2) then DeepStackExchange
+   else NotDeepStackOperation.
+
+Lemma DeepStackOperation_num_of_roundtrip (x : DeepStackOperation) : DeepStackOperation_of_num (num_of_DeepStackOperation x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_DeepStackOperation_injective (x y : DeepStackOperation) : num_of_DeepStackOperation x = num_of_DeepStackOperation y -> x = y.
+  intro.
+  rewrite <- (DeepStackOperation_num_of_roundtrip x).
+  rewrite <- (DeepStackOperation_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition DeepStackOperation_eq_dec (x y : DeepStackOperation) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_DeepStackOperation x) (num_of_DeepStackOperation y) with
+  | left e => left (num_of_DeepStackOperation_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition DeepStackOperation_beq (x y : DeepStackOperation) : bool :=
+  Z.eqb (num_of_DeepStackOperation x) (num_of_DeepStackOperation y).
+Lemma DeepStackOperation_beq_iff x y : DeepStackOperation_beq x y = true <-> x = y.
+  unfold DeepStackOperation_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_DeepStackOperation_injective | congruence].
+Qed.
+Lemma DeepStackOperation_beq_refl x : DeepStackOperation_beq x x = true.
+apply DeepStackOperation_beq_iff; reflexivity.
+Qed.
 #[export]
-Instance Decidable_eq_Code : EqDecision Code.
-   intros [x0 x1].
-   intros [y0 y1].
+Instance Decidable_eq_DeepStackOperation : EqDecision DeepStackOperation :=
+  DeepStackOperation_eq_dec.
+#[export]
+Instance Countable_DeepStackOperation : Countable DeepStackOperation.
+refine {|
+  encode x := encode (num_of_DeepStackOperation x);
+  decode x := z ← decode x; mret (DeepStackOperation_of_num z);
+|}.
+abstract (
+  intro s; rewrite decode_encode;
+  simpl;
+  rewrite DeepStackOperation_num_of_roundtrip;
+  reflexivity).
+Defined.
+#[export]
+Instance dummy_DeepStackOperation : Inhabited DeepStackOperation := {
+  inhabitant :=
+    DeepStackDuplicate
+}.
+
+
+Record CodeFields {off : Z} {len : Z} (*code_region_valid_range off len && code_valid_length len*) := {
+  CodeFields_bytes : Z;
+  CodeFields_len : Z;
+  CodeFields_jumpdests : jump_table_index;
+}.
+Arguments CodeFields : clear implicits.
+#[export]
+Instance Decidable_eq_CodeFields {off : Z} {len : Z}
+  (*code_region_valid_range off len && code_valid_length len*) : EqDecision (CodeFields off len).
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_Code : Countable Code.
+Instance Countable_CodeFields {off : Z} {len : Z}
+  (*code_region_valid_range off len && code_valid_length len*) : Countable (CodeFields off len).
 refine {|
-  encode x := encode (Code_bytes x, Code_jumpdests x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_Code x0 x1)
+  encode x := encode (CodeFields_bytes x, CodeFields_len x, CodeFields_jumpdests x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_CodeFields off len x0 x1 x2)
 |}.
 abstract (
-  intros [x0 x1];
+  intros [x0 x1 x2];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'Code_bytes' := e ]}" :=
-  match r with Build_Code _ (_ as f1) => Build_Code e f1 end (at level 1).
-Notation "{[ r 'with' 'Code_jumpdests' := e ]}" :=
-  match r with Build_Code (_ as f0) _ => Build_Code f0 e end (at level 1).
+Notation "{[ r 'with' 'CodeFields_bytes' := e ]}" :=
+  match r with Build_CodeFields _ _ _ (_ as f1) (_ as f2) =>
+    Build_CodeFields _ _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'CodeFields_len' := e ]}" :=
+  match r with Build_CodeFields _ _ (_ as f0) _ (_ as f2) =>
+    Build_CodeFields _ _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'CodeFields_jumpdests' := e ]}" :=
+  match r with Build_CodeFields _ _ (_ as f0) (_ as f1) _ =>
+    Build_CodeFields _ _ f0 f1 e end (at level 1).
 #[export]
-Instance dummy_Code : Inhabited (Code) := {
-  inhabitant := {| Code_bytes := inhabitant; Code_jumpdests := inhabitant
+Instance dummy_CodeFields {off : Z} {len : Z}
+  (*code_region_valid_range off len && code_valid_length len*) : Inhabited (CodeFields off len) := {
+  inhabitant := {|
+    CodeFields_bytes := inhabitant;
+    CodeFields_len := inhabitant;
+    CodeFields_jumpdests := inhabitant
 |} }.
 
+
+Definition Code : Type := {len & {off & (CodeFields off len)}}%type.
 
 Record pairing_check_result := { pairing_check_result_value : Z; }.
 Arguments pairing_check_result : clear implicits.
@@ -3044,14 +3863,121 @@ Instance dummy_RlpResult {value : Type} `{Inhabited value} : Inhabited (RlpResul
   inhabitant := RlpOk inhabitant
 }.
 
-Record BlobSchedule := {
-  BlobSchedule_target : blob_target_count;
-  BlobSchedule_max : blob_count;
-  BlobSchedule_base_fee_update_fraction : blob_fee_update_fraction;
-}.
-Arguments BlobSchedule : clear implicits.
+Record Fork := { Fork_value : Z; }.
+Arguments Fork : clear implicits.
 #[export]
-Instance Decidable_eq_BlobSchedule : EqDecision BlobSchedule.
+Instance Decidable_eq_Fork : EqDecision Fork.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_Fork : Countable Fork.
+refine {|
+  encode x := encode (Fork_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_Fork x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'Fork_value' := e ]}" := {| Fork_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_Fork : Inhabited (Fork) := { inhabitant := {| Fork_value := inhabitant |} }.
+
+
+Definition Fork_valid (x : Fork) : Prop :=
+0 <= x.(Fork_value) /\ x.(Fork_value) <= 16.
+
+Definition frontier_fork_value : Z := 0.
+#[export] Hint Unfold frontier_fork_value : sail.
+
+Definition homestead_fork_value : Z := 1.
+#[export] Hint Unfold homestead_fork_value : sail.
+
+Definition byzantium_fork_value : Z := 2.
+#[export] Hint Unfold byzantium_fork_value : sail.
+
+Definition constantinople_fork_value : Z := 3.
+#[export] Hint Unfold constantinople_fork_value : sail.
+
+Definition istanbul_fork_value : Z := 4.
+#[export] Hint Unfold istanbul_fork_value : sail.
+
+Definition berlin_fork_value : Z := 5.
+#[export] Hint Unfold berlin_fork_value : sail.
+
+Definition london_fork_value : Z := 6.
+#[export] Hint Unfold london_fork_value : sail.
+
+Definition arrow_glacier_fork_value : Z := 7.
+#[export] Hint Unfold arrow_glacier_fork_value : sail.
+
+Definition gray_glacier_fork_value : Z := 8.
+#[export] Hint Unfold gray_glacier_fork_value : sail.
+
+Definition paris_fork_value : Z := 9.
+#[export] Hint Unfold paris_fork_value : sail.
+
+Definition shanghai_fork_value : Z := 10.
+#[export] Hint Unfold shanghai_fork_value : sail.
+
+Definition first_blob_fork_value : Z := 11.
+#[export] Hint Unfold first_blob_fork_value : sail.
+
+Definition prague_fork_value : Z := 12.
+#[export] Hint Unfold prague_fork_value : sail.
+
+Definition osaka_fork_value : Z := 13.
+#[export] Hint Unfold osaka_fork_value : sail.
+
+Definition bpo1_fork_value : Z := 14.
+#[export] Hint Unfold bpo1_fork_value : sail.
+
+Definition bpo2_fork_value : Z := 15.
+#[export] Hint Unfold bpo2_fork_value : sail.
+
+Definition amsterdam_fork_value : Z := 16.
+#[export] Hint Unfold amsterdam_fork_value : sail.
+
+Definition blob_fee_update_fraction_parameter (denominator : Z) : bool :=
+  (denominator =? inactive_blob_fee_update_fraction) ||
+    ((denominator =? cancun_blob_fee_update_fraction) ||
+      ((denominator =? prague_blob_fee_update_fraction) ||
+        ((denominator =? bpo1_blob_fee_update_fraction) ||
+          (denominator =? bpo2_blob_fee_update_fraction)))).
+#[export] Hint Unfold blob_fee_update_fraction_parameter : sail.
+
+Definition blob_schedule_parameters (target : Z) (maximum : Z) (denominator : Z) : bool :=
+  blob_fee_update_fraction_parameter denominator &&
+    ((target =? blob_schedule_inactive_count) &&
+      ((maximum =? blob_schedule_inactive_count) &&
+        (denominator =? inactive_blob_fee_update_fraction)) ||
+      ((target =? cancun_blob_target_count) &&
+        ((maximum =? cancun_blob_max_count) && (denominator =? cancun_blob_fee_update_fraction)) ||
+        ((target =? prague_blob_target_count) &&
+          ((maximum =? prague_blob_max_count) && (denominator =? prague_blob_fee_update_fraction)) ||
+          ((target =? bpo1_blob_target_count) &&
+            ((maximum =? bpo1_blob_max_count) && (denominator =? bpo1_blob_fee_update_fraction)) ||
+            (target =? bpo2_blob_target_count) &&
+              ((maximum =? bpo2_blob_max_count) && (denominator =? bpo2_blob_fee_update_fraction)))))).
+#[export] Hint Unfold blob_schedule_parameters : sail.
+
+Record BlobScheduleFields {target : Z} {maximum : Z} {denominator : Z}
+(*blob_schedule_parameters target maximum denominator*) := {
+  BlobScheduleFields_target : Z;
+  BlobScheduleFields_max : Z;
+  BlobScheduleFields_base_fee_update_fraction : Z;
+}.
+Arguments BlobScheduleFields : clear implicits.
+#[export]
+Instance Decidable_eq_BlobScheduleFields {target : Z} {maximum : Z} {denominator : Z}
+  (*blob_schedule_parameters target maximum denominator*) :
+  EqDecision (BlobScheduleFields target maximum denominator).
    intros [x0 x1 x2].
    intros [y0 y1 y2].
   cmp_record_field x0 y0.
@@ -3060,11 +3986,13 @@ Instance Decidable_eq_BlobSchedule : EqDecision BlobSchedule.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_BlobSchedule : Countable BlobSchedule.
+Instance Countable_BlobScheduleFields {target : Z} {maximum : Z} {denominator : Z}
+  (*blob_schedule_parameters target maximum denominator*) : Countable
+  (BlobScheduleFields target maximum denominator).
 refine {|
-  encode x := encode (BlobSchedule_target x, BlobSchedule_max x, BlobSchedule_base_fee_update_fraction x);
+  encode x := encode (BlobScheduleFields_target x, BlobScheduleFields_max x, BlobScheduleFields_base_fee_update_fraction x);
   decode x := '(x0, x1, x2) ← decode x;
-              mret (Build_BlobSchedule x0 x1 x2)
+              mret (Build_BlobScheduleFields target maximum denominator x0 x1 x2)
 |}.
 abstract (
   intros [x0 x1 x2];
@@ -3072,31 +4000,348 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'BlobSchedule_target' := e ]}" :=
-  match r with Build_BlobSchedule _ (_ as f1) (_ as f2) =>
-    Build_BlobSchedule e f1 f2 end (at level 1).
-Notation "{[ r 'with' 'BlobSchedule_max' := e ]}" :=
-  match r with Build_BlobSchedule (_ as f0) _ (_ as f2) =>
-    Build_BlobSchedule f0 e f2 end (at level 1).
-Notation "{[ r 'with' 'BlobSchedule_base_fee_update_fraction' := e ]}" :=
-  match r with Build_BlobSchedule (_ as f0) (_ as f1) _ =>
-    Build_BlobSchedule f0 f1 e end (at level 1).
+Notation "{[ r 'with' 'BlobScheduleFields_target' := e ]}" :=
+  match r with Build_BlobScheduleFields _ _ _ _ (_ as f1) (_ as f2) =>
+    Build_BlobScheduleFields _ _ _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'BlobScheduleFields_max' := e ]}" :=
+  match r with Build_BlobScheduleFields _ _ _ (_ as f0) _ (_ as f2) =>
+    Build_BlobScheduleFields _ _ _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'BlobScheduleFields_base_fee_update_fraction' := e ]}" :=
+  match r with Build_BlobScheduleFields _ _ _ (_ as f0) (_ as f1) _ =>
+    Build_BlobScheduleFields _ _ _ f0 f1 e end (at level 1).
 #[export]
-Instance dummy_BlobSchedule : Inhabited (BlobSchedule) := {
+Instance dummy_BlobScheduleFields {target : Z} {maximum : Z} {denominator : Z}
+  (*blob_schedule_parameters target maximum denominator*) :
+  Inhabited (BlobScheduleFields target maximum denominator) := {
   inhabitant := {|
-    BlobSchedule_target := inhabitant;
-    BlobSchedule_max := inhabitant;
-    BlobSchedule_base_fee_update_fraction := inhabitant
+    BlobScheduleFields_target := inhabitant;
+    BlobScheduleFields_max := inhabitant;
+    BlobScheduleFields_base_fee_update_fraction := inhabitant
 |} }.
 
 
-Record ProtocolProfile := {
-  ProtocolProfile_fork : Fork;
-  ProtocolProfile_blob_schedule : BlobSchedule;
+Definition BlobSchedule : Type :=
+  {denominator & {maximum & {target & (BlobScheduleFields target maximum denominator)}}}%type.
+
+Definition cancun_blob_schedule : Type := BlobScheduleFields 3 6 3338477.
+
+Definition prague_blob_schedule : Type := BlobScheduleFields 6 9 5007716.
+
+Definition osaka_blob_schedule : Type := BlobScheduleFields 6 9 5007716.
+
+Definition bpo1_blob_schedule : Type := BlobScheduleFields 10 15 8346193.
+
+Definition bpo2_blob_schedule : Type := BlobScheduleFields 14 21 11684671.
+
+Definition amsterdam_blob_schedule : Type := BlobScheduleFields 14 21 11684671.
+
+Definition protocol_profile_parameters (fork : Z) (target : Z) (maximum : Z) (denominator : Z) (code_limit : Z) (initcode_limit : Z) (transaction_total_gas_limit : Z) (transaction_regular_gas_limit : Z) (transaction_blob_limit : Z) (refund_divisor : Z) : bool :=
+  (fork =? berlin_fork_value) &&
+    ((target =? blob_schedule_inactive_count) &&
+      ((maximum =? blob_schedule_inactive_count) &&
+        ((denominator =? inactive_blob_fee_update_fraction) &&
+          ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+            ((initcode_limit =? inactive_initcode_size_limit) &&
+              ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                ((transaction_regular_gas_limit =? ssz_uint_bound) &&
+                  ((transaction_blob_limit =? blob_schedule_inactive_count) &&
+                    (refund_divisor =? pre_london_refund_divisor))))))))) ||
+    ((london_fork_value <=? fork) && (fork <=? paris_fork_value) &&
+      ((target =? blob_schedule_inactive_count) &&
+        ((maximum =? blob_schedule_inactive_count) &&
+          ((denominator =? inactive_blob_fee_update_fraction) &&
+            ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+              ((initcode_limit =? inactive_initcode_size_limit) &&
+                ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                  ((transaction_regular_gas_limit =? ssz_uint_bound) &&
+                    ((transaction_blob_limit =? blob_schedule_inactive_count) &&
+                      (refund_divisor =? post_london_refund_divisor))))))))) ||
+      ((fork =? shanghai_fork_value) &&
+        ((target =? blob_schedule_inactive_count) &&
+          ((maximum =? blob_schedule_inactive_count) &&
+            ((denominator =? inactive_blob_fee_update_fraction) &&
+              ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                  ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                    ((transaction_regular_gas_limit =? ssz_uint_bound) &&
+                      ((transaction_blob_limit =? blob_schedule_inactive_count) &&
+                        (refund_divisor =? post_london_refund_divisor))))))))) ||
+        ((fork =? first_blob_fork_value) &&
+          ((target =? cancun_blob_target_count) &&
+            ((maximum =? cancun_blob_max_count) &&
+              ((denominator =? cancun_blob_fee_update_fraction) &&
+                ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                  ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                    ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                      ((transaction_regular_gas_limit =? ssz_uint_bound) &&
+                        ((transaction_blob_limit =? cancun_blob_max_count) &&
+                          (refund_divisor =? post_london_refund_divisor))))))))) ||
+          ((fork =? prague_fork_value) &&
+            ((target =? prague_blob_target_count) &&
+              ((maximum =? prague_blob_max_count) &&
+                ((denominator =? prague_blob_fee_update_fraction) &&
+                  ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                    ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                      ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                        ((transaction_regular_gas_limit =? ssz_uint_bound) &&
+                          ((transaction_blob_limit =? prague_blob_max_count) &&
+                            (refund_divisor =? post_london_refund_divisor))))))))) ||
+            ((fork =? osaka_fork_value) &&
+              ((target =? prague_blob_target_count) &&
+                ((maximum =? prague_blob_max_count) &&
+                  ((denominator =? prague_blob_fee_update_fraction) &&
+                    ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                      ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                        ((transaction_total_gas_limit =? eip7825_transaction_gas_limit) &&
+                          ((transaction_regular_gas_limit =? eip7825_transaction_gas_limit) &&
+                            ((transaction_blob_limit =? cancun_blob_max_count) &&
+                              (refund_divisor =? post_london_refund_divisor))))))))) ||
+              ((fork =? bpo1_fork_value) &&
+                ((target =? bpo1_blob_target_count) &&
+                  ((maximum =? bpo1_blob_max_count) &&
+                    ((denominator =? bpo1_blob_fee_update_fraction) &&
+                      ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                        ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                          ((transaction_total_gas_limit =? eip7825_transaction_gas_limit) &&
+                            ((transaction_regular_gas_limit =? eip7825_transaction_gas_limit) &&
+                              ((transaction_blob_limit =? cancun_blob_max_count) &&
+                                (refund_divisor =? post_london_refund_divisor))))))))) ||
+                ((fork =? bpo2_fork_value) &&
+                  ((target =? bpo2_blob_target_count) &&
+                    ((maximum =? bpo2_blob_max_count) &&
+                      ((denominator =? bpo2_blob_fee_update_fraction) &&
+                        ((code_limit =? pre_amsterdam_deployed_code_size_limit) &&
+                          ((initcode_limit =? pre_amsterdam_initcode_size_limit) &&
+                            ((transaction_total_gas_limit =? eip7825_transaction_gas_limit) &&
+                              ((transaction_regular_gas_limit =? eip7825_transaction_gas_limit) &&
+                                ((transaction_blob_limit =? cancun_blob_max_count) &&
+                                  (refund_divisor =? post_london_refund_divisor))))))))) ||
+                  (fork =? amsterdam_fork_value) &&
+                    ((target =? bpo2_blob_target_count) &&
+                      ((maximum =? bpo2_blob_max_count) &&
+                        ((denominator =? bpo2_blob_fee_update_fraction) &&
+                          ((code_limit =? amsterdam_deployed_code_size_limit) &&
+                            ((initcode_limit =? amsterdam_initcode_size_limit) &&
+                              ((transaction_total_gas_limit =? ssz_uint_bound) &&
+                                ((transaction_regular_gas_limit =? eip7825_transaction_gas_limit) &&
+                                  ((transaction_blob_limit =? cancun_blob_max_count) &&
+                                    (refund_divisor =? post_london_refund_divisor)))))))))))))))).
+#[export] Hint Unfold protocol_profile_parameters : sail.
+
+Definition profile_excess_blob_gas_limit (fork : Z) (target : Z) (maximum : Z) (denominator : Z) : Type :=
+  Z.
+
+Record ProtocolProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+{code_limit : Z} {initcode_limit : Z} {transaction_total_gas_limit : Z}
+{transaction_regular_gas_limit : Z} {transaction_blob_limit : Z} {refund_divisor : Z}
+(*protocol_profile_parameters fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor*) := {
+  ProtocolProfileFields_fork : Z;
+  ProtocolProfileFields_blob_schedule : BlobScheduleFields target maximum denominator;
+  ProtocolProfileFields_excess_blob_gas_limit : profile_excess_blob_gas_limit fork target maximum denominator;
+  ProtocolProfileFields_deployed_code_size_limit : Z;
+  ProtocolProfileFields_initcode_size_limit : Z;
+  ProtocolProfileFields_transaction_total_gas_limit : Z;
+  ProtocolProfileFields_transaction_regular_gas_limit : Z;
+  ProtocolProfileFields_transaction_blob_limit : Z;
+  ProtocolProfileFields_refund_divisor : Z;
 }.
-Arguments ProtocolProfile : clear implicits.
+Arguments ProtocolProfileFields : clear implicits.
 #[export]
-Instance Decidable_eq_ProtocolProfile : EqDecision ProtocolProfile.
+Instance Decidable_eq_ProtocolProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {transaction_total_gas_limit : Z}
+  {transaction_regular_gas_limit : Z} {transaction_blob_limit : Z} {refund_divisor : Z}
+  (*protocol_profile_parameters fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor*)
+  :
+  EqDecision (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor).
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+  cmp_record_field x5 y5.
+  cmp_record_field x6 y6.
+  cmp_record_field x7 y7.
+  cmp_record_field x8 y8.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_ProtocolProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {transaction_total_gas_limit : Z}
+  {transaction_regular_gas_limit : Z} {transaction_blob_limit : Z} {refund_divisor : Z}
+  (*protocol_profile_parameters fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor*)
+  : Countable
+  (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor).
+refine {|
+  encode x := encode (ProtocolProfileFields_fork x, ProtocolProfileFields_blob_schedule x, ProtocolProfileFields_excess_blob_gas_limit x, ProtocolProfileFields_deployed_code_size_limit x, ProtocolProfileFields_initcode_size_limit x, ProtocolProfileFields_transaction_total_gas_limit x, ProtocolProfileFields_transaction_regular_gas_limit x, ProtocolProfileFields_transaction_blob_limit x, ProtocolProfileFields_refund_divisor x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8) ← decode x;
+              mret (Build_ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor x0 x1 x2 x3 x4 x5 x6 x7 x8)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'ProtocolProfileFields_fork' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ e f1 f2 f3 f4 f5 f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_blob_schedule' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 e f2 f3 f4 f5 f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_excess_blob_gas_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 e f3 f4 f5 f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_deployed_code_size_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 e f4 f5 f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_initcode_size_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 f3 e f5 f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_transaction_total_gas_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 f3 f4 e f6 f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_transaction_regular_gas_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 f3 f4 f5 e f7 f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_transaction_blob_limit' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 f3 f4 f5 f6 e f8 end (at level 1).
+Notation "{[ r 'with' 'ProtocolProfileFields_refund_divisor' := e ]}" :=
+  match r with Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ =>
+    Build_ProtocolProfileFields _ _ _ _ _ _ _ _ _ _ f0 f1 f2 f3 f4 f5 f6 f7 e end (at level 1).
+#[export]
+Instance dummy_ProtocolProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {transaction_total_gas_limit : Z}
+  {transaction_regular_gas_limit : Z} {transaction_blob_limit : Z} {refund_divisor : Z}
+  (*protocol_profile_parameters fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor*)
+  :
+  Inhabited (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor) := {
+  inhabitant := {|
+    ProtocolProfileFields_fork := inhabitant;
+    ProtocolProfileFields_blob_schedule := inhabitant;
+    ProtocolProfileFields_excess_blob_gas_limit := inhabitant;
+    ProtocolProfileFields_deployed_code_size_limit := inhabitant;
+    ProtocolProfileFields_initcode_size_limit := inhabitant;
+    ProtocolProfileFields_transaction_total_gas_limit := inhabitant;
+    ProtocolProfileFields_transaction_regular_gas_limit := inhabitant;
+    ProtocolProfileFields_transaction_blob_limit := inhabitant;
+    ProtocolProfileFields_refund_divisor := inhabitant
+|} }.
+
+
+Definition ProtocolProfile : Type :=
+  {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type.
+
+Definition gas_limits_parameters (block_limit : Z) (profile_total_limit : Z) (profile_regular_limit : Z) (transaction_total_limit : Z) (transaction_regular_limit : Z) : bool :=
+  (0 <=? block_limit) &&
+    ((block_limit <=? block_gas_limit_bound) &&
+      (protocol_transaction_total_gas_limit_value profile_total_limit &&
+        (protocol_transaction_regular_gas_limit_value profile_regular_limit &&
+          ((transaction_total_limit =?
+            ((if block_limit <? profile_total_limit then block_limit else profile_total_limit))) &&
+            (transaction_regular_limit =?
+              ((if transaction_total_limit <? profile_regular_limit then transaction_total_limit else profile_regular_limit))))))).
+#[export] Hint Unfold gas_limits_parameters : sail.
+
+Record GasLimitsFields {block_limit : Z} {profile_total_limit : Z} {profile_regular_limit : Z}
+{transaction_total_limit : Z} {transaction_regular_limit : Z}
+(*gas_limits_parameters block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit*) := {
+  GasLimitsFields_block_limit : Z;
+  GasLimitsFields_transaction_total_limit : Z;
+  GasLimitsFields_transaction_regular_limit : Z;
+  GasLimitsFields_system_regular_limit : Z;
+  GasLimitsFields_system_state_limit : Z;
+}.
+Arguments GasLimitsFields : clear implicits.
+#[export]
+Instance Decidable_eq_GasLimitsFields {block_limit : Z} {profile_total_limit : Z}
+  {profile_regular_limit : Z} {transaction_total_limit : Z} {transaction_regular_limit : Z}
+  (*gas_limits_parameters block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit*)
+  :
+  EqDecision (GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit).
+   intros [x0 x1 x2 x3 x4].
+   intros [y0 y1 y2 y3 y4].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_GasLimitsFields {block_limit : Z} {profile_total_limit : Z}
+  {profile_regular_limit : Z} {transaction_total_limit : Z} {transaction_regular_limit : Z}
+  (*gas_limits_parameters block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit*)
+  : Countable
+  (GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit).
+refine {|
+  encode x := encode (GasLimitsFields_block_limit x, GasLimitsFields_transaction_total_limit x, GasLimitsFields_transaction_regular_limit x, GasLimitsFields_system_regular_limit x, GasLimitsFields_system_state_limit x);
+  decode x := '(x0, x1, x2, x3, x4) ← decode x;
+              mret (Build_GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit x0 x1 x2 x3 x4)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'GasLimitsFields_block_limit' := e ]}" :=
+  match r with Build_GasLimitsFields _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) =>
+    Build_GasLimitsFields _ _ _ _ _ e f1 f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'GasLimitsFields_transaction_total_limit' := e ]}" :=
+  match r with Build_GasLimitsFields _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) =>
+    Build_GasLimitsFields _ _ _ _ _ f0 e f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'GasLimitsFields_transaction_regular_limit' := e ]}" :=
+  match r with Build_GasLimitsFields _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) =>
+    Build_GasLimitsFields _ _ _ _ _ f0 f1 e f3 f4 end (at level 1).
+Notation "{[ r 'with' 'GasLimitsFields_system_regular_limit' := e ]}" :=
+  match r with Build_GasLimitsFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) =>
+    Build_GasLimitsFields _ _ _ _ _ f0 f1 f2 e f4 end (at level 1).
+Notation "{[ r 'with' 'GasLimitsFields_system_state_limit' := e ]}" :=
+  match r with Build_GasLimitsFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ =>
+    Build_GasLimitsFields _ _ _ _ _ f0 f1 f2 f3 e end (at level 1).
+#[export]
+Instance dummy_GasLimitsFields {block_limit : Z} {profile_total_limit : Z}
+  {profile_regular_limit : Z} {transaction_total_limit : Z} {transaction_regular_limit : Z}
+  (*gas_limits_parameters block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit*)
+  :
+  Inhabited (GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit) := {
+  inhabitant := {|
+    GasLimitsFields_block_limit := inhabitant;
+    GasLimitsFields_transaction_total_limit := inhabitant;
+    GasLimitsFields_transaction_regular_limit := inhabitant;
+    GasLimitsFields_system_regular_limit := inhabitant;
+    GasLimitsFields_system_state_limit := inhabitant
+|} }.
+
+
+Definition GasLimits : Type :=
+  {transaction_regular_limit & {transaction_total_limit & {profile_regular_limit & {profile_total_limit & {block_limit & (GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit)}}}}}%type.
+
+Definition execution_profile_parameters (fork : Z) (target : Z) (maximum : Z) (denominator : Z) (code_limit : Z) (initcode_limit : Z) (profile_total_limit : Z) (profile_regular_limit : Z) (transaction_blob_limit : Z) (refund_divisor : Z) (block_limit : Z) (transaction_total_limit : Z) (transaction_regular_limit : Z) : bool :=
+  protocol_profile_parameters fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor &&
+    gas_limits_parameters block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit.
+#[export] Hint Unfold execution_profile_parameters : sail.
+
+Record ExecutionProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+{code_limit : Z} {initcode_limit : Z} {profile_total_limit : Z} {profile_regular_limit : Z}
+{transaction_blob_limit : Z} {refund_divisor : Z} {block_limit : Z} {transaction_total_limit : Z}
+{transaction_regular_limit : Z}
+(*execution_profile_parameters fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit*) := {
+  ExecutionProfileFields_protocol : ProtocolProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor;
+  ExecutionProfileFields_gas : GasLimitsFields block_limit profile_total_limit profile_regular_limit transaction_total_limit transaction_regular_limit;
+}.
+Arguments ExecutionProfileFields : clear implicits.
+#[export]
+Instance Decidable_eq_ExecutionProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {profile_total_limit : Z} {profile_regular_limit : Z}
+  {transaction_blob_limit : Z} {refund_divisor : Z} {block_limit : Z} {transaction_total_limit : Z}
+  {transaction_regular_limit : Z}
+  (*execution_profile_parameters fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit*)
+  :
+  EqDecision (ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -3104,11 +4349,17 @@ Instance Decidable_eq_ProtocolProfile : EqDecision ProtocolProfile.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_ProtocolProfile : Countable ProtocolProfile.
+Instance Countable_ExecutionProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {profile_total_limit : Z} {profile_regular_limit : Z}
+  {transaction_blob_limit : Z} {refund_divisor : Z} {block_limit : Z} {transaction_total_limit : Z}
+  {transaction_regular_limit : Z}
+  (*execution_profile_parameters fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit*)
+  : Countable
+  (ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit).
 refine {|
-  encode x := encode (ProtocolProfile_fork x, ProtocolProfile_blob_schedule x);
+  encode x := encode (ExecutionProfileFields_protocol x, ExecutionProfileFields_gas x);
   decode x := '(x0, x1) ← decode x;
-              mret (Build_ProtocolProfile x0 x1)
+              mret (Build_ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit x0 x1)
 |}.
 abstract (
   intros [x0 x1];
@@ -3116,15 +4367,28 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'ProtocolProfile_fork' := e ]}" :=
-  match r with Build_ProtocolProfile _ (_ as f1) => Build_ProtocolProfile e f1 end (at level 1).
-Notation "{[ r 'with' 'ProtocolProfile_blob_schedule' := e ]}" :=
-  match r with Build_ProtocolProfile (_ as f0) _ => Build_ProtocolProfile f0 e end (at level 1).
+Notation "{[ r 'with' 'ExecutionProfileFields_protocol' := e ]}" :=
+  match r with Build_ExecutionProfileFields _ _ _ _ _ _ _ _ _ _ _ _ _ _ (_ as f1) =>
+    Build_ExecutionProfileFields _ _ _ _ _ _ _ _ _ _ _ _ _ e f1 end (at level 1).
+Notation "{[ r 'with' 'ExecutionProfileFields_gas' := e ]}" :=
+  match r with Build_ExecutionProfileFields _ _ _ _ _ _ _ _ _ _ _ _ _ (_ as f0) _ =>
+    Build_ExecutionProfileFields _ _ _ _ _ _ _ _ _ _ _ _ _ f0 e end (at level 1).
 #[export]
-Instance dummy_ProtocolProfile : Inhabited (ProtocolProfile) := {
-  inhabitant := {| ProtocolProfile_fork := inhabitant; ProtocolProfile_blob_schedule := inhabitant
+Instance dummy_ExecutionProfileFields {fork : Z} {target : Z} {maximum : Z} {denominator : Z}
+  {code_limit : Z} {initcode_limit : Z} {profile_total_limit : Z} {profile_regular_limit : Z}
+  {transaction_blob_limit : Z} {refund_divisor : Z} {block_limit : Z} {transaction_total_limit : Z}
+  {transaction_regular_limit : Z}
+  (*execution_profile_parameters fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit*)
+  :
+  Inhabited (ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit) := {
+  inhabitant := {|
+    ExecutionProfileFields_protocol := inhabitant;
+    ExecutionProfileFields_gas := inhabitant
 |} }.
 
+
+Definition ExecutionProfile : Type :=
+  {transaction_regular_limit & {transaction_total_limit & {block_limit & {refund_divisor & {transaction_blob_limit & {profile_regular_limit & {profile_total_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit)}}}}}}}}}}}}}%type.
 
 Record ChainConfig := { ChainConfig_chain_id : chain_identifier; }.
 Arguments ChainConfig : clear implicits.
@@ -3411,6 +4675,77 @@ Instance dummy_StorageEntry : Inhabited (StorageEntry) := {
 |} }.
 
 
+Record StorageBlockRow := {
+  StorageBlockRow_found : bool;
+  StorageBlockRow_value : StorageValue;
+}.
+Arguments StorageBlockRow : clear implicits.
+#[export]
+Instance Decidable_eq_StorageBlockRow : EqDecision StorageBlockRow.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_StorageBlockRow : Countable StorageBlockRow.
+refine {|
+  encode x := encode (StorageBlockRow_found x, StorageBlockRow_value x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_StorageBlockRow x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'StorageBlockRow_found' := e ]}" :=
+  match r with Build_StorageBlockRow _ (_ as f1) => Build_StorageBlockRow e f1 end (at level 1).
+Notation "{[ r 'with' 'StorageBlockRow_value' := e ]}" :=
+  match r with Build_StorageBlockRow (_ as f0) _ => Build_StorageBlockRow f0 e end (at level 1).
+#[export]
+Instance dummy_StorageBlockRow : Inhabited (StorageBlockRow) := {
+  inhabitant := {| StorageBlockRow_found := inhabitant; StorageBlockRow_value := inhabitant
+|} }.
+
+
+Inductive StorageTxPopResult :=
+| StorageTxPopRow : StorageEntry -> StorageTxPopResult
+| StorageTxPopExhausted : unit -> StorageTxPopResult.
+Arguments StorageTxPopResult : clear implicits.
+
+Definition sail_StorageTxPopResult_encode (x : StorageTxPopResult) := match x with
+  | StorageTxPopRow x' => encode (0, encode x')
+  | StorageTxPopExhausted x' => encode (1, encode x') end.
+Definition sail_StorageTxPopResult_decode x : option StorageTxPopResult := match decode x with
+  | Some (0, x') => StorageTxPopRow <$> decode x'
+  | Some (1, x') => StorageTxPopExhausted <$> decode x'
+  | _ => None end.
+Lemma sail_StorageTxPopResult_decode_encode : forall (x : StorageTxPopResult),
+  sail_StorageTxPopResult_decode (sail_StorageTxPopResult_encode x)  = Some x.
+Proof.
+  unfold sail_StorageTxPopResult_decode, sail_StorageTxPopResult_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_StorageTxPopResult : EqDecision StorageTxPopResult := decode_encode_eq_dec
+  sail_StorageTxPopResult_encode sail_StorageTxPopResult_decode
+  sail_StorageTxPopResult_decode_encode .
+
+#[export]
+Instance Countable_StorageTxPopResult : Countable StorageTxPopResult := {|
+  encode := sail_StorageTxPopResult_encode;
+  decode := sail_StorageTxPopResult_decode;
+  decode_encode := sail_StorageTxPopResult_decode_encode
+|}.
+#[export]
+Instance dummy_StorageTxPopResult : Inhabited (StorageTxPopResult) := {
+  inhabitant := StorageTxPopRow inhabitant
+}.
+
 Record AcctValue := {
   AcctValue_curr : Account;
   AcctValue_orig : Account;
@@ -3483,6 +4818,76 @@ Instance dummy_AcctEntry : Inhabited (AcctEntry) := {
 |} }.
 
 
+Record AccountRow := {
+  AccountRow_found : bool;
+  AccountRow_account : Account;
+}.
+Arguments AccountRow : clear implicits.
+#[export]
+Instance Decidable_eq_AccountRow : EqDecision AccountRow.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_AccountRow : Countable AccountRow.
+refine {|
+  encode x := encode (AccountRow_found x, AccountRow_account x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_AccountRow x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'AccountRow_found' := e ]}" :=
+  match r with Build_AccountRow _ (_ as f1) => Build_AccountRow e f1 end (at level 1).
+Notation "{[ r 'with' 'AccountRow_account' := e ]}" :=
+  match r with Build_AccountRow (_ as f0) _ => Build_AccountRow f0 e end (at level 1).
+#[export]
+Instance dummy_AccountRow : Inhabited (AccountRow) := {
+  inhabitant := {| AccountRow_found := inhabitant; AccountRow_account := inhabitant
+|} }.
+
+
+Inductive AcctTxPopResult :=
+| AcctTxPopRow : AcctEntry -> AcctTxPopResult
+| AcctTxPopExhausted : unit -> AcctTxPopResult.
+Arguments AcctTxPopResult : clear implicits.
+
+Definition sail_AcctTxPopResult_encode (x : AcctTxPopResult) := match x with
+  | AcctTxPopRow x' => encode (0, encode x')
+  | AcctTxPopExhausted x' => encode (1, encode x') end.
+Definition sail_AcctTxPopResult_decode x : option AcctTxPopResult := match decode x with
+  | Some (0, x') => AcctTxPopRow <$> decode x'
+  | Some (1, x') => AcctTxPopExhausted <$> decode x'
+  | _ => None end.
+Lemma sail_AcctTxPopResult_decode_encode : forall (x : AcctTxPopResult), sail_AcctTxPopResult_decode
+  (sail_AcctTxPopResult_encode x)  = Some x.
+Proof.
+  unfold sail_AcctTxPopResult_decode, sail_AcctTxPopResult_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_AcctTxPopResult : EqDecision AcctTxPopResult := decode_encode_eq_dec
+  sail_AcctTxPopResult_encode sail_AcctTxPopResult_decode sail_AcctTxPopResult_decode_encode .
+
+#[export]
+Instance Countable_AcctTxPopResult : Countable AcctTxPopResult := {|
+  encode := sail_AcctTxPopResult_encode;
+  decode := sail_AcctTxPopResult_decode;
+  decode_encode := sail_AcctTxPopResult_decode_encode
+|}.
+#[export]
+Instance dummy_AcctTxPopResult : Inhabited (AcctTxPopResult) := {
+  inhabitant := AcctTxPopRow inhabitant
+}.
+
 Record StorageTrieEntry := {
   StorageTrieEntry_entry : StorageEntry;
   StorageTrieEntry_address_hash : hash;
@@ -3529,6 +4934,42 @@ Instance dummy_StorageTrieEntry : Inhabited (StorageTrieEntry) := {
 |} }.
 
 
+Inductive StorageBlockIterResult :=
+| StorageBlockIterRow : StorageTrieEntry -> StorageBlockIterResult
+| StorageBlockIterExhausted : unit -> StorageBlockIterResult.
+Arguments StorageBlockIterResult : clear implicits.
+
+Definition sail_StorageBlockIterResult_encode (x : StorageBlockIterResult) := match x with
+  | StorageBlockIterRow x' => encode (0, encode x')
+  | StorageBlockIterExhausted x' => encode (1, encode x') end.
+Definition sail_StorageBlockIterResult_decode x : option StorageBlockIterResult
+  := match decode x with
+  | Some (0, x') => StorageBlockIterRow <$> decode x'
+  | Some (1, x') => StorageBlockIterExhausted <$> decode x'
+  | _ => None end.
+Lemma sail_StorageBlockIterResult_decode_encode : forall (x : StorageBlockIterResult),
+  sail_StorageBlockIterResult_decode (sail_StorageBlockIterResult_encode x)  = Some x.
+Proof.
+  unfold sail_StorageBlockIterResult_decode, sail_StorageBlockIterResult_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_StorageBlockIterResult : EqDecision StorageBlockIterResult :=
+  decode_encode_eq_dec sail_StorageBlockIterResult_encode sail_StorageBlockIterResult_decode
+  sail_StorageBlockIterResult_decode_encode .
+
+#[export]
+Instance Countable_StorageBlockIterResult : Countable StorageBlockIterResult := {|
+  encode := sail_StorageBlockIterResult_encode;
+  decode := sail_StorageBlockIterResult_decode;
+  decode_encode := sail_StorageBlockIterResult_decode_encode
+|}.
+#[export]
+Instance dummy_StorageBlockIterResult : Inhabited (StorageBlockIterResult) := {
+  inhabitant := StorageBlockIterRow inhabitant
+}.
+
 Record AcctTrieEntry := {
   AcctTrieEntry_entry : AcctEntry;
   AcctTrieEntry_address_hash : hash;
@@ -3564,6 +5005,41 @@ Instance dummy_AcctTrieEntry : Inhabited (AcctTrieEntry) := {
   inhabitant := {| AcctTrieEntry_entry := inhabitant; AcctTrieEntry_address_hash := inhabitant
 |} }.
 
+
+Inductive AcctBlockIterResult :=
+| AcctBlockIterRow : AcctTrieEntry -> AcctBlockIterResult
+| AcctBlockIterExhausted : unit -> AcctBlockIterResult.
+Arguments AcctBlockIterResult : clear implicits.
+
+Definition sail_AcctBlockIterResult_encode (x : AcctBlockIterResult) := match x with
+  | AcctBlockIterRow x' => encode (0, encode x')
+  | AcctBlockIterExhausted x' => encode (1, encode x') end.
+Definition sail_AcctBlockIterResult_decode x : option AcctBlockIterResult := match decode x with
+  | Some (0, x') => AcctBlockIterRow <$> decode x'
+  | Some (1, x') => AcctBlockIterExhausted <$> decode x'
+  | _ => None end.
+Lemma sail_AcctBlockIterResult_decode_encode : forall (x : AcctBlockIterResult),
+  sail_AcctBlockIterResult_decode (sail_AcctBlockIterResult_encode x)  = Some x.
+Proof.
+  unfold sail_AcctBlockIterResult_decode, sail_AcctBlockIterResult_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_AcctBlockIterResult : EqDecision AcctBlockIterResult := decode_encode_eq_dec
+  sail_AcctBlockIterResult_encode sail_AcctBlockIterResult_decode
+  sail_AcctBlockIterResult_decode_encode .
+
+#[export]
+Instance Countable_AcctBlockIterResult : Countable AcctBlockIterResult := {|
+  encode := sail_AcctBlockIterResult_encode;
+  decode := sail_AcctBlockIterResult_decode;
+  decode_encode := sail_AcctBlockIterResult_decode_encode
+|}.
+#[export]
+Instance dummy_AcctBlockIterResult : Inhabited (AcctBlockIterResult) := {
+  inhabitant := AcctBlockIterRow inhabitant
+}.
 
 Inductive TxType := LegacyTx | AccessListTx | FeeMarketTx | BlobTx | SetCodeTx.
 Definition num_of_TxType (arg_ : TxType) : Z :=
@@ -3627,6 +5103,111 @@ Defined.
 Instance dummy_TxType : Inhabited TxType := { inhabitant := LegacyTx }.
 
 
+Inductive TxSignatureScheme := LegacySignature | TypedSignature.
+Definition num_of_TxSignatureScheme (arg_ : TxSignatureScheme) : Z :=
+   match arg_ with | LegacySignature => 0 | TypedSignature => 1 end.
+
+Definition TxSignatureScheme_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 1)*) : TxSignatureScheme :=
+   let l__0 := arg_ in
+   if Z.eqb (l__0) (0) then LegacySignature
+   else TypedSignature.
+
+Lemma TxSignatureScheme_num_of_roundtrip (x : TxSignatureScheme) : TxSignatureScheme_of_num (num_of_TxSignatureScheme x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_TxSignatureScheme_injective (x y : TxSignatureScheme) : num_of_TxSignatureScheme x = num_of_TxSignatureScheme y -> x = y.
+  intro.
+  rewrite <- (TxSignatureScheme_num_of_roundtrip x).
+  rewrite <- (TxSignatureScheme_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition TxSignatureScheme_eq_dec (x y : TxSignatureScheme) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_TxSignatureScheme x) (num_of_TxSignatureScheme y) with
+  | left e => left (num_of_TxSignatureScheme_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition TxSignatureScheme_beq (x y : TxSignatureScheme) : bool :=
+  Z.eqb (num_of_TxSignatureScheme x) (num_of_TxSignatureScheme y).
+Lemma TxSignatureScheme_beq_iff x y : TxSignatureScheme_beq x y = true <-> x = y.
+  unfold TxSignatureScheme_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_TxSignatureScheme_injective | congruence].
+Qed.
+Lemma TxSignatureScheme_beq_refl x : TxSignatureScheme_beq x x = true.
+apply TxSignatureScheme_beq_iff; reflexivity.
+Qed.
+#[export]
+Instance Decidable_eq_TxSignatureScheme : EqDecision TxSignatureScheme := TxSignatureScheme_eq_dec.
+#[export]
+Instance Countable_TxSignatureScheme : Countable TxSignatureScheme.
+refine {|
+  encode x := encode (num_of_TxSignatureScheme x);
+  decode x := z ← decode x; mret (TxSignatureScheme_of_num z);
+|}.
+abstract (
+  intro s; rewrite decode_encode;
+  simpl;
+  rewrite TxSignatureScheme_num_of_roundtrip;
+  reflexivity).
+Defined.
+#[export]
+Instance dummy_TxSignatureScheme : Inhabited TxSignatureScheme := { inhabitant := LegacySignature }.
+
+
+Record TxTypeSemantics := {
+  TxTypeSemantics_minimum_fork : Fork;
+  TxTypeSemantics_signature : TxSignatureScheme;
+  TxTypeSemantics_blob : bool;
+  TxTypeSemantics_set_code : bool;
+}.
+Arguments TxTypeSemantics : clear implicits.
+#[export]
+Instance Decidable_eq_TxTypeSemantics : EqDecision TxTypeSemantics.
+   intros [x0 x1 x2 x3].
+   intros [y0 y1 y2 y3].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TxTypeSemantics : Countable TxTypeSemantics.
+refine {|
+  encode x := encode (TxTypeSemantics_minimum_fork x, TxTypeSemantics_signature x, TxTypeSemantics_blob x, TxTypeSemantics_set_code x);
+  decode x := '(x0, x1, x2, x3) ← decode x;
+              mret (Build_TxTypeSemantics x0 x1 x2 x3)
+|}.
+abstract (
+  intros [x0 x1 x2 x3];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TxTypeSemantics_minimum_fork' := e ]}" :=
+  match r with Build_TxTypeSemantics _ (_ as f1) (_ as f2) (_ as f3) =>
+    Build_TxTypeSemantics e f1 f2 f3 end (at level 1).
+Notation "{[ r 'with' 'TxTypeSemantics_signature' := e ]}" :=
+  match r with Build_TxTypeSemantics (_ as f0) _ (_ as f2) (_ as f3) =>
+    Build_TxTypeSemantics f0 e f2 f3 end (at level 1).
+Notation "{[ r 'with' 'TxTypeSemantics_blob' := e ]}" :=
+  match r with Build_TxTypeSemantics (_ as f0) (_ as f1) _ (_ as f3) =>
+    Build_TxTypeSemantics f0 f1 e f3 end (at level 1).
+Notation "{[ r 'with' 'TxTypeSemantics_set_code' := e ]}" :=
+  match r with Build_TxTypeSemantics (_ as f0) (_ as f1) (_ as f2) _ =>
+    Build_TxTypeSemantics f0 f1 f2 e end (at level 1).
+#[export]
+Instance dummy_TxTypeSemantics : Inhabited (TxTypeSemantics) := {
+  inhabitant := {|
+    TxTypeSemantics_minimum_fork := inhabitant;
+    TxTypeSemantics_signature := inhabitant;
+    TxTypeSemantics_blob := inhabitant;
+    TxTypeSemantics_set_code := inhabitant
+|} }.
+
+
 Record Authorization := {
   Authorization_valid_sig : bool;
   Authorization_authority : address_typ;
@@ -3685,13 +5266,14 @@ Instance dummy_Authorization : Inhabited (Authorization) := {
 |} }.
 
 
-Record BlobHashes := {
-  BlobHashes_bytes : StatelessInputSlice;
-  BlobHashes_count : transaction_blob_count;
+Record BlobHashesFields {limit : Z} (*transaction_blob_limit_value limit*) := {
+  BlobHashesFields_bytes : StatelessInputSlice;
+  BlobHashesFields_count : transaction_blob_count limit;
 }.
-Arguments BlobHashes : clear implicits.
+Arguments BlobHashesFields : clear implicits.
 #[export]
-Instance Decidable_eq_BlobHashes : EqDecision BlobHashes.
+Instance Decidable_eq_BlobHashesFields {limit : Z} (*transaction_blob_limit_value limit*) :
+  EqDecision (BlobHashesFields limit).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -3699,11 +5281,12 @@ Instance Decidable_eq_BlobHashes : EqDecision BlobHashes.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_BlobHashes : Countable BlobHashes.
+Instance Countable_BlobHashesFields {limit : Z} (*transaction_blob_limit_value limit*) : Countable
+  (BlobHashesFields limit).
 refine {|
-  encode x := encode (BlobHashes_bytes x, BlobHashes_count x);
+  encode x := encode (BlobHashesFields_bytes x, BlobHashesFields_count x);
   decode x := '(x0, x1) ← decode x;
-              mret (Build_BlobHashes x0 x1)
+              mret (Build_BlobHashesFields limit x0 x1)
 |}.
 abstract (
   intros [x0 x1];
@@ -3711,13 +5294,16 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'BlobHashes_bytes' := e ]}" :=
-  match r with Build_BlobHashes _ (_ as f1) => Build_BlobHashes e f1 end (at level 1).
-Notation "{[ r 'with' 'BlobHashes_count' := e ]}" :=
-  match r with Build_BlobHashes (_ as f0) _ => Build_BlobHashes f0 e end (at level 1).
+Notation "{[ r 'with' 'BlobHashesFields_bytes' := e ]}" :=
+  match r with Build_BlobHashesFields _ _ (_ as f1) =>
+    Build_BlobHashesFields _ e f1 end (at level 1).
+Notation "{[ r 'with' 'BlobHashesFields_count' := e ]}" :=
+  match r with Build_BlobHashesFields _ (_ as f0) _ =>
+    Build_BlobHashesFields _ f0 e end (at level 1).
 #[export]
-Instance dummy_BlobHashes : Inhabited (BlobHashes) := {
-  inhabitant := {| BlobHashes_bytes := inhabitant; BlobHashes_count := inhabitant
+Instance dummy_BlobHashesFields {limit : Z} (*transaction_blob_limit_value limit*) :
+  Inhabited (BlobHashesFields limit) := {
+  inhabitant := {| BlobHashesFields_bytes := inhabitant; BlobHashesFields_count := inhabitant
 |} }.
 
 
@@ -3802,13 +5388,16 @@ Instance dummy_AccessListRef : Inhabited (AccessListRef) := {
 |} }.
 
 
-Record AuthorizationListRef := {
-  AuthorizationListRef_encoded : StatelessInputSlice;
-  AuthorizationListRef_count : transaction_item_count;
+Record AuthorizationListRefFields {count : Z}
+(*(0 <=? count) && (count <=? transaction_length_bound)*) := {
+  AuthorizationListRefFields_encoded : StatelessInputSlice;
+  AuthorizationListRefFields_count : Z;
 }.
-Arguments AuthorizationListRef : clear implicits.
+Arguments AuthorizationListRefFields : clear implicits.
 #[export]
-Instance Decidable_eq_AuthorizationListRef : EqDecision AuthorizationListRef.
+Instance Decidable_eq_AuthorizationListRefFields {count : Z}
+  (*(0 <=? count) && (count <=? transaction_length_bound)*) :
+  EqDecision (AuthorizationListRefFields count).
    intros [x0 x1].
    intros [y0 y1].
   cmp_record_field x0 y0.
@@ -3816,11 +5405,13 @@ Instance Decidable_eq_AuthorizationListRef : EqDecision AuthorizationListRef.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_AuthorizationListRef : Countable AuthorizationListRef.
+Instance Countable_AuthorizationListRefFields {count : Z}
+  (*(0 <=? count) && (count <=? transaction_length_bound)*) : Countable
+  (AuthorizationListRefFields count).
 refine {|
-  encode x := encode (AuthorizationListRef_encoded x, AuthorizationListRef_count x);
+  encode x := encode (AuthorizationListRefFields_encoded x, AuthorizationListRefFields_count x);
   decode x := '(x0, x1) ← decode x;
-              mret (Build_AuthorizationListRef x0 x1)
+              mret (Build_AuthorizationListRefFields count x0 x1)
 |}.
 abstract (
   intros [x0 x1];
@@ -3828,19 +5419,23 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'AuthorizationListRef_encoded' := e ]}" :=
-  match r with Build_AuthorizationListRef _ (_ as f1) =>
-    Build_AuthorizationListRef e f1 end (at level 1).
-Notation "{[ r 'with' 'AuthorizationListRef_count' := e ]}" :=
-  match r with Build_AuthorizationListRef (_ as f0) _ =>
-    Build_AuthorizationListRef f0 e end (at level 1).
+Notation "{[ r 'with' 'AuthorizationListRefFields_encoded' := e ]}" :=
+  match r with Build_AuthorizationListRefFields _ _ (_ as f1) =>
+    Build_AuthorizationListRefFields _ e f1 end (at level 1).
+Notation "{[ r 'with' 'AuthorizationListRefFields_count' := e ]}" :=
+  match r with Build_AuthorizationListRefFields _ (_ as f0) _ =>
+    Build_AuthorizationListRefFields _ f0 e end (at level 1).
 #[export]
-Instance dummy_AuthorizationListRef : Inhabited (AuthorizationListRef) := {
+Instance dummy_AuthorizationListRefFields {count : Z}
+  (*(0 <=? count) && (count <=? transaction_length_bound)*) :
+  Inhabited (AuthorizationListRefFields count) := {
   inhabitant := {|
-    AuthorizationListRef_encoded := inhabitant;
-    AuthorizationListRef_count := inhabitant
+    AuthorizationListRefFields_encoded := inhabitant;
+    AuthorizationListRefFields_count := inhabitant
 |} }.
 
+
+Definition AuthorizationListRef : Type := {count & (AuthorizationListRefFields count)}%type.
 
 Record transaction_byte_length := { transaction_byte_length_value : Z; }.
 Arguments transaction_byte_length : clear implicits.
@@ -3974,32 +5569,33 @@ Instance dummy_transaction_initcode_cost : Inhabited (transaction_initcode_cost)
 Definition transaction_initcode_cost_valid (x : transaction_initcode_cost) : Prop :=
 0 <= x.(transaction_initcode_cost_value) /\ x.(transaction_initcode_cost_value) <= (2 * e_div (transaction_length_bound + 31) 32).
 
-Record Transaction := {
-  Transaction_tx_type : TxType;
-  Transaction_sender : address_typ;
-  Transaction_nonce : word;
-  Transaction_chain_id : chain_identifier;
-  Transaction_gas_limit : transaction_gas;
-  Transaction_is_create : bool;
-  Transaction_recipient : address_typ;
-  Transaction_value : word;
-  Transaction_raw : StatelessInputSlice;
-  Transaction_input_src : TransactionInputSlice;
-  Transaction_access_list : AccessListRef;
-  Transaction_max_fee : word;
-  Transaction_max_blob_fee : word;
-  Transaction_max_priority_fee : word;
-  Transaction_authorizations : AuthorizationListRef;
-  Transaction_blob_hashes : BlobHashes;
-  Transaction_pubkey : StatelessInputSlice;
-  Transaction_signing_hash : hash;
-  Transaction_sig_v : word;
-  Transaction_sig_r : word;
-  Transaction_sig_s : word;
+Record TransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) := {
+  TransactionFields_tx_type : TxType;
+  TransactionFields_sender : address_typ;
+  TransactionFields_nonce : word;
+  TransactionFields_chain_id : chain_identifier;
+  TransactionFields_gas_limit : transaction_gas;
+  TransactionFields_is_create : bool;
+  TransactionFields_recipient : address_typ;
+  TransactionFields_value : word;
+  TransactionFields_raw : StatelessInputSlice;
+  TransactionFields_input_src : TransactionInputSlice;
+  TransactionFields_access_list : AccessListRef;
+  TransactionFields_max_fee : word;
+  TransactionFields_max_blob_fee : word;
+  TransactionFields_max_priority_fee : word;
+  TransactionFields_authorizations : AuthorizationListRef;
+  TransactionFields_blob_hashes : BlobHashesFields blob_limit;
+  TransactionFields_pubkey : StatelessInputSlice;
+  TransactionFields_signing_hash : hash;
+  TransactionFields_sig_v : word;
+  TransactionFields_sig_r : word;
+  TransactionFields_sig_s : word;
 }.
-Arguments Transaction : clear implicits.
+Arguments TransactionFields : clear implicits.
 #[export]
-Instance Decidable_eq_Transaction : EqDecision Transaction.
+Instance Decidable_eq_TransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*)
+  : EqDecision (TransactionFields blob_limit).
    intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19 x20].
    intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11 y12 y13 y14 y15 y16 y17 y18 y19 y20].
   cmp_record_field x0 y0.
@@ -4026,11 +5622,12 @@ Instance Decidable_eq_Transaction : EqDecision Transaction.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_Transaction : Countable Transaction.
+Instance Countable_TransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) :
+  Countable (TransactionFields blob_limit).
 refine {|
-  encode x := encode (Transaction_tx_type x, Transaction_sender x, Transaction_nonce x, Transaction_chain_id x, Transaction_gas_limit x, Transaction_is_create x, Transaction_recipient x, Transaction_value x, Transaction_raw x, Transaction_input_src x, Transaction_access_list x, Transaction_max_fee x, Transaction_max_blob_fee x, Transaction_max_priority_fee x, Transaction_authorizations x, Transaction_blob_hashes x, Transaction_pubkey x, Transaction_signing_hash x, Transaction_sig_v x, Transaction_sig_r x, Transaction_sig_s x);
+  encode x := encode (TransactionFields_tx_type x, TransactionFields_sender x, TransactionFields_nonce x, TransactionFields_chain_id x, TransactionFields_gas_limit x, TransactionFields_is_create x, TransactionFields_recipient x, TransactionFields_value x, TransactionFields_raw x, TransactionFields_input_src x, TransactionFields_access_list x, TransactionFields_max_fee x, TransactionFields_max_blob_fee x, TransactionFields_max_priority_fee x, TransactionFields_authorizations x, TransactionFields_blob_hashes x, TransactionFields_pubkey x, TransactionFields_signing_hash x, TransactionFields_sig_v x, TransactionFields_sig_r x, TransactionFields_sig_s x);
   decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20) ← decode x;
-              mret (Build_Transaction x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19 x20)
+              mret (Build_TransactionFields blob_limit x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19 x20)
 |}.
 abstract (
   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19 x20];
@@ -4038,116 +5635,119 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'Transaction_tx_type' := e ]}" :=
-  match r with Build_Transaction _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_tx_type' := e ]}" :=
+  match r with Build_TransactionFields _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_sender' := e ]}" :=
-  match r with Build_Transaction (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_sender' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_nonce' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_nonce' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_chain_id' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_chain_id' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_gas_limit' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_gas_limit' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_is_create' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_is_create' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_recipient' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_recipient' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_value' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_value' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_raw' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_raw' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_input_src' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_input_src' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_access_list' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_access_list' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_max_fee' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_max_fee' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_max_blob_fee' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_max_blob_fee' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_max_priority_fee' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_max_priority_fee' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_authorizations' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_authorizations' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_blob_hashes' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_blob_hashes' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_pubkey' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_pubkey' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_signing_hash' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 f19 f20
+Notation "{[ r 'with' 'TransactionFields_signing_hash' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_sig_v' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ (_ as f19) (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e f19 f20
+Notation "{[ r 'with' 'TransactionFields_sig_v' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ (_ as f19) (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e f19 f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_sig_r' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) _ (_ as f20) =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 e f20
+Notation "{[ r 'with' 'TransactionFields_sig_r' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) _ (_ as f20) =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 e f20
       end (at level 1).
-Notation "{[ r 'with' 'Transaction_sig_s' := e ]}" :=
-  match r with Build_Transaction (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) _ =>
-    Build_Transaction f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 e
+Notation "{[ r 'with' 'TransactionFields_sig_s' := e ]}" :=
+  match r with Build_TransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) _ =>
+    Build_TransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 e
       end (at level 1).
 #[export]
-Instance dummy_Transaction : Inhabited (Transaction) := {
+Instance dummy_TransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) :
+  Inhabited (TransactionFields blob_limit) := {
   inhabitant := {|
-    Transaction_tx_type := inhabitant;
-    Transaction_sender := inhabitant;
-    Transaction_nonce := inhabitant;
-    Transaction_chain_id := inhabitant;
-    Transaction_gas_limit := inhabitant;
-    Transaction_is_create := inhabitant;
-    Transaction_recipient := inhabitant;
-    Transaction_value := inhabitant;
-    Transaction_raw := inhabitant;
-    Transaction_input_src := inhabitant;
-    Transaction_access_list := inhabitant;
-    Transaction_max_fee := inhabitant;
-    Transaction_max_blob_fee := inhabitant;
-    Transaction_max_priority_fee := inhabitant;
-    Transaction_authorizations := inhabitant;
-    Transaction_blob_hashes := inhabitant;
-    Transaction_pubkey := inhabitant;
-    Transaction_signing_hash := inhabitant;
-    Transaction_sig_v := inhabitant;
-    Transaction_sig_r := inhabitant;
-    Transaction_sig_s := inhabitant
+    TransactionFields_tx_type := inhabitant;
+    TransactionFields_sender := inhabitant;
+    TransactionFields_nonce := inhabitant;
+    TransactionFields_chain_id := inhabitant;
+    TransactionFields_gas_limit := inhabitant;
+    TransactionFields_is_create := inhabitant;
+    TransactionFields_recipient := inhabitant;
+    TransactionFields_value := inhabitant;
+    TransactionFields_raw := inhabitant;
+    TransactionFields_input_src := inhabitant;
+    TransactionFields_access_list := inhabitant;
+    TransactionFields_max_fee := inhabitant;
+    TransactionFields_max_blob_fee := inhabitant;
+    TransactionFields_max_priority_fee := inhabitant;
+    TransactionFields_authorizations := inhabitant;
+    TransactionFields_blob_hashes := inhabitant;
+    TransactionFields_pubkey := inhabitant;
+    TransactionFields_signing_hash := inhabitant;
+    TransactionFields_sig_v := inhabitant;
+    TransactionFields_sig_r := inhabitant;
+    TransactionFields_sig_s := inhabitant
 |} }.
 
+
+Definition Transaction : Type := {blob_limit & (TransactionFields blob_limit)}%type.
 
 Inductive LogTopics :=
 | LogTopics0 : unit -> LogTopics
@@ -4262,17 +5862,34 @@ Instance dummy_LogSeriesRef : Inhabited (LogSeriesRef) := {
 |} }.
 
 
-Record Receipt := {
-  Receipt_tx_type : TxType;
-  Receipt_success : bool;
-  Receipt_gas_used : gas;
-  Receipt_execution_gas : gas;
-  Receipt_state_gas : gas;
-  Receipt_logs : LogSeriesRef;
+Definition receipt_gas_relation (limit : Z) (regular_limit : Z) (gas_used : Z) (execution_gas : Z) (state_gas : Z) : bool :=
+  (0 <=? limit) &&
+    ((limit <=? block_gas_limit_bound) &&
+      ((0 <=? regular_limit) &&
+        ((regular_limit <=? limit) &&
+          ((0 <=? gas_used) &&
+            ((gas_used <=? limit) &&
+              ((0 <=? execution_gas) &&
+                ((execution_gas <=? regular_limit) &&
+                  ((0 <=? state_gas) &&
+                    ((state_gas <=? limit) && (gas_used <=? (execution_gas + state_gas))))))))))).
+#[export] Hint Unfold receipt_gas_relation : sail.
+
+Record ReceiptFields {limit : Z} {regular_limit : Z} {gas_used : Z} {execution_gas : Z}
+{state_gas : Z} (*receipt_gas_relation limit regular_limit gas_used execution_gas state_gas*) := {
+  ReceiptFields_tx_type : TxType;
+  ReceiptFields_success : bool;
+  ReceiptFields_gas_used : Z;
+  ReceiptFields_execution_gas : Z;
+  ReceiptFields_state_gas : Z;
+  ReceiptFields_logs : LogSeriesRef;
 }.
-Arguments Receipt : clear implicits.
+Arguments ReceiptFields : clear implicits.
 #[export]
-Instance Decidable_eq_Receipt : EqDecision Receipt.
+Instance Decidable_eq_ReceiptFields {limit : Z} {regular_limit : Z} {gas_used : Z}
+  {execution_gas : Z} {state_gas : Z}
+  (*receipt_gas_relation limit regular_limit gas_used execution_gas state_gas*) :
+  EqDecision (ReceiptFields limit regular_limit gas_used execution_gas state_gas).
    intros [x0 x1 x2 x3 x4 x5].
    intros [y0 y1 y2 y3 y4 y5].
   cmp_record_field x0 y0.
@@ -4284,11 +5901,13 @@ Instance Decidable_eq_Receipt : EqDecision Receipt.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_Receipt : Countable Receipt.
+Instance Countable_ReceiptFields {limit : Z} {regular_limit : Z} {gas_used : Z} {execution_gas : Z}
+  {state_gas : Z} (*receipt_gas_relation limit regular_limit gas_used execution_gas state_gas*) :
+  Countable (ReceiptFields limit regular_limit gas_used execution_gas state_gas).
 refine {|
-  encode x := encode (Receipt_tx_type x, Receipt_success x, Receipt_gas_used x, Receipt_execution_gas x, Receipt_state_gas x, Receipt_logs x);
+  encode x := encode (ReceiptFields_tx_type x, ReceiptFields_success x, ReceiptFields_gas_used x, ReceiptFields_execution_gas x, ReceiptFields_state_gas x, ReceiptFields_logs x);
   decode x := '(x0, x1, x2, x3, x4, x5) ← decode x;
-              mret (Build_Receipt x0 x1 x2 x3 x4 x5)
+              mret (Build_ReceiptFields limit regular_limit gas_used execution_gas state_gas x0 x1 x2 x3 x4 x5)
 |}.
 abstract (
   intros [x0 x1 x2 x3 x4 x5];
@@ -4296,35 +5915,43 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'Receipt_tx_type' := e ]}" :=
-  match r with Build_Receipt _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
-    Build_Receipt e f1 f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Receipt_success' := e ]}" :=
-  match r with Build_Receipt (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
-    Build_Receipt f0 e f2 f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Receipt_gas_used' := e ]}" :=
-  match r with Build_Receipt (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) =>
-    Build_Receipt f0 f1 e f3 f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Receipt_execution_gas' := e ]}" :=
-  match r with Build_Receipt (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) =>
-    Build_Receipt f0 f1 f2 e f4 f5 end (at level 1).
-Notation "{[ r 'with' 'Receipt_state_gas' := e ]}" :=
-  match r with Build_Receipt (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) =>
-    Build_Receipt f0 f1 f2 f3 e f5 end (at level 1).
-Notation "{[ r 'with' 'Receipt_logs' := e ]}" :=
-  match r with Build_Receipt (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ =>
-    Build_Receipt f0 f1 f2 f3 f4 e end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_tx_type' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
+    Build_ReceiptFields _ _ _ _ _ e f1 f2 f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_success' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
+    Build_ReceiptFields _ _ _ _ _ f0 e f2 f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_gas_used' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) =>
+    Build_ReceiptFields _ _ _ _ _ f0 f1 e f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_execution_gas' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) =>
+    Build_ReceiptFields _ _ _ _ _ f0 f1 f2 e f4 f5 end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_state_gas' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) =>
+    Build_ReceiptFields _ _ _ _ _ f0 f1 f2 f3 e f5 end (at level 1).
+Notation "{[ r 'with' 'ReceiptFields_logs' := e ]}" :=
+  match r with Build_ReceiptFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ =>
+    Build_ReceiptFields _ _ _ _ _ f0 f1 f2 f3 f4 e end (at level 1).
 #[export]
-Instance dummy_Receipt : Inhabited (Receipt) := {
+Instance dummy_ReceiptFields {limit : Z} {regular_limit : Z} {gas_used : Z} {execution_gas : Z}
+  {state_gas : Z} (*receipt_gas_relation limit regular_limit gas_used execution_gas state_gas*) :
+  Inhabited (ReceiptFields limit regular_limit gas_used execution_gas state_gas) := {
   inhabitant := {|
-    Receipt_tx_type := inhabitant;
-    Receipt_success := inhabitant;
-    Receipt_gas_used := inhabitant;
-    Receipt_execution_gas := inhabitant;
-    Receipt_state_gas := inhabitant;
-    Receipt_logs := inhabitant
+    ReceiptFields_tx_type := inhabitant;
+    ReceiptFields_success := inhabitant;
+    ReceiptFields_gas_used := inhabitant;
+    ReceiptFields_execution_gas := inhabitant;
+    ReceiptFields_state_gas := inhabitant;
+    ReceiptFields_logs := inhabitant
 |} }.
 
+
+Definition ReceiptWithin (limit : Z) (regular_limit : Z) : Type :=
+  {gas_used & {execution_gas & {state_gas & (ReceiptFields limit regular_limit gas_used execution_gas state_gas)}}}%type.
+
+Definition Receipt : Type :=
+  {limit & {regular_limit & {gas_used & {execution_gas & {state_gas & (ReceiptFields limit regular_limit gas_used execution_gas state_gas)}}}}}%type.
 
 Definition LogsBloom : Type := vec byte 256.
 
@@ -4346,7 +5973,7 @@ Record BlockHeader := {
   BlockHeader_parent_hash : hash;
   BlockHeader_parent_beacon_block_root : hash;
   BlockHeader_slot_number : slot_number_typ;
-  BlockHeader_extra_data : StatelessInputSlice;
+  BlockHeader_extra_data : StatelessInputSliceAtMost (2 ^ 5);
 }.
 Arguments BlockHeader : clear implicits.
 #[export]
@@ -4509,7 +6136,7 @@ Instance dummy_Withdrawal : Inhabited (Withdrawal) := {
 Record BlockBody := {
   BlockBody_transactions : TransactionListRef;
   BlockBody_withdrawals : WithdrawalListRef;
-  BlockBody_block_access_list : StatelessInputSlice;
+  BlockBody_block_access_list : StatelessInputSliceAtMost (2 ^ 30);
 }.
 Arguments BlockBody : clear implicits.
 #[export]
@@ -4623,72 +6250,15 @@ Instance dummy_ExecutionPayload : Inhabited (ExecutionPayload) := {
 |} }.
 
 
-Record ExecutionRequests := {
-  ExecutionRequests_deposits : StatelessInputSlice;
-  ExecutionRequests_withdrawals : ScratchSlice;
-  ExecutionRequests_consolidations : ScratchSlice;
-  ExecutionRequests_builder_deposits : ScratchSlice;
-  ExecutionRequests_builder_exits : ScratchSlice;
+Record TxEnvFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) := {
+  TxEnvFields_origin : address_typ;
+  TxEnvFields_gas_price : word;
+  TxEnvFields_blob_hashes : BlobHashesFields blob_limit;
 }.
-Arguments ExecutionRequests : clear implicits.
+Arguments TxEnvFields : clear implicits.
 #[export]
-Instance Decidable_eq_ExecutionRequests : EqDecision ExecutionRequests.
-   intros [x0 x1 x2 x3 x4].
-   intros [y0 y1 y2 y3 y4].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-  cmp_record_field x4 y4.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_ExecutionRequests : Countable ExecutionRequests.
-refine {|
-  encode x := encode (ExecutionRequests_deposits x, ExecutionRequests_withdrawals x, ExecutionRequests_consolidations x, ExecutionRequests_builder_deposits x, ExecutionRequests_builder_exits x);
-  decode x := '(x0, x1, x2, x3, x4) ← decode x;
-              mret (Build_ExecutionRequests x0 x1 x2 x3 x4)
-|}.
-abstract (
-  intros [x0 x1 x2 x3 x4];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'ExecutionRequests_deposits' := e ]}" :=
-  match r with Build_ExecutionRequests _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) =>
-    Build_ExecutionRequests e f1 f2 f3 f4 end (at level 1).
-Notation "{[ r 'with' 'ExecutionRequests_withdrawals' := e ]}" :=
-  match r with Build_ExecutionRequests (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) =>
-    Build_ExecutionRequests f0 e f2 f3 f4 end (at level 1).
-Notation "{[ r 'with' 'ExecutionRequests_consolidations' := e ]}" :=
-  match r with Build_ExecutionRequests (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) =>
-    Build_ExecutionRequests f0 f1 e f3 f4 end (at level 1).
-Notation "{[ r 'with' 'ExecutionRequests_builder_deposits' := e ]}" :=
-  match r with Build_ExecutionRequests (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) =>
-    Build_ExecutionRequests f0 f1 f2 e f4 end (at level 1).
-Notation "{[ r 'with' 'ExecutionRequests_builder_exits' := e ]}" :=
-  match r with Build_ExecutionRequests (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ =>
-    Build_ExecutionRequests f0 f1 f2 f3 e end (at level 1).
-#[export]
-Instance dummy_ExecutionRequests : Inhabited (ExecutionRequests) := {
-  inhabitant := {|
-    ExecutionRequests_deposits := inhabitant;
-    ExecutionRequests_withdrawals := inhabitant;
-    ExecutionRequests_consolidations := inhabitant;
-    ExecutionRequests_builder_deposits := inhabitant;
-    ExecutionRequests_builder_exits := inhabitant
-|} }.
-
-
-Record TxEnv := {
-  TxEnv_origin : address_typ;
-  TxEnv_gas_price : word;
-  TxEnv_blob_hashes : BlobHashes;
-}.
-Arguments TxEnv : clear implicits.
-#[export]
-Instance Decidable_eq_TxEnv : EqDecision TxEnv.
+Instance Decidable_eq_TxEnvFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) :
+  EqDecision (TxEnvFields blob_limit).
    intros [x0 x1 x2].
    intros [y0 y1 y2].
   cmp_record_field x0 y0.
@@ -4697,11 +6267,12 @@ Instance Decidable_eq_TxEnv : EqDecision TxEnv.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_TxEnv : Countable TxEnv.
+Instance Countable_TxEnvFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) :
+  Countable (TxEnvFields blob_limit).
 refine {|
-  encode x := encode (TxEnv_origin x, TxEnv_gas_price x, TxEnv_blob_hashes x);
+  encode x := encode (TxEnvFields_origin x, TxEnvFields_gas_price x, TxEnvFields_blob_hashes x);
   decode x := '(x0, x1, x2) ← decode x;
-              mret (Build_TxEnv x0 x1 x2)
+              mret (Build_TxEnvFields blob_limit x0 x1 x2)
 |}.
 abstract (
   intros [x0 x1 x2];
@@ -4709,37 +6280,111 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'TxEnv_origin' := e ]}" :=
-  match r with Build_TxEnv _ (_ as f1) (_ as f2) => Build_TxEnv e f1 f2 end (at level 1).
-Notation "{[ r 'with' 'TxEnv_gas_price' := e ]}" :=
-  match r with Build_TxEnv (_ as f0) _ (_ as f2) => Build_TxEnv f0 e f2 end (at level 1).
-Notation "{[ r 'with' 'TxEnv_blob_hashes' := e ]}" :=
-  match r with Build_TxEnv (_ as f0) (_ as f1) _ => Build_TxEnv f0 f1 e end (at level 1).
+Notation "{[ r 'with' 'TxEnvFields_origin' := e ]}" :=
+  match r with Build_TxEnvFields _ _ (_ as f1) (_ as f2) =>
+    Build_TxEnvFields _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'TxEnvFields_gas_price' := e ]}" :=
+  match r with Build_TxEnvFields _ (_ as f0) _ (_ as f2) =>
+    Build_TxEnvFields _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'TxEnvFields_blob_hashes' := e ]}" :=
+  match r with Build_TxEnvFields _ (_ as f0) (_ as f1) _ =>
+    Build_TxEnvFields _ f0 f1 e end (at level 1).
 #[export]
-Instance dummy_TxEnv : Inhabited (TxEnv) := {
+Instance dummy_TxEnvFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) :
+  Inhabited (TxEnvFields blob_limit) := {
   inhabitant := {|
-    TxEnv_origin := inhabitant;
-    TxEnv_gas_price := inhabitant;
-    TxEnv_blob_hashes := inhabitant
+    TxEnvFields_origin := inhabitant;
+    TxEnvFields_gas_price := inhabitant;
+    TxEnvFields_blob_hashes := inhabitant
 |} }.
 
 
-Record TxValidity := {
-  TxValidity_sender : address_typ;
-  TxValidity_nonce_before : account_nonce;
-  TxValidity_gas_limit : block_gas_limit;
-  TxValidity_intrinsic_execution_gas : gas_cost;
-  TxValidity_intrinsic_state_gas : gas_cost;
-  TxValidity_calldata_floor : gas_cost;
-  TxValidity_blob_fee : word;
-  TxValidity_gas_price : word;
-  TxValidity_priority_fee : word;
+Definition TxEnv : Type := {blob_limit & (TxEnvFields blob_limit)}%type.
+
+Record TransactionGasAllowanceFields {total : Z} {regular : Z}
+(*(0 <=? regular) && ((regular <=? total) && (total <=? block_gas_limit_bound))*) := {
+  TransactionGasAllowanceFields_total : Z;
+  TransactionGasAllowanceFields_regular : Z;
 }.
-Arguments TxValidity : clear implicits.
+Arguments TransactionGasAllowanceFields : clear implicits.
 #[export]
-Instance Decidable_eq_TxValidity : EqDecision TxValidity.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8].
+Instance Decidable_eq_TransactionGasAllowanceFields {total : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? total) && (total <=? block_gas_limit_bound))*) :
+  EqDecision (TransactionGasAllowanceFields total regular).
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TransactionGasAllowanceFields {total : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? total) && (total <=? block_gas_limit_bound))*) : Countable
+  (TransactionGasAllowanceFields total regular).
+refine {|
+  encode x := encode (TransactionGasAllowanceFields_total x, TransactionGasAllowanceFields_regular x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_TransactionGasAllowanceFields total regular x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TransactionGasAllowanceFields_total' := e ]}" :=
+  match r with Build_TransactionGasAllowanceFields _ _ _ (_ as f1) =>
+    Build_TransactionGasAllowanceFields _ _ e f1 end (at level 1).
+Notation "{[ r 'with' 'TransactionGasAllowanceFields_regular' := e ]}" :=
+  match r with Build_TransactionGasAllowanceFields _ _ (_ as f0) _ =>
+    Build_TransactionGasAllowanceFields _ _ f0 e end (at level 1).
+#[export]
+Instance dummy_TransactionGasAllowanceFields {total : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? total) && (total <=? block_gas_limit_bound))*) :
+  Inhabited (TransactionGasAllowanceFields total regular) := {
+  inhabitant := {|
+    TransactionGasAllowanceFields_total := inhabitant;
+    TransactionGasAllowanceFields_regular := inhabitant
+|} }.
+
+
+Definition TransactionGasAllowance : Type :=
+  {regular & {total & (TransactionGasAllowanceFields total regular)}}%type.
+
+Definition transaction_initial_gas_relation (total : Z) (regular : Z) (intrinsic_execution : Z) (intrinsic_state : Z) (calldata_floor : Z) (execution : Z) (state : Z) : bool :=
+  (0 <=? intrinsic_execution) &&
+    ((0 <=? intrinsic_state) &&
+      ((0 <=? calldata_floor) &&
+        ((intrinsic_execution <=? regular) &&
+          ((calldata_floor <=? regular) &&
+            ((regular <=? total) &&
+              ((total <=? block_gas_limit_bound) &&
+                ((0 <=? execution) &&
+                  ((0 <=? state) &&
+                    (((execution + state + intrinsic_execution + intrinsic_state) =? total) &&
+                      (execution <=? (regular - intrinsic_execution))))))))))).
+#[export] Hint Unfold transaction_initial_gas_relation : sail.
+
+Record TransactionInitialGasFields {total : Z} {regular : Z} {intrinsic_execution : Z}
+{intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+(*transaction_initial_gas_relation total regular intrinsic_execution intrinsic_state calldata_floor execution state*) := {
+  TransactionInitialGasFields_admitted_limit : Z;
+  TransactionInitialGasFields_regular_limit : Z;
+  TransactionInitialGasFields_intrinsic_execution : Z;
+  TransactionInitialGasFields_intrinsic_state : Z;
+  TransactionInitialGasFields_calldata_floor : Z;
+  TransactionInitialGasFields_execution_remaining : Z;
+  TransactionInitialGasFields_state_remaining : Z;
+}.
+Arguments TransactionInitialGasFields : clear implicits.
+#[export]
+Instance Decidable_eq_TransactionInitialGasFields {total : Z} {regular : Z}
+  {intrinsic_execution : Z} {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation total regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  :
+  EqDecision (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state).
+   intros [x0 x1 x2 x3 x4 x5 x6].
+   intros [y0 y1 y2 y3 y4 y5 y6].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -4747,75 +6392,184 @@ Instance Decidable_eq_TxValidity : EqDecision TxValidity.
   cmp_record_field x4 y4.
   cmp_record_field x5 y5.
   cmp_record_field x6 y6.
-  cmp_record_field x7 y7.
-  cmp_record_field x8 y8.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_TxValidity : Countable TxValidity.
+Instance Countable_TransactionInitialGasFields {total : Z} {regular : Z} {intrinsic_execution : Z}
+  {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation total regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  : Countable
+  (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state).
 refine {|
-  encode x := encode (TxValidity_sender x, TxValidity_nonce_before x, TxValidity_gas_limit x, TxValidity_intrinsic_execution_gas x, TxValidity_intrinsic_state_gas x, TxValidity_calldata_floor x, TxValidity_blob_fee x, TxValidity_gas_price x, TxValidity_priority_fee x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8) ← decode x;
-              mret (Build_TxValidity x0 x1 x2 x3 x4 x5 x6 x7 x8)
+  encode x := encode (TransactionInitialGasFields_admitted_limit x, TransactionInitialGasFields_regular_limit x, TransactionInitialGasFields_intrinsic_execution x, TransactionInitialGasFields_intrinsic_state x, TransactionInitialGasFields_calldata_floor x, TransactionInitialGasFields_execution_remaining x, TransactionInitialGasFields_state_remaining x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6) ← decode x;
+              mret (Build_TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state x0 x1 x2 x3 x4 x5 x6)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8];
+  intros [x0 x1 x2 x3 x4 x5 x6];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'TxValidity_sender' := e ]}" :=
-  match r with Build_TxValidity _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity e f1 f2 f3 f4 f5 f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_nonce_before' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 e f2 f3 f4 f5 f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_gas_limit' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 f1 e f3 f4 f5 f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_intrinsic_execution_gas' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 f1 f2 e f4 f5 f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_intrinsic_state_gas' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 f1 f2 f3 e f5 f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_calldata_floor' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 f1 f2 f3 f4 e f6 f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_blob_fee' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) =>
-    Build_TxValidity f0 f1 f2 f3 f4 f5 e f7 f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_gas_price' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) =>
-    Build_TxValidity f0 f1 f2 f3 f4 f5 f6 e f8 end (at level 1).
-Notation "{[ r 'with' 'TxValidity_priority_fee' := e ]}" :=
-  match r with Build_TxValidity (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ =>
-    Build_TxValidity f0 f1 f2 f3 f4 f5 f6 f7 e end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_admitted_limit' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ e f1 f2 f3 f4 f5 f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_regular_limit' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 e f2 f3 f4 f5 f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_intrinsic_execution' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 f1 e f3 f4 f5 f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_intrinsic_state' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 f1 f2 e f4 f5 f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_calldata_floor' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 f1 f2 f3 e f5 f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_execution_remaining' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 f1 f2 f3 f4 e f6 end (at level 1).
+Notation "{[ r 'with' 'TransactionInitialGasFields_state_remaining' := e ]}" :=
+  match r with Build_TransactionInitialGasFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ =>
+    Build_TransactionInitialGasFields _ _ _ _ _ _ _ f0 f1 f2 f3 f4 f5 e end (at level 1).
 #[export]
-Instance dummy_TxValidity : Inhabited (TxValidity) := {
+Instance dummy_TransactionInitialGasFields {total : Z} {regular : Z} {intrinsic_execution : Z}
+  {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation total regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  :
+  Inhabited (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state) := {
   inhabitant := {|
-    TxValidity_sender := inhabitant;
-    TxValidity_nonce_before := inhabitant;
-    TxValidity_gas_limit := inhabitant;
-    TxValidity_intrinsic_execution_gas := inhabitant;
-    TxValidity_intrinsic_state_gas := inhabitant;
-    TxValidity_calldata_floor := inhabitant;
-    TxValidity_blob_fee := inhabitant;
-    TxValidity_gas_price := inhabitant;
-    TxValidity_priority_fee := inhabitant
+    TransactionInitialGasFields_admitted_limit := inhabitant;
+    TransactionInitialGasFields_regular_limit := inhabitant;
+    TransactionInitialGasFields_intrinsic_execution := inhabitant;
+    TransactionInitialGasFields_intrinsic_state := inhabitant;
+    TransactionInitialGasFields_calldata_floor := inhabitant;
+    TransactionInitialGasFields_execution_remaining := inhabitant;
+    TransactionInitialGasFields_state_remaining := inhabitant
 |} }.
 
 
-Record TxFrameResult := {
-  TxFrameResult_success : bool;
-  TxFrameResult_execution_gas_remaining : gas;
-  TxFrameResult_state_gas_remaining : gas;
-  TxFrameResult_state_gas_used : state_gas_delta;
-  TxFrameResult_refund : gas_refund;
+Definition TransactionInitialGas : Type :=
+  {state & {execution & {calldata_floor & {intrinsic_state & {intrinsic_execution & {regular & {total & (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state)}}}}}}}%type.
+
+Definition TransactionInitialGasFor (total : Z) : Type :=
+  {state & {execution & {calldata_floor & {intrinsic_state & {intrinsic_execution & {regular & (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state)}}}}}}%type.
+
+Definition TransactionInitialGasForLimits (total : Z) (regular : Z) : Type :=
+  {state & {execution & {calldata_floor & {intrinsic_state & {intrinsic_execution & (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state)}}}}}%type.
+
+Record TxValidityFields {limit : Z} {regular : Z} {intrinsic_execution : Z} {intrinsic_state : Z}
+{calldata_floor : Z} {execution : Z} {state : Z}
+(*transaction_initial_gas_relation limit regular intrinsic_execution intrinsic_state calldata_floor execution state*) := {
+  TxValidityFields_sender : address_typ;
+  TxValidityFields_nonce_before : account_nonce;
+  TxValidityFields_gas : TransactionInitialGasFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state;
+  TxValidityFields_blob_fee : word;
+  TxValidityFields_gas_price : word;
+  TxValidityFields_priority_fee : word;
 }.
-Arguments TxFrameResult : clear implicits.
+Arguments TxValidityFields : clear implicits.
 #[export]
-Instance Decidable_eq_TxFrameResult : EqDecision TxFrameResult.
+Instance Decidable_eq_TxValidityFields {limit : Z} {regular : Z} {intrinsic_execution : Z}
+  {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation limit regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  :
+  EqDecision (TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state).
+   intros [x0 x1 x2 x3 x4 x5].
+   intros [y0 y1 y2 y3 y4 y5].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+  cmp_record_field x5 y5.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TxValidityFields {limit : Z} {regular : Z} {intrinsic_execution : Z}
+  {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation limit regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  : Countable
+  (TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state).
+refine {|
+  encode x := encode (TxValidityFields_sender x, TxValidityFields_nonce_before x, TxValidityFields_gas x, TxValidityFields_blob_fee x, TxValidityFields_gas_price x, TxValidityFields_priority_fee x);
+  decode x := '(x0, x1, x2, x3, x4, x5) ← decode x;
+              mret (Build_TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state x0 x1 x2 x3 x4 x5)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4 x5];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TxValidityFields_sender' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
+    Build_TxValidityFields _ _ _ _ _ _ _ e f1 f2 f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'TxValidityFields_nonce_before' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) =>
+    Build_TxValidityFields _ _ _ _ _ _ _ f0 e f2 f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'TxValidityFields_gas' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) =>
+    Build_TxValidityFields _ _ _ _ _ _ _ f0 f1 e f3 f4 f5 end (at level 1).
+Notation "{[ r 'with' 'TxValidityFields_blob_fee' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) =>
+    Build_TxValidityFields _ _ _ _ _ _ _ f0 f1 f2 e f4 f5 end (at level 1).
+Notation "{[ r 'with' 'TxValidityFields_gas_price' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) =>
+    Build_TxValidityFields _ _ _ _ _ _ _ f0 f1 f2 f3 e f5 end (at level 1).
+Notation "{[ r 'with' 'TxValidityFields_priority_fee' := e ]}" :=
+  match r with Build_TxValidityFields _ _ _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ =>
+    Build_TxValidityFields _ _ _ _ _ _ _ f0 f1 f2 f3 f4 e end (at level 1).
+#[export]
+Instance dummy_TxValidityFields {limit : Z} {regular : Z} {intrinsic_execution : Z}
+  {intrinsic_state : Z} {calldata_floor : Z} {execution : Z} {state : Z}
+  (*transaction_initial_gas_relation limit regular intrinsic_execution intrinsic_state calldata_floor execution state*)
+  :
+  Inhabited (TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state) := {
+  inhabitant := {|
+    TxValidityFields_sender := inhabitant;
+    TxValidityFields_nonce_before := inhabitant;
+    TxValidityFields_gas := inhabitant;
+    TxValidityFields_blob_fee := inhabitant;
+    TxValidityFields_gas_price := inhabitant;
+    TxValidityFields_priority_fee := inhabitant
+|} }.
+
+
+Definition TxValidityForLimits (limit : Z) (regular : Z) : Type :=
+  {state & {execution & {calldata_floor & {intrinsic_state & {intrinsic_execution & (TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state)}}}}}%type.
+
+Definition TxValidity : Type :=
+  {state & {execution & {calldata_floor & {intrinsic_state & {intrinsic_execution & {regular & {limit & (TxValidityFields limit regular intrinsic_execution intrinsic_state calldata_floor execution state)}}}}}}}%type.
+
+Definition tx_frame_gas_snapshot_relation (limit : Z) (regular : Z) (calldata_floor : Z) (remaining : Z) (state_used : Z) : bool :=
+  (0 <=? regular) &&
+    ((regular <=? limit) &&
+      ((limit <=? block_gas_limit_bound) &&
+        ((0 <=? calldata_floor) &&
+          ((calldata_floor <=? regular) &&
+            ((0 <=? remaining) &&
+              ((0 <=? state_used) &&
+                ((state_used <=? limit) &&
+                  (((remaining + state_used) <=? limit) &&
+                    ((limit - remaining - state_used) <=? regular))))))))).
+#[export] Hint Unfold tx_frame_gas_snapshot_relation : sail.
+
+Record TxFrameGasSnapshotFields {limit : Z} {regular : Z} {calldata_floor : Z} {remaining : Z}
+{state_used : Z}
+(*tx_frame_gas_snapshot_relation limit regular calldata_floor remaining state_used*) := {
+  TxFrameGasSnapshotFields_admitted_limit : Z;
+  TxFrameGasSnapshotFields_regular_limit : Z;
+  TxFrameGasSnapshotFields_calldata_floor : Z;
+  TxFrameGasSnapshotFields_remaining : Z;
+  TxFrameGasSnapshotFields_state_used : Z;
+}.
+Arguments TxFrameGasSnapshotFields : clear implicits.
+#[export]
+Instance Decidable_eq_TxFrameGasSnapshotFields {limit : Z} {regular : Z} {calldata_floor : Z}
+  {remaining : Z} {state_used : Z}
+  (*tx_frame_gas_snapshot_relation limit regular calldata_floor remaining state_used*) :
+  EqDecision (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used).
    intros [x0 x1 x2 x3 x4].
    intros [y0 y1 y2 y3 y4].
   cmp_record_field x0 y0.
@@ -4826,11 +6580,14 @@ Instance Decidable_eq_TxFrameResult : EqDecision TxFrameResult.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_TxFrameResult : Countable TxFrameResult.
+Instance Countable_TxFrameGasSnapshotFields {limit : Z} {regular : Z} {calldata_floor : Z}
+  {remaining : Z} {state_used : Z}
+  (*tx_frame_gas_snapshot_relation limit regular calldata_floor remaining state_used*) : Countable
+  (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used).
 refine {|
-  encode x := encode (TxFrameResult_success x, TxFrameResult_execution_gas_remaining x, TxFrameResult_state_gas_remaining x, TxFrameResult_state_gas_used x, TxFrameResult_refund x);
+  encode x := encode (TxFrameGasSnapshotFields_admitted_limit x, TxFrameGasSnapshotFields_regular_limit x, TxFrameGasSnapshotFields_calldata_floor x, TxFrameGasSnapshotFields_remaining x, TxFrameGasSnapshotFields_state_used x);
   decode x := '(x0, x1, x2, x3, x4) ← decode x;
-              mret (Build_TxFrameResult x0 x1 x2 x3 x4)
+              mret (Build_TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used x0 x1 x2 x3 x4)
 |}.
 abstract (
   intros [x0 x1 x2 x3 x4];
@@ -4838,31 +6595,95 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'TxFrameResult_success' := e ]}" :=
-  match r with Build_TxFrameResult _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) =>
-    Build_TxFrameResult e f1 f2 f3 f4 end (at level 1).
-Notation "{[ r 'with' 'TxFrameResult_execution_gas_remaining' := e ]}" :=
-  match r with Build_TxFrameResult (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) =>
-    Build_TxFrameResult f0 e f2 f3 f4 end (at level 1).
-Notation "{[ r 'with' 'TxFrameResult_state_gas_remaining' := e ]}" :=
-  match r with Build_TxFrameResult (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) =>
-    Build_TxFrameResult f0 f1 e f3 f4 end (at level 1).
-Notation "{[ r 'with' 'TxFrameResult_state_gas_used' := e ]}" :=
-  match r with Build_TxFrameResult (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) =>
-    Build_TxFrameResult f0 f1 f2 e f4 end (at level 1).
-Notation "{[ r 'with' 'TxFrameResult_refund' := e ]}" :=
-  match r with Build_TxFrameResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ =>
-    Build_TxFrameResult f0 f1 f2 f3 e end (at level 1).
+Notation "{[ r 'with' 'TxFrameGasSnapshotFields_admitted_limit' := e ]}" :=
+  match r with Build_TxFrameGasSnapshotFields _ _ _ _ _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) =>
+    Build_TxFrameGasSnapshotFields _ _ _ _ _ e f1 f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'TxFrameGasSnapshotFields_regular_limit' := e ]}" :=
+  match r with Build_TxFrameGasSnapshotFields _ _ _ _ _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) =>
+    Build_TxFrameGasSnapshotFields _ _ _ _ _ f0 e f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'TxFrameGasSnapshotFields_calldata_floor' := e ]}" :=
+  match r with Build_TxFrameGasSnapshotFields _ _ _ _ _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) =>
+    Build_TxFrameGasSnapshotFields _ _ _ _ _ f0 f1 e f3 f4 end (at level 1).
+Notation "{[ r 'with' 'TxFrameGasSnapshotFields_remaining' := e ]}" :=
+  match r with Build_TxFrameGasSnapshotFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) =>
+    Build_TxFrameGasSnapshotFields _ _ _ _ _ f0 f1 f2 e f4 end (at level 1).
+Notation "{[ r 'with' 'TxFrameGasSnapshotFields_state_used' := e ]}" :=
+  match r with Build_TxFrameGasSnapshotFields _ _ _ _ _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ =>
+    Build_TxFrameGasSnapshotFields _ _ _ _ _ f0 f1 f2 f3 e end (at level 1).
 #[export]
-Instance dummy_TxFrameResult : Inhabited (TxFrameResult) := {
+Instance dummy_TxFrameGasSnapshotFields {limit : Z} {regular : Z} {calldata_floor : Z}
+  {remaining : Z} {state_used : Z}
+  (*tx_frame_gas_snapshot_relation limit regular calldata_floor remaining state_used*) :
+  Inhabited (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used) := {
   inhabitant := {|
-    TxFrameResult_success := inhabitant;
-    TxFrameResult_execution_gas_remaining := inhabitant;
-    TxFrameResult_state_gas_remaining := inhabitant;
-    TxFrameResult_state_gas_used := inhabitant;
-    TxFrameResult_refund := inhabitant
+    TxFrameGasSnapshotFields_admitted_limit := inhabitant;
+    TxFrameGasSnapshotFields_regular_limit := inhabitant;
+    TxFrameGasSnapshotFields_calldata_floor := inhabitant;
+    TxFrameGasSnapshotFields_remaining := inhabitant;
+    TxFrameGasSnapshotFields_state_used := inhabitant
 |} }.
 
+
+Definition TxFrameGasSnapshot : Type :=
+  {state_used & {remaining & {calldata_floor & {regular & {limit & (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used)}}}}}%type.
+
+Definition TxFrameGasSnapshotForLimits (limit : Z) (regular : Z) : Type :=
+  {state_used & {remaining & {calldata_floor & (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used)}}}%type.
+
+Record TxFrameResultFields {limit : Z} {regular : Z}
+(*(0 <=? regular) && ((regular <=? limit) && (limit <=? block_gas_limit_bound))*) := {
+  TxFrameResultFields_success : bool;
+  TxFrameResultFields_gas : TxFrameGasSnapshotForLimits limit regular;
+  TxFrameResultFields_refund : gas_refund;
+}.
+Arguments TxFrameResultFields : clear implicits.
+#[export]
+Instance Decidable_eq_TxFrameResultFields {limit : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? limit) && (limit <=? block_gas_limit_bound))*) :
+  EqDecision (TxFrameResultFields limit regular).
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TxFrameResultFields {limit : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? limit) && (limit <=? block_gas_limit_bound))*) : Countable
+  (TxFrameResultFields limit regular).
+refine {|
+  encode x := encode (TxFrameResultFields_success x, TxFrameResultFields_gas x, TxFrameResultFields_refund x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_TxFrameResultFields limit regular x0 x1 x2)
+|}.
+abstract (
+  intros [x0 x1 x2];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TxFrameResultFields_success' := e ]}" :=
+  match r with Build_TxFrameResultFields _ _ _ (_ as f1) (_ as f2) =>
+    Build_TxFrameResultFields _ _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'TxFrameResultFields_gas' := e ]}" :=
+  match r with Build_TxFrameResultFields _ _ (_ as f0) _ (_ as f2) =>
+    Build_TxFrameResultFields _ _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'TxFrameResultFields_refund' := e ]}" :=
+  match r with Build_TxFrameResultFields _ _ (_ as f0) (_ as f1) _ =>
+    Build_TxFrameResultFields _ _ f0 f1 e end (at level 1).
+#[export]
+Instance dummy_TxFrameResultFields {limit : Z} {regular : Z}
+  (*(0 <=? regular) && ((regular <=? limit) && (limit <=? block_gas_limit_bound))*) :
+  Inhabited (TxFrameResultFields limit regular) := {
+  inhabitant := {|
+    TxFrameResultFields_success := inhabitant;
+    TxFrameResultFields_gas := inhabitant;
+    TxFrameResultFields_refund := inhabitant
+|} }.
+
+
+Definition TxFrameResult : Type := {regular & {limit & (TxFrameResultFields limit regular)}}%type.
 
 Inductive CallKind := Call | CallCode | DelegateCall | StaticCall.
 Definition num_of_CallKind (arg_ : CallKind) : Z :=
@@ -4919,12 +6740,65 @@ Defined.
 Instance dummy_CallKind : Inhabited CallKind := { inhabitant := Call }.
 
 
+Inductive CreateKind := CreateByNonce | CreateBySalt.
+Definition num_of_CreateKind (arg_ : CreateKind) : Z :=
+   match arg_ with | CreateByNonce => 0 | CreateBySalt => 1 end.
+
+Definition CreateKind_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 1)*) : CreateKind :=
+   let l__0 := arg_ in
+   if Z.eqb (l__0) (0) then CreateByNonce
+   else CreateBySalt.
+
+Lemma CreateKind_num_of_roundtrip (x : CreateKind) : CreateKind_of_num (num_of_CreateKind x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_CreateKind_injective (x y : CreateKind) : num_of_CreateKind x = num_of_CreateKind y -> x = y.
+  intro.
+  rewrite <- (CreateKind_num_of_roundtrip x).
+  rewrite <- (CreateKind_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition CreateKind_eq_dec (x y : CreateKind) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_CreateKind x) (num_of_CreateKind y) with
+  | left e => left (num_of_CreateKind_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition CreateKind_beq (x y : CreateKind) : bool :=
+  Z.eqb (num_of_CreateKind x) (num_of_CreateKind y).
+Lemma CreateKind_beq_iff x y : CreateKind_beq x y = true <-> x = y.
+  unfold CreateKind_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_CreateKind_injective | congruence].
+Qed.
+Lemma CreateKind_beq_refl x : CreateKind_beq x x = true.
+apply CreateKind_beq_iff; reflexivity.
+Qed.
+#[export]
+Instance Decidable_eq_CreateKind : EqDecision CreateKind := CreateKind_eq_dec.
+#[export]
+Instance Countable_CreateKind : Countable CreateKind.
+refine {|
+  encode x := encode (num_of_CreateKind x);
+  decode x := z ← decode x; mret (CreateKind_of_num z);
+|}.
+abstract (
+  intro s; rewrite decode_encode;
+  simpl;
+  rewrite CreateKind_num_of_roundtrip;
+  reflexivity).
+Defined.
+#[export]
+Instance dummy_CreateKind : Inhabited CreateKind := { inhabitant := CreateByNonce }.
+
+
 Record Message := {
   Message_caller : address_typ;
   Message_code_address : address_typ;
   Message_address : address_typ;
   Message_value : word;
-  Message_state_gas_reservoir : gas;
+  Message_state_gas_reservoir : gas_typ;
   Message_is_static : bool;
   Message_depth : frame_depth;
 }.
@@ -4990,10 +6864,9 @@ Instance dummy_Message : Inhabited (Message) := {
 
 
 Record FrameCheckpoint := {
-  FrameCheckpoint_state : journal_checkpoint;
   FrameCheckpoint_pc : code_pointer;
-  FrameCheckpoint_gas_remaining : gas;
-  FrameCheckpoint_state_gas_remaining : gas;
+  FrameCheckpoint_gas_remaining : gas_typ;
+  FrameCheckpoint_state_gas_remaining : gas_typ;
   FrameCheckpoint_state_gas_spilled : state_gas_spill;
   FrameCheckpoint_refund : gas_refund;
   FrameCheckpoint_status : FrameStatus;
@@ -5001,13 +6874,13 @@ Record FrameCheckpoint := {
   FrameCheckpoint_call_depth : frame_depth;
   FrameCheckpoint_code : Code;
   FrameCheckpoint_calldata : CalldataSlice;
-  FrameCheckpoint_memory : MemorySlice;
+  FrameCheckpoint_memory : EvmMemorySlice;
 }.
 Arguments FrameCheckpoint : clear implicits.
 #[export]
 Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11].
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -5019,62 +6892,57 @@ Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
   cmp_record_field x8 y8.
   cmp_record_field x9 y9.
   cmp_record_field x10 y10.
-  cmp_record_field x11 y11.
 left; subst; reflexivity.
 Defined.
 #[export]
 Instance Countable_FrameCheckpoint : Countable FrameCheckpoint.
 refine {|
-  encode x := encode (FrameCheckpoint_state x, FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_call_depth x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11) ← decode x;
-              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11)
+  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_call_depth x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) ← decode x;
+              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11];
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'FrameCheckpoint_state' := e ]}" :=
-  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_pc' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_spilled' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_refund' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_status' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_message' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_call_depth' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_code' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_calldata' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_memory' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e end (at level 1).
 #[export]
 Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
   inhabitant := {|
-    FrameCheckpoint_state := inhabitant;
     FrameCheckpoint_pc := inhabitant;
     FrameCheckpoint_gas_remaining := inhabitant;
     FrameCheckpoint_state_gas_remaining := inhabitant;
@@ -5317,53 +7185,38 @@ Instance dummy_WitnessContext : Inhabited (WitnessContext) := {
 |} }.
 
 
-Record CodeAnalysis := {
-  CodeAnalysis_chunk : JumpdestChunk;
-  CodeAnalysis_chunk_index : code_chunk_index;
-  CodeAnalysis_chunk_offset : Z;
-}.
-Arguments CodeAnalysis : clear implicits.
+Record rlp_scratch_length := { rlp_scratch_length_value : Z; }.
+Arguments rlp_scratch_length : clear implicits.
 #[export]
-Instance Decidable_eq_CodeAnalysis : EqDecision CodeAnalysis.
-   intros [x0 x1 x2].
-   intros [y0 y1 y2].
+Instance Decidable_eq_rlp_scratch_length : EqDecision rlp_scratch_length.
+   intros [x0].
+   intros [y0].
   cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_CodeAnalysis : Countable CodeAnalysis.
+Instance Countable_rlp_scratch_length : Countable rlp_scratch_length.
 refine {|
-  encode x := encode (CodeAnalysis_chunk x, CodeAnalysis_chunk_index x, CodeAnalysis_chunk_offset x);
-  decode x := '(x0, x1, x2) ← decode x;
-              mret (Build_CodeAnalysis x0 x1 x2)
+  encode x := encode (rlp_scratch_length_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_rlp_scratch_length x0)
 |}.
 abstract (
-  intros [x0 x1 x2];
+  intros [x0];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'CodeAnalysis_chunk' := e ]}" :=
-  match r with Build_CodeAnalysis _ (_ as f1) (_ as f2) =>
-    Build_CodeAnalysis e f1 f2 end (at level 1).
-Notation "{[ r 'with' 'CodeAnalysis_chunk_index' := e ]}" :=
-  match r with Build_CodeAnalysis (_ as f0) _ (_ as f2) =>
-    Build_CodeAnalysis f0 e f2 end (at level 1).
-Notation "{[ r 'with' 'CodeAnalysis_chunk_offset' := e ]}" :=
-  match r with Build_CodeAnalysis (_ as f0) (_ as f1) _ =>
-    Build_CodeAnalysis f0 f1 e end (at level 1).
+Notation "{[ r 'with' 'rlp_scratch_length_value' := e ]}" :=
+  {| rlp_scratch_length_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_CodeAnalysis : Inhabited (CodeAnalysis) := {
-  inhabitant := {|
-    CodeAnalysis_chunk := inhabitant;
-    CodeAnalysis_chunk_index := inhabitant;
-    CodeAnalysis_chunk_offset := inhabitant
+Instance dummy_rlp_scratch_length : Inhabited (rlp_scratch_length) := {
+  inhabitant := {| rlp_scratch_length_value := inhabitant
 |} }.
 
 
-Definition rlp_scratch_length : Type := Z.
+Definition rlp_scratch_length_valid (x : rlp_scratch_length) : Prop :=
+0 <= x.(rlp_scratch_length_value) /\ x.(rlp_scratch_length_value) <= (2 ^ 32 - 1).
 
 Definition rlp_natural_valid (value : Z) : bool := 0 <=? value.
 #[export] Hint Unfold rlp_natural_valid : sail.
@@ -5372,6 +7225,42 @@ Definition rlp_natural_increment_valid (value : Z) : bool := 0 <=? value.
 #[export] Hint Unfold rlp_natural_increment_valid : sail.
 
 Definition rlp_natural_size : Type := Z.
+
+Record RlpEncoder := {
+  RlpEncoder_start : source_pointer;
+  RlpEncoder_expected_len : source_length;
+}.
+Arguments RlpEncoder : clear implicits.
+#[export]
+Instance Decidable_eq_RlpEncoder : EqDecision RlpEncoder.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_RlpEncoder : Countable RlpEncoder.
+refine {|
+  encode x := encode (RlpEncoder_start x, RlpEncoder_expected_len x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_RlpEncoder x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'RlpEncoder_start' := e ]}" :=
+  match r with Build_RlpEncoder _ (_ as f1) => Build_RlpEncoder e f1 end (at level 1).
+Notation "{[ r 'with' 'RlpEncoder_expected_len' := e ]}" :=
+  match r with Build_RlpEncoder (_ as f0) _ => Build_RlpEncoder f0 e end (at level 1).
+#[export]
+Instance dummy_RlpEncoder : Inhabited (RlpEncoder) := {
+  inhabitant := {| RlpEncoder_start := inhabitant; RlpEncoder_expected_len := inhabitant
+|} }.
+
 
 Record AccessListDecode {address_bound : Z} {slot_bound : Z}
 (*source_valid_length address_bound && source_valid_length slot_bound*) := {
@@ -5419,6 +7308,579 @@ Instance dummy_AccessListDecode {address_bound : Z} {slot_bound : Z}
     AccessListDecode_slot_count := inhabitant
 |} }.
 
+
+Record JournalTransientChange := {
+  JournalTransientChange_address : address_typ;
+  JournalTransientChange_slot : word;
+  JournalTransientChange_prior : word;
+}.
+Arguments JournalTransientChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalTransientChange : EqDecision JournalTransientChange.
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalTransientChange : Countable JournalTransientChange.
+refine {|
+  encode x := encode (JournalTransientChange_address x, JournalTransientChange_slot x, JournalTransientChange_prior x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_JournalTransientChange x0 x1 x2)
+|}.
+abstract (
+  intros [x0 x1 x2];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalTransientChange_address' := e ]}" :=
+  match r with Build_JournalTransientChange _ (_ as f1) (_ as f2) =>
+    Build_JournalTransientChange e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'JournalTransientChange_slot' := e ]}" :=
+  match r with Build_JournalTransientChange (_ as f0) _ (_ as f2) =>
+    Build_JournalTransientChange f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'JournalTransientChange_prior' := e ]}" :=
+  match r with Build_JournalTransientChange (_ as f0) (_ as f1) _ =>
+    Build_JournalTransientChange f0 f1 e end (at level 1).
+#[export]
+Instance dummy_JournalTransientChange : Inhabited (JournalTransientChange) := {
+  inhabitant := {|
+    JournalTransientChange_address := inhabitant;
+    JournalTransientChange_slot := inhabitant;
+    JournalTransientChange_prior := inhabitant
+|} }.
+
+
+Record JournalWarmAccountChange := {
+  JournalWarmAccountChange_address : address_typ;
+  JournalWarmAccountChange_prior_epoch : block_access_index;
+}.
+Arguments JournalWarmAccountChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalWarmAccountChange : EqDecision JournalWarmAccountChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalWarmAccountChange : Countable JournalWarmAccountChange.
+refine {|
+  encode x := encode (JournalWarmAccountChange_address x, JournalWarmAccountChange_prior_epoch x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalWarmAccountChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalWarmAccountChange_address' := e ]}" :=
+  match r with Build_JournalWarmAccountChange _ (_ as f1) =>
+    Build_JournalWarmAccountChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalWarmAccountChange_prior_epoch' := e ]}" :=
+  match r with Build_JournalWarmAccountChange (_ as f0) _ =>
+    Build_JournalWarmAccountChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalWarmAccountChange : Inhabited (JournalWarmAccountChange) := {
+  inhabitant := {|
+    JournalWarmAccountChange_address := inhabitant;
+    JournalWarmAccountChange_prior_epoch := inhabitant
+|} }.
+
+
+Record JournalWarmStorageChange := {
+  JournalWarmStorageChange_key : StorageKey;
+  JournalWarmStorageChange_prior_epoch : block_access_index;
+}.
+Arguments JournalWarmStorageChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalWarmStorageChange : EqDecision JournalWarmStorageChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalWarmStorageChange : Countable JournalWarmStorageChange.
+refine {|
+  encode x := encode (JournalWarmStorageChange_key x, JournalWarmStorageChange_prior_epoch x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalWarmStorageChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalWarmStorageChange_key' := e ]}" :=
+  match r with Build_JournalWarmStorageChange _ (_ as f1) =>
+    Build_JournalWarmStorageChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalWarmStorageChange_prior_epoch' := e ]}" :=
+  match r with Build_JournalWarmStorageChange (_ as f0) _ =>
+    Build_JournalWarmStorageChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalWarmStorageChange : Inhabited (JournalWarmStorageChange) := {
+  inhabitant := {|
+    JournalWarmStorageChange_key := inhabitant;
+    JournalWarmStorageChange_prior_epoch := inhabitant
+|} }.
+
+
+Record JournalAccountBalanceChange := {
+  JournalAccountBalanceChange_address : address_typ;
+  JournalAccountBalanceChange_prior : word;
+}.
+Arguments JournalAccountBalanceChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountBalanceChange : EqDecision JournalAccountBalanceChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountBalanceChange : Countable JournalAccountBalanceChange.
+refine {|
+  encode x := encode (JournalAccountBalanceChange_address x, JournalAccountBalanceChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountBalanceChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountBalanceChange_address' := e ]}" :=
+  match r with Build_JournalAccountBalanceChange _ (_ as f1) =>
+    Build_JournalAccountBalanceChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountBalanceChange_prior' := e ]}" :=
+  match r with Build_JournalAccountBalanceChange (_ as f0) _ =>
+    Build_JournalAccountBalanceChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountBalanceChange : Inhabited (JournalAccountBalanceChange) := {
+  inhabitant := {|
+    JournalAccountBalanceChange_address := inhabitant;
+    JournalAccountBalanceChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountNonceChange := {
+  JournalAccountNonceChange_address : address_typ;
+  JournalAccountNonceChange_prior : account_nonce;
+}.
+Arguments JournalAccountNonceChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountNonceChange : EqDecision JournalAccountNonceChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountNonceChange : Countable JournalAccountNonceChange.
+refine {|
+  encode x := encode (JournalAccountNonceChange_address x, JournalAccountNonceChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountNonceChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountNonceChange_address' := e ]}" :=
+  match r with Build_JournalAccountNonceChange _ (_ as f1) =>
+    Build_JournalAccountNonceChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountNonceChange_prior' := e ]}" :=
+  match r with Build_JournalAccountNonceChange (_ as f0) _ =>
+    Build_JournalAccountNonceChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountNonceChange : Inhabited (JournalAccountNonceChange) := {
+  inhabitant := {|
+    JournalAccountNonceChange_address := inhabitant;
+    JournalAccountNonceChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountCodeHashChange := {
+  JournalAccountCodeHashChange_address : address_typ;
+  JournalAccountCodeHashChange_prior : hash;
+}.
+Arguments JournalAccountCodeHashChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountCodeHashChange : EqDecision JournalAccountCodeHashChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountCodeHashChange : Countable JournalAccountCodeHashChange.
+refine {|
+  encode x := encode (JournalAccountCodeHashChange_address x, JournalAccountCodeHashChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountCodeHashChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountCodeHashChange_address' := e ]}" :=
+  match r with Build_JournalAccountCodeHashChange _ (_ as f1) =>
+    Build_JournalAccountCodeHashChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountCodeHashChange_prior' := e ]}" :=
+  match r with Build_JournalAccountCodeHashChange (_ as f0) _ =>
+    Build_JournalAccountCodeHashChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountCodeHashChange : Inhabited (JournalAccountCodeHashChange) := {
+  inhabitant := {|
+    JournalAccountCodeHashChange_address := inhabitant;
+    JournalAccountCodeHashChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountExistsChange := {
+  JournalAccountExistsChange_address : address_typ;
+  JournalAccountExistsChange_prior : bool;
+}.
+Arguments JournalAccountExistsChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountExistsChange : EqDecision JournalAccountExistsChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountExistsChange : Countable JournalAccountExistsChange.
+refine {|
+  encode x := encode (JournalAccountExistsChange_address x, JournalAccountExistsChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountExistsChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountExistsChange_address' := e ]}" :=
+  match r with Build_JournalAccountExistsChange _ (_ as f1) =>
+    Build_JournalAccountExistsChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountExistsChange_prior' := e ]}" :=
+  match r with Build_JournalAccountExistsChange (_ as f0) _ =>
+    Build_JournalAccountExistsChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountExistsChange : Inhabited (JournalAccountExistsChange) := {
+  inhabitant := {|
+    JournalAccountExistsChange_address := inhabitant;
+    JournalAccountExistsChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountCreatedChange := {
+  JournalAccountCreatedChange_address : address_typ;
+  JournalAccountCreatedChange_prior : bool;
+}.
+Arguments JournalAccountCreatedChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountCreatedChange : EqDecision JournalAccountCreatedChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountCreatedChange : Countable JournalAccountCreatedChange.
+refine {|
+  encode x := encode (JournalAccountCreatedChange_address x, JournalAccountCreatedChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountCreatedChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountCreatedChange_address' := e ]}" :=
+  match r with Build_JournalAccountCreatedChange _ (_ as f1) =>
+    Build_JournalAccountCreatedChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountCreatedChange_prior' := e ]}" :=
+  match r with Build_JournalAccountCreatedChange (_ as f0) _ =>
+    Build_JournalAccountCreatedChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountCreatedChange : Inhabited (JournalAccountCreatedChange) := {
+  inhabitant := {|
+    JournalAccountCreatedChange_address := inhabitant;
+    JournalAccountCreatedChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountSelfdestructedChange := {
+  JournalAccountSelfdestructedChange_address : address_typ;
+  JournalAccountSelfdestructedChange_prior : bool;
+}.
+Arguments JournalAccountSelfdestructedChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountSelfdestructedChange :
+  EqDecision JournalAccountSelfdestructedChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountSelfdestructedChange : Countable
+  JournalAccountSelfdestructedChange.
+refine {|
+  encode x := encode (JournalAccountSelfdestructedChange_address x, JournalAccountSelfdestructedChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountSelfdestructedChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountSelfdestructedChange_address' := e ]}" :=
+  match r with Build_JournalAccountSelfdestructedChange _ (_ as f1) =>
+    Build_JournalAccountSelfdestructedChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountSelfdestructedChange_prior' := e ]}" :=
+  match r with Build_JournalAccountSelfdestructedChange (_ as f0) _ =>
+    Build_JournalAccountSelfdestructedChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountSelfdestructedChange :
+  Inhabited (JournalAccountSelfdestructedChange) := {
+  inhabitant := {|
+    JournalAccountSelfdestructedChange_address := inhabitant;
+    JournalAccountSelfdestructedChange_prior := inhabitant
+|} }.
+
+
+Record JournalStorageValueChange := {
+  JournalStorageValueChange_key : StorageKey;
+  JournalStorageValueChange_prior : word;
+}.
+Arguments JournalStorageValueChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalStorageValueChange : EqDecision JournalStorageValueChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalStorageValueChange : Countable JournalStorageValueChange.
+refine {|
+  encode x := encode (JournalStorageValueChange_key x, JournalStorageValueChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalStorageValueChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalStorageValueChange_key' := e ]}" :=
+  match r with Build_JournalStorageValueChange _ (_ as f1) =>
+    Build_JournalStorageValueChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalStorageValueChange_prior' := e ]}" :=
+  match r with Build_JournalStorageValueChange (_ as f0) _ =>
+    Build_JournalStorageValueChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalStorageValueChange : Inhabited (JournalStorageValueChange) := {
+  inhabitant := {|
+    JournalStorageValueChange_key := inhabitant;
+    JournalStorageValueChange_prior := inhabitant
+|} }.
+
+
+Record JournalStorageRowGenerationChange := {
+  JournalStorageRowGenerationChange_key : StorageKey;
+  JournalStorageRowGenerationChange_prior : storage_generation;
+}.
+Arguments JournalStorageRowGenerationChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalStorageRowGenerationChange :
+  EqDecision JournalStorageRowGenerationChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalStorageRowGenerationChange : Countable JournalStorageRowGenerationChange.
+refine {|
+  encode x := encode (JournalStorageRowGenerationChange_key x, JournalStorageRowGenerationChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalStorageRowGenerationChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalStorageRowGenerationChange_key' := e ]}" :=
+  match r with Build_JournalStorageRowGenerationChange _ (_ as f1) =>
+    Build_JournalStorageRowGenerationChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalStorageRowGenerationChange_prior' := e ]}" :=
+  match r with Build_JournalStorageRowGenerationChange (_ as f0) _ =>
+    Build_JournalStorageRowGenerationChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalStorageRowGenerationChange :
+  Inhabited (JournalStorageRowGenerationChange) := {
+  inhabitant := {|
+    JournalStorageRowGenerationChange_key := inhabitant;
+    JournalStorageRowGenerationChange_prior := inhabitant
+|} }.
+
+
+Record JournalAccountStorageGenerationChange := {
+  JournalAccountStorageGenerationChange_address : address_typ;
+  JournalAccountStorageGenerationChange_prior : storage_generation;
+}.
+Arguments JournalAccountStorageGenerationChange : clear implicits.
+#[export]
+Instance Decidable_eq_JournalAccountStorageGenerationChange :
+  EqDecision JournalAccountStorageGenerationChange.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_JournalAccountStorageGenerationChange : Countable
+  JournalAccountStorageGenerationChange.
+refine {|
+  encode x := encode (JournalAccountStorageGenerationChange_address x, JournalAccountStorageGenerationChange_prior x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_JournalAccountStorageGenerationChange x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'JournalAccountStorageGenerationChange_address' := e ]}" :=
+  match r with Build_JournalAccountStorageGenerationChange _ (_ as f1) =>
+    Build_JournalAccountStorageGenerationChange e f1 end (at level 1).
+Notation "{[ r 'with' 'JournalAccountStorageGenerationChange_prior' := e ]}" :=
+  match r with Build_JournalAccountStorageGenerationChange (_ as f0) _ =>
+    Build_JournalAccountStorageGenerationChange f0 e end (at level 1).
+#[export]
+Instance dummy_JournalAccountStorageGenerationChange :
+  Inhabited (JournalAccountStorageGenerationChange) := {
+  inhabitant := {|
+    JournalAccountStorageGenerationChange_address := inhabitant;
+    JournalAccountStorageGenerationChange_prior := inhabitant
+|} }.
+
+
+Inductive StateJournalEntry :=
+| JournalTransientChanged : JournalTransientChange -> StateJournalEntry
+| JournalWarmAccountChanged : JournalWarmAccountChange -> StateJournalEntry
+| JournalWarmStorageChanged : JournalWarmStorageChange -> StateJournalEntry
+| JournalAccountBalanceChanged : JournalAccountBalanceChange -> StateJournalEntry
+| JournalAccountNonceChanged : JournalAccountNonceChange -> StateJournalEntry
+| JournalAccountCodeHashChanged : JournalAccountCodeHashChange -> StateJournalEntry
+| JournalAccountExistsChanged : JournalAccountExistsChange -> StateJournalEntry
+| JournalAccountCreatedChanged : JournalAccountCreatedChange -> StateJournalEntry
+| JournalAccountSelfdestructedChanged : JournalAccountSelfdestructedChange -> StateJournalEntry
+| JournalTransactionAccountListed : unit -> StateJournalEntry
+| JournalTransactionStorageListed : address_typ -> StateJournalEntry
+| JournalLogAppended : unit -> StateJournalEntry
+| JournalStorageValueChanged : JournalStorageValueChange -> StateJournalEntry
+| JournalStorageRowGenerationChanged : JournalStorageRowGenerationChange -> StateJournalEntry
+| JournalAccountStorageGenerationChanged : JournalAccountStorageGenerationChange -> StateJournalEntry
+| JournalFrameCheckpointed : unit -> StateJournalEntry
+| JournalFrameCommitted : unit -> StateJournalEntry.
+Arguments StateJournalEntry : clear implicits.
+
+Definition sail_StateJournalEntry_encode (x : StateJournalEntry) := match x with
+  | JournalTransientChanged x' => encode (0, encode x')
+  | JournalWarmAccountChanged x' => encode (1, encode x')
+  | JournalWarmStorageChanged x' => encode (2, encode x')
+  | JournalAccountBalanceChanged x' => encode (3, encode x')
+  | JournalAccountNonceChanged x' => encode (4, encode x')
+  | JournalAccountCodeHashChanged x' => encode (5, encode x')
+  | JournalAccountExistsChanged x' => encode (6, encode x')
+  | JournalAccountCreatedChanged x' => encode (7, encode x')
+  | JournalAccountSelfdestructedChanged x' => encode (8, encode x')
+  | JournalTransactionAccountListed x' => encode (9, encode x')
+  | JournalTransactionStorageListed x' => encode (10, encode x')
+  | JournalLogAppended x' => encode (11, encode x')
+  | JournalStorageValueChanged x' => encode (12, encode x')
+  | JournalStorageRowGenerationChanged x' => encode (13, encode x')
+  | JournalAccountStorageGenerationChanged x' => encode (14, encode x')
+  | JournalFrameCheckpointed x' => encode (15, encode x')
+  | JournalFrameCommitted x' => encode (16, encode x') end.
+Definition sail_StateJournalEntry_decode x : option StateJournalEntry := match decode x with
+  | Some (0, x') => JournalTransientChanged <$> decode x'
+  | Some (1, x') => JournalWarmAccountChanged <$> decode x'
+  | Some (2, x') => JournalWarmStorageChanged <$> decode x'
+  | Some (3, x') => JournalAccountBalanceChanged <$> decode x'
+  | Some (4, x') => JournalAccountNonceChanged <$> decode x'
+  | Some (5, x') => JournalAccountCodeHashChanged <$> decode x'
+  | Some (6, x') => JournalAccountExistsChanged <$> decode x'
+  | Some (7, x') => JournalAccountCreatedChanged <$> decode x'
+  | Some (8, x') => JournalAccountSelfdestructedChanged <$> decode x'
+  | Some (9, x') => JournalTransactionAccountListed <$> decode x'
+  | Some (10, x') => JournalTransactionStorageListed <$> decode x'
+  | Some (11, x') => JournalLogAppended <$> decode x'
+  | Some (12, x') => JournalStorageValueChanged <$> decode x'
+  | Some (13, x') => JournalStorageRowGenerationChanged <$> decode x'
+  | Some (14, x') => JournalAccountStorageGenerationChanged <$> decode x'
+  | Some (15, x') => JournalFrameCheckpointed <$> decode x'
+  | Some (16, x') => JournalFrameCommitted <$> decode x'
+  | _ => None end.
+Lemma sail_StateJournalEntry_decode_encode : forall (x : StateJournalEntry),
+  sail_StateJournalEntry_decode (sail_StateJournalEntry_encode x)  = Some x.
+Proof.
+  unfold sail_StateJournalEntry_decode, sail_StateJournalEntry_encode;
+  intros [x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_StateJournalEntry : EqDecision StateJournalEntry := decode_encode_eq_dec
+  sail_StateJournalEntry_encode sail_StateJournalEntry_decode sail_StateJournalEntry_decode_encode .
+
+#[export]
+Instance Countable_StateJournalEntry : Countable StateJournalEntry := {|
+  encode := sail_StateJournalEntry_encode;
+  decode := sail_StateJournalEntry_decode;
+  decode_encode := sail_StateJournalEntry_decode_encode
+|}.
+#[export]
+Instance dummy_StateJournalEntry : Inhabited (StateJournalEntry) := {
+  inhabitant := JournalTransientChanged inhabitant
+}.
 
 Record BalStorageChangeEntry := {
   BalStorageChangeEntry_slot : word;
@@ -5965,109 +8427,55 @@ Instance dummy_trie_path_cursor : Inhabited (trie_path_cursor) := {
 Definition trie_path_cursor_valid (x : trie_path_cursor) : Prop :=
 0 <= x.(trie_path_cursor_value) /\ x.(trie_path_cursor_value) <= 64.
 
-Record MemoryExpansion {available : Z} (*live_gas_valid available*) := {
-  MemoryExpansion_range : MemoryRange;
-  MemoryExpansion_required_size : memory_length;
-  MemoryExpansion_cost : Z;
+Record TransactionMergeSemantics := {
+  TransactionMergeSemantics_delete_only_created : bool;
+  TransactionMergeSemantics_preserve_selfdestruct_balance : bool;
 }.
-Arguments MemoryExpansion : clear implicits.
+Arguments TransactionMergeSemantics : clear implicits.
 #[export]
-Instance Decidable_eq_MemoryExpansion {available : Z} (*live_gas_valid available*) :
-  EqDecision (MemoryExpansion available).
-   intros [x0 x1 x2].
-   intros [y0 y1 y2].
+Instance Decidable_eq_TransactionMergeSemantics : EqDecision TransactionMergeSemantics.
+   intros [x0 x1].
+   intros [y0 y1].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_MemoryExpansion {available : Z} (*live_gas_valid available*) : Countable
-  (MemoryExpansion available).
+Instance Countable_TransactionMergeSemantics : Countable TransactionMergeSemantics.
 refine {|
-  encode x := encode (MemoryExpansion_range x, MemoryExpansion_required_size x, MemoryExpansion_cost x);
-  decode x := '(x0, x1, x2) ← decode x;
-              mret (Build_MemoryExpansion available x0 x1 x2)
+  encode x := encode (TransactionMergeSemantics_delete_only_created x, TransactionMergeSemantics_preserve_selfdestruct_balance x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_TransactionMergeSemantics x0 x1)
 |}.
 abstract (
-  intros [x0 x1 x2];
+  intros [x0 x1];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'MemoryExpansion_range' := e ]}" :=
-  match r with Build_MemoryExpansion _ _ (_ as f1) (_ as f2) =>
-    Build_MemoryExpansion _ e f1 f2 end (at level 1).
-Notation "{[ r 'with' 'MemoryExpansion_required_size' := e ]}" :=
-  match r with Build_MemoryExpansion _ (_ as f0) _ (_ as f2) =>
-    Build_MemoryExpansion _ f0 e f2 end (at level 1).
-Notation "{[ r 'with' 'MemoryExpansion_cost' := e ]}" :=
-  match r with Build_MemoryExpansion _ (_ as f0) (_ as f1) _ =>
-    Build_MemoryExpansion _ f0 f1 e end (at level 1).
+Notation "{[ r 'with' 'TransactionMergeSemantics_delete_only_created' := e ]}" :=
+  match r with Build_TransactionMergeSemantics _ (_ as f1) =>
+    Build_TransactionMergeSemantics e f1 end (at level 1).
+Notation "{[ r 'with' 'TransactionMergeSemantics_preserve_selfdestruct_balance' := e ]}" :=
+  match r with Build_TransactionMergeSemantics (_ as f0) _ =>
+    Build_TransactionMergeSemantics f0 e end (at level 1).
 #[export]
-Instance dummy_MemoryExpansion {available : Z} (*live_gas_valid available*) :
-  Inhabited (MemoryExpansion available) := {
+Instance dummy_TransactionMergeSemantics : Inhabited (TransactionMergeSemantics) := {
   inhabitant := {|
-    MemoryExpansion_range := inhabitant;
-    MemoryExpansion_required_size := inhabitant;
-    MemoryExpansion_cost := inhabitant
+    TransactionMergeSemantics_delete_only_created := inhabitant;
+    TransactionMergeSemantics_preserve_selfdestruct_balance := inhabitant
 |} }.
 
 
-Record MemoryPairExpansion {available : Z} (*live_gas_valid available*) := {
-  MemoryPairExpansion_left : MemoryRange;
-  MemoryPairExpansion_right : MemoryRange;
-  MemoryPairExpansion_required_size : memory_length;
-  MemoryPairExpansion_cost : Z;
-}.
-Arguments MemoryPairExpansion : clear implicits.
-#[export]
-Instance Decidable_eq_MemoryPairExpansion {available : Z} (*live_gas_valid available*) :
-  EqDecision (MemoryPairExpansion available).
-   intros [x0 x1 x2 x3].
-   intros [y0 y1 y2 y3].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_MemoryPairExpansion {available : Z} (*live_gas_valid available*) : Countable
-  (MemoryPairExpansion available).
-refine {|
-  encode x := encode (MemoryPairExpansion_left x, MemoryPairExpansion_right x, MemoryPairExpansion_required_size x, MemoryPairExpansion_cost x);
-  decode x := '(x0, x1, x2, x3) ← decode x;
-              mret (Build_MemoryPairExpansion available x0 x1 x2 x3)
-|}.
-abstract (
-  intros [x0 x1 x2 x3];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
+Definition memory_word_count_relation (byte_len : Z) (words : Z) : bool :=
+  (0 <=? byte_len) &&
+    ((words =? (e_div (byte_len + 31) 32)) &&
+      ((byte_len <=? (32 * words)) && ((32 * words) <=? (byte_len + 31)))).
+#[export] Hint Unfold memory_word_count_relation : sail.
 
-Notation "{[ r 'with' 'MemoryPairExpansion_left' := e ]}" :=
-  match r with Build_MemoryPairExpansion _ _ (_ as f1) (_ as f2) (_ as f3) =>
-    Build_MemoryPairExpansion _ e f1 f2 f3 end (at level 1).
-Notation "{[ r 'with' 'MemoryPairExpansion_right' := e ]}" :=
-  match r with Build_MemoryPairExpansion _ (_ as f0) _ (_ as f2) (_ as f3) =>
-    Build_MemoryPairExpansion _ f0 e f2 f3 end (at level 1).
-Notation "{[ r 'with' 'MemoryPairExpansion_required_size' := e ]}" :=
-  match r with Build_MemoryPairExpansion _ (_ as f0) (_ as f1) _ (_ as f3) =>
-    Build_MemoryPairExpansion _ f0 f1 e f3 end (at level 1).
-Notation "{[ r 'with' 'MemoryPairExpansion_cost' := e ]}" :=
-  match r with Build_MemoryPairExpansion _ (_ as f0) (_ as f1) (_ as f2) _ =>
-    Build_MemoryPairExpansion _ f0 f1 f2 e end (at level 1).
-#[export]
-Instance dummy_MemoryPairExpansion {available : Z} (*live_gas_valid available*) :
-  Inhabited (MemoryPairExpansion available) := {
-  inhabitant := {|
-    MemoryPairExpansion_left := inhabitant;
-    MemoryPairExpansion_right := inhabitant;
-    MemoryPairExpansion_required_size := inhabitant;
-    MemoryPairExpansion_cost := inhabitant
-|} }.
-
+Definition memory_cost_relation (words : Z) (cost : Z) : bool :=
+  (0 <=? words) && (cost =? (3 * words + e_div (words * words) 512)).
+#[export] Hint Unfold memory_cost_relation : sail.
 
 Record SstoreCosts := {
   SstoreCosts_execution : gas_cost;
@@ -6236,7 +8644,7 @@ Inductive ast :=
 | DUPN : byte -> ast
 | SWAPN : byte -> ast
 | EXCHANGE : byte -> ast
-| CREATE : unit -> ast
+| opcode_CREATE : unit -> ast
 | CALL : unit -> ast
 | CALLCODE : unit -> ast
 | RETURN : unit -> ast
@@ -6327,7 +8735,7 @@ Definition sail_ast_encode (x : ast) := match x with
   | DUPN x' => encode (75, encode x')
   | SWAPN x' => encode (76, encode x')
   | EXCHANGE x' => encode (77, encode x')
-  | CREATE x' => encode (78, encode x')
+  | opcode_CREATE x' => encode (78, encode x')
   | CALL x' => encode (79, encode x')
   | CALLCODE x' => encode (80, encode x')
   | RETURN x' => encode (81, encode x')
@@ -6416,7 +8824,7 @@ Definition sail_ast_decode x : option ast := match decode x with
   | Some (75, x') => DUPN <$> decode x'
   | Some (76, x') => SWAPN <$> decode x'
   | Some (77, x') => EXCHANGE <$> decode x'
-  | Some (78, x') => CREATE <$> decode x'
+  | Some (78, x') => opcode_CREATE <$> decode x'
   | Some (79, x') => CALL <$> decode x'
   | Some (80, x') => CALLCODE <$> decode x'
   | Some (81, x') => RETURN <$> decode x'
@@ -6445,6 +8853,163 @@ Instance Countable_ast : Countable ast := {|
 |}.
 #[export]
 Instance dummy_ast : Inhabited (ast) := { inhabitant := STOP inhabitant }.
+
+Record CreateSemantics := { CreateSemantics_uses_salt : bool; }.
+Arguments CreateSemantics : clear implicits.
+#[export]
+Instance Decidable_eq_CreateSemantics : EqDecision CreateSemantics.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_CreateSemantics : Countable CreateSemantics.
+refine {|
+  encode x := encode (CreateSemantics_uses_salt x);
+  decode x := '(x0) ← decode x;
+              mret (Build_CreateSemantics x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'CreateSemantics_uses_salt' := e ]}" :=
+  {| CreateSemantics_uses_salt := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_CreateSemantics : Inhabited (CreateSemantics) := {
+  inhabitant := {| CreateSemantics_uses_salt := inhabitant
+|} }.
+
+
+Record CallSemantics := {
+  CallSemantics_takes_value : bool;
+  CallSemantics_transfers_value : bool;
+  CallSemantics_uses_target_address : bool;
+  CallSemantics_inherits_caller_and_value : bool;
+  CallSemantics_enters_static_context : bool;
+}.
+Arguments CallSemantics : clear implicits.
+#[export]
+Instance Decidable_eq_CallSemantics : EqDecision CallSemantics.
+   intros [x0 x1 x2 x3 x4].
+   intros [y0 y1 y2 y3 y4].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_CallSemantics : Countable CallSemantics.
+refine {|
+  encode x := encode (CallSemantics_takes_value x, CallSemantics_transfers_value x, CallSemantics_uses_target_address x, CallSemantics_inherits_caller_and_value x, CallSemantics_enters_static_context x);
+  decode x := '(x0, x1, x2, x3, x4) ← decode x;
+              mret (Build_CallSemantics x0 x1 x2 x3 x4)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'CallSemantics_takes_value' := e ]}" :=
+  match r with Build_CallSemantics _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) =>
+    Build_CallSemantics e f1 f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'CallSemantics_transfers_value' := e ]}" :=
+  match r with Build_CallSemantics (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) =>
+    Build_CallSemantics f0 e f2 f3 f4 end (at level 1).
+Notation "{[ r 'with' 'CallSemantics_uses_target_address' := e ]}" :=
+  match r with Build_CallSemantics (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) =>
+    Build_CallSemantics f0 f1 e f3 f4 end (at level 1).
+Notation "{[ r 'with' 'CallSemantics_inherits_caller_and_value' := e ]}" :=
+  match r with Build_CallSemantics (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) =>
+    Build_CallSemantics f0 f1 f2 e f4 end (at level 1).
+Notation "{[ r 'with' 'CallSemantics_enters_static_context' := e ]}" :=
+  match r with Build_CallSemantics (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ =>
+    Build_CallSemantics f0 f1 f2 f3 e end (at level 1).
+#[export]
+Instance dummy_CallSemantics : Inhabited (CallSemantics) := {
+  inhabitant := {|
+    CallSemantics_takes_value := inhabitant;
+    CallSemantics_transfers_value := inhabitant;
+    CallSemantics_uses_target_address := inhabitant;
+    CallSemantics_inherits_caller_and_value := inhabitant;
+    CallSemantics_enters_static_context := inhabitant
+|} }.
+
+
+Definition authorization_refund_per_item : Z := 12500.
+#[export] Hint Unfold authorization_refund_per_item : sail.
+
+Record authorization_item_refund := { authorization_item_refund_value : Z; }.
+Arguments authorization_item_refund : clear implicits.
+#[export]
+Instance Decidable_eq_authorization_item_refund : EqDecision authorization_item_refund.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_authorization_item_refund : Countable authorization_item_refund.
+refine {|
+  encode x := encode (authorization_item_refund_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_authorization_item_refund x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'authorization_item_refund_value' := e ]}" :=
+  {| authorization_item_refund_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_authorization_item_refund : Inhabited (authorization_item_refund) := {
+  inhabitant := {| authorization_item_refund_value := inhabitant
+|} }.
+
+
+Definition authorization_item_refund_valid (x : authorization_item_refund) : Prop :=
+0 <= x.(authorization_item_refund_value) /\ x.(authorization_item_refund_value) <= 12500.
+
+Record authorization_refund_typ := { authorization_refund_value : Z; }.
+Arguments authorization_refund_typ : clear implicits.
+#[export]
+Instance Decidable_eq_authorization_refund_typ : EqDecision authorization_refund_typ.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_authorization_refund_typ : Countable authorization_refund_typ.
+refine {|
+  encode x := encode (authorization_refund_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_authorization_refund_typ x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'authorization_refund_value' := e ]}" :=
+  {| authorization_refund_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_authorization_refund_typ : Inhabited (authorization_refund_typ) := {
+  inhabitant := {| authorization_refund_value := inhabitant
+|} }.
+
+
+Definition authorization_refund_typ_valid (x : authorization_refund_typ) : Prop :=
+0 <= x.(authorization_refund_value) /\ x.(authorization_refund_value) <= (12500 * 2 ^ 30).
 
 Record IntrinsicGasCost := {
   IntrinsicGasCost_execution : gas_cost;
@@ -6557,7 +9122,7 @@ Instance dummy_TransactionCosts : Inhabited (TransactionCosts) := {
 
 
 Record TxUpfrontResult := {
-  TxUpfrontResult_authorization_refund : gas_refund;
+  TxUpfrontResult_authorization_refund : authorization_refund_typ;
   TxUpfrontResult_create_target_prestate_empty : bool;
 }.
 Arguments TxUpfrontResult : clear implicits.
@@ -6626,6 +9191,46 @@ Instance dummy_amsterdam_recipient_cost : Inhabited (amsterdam_recipient_cost) :
 
 Definition amsterdam_recipient_cost_valid (x : amsterdam_recipient_cost) : Prop :=
 0 <= x.(amsterdam_recipient_cost_value) /\ x.(amsterdam_recipient_cost_value) <= 12756.
+
+Record TransactionPreparation := {
+  TransactionPreparation_ready : bool;
+  TransactionPreparation_delegated : bool;
+}.
+Arguments TransactionPreparation : clear implicits.
+#[export]
+Instance Decidable_eq_TransactionPreparation : EqDecision TransactionPreparation.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TransactionPreparation : Countable TransactionPreparation.
+refine {|
+  encode x := encode (TransactionPreparation_ready x, TransactionPreparation_delegated x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_TransactionPreparation x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TransactionPreparation_ready' := e ]}" :=
+  match r with Build_TransactionPreparation _ (_ as f1) =>
+    Build_TransactionPreparation e f1 end (at level 1).
+Notation "{[ r 'with' 'TransactionPreparation_delegated' := e ]}" :=
+  match r with Build_TransactionPreparation (_ as f0) _ =>
+    Build_TransactionPreparation f0 e end (at level 1).
+#[export]
+Instance dummy_TransactionPreparation : Inhabited (TransactionPreparation) := {
+  inhabitant := {|
+    TransactionPreparation_ready := inhabitant;
+    TransactionPreparation_delegated := inhabitant
+|} }.
+
 
 Record trie_depth := { trie_depth_value : Z; }.
 Arguments trie_depth : clear implicits.
@@ -6900,23 +9505,62 @@ Instance dummy_TrieUpdateSource : Inhabited (TrieUpdateSource) := {
   inhabitant := StorageTrieUpdates inhabitant
 }.
 
+Record TrieUpdateFetch := {
+  TrieUpdateFetch_available : bool;
+  TrieUpdateFetch_update : TrieUpdate;
+}.
+Arguments TrieUpdateFetch : clear implicits.
+#[export]
+Instance Decidable_eq_TrieUpdateFetch : EqDecision TrieUpdateFetch.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TrieUpdateFetch : Countable TrieUpdateFetch.
+refine {|
+  encode x := encode (TrieUpdateFetch_available x, TrieUpdateFetch_update x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_TrieUpdateFetch x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TrieUpdateFetch_available' := e ]}" :=
+  match r with Build_TrieUpdateFetch _ (_ as f1) => Build_TrieUpdateFetch e f1 end (at level 1).
+Notation "{[ r 'with' 'TrieUpdateFetch_update' := e ]}" :=
+  match r with Build_TrieUpdateFetch (_ as f0) _ => Build_TrieUpdateFetch f0 e end (at level 1).
+#[export]
+Instance dummy_TrieUpdateFetch : Inhabited (TrieUpdateFetch) := {
+  inhabitant := {| TrieUpdateFetch_available := inhabitant; TrieUpdateFetch_update := inhabitant
+|} }.
+
+
 Inductive TrieUpdateRelation :=
 | UpdateUnderPrefix : TriePath -> TrieUpdateRelation
-| UpdateBeyondPrefix : trie_path_len -> TrieUpdateRelation.
+| UpdateBeyondPrefix : trie_path_len -> TrieUpdateRelation
+| UpdateSourceExhausted : unit -> TrieUpdateRelation.
 Arguments TrieUpdateRelation : clear implicits.
 
 Definition sail_TrieUpdateRelation_encode (x : TrieUpdateRelation) := match x with
   | UpdateUnderPrefix x' => encode (0, encode x')
-  | UpdateBeyondPrefix x' => encode (1, encode x') end.
+  | UpdateBeyondPrefix x' => encode (1, encode x')
+  | UpdateSourceExhausted x' => encode (2, encode x') end.
 Definition sail_TrieUpdateRelation_decode x : option TrieUpdateRelation := match decode x with
   | Some (0, x') => UpdateUnderPrefix <$> decode x'
   | Some (1, x') => UpdateBeyondPrefix <$> decode x'
+  | Some (2, x') => UpdateSourceExhausted <$> decode x'
   | _ => None end.
 Lemma sail_TrieUpdateRelation_decode_encode : forall (x : TrieUpdateRelation),
   sail_TrieUpdateRelation_decode (sail_TrieUpdateRelation_encode x)  = Some x.
 Proof.
   unfold sail_TrieUpdateRelation_decode, sail_TrieUpdateRelation_encode;
-  intros [x|x]; rewrite !decode_encode; reflexivity.
+  intros [x|x|x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]
@@ -6937,7 +9581,7 @@ Instance dummy_TrieUpdateRelation : Inhabited (TrieUpdateRelation) := {
 
 Record TrieUpdateCursor := {
   TrieUpdateCursor_source : TrieUpdateSource;
-  TrieUpdateCursor_current : option TrieUpdate;
+  TrieUpdateCursor_current : TrieUpdate;
   TrieUpdateCursor_relation : TrieUpdateRelation;
 }.
 Arguments TrieUpdateCursor : clear implicits.
@@ -6982,25 +9626,28 @@ Instance dummy_TrieUpdateCursor : Inhabited (TrieUpdateCursor) := {
 
 
 Inductive TrieItemValue :=
+| EmptySubtree : unit -> TrieItemValue
 | LeafItem : TrieLeafValue -> TrieItemValue
 | BranchItem : NodeRef -> TrieItemValue
 | SubtreeItem : NodeRef -> TrieItemValue.
 Arguments TrieItemValue : clear implicits.
 
 Definition sail_TrieItemValue_encode (x : TrieItemValue) := match x with
-  | LeafItem x' => encode (0, encode x')
-  | BranchItem x' => encode (1, encode x')
-  | SubtreeItem x' => encode (2, encode x') end.
+  | EmptySubtree x' => encode (0, encode x')
+  | LeafItem x' => encode (1, encode x')
+  | BranchItem x' => encode (2, encode x')
+  | SubtreeItem x' => encode (3, encode x') end.
 Definition sail_TrieItemValue_decode x : option TrieItemValue := match decode x with
-  | Some (0, x') => LeafItem <$> decode x'
-  | Some (1, x') => BranchItem <$> decode x'
-  | Some (2, x') => SubtreeItem <$> decode x'
+  | Some (0, x') => EmptySubtree <$> decode x'
+  | Some (1, x') => LeafItem <$> decode x'
+  | Some (2, x') => BranchItem <$> decode x'
+  | Some (3, x') => SubtreeItem <$> decode x'
   | _ => None end.
 Lemma sail_TrieItemValue_decode_encode : forall (x : TrieItemValue), sail_TrieItemValue_decode
   (sail_TrieItemValue_encode x)  = Some x.
 Proof.
   unfold sail_TrieItemValue_decode, sail_TrieItemValue_encode;
-  intros [x|x|x]; rewrite !decode_encode; reflexivity.
+  intros [x|x|x|x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]
@@ -7014,7 +9661,8 @@ Instance Countable_TrieItemValue : Countable TrieItemValue := {|
   decode_encode := sail_TrieItemValue_decode_encode
 |}.
 #[export]
-Instance dummy_TrieItemValue : Inhabited (TrieItemValue) := { inhabitant := LeafItem inhabitant }.
+Instance dummy_TrieItemValue : Inhabited (TrieItemValue) := { inhabitant := EmptySubtree inhabitant
+}.
 
 Record TrieItem := {
   TrieItem_path : TriePath;
@@ -7055,7 +9703,7 @@ Instance dummy_TrieItem : Inhabited (TrieItem) := {
 Record TrieChildren := {
   TrieChildren_mask : branch_mask;
   TrieChildren_children : BranchRefs;
-  TrieChildren_only : option TrieItem;
+  TrieChildren_only : TrieItem;
   TrieChildren_count : Z;
 }.
 Arguments TrieChildren : clear implicits.
@@ -7101,6 +9749,42 @@ Instance dummy_TrieChildren : Inhabited (TrieChildren) := {
     TrieChildren_children := inhabitant;
     TrieChildren_only := inhabitant;
     TrieChildren_count := inhabitant
+|} }.
+
+
+Record TrieRootResult := {
+  TrieRootResult_root : hash;
+  TrieRootResult_changed : bool;
+}.
+Arguments TrieRootResult : clear implicits.
+#[export]
+Instance Decidable_eq_TrieRootResult : EqDecision TrieRootResult.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_TrieRootResult : Countable TrieRootResult.
+refine {|
+  encode x := encode (TrieRootResult_root x, TrieRootResult_changed x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_TrieRootResult x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'TrieRootResult_root' := e ]}" :=
+  match r with Build_TrieRootResult _ (_ as f1) => Build_TrieRootResult e f1 end (at level 1).
+Notation "{[ r 'with' 'TrieRootResult_changed' := e ]}" :=
+  match r with Build_TrieRootResult (_ as f0) _ => Build_TrieRootResult f0 e end (at level 1).
+#[export]
+Instance dummy_TrieRootResult : Inhabited (TrieRootResult) := {
+  inhabitant := {| TrieRootResult_root := inhabitant; TrieRootResult_changed := inhabitant
 |} }.
 
 
@@ -7150,7 +9834,7 @@ Instance dummy_RlpIndexItem {maximum : Z} (*rlp_index_valid_maximum maximum*) :
 Record RlpIndexCursor {maximum : Z} (*rlp_index_valid_maximum maximum*) := {
   RlpIndexCursor_count : Z;
   RlpIndexCursor_position : Z;
-  RlpIndexCursor_current : option (RlpIndexItem maximum);
+  RlpIndexCursor_current : RlpIndexItem maximum;
 }.
 Arguments RlpIndexCursor : clear implicits.
 #[export]
@@ -7229,41 +9913,37 @@ Instance dummy_rlp_index_byte_width : Inhabited (rlp_index_byte_width) := {
 Definition rlp_index_byte_width_valid (x : rlp_index_byte_width) : Prop :=
 1 <= x.(rlp_index_byte_width_value) /\ x.(rlp_index_byte_width_value) <= 8.
 
-Record TrieRootResult := {
-  TrieRootResult_root : hash;
-  TrieRootResult_changed : bool;
-}.
-Arguments TrieRootResult : clear implicits.
+Record rlp_index := { rlp_index_value : Z; }.
+Arguments rlp_index : clear implicits.
 #[export]
-Instance Decidable_eq_TrieRootResult : EqDecision TrieRootResult.
-   intros [x0 x1].
-   intros [y0 y1].
+Instance Decidable_eq_rlp_index : EqDecision rlp_index.
+   intros [x0].
+   intros [y0].
   cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_TrieRootResult : Countable TrieRootResult.
+Instance Countable_rlp_index : Countable rlp_index.
 refine {|
-  encode x := encode (TrieRootResult_root x, TrieRootResult_changed x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_TrieRootResult x0 x1)
+  encode x := encode (rlp_index_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_rlp_index x0)
 |}.
 abstract (
-  intros [x0 x1];
+  intros [x0];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'TrieRootResult_root' := e ]}" :=
-  match r with Build_TrieRootResult _ (_ as f1) => Build_TrieRootResult e f1 end (at level 1).
-Notation "{[ r 'with' 'TrieRootResult_changed' := e ]}" :=
-  match r with Build_TrieRootResult (_ as f0) _ => Build_TrieRootResult f0 e end (at level 1).
+Notation "{[ r 'with' 'rlp_index_value' := e ]}" :=
+  {| rlp_index_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_TrieRootResult : Inhabited (TrieRootResult) := {
-  inhabitant := {| TrieRootResult_root := inhabitant; TrieRootResult_changed := inhabitant
+Instance dummy_rlp_index : Inhabited (rlp_index) := { inhabitant := {| rlp_index_value := inhabitant
 |} }.
 
+
+Definition rlp_index_valid (x : rlp_index) : Prop :=
+0 <= x.(rlp_index_value) /\ x.(rlp_index_value) <= (2 ^ 20 - 1).
 
 Record StatelessInputRef := {
   StatelessInputRef_protocol : ProtocolProfile;
@@ -7275,10 +9955,10 @@ Record StatelessInputRef := {
   StatelessInputRef_consolidation_requests : StatelessInputSlice;
   StatelessInputRef_builder_deposit_requests : StatelessInputSlice;
   StatelessInputRef_builder_exit_requests : StatelessInputSlice;
-  StatelessInputRef_extra_data : StatelessInputSlice;
+  StatelessInputRef_extra_data : StatelessInputSliceAtMost (2 ^ 5);
   StatelessInputRef_transactions : TransactionListRef;
   StatelessInputRef_withdrawals : WithdrawalListRef;
-  StatelessInputRef_block_access_list : StatelessInputSlice;
+  StatelessInputRef_block_access_list : StatelessInputSliceAtMost (2 ^ 30);
   StatelessInputRef_witness_state : WitnessNodeListRef;
   StatelessInputRef_witness_codes : WitnessCodeListRef;
   StatelessInputRef_witness_headers : WitnessHeaderListRef;
@@ -7690,58 +10370,6 @@ Instance dummy_ReceiptRecordsRef : Inhabited (ReceiptRecordsRef) := {
 |} }.
 
 
-Record ReceiptAccumulator := {
-  ReceiptAccumulator_records_start : source_pointer;
-  ReceiptAccumulator_count : transaction_count;
-  ReceiptAccumulator_cumulative_gas_used : block_gas;
-  ReceiptAccumulator_bloom : LogsBloom;
-}.
-Arguments ReceiptAccumulator : clear implicits.
-#[export]
-Instance Decidable_eq_ReceiptAccumulator : EqDecision ReceiptAccumulator.
-   intros [x0 x1 x2 x3].
-   intros [y0 y1 y2 y3].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-  cmp_record_field x2 y2.
-  cmp_record_field x3 y3.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_ReceiptAccumulator : Countable ReceiptAccumulator.
-refine {|
-  encode x := encode (ReceiptAccumulator_records_start x, ReceiptAccumulator_count x, ReceiptAccumulator_cumulative_gas_used x, ReceiptAccumulator_bloom x);
-  decode x := '(x0, x1, x2, x3) ← decode x;
-              mret (Build_ReceiptAccumulator x0 x1 x2 x3)
-|}.
-abstract (
-  intros [x0 x1 x2 x3];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'ReceiptAccumulator_records_start' := e ]}" :=
-  match r with Build_ReceiptAccumulator _ (_ as f1) (_ as f2) (_ as f3) =>
-    Build_ReceiptAccumulator e f1 f2 f3 end (at level 1).
-Notation "{[ r 'with' 'ReceiptAccumulator_count' := e ]}" :=
-  match r with Build_ReceiptAccumulator (_ as f0) _ (_ as f2) (_ as f3) =>
-    Build_ReceiptAccumulator f0 e f2 f3 end (at level 1).
-Notation "{[ r 'with' 'ReceiptAccumulator_cumulative_gas_used' := e ]}" :=
-  match r with Build_ReceiptAccumulator (_ as f0) (_ as f1) _ (_ as f3) =>
-    Build_ReceiptAccumulator f0 f1 e f3 end (at level 1).
-Notation "{[ r 'with' 'ReceiptAccumulator_bloom' := e ]}" :=
-  match r with Build_ReceiptAccumulator (_ as f0) (_ as f1) (_ as f2) _ =>
-    Build_ReceiptAccumulator f0 f1 f2 e end (at level 1).
-#[export]
-Instance dummy_ReceiptAccumulator : Inhabited (ReceiptAccumulator) := {
-  inhabitant := {|
-    ReceiptAccumulator_records_start := inhabitant;
-    ReceiptAccumulator_count := inhabitant;
-    ReceiptAccumulator_cumulative_gas_used := inhabitant;
-    ReceiptAccumulator_bloom := inhabitant
-|} }.
-
-
 Inductive IndexedTrieSource :=
 | IndexedTransactions : TransactionListRef -> IndexedTrieSource
 | IndexedWithdrawals : WithdrawalListRef -> IndexedTrieSource
@@ -7826,20 +10454,19 @@ Instance dummy_IndexedTrieCursor : Inhabited (IndexedTrieCursor) := {
 
 
 Record BlockExecutionResult := {
-  BlockExecutionResult_header_gas_used : gas;
-  BlockExecutionResult_execution_gas_used : gas;
-  BlockExecutionResult_state_gas_used : gas;
+  BlockExecutionResult_header_gas_used : block_gas;
+  BlockExecutionResult_execution_gas_used : block_gas;
+  BlockExecutionResult_state_gas_used : block_gas;
   BlockExecutionResult_blob_gas_used : blob_gas_used_typ;
   BlockExecutionResult_first_tx_recipient : address_typ;
   BlockExecutionResult_receipts_root : hash;
-  BlockExecutionResult_logs_bloom : LogsBloom;
-  BlockExecutionResult_requests : ExecutionRequests;
+  BlockExecutionResult_logs : LogSeriesRef;
 }.
 Arguments BlockExecutionResult : clear implicits.
 #[export]
 Instance Decidable_eq_BlockExecutionResult : EqDecision BlockExecutionResult.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7].
+   intros [x0 x1 x2 x3 x4 x5 x6].
+   intros [y0 y1 y2 y3 y4 y5 y6].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -7847,46 +10474,42 @@ Instance Decidable_eq_BlockExecutionResult : EqDecision BlockExecutionResult.
   cmp_record_field x4 y4.
   cmp_record_field x5 y5.
   cmp_record_field x6 y6.
-  cmp_record_field x7 y7.
 left; subst; reflexivity.
 Defined.
 #[export]
 Instance Countable_BlockExecutionResult : Countable BlockExecutionResult.
 refine {|
-  encode x := encode (BlockExecutionResult_header_gas_used x, BlockExecutionResult_execution_gas_used x, BlockExecutionResult_state_gas_used x, BlockExecutionResult_blob_gas_used x, BlockExecutionResult_first_tx_recipient x, BlockExecutionResult_receipts_root x, BlockExecutionResult_logs_bloom x, BlockExecutionResult_requests x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7) ← decode x;
-              mret (Build_BlockExecutionResult x0 x1 x2 x3 x4 x5 x6 x7)
+  encode x := encode (BlockExecutionResult_header_gas_used x, BlockExecutionResult_execution_gas_used x, BlockExecutionResult_state_gas_used x, BlockExecutionResult_blob_gas_used x, BlockExecutionResult_first_tx_recipient x, BlockExecutionResult_receipts_root x, BlockExecutionResult_logs x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6) ← decode x;
+              mret (Build_BlockExecutionResult x0 x1 x2 x3 x4 x5 x6)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7];
+  intros [x0 x1 x2 x3 x4 x5 x6];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
 Notation "{[ r 'with' 'BlockExecutionResult_header_gas_used' := e ]}" :=
-  match r with Build_BlockExecutionResult _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult e f1 f2 f3 f4 f5 f6 f7 end (at level 1).
+  match r with Build_BlockExecutionResult _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_BlockExecutionResult e f1 f2 f3 f4 f5 f6 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_execution_gas_used' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult f0 e f2 f3 f4 f5 f6 f7 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_BlockExecutionResult f0 e f2 f3 f4 f5 f6 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_state_gas_used' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult f0 f1 e f3 f4 f5 f6 f7 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) =>
+    Build_BlockExecutionResult f0 f1 e f3 f4 f5 f6 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_blob_gas_used' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult f0 f1 f2 e f4 f5 f6 f7 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) =>
+    Build_BlockExecutionResult f0 f1 f2 e f4 f5 f6 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_first_tx_recipient' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 e f5 f6 f7 end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 e f5 f6 end (at level 1).
 Notation "{[ r 'with' 'BlockExecutionResult_receipts_root' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 e f6 f7 end (at level 1).
-Notation "{[ r 'with' 'BlockExecutionResult_logs_bloom' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 e f7 end (at level 1).
-Notation "{[ r 'with' 'BlockExecutionResult_requests' := e ]}" :=
-  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ =>
-    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 f6 e end (at level 1).
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 e f6 end (at level 1).
+Notation "{[ r 'with' 'BlockExecutionResult_logs' := e ]}" :=
+  match r with Build_BlockExecutionResult (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ =>
+    Build_BlockExecutionResult f0 f1 f2 f3 f4 f5 e end (at level 1).
 #[export]
 Instance dummy_BlockExecutionResult : Inhabited (BlockExecutionResult) := {
   inhabitant := {|
@@ -7896,86 +10519,74 @@ Instance dummy_BlockExecutionResult : Inhabited (BlockExecutionResult) := {
     BlockExecutionResult_blob_gas_used := inhabitant;
     BlockExecutionResult_first_tx_recipient := inhabitant;
     BlockExecutionResult_receipts_root := inhabitant;
-    BlockExecutionResult_logs_bloom := inhabitant;
-    BlockExecutionResult_requests := inhabitant
+    BlockExecutionResult_logs := inhabitant
 |} }.
 
 
-Record StatelessValidationFailure := {
-  StatelessValidationFailure_stage : validation_stage;
-  StatelessValidationFailure_reason : BlockError;
+Definition block_gas_usage_relation (limit : Z) (execution : Z) (state : Z) (receipts : Z) : bool :=
+  (0 <=? limit) &&
+    ((limit <=? block_gas_limit_bound) &&
+      ((0 <=? execution) &&
+        ((execution <=? limit) &&
+          ((0 <=? state) &&
+            ((state <=? limit) && ((0 <=? receipts) && (receipts <=? (execution + state)))))))).
+#[export] Hint Unfold block_gas_usage_relation : sail.
+
+Record BlockGasUsageFields {limit : Z} {execution : Z} {state : Z} {receipts : Z}
+(*block_gas_usage_relation limit execution state receipts*) := {
+  BlockGasUsageFields_execution : Z;
+  BlockGasUsageFields_state : Z;
+  BlockGasUsageFields_receipts : Z;
 }.
-Arguments StatelessValidationFailure : clear implicits.
+Arguments BlockGasUsageFields : clear implicits.
 #[export]
-Instance Decidable_eq_StatelessValidationFailure : EqDecision StatelessValidationFailure.
-   intros [x0 x1].
-   intros [y0 y1].
+Instance Decidable_eq_BlockGasUsageFields {limit : Z} {execution : Z} {state : Z} {receipts : Z}
+  (*block_gas_usage_relation limit execution state receipts*) :
+  EqDecision (BlockGasUsageFields limit execution state receipts).
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_StatelessValidationFailure : Countable StatelessValidationFailure.
+Instance Countable_BlockGasUsageFields {limit : Z} {execution : Z} {state : Z} {receipts : Z}
+  (*block_gas_usage_relation limit execution state receipts*) : Countable
+  (BlockGasUsageFields limit execution state receipts).
 refine {|
-  encode x := encode (StatelessValidationFailure_stage x, StatelessValidationFailure_reason x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_StatelessValidationFailure x0 x1)
+  encode x := encode (BlockGasUsageFields_execution x, BlockGasUsageFields_state x, BlockGasUsageFields_receipts x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_BlockGasUsageFields limit execution state receipts x0 x1 x2)
 |}.
 abstract (
-  intros [x0 x1];
+  intros [x0 x1 x2];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'StatelessValidationFailure_stage' := e ]}" :=
-  match r with Build_StatelessValidationFailure _ (_ as f1) =>
-    Build_StatelessValidationFailure e f1 end (at level 1).
-Notation "{[ r 'with' 'StatelessValidationFailure_reason' := e ]}" :=
-  match r with Build_StatelessValidationFailure (_ as f0) _ =>
-    Build_StatelessValidationFailure f0 e end (at level 1).
+Notation "{[ r 'with' 'BlockGasUsageFields_execution' := e ]}" :=
+  match r with Build_BlockGasUsageFields _ _ _ _ _ (_ as f1) (_ as f2) =>
+    Build_BlockGasUsageFields _ _ _ _ e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'BlockGasUsageFields_state' := e ]}" :=
+  match r with Build_BlockGasUsageFields _ _ _ _ (_ as f0) _ (_ as f2) =>
+    Build_BlockGasUsageFields _ _ _ _ f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'BlockGasUsageFields_receipts' := e ]}" :=
+  match r with Build_BlockGasUsageFields _ _ _ _ (_ as f0) (_ as f1) _ =>
+    Build_BlockGasUsageFields _ _ _ _ f0 f1 e end (at level 1).
 #[export]
-Instance dummy_StatelessValidationFailure : Inhabited (StatelessValidationFailure) := {
+Instance dummy_BlockGasUsageFields {limit : Z} {execution : Z} {state : Z} {receipts : Z}
+  (*block_gas_usage_relation limit execution state receipts*) :
+  Inhabited (BlockGasUsageFields limit execution state receipts) := {
   inhabitant := {|
-    StatelessValidationFailure_stage := inhabitant;
-    StatelessValidationFailure_reason := inhabitant
+    BlockGasUsageFields_execution := inhabitant;
+    BlockGasUsageFields_state := inhabitant;
+    BlockGasUsageFields_receipts := inhabitant
 |} }.
 
 
-Inductive StatelessValidationResult :=
-| StatelessPayloadValid : unit -> StatelessValidationResult
-| StatelessPayloadInvalid : StatelessValidationFailure -> StatelessValidationResult.
-Arguments StatelessValidationResult : clear implicits.
-
-Definition sail_StatelessValidationResult_encode (x : StatelessValidationResult) := match x with
-  | StatelessPayloadValid x' => encode (0, encode x')
-  | StatelessPayloadInvalid x' => encode (1, encode x') end.
-Definition sail_StatelessValidationResult_decode x : option StatelessValidationResult
-  := match decode x with
-  | Some (0, x') => StatelessPayloadValid <$> decode x'
-  | Some (1, x') => StatelessPayloadInvalid <$> decode x'
-  | _ => None end.
-Lemma sail_StatelessValidationResult_decode_encode : forall (x : StatelessValidationResult),
-  sail_StatelessValidationResult_decode (sail_StatelessValidationResult_encode x)  = Some x.
-Proof.
-  unfold sail_StatelessValidationResult_decode, sail_StatelessValidationResult_encode;
-  intros [x|x]; rewrite !decode_encode; reflexivity.
-Qed.
-
-#[export]
-Instance Decidable_eq_StatelessValidationResult : EqDecision StatelessValidationResult :=
-  decode_encode_eq_dec sail_StatelessValidationResult_encode sail_StatelessValidationResult_decode
-  sail_StatelessValidationResult_decode_encode .
-
-#[export]
-Instance Countable_StatelessValidationResult : Countable StatelessValidationResult := {|
-  encode := sail_StatelessValidationResult_encode;
-  decode := sail_StatelessValidationResult_decode;
-  decode_encode := sail_StatelessValidationResult_decode_encode
-|}.
-#[export]
-Instance dummy_StatelessValidationResult : Inhabited (StatelessValidationResult) := {
-  inhabitant := StatelessPayloadValid inhabitant
-}.
+Definition BlockGasUsageFor (limit : Z) : Type :=
+  {receipts & {state & {execution & (BlockGasUsageFields limit execution state receipts)}}}%type.
 
 Record htr_depth := { htr_depth_value : Z; }.
 Arguments htr_depth : clear implicits.
@@ -8109,100 +10720,9 @@ Defined.
 Instance dummy_HtrRequestKind : Inhabited HtrRequestKind := { inhabitant := HtrDeposit }.
 
 
-Record GuestValidation := {
-  GuestValidation_input_ref : StatelessInputRef;
-  GuestValidation_valid : bool;
-}.
-Arguments GuestValidation : clear implicits.
-#[export]
-Instance Decidable_eq_GuestValidation : EqDecision GuestValidation.
-   intros [x0 x1].
-   intros [y0 y1].
-  cmp_record_field x0 y0.
-  cmp_record_field x1 y1.
-left; subst; reflexivity.
-Defined.
-#[export]
-Instance Countable_GuestValidation : Countable GuestValidation.
-refine {|
-  encode x := encode (GuestValidation_input_ref x, GuestValidation_valid x);
-  decode x := '(x0, x1) ← decode x;
-              mret (Build_GuestValidation x0 x1)
-|}.
-abstract (
-  intros [x0 x1];
-  rewrite decode_encode;
-  reflexivity).
-Defined.
-
-Notation "{[ r 'with' 'GuestValidation_input_ref' := e ]}" :=
-  match r with Build_GuestValidation _ (_ as f1) => Build_GuestValidation e f1 end (at level 1).
-Notation "{[ r 'with' 'GuestValidation_valid' := e ]}" :=
-  match r with Build_GuestValidation (_ as f0) _ => Build_GuestValidation f0 e end (at level 1).
-#[export]
-Instance dummy_GuestValidation : Inhabited (GuestValidation) := {
-  inhabitant := {| GuestValidation_input_ref := inhabitant; GuestValidation_valid := inhabitant
-|} }.
 
 
 
-
-
-
-Variant register_BlobSchedule :=
-  | k_blob_schedule
-.
-
-Definition num_of_register_BlobSchedule (r : register_BlobSchedule) : Z :=
-  match r with
-  | k_blob_schedule => 0
-  end.
-Definition register_BlobSchedule_of_num (i : Z) : register_BlobSchedule :=
-  match i with
-  | 0 => k_blob_schedule
-  | _ => k_blob_schedule
-  end.
-Lemma register_BlobSchedule_num_of_roundtrip (x : register_BlobSchedule) : register_BlobSchedule_of_num (num_of_register_BlobSchedule x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_BlobSchedule_injective (x y : register_BlobSchedule) : num_of_register_BlobSchedule x = num_of_register_BlobSchedule y -> x = y.
-  intro.
-  rewrite <- (register_BlobSchedule_num_of_roundtrip x).
-  rewrite <- (register_BlobSchedule_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_BlobSchedule_eq_dec (x y : register_BlobSchedule) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_BlobSchedule x) (num_of_register_BlobSchedule y) with
-  | left e => left (num_of_register_BlobSchedule_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_BlobSchedule_beq (x y : register_BlobSchedule) : bool :=
-  Z.eqb (num_of_register_BlobSchedule x) (num_of_register_BlobSchedule y).
-Lemma register_BlobSchedule_beq_iff x y : register_BlobSchedule_beq x y = true <-> x = y.
-  unfold register_BlobSchedule_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_BlobSchedule_injective | congruence].
-Qed.
-Lemma register_BlobSchedule_beq_refl x : register_BlobSchedule_beq x x = true.
-apply register_BlobSchedule_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_BlobSchedule_beq_iff : register_beq_iffs.
-Hint Rewrite register_BlobSchedule_beq_refl : register_beq_refls.
-Definition register_BlobSchedule_list : list (string * register_BlobSchedule) := [
-  ("k_blob_schedule", k_blob_schedule)
-].
-
-Instance Decidable_eq_register_BlobSchedule : EqDecision register_BlobSchedule := register_BlobSchedule_eq_dec.
-Instance Countable_register_BlobSchedule : Countable register_BlobSchedule. refine {|
-  encode x := encode (num_of_register_BlobSchedule x);
-  decode x := register_BlobSchedule_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_BlobSchedule_num_of_roundtrip.
-  reflexivity.
-Defined.
 
 Variant register_BlockHeader :=
   | k_header
@@ -8369,58 +10889,113 @@ Instance Countable_register_Code : Countable register_Code. refine {|
   reflexivity.
 Defined.
 
-Variant register_Fork :=
-  | k_fork
+Variant register_EvmMemorySlice :=
+  | evm_memory
 .
 
-Definition num_of_register_Fork (r : register_Fork) : Z :=
+Definition num_of_register_EvmMemorySlice (r : register_EvmMemorySlice) : Z :=
   match r with
-  | k_fork => 0
+  | evm_memory => 0
   end.
-Definition register_Fork_of_num (i : Z) : register_Fork :=
+Definition register_EvmMemorySlice_of_num (i : Z) : register_EvmMemorySlice :=
   match i with
-  | 0 => k_fork
-  | _ => k_fork
+  | 0 => evm_memory
+  | _ => evm_memory
   end.
-Lemma register_Fork_num_of_roundtrip (x : register_Fork) : register_Fork_of_num (num_of_register_Fork x) = x.
+Lemma register_EvmMemorySlice_num_of_roundtrip (x : register_EvmMemorySlice) : register_EvmMemorySlice_of_num (num_of_register_EvmMemorySlice x) = x.
   destruct x; reflexivity.
 Qed.
-Lemma num_of_register_Fork_injective (x y : register_Fork) : num_of_register_Fork x = num_of_register_Fork y -> x = y.
+Lemma num_of_register_EvmMemorySlice_injective (x y : register_EvmMemorySlice) : num_of_register_EvmMemorySlice x = num_of_register_EvmMemorySlice y -> x = y.
   intro.
-  rewrite <- (register_Fork_num_of_roundtrip x).
-  rewrite <- (register_Fork_num_of_roundtrip y).
+  rewrite <- (register_EvmMemorySlice_num_of_roundtrip x).
+  rewrite <- (register_EvmMemorySlice_num_of_roundtrip y).
   congruence.
 Qed.
-Definition register_Fork_eq_dec (x y : register_Fork) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_Fork x) (num_of_register_Fork y) with
-  | left e => left (num_of_register_Fork_injective x y e)
+Definition register_EvmMemorySlice_eq_dec (x y : register_EvmMemorySlice) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_EvmMemorySlice x) (num_of_register_EvmMemorySlice y) with
+  | left e => left (num_of_register_EvmMemorySlice_injective x y e)
   | right ne => right _
   end).
   congruence.
 Defined.
-Definition register_Fork_beq (x y : register_Fork) : bool :=
-  Z.eqb (num_of_register_Fork x) (num_of_register_Fork y).
-Lemma register_Fork_beq_iff x y : register_Fork_beq x y = true <-> x = y.
-  unfold register_Fork_beq.
+Definition register_EvmMemorySlice_beq (x y : register_EvmMemorySlice) : bool :=
+  Z.eqb (num_of_register_EvmMemorySlice x) (num_of_register_EvmMemorySlice y).
+Lemma register_EvmMemorySlice_beq_iff x y : register_EvmMemorySlice_beq x y = true <-> x = y.
+  unfold register_EvmMemorySlice_beq.
   rewrite Z.eqb_eq.
-  split; [apply num_of_register_Fork_injective | congruence].
+  split; [apply num_of_register_EvmMemorySlice_injective | congruence].
 Qed.
-Lemma register_Fork_beq_refl x : register_Fork_beq x x = true.
-apply register_Fork_beq_iff; reflexivity.
+Lemma register_EvmMemorySlice_beq_refl x : register_EvmMemorySlice_beq x x = true.
+apply register_EvmMemorySlice_beq_iff; reflexivity.
 Qed.
-Hint Rewrite register_Fork_beq_iff : register_beq_iffs.
-Hint Rewrite register_Fork_beq_refl : register_beq_refls.
-Definition register_Fork_list : list (string * register_Fork) := [
-  ("k_fork", k_fork)
+Hint Rewrite register_EvmMemorySlice_beq_iff : register_beq_iffs.
+Hint Rewrite register_EvmMemorySlice_beq_refl : register_beq_refls.
+Definition register_EvmMemorySlice_list : list (string * register_EvmMemorySlice) := [
+  ("evm_memory", evm_memory)
 ].
 
-Instance Decidable_eq_register_Fork : EqDecision register_Fork := register_Fork_eq_dec.
-Instance Countable_register_Fork : Countable register_Fork. refine {|
-  encode x := encode (num_of_register_Fork x);
-  decode x := register_Fork_of_num <$> decode x
+Instance Decidable_eq_register_EvmMemorySlice : EqDecision register_EvmMemorySlice := register_EvmMemorySlice_eq_dec.
+Instance Countable_register_EvmMemorySlice : Countable register_EvmMemorySlice. refine {|
+  encode x := encode (num_of_register_EvmMemorySlice x);
+  decode x := register_EvmMemorySlice_of_num <$> decode x
 |}.
   intro s; rewrite decode_encode; simpl.
-  rewrite register_Fork_num_of_roundtrip.
+  rewrite register_EvmMemorySlice_num_of_roundtrip.
+  reflexivity.
+Defined.
+
+Variant register_ExecutionProfile :=
+  | k_execution_profile
+.
+
+Definition num_of_register_ExecutionProfile (r : register_ExecutionProfile) : Z :=
+  match r with
+  | k_execution_profile => 0
+  end.
+Definition register_ExecutionProfile_of_num (i : Z) : register_ExecutionProfile :=
+  match i with
+  | 0 => k_execution_profile
+  | _ => k_execution_profile
+  end.
+Lemma register_ExecutionProfile_num_of_roundtrip (x : register_ExecutionProfile) : register_ExecutionProfile_of_num (num_of_register_ExecutionProfile x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_register_ExecutionProfile_injective (x y : register_ExecutionProfile) : num_of_register_ExecutionProfile x = num_of_register_ExecutionProfile y -> x = y.
+  intro.
+  rewrite <- (register_ExecutionProfile_num_of_roundtrip x).
+  rewrite <- (register_ExecutionProfile_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition register_ExecutionProfile_eq_dec (x y : register_ExecutionProfile) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_ExecutionProfile x) (num_of_register_ExecutionProfile y) with
+  | left e => left (num_of_register_ExecutionProfile_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition register_ExecutionProfile_beq (x y : register_ExecutionProfile) : bool :=
+  Z.eqb (num_of_register_ExecutionProfile x) (num_of_register_ExecutionProfile y).
+Lemma register_ExecutionProfile_beq_iff x y : register_ExecutionProfile_beq x y = true <-> x = y.
+  unfold register_ExecutionProfile_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_register_ExecutionProfile_injective | congruence].
+Qed.
+Lemma register_ExecutionProfile_beq_refl x : register_ExecutionProfile_beq x x = true.
+apply register_ExecutionProfile_beq_iff; reflexivity.
+Qed.
+Hint Rewrite register_ExecutionProfile_beq_iff : register_beq_iffs.
+Hint Rewrite register_ExecutionProfile_beq_refl : register_beq_refls.
+Definition register_ExecutionProfile_list : list (string * register_ExecutionProfile) := [
+  ("k_execution_profile", k_execution_profile)
+].
+
+Instance Decidable_eq_register_ExecutionProfile : EqDecision register_ExecutionProfile := register_ExecutionProfile_eq_dec.
+Instance Countable_register_ExecutionProfile : Countable register_ExecutionProfile. refine {|
+  encode x := encode (num_of_register_ExecutionProfile x);
+  decode x := register_ExecutionProfile_of_num <$> decode x
+|}.
+  intro s; rewrite decode_encode; simpl.
+  rewrite register_ExecutionProfile_num_of_roundtrip.
   reflexivity.
 Defined.
 
@@ -8476,61 +11051,6 @@ Instance Countable_register_FrameStatus : Countable register_FrameStatus. refine
 |}.
   intro s; rewrite decode_encode; simpl.
   rewrite register_FrameStatus_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_MemorySlice :=
-  | evm_memory
-.
-
-Definition num_of_register_MemorySlice (r : register_MemorySlice) : Z :=
-  match r with
-  | evm_memory => 0
-  end.
-Definition register_MemorySlice_of_num (i : Z) : register_MemorySlice :=
-  match i with
-  | 0 => evm_memory
-  | _ => evm_memory
-  end.
-Lemma register_MemorySlice_num_of_roundtrip (x : register_MemorySlice) : register_MemorySlice_of_num (num_of_register_MemorySlice x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_MemorySlice_injective (x y : register_MemorySlice) : num_of_register_MemorySlice x = num_of_register_MemorySlice y -> x = y.
-  intro.
-  rewrite <- (register_MemorySlice_num_of_roundtrip x).
-  rewrite <- (register_MemorySlice_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_MemorySlice_eq_dec (x y : register_MemorySlice) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_MemorySlice x) (num_of_register_MemorySlice y) with
-  | left e => left (num_of_register_MemorySlice_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_MemorySlice_beq (x y : register_MemorySlice) : bool :=
-  Z.eqb (num_of_register_MemorySlice x) (num_of_register_MemorySlice y).
-Lemma register_MemorySlice_beq_iff x y : register_MemorySlice_beq x y = true <-> x = y.
-  unfold register_MemorySlice_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_MemorySlice_injective | congruence].
-Qed.
-Lemma register_MemorySlice_beq_refl x : register_MemorySlice_beq x x = true.
-apply register_MemorySlice_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_MemorySlice_beq_iff : register_beq_iffs.
-Hint Rewrite register_MemorySlice_beq_refl : register_beq_refls.
-Definition register_MemorySlice_list : list (string * register_MemorySlice) := [
-  ("evm_memory", evm_memory)
-].
-
-Instance Decidable_eq_register_MemorySlice : EqDecision register_MemorySlice := register_MemorySlice_eq_dec.
-Instance Countable_register_MemorySlice : Countable register_MemorySlice. refine {|
-  encode x := encode (num_of_register_MemorySlice x);
-  decode x := register_MemorySlice_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_MemorySlice_num_of_roundtrip.
   reflexivity.
 Defined.
 
@@ -8754,18 +11274,73 @@ Instance Countable_register_TxEnv : Countable register_TxEnv. refine {|
   reflexivity.
 Defined.
 
+Variant register_ancestor_hash_count :=
+  | k_n_headers
+.
+
+Definition num_of_register_ancestor_hash_count (r : register_ancestor_hash_count) : Z :=
+  match r with
+  | k_n_headers => 0
+  end.
+Definition register_ancestor_hash_count_of_num (i : Z) : register_ancestor_hash_count :=
+  match i with
+  | 0 => k_n_headers
+  | _ => k_n_headers
+  end.
+Lemma register_ancestor_hash_count_num_of_roundtrip (x : register_ancestor_hash_count) : register_ancestor_hash_count_of_num (num_of_register_ancestor_hash_count x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_register_ancestor_hash_count_injective (x y : register_ancestor_hash_count) : num_of_register_ancestor_hash_count x = num_of_register_ancestor_hash_count y -> x = y.
+  intro.
+  rewrite <- (register_ancestor_hash_count_num_of_roundtrip x).
+  rewrite <- (register_ancestor_hash_count_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition register_ancestor_hash_count_eq_dec (x y : register_ancestor_hash_count) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_ancestor_hash_count x) (num_of_register_ancestor_hash_count y) with
+  | left e => left (num_of_register_ancestor_hash_count_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition register_ancestor_hash_count_beq (x y : register_ancestor_hash_count) : bool :=
+  Z.eqb (num_of_register_ancestor_hash_count x) (num_of_register_ancestor_hash_count y).
+Lemma register_ancestor_hash_count_beq_iff x y : register_ancestor_hash_count_beq x y = true <-> x = y.
+  unfold register_ancestor_hash_count_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_register_ancestor_hash_count_injective | congruence].
+Qed.
+Lemma register_ancestor_hash_count_beq_refl x : register_ancestor_hash_count_beq x x = true.
+apply register_ancestor_hash_count_beq_iff; reflexivity.
+Qed.
+Hint Rewrite register_ancestor_hash_count_beq_iff : register_beq_iffs.
+Hint Rewrite register_ancestor_hash_count_beq_refl : register_beq_refls.
+Definition register_ancestor_hash_count_list : list (string * register_ancestor_hash_count) := [
+  ("k_n_headers", k_n_headers)
+].
+
+Instance Decidable_eq_register_ancestor_hash_count : EqDecision register_ancestor_hash_count := register_ancestor_hash_count_eq_dec.
+Instance Countable_register_ancestor_hash_count : Countable register_ancestor_hash_count. refine {|
+  encode x := encode (num_of_register_ancestor_hash_count x);
+  decode x := register_ancestor_hash_count_of_num <$> decode x
+|}.
+  intro s; rewrite decode_encode; simpl.
+  rewrite register_ancestor_hash_count_num_of_roundtrip.
+  reflexivity.
+Defined.
+
 Variant register_block_access_index :=
-  | k_block_access_index
+  | k_current_transaction_epoch
 .
 
 Definition num_of_register_block_access_index (r : register_block_access_index) : Z :=
   match r with
-  | k_block_access_index => 0
+  | k_current_transaction_epoch => 0
   end.
 Definition register_block_access_index_of_num (i : Z) : register_block_access_index :=
   match i with
-  | 0 => k_block_access_index
-  | _ => k_block_access_index
+  | 0 => k_current_transaction_epoch
+  | _ => k_current_transaction_epoch
   end.
 Lemma register_block_access_index_num_of_roundtrip (x : register_block_access_index) : register_block_access_index_of_num (num_of_register_block_access_index x) = x.
   destruct x; reflexivity.
@@ -8796,7 +11371,7 @@ Qed.
 Hint Rewrite register_block_access_index_beq_iff : register_beq_iffs.
 Hint Rewrite register_block_access_index_beq_refl : register_beq_refls.
 Definition register_block_access_index_list : list (string * register_block_access_index) := [
-  ("k_block_access_index", k_block_access_index)
+  ("k_current_transaction_epoch", k_current_transaction_epoch)
 ].
 
 Instance Decidable_eq_register_block_access_index : EqDecision register_block_access_index := register_block_access_index_eq_dec.
@@ -9143,61 +11718,6 @@ Instance Countable_register_hash : Countable register_hash. refine {|
   reflexivity.
 Defined.
 
-Variant register_item_count :=
-  | k_n_headers
-.
-
-Definition num_of_register_item_count (r : register_item_count) : Z :=
-  match r with
-  | k_n_headers => 0
-  end.
-Definition register_item_count_of_num (i : Z) : register_item_count :=
-  match i with
-  | 0 => k_n_headers
-  | _ => k_n_headers
-  end.
-Lemma register_item_count_num_of_roundtrip (x : register_item_count) : register_item_count_of_num (num_of_register_item_count x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_item_count_injective (x y : register_item_count) : num_of_register_item_count x = num_of_register_item_count y -> x = y.
-  intro.
-  rewrite <- (register_item_count_num_of_roundtrip x).
-  rewrite <- (register_item_count_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_item_count_eq_dec (x y : register_item_count) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_item_count x) (num_of_register_item_count y) with
-  | left e => left (num_of_register_item_count_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_item_count_beq (x y : register_item_count) : bool :=
-  Z.eqb (num_of_register_item_count x) (num_of_register_item_count y).
-Lemma register_item_count_beq_iff x y : register_item_count_beq x y = true <-> x = y.
-  unfold register_item_count_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_item_count_injective | congruence].
-Qed.
-Lemma register_item_count_beq_refl x : register_item_count_beq x x = true.
-apply register_item_count_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_item_count_beq_iff : register_beq_iffs.
-Hint Rewrite register_item_count_beq_refl : register_beq_refls.
-Definition register_item_count_list : list (string * register_item_count) := [
-  ("k_n_headers", k_n_headers)
-].
-
-Instance Decidable_eq_register_item_count : EqDecision register_item_count := register_item_count_eq_dec.
-Instance Countable_register_item_count : Countable register_item_count. refine {|
-  encode x := encode (num_of_register_item_count x);
-  decode x := register_item_count_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_item_count_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 Variant register_state_gas_spill :=
   | state_gas_spilled
 .
@@ -9255,17 +11775,17 @@ Defined.
 
 
 Variant register : Type :=
-  | R_BlobSchedule :> register_BlobSchedule -> register
   | R_BlockHeader :> register_BlockHeader -> register
   | R_CalldataSlice :> register_CalldataSlice -> register
   | R_Code :> register_Code -> register
-  | R_Fork :> register_Fork -> register
+  | R_EvmMemorySlice :> register_EvmMemorySlice -> register
+  | R_ExecutionProfile :> register_ExecutionProfile -> register
   | R_FrameStatus :> register_FrameStatus -> register
-  | R_MemorySlice :> register_MemorySlice -> register
   | R_Message :> register_Message -> register
   | R_OutputSlice :> register_OutputSlice -> register
   | R_ScratchSlice :> register_ScratchSlice -> register
   | R_TxEnv :> register_TxEnv -> register
+  | R_ancestor_hash_count :> register_ancestor_hash_count -> register
   | R_block_access_index :> register_block_access_index -> register
   | R_chain_identifier :> register_chain_identifier -> register
   | R_code_pointer :> register_code_pointer -> register
@@ -9273,47 +11793,45 @@ Variant register : Type :=
   | R_gas :> register_gas -> register
   | R_gas_refund :> register_gas_refund -> register
   | R_hash :> register_hash -> register
-  | R_item_count :> register_item_count -> register
   | R_state_gas_spill :> register_state_gas_spill -> register
 .
 
 Definition type_of_register (r : register) : Type :=
   match r with
-  | R_BlobSchedule _ => BlobSchedule
   | R_BlockHeader _ => BlockHeader
   | R_CalldataSlice _ => CalldataSlice
   | R_Code _ => Code
-  | R_Fork _ => Fork
+  | R_EvmMemorySlice _ => EvmMemorySlice
+  | R_ExecutionProfile _ => ExecutionProfile
   | R_FrameStatus _ => FrameStatus
-  | R_MemorySlice _ => MemorySlice
   | R_Message _ => Message
   | R_OutputSlice _ => OutputSlice
   | R_ScratchSlice _ => ScratchSlice
   | R_TxEnv _ => TxEnv
+  | R_ancestor_hash_count _ => ancestor_hash_count
   | R_block_access_index _ => block_access_index
   | R_chain_identifier _ => chain_identifier
   | R_code_pointer _ => code_pointer
   | R_frame_depth _ => frame_depth
-  | R_gas _ => gas
+  | R_gas _ => gas_typ
   | R_gas_refund _ => gas_refund
   | R_hash _ => hash
-  | R_item_count _ => item_count
   | R_state_gas_spill _ => state_gas_spill
   end.
 
   Definition register_encode (r : register) : positive :=
     match r with
-    | R_BlobSchedule r => encode (0, encode r)
-    | R_BlockHeader r => encode (1, encode r)
-    | R_CalldataSlice r => encode (2, encode r)
-    | R_Code r => encode (3, encode r)
-    | R_Fork r => encode (4, encode r)
+    | R_BlockHeader r => encode (0, encode r)
+    | R_CalldataSlice r => encode (1, encode r)
+    | R_Code r => encode (2, encode r)
+    | R_EvmMemorySlice r => encode (3, encode r)
+    | R_ExecutionProfile r => encode (4, encode r)
     | R_FrameStatus r => encode (5, encode r)
-    | R_MemorySlice r => encode (6, encode r)
-    | R_Message r => encode (7, encode r)
-    | R_OutputSlice r => encode (8, encode r)
-    | R_ScratchSlice r => encode (9, encode r)
-    | R_TxEnv r => encode (10, encode r)
+    | R_Message r => encode (6, encode r)
+    | R_OutputSlice r => encode (7, encode r)
+    | R_ScratchSlice r => encode (8, encode r)
+    | R_TxEnv r => encode (9, encode r)
+    | R_ancestor_hash_count r => encode (10, encode r)
     | R_block_access_index r => encode (11, encode r)
     | R_chain_identifier r => encode (12, encode r)
     | R_code_pointer r => encode (13, encode r)
@@ -9321,22 +11839,21 @@ Definition type_of_register (r : register) : Type :=
     | R_gas r => encode (15, encode r)
     | R_gas_refund r => encode (16, encode r)
     | R_hash r => encode (17, encode r)
-    | R_item_count r => encode (18, encode r)
-    | R_state_gas_spill r => encode (19, encode r)
+    | R_state_gas_spill r => encode (18, encode r)
     end.
   Definition register_decode (x : positive) : option register :=
     match decode x with
-    | Some (0, y) => r ← decode y; mret (R_BlobSchedule r)
-    | Some (1, y) => r ← decode y; mret (R_BlockHeader r)
-    | Some (2, y) => r ← decode y; mret (R_CalldataSlice r)
-    | Some (3, y) => r ← decode y; mret (R_Code r)
-    | Some (4, y) => r ← decode y; mret (R_Fork r)
+    | Some (0, y) => r ← decode y; mret (R_BlockHeader r)
+    | Some (1, y) => r ← decode y; mret (R_CalldataSlice r)
+    | Some (2, y) => r ← decode y; mret (R_Code r)
+    | Some (3, y) => r ← decode y; mret (R_EvmMemorySlice r)
+    | Some (4, y) => r ← decode y; mret (R_ExecutionProfile r)
     | Some (5, y) => r ← decode y; mret (R_FrameStatus r)
-    | Some (6, y) => r ← decode y; mret (R_MemorySlice r)
-    | Some (7, y) => r ← decode y; mret (R_Message r)
-    | Some (8, y) => r ← decode y; mret (R_OutputSlice r)
-    | Some (9, y) => r ← decode y; mret (R_ScratchSlice r)
-    | Some (10, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (6, y) => r ← decode y; mret (R_Message r)
+    | Some (7, y) => r ← decode y; mret (R_OutputSlice r)
+    | Some (8, y) => r ← decode y; mret (R_ScratchSlice r)
+    | Some (9, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (10, y) => r ← decode y; mret (R_ancestor_hash_count r)
     | Some (11, y) => r ← decode y; mret (R_block_access_index r)
     | Some (12, y) => r ← decode y; mret (R_chain_identifier r)
     | Some (13, y) => r ← decode y; mret (R_code_pointer r)
@@ -9344,8 +11861,7 @@ Definition type_of_register (r : register) : Type :=
     | Some (15, y) => r ← decode y; mret (R_gas r)
     | Some (16, y) => r ← decode y; mret (R_gas_refund r)
     | Some (17, y) => r ← decode y; mret (R_hash r)
-    | Some (18, y) => r ← decode y; mret (R_item_count r)
-    | Some (19, y) => r ← decode y; mret (R_state_gas_spill r)
+    | Some (18, y) => r ← decode y; mret (R_state_gas_spill r)
     | _ => None
     end.
   Lemma register_decode_encode r : register_decode (register_encode r) = Some r.
@@ -9379,17 +11895,17 @@ Definition type_of_register (r : register) : Type :=
 Definition register_transport {P : Type -> Type} {r r' : register} : r = r' -> P (type_of_register r) -> P (type_of_register r').
 refine (
   match r, r' with
-  | R_BlobSchedule r, R_BlobSchedule r' => fun _ x => x
   | R_BlockHeader r, R_BlockHeader r' => fun _ x => x
   | R_CalldataSlice r, R_CalldataSlice r' => fun _ x => x
   | R_Code r, R_Code r' => fun _ x => x
-  | R_Fork r, R_Fork r' => fun _ x => x
+  | R_EvmMemorySlice r, R_EvmMemorySlice r' => fun _ x => x
+  | R_ExecutionProfile r, R_ExecutionProfile r' => fun _ x => x
   | R_FrameStatus r, R_FrameStatus r' => fun _ x => x
-  | R_MemorySlice r, R_MemorySlice r' => fun _ x => x
   | R_Message r, R_Message r' => fun _ x => x
   | R_OutputSlice r, R_OutputSlice r' => fun _ x => x
   | R_ScratchSlice r, R_ScratchSlice r' => fun _ x => x
   | R_TxEnv r, R_TxEnv r' => fun _ x => x
+  | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun _ x => x
   | R_block_access_index r, R_block_access_index r' => fun _ x => x
   | R_chain_identifier r, R_chain_identifier r' => fun _ x => x
   | R_code_pointer r, R_code_pointer r' => fun _ x => x
@@ -9397,7 +11913,6 @@ refine (
   | R_gas r, R_gas r' => fun _ x => x
   | R_gas_refund r, R_gas_refund r' => fun _ x => x
   | R_hash r, R_hash r' => fun _ x => x
-  | R_item_count r, R_item_count r' => fun _ x => x
   | R_state_gas_spill r, R_state_gas_spill r' => fun _ x => x
   | _, _ => fun e _ => _
   end
@@ -9416,17 +11931,17 @@ Qed.
 
 Definition register_beq (r r' : register) : bool :=
   match r, r' with
-  | R_BlobSchedule r, R_BlobSchedule r' => register_BlobSchedule_beq r r'
   | R_BlockHeader r, R_BlockHeader r' => register_BlockHeader_beq r r'
   | R_CalldataSlice r, R_CalldataSlice r' => register_CalldataSlice_beq r r'
   | R_Code r, R_Code r' => register_Code_beq r r'
-  | R_Fork r, R_Fork r' => register_Fork_beq r r'
+  | R_EvmMemorySlice r, R_EvmMemorySlice r' => register_EvmMemorySlice_beq r r'
+  | R_ExecutionProfile r, R_ExecutionProfile r' => register_ExecutionProfile_beq r r'
   | R_FrameStatus r, R_FrameStatus r' => register_FrameStatus_beq r r'
-  | R_MemorySlice r, R_MemorySlice r' => register_MemorySlice_beq r r'
   | R_Message r, R_Message r' => register_Message_beq r r'
   | R_OutputSlice r, R_OutputSlice r' => register_OutputSlice_beq r r'
   | R_ScratchSlice r, R_ScratchSlice r' => register_ScratchSlice_beq r r'
   | R_TxEnv r, R_TxEnv r' => register_TxEnv_beq r r'
+  | R_ancestor_hash_count r, R_ancestor_hash_count r' => register_ancestor_hash_count_beq r r'
   | R_block_access_index r, R_block_access_index r' => register_block_access_index_beq r r'
   | R_chain_identifier r, R_chain_identifier r' => register_chain_identifier_beq r r'
   | R_code_pointer r, R_code_pointer r' => register_code_pointer_beq r r'
@@ -9434,7 +11949,6 @@ Definition register_beq (r r' : register) : bool :=
   | R_gas r, R_gas r' => register_gas_beq r r'
   | R_gas_refund r, R_gas_refund r' => register_gas_refund_beq r r'
   | R_hash r, R_hash r' => register_hash_beq r r'
-  | R_item_count r, R_item_count r' => register_item_count_beq r r'
   | R_state_gas_spill r, R_state_gas_spill r' => register_state_gas_spill_beq r r'
   | _, _ => false
   end.
@@ -9445,17 +11959,17 @@ Qed.
 
 Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_register r) -> option (P (type_of_register r')) :=
   match r, r' with
-  | R_BlobSchedule r, R_BlobSchedule r' => fun p => if register_BlobSchedule_beq r r' then Some p else None
   | R_BlockHeader r, R_BlockHeader r' => fun p => if register_BlockHeader_beq r r' then Some p else None
   | R_CalldataSlice r, R_CalldataSlice r' => fun p => if register_CalldataSlice_beq r r' then Some p else None
   | R_Code r, R_Code r' => fun p => if register_Code_beq r r' then Some p else None
-  | R_Fork r, R_Fork r' => fun p => if register_Fork_beq r r' then Some p else None
+  | R_EvmMemorySlice r, R_EvmMemorySlice r' => fun p => if register_EvmMemorySlice_beq r r' then Some p else None
+  | R_ExecutionProfile r, R_ExecutionProfile r' => fun p => if register_ExecutionProfile_beq r r' then Some p else None
   | R_FrameStatus r, R_FrameStatus r' => fun p => if register_FrameStatus_beq r r' then Some p else None
-  | R_MemorySlice r, R_MemorySlice r' => fun p => if register_MemorySlice_beq r r' then Some p else None
   | R_Message r, R_Message r' => fun p => if register_Message_beq r r' then Some p else None
   | R_OutputSlice r, R_OutputSlice r' => fun p => if register_OutputSlice_beq r r' then Some p else None
   | R_ScratchSlice r, R_ScratchSlice r' => fun p => if register_ScratchSlice_beq r r' then Some p else None
   | R_TxEnv r, R_TxEnv r' => fun p => if register_TxEnv_beq r r' then Some p else None
+  | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun p => if register_ancestor_hash_count_beq r r' then Some p else None
   | R_block_access_index r, R_block_access_index r' => fun p => if register_block_access_index_beq r r' then Some p else None
   | R_chain_identifier r, R_chain_identifier r' => fun p => if register_chain_identifier_beq r r' then Some p else None
   | R_code_pointer r, R_code_pointer r' => fun p => if register_code_pointer_beq r r' then Some p else None
@@ -9463,23 +11977,22 @@ Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_re
   | R_gas r, R_gas r' => fun p => if register_gas_beq r r' then Some p else None
   | R_gas_refund r, R_gas_refund r' => fun p => if register_gas_refund_beq r r' then Some p else None
   | R_hash r, R_hash r' => fun p => if register_hash_beq r r' then Some p else None
-  | R_item_count r, R_item_count r' => fun p => if register_item_count_beq r r' then Some p else None
   | R_state_gas_spill r, R_state_gas_spill r' => fun p => if register_state_gas_spill_beq r r' then Some p else None
   | _, _ => fun _ => None
   end.
 
 Definition register_list : list (string * register) := List.concat [
-  List.map (fun '(s, r) => (s, R_BlobSchedule r)) register_BlobSchedule_list;
   List.map (fun '(s, r) => (s, R_BlockHeader r)) register_BlockHeader_list;
   List.map (fun '(s, r) => (s, R_CalldataSlice r)) register_CalldataSlice_list;
   List.map (fun '(s, r) => (s, R_Code r)) register_Code_list;
-  List.map (fun '(s, r) => (s, R_Fork r)) register_Fork_list;
+  List.map (fun '(s, r) => (s, R_EvmMemorySlice r)) register_EvmMemorySlice_list;
+  List.map (fun '(s, r) => (s, R_ExecutionProfile r)) register_ExecutionProfile_list;
   List.map (fun '(s, r) => (s, R_FrameStatus r)) register_FrameStatus_list;
-  List.map (fun '(s, r) => (s, R_MemorySlice r)) register_MemorySlice_list;
   List.map (fun '(s, r) => (s, R_Message r)) register_Message_list;
   List.map (fun '(s, r) => (s, R_OutputSlice r)) register_OutputSlice_list;
   List.map (fun '(s, r) => (s, R_ScratchSlice r)) register_ScratchSlice_list;
   List.map (fun '(s, r) => (s, R_TxEnv r)) register_TxEnv_list;
+  List.map (fun '(s, r) => (s, R_ancestor_hash_count r)) register_ancestor_hash_count_list;
   List.map (fun '(s, r) => (s, R_block_access_index r)) register_block_access_index_list;
   List.map (fun '(s, r) => (s, R_chain_identifier r)) register_chain_identifier_list;
   List.map (fun '(s, r) => (s, R_code_pointer r)) register_code_pointer_list;
@@ -9487,7 +12000,6 @@ Definition register_list : list (string * register) := List.concat [
   List.map (fun '(s, r) => (s, R_gas r)) register_gas_list;
   List.map (fun '(s, r) => (s, R_gas_refund r)) register_gas_refund_list;
   List.map (fun '(s, r) => (s, R_hash r)) register_hash_list;
-  List.map (fun '(s, r) => (s, R_item_count r)) register_item_count_list;
   List.map (fun '(s, r) => (s, R_state_gas_spill r)) register_state_gas_spill_list
 ].
 
@@ -9523,17 +12035,17 @@ Qed.
 #[export] Hint Extern 1 (register _) => assumption : typeclass_instances.
 #[export] Instance Decidable_eq_register_values `(r : register) : EqDecision (type_of_register r) | 100 :=
 match r with
-  | R_BlobSchedule _ => _
   | R_BlockHeader _ => _
   | R_CalldataSlice _ => _
   | R_Code _ => _
-  | R_Fork _ => _
+  | R_EvmMemorySlice _ => _
+  | R_ExecutionProfile _ => _
   | R_FrameStatus _ => _
-  | R_MemorySlice _ => _
   | R_Message _ => _
   | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
   | R_TxEnv _ => _
+  | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
   | R_chain_identifier _ => _
   | R_code_pointer _ => _
@@ -9541,22 +12053,21 @@ match r with
   | R_gas _ => _
   | R_gas_refund _ => _
   | R_hash _ => _
-  | R_item_count _ => _
   | R_state_gas_spill _ => _
 end.
 #[export] Instance Inhabited_register_values `(r : register) : Inhabited (type_of_register r) | 100 :=
   match r with
-  | R_BlobSchedule _ => _
   | R_BlockHeader _ => _
   | R_CalldataSlice _ => _
   | R_Code _ => _
-  | R_Fork _ => _
+  | R_EvmMemorySlice _ => _
+  | R_ExecutionProfile _ => _
   | R_FrameStatus _ => _
-  | R_MemorySlice _ => _
   | R_Message _ => _
   | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
   | R_TxEnv _ => _
+  | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
   | R_chain_identifier _ => _
   | R_code_pointer _ => _
@@ -9564,23 +12075,22 @@ end.
   | R_gas _ => _
   | R_gas_refund _ => _
   | R_hash _ => _
-  | R_item_count _ => _
   | R_state_gas_spill _ => _
 end.
 #[export] Instance Countable_register_values `(r : register) : Countable (type_of_register r) | 100.
 refine {|
   encode := match r with
-  | R_BlobSchedule _ => encode
   | R_BlockHeader _ => encode
   | R_CalldataSlice _ => encode
   | R_Code _ => encode
-  | R_Fork _ => encode
+  | R_EvmMemorySlice _ => encode
+  | R_ExecutionProfile _ => encode
   | R_FrameStatus _ => encode
-  | R_MemorySlice _ => encode
   | R_Message _ => encode
   | R_OutputSlice _ => encode
   | R_ScratchSlice _ => encode
   | R_TxEnv _ => encode
+  | R_ancestor_hash_count _ => encode
   | R_block_access_index _ => encode
   | R_chain_identifier _ => encode
   | R_code_pointer _ => encode
@@ -9588,21 +12098,20 @@ refine {|
   | R_gas _ => encode
   | R_gas_refund _ => encode
   | R_hash _ => encode
-  | R_item_count _ => encode
   | R_state_gas_spill _ => encode
   end;
   decode := match r with
-  | R_BlobSchedule _ => decode
   | R_BlockHeader _ => decode
   | R_CalldataSlice _ => decode
   | R_Code _ => decode
-  | R_Fork _ => decode
+  | R_EvmMemorySlice _ => decode
+  | R_ExecutionProfile _ => decode
   | R_FrameStatus _ => decode
-  | R_MemorySlice _ => decode
   | R_Message _ => decode
   | R_OutputSlice _ => decode
   | R_ScratchSlice _ => decode
   | R_TxEnv _ => decode
+  | R_ancestor_hash_count _ => decode
   | R_block_access_index _ => decode
   | R_chain_identifier _ => decode
   | R_code_pointer _ => decode
@@ -9610,16 +12119,11 @@ refine {|
   | R_gas _ => decode
   | R_gas_refund _ => decode
   | R_hash _ => decode
-  | R_item_count _ => decode
   | R_state_gas_spill _ => decode
   end;
 |}.
 abstract (destruct r; apply decode_encode).
 Defined.
-
-Definition k_blob_schedule_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "k_blob_schedule" k_blob_schedule (fun x => x) (fun x => x).
-Instance dummy_register_BlobSchedule : Inhabited (register_ref _) := populate k_blob_schedule_ref.
 
 Definition k_header_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_header" k_header (fun x => x) (fun x => x).
@@ -9633,17 +12137,17 @@ Definition frame_code_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "frame_code" frame_code (fun x => x) (fun x => x).
 Instance dummy_register_Code : Inhabited (register_ref _) := populate frame_code_ref.
 
-Definition k_fork_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "k_fork" k_fork (fun x => x) (fun x => x).
-Instance dummy_register_Fork : Inhabited (register_ref _) := populate k_fork_ref.
+Definition evm_memory_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "evm_memory" evm_memory (fun x => x) (fun x => x).
+Instance dummy_register_EvmMemorySlice : Inhabited (register_ref _) := populate evm_memory_ref.
+
+Definition k_execution_profile_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "k_execution_profile" k_execution_profile (fun x => x) (fun x => x).
+Instance dummy_register_ExecutionProfile : Inhabited (register_ref _) := populate k_execution_profile_ref.
 
 Definition frame_status_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "frame_status" frame_status (fun x => x) (fun x => x).
 Instance dummy_register_FrameStatus : Inhabited (register_ref _) := populate frame_status_ref.
-
-Definition evm_memory_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "evm_memory" evm_memory (fun x => x) (fun x => x).
-Instance dummy_register_MemorySlice : Inhabited (register_ref _) := populate evm_memory_ref.
 
 Definition message_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "message" message (fun x => x) (fun x => x).
@@ -9661,9 +12165,13 @@ Definition k_tx_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_tx" k_tx (fun x => x) (fun x => x).
 Instance dummy_register_TxEnv : Inhabited (register_ref _) := populate k_tx_ref.
 
-Definition k_block_access_index_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "k_block_access_index" k_block_access_index (fun x => x) (fun x => x).
-Instance dummy_register_block_access_index : Inhabited (register_ref _) := populate k_block_access_index_ref.
+Definition k_n_headers_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "k_n_headers" k_n_headers (fun x => x) (fun x => x).
+Instance dummy_register_ancestor_hash_count : Inhabited (register_ref _) := populate k_n_headers_ref.
+
+Definition k_current_transaction_epoch_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "k_current_transaction_epoch" k_current_transaction_epoch (fun x => x) (fun x => x).
+Instance dummy_register_block_access_index : Inhabited (register_ref _) := populate k_current_transaction_epoch_ref.
 
 Definition k_chain_id_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_chain_id" k_chain_id (fun x => x) (fun x => x).
@@ -9691,10 +12199,6 @@ Definition k_parent_state_root_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_parent_state_root" k_parent_state_root (fun x => x) (fun x => x).
 Instance dummy_register_hash : Inhabited (register_ref _) := populate k_parent_state_root_ref.
 
-Definition k_n_headers_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "k_n_headers" k_n_headers (fun x => x) (fun x => x).
-Instance dummy_register_item_count : Inhabited (register_ref _) := populate k_n_headers_ref.
-
 Definition state_gas_spilled_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "state_gas_spilled" state_gas_spilled (fun x => x) (fun x => x).
 Instance dummy_register_state_gas_spill : Inhabited (register_ref _) := populate state_gas_spilled_ref.
@@ -9702,110 +12206,95 @@ Instance dummy_register_state_gas_spill : Inhabited (register_ref _) := populate
 
 (* Definitions to support the lifting to the sequential monad *)
 Record regstate := {
-  BlobSchedule_s : register_BlobSchedule -> BlobSchedule;
   BlockHeader_s : register_BlockHeader -> BlockHeader;
   CalldataSlice_s : register_CalldataSlice -> CalldataSlice;
   Code_s : register_Code -> Code;
-  Fork_s : register_Fork -> Fork;
+  EvmMemorySlice_s : register_EvmMemorySlice -> EvmMemorySlice;
+  ExecutionProfile_s : register_ExecutionProfile -> ExecutionProfile;
   FrameStatus_s : register_FrameStatus -> FrameStatus;
-  MemorySlice_s : register_MemorySlice -> MemorySlice;
   Message_s : register_Message -> Message;
   OutputSlice_s : register_OutputSlice -> OutputSlice;
   ScratchSlice_s : register_ScratchSlice -> ScratchSlice;
   TxEnv_s : register_TxEnv -> TxEnv;
+  ancestor_hash_count_s : register_ancestor_hash_count -> ancestor_hash_count;
   block_access_index_s : register_block_access_index -> block_access_index;
   chain_identifier_s : register_chain_identifier -> chain_identifier;
   code_pointer_s : register_code_pointer -> code_pointer;
   frame_depth_s : register_frame_depth -> frame_depth;
-  gas_s : register_gas -> gas;
+  gas_s : register_gas -> gas_typ;
   gas_refund_s : register_gas_refund -> gas_refund;
   hash_s : register_hash -> hash;
-  item_count_s : register_item_count -> item_count;
   state_gas_spill_s : register_state_gas_spill -> state_gas_spill;
 }.
-Notation "{[ r 'with' 'BlobSchedule_s' := e ]}" :=
-  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
 Notation "{[ r 'with' 'BlockHeader_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'CalldataSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'Code_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
-Notation "{[ r 'with' 'Fork_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+Notation "{[ r 'with' 'EvmMemorySlice_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'ExecutionProfile_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'MemorySlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'Message_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'OutputSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'ScratchSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
 Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 f19
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18
       end (at level 1).
+Notation "{[ r 'with' 'ancestor_hash_count_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'block_access_index_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'chain_identifier_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'code_pointer_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'frame_depth_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'gas_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 end (at level 1).
 Notation "{[ r 'with' 'gas_refund_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 end (at level 1).
 Notation "{[ r 'with' 'hash_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'item_count_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 end (at level 1).
 Notation "{[ r 'with' 'state_gas_spill_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) _ =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 e
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e end (at level 1).
 
 Definition init_regstate : regstate := Build_regstate
-  inhabitant
   inhabitant
   inhabitant
   inhabitant
@@ -9829,17 +12318,17 @@ Definition init_regstate : regstate := Build_regstate
 
 Definition register_lookup (reg : register) (rs : regstate) : type_of_register reg :=
   match reg with
-  | R_BlobSchedule r => rs.(BlobSchedule_s) r
   | R_BlockHeader r => rs.(BlockHeader_s) r
   | R_CalldataSlice r => rs.(CalldataSlice_s) r
   | R_Code r => rs.(Code_s) r
-  | R_Fork r => rs.(Fork_s) r
+  | R_EvmMemorySlice r => rs.(EvmMemorySlice_s) r
+  | R_ExecutionProfile r => rs.(ExecutionProfile_s) r
   | R_FrameStatus r => rs.(FrameStatus_s) r
-  | R_MemorySlice r => rs.(MemorySlice_s) r
   | R_Message r => rs.(Message_s) r
   | R_OutputSlice r => rs.(OutputSlice_s) r
   | R_ScratchSlice r => rs.(ScratchSlice_s) r
   | R_TxEnv r => rs.(TxEnv_s) r
+  | R_ancestor_hash_count r => rs.(ancestor_hash_count_s) r
   | R_block_access_index r => rs.(block_access_index_s) r
   | R_chain_identifier r => rs.(chain_identifier_s) r
   | R_code_pointer r => rs.(code_pointer_s) r
@@ -9847,23 +12336,22 @@ Definition register_lookup (reg : register) (rs : regstate) : type_of_register r
   | R_gas r => rs.(gas_s) r
   | R_gas_refund r => rs.(gas_refund_s) r
   | R_hash r => rs.(hash_s) r
-  | R_item_count r => rs.(item_count_s) r
   | R_state_gas_spill r => rs.(state_gas_spill_s) r
   end.
 
 Definition register_set (reg : register) : type_of_register reg -> regstate -> regstate :=
   match reg with
-  | R_BlobSchedule r => fun v rs => {[ rs with BlobSchedule_s := fun r' => if register_BlobSchedule_beq r' r then v else rs.(BlobSchedule_s) r' ]}
   | R_BlockHeader r => fun v rs => {[ rs with BlockHeader_s := fun r' => if register_BlockHeader_beq r' r then v else rs.(BlockHeader_s) r' ]}
   | R_CalldataSlice r => fun v rs => {[ rs with CalldataSlice_s := fun r' => if register_CalldataSlice_beq r' r then v else rs.(CalldataSlice_s) r' ]}
   | R_Code r => fun v rs => {[ rs with Code_s := fun r' => if register_Code_beq r' r then v else rs.(Code_s) r' ]}
-  | R_Fork r => fun v rs => {[ rs with Fork_s := fun r' => if register_Fork_beq r' r then v else rs.(Fork_s) r' ]}
+  | R_EvmMemorySlice r => fun v rs => {[ rs with EvmMemorySlice_s := fun r' => if register_EvmMemorySlice_beq r' r then v else rs.(EvmMemorySlice_s) r' ]}
+  | R_ExecutionProfile r => fun v rs => {[ rs with ExecutionProfile_s := fun r' => if register_ExecutionProfile_beq r' r then v else rs.(ExecutionProfile_s) r' ]}
   | R_FrameStatus r => fun v rs => {[ rs with FrameStatus_s := fun r' => if register_FrameStatus_beq r' r then v else rs.(FrameStatus_s) r' ]}
-  | R_MemorySlice r => fun v rs => {[ rs with MemorySlice_s := fun r' => if register_MemorySlice_beq r' r then v else rs.(MemorySlice_s) r' ]}
   | R_Message r => fun v rs => {[ rs with Message_s := fun r' => if register_Message_beq r' r then v else rs.(Message_s) r' ]}
   | R_OutputSlice r => fun v rs => {[ rs with OutputSlice_s := fun r' => if register_OutputSlice_beq r' r then v else rs.(OutputSlice_s) r' ]}
   | R_ScratchSlice r => fun v rs => {[ rs with ScratchSlice_s := fun r' => if register_ScratchSlice_beq r' r then v else rs.(ScratchSlice_s) r' ]}
   | R_TxEnv r => fun v rs => {[ rs with TxEnv_s := fun r' => if register_TxEnv_beq r' r then v else rs.(TxEnv_s) r' ]}
+  | R_ancestor_hash_count r => fun v rs => {[ rs with ancestor_hash_count_s := fun r' => if register_ancestor_hash_count_beq r' r then v else rs.(ancestor_hash_count_s) r' ]}
   | R_block_access_index r => fun v rs => {[ rs with block_access_index_s := fun r' => if register_block_access_index_beq r' r then v else rs.(block_access_index_s) r' ]}
   | R_chain_identifier r => fun v rs => {[ rs with chain_identifier_s := fun r' => if register_chain_identifier_beq r' r then v else rs.(chain_identifier_s) r' ]}
   | R_code_pointer r => fun v rs => {[ rs with code_pointer_s := fun r' => if register_code_pointer_beq r' r then v else rs.(code_pointer_s) r' ]}
@@ -9871,7 +12359,6 @@ Definition register_set (reg : register) : type_of_register reg -> regstate -> r
   | R_gas r => fun v rs => {[ rs with gas_s := fun r' => if register_gas_beq r' r then v else rs.(gas_s) r' ]}
   | R_gas_refund r => fun v rs => {[ rs with gas_refund_s := fun r' => if register_gas_refund_beq r' r then v else rs.(gas_refund_s) r' ]}
   | R_hash r => fun v rs => {[ rs with hash_s := fun r' => if register_hash_beq r' r then v else rs.(hash_s) r' ]}
-  | R_item_count r => fun v rs => {[ rs with item_count_s := fun r' => if register_item_count_beq r' r then v else rs.(item_count_s) r' ]}
   | R_state_gas_spill r => fun v rs => {[ rs with state_gas_spill_s := fun r' => if register_state_gas_spill_beq r' r then v else rs.(state_gas_spill_s) r' ]}
   end.
 
@@ -9895,8 +12382,8 @@ Definition register_accessors : register_accessors regstate register type_of_reg
 
 Definition read_reg {E} := @read_reg register type_of_register E.
 Definition write_reg {E} := @write_reg register type_of_register E.
-Definition MR r a := @monadR register type_of_register a r exception.
-Definition M a := @monad register type_of_register a exception.
-Definition returnM {A:Type} := @returnm register type_of_register A exception.
-Definition returnR {A:Type} (R:Type) := @returnm register type_of_register A (R + exception).
+Definition MR r a := @monadR register type_of_register a r unit.
+Definition M a := @monad register type_of_register a unit.
+Definition returnM {A:Type} := @returnm register type_of_register A unit.
+Definition returnR {A:Type} (R:Type) := @returnm register type_of_register A (R + unit).
 Definition register_ref := @register_ref register type_of_register.

@@ -16,12 +16,12 @@
 #include <stdint.h>
 
 unit transient_storage_reset(const unit u);
-unit transient_storage_write(sail_fixed_bytes_20 addr, const sail_u256 slot,
-                             const sail_u256 v);
+unit transient_storage_write(fixed_bytes_20 addr, const u256 slot,
+                             const u256 v);
 /* Private rollback write: does not append another undo entry. */
-unit transient_storage_restore(sail_fixed_bytes_20 addr, sail_u256 slot,
-                               sail_u256 v);
-sail_u256 transient_storage_read(sail_fixed_bytes_20 addr,
-                                 const sail_u256 slot);
+unit transient_storage_restore(fixed_bytes_20 addr, u256 slot,
+                               u256 v);
+u256 transient_storage_read(fixed_bytes_20 addr,
+                                 const u256 slot);
 
 #endif

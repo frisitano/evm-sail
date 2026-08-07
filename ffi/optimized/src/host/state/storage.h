@@ -15,42 +15,27 @@
 
 struct StorageEntry;
 
-unit storage_db_reset(const unit u);
-unit host_storage_update(Address address, U256 slot, U256 value,
-                         U256 original);
-unit storage_tx_clear(Address address);
-unit storage_tx_reset(const unit u);
-bool storage_has_writes(Address address);
-unit storage_block_clear(Address address);
+void storage_block_clear(bytes20 address);
 
 /* Minimal borrowed view used while reducing one live storage-trie binding.
  * The slot identity remains module-owned and outside the MPT hot path.
  * Mutations stay behind the semantic setters above so generation and journal
  * invariants remain owned by this module. */
 typedef struct {
-  const U256 *current;
-  const U256 *original;
-  const Hash32 *secure_key;
+  const u256 *current;
+  const u256 *original;
+  const bytes32 *secure_key;
   NodeId terminal_node;
   bool prestate_exists;
 } StorageTrieView;
 
 uint32_t storage_trie_candidates(AccountId account_id, StorageId *begin,
                                  StorageGeneration *generation);
-bool storage_trie_binding_order_key(StorageId storage_id,
-                                    StorageGeneration generation,
-                                    NodeId *terminal_node,
-                                    Hash32 *secure_key);
-bool storage_trie_binding_get(StorageId storage_id,
-                              StorageGeneration generation,
+bool storage_trie_binding_order_key(StorageId storage_id, StorageGeneration generation,
+                                    NodeId *terminal_node, bytes32 *secure_key);
+bool storage_trie_binding_get(StorageId storage_id, StorageGeneration generation,
                               StorageTrieView *view);
-unit storage_block_iter_begin(Address address);
-uint64_t storage_block_iter_next_probe(Address address, U256 *slot,
-                                       U256 *current, U256 *original,
-                                       Hash32 *address_hash,
-                                       Hash32 *slot_hash);
-void storage_block_initialize(AccountId account_id, StorageId storage_id,
-                              U256 value, NodeId terminal_node,
-                              bool prestate_exists);
+void storage_block_initialize(AccountId account_id, StorageId storage_id, u256 value,
+                              NodeId terminal_node, bool prestate_exists);
 
 #endif

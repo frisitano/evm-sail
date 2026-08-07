@@ -44,8 +44,7 @@ val mem_frame_leave = impure { c: "mem_frame_leave" } : unit -> unit
     charged and returns the current frame's absolute source slice. Failure to
     realize this established precondition is a host implementation failure,
     not an EVM out-of-gas result. */
-val mem_expand = impure { c: "mem_expand" } : forall 'required, memory_region_valid_range(0, 'required).
-    int('required) -> EvmMemorySliceLength(
+val mem_expand = impure { c: "mem_expand" } : forall 'required, memory_region_valid_range(0, 'required). int('required) -> EvmMemorySliceLength(
         'required,
     )
 

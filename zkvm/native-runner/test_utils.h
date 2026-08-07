@@ -25,12 +25,11 @@
 GUEST_API void guest_init(void);
 GUEST_API void guest_fini(void);
 
-/* FULL wipe back to the post-model_init "fresh block" state: world overlay +
- * warm/journal/logs/refund/selfdestruct/created/bal/transient (k_world_reset),
- * the hash-keyed witness node DB (nodedb_reset), the k_witness_bad register
- * (set true on a deficient witness and NEVER self-reset -- the one leak an
- * FFI-only reset would miss), and the buffered output. Call between fixtures
- * ONLY in a reused (warm-worker) process; a forked child does not need it. */
+/* FULL wipe back to the post-model_init "fresh block" state. The optimized
+ * backend clears the prior run's recorded workspace allocations here, then
+ * resets owner cursors and buffered output; block execution itself assumes a
+ * clean workspace. Call between fixtures ONLY in a reused (warm-worker)
+ * process; a forked child does not need it. */
 GUEST_API void guest_reset(void);
 
 /* Run the guest once over `in`[0..n) on a large-stack thread (the guest needs

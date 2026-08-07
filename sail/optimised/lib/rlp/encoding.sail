@@ -16,23 +16,20 @@ type rlp_natural_size = range(1, 33)
  * integer carrier to an 8-bit vector. Keep the canonical conversion in the
  * base model and cross that representation boundary through one pure native
  * primitive in optimized C. */
-val optimized_rlp_length_byte = pure { c: "rlp_length_byte_native" } :
-    range(0, 255) -> byte
+val rlp_length_byte_native = pure { c: "rlp_length_byte_native" } : range(0, 255) -> byte
 
 /*! Appends the canonical RLP prefix of a byte-string payload. */
 val rlp_write_string_prefix : forall 'len, 0 <= 'len. (int('len), byte) -> unit
 function rlp_write_string_prefix(len, first) = {
     if (len == 1) & (first[7] == bitzero) then {
         ()
+    } else if len <= RLP_SHORT_LENGTH_LIMIT then {
+        scratch_push_byte(add_bits(0x80, rlp_length_byte_native(len)))
     } else {
-        if len <= RLP_SHORT_LENGTH_LIMIT then {
-            scratch_push_byte(add_bits(0x80, optimized_rlp_length_byte(len)))
-        } else {
-            let length_word = rlp_length_word(len);
-            let length_len = rlp_minimal_word_len(length_word);
-            scratch_push_byte(add_bits(0xb7, optimized_rlp_length_byte(length_len)));
-            scratch_push_word_be(length_word, length_len)
-        }
+        let length_word = rlp_length_word(len);
+        let length_len = rlp_minimal_word_len(length_word);
+        scratch_push_byte(add_bits(0xb7, rlp_length_byte_native(length_len)));
+        scratch_push_word_be(length_word, length_len)
     }
 }
 
@@ -40,11 +37,11 @@ function rlp_write_string_prefix(len, first) = {
 val rlp_write_list_prefix : forall 'len, 0 <= 'len. int('len) -> unit
 function rlp_write_list_prefix(content_len) = {
     if content_len <= RLP_SHORT_LENGTH_LIMIT then {
-        scratch_push_byte(add_bits(0xc0, optimized_rlp_length_byte(content_len)))
+        scratch_push_byte(add_bits(0xc0, rlp_length_byte_native(content_len)))
     } else {
         let length_word = rlp_length_word(content_len);
         let length_len = rlp_minimal_word_len(length_word);
-        scratch_push_byte(add_bits(0xf7, optimized_rlp_length_byte(length_len)));
+        scratch_push_byte(add_bits(0xf7, rlp_length_byte_native(length_len)));
         scratch_push_word_be(length_word, length_len)
     }
 }

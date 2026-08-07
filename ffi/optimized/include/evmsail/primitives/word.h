@@ -9,23 +9,12 @@
 /*
  * Optimized-C refinements of the direct endian-conversion equations in
  * prelude.sail. Fixed byte vectors use canonical protocol order, while
- * U256 limbs are least-significant first. Keeping these definitions in
+ * u256 limbs are least-significant first. Keeping these definitions in
  * the generated model translation unit lets ordinary C optimization inline
  * every load/store into its caller.
  */
-static inline uint64_t load_be64(const uint8_t bytes[8]) {
-  return ((uint64_t)bytes[0] << 56) | ((uint64_t)bytes[1] << 48) |
-         ((uint64_t)bytes[2] << 40) | ((uint64_t)bytes[3] << 32) |
-         ((uint64_t)bytes[4] << 24) | ((uint64_t)bytes[5] << 16) |
-         ((uint64_t)bytes[6] << 8) | (uint64_t)bytes[7];
-}
-
-static inline uint32_t load_be32(const uint8_t bytes[4]) {
-  return ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
-         ((uint32_t)bytes[2] << 8) | (uint32_t)bytes[3];
-}
-
-static inline void store_be64(uint8_t bytes[8], uint64_t value) {
+static inline void store_be64(uint8_t bytes[8], uint64_t value)
+{
   bytes[0] = (uint8_t)(value >> 56);
   bytes[1] = (uint8_t)(value >> 48);
   bytes[2] = (uint8_t)(value >> 40);
@@ -36,62 +25,23 @@ static inline void store_be64(uint8_t bytes[8], uint64_t value) {
   bytes[7] = (uint8_t)value;
 }
 
-static inline void store_be32(uint8_t bytes[4], uint32_t value) {
+static inline void store_be32(uint8_t bytes[4], uint32_t value)
+{
   bytes[0] = (uint8_t)(value >> 24);
   bytes[1] = (uint8_t)(value >> 16);
   bytes[2] = (uint8_t)(value >> 8);
   bytes[3] = (uint8_t)value;
 }
 
-static inline U256 word_from_hash(
-    Hash32 bytes) {
-  return (U256){
-      .limbs =
-          {
-              load_be64(bytes.bytes + 24),
-              load_be64(bytes.bytes + 16),
-              load_be64(bytes.bytes + 8),
-              load_be64(bytes.bytes),
-          },
-  };
-}
-
-static inline Hash32 hash_from_word(
-    U256 value) {
-  Hash32 result;
-  store_be64(result.bytes, value.limbs[3]);
-  store_be64(result.bytes + 8, value.limbs[2]);
-  store_be64(result.bytes + 16, value.limbs[1]);
-  store_be64(result.bytes + 24, value.limbs[0]);
+static inline bytes20 address_from_word(u256 value)
+{
+  bytes20 result = {{0}};
+  result.lanes[0] = (uint64_t)__builtin_bswap32((uint32_t)value.limbs[2]) |
+                    ((__builtin_bswap64(value.limbs[1]) & UINT64_C(0xffffffff)) << 32);
+  result.lanes[1] = (__builtin_bswap64(value.limbs[1]) >> 32) |
+                    ((__builtin_bswap64(value.limbs[0]) & UINT64_C(0xffffffff)) << 32);
+  result.lanes[2] = __builtin_bswap64(value.limbs[0]) >> 32;
   return result;
-}
-
-static inline uint64_t bit_length_u64(uint64_t value) {
-  return value == UINT64_C(0)
-             ? UINT64_C(0)
-             : UINT64_C(64) - (uint64_t)__builtin_clzll(value);
-}
-
-static inline Address address_from_word(
-    U256 value) {
-  Address result;
-  store_be32(result.bytes, (uint32_t)value.limbs[2]);
-  store_be64(result.bytes + 4, value.limbs[1]);
-  store_be64(result.bytes + 12, value.limbs[0]);
-  return result;
-}
-
-static inline U256 word_from_address(
-    Address bytes) {
-  return (U256){
-      .limbs =
-          {
-              load_be64(bytes.bytes + 12),
-              load_be64(bytes.bytes + 4),
-              load_be32(bytes.bytes),
-              0,
-          },
-  };
 }
 
 #endif

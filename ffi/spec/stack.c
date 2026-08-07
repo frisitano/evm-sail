@@ -4,10 +4,11 @@
  * malloc per stack operation, millions per block). Here each call frame has a
  * flat array of 256-bit words with O(1) push/pop/peek/set; the per-depth
  * arrays are allocated once and REUSED across frames, so steady-state
- * execution performs no allocation. Frames form a stack: stack_enter_frame on call,
- * stack_leave_frame on return, stack_reset per transaction.
+ * execution performs no allocation. Frames form a stack:
+ * operand_stack_push_empty_frame on call, operand_stack_pop_frame on return,
+ * and stack_reset per transaction.
  *
- * Words cross both FFIs as inferred inline sail_u256 values and map directly
+ * Words cross both FFIs as inferred inline u256 values and map directly
  * to the cached four-limb rows here.
  *
  * Bounds policy: the EVM's 1024-word stack limit is enforced by the Sail side
@@ -28,8 +29,8 @@ typedef struct {
   uint32_t n;                   /* current height                            */
 } hs_frame;
 
-_Static_assert(sizeof(sail_u256) == sizeof(uint64_t[4]),
-               "optimized stack rows must match sail_u256");
+_Static_assert(sizeof(u256) == sizeof(uint64_t[4]),
+               "optimized stack rows must match u256");
 
 static hs_frame hs_stk[HS_MAXDEPTH];
 static int hs_top = 0;
@@ -49,7 +50,7 @@ unit stack_reset(const unit u) {
 }
 
 /* enter a call: fresh empty frame (reusing the depth slot's array) */
-unit stack_enter_frame(const unit u) {
+unit operand_stack_push_empty_frame(const unit u) {
   (void)u;
   if (hs_top + 1 < HS_MAXDEPTH) {
     hs_top++;
@@ -60,7 +61,7 @@ unit stack_enter_frame(const unit u) {
 }
 
 /* leave a call: drop the frame, restore the parent */
-unit stack_leave_frame(const unit u) {
+unit operand_stack_pop_frame(const unit u) {
   (void)u;
   if (hs_top > 0) hs_top--;
   return UNIT;
@@ -70,7 +71,7 @@ uint64_t stack_depth(const unit u) { (void)u; return hs_stk[hs_top].n; }
 
 /* pop AND return the top word (zero when empty; the Sail side guards
    underflow before calling) -- one crossing per POP instead of peek+drop */
-sail_u256 stack_pop_word( const unit u) {
+u256 stack_pop_word( const unit u) {
   (void)u;
   static const uint64_t zero[4] = {0, 0, 0, 0};
   hs_frame *f = &hs_stk[hs_top];
@@ -81,7 +82,7 @@ sail_u256 stack_pop_word( const unit u) {
   return (le_words4_to_sail_word(zero));
 }
 
-unit stack_push_word(const sail_u256 w) {
+unit stack_push_word(const u256 w) {
   hs_frame *f = &hs_stk[hs_top];
   if (f->w && f->n < HS_CAP)
     sail_word_to_le_words4(f->w[f->n++], (w));
@@ -89,7 +90,7 @@ unit stack_push_word(const sail_u256 w) {
 }
 
 /* the nth-from-top word (n = 0 is the top); zero if out of range */
-sail_u256 stack_peek_word( uint64_t n) {
+u256 stack_peek_word( uint64_t n) {
   static const uint64_t zero[4] = {0, 0, 0, 0};
   hs_frame *f = &hs_stk[hs_top];
   return (le_words4_to_sail_word((!f->w || n >= f->n) ? zero
@@ -97,7 +98,7 @@ sail_u256 stack_peek_word( uint64_t n) {
 }
 
 /* overwrite the nth-from-top word (SWAP) */
-unit stack_set_word(uint64_t n, const sail_u256 w) {
+unit stack_set_word(uint64_t n, const u256 w) {
   hs_frame *f = &hs_stk[hs_top];
   if (f->w && n < f->n)
     sail_word_to_le_words4(f->w[f->n - 1 - n], (w));

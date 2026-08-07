@@ -15,7 +15,7 @@
 #define ND_INIT_CAP 1024u /* power of two */
 
 typedef struct {
-  sail_fixed_bytes_32 key;
+  fixed_bytes_32 key;
   uint64_t off;
   uint64_t len;
   uint8_t used;
@@ -26,12 +26,12 @@ static uint32_t nd_cap = 0;
 static uint32_t nd_n = 0;
 
 /* Memoized last lookup. */
-static sail_fixed_bytes_32 nd_memo_key;
+static fixed_bytes_32 nd_memo_key;
 static uint64_t nd_memo_off;
 static uint64_t nd_memo_len; /* 0 = absent (witness nodes are never empty) */
 static int nd_memo_valid = 0;
 
-static uint64_t nd_hash(const sail_fixed_bytes_32 *k) {
+static uint64_t nd_hash(const fixed_bytes_32 *k) {
   uint64_t h = 0xcbf29ce484222325ull;
   for (size_t i = 0; i < sizeof(k->bytes); i++) {
     h ^= k->bytes[i];
@@ -42,7 +42,7 @@ static uint64_t nd_hash(const sail_fixed_bytes_32 *k) {
 
 static void nd_grow(void);
 
-static void nd_put(const sail_fixed_bytes_32 *k, uint64_t off, uint64_t len) {
+static void nd_put(const fixed_bytes_32 *k, uint64_t off, uint64_t len) {
   if ((nd_n + 1) * 4 >= nd_cap * 3)
     nd_grow();
   uint32_t m = nd_cap - 1;
@@ -82,8 +82,8 @@ unit nodedb_reset(const unit u) {
   return UNIT;
 }
 
-unit nodedb_insert(sail_fixed_bytes_32 kh, uint64_t off, uint64_t len) {
-  sail_fixed_bytes_32 k = kh;
+unit nodedb_insert(fixed_bytes_32 kh, uint64_t off, uint64_t len) {
+  fixed_bytes_32 k = kh;
   if (!nd_tab)
     nodedb_reset(UNIT);
   nd_put(&k, off, len);
@@ -91,7 +91,7 @@ unit nodedb_insert(sail_fixed_bytes_32 kh, uint64_t off, uint64_t len) {
   return UNIT;
 }
 
-void nodedb_insert_digest(const sail_fixed_bytes_32 *hash, uint64_t off, uint64_t len) {
+void nodedb_insert_digest(const fixed_bytes_32 *hash, uint64_t off, uint64_t len) {
   if (!nd_tab)
     nodedb_reset(UNIT);
   nd_put(hash, off, len);
@@ -99,8 +99,8 @@ void nodedb_insert_digest(const sail_fixed_bytes_32 *hash, uint64_t off, uint64_
 }
 
 /* Memoized point lookup. */
-static void nd_find(sail_fixed_bytes_32 kh) {
-  sail_fixed_bytes_32 k = kh;
+static void nd_find(fixed_bytes_32 kh) {
+  fixed_bytes_32 k = kh;
   if (nd_memo_valid && evmsail_hash_equal(&nd_memo_key, &k))
     return;
   nd_memo_key = k;
@@ -121,7 +121,7 @@ static void nd_find(sail_fixed_bytes_32 kh) {
   }
 }
 
-bool nodedb_lookup_span(sail_fixed_bytes_32 kh, uint64_t *off, uint64_t *len) {
+bool nodedb_lookup_span(fixed_bytes_32 kh, uint64_t *off, uint64_t *len) {
   nd_find(kh);
   if (off)
     *off = nd_memo_off;

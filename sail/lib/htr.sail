@@ -47,81 +47,31 @@ let HTR_BUILDER_EXIT_PUBKEY : int(20) = 20
 
 /* SSZ zero hashes by subtree level. Keeping these as constants avoids hashing
  * the same all-zero subtree once per level for every Merkle root. */
-let SSZ_ZERO_HASH_01 : hash = word_to_hash(
-    u256(unsigned(0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b)),
-)
-let SSZ_ZERO_HASH_02 : hash = word_to_hash(
-    u256(unsigned(0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71)),
-)
-let SSZ_ZERO_HASH_03 : hash = word_to_hash(
-    u256(unsigned(0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c)),
-)
-let SSZ_ZERO_HASH_04 : hash = word_to_hash(
-    u256(unsigned(0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c)),
-)
-let SSZ_ZERO_HASH_05 : hash = word_to_hash(
-    u256(unsigned(0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30)),
-)
-let SSZ_ZERO_HASH_06 : hash = word_to_hash(
-    u256(unsigned(0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1)),
-)
-let SSZ_ZERO_HASH_07 : hash = word_to_hash(
-    u256(unsigned(0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c)),
-)
-let SSZ_ZERO_HASH_08 : hash = word_to_hash(
-    u256(unsigned(0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193)),
-)
-let SSZ_ZERO_HASH_09 : hash = word_to_hash(
-    u256(unsigned(0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1)),
-)
-let SSZ_ZERO_HASH_10 : hash = word_to_hash(
-    u256(unsigned(0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b)),
-)
-let SSZ_ZERO_HASH_11 : hash = word_to_hash(
-    u256(unsigned(0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220)),
-)
-let SSZ_ZERO_HASH_12 : hash = word_to_hash(
-    u256(unsigned(0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f)),
-)
-let SSZ_ZERO_HASH_13 : hash = word_to_hash(
-    u256(unsigned(0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e)),
-)
-let SSZ_ZERO_HASH_14 : hash = word_to_hash(
-    u256(unsigned(0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784)),
-)
-let SSZ_ZERO_HASH_15 : hash = word_to_hash(
-    u256(unsigned(0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb)),
-)
-let SSZ_ZERO_HASH_16 : hash = word_to_hash(
-    u256(unsigned(0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb)),
-)
-let SSZ_ZERO_HASH_17 : hash = word_to_hash(
-    u256(unsigned(0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab)),
-)
-let SSZ_ZERO_HASH_18 : hash = word_to_hash(
-    u256(unsigned(0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4)),
-)
-let SSZ_ZERO_HASH_19 : hash = word_to_hash(
-    u256(unsigned(0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f)),
-)
-let SSZ_ZERO_HASH_20 : hash = word_to_hash(
-    u256(unsigned(0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa)),
-)
-let SSZ_ZERO_HASH_21 : hash = word_to_hash(
-    u256(unsigned(0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c)),
-)
-let SSZ_ZERO_HASH_22 : hash = word_to_hash(
-    u256(unsigned(0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167)),
-)
-let SSZ_ZERO_HASH_23 : hash = word_to_hash(
-    u256(unsigned(0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7)),
-)
-let SSZ_ZERO_HASH_24 : hash = word_to_hash(
-    u256(unsigned(0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0)),
-)
-let SSZ_ZERO_HASH_25 : hash = word_to_hash(
-    u256(unsigned(0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544)),
-)
+let SSZ_ZERO_HASH_01 : hash = hash_from_bits(0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b)
+let SSZ_ZERO_HASH_02 : hash = hash_from_bits(0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71)
+let SSZ_ZERO_HASH_03 : hash = hash_from_bits(0xc78009fdf07fc56a11f122370658a353aaa542ed63e44c4bc15ff4cd105ab33c)
+let SSZ_ZERO_HASH_04 : hash = hash_from_bits(0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c)
+let SSZ_ZERO_HASH_05 : hash = hash_from_bits(0x9efde052aa15429fae05bad4d0b1d7c64da64d03d7a1854a588c2cb8430c0d30)
+let SSZ_ZERO_HASH_06 : hash = hash_from_bits(0xd88ddfeed400a8755596b21942c1497e114c302e6118290f91e6772976041fa1)
+let SSZ_ZERO_HASH_07 : hash = hash_from_bits(0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c)
+let SSZ_ZERO_HASH_08 : hash = hash_from_bits(0x26846476fd5fc54a5d43385167c95144f2643f533cc85bb9d16b782f8d7db193)
+let SSZ_ZERO_HASH_09 : hash = hash_from_bits(0x506d86582d252405b840018792cad2bf1259f1ef5aa5f887e13cb2f0094f51e1)
+let SSZ_ZERO_HASH_10 : hash = hash_from_bits(0xffff0ad7e659772f9534c195c815efc4014ef1e1daed4404c06385d11192e92b)
+let SSZ_ZERO_HASH_11 : hash = hash_from_bits(0x6cf04127db05441cd833107a52be852868890e4317e6a02ab47683aa75964220)
+let SSZ_ZERO_HASH_12 : hash = hash_from_bits(0xb7d05f875f140027ef5118a2247bbb84ce8f2f0f1123623085daf7960c329f5f)
+let SSZ_ZERO_HASH_13 : hash = hash_from_bits(0xdf6af5f5bbdb6be9ef8aa618e4bf8073960867171e29676f8b284dea6a08a85e)
+let SSZ_ZERO_HASH_14 : hash = hash_from_bits(0xb58d900f5e182e3c50ef74969ea16c7726c549757cc23523c369587da7293784)
+let SSZ_ZERO_HASH_15 : hash = hash_from_bits(0xd49a7502ffcfb0340b1d7885688500ca308161a7f96b62df9d083b71fcc8f2bb)
+let SSZ_ZERO_HASH_16 : hash = hash_from_bits(0x8fe6b1689256c0d385f42f5bbe2027a22c1996e110ba97c171d3e5948de92beb)
+let SSZ_ZERO_HASH_17 : hash = hash_from_bits(0x8d0d63c39ebade8509e0ae3c9c3876fb5fa112be18f905ecacfecb92057603ab)
+let SSZ_ZERO_HASH_18 : hash = hash_from_bits(0x95eec8b2e541cad4e91de38385f2e046619f54496c2382cb6cacd5b98c26f5a4)
+let SSZ_ZERO_HASH_19 : hash = hash_from_bits(0xf893e908917775b62bff23294dbbe3a1cd8e6cc1c35b4801887b646a6f81f17f)
+let SSZ_ZERO_HASH_20 : hash = hash_from_bits(0xcddba7b592e3133393c16194fac7431abf2f5485ed711db282183c819e08ebaa)
+let SSZ_ZERO_HASH_21 : hash = hash_from_bits(0x8a8d7fe3af8caa085a7639a832001457dfb9128a8061142ad0335629ff23ff9c)
+let SSZ_ZERO_HASH_22 : hash = hash_from_bits(0xfeb3c337d7a51a6fbf00b9e34c52e1c9195c969bd4e7a0bfd51d5c5bed9c1167)
+let SSZ_ZERO_HASH_23 : hash = hash_from_bits(0xe71f0aa83cc32edfbefa9f4d3e0174ca85182eec9f3a09f6a6c0df6377a510d7)
+let SSZ_ZERO_HASH_24 : hash = hash_from_bits(0x31206fa80a50bb6abe29085058f16212212a60eec8f049fecb92d8c8e0a84bc0)
+let SSZ_ZERO_HASH_25 : hash = hash_from_bits(0x21352bfecbeddde993839f614c3dac0a3ee37543f9b412b16199dc158e23b544)
 
 /*! The root of an all-zero subtree at `level`. */
 function ssz_zero_hash(level : htr_depth) -> hash = match level {
@@ -194,38 +144,36 @@ val merkleize_vector_subtree : forall 'n 'start, 1 <= 'n & 'n <= 32 & 0 <= 'star
 function merkleize_vector_subtree(leaves, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if (count == 1) & (start < length(leaves)) then {
-                leaves[length(leaves) - 1 - start]
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        let leaves_length = length(leaves);
+        if (count == 1) & (start < leaves_length) then {
+            leaves[leaves_length - 1 - start]
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                merkleize_vector_subtree(leaves, start, left_count, child_depth),
-                merkleize_vector_subtree(leaves, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = merkleize_vector_subtree(leaves, start, left_count, child_depth);
+        let right_root = merkleize_vector_subtree(leaves, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure merkleize_vector_subtree(leaves, start, count, depth) = depth
 
 /*! `merkleize` of a fixed leaf vector at `depth` (SSZ spec). */
 val merkleize : forall 'n, 1 <= 'n & 'n <= 32. (vector('n, dec, hash), htr_depth) -> hash
 function merkleize(leaves, depth) = {
     let count : htr_leaf_count = length(leaves);
-    if count <= htr_leaf_capacity(depth) then {
+    let capacity = htr_leaf_capacity(depth);
+    if count <= capacity then {
         merkleize_vector_subtree(leaves, 0, count, depth)
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient)
     }
 }
 
@@ -317,28 +265,28 @@ function htr_addr(address_bytes : address) -> hash = {
     `mix_in_length`. */
 val htr_length_chunk : forall 'len, source_valid_length('len). int('len) -> hash
 function htr_length_chunk(len) =
-    htr_u256(word_of_byte_count(len))
+    let length_word = word_of_byte_count(len) in
+    htr_u256(length_word)
 
 /*! `mix_in_length`: hashes the list root with its uint256 length chunk. */
 val mix_in_length : forall 'len, source_valid_length('len). (hash, int('len)) -> hash
 function mix_in_length(root, len) =
-    sha256_pair(root, htr_length_chunk(len))
+    let length_chunk = htr_length_chunk(len) in
+    sha256_pair(root, length_chunk)
 
 /*! The ceiling of log2 — the Merkle depth of an `n`-chunk capacity. */
 function clog2(n : htr_leaf_count) -> htr_depth = {
-    var remaining : htr_leaf_count = if n == 0 then {
-            0
-        } else {
-            n - 1
-        };
+    var remaining : htr_leaf_count =
+        if n == 0 then 0 else n - 1;
     var depth : htr_depth = 0;
     foreach (_step from 0 to 24) {
         if remaining != 0 then {
             let current_depth = depth;
-            depth = if current_depth < 25 then {
+            depth =
+                if current_depth < 25 then {
                     current_depth + 1
                 } else {
-                    throw InvalidBlock(WitnessDeficient)
+                    fatal_error(WitnessDeficient)
                 };
             remaining = tdiv_nat(remaining, 2)
         }
@@ -351,9 +299,10 @@ val htr_chunk : forall 'index, 0 <= 'index. (StatelessInputSlice, int('index)) -
 function htr_chunk(bytes, chunk_index) =
     if chunk_index <= 33554432 then {
         let offset : source_pointer = chunk_index * WORD_BYTE_LENGTH;
-        word_to_hash(slice_load(bytes, offset))
+        let chunk_word = slice_load(bytes, offset);
+        word_to_hash(chunk_word)
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient)
     }
 
 /*! Returns the number of 32-byte chunks needed to contain `byte_len` bytes. */
@@ -362,7 +311,7 @@ function htr_chunk_count(byte_len) =
     if byte_len <= HTR_BYTE_LIST_LIMIT then {
         (byte_len + 31) / 32
     } else {
-        throw InvalidBlock(WitnessDeficient)
+        fatal_error(WitnessDeficient)
     }
 
 /*! Recursively merkleizes the live chunk prefix of a byte span. */
@@ -370,38 +319,35 @@ val htr_bytes_subtree : forall 'start, 0 <= 'start. (StatelessInputSlice, int('s
 function htr_bytes_subtree(bytes, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if count == 1 then {
-                htr_chunk(bytes, start)
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        if count == 1 then {
+            htr_chunk(bytes, start)
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                htr_bytes_subtree(bytes, start, left_count, child_depth),
-                htr_bytes_subtree(bytes, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = htr_bytes_subtree(bytes, start, left_count, child_depth);
+        let right_root = htr_bytes_subtree(bytes, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure htr_bytes_subtree(bytes, start, count, depth) = depth
 
 /*! The Merkle root of a byte span's chunks at `depth`. */
 function htr_bytes_root(bytes : StatelessInputSlice, depth : htr_depth) -> hash = {
     let count = htr_chunk_count(bytes.len);
-    if count <= htr_leaf_capacity(depth) then {
-            htr_bytes_subtree(bytes, 0, count, depth)
-        } else {
-            throw InvalidBlock(WitnessDeficient)
-        }
+    let capacity = htr_leaf_capacity(depth);
+    if count <= capacity then {
+        htr_bytes_subtree(bytes, 0, count, depth)
+    } else {
+        fatal_error(WitnessDeficient)
+    }
 }
 
 /*md
@@ -410,7 +356,8 @@ function htr_bytes_root(bytes : StatelessInputSlice, depth : htr_depth) -> hash 
 /*! `hash_tree_root` of a fixed-size `ByteVector`. */
 function htr_bytevector(bytes : StatelessInputSlice) -> hash = {
     let chunks = htr_chunk_count(bytes.len);
-    htr_bytes_root(bytes, clog2(chunks))
+    let depth = clog2(chunks);
+    htr_bytes_root(bytes, depth)
 }
 
 /* These source-bound helpers deliberately state the decode-then-HTR
@@ -421,30 +368,35 @@ function htr_bytevector(bytes : StatelessInputSlice) -> hash = {
 /*! HTR of an SSZ `uint64` field in an enclosing serialized object. */
 val htr_ssz_uint : forall 'off, source_valid_range('off, 8). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_uint(bytes, offset) =
-    htr_uint(decode_ssz_uint(bytes, offset))
+    let value = decode_ssz_uint(bytes, offset) in
+    htr_uint(value)
 
 /*! HTR of an SSZ `uint256` field in an enclosing serialized object. */
 val htr_ssz_u256 : forall 'off, source_valid_range('off, 32). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_u256(bytes, offset) =
-    htr_u256(ssz_u256(bytes, offset))
+    let value = ssz_u256(bytes, offset) in
+    htr_u256(value)
 
 /*! HTR of an SSZ `Bytes32` field in an enclosing serialized object. */
 val htr_ssz_bytes32 : forall 'off, source_valid_range('off, 32). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_bytes32(bytes, offset) =
-    htr_bytes32(ssz_bytes32(bytes, offset))
+    let value = ssz_bytes32(bytes, offset) in
+    htr_bytes32(value)
 
 /*! HTR of an SSZ 20-byte address field in an enclosing serialized object. */
 val htr_ssz_addr : forall 'off, source_valid_range('off, 20). (StatelessInputSlice, int('off)) -> hash
 function htr_ssz_addr(bytes, offset) =
-    htr_addr(ssz_addr(bytes, offset))
+    let value = ssz_addr(bytes, offset) in
+    htr_addr(value)
 
 /*! HTR of a fixed-size `ByteVector` field in an enclosing serialized object. */
 val htr_ssz_bytevector : forall 'off 'len, source_valid_range('off, 'len). (StatelessInputSlice, int('off), int('len)) -> hash
 function htr_ssz_bytevector(bytes, offset, len) = {
     if offset + len <= bytes.len then {
-        htr_bytevector(sub_slice(bytes, offset, len))
+        let field = sub_slice(bytes, offset, len);
+        htr_bytevector(field)
     } else {
-        throw InvalidBlock(InvalidConfig)
+        fatal_error(InvalidConfig)
     }
 }
 
@@ -453,7 +405,9 @@ function htr_ssz_bytevector(bytes, offset, len) = {
 val htr_bytelist : forall 'limit, source_valid_length('limit). (StatelessInputSlice, int('limit)) -> hash
 function htr_bytelist(bytes, limit_bytes) = {
     let capacity = htr_chunk_count(limit_bytes);
-    mix_in_length(htr_bytes_root(bytes, clog2(capacity)), bytes.len)
+    let depth = clog2(capacity);
+    let root = htr_bytes_root(bytes, depth);
+    mix_in_length(root, bytes.len)
 }
 
 /*md
@@ -461,15 +415,11 @@ function htr_bytelist(bytes, limit_bytes) = {
 */
 /*! `hash_tree_root` of one SSZ withdrawal (4 fields, depth 2). */
 function htr_withdrawal(withdrawal : StatelessInputSliceLength(44)) -> hash = {
-    merkleize(
-        [
-            htr_ssz_uint(withdrawal, WD_INDEX),
-            htr_ssz_uint(withdrawal, WD_VALIDATOR_INDEX),
-            htr_ssz_addr(withdrawal, WD_ADDRESS),
-            htr_ssz_uint(withdrawal, WD_AMOUNT),
-        ],
-        2,
-    )
+    let index_root = htr_ssz_uint(withdrawal, WD_INDEX);
+    let validator_root = htr_ssz_uint(withdrawal, WD_VALIDATOR_INDEX);
+    let address_root = htr_ssz_addr(withdrawal, WD_ADDRESS);
+    let amount_root = htr_ssz_uint(withdrawal, WD_AMOUNT);
+    merkleize([index_root, validator_root, address_root, amount_root], 2)
 }
 
 /*! Recursively merkleizes a range of transaction roots. */
@@ -477,35 +427,33 @@ val htr_transactions_subtree : forall 'start, 0 <= 'start. (TransactionListRef, 
 function htr_transactions_subtree(transactions, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if count == 1 then {
-                htr_bytelist(ssz_list_at(transactions, start), HTR_BYTE_LIST_LIMIT)
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        if count == 1 then {
+            let transaction = ssz_list_at(transactions, start);
+            htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT)
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                htr_transactions_subtree(transactions, start, left_count, child_depth),
-                htr_transactions_subtree(transactions, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = htr_transactions_subtree(transactions, start, left_count, child_depth);
+        let right_root = htr_transactions_subtree(transactions, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure htr_transactions_subtree(transactions, start, count, depth) = depth
 
 /*! `hash_tree_root` of the transactions list
     (`List[ByteList[2^30], 2^20]`). */
 function htr_transactions(transactions : TransactionListRef) -> hash = {
     let count : htr_leaf_count = transactions.count;
-    mix_in_length(htr_transactions_subtree(transactions, 0, count, 20), transactions.count)
+    let root = htr_transactions_subtree(transactions, 0, count, 20);
+    mix_in_length(root, transactions.count)
 }
 
 /*! Recursively merkleizes a range of withdrawal roots. */
@@ -513,60 +461,77 @@ val htr_withdrawals_subtree : forall 'start, 0 <= 'start. (WithdrawalListRef, in
 function htr_withdrawals_subtree(withdrawals, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if count == 1 then {
-                htr_withdrawal(ssz_fixed_list_at(withdrawals, start, WD_SIZE))
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        if count == 1 then {
+            let withdrawal = ssz_fixed_list_at(withdrawals, start, WD_SIZE);
+            htr_withdrawal(withdrawal)
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                htr_withdrawals_subtree(withdrawals, start, left_count, child_depth),
-                htr_withdrawals_subtree(withdrawals, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = htr_withdrawals_subtree(withdrawals, start, left_count, child_depth);
+        let right_root = htr_withdrawals_subtree(withdrawals, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure htr_withdrawals_subtree(withdrawals, start, count, depth) = depth
 
 /*! `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). */
 function htr_withdrawals(withdrawals : WithdrawalListRef) -> hash = {
     let count : htr_leaf_count = withdrawals.count;
-    mix_in_length(htr_withdrawals_subtree(withdrawals, 0, count, 4), withdrawals.count)
+    let root = htr_withdrawals_subtree(withdrawals, 0, count, 4);
+    mix_in_length(root, withdrawals.count)
 }
 
 /*! `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let payload = input_ref.execution_payload;
+    let parent_hash_root = htr_ssz_bytes32(payload, 0);
+    let fee_recipient_root = htr_ssz_addr(payload, PL_FEE_RECIPIENT);
+    let state_root = htr_ssz_bytes32(payload, PL_STATE_ROOT);
+    let receipts_root = htr_ssz_bytes32(payload, PL_RECEIPTS_ROOT);
+    let logs_bloom_root = htr_ssz_bytevector(payload, PL_LOGS_BLOOM, LOGS_BLOOM_BYTE_LENGTH);
+    let prev_randao_root = htr_ssz_bytes32(payload, PL_PREV_RANDAO);
+    let block_number_root = htr_ssz_uint(payload, PL_BLOCK_NUMBER);
+    let gas_limit_root = htr_ssz_uint(payload, PL_GAS_LIMIT);
+    let gas_used_root = htr_ssz_uint(payload, PL_GAS_USED);
+    let timestamp_root = htr_ssz_uint(payload, PL_TIMESTAMP);
+    let extra_data_root = htr_bytelist(input_ref.extra_data, WORD_BYTE_LENGTH);
+    let base_fee_root = htr_ssz_u256(payload, PL_BASE_FEE);
+    let block_hash_root = htr_ssz_bytes32(payload, PL_BLOCK_HASH);
+    let transactions_root = htr_transactions(input_ref.transactions);
+    let withdrawals_root = htr_withdrawals(input_ref.withdrawals);
+    let blob_gas_used_root = htr_ssz_uint(payload, PL_BLOB_GAS_USED);
+    let excess_blob_gas_root = htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS);
+    let block_access_list_root = htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT);
+    let slot_number_root = htr_ssz_uint(payload, PL_SLOT_NUMBER);
     merkleize(
         [
-            htr_ssz_bytes32(payload, 0),
-            htr_ssz_addr(payload, PL_FEE_RECIPIENT),
-            htr_ssz_bytes32(payload, PL_STATE_ROOT),
-            htr_ssz_bytes32(payload, PL_RECEIPTS_ROOT),
-            htr_ssz_bytevector(payload, PL_LOGS_BLOOM, LOGS_BLOOM_BYTE_LENGTH),
-            htr_ssz_bytes32(payload, PL_PREV_RANDAO),
-            htr_ssz_uint(payload, PL_BLOCK_NUMBER),
-            htr_ssz_uint(payload, PL_GAS_LIMIT),
-            htr_ssz_uint(payload, PL_GAS_USED),
-            htr_ssz_uint(payload, PL_TIMESTAMP),
-            htr_bytelist(input_ref.extra_data, WORD_BYTE_LENGTH),
-            htr_ssz_u256(payload, PL_BASE_FEE),
-            htr_ssz_bytes32(payload, PL_BLOCK_HASH),
-            htr_transactions(input_ref.transactions),
-            htr_withdrawals(input_ref.withdrawals),
-            htr_ssz_uint(payload, PL_BLOB_GAS_USED),
-            htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS),
-            htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT),
-            htr_ssz_uint(payload, PL_SLOT_NUMBER),
+            parent_hash_root,
+            fee_recipient_root,
+            state_root,
+            receipts_root,
+            logs_bloom_root,
+            prev_randao_root,
+            block_number_root,
+            gas_limit_root,
+            gas_used_root,
+            timestamp_root,
+            extra_data_root,
+            base_fee_root,
+            block_hash_root,
+            transactions_root,
+            withdrawals_root,
+            blob_gas_used_root,
+            excess_blob_gas_root,
+            block_access_list_root,
+            slot_number_root,
         ],
         5,
     )
@@ -582,35 +547,32 @@ val htr_versioned_hashes_subtree : forall 'start, 0 <= 'start. (
 function htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if count == 1 then {
-                htr_chunk(versioned_hashes, start)
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        if count == 1 then {
+            htr_chunk(versioned_hashes, start)
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                htr_versioned_hashes_subtree(versioned_hashes, start, left_count, child_depth),
-                htr_versioned_hashes_subtree(versioned_hashes, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = htr_versioned_hashes_subtree(versioned_hashes, start, left_count, child_depth);
+        let right_root = htr_versioned_hashes_subtree(versioned_hashes, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) = depth
 
 /*! `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). */
 function htr_versioned_hashes(versioned_hashes : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, sizeof(blob_commitment_count_bound));
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_versioned_hashes_subtree(versioned_hashes, 0, count, 12), items.count)
+    let root = htr_versioned_hashes_subtree(versioned_hashes, 0, count, 12);
+    mix_in_length(root, items.count)
 }
 
 /*md
@@ -620,62 +582,45 @@ The EIP-7685 execution-request commitments.
 */
 /*! `hash_tree_root` of one deposit request (5 fields, depth 3). */
 function htr_deposit(deposit : StatelessInputSliceLength(192)) -> hash = {
-    merkleize(
-        [
-            htr_ssz_bytevector(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH),
-            htr_ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS),
-            htr_ssz_uint(deposit, HTR_DEPOSIT_AMOUNT),
-            htr_ssz_bytevector(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
-            htr_ssz_uint(deposit, HTR_DEPOSIT_INDEX),
-        ],
-        3,
-    )
+    let pubkey = htr_ssz_bytevector(deposit, HTR_DEPOSIT_PUBKEY, HTR_DEPOSIT_PUBKEY_LENGTH);
+    let withdrawal_credentials = htr_ssz_bytes32(deposit, HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS);
+    let amount = htr_ssz_uint(deposit, HTR_DEPOSIT_AMOUNT);
+    let signature = htr_ssz_bytevector(deposit, HTR_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH);
+    let index = htr_ssz_uint(deposit, HTR_DEPOSIT_INDEX);
+    merkleize([pubkey, withdrawal_credentials, amount, signature, index], 3)
 }
 
 /*! `hash_tree_root` of one withdrawal request (3 fields, depth 2). */
 function htr_withdrawal_request(request : StatelessInputSliceLength(76)) -> hash = {
-    merkleize(
-        [
-            htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
-            htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-            htr_ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT),
-        ],
-        2,
-    )
+    let source_address = htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS);
+    let source_pubkey = htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH);
+    let amount = htr_ssz_uint(request, HTR_WITHDRAWAL_REQUEST_AMOUNT);
+    merkleize([source_address, source_pubkey, amount], 2)
 }
 
 /*! `hash_tree_root` of one consolidation request (3 fields, depth 2). */
-function htr_consolidation_request(request : StatelessInputSliceLength(116)) -> hash =
-    merkleize(
-        [
-            htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS),
-            htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-            htr_ssz_bytevector(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-        ],
-        2,
-    )
+function htr_consolidation_request(request : StatelessInputSliceLength(116)) -> hash = {
+    let source_address = htr_ssz_addr(request, HTR_REQUEST_SOURCE_ADDRESS);
+    let source_pubkey = htr_ssz_bytevector(request, HTR_REQUEST_SOURCE_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH);
+    let target_pubkey = htr_ssz_bytevector(request, HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH);
+    merkleize([source_address, source_pubkey, target_pubkey], 2)
+}
 
 /*! `hash_tree_root` of one builder deposit request (4 fields, depth 2). */
-function htr_builder_deposit_request(request : StatelessInputSliceLength(184)) -> hash =
-    merkleize(
-        [
-            htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-            htr_ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS),
-            htr_ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT),
-            htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH),
-        ],
-        2,
-    )
+function htr_builder_deposit_request(request : StatelessInputSliceLength(184)) -> hash = {
+    let pubkey = htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH);
+    let withdrawal_credentials = htr_ssz_bytes32(request, HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS);
+    let amount = htr_ssz_uint(request, HTR_BUILDER_DEPOSIT_AMOUNT);
+    let signature = htr_ssz_bytevector(request, HTR_BUILDER_DEPOSIT_SIGNATURE, HTR_DEPOSIT_SIGNATURE_LENGTH);
+    merkleize([pubkey, withdrawal_credentials, amount, signature], 2)
+}
 
 /*! `hash_tree_root` of one builder exit request (2 fields, depth 1). */
-function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> hash =
-    merkleize(
-        [
-            htr_ssz_addr(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS),
-            htr_ssz_bytevector(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH),
-        ],
-        1,
-    )
+function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> hash = {
+    let source_address = htr_ssz_addr(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS);
+    let pubkey = htr_ssz_bytevector(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH);
+    merkleize([source_address, pubkey], 1)
+}
 
 /*! The closed fixed-width leaf-operation algebra carried through the generic
     request-list recursion. [htr_request_leaf][] interprets it at depth zero,
@@ -695,41 +640,46 @@ function htr_request_leaf(requests, index, kind) =
         HtrDeposit => {
             let offset = index * HTR_DEPOSIT_LENGTH;
             if offset + HTR_DEPOSIT_LENGTH <= requests.len then {
-                htr_deposit(sub_slice(requests, offset, HTR_DEPOSIT_LENGTH))
+                let deposit = sub_slice(requests, offset, HTR_DEPOSIT_LENGTH);
+                htr_deposit(deposit)
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig)
             }
         },
         HtrWithdrawalRequest => {
             let offset = index * HTR_WITHDRAWAL_REQUEST_LENGTH;
             if offset + HTR_WITHDRAWAL_REQUEST_LENGTH <= requests.len then {
-                htr_withdrawal_request(sub_slice(requests, offset, HTR_WITHDRAWAL_REQUEST_LENGTH))
+                let request = sub_slice(requests, offset, HTR_WITHDRAWAL_REQUEST_LENGTH);
+                htr_withdrawal_request(request)
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig)
             }
         },
         HtrConsolidationRequest => {
             let offset = index * HTR_CONSOLIDATION_REQUEST_LENGTH;
             if offset + HTR_CONSOLIDATION_REQUEST_LENGTH <= requests.len then {
-                htr_consolidation_request(sub_slice(requests, offset, HTR_CONSOLIDATION_REQUEST_LENGTH))
+                let request = sub_slice(requests, offset, HTR_CONSOLIDATION_REQUEST_LENGTH);
+                htr_consolidation_request(request)
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig)
             }
         },
         HtrBuilderDepositRequest => {
             let offset = index * HTR_BUILDER_DEPOSIT_LENGTH;
             if offset + HTR_BUILDER_DEPOSIT_LENGTH <= requests.len then {
-                htr_builder_deposit_request(sub_slice(requests, offset, HTR_BUILDER_DEPOSIT_LENGTH))
+                let request = sub_slice(requests, offset, HTR_BUILDER_DEPOSIT_LENGTH);
+                htr_builder_deposit_request(request)
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig)
             }
         },
         HtrBuilderExitRequest => {
             let offset = index * HTR_BUILDER_EXIT_LENGTH;
             if offset + HTR_BUILDER_EXIT_LENGTH <= requests.len then {
-                htr_builder_exit_request(sub_slice(requests, offset, HTR_BUILDER_EXIT_LENGTH))
+                let request = sub_slice(requests, offset, HTR_BUILDER_EXIT_LENGTH);
+                htr_builder_exit_request(request)
             } else {
-                throw InvalidBlock(InvalidConfig)
+                fatal_error(InvalidConfig)
             }
         },
     }
@@ -745,35 +695,32 @@ val htr_requests_subtree : forall 'start, 0 <= 'start. (
 function htr_requests_subtree(requests, kind, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
-    } else {
-        if depth == 0 then {
-            if count == 1 then {
-                htr_request_leaf(requests, start, kind)
-            } else {
-                throw InvalidBlock(WitnessDeficient)
-            }
+    } else if depth == 0 then {
+        if count == 1 then {
+            htr_request_leaf(requests, start, kind)
         } else {
-            let child_depth : htr_depth = depth - 1;
-            let half = htr_leaf_capacity(child_depth);
-            let left_count : htr_leaf_count = if count < half then { count } else { half };
-            let right_count : htr_leaf_count = if count < half then {
-                    0
-                } else {
-                    count - half
-                };
-            sha256_pair(
-                htr_requests_subtree(requests, kind, start, left_count, child_depth),
-                htr_requests_subtree(requests, kind, start + half, right_count, child_depth),
-            )
+            fatal_error(WitnessDeficient)
         }
+    } else {
+        let child_depth : htr_depth = depth - 1;
+        let half = htr_leaf_capacity(child_depth);
+        let left_count : htr_leaf_count =
+            if count < half then count else half;
+        let right_count : htr_leaf_count =
+            if count < half then 0 else count - half;
+        let left_root = htr_requests_subtree(requests, kind, start, left_count, child_depth);
+        let right_root = htr_requests_subtree(requests, kind, start + half, right_count, child_depth);
+        sha256_pair(left_root, right_root)
     }
+
 termination_measure htr_requests_subtree(requests, kind, start, count, depth) = depth
 
 /*! `hash_tree_root` of the deposit-request list (depth 13). */
 function htr_deposits(deposits : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, sizeof(deposit_request_count_bound));
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_requests_subtree(deposits, HtrDeposit, 0, count, 13), items.count)
+    let root = htr_requests_subtree(deposits, HtrDeposit, 0, count, 13);
+    mix_in_length(root, items.count)
 }
 
 /*! `hash_tree_root` of the withdrawal-request list (depth 4). */
@@ -784,7 +731,8 @@ function htr_withdrawal_requests(requests : StatelessInputSlice) -> hash = {
         sizeof(withdrawal_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_requests_subtree(requests, HtrWithdrawalRequest, 0, count, 4), items.count)
+    let root = htr_requests_subtree(requests, HtrWithdrawalRequest, 0, count, 4);
+    mix_in_length(root, items.count)
 }
 
 /*! `hash_tree_root` of the consolidation-request list (depth 1). */
@@ -795,7 +743,8 @@ function htr_consolidation_requests(requests : StatelessInputSlice) -> hash = {
         sizeof(consolidation_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_requests_subtree(requests, HtrConsolidationRequest, 0, count, 1), items.count)
+    let root = htr_requests_subtree(requests, HtrConsolidationRequest, 0, count, 1);
+    mix_in_length(root, items.count)
 }
 
 /*! `hash_tree_root` of the builder-deposit-request list (depth 6). */
@@ -806,26 +755,27 @@ function htr_builder_deposit_requests(requests : StatelessInputSlice) -> hash = 
         sizeof(builder_deposit_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_requests_subtree(requests, HtrBuilderDepositRequest, 0, count, 6), items.count)
+    let root = htr_requests_subtree(requests, HtrBuilderDepositRequest, 0, count, 6);
+    mix_in_length(root, items.count)
 }
 
 /*! `hash_tree_root` of the builder-exit-request list (depth 4). */
 function htr_builder_exit_requests(requests : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, sizeof(builder_exit_request_count_bound));
     let count : htr_leaf_count = items.count;
-    mix_in_length(htr_requests_subtree(requests, HtrBuilderExitRequest, 0, count, 4), items.count)
+    let root = htr_requests_subtree(requests, HtrBuilderExitRequest, 0, count, 4);
+    mix_in_length(root, items.count)
 }
 
 /*! `hash_tree_root` of the `SszExecutionRequests` container. */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash = {
+    let deposits = htr_deposits(input_ref.deposits);
+    let withdrawal_requests = htr_withdrawal_requests(input_ref.withdrawal_requests);
+    let consolidation_requests = htr_consolidation_requests(input_ref.consolidation_requests);
+    let builder_deposit_requests = htr_builder_deposit_requests(input_ref.builder_deposit_requests);
+    let builder_exit_requests = htr_builder_exit_requests(input_ref.builder_exit_requests);
     merkleize(
-        [
-            htr_deposits(input_ref.deposits),
-            htr_withdrawal_requests(input_ref.withdrawal_requests),
-            htr_consolidation_requests(input_ref.consolidation_requests),
-            htr_builder_deposit_requests(input_ref.builder_deposit_requests),
-            htr_builder_exit_requests(input_ref.builder_exit_requests),
-        ],
+        [deposits, withdrawal_requests, consolidation_requests, builder_deposit_requests, builder_exit_requests],
         3,
     )
 }
@@ -833,13 +783,9 @@ function htr_execution_requests(input_ref : StatelessInputRef) -> hash = {
 /*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
     the commitment the guest proves its input against. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
-    merkleize(
-        [
-            htr_execution_payload(input_ref),
-            htr_versioned_hashes(input_ref.versioned_hashes),
-            htr_ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT),
-            htr_execution_requests(input_ref),
-        ],
-        2,
-    )
+    let payload_root = htr_execution_payload(input_ref);
+    let versioned_hashes_root = htr_versioned_hashes(input_ref.versioned_hashes);
+    let beacon_root = htr_ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT);
+    let requests_root = htr_execution_requests(input_ref);
+    merkleize([payload_root, versioned_hashes_root, beacon_root, requests_root], 2)
 }

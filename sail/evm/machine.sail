@@ -51,7 +51,7 @@ function validated_refund_add(left, right) = {
     if (-sizeof(gas_refund_bound) <= total) & (total <= sizeof(gas_refund_bound)) then {
         total
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid)
     }
 }
 
@@ -134,10 +134,7 @@ function stack_height() -> operand_stack_height = {
     charges gas or performs side effects. `inputs` is the instruction's
     required stack height (delta) and `outputs` is the height it contributes
     after consuming those inputs (alpha). */
-function validate_stack(
-    inputs : operand_stack_height,
-    outputs : operand_stack_height,
-) -> bool = {
+function validate_stack(inputs : operand_stack_height, outputs : operand_stack_height) -> bool = {
     let height = stack_height();
     if height < inputs then {
         exc_halt(StackUnderflow);
@@ -155,31 +152,38 @@ function validate_stack(
 function peek(n : stack_index) -> word = stack_peek_word(n)
 
 /*! Pushes a word, entering `StackOverflow` at the 1024 limit. */
-function push_word(w : word) -> unit =
-    if STACK_LIMIT <= stack_height() then {
+function push_word(w : word) -> unit = {
+    let height = stack_height();
+    if STACK_LIMIT <= height then {
         exc_halt(StackOverflow)
     } else {
         stack_push_word(w)
     }
+}
 
 /*! Pushes the mathematical live-gas quantity as an EVM word. Transaction
     validation establishes that every reachable value is below the word
     modulus; the total canonical definition retains modular behavior outside
     that invariant. */
-function push_gas(value : gas) -> unit =
-    push_word(u256(tmod_nat(value, sizeof(word_modulus))))
+function push_gas(value : gas) -> unit = {
+    let reduced = tmod_nat(value, sizeof(word_modulus));
+    let gas_word = u256(reduced);
+    push_word(gas_word)
+}
 
 overload push = {push_word, push_gas}
 
 /*! Pops the top word, entering `StackUnderflow` (and yielding zero) on
     an empty stack. */
-function pop() -> word =
-    if stack_height() == 0 then {
+function pop() -> word = {
+    let height = stack_height();
+    if height == 0 then {
         exc_halt(StackUnderflow);
         WORD_ZERO
     } else {
         stack_pop_word()
     }
+}
 
 /*! Overwrites the `n`-th-from-top operand (`SWAP`). */
 function stack_set(n : stack_index, w : word) -> unit =
@@ -231,7 +235,8 @@ function returndata_copy(dst, off, len) =
 function returndata_copy_prefix(dst : memory_pointer, want : memory_length) -> unit = {
     let wanted = want;
     let available = returndata_size();
-    let copy_length : memory_length = if wanted < available then { wanted } else { available };
+    let copy_length : memory_length =
+        if wanted < available then wanted else available;
     slice_copy(returndata, dst, 0, copy_length)
 }
 
@@ -330,7 +335,8 @@ function active_memory_slice(off, len) =
     if len == 0 then {
         EMPTY_EVM_MEMORY_SLICE
     } else {
-        sub_slice(memory_expand_to(off + len), off, len)
+        let memory = memory_expand_to(off + len);
+        sub_slice(memory, off, len)
     }
 
 /*! Returns expanded memory as executable initcode, retaining the cursor
@@ -341,7 +347,9 @@ function memory_code_slice(off, len) =
     if len == 0 then {
         EMPTY_CODE_SLICE
     } else {
-        code_db_intern_memory(sub_slice(memory_expand_to(off + len), off, len))
+        let memory = memory_expand_to(off + len);
+        let initcode = sub_slice(memory, off, len);
+        code_db_intern_memory(initcode)
     }
 
 /* Entering a child returns the saved parent pointer. Restoring that value is
@@ -360,7 +368,10 @@ function memory_frame_leave(parent : EvmMemorySlice) -> unit = {
     evm_memory = parent
 }
 
-/*! Captures parent execution state and enters child stack and memory frames. */
+/*! Captures parent execution state and enters child stack and memory frames.
+    The host operand-frame cursor mirrors `call_depth`: push the empty child
+    operand stack before installing the child's semantic depth, and pop it
+    before restoring the parent's semantic depth. */
 function suspend_frame() -> FrameCheckpoint = {
     k_journal_checkpoint();
     let saved_pc = pc;
@@ -373,7 +384,7 @@ function suspend_frame() -> FrameCheckpoint = {
     let saved_depth = call_depth;
     let saved_code = frame_code;
     let saved_calldata = calldata;
-    stack_enter_frame();
+    operand_stack_push_empty_frame();
     let saved_memory = memory_frame_enter();
     struct {
         pc = saved_pc,
@@ -392,7 +403,7 @@ function suspend_frame() -> FrameCheckpoint = {
 
 /*! Restores a suspended parent after nested execution completes. */
 function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
-    stack_leave_frame();
+    operand_stack_pop_frame();
     memory_frame_leave(checkpoint.memory);
     pc = checkpoint.pc;
     gas_remaining = checkpoint.gas_remaining;
@@ -406,31 +417,24 @@ function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
     calldata = checkpoint.calldata
 }
 
-/*! Writes one memory byte and raises the high-water mark; a no-op when
-    halted. */
+/*! Writes one memory byte and raises the high-water mark. */
 function mem_set_byte(off : memory_pointer, v : byte) -> unit =
-    if is_running() then {
-        mem_write_byte(off, v)
-    }
+    mem_write_byte(off, v)
 
-/*! `MLOAD`: the big-endian word at `off`; zero when halted. */
+/*! `MLOAD`: the big-endian word at `off`. */
 function mem_load(off : memory_pointer) -> word =
-    if is_running() then {
-        mem_load_word(off)
-    } else {
-        ZERO_WORD
-    }
+    mem_load_word(off)
 
 /*! `MSTORE`: writes the big-endian word at `off` and raises the
     high-water mark. */
 function mem_store(off : memory_pointer, w : word) -> unit =
-    if is_running() then {
-        mem_store_word(off, w)
-    }
+    mem_store_word(off, w)
 
 /*! `MSTORE8`: writes the low byte of `w`. */
-function mem_store_byte(off : memory_pointer, w : word) -> unit =
-    mem_set_byte(off, word_low_byte(w))
+function mem_store_byte(off : memory_pointer, w : word) -> unit = {
+    let value = word_low_byte(w);
+    mem_set_byte(off, value)
+}
 
 /*! `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. */
 function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_length) -> unit =
@@ -440,5 +444,8 @@ function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_leng
 
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. */
-function mem_keccak(range : MemoryRange) -> word =
-    hash_to_word(keccak256(active_memory_slice(range.off, range.len)))
+function mem_keccak(range : MemoryRange) -> word = {
+    let bytes = active_memory_slice(range.off, range.len);
+    let digest = keccak256(bytes);
+    hash_to_word(digest)
+}

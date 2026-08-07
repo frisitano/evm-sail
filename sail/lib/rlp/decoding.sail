@@ -6,9 +6,8 @@ decoding. Input- and scratch-backed cursors remain nominally distinct so a
 decoder never pays for a runtime provenance tag.
 */
 
-/* Malformed RLP is a normal invalid-block outcome: the decoders throw
- * InvalidBlock(RlpDecode) at detection and the guest catches it once at the
- * top level. */
+/* Malformed RLP terminates validation with fatal_error(RlpDecode) at the
+ * point where the invalid encoding is detected. */
 
 /*! Parses exactly `width` big-endian bytes.  The result bound follows from the
     width, so callers can expose a protocol-width bound through the argument
@@ -33,7 +32,9 @@ function rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
     if width == 0 then {
         0
     } else {
-        rlp_uint64_append(width, rlp_uint64_width(content, width - 1), slice_byte(content, width - 1))
+        let prefix = rlp_uint64_width(content, width - 1);
+        let next = slice_byte(content, width - 1);
+        rlp_uint64_append(width, prefix, next)
     }
 termination_measure rlp_uint64_width(content, width) = width
 
@@ -42,34 +43,31 @@ termination_measure rlp_uint64_width(content, width) = width
 function rlp_ref_hdr(b : StatelessInputSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
     let source_len = b.len;
     if source_len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
-    let h = unsigned(slice_byte(b, 0));
+    let first_byte = slice_byte(b, 0);
+    let h = unsigned(first_byte);
     if h < 128 then {
         (false, 0, 1)
-    } else {
-        if h < 184 then {
-            (false, 1, h - 128)
+    } else if h < 184 then {
+        (false, 1, h - 128)
+    } else if h < 192 then {
+        let length_width : range(1, 8) = h - 183;
+        if length_width <= source_len - 1 then {
+            let length_bytes = sub_slice(b, 1, length_width);
+            (false, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
         } else {
-            if h < 192 then {
-                let length_width : range(1, 8) = h - 183;
-                if source_len - 1 < length_width then {
-                    throw InvalidBlock(RlpDecode)
-                };
-                let length_bytes = sub_slice(b, 1, length_width);
-                (false, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
-            } else {
-                if h < 248 then {
-                    (true, 1, h - 192)
-                } else {
-                    let length_width : range(1, 8) = h - 247;
-                    if source_len - 1 < length_width then {
-                        throw InvalidBlock(RlpDecode)
-                    };
-                    let length_bytes = sub_slice(b, 1, length_width);
-                    (true, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
-                }
-            }
+            fatal_error(RlpDecode)
+        }
+    } else if h < 248 then {
+        (true, 1, h - 192)
+    } else {
+        let length_width : range(1, 8) = h - 247;
+        if length_width <= source_len - 1 then {
+            let length_bytes = sub_slice(b, 1, length_width);
+            (true, 1 + length_width, rlp_uint64_width(length_bytes, length_width))
+        } else {
+            fatal_error(RlpDecode)
         }
     }
 }
@@ -87,7 +85,7 @@ function rlp_decode_list(f) =
     if f.is_list then {
         sub_slice(f.source, f.source.len - f.content_len, f.content_len)
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     }
 
 /*! Decodes the item at the head of a cursor without advancing it. The
@@ -102,15 +100,15 @@ val rlp_decode_item : forall 'source_off 'source_len, source_valid_range('source
 
 function rlp_decode_item(cursor) = {
     if cursor.len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let (is_list, content_off, content_len_value) = rlp_ref_hdr(cursor);
     let (content_len as 'content_len) = content_len_value;
     if cursor.len < content_off then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     if cursor.len - content_off < content_len then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let (full_len as 'full_len) = content_off + content_len;
     if (0 < full_len) & (full_len <= cursor.len) then {
@@ -122,7 +120,7 @@ function rlp_decode_item(cursor) = {
             };
         field
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     }
 }
 
@@ -142,12 +140,12 @@ val rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid_range('
         'source_off,
         'source_len,
     ) -> unit
-function rlp_cursor_expect_end(cursor) =
+function rlp_cursor_expect_end(cursor) = {
     if cursor.len == 0 then {
-        ()
-    } else {
-        throw InvalidBlock(RlpDecode)
-    }
+        return ()
+    };
+    fatal_error(RlpDecode)
+}
 
 /*! Decodes a byte sequence that must be exactly one RLP item. */
 val rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). StatelessInputSliceFields(
@@ -159,22 +157,20 @@ val rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_
 function rlp_single_ref(item) = {
     let item_length = item.len;
     if item_length == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     } else {
         let (is_list, content_off, content_len_value) = rlp_ref_hdr(item);
         let (content_len as 'content_len) = content_len_value;
-        if content_off > item_length then {
-            throw InvalidBlock(RlpDecode)
-        };
-        if content_len != item_length - content_off then {
-            throw InvalidBlock(RlpDecode)
-        };
-        let field : RlpFieldRef('source_off, 'source_len, 'content_len) = struct {
-                source = item,
-                is_list = is_list,
-                content_len = content_len,
-            };
-        field
+        if (content_off <= item_length) & (content_len == item_length - content_off) then {
+            let field : RlpFieldRef('source_off, 'source_len, 'content_len) = struct {
+                    source = item,
+                    is_list = is_list,
+                    content_len = content_len,
+                };
+            field
+        } else {
+            fatal_error(RlpDecode)
+        }
     }
 }
 
@@ -186,9 +182,10 @@ function rlp_node_cursor(node : StatelessInputSlice) -> (
      RlpCursor('source_off, 'source_len)}
 ) = {
     if node.len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     } else {
-        rlp_decode_list(rlp_single_ref(node))
+        let item = rlp_single_ref(node);
+        rlp_decode_list(item)
     }
 }
 
@@ -216,41 +213,40 @@ function scratch_rlp_uint64_width forall 'n, 0 <= 'n <= 8. (
     if width == 0 then {
         0
     } else {
-        rlp_uint64_append(width, scratch_rlp_uint64_width(content, width - 1), slice_byte(content, width - 1))
+        let prefix = scratch_rlp_uint64_width(content, width - 1);
+        let next = slice_byte(content, width - 1);
+        rlp_uint64_append(width, prefix, next)
     }
 termination_measure scratch_rlp_uint64_width(content, width) = width
 
 function scratch_rlp_ref_hdr(b : ScratchSlice) -> (bool, source_pointer, range(0, 2 ^ 64 - 1)) = {
     let source_len = b.len;
     if source_len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
-    let h = unsigned(slice_byte(b, 0));
+    let first_byte = slice_byte(b, 0);
+    let h = unsigned(first_byte);
     if h < 128 then {
         (false, 0, 1)
-    } else {
-        if h < 184 then {
-            (false, 1, h - 128)
+    } else if h < 184 then {
+        (false, 1, h - 128)
+    } else if h < 192 then {
+        let length_width : range(1, 8) = h - 183;
+        if length_width <= source_len - 1 then {
+            let length_bytes = sub_slice(b, 1, length_width);
+            (false, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
         } else {
-            if h < 192 then {
-                let length_width : range(1, 8) = h - 183;
-                if source_len - 1 < length_width then {
-                    throw InvalidBlock(RlpDecode)
-                };
-                let length_bytes = sub_slice(b, 1, length_width);
-                (false, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
-            } else {
-                if h < 248 then {
-                    (true, 1, h - 192)
-                } else {
-                    let length_width : range(1, 8) = h - 247;
-                    if source_len - 1 < length_width then {
-                        throw InvalidBlock(RlpDecode)
-                    };
-                    let length_bytes = sub_slice(b, 1, length_width);
-                    (true, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
-                }
-            }
+            fatal_error(RlpDecode)
+        }
+    } else if h < 248 then {
+        (true, 1, h - 192)
+    } else {
+        let length_width : range(1, 8) = h - 247;
+        if length_width <= source_len - 1 then {
+            let length_bytes = sub_slice(b, 1, length_width);
+            (true, 1 + length_width, scratch_rlp_uint64_width(length_bytes, length_width))
+        } else {
+            fatal_error(RlpDecode)
         }
     }
 }
@@ -265,7 +261,7 @@ function scratch_rlp_decode_list(f) =
     if f.is_list then {
         sub_slice(f.source, f.source.len - f.content_len, f.content_len)
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     }
 
 val scratch_rlp_decode_item : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchRlpCursor(
@@ -276,15 +272,15 @@ val scratch_rlp_decode_item : forall 'source_off 'source_len, source_valid_range
           ScratchRlpFieldRef('source_off, 'full_len, 'content_len)}
 function scratch_rlp_decode_item(cursor) = {
     if cursor.len == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let (is_list, content_off, content_len_value) = scratch_rlp_ref_hdr(cursor);
     let (content_len as 'content_len) = content_len_value;
     if cursor.len < content_off then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     if cursor.len - content_off < content_len then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     };
     let (full_len as 'full_len) = content_off + content_len;
     if (0 < full_len) & (full_len <= cursor.len) then {
@@ -296,7 +292,7 @@ function scratch_rlp_decode_item(cursor) = {
             };
         field
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     }
 }
 
@@ -313,12 +309,12 @@ val scratch_rlp_cursor_expect_end : forall 'source_off 'source_len, source_valid
         'source_off,
         'source_len,
     ) -> unit
-function scratch_rlp_cursor_expect_end(cursor) =
+function scratch_rlp_cursor_expect_end(cursor) = {
     if cursor.len == 0 then {
-        ()
-    } else {
-        throw InvalidBlock(RlpDecode)
-    }
+        return ()
+    };
+    fatal_error(RlpDecode)
+}
 
 val scratch_rlp_single_ref : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). ScratchSliceFields(
         'source_off,
@@ -329,22 +325,20 @@ val scratch_rlp_single_ref : forall 'source_off 'source_len, source_valid_range(
 function scratch_rlp_single_ref(item) = {
     let item_length = item.len;
     if item_length == 0 then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     } else {
         let (is_list, content_off, content_len_value) = scratch_rlp_ref_hdr(item);
         let (content_len as 'content_len) = content_len_value;
-        if content_off > item_length then {
-            throw InvalidBlock(RlpDecode)
-        };
-        if content_len != item_length - content_off then {
-            throw InvalidBlock(RlpDecode)
-        };
-        let field : ScratchRlpFieldRef('source_off, 'source_len, 'content_len) = struct {
-                source = item,
-                is_list = is_list,
-                content_len = content_len,
-            };
-        field
+        if (content_off <= item_length) & (content_len == item_length - content_off) then {
+            let field : ScratchRlpFieldRef('source_off, 'source_len, 'content_len) = struct {
+                    source = item,
+                    is_list = is_list,
+                    content_len = content_len,
+                };
+            field
+        } else {
+            fatal_error(RlpDecode)
+        }
     }
 }
 
@@ -353,7 +347,8 @@ function scratch_rlp_node_cursor(node : ScratchSlice) -> (
      source_valid_range('source_off, 'source_len).
      ScratchRlpCursor('source_off, 'source_len)}
 ) =
-    scratch_rlp_decode_list(scratch_rlp_single_ref(node))
+    let item = scratch_rlp_single_ref(node) in
+    scratch_rlp_decode_list(item)
 
 function scratch_rlp_item_content forall 'source_off 'source_len 'content_len,
                                     rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
@@ -369,7 +364,7 @@ function scratch_rlp_decode_word forall 'source_off 'source_len 'content_len,
 ) = {
     let n = f.content_len;
     if f.is_list | (RLP_WORD_LENGTH_LIMIT < n) then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     } else {
         slice_load_n(f.source, f.source.len - n, n)
     }
@@ -390,45 +385,38 @@ function rlp_ref_framing_canonical forall 'source_off 'source_len 'content_len,
     let source_length = source.len;
     if full_length == 0 then {
         false
-    } else {
-        if f.is_list then {
-            if n <= RLP_SHORT_LENGTH_LIMIT then {
-                (full_length == payload_length + 1) & (slice_byte(f.source, 0) == add_bits(0xc0, rlp_length_byte(n)))
-            } else {
-                let length_word = rlp_length_word(n);
-                let length_width = rlp_minimal_word_len(length_word);
-                  (full_length == 1 + length_width + payload_length)
-                & (slice_byte(f.source, 0) == add_bits(0xf7, rlp_length_byte(length_width)))
-                & (if full_offset < source_length then {
-                      slice_load_n(f.source, full_offset + 1, length_width) == length_word
-                  } else {
-                      false
-                  })
-            }
+    } else if f.is_list then {
+        if n <= RLP_SHORT_LENGTH_LIMIT then {
+            let length_byte = rlp_length_byte(n);
+            (full_length == payload_length + 1) & (slice_byte(f.source, 0) == add_bits(0xc0, length_byte))
         } else {
-            if payload_length == 0 then {
-                (full_length == 1) & (slice_byte(f.source, 0) == 0x80)
-            } else {
-                let first = slice_byte(f.source, content_offset);
-                if (payload_length == 1) & (first[7] == bitzero) then {
-                    (full_length == 1) & (slice_byte(f.source, 0) == first)
-                } else {
-                    if n <= RLP_SHORT_LENGTH_LIMIT then {
-                        (full_length == payload_length + 1) &
-                            (slice_byte(f.source, 0) == add_bits(0x80, rlp_length_byte(n)))
-                    } else {
-                        let length_word = rlp_length_word(n);
-                        let length_width = rlp_minimal_word_len(length_word);
-                          (full_length == 1 + length_width + payload_length)
-                        & (slice_byte(f.source, 0) == add_bits(0xb7, rlp_length_byte(length_width)))
-                        & (if full_offset < source_length then {
-                              slice_load_n(f.source, full_offset + 1, length_width) == length_word
-                          } else {
-                              false
-                          })
-                    }
-                }
-            }
+            let length_word = rlp_length_word(n);
+            let length_width = rlp_minimal_word_len(length_word);
+            let length_byte = rlp_length_byte(length_width);
+              (full_length == 1 + length_width + payload_length)
+            & (slice_byte(f.source, 0) == add_bits(0xf7, length_byte))
+            & (if full_offset < source_length
+              then slice_load_n(f.source, full_offset + 1, length_width) == length_word
+              else false)
+        }
+    } else if payload_length == 0 then {
+        (full_length == 1) & (slice_byte(f.source, 0) == 0x80)
+    } else {
+        let first = slice_byte(f.source, content_offset);
+        if (payload_length == 1) & (first[7] == bitzero) then {
+            (full_length == 1) & (slice_byte(f.source, 0) == first)
+        } else if n <= RLP_SHORT_LENGTH_LIMIT then {
+            let length_byte = rlp_length_byte(n);
+            (full_length == payload_length + 1) & (slice_byte(f.source, 0) == add_bits(0x80, length_byte))
+        } else {
+            let length_word = rlp_length_word(n);
+            let length_width = rlp_minimal_word_len(length_word);
+            let length_byte = rlp_length_byte(length_width);
+              (full_length == 1 + length_width + payload_length)
+            & (slice_byte(f.source, 0) == add_bits(0xb7, length_byte))
+            & (if full_offset < source_length
+              then slice_load_n(f.source, full_offset + 1, length_width) == length_word
+              else false)
         }
     }
 }
@@ -449,11 +437,42 @@ function rlp_item_uint_canonical forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     bool
 ) =
-    if not_bool(rlp_ref_bytes_canonical(f)) then {
+    let bytes_canonical = rlp_ref_bytes_canonical(f) in
+    let invalid = not_bool(bytes_canonical) in
+    if invalid then {
         false
     } else {
         (f.content_len == 0) | (slice_byte(f.source, f.source.len - f.content_len) != 0x00)
     }
+
+/*! Whether a string field fits one EVM word. This is the non-throwing form
+    used by structural validation passes that do not need the decoded value. */
+function rlp_word_valid forall 'source_off 'source_len 'content_len,
+                          rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) =
+    not_bool(f.is_list) & (f.content_len <= RLP_WORD_LENGTH_LIMIT)
+
+/*! Whether a field is a canonical unsigned EVM-word integer. */
+function rlp_u256_valid forall 'source_off 'source_len 'content_len,
+                          rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) = {
+    let canonical = rlp_item_uint_canonical(f);
+    canonical & (f.content_len <= RLP_WORD_LENGTH_LIMIT)
+}
+
+/*! Whether a field is a canonical unsigned 64-bit integer. */
+function rlp_uint64_valid forall 'source_off 'source_len 'content_len,
+                            rlp_field_ref_valid('source_off, 'source_len, 'content_len). (f :
+    RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
+    bool
+) = {
+    let canonical = rlp_item_uint_canonical(f);
+    canonical & (f.content_len <= RLP_UINT64_LENGTH_LIMIT)
+}
 
 /*! Decodes a string field of at most 32 bytes into a word. */
 function rlp_decode_word forall 'source_off 'source_len 'content_len,
@@ -463,7 +482,7 @@ function rlp_decode_word forall 'source_off 'source_len 'content_len,
 ) = {
     let n = f.content_len;
     if f.is_list | (RLP_WORD_LENGTH_LIMIT < n) then {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     } else {
         slice_load_n(f.source, f.source.len - n, n)
     }
@@ -476,10 +495,11 @@ function rlp_decode_u256 forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     word
 ) =
-    if rlp_item_uint_canonical(f) then {
+    let canonical = rlp_item_uint_canonical(f) in
+    if canonical then {
         rlp_decode_word(f)
     } else {
-        throw InvalidBlock(RlpDecode)
+        fatal_error(RlpDecode)
     }
 
 /*! Decodes a canonical unsigned integer into the uint64 wire domain used by
@@ -489,8 +509,10 @@ function rlp_decode_uint64 forall 'source_off 'source_len 'content_len,
     RlpFieldRef('source_off, 'source_len, 'content_len)) -> (
     ssz_uint
 ) = {
-    if not_bool(rlp_item_uint_canonical(f)) | (RLP_UINT64_LENGTH_LIMIT < f.content_len) then {
-        throw InvalidBlock(RlpDecode)
+    let canonical = rlp_item_uint_canonical(f);
+    let invalid_encoding = not_bool(canonical);
+    if invalid_encoding | (RLP_UINT64_LENGTH_LIMIT < f.content_len) then {
+        fatal_error(RlpDecode)
     };
     let content_length = f.content_len;
     let content = rlp_item_content(f);

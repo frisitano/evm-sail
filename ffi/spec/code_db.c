@@ -128,7 +128,7 @@ bool jumpdest_ref_contains(uint64_t ref, uint64_t code_len, uint64_t i) {
 /* ------------------------------ code_db -------------------------------- */
 
 typedef struct {
-  sail_fixed_bytes_32 key;             /* codeHash digest bytes          */
+  fixed_bytes_32 key;             /* codeHash digest bytes          */
   uint64_t off;                   /* absolute offset in code_arena   */
   uint64_t jumpdest_ref;          /* resolved Sail-built bitmap      */
   uint32_t len;
@@ -138,7 +138,7 @@ typedef struct {
 static code_db_ent *code_db;
 static uint32_t code_db_cap, code_db_n;
 
-static uint64_t code_db_hash(const sail_fixed_bytes_32 *key) {
+static uint64_t code_db_hash(const fixed_bytes_32 *key) {
   uint64_t h = 0xcbf29ce484222325ull;
   for (int i = 0; i < 4; i++) {
     uint64_t word;
@@ -148,7 +148,7 @@ static uint64_t code_db_hash(const sail_fixed_bytes_32 *key) {
   }
   return h;
 }
-static code_db_ent *code_db_find(const sail_fixed_bytes_32 *key) {
+static code_db_ent *code_db_find(const fixed_bytes_32 *key) {
   uint32_t i = (uint32_t)(code_db_hash(key) & (code_db_cap - 1));
   for (;;) {
     code_db_ent *e = &code_db[i];
@@ -217,7 +217,7 @@ bool code_db_append_region(const uint8_t *src, uint64_t len, uint64_t *off) {
  * insert the bytes and Sail-supplied analysis result. A hash already present
  * with bytes is left untouched. Empty code interns nothing -- a codeless
  * account carries KECCAK_EMPTY with no store entry. */
-static int code_db_intern(const sail_fixed_bytes_32 *key, const uint8_t *src,
+static int code_db_intern(const fixed_bytes_32 *key, const uint8_t *src,
                           uint32_t len, uint64_t jumpdest_ref) {
   if (!len) return jumpdest_ref == 0;
   if (!jumpdest_table_matches(jumpdest_ref, len)) return 0;
@@ -312,7 +312,7 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
     }
   }
 
-  sail_fixed_bytes_32 key = {{0}};
+  fixed_bytes_32 key = {{0}};
   zkvm_keccak256_hash digest = {{0}};
   if (zkvm_keccak256(src, (size_t)len, &digest) != ZKVM_EOK)
     return false;
@@ -320,9 +320,9 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len,
   return code_db_intern(&key, src, (uint32_t)len, jumpdest_ref);
 }
 
-sail_fixed_bytes_32 code_db_store_indexed_bytes(
+fixed_bytes_32 code_db_store_indexed_bytes(
     const uint8_t *src, uint64_t len, uint64_t jumpdest_ref) {
-  sail_fixed_bytes_32 key = {{0}};
+  fixed_bytes_32 key = {{0}};
   if (len > UINT32_MAX ||
       !jumpdest_table_matches(jumpdest_ref, (uint32_t)len)) {
     return evmsail_hash_from_be_bytes(key.bytes);
@@ -342,14 +342,14 @@ sail_fixed_bytes_32 code_db_store_indexed_bytes(
 /* Return the code span and its associated JUMPDEST table as one invariant.
  * the selected model code adapter assembles the generated Code result. */
 
-static const code_db_ent *code_db_get(sail_fixed_bytes_32 h) {
+static const code_db_ent *code_db_get(fixed_bytes_32 h) {
   if (!code_db) return NULL;
-  sail_fixed_bytes_32 key = h;
+  fixed_bytes_32 key = h;
   const code_db_ent *e = code_db_find(&key);
   return (e->used && e->len) ? e : NULL;
 }
 
-bool code_db_lookup_indexed(sail_fixed_bytes_32 h, uint64_t *off, uint64_t *len,
+bool code_db_lookup_indexed(fixed_bytes_32 h, uint64_t *off, uint64_t *len,
                             uint64_t *jumpdest_ref) {
   const code_db_ent *e = code_db_get(h);
   if (!e) return false;
@@ -386,7 +386,7 @@ bool code_db_owned_contains(uint64_t pointer, uint64_t len) {
 /* EIP-7702 delegation probe in one call (this runs on every CALL-family
  * target; reading the code any other way would be O(|code|) or a code-db
  * walk). The generated-model binding pairs this flag with the nominal address. */
-bool code_db_read_delegation_address(uint8_t address[20], sail_fixed_bytes_32 h) {
+bool code_db_read_delegation_address(uint8_t address[20], fixed_bytes_32 h) {
   const code_db_ent *e = code_db_get(h);
   const uint8_t *p = NULL;
   uint64_t resolved_len = 0;

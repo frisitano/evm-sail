@@ -16,7 +16,9 @@ function create_address(sender : address, nonce : account_nonce) -> address = {
     rlp_write_addr(sender);
     rlp_write_uint(nonce);
     let encoded = rlp_encoder_finish(encoder);
-    let address = word_to_address(hash_to_word(keccak256(encoded)));
+    let digest = keccak256(encoded);
+    let digest_word = hash_to_word(digest);
+    let address = word_to_address(digest_word);
     rlp_encoder_rewind(encoder);
     address
 }

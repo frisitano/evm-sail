@@ -5,6 +5,8 @@
  * by the optimized cost planners before they are materialized. */
 type gas = range(0, 2 ^ 64 - 1)
 type gas_cost = range(0, 2 ^ 64 - 1)
+type memory_required_endpoint = range(0, memory_region_bound + 1)
+type memory_expansion_charge = range(0, 2 ^ 64)
 type modexp_factor = range(0, 3 * (2 ^ 64 - 1) + 257)
 type modexp_product = range(
     0,

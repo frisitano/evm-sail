@@ -19,7 +19,7 @@ struct zEvmMemorySliceFields;
 struct zCodeRegionSliceFields;
 struct zLogDataSliceFields;
 struct zOutputSliceFields;
-struct zScratchRegionResult;
+struct zScratchSliceFields;
 struct zCalldataSlice;
 
 bool evmsail_stateless_input_contains(uint64_t pointer, uint64_t len);
@@ -33,7 +33,7 @@ void evmsail_input_reset(void);
 
 struct zStatelessInputSliceFields stateless_input(unit u);
 struct zEvmMemorySliceFields mem_expand(uint64_t len);
-struct zStatelessInputSliceFields nodedb_lookup(sail_fixed_bytes_32 hash);
+struct zStatelessInputSliceFields nodedb_lookup(fixed_bytes_32 hash);
 
 
 uint64_t stateless_input_byte_at(
@@ -56,7 +56,7 @@ bool log_input_slices_equal(struct zLogDataSliceFields left,
 bool input_code_slices_equal(struct zStatelessInputSliceFields left,
                              struct zCodeRegionSliceFields right);
 bool evmsail_logs_bloom_matches_ref(
-    sail_fixed_bytes_256 computed, struct zStatelessInputSliceFields reference);
+    fixed_bytes_256 computed, struct zStatelessInputSliceFields reference);
 
 uint64_t stateless_input_count_nonzero(
     struct zStatelessInputSliceFields slice);
@@ -69,12 +69,12 @@ bool memory_slice_strided_zero(
     uint64_t width, uint64_t count);
 
 #define EVMSAIL_DECLARE_SLICE_LOAD(prefix, type)                              \
-  sail_u256 prefix##_load_word(                                     \
+  u256 prefix##_load_word(                                     \
        struct type slice,                           \
       uint64_t index)
 
 #define EVMSAIL_DECLARE_SLICE_LOAD_N(prefix, type)                            \
-  sail_u256 prefix##_load_n_word(                                   \
+  u256 prefix##_load_n_word(                                   \
        struct type slice,                           \
       uint64_t index, uint64_t len)
 
@@ -102,41 +102,41 @@ EVMSAIL_DECLARE_SLICE_COPY(output_slice, zOutputSliceFields);
 #undef EVMSAIL_DECLARE_SLICE_LOAD_N
 #undef EVMSAIL_DECLARE_SLICE_COPY
 
-void scratch_store_byte(struct zScratchRegionResult *result,
+void scratch_store_byte(struct zScratchSliceFields *result,
                         uint64_t off, uint64_t data);
 void scratch_store_stateless_input(
-    struct zScratchRegionResult *result, uint64_t off,
+    struct zScratchSliceFields *result, uint64_t off,
     struct zStatelessInputSliceFields slice);
-void scratch_store_scratch(struct zScratchRegionResult *result,
+void scratch_store_scratch(struct zScratchSliceFields *result,
                            uint64_t off,
                            struct zScratchSliceFields slice);
-void scratch_store_log_data(struct zScratchRegionResult *result,
+void scratch_store_log_data(struct zScratchSliceFields *result,
                             uint64_t off,
                             struct zLogDataSliceFields slice);
-void scratch_store_output(struct zScratchRegionResult *result,
+void scratch_store_output(struct zScratchSliceFields *result,
                           uint64_t off,
                           struct zOutputSliceFields slice);
-void scratch_store_address(struct zScratchRegionResult *result,
+void scratch_store_address(struct zScratchSliceFields *result,
                            uint64_t off,
-                           sail_fixed_bytes_20 data);
-void scratch_store_b256(struct zScratchRegionResult *result,
-                        uint64_t off, sail_fixed_bytes_32 data,
+                           fixed_bytes_20 data);
+void scratch_store_b256(struct zScratchSliceFields *result,
+                        uint64_t off, fixed_bytes_32 data,
                         uint64_t len);
-void scratch_store_fixed_bytes_256(struct zScratchRegionResult *result,
+void scratch_store_fixed_bytes_256(struct zScratchSliceFields *result,
                                    uint64_t off,
-                                   sail_fixed_bytes_256 data);
+                                   fixed_bytes_256 data);
 void scratch_store_receipt_logs_bloom(
-    struct zScratchRegionResult *result, uint64_t off, uint64_t start,
+    struct zScratchSliceFields *result, uint64_t off, uint64_t start,
     uint64_t count);
-void scratch_store_word(struct zScratchRegionResult *result,
+void scratch_store_word(struct zScratchSliceFields *result,
                         uint64_t off,
-                        const sail_u256 data, uint64_t len);
+                        const u256 data, uint64_t len);
 
 bool public_output_write(struct zScratchSliceFields output);
 bool output_buffer_store_memory(struct zEvmMemorySliceFields slice);
 bool output_buffer_store_input(struct zStatelessInputSliceFields slice);
 
-sail_fixed_bytes_32 code_db_store_indexed(struct zCodeFields code);
+fixed_bytes_32 code_db_store_indexed(struct zCodeFields code);
 
 bool accelerator_ripemd160(struct zCalldataSlice input);
 bool accelerator_modexp(struct zCalldataSlice input, uint64_t base_len,

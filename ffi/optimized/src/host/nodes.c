@@ -11,38 +11,50 @@
 #include "evmsail/host/nodes.h"
 
 #include "evmsail/host/region_access.h"
+#include "evmsail/prelude.h"
+#include "evmsail/spec/exceptions.h"
+#include "evmsail/spec/host/region_access.h"
+#include "lib/mpt/common.h"
 #include "lib/mpt/nodes.h"
+#include <stdint.h>
+#include <stddef.h>
 
-unit nodedb_reset(const unit ignored) {
-  (void)ignored;
-  mpt_node_index_clear();
-  return UNIT;
+void nodedb_reset(void)
+{
+  mpt_node_arena_reset();
 }
 
-unit nodedb_insert(Hash32 digest, uint64_t input_offset,
-                   uint64_t encoded_length) {
-  const uint8_t *bytes = stateless_input_ptr(input_offset, encoded_length);
-  if (bytes)
-    (void)mpt_node_table_insert(
-        &digest, (ByteSpan){bytes, (size_t)encoded_length});
-  return UNIT;
+void nodedb_insert(bytes32 digest, uint32_t input_offset, uint32_t encoded_length)
+{
+  const Bytes input = stateless_input();
+  if (input_offset > input.len || encoded_length > input.len - input_offset) {
+    fatal_error(WitnessDeficient);
+  }
+  if (!mpt_node_table_insert(&digest,
+                             (ByteSpan){input.bytes + input_offset, (size_t)encoded_length})) {
+    fatal_error(WitnessDeficient);
+  }
 }
 
-bool nodedb_lookup_span(Hash32 digest,
-                        uint64_t *input_offset, uint64_t *encoded_length) {
+bool nodedb_lookup_span(bytes32 digest, uint32_t *input_offset, uint32_t *encoded_length)
+{
   ByteSpan encoded;
-  uint64_t off = 0;
-  if (!mpt_node_index_span(&digest, &encoded) ||
+  uint32_t off = 0;
+  if (!mpt_node_index_span(&digest, &encoded) || encoded.len > UINT32_MAX ||
       !stateless_input_offset(encoded.data, encoded.len, &off)) {
-    if (input_offset)
+    if (input_offset) {
       *input_offset = 0;
-    if (encoded_length)
+    }
+    if (encoded_length) {
       *encoded_length = 0;
+    }
     return false;
   }
-  if (input_offset)
+  if (input_offset) {
     *input_offset = off;
-  if (encoded_length)
-    *encoded_length = encoded.len;
+  }
+  if (encoded_length) {
+    *encoded_length = (uint32_t)encoded.len;
+  }
   return true;
 }

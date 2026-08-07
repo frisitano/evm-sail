@@ -34,10 +34,10 @@ bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len);
 
 /* Fixed-width signature primitive shared by transaction execution. */
 struct zAddressResult precompile_ecrecover_hash_sig(
-     sail_fixed_bytes_32 h,
-    uint64_t yparity, const sail_u256 r, const sail_u256 s);
-bool precompile_ecrecover_hash_sig_address(uint8_t address[20], sail_fixed_bytes_32 h,
-                                           uint64_t yparity, sail_u256 r,
-                                           sail_u256 s);
+     fixed_bytes_32 h,
+    uint64_t yparity, const u256 r, const u256 s);
+bool precompile_ecrecover_hash_sig_address(uint8_t address[20], fixed_bytes_32 h,
+                                           uint64_t yparity, u256 r,
+                                           u256 s);
 
 #endif

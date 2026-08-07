@@ -375,9 +375,9 @@ uint8_t evmsail_debug_ecrecover_pubkey[64];
 uint8_t evmsail_debug_ecrecover_address[20];
 #endif
 
-bool precompile_ecrecover_hash_sig_address(uint8_t address[20], sail_fixed_bytes_32 hash,
-                                           uint64_t yparity, sail_u256 r,
-                                           sail_u256 s) {
+bool precompile_ecrecover_hash_sig_address(uint8_t address[20], fixed_bytes_32 hash,
+                                           uint64_t yparity, u256 r,
+                                           u256 s) {
   zkvm_secp256k1_signature signature;
   zkvm_secp256k1_pubkey public_key;
   zkvm_keccak256_hash address_hash = {{0}};

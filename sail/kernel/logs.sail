@@ -65,39 +65,52 @@ function bloom_bit_mask(bit_to_set : range(0, 7)) -> byte =
 function bloom_set_bit(bloom : LogsBloom, bit_to_set : bloom_bit_index) -> LogsBloom = {
     var out = bloom;
     let quotient = bit_to_set / 8;
-    let natural_byte : range(0, 255) = if quotient <= 255 then {
+    let natural_byte : range(0, 255) =
+        if quotient <= 255 then {
             quotient
         } else {
             assert(false);
             0
         };
     let remainder = tmod_int(bit_to_set, 8);
-    let bit_in_byte : range(0, 7) = if remainder <= 7 then {
+    let bit_in_byte : range(0, 7) =
+        if remainder <= 7 then {
             remainder
         } else {
             assert(false);
             0
         };
-    out[natural_byte] = or_vec(out[natural_byte], bloom_bit_mask(bit_in_byte));
+    let mask = bloom_bit_mask(bit_in_byte);
+    out[natural_byte] = or_vec(out[natural_byte], mask);
     out
 }
 
 /*! Adds a hashed bloom entry: three bits from its KECCAK-256. */
 function bloom_add_entry_hash(bloom : LogsBloom, h : hash) -> LogsBloom = {
     let bytes = h;
-    var out = bloom_set_bit(bloom, unsigned(append(bytes[0][2 .. 0], bytes[1])));
-    out = bloom_set_bit(out, unsigned(append(bytes[2][2 .. 0], bytes[3])));
-    out = bloom_set_bit(out, unsigned(append(bytes[4][2 .. 0], bytes[5])));
+    let first_bits = append(bytes[0][2 .. 0], bytes[1]);
+    let first_index = unsigned(first_bits);
+    var out = bloom_set_bit(bloom, first_index);
+    let second_bits = append(bytes[2][2 .. 0], bytes[3]);
+    let second_index = unsigned(second_bits);
+    out = bloom_set_bit(out, second_index);
+    let third_bits = append(bytes[4][2 .. 0], bytes[5]);
+    let third_index = unsigned(third_bits);
+    out = bloom_set_bit(out, third_index);
     out
 }
 
 /*! Adds one retained log record to the bloom (YP §4.4.1, the M function). */
 function bloom_add_log_at(bloom : LogsBloom, index : log_store_index) -> LogsBloom = {
-    var out = bloom_add_entry_hash(bloom, keccak256_address(log_address(index)));
+    let address = log_address(index);
+    let address_hash = keccak256_address(address);
+    var out = bloom_add_entry_hash(bloom, address_hash);
     var topic : log_store_index = 0;
     let topic_count = log_topics_count(index);
     while topic < topic_count termination_measure(topic_count - topic) do {
-        out = bloom_add_entry_hash(out, keccak256_word(log_topic(index, topic)));
+        let topic_value = log_topic(index, topic);
+        let topic_hash = keccak256_word(topic_value);
+        out = bloom_add_entry_hash(out, topic_hash);
         topic = log_store_index_increment(topic)
     };
     out
@@ -108,7 +121,8 @@ function bloom_add_logs(bloom : LogsBloom, logs : LogSeriesRef) -> LogsBloom = {
     var out = bloom;
     var offset : log_store_index = 0;
     while offset < logs.count termination_measure(logs.count - offset) do {
-        out = bloom_add_log_at(out, log_store_index_add(logs.start, offset));
+        let index = log_store_index_add(logs.start, offset);
+        out = bloom_add_log_at(out, index);
         offset = log_store_index_increment(offset)
     };
     out
@@ -132,15 +146,15 @@ function logs_bloom_or(left : LogsBloom, right : LogsBloom) -> LogsBloom = {
 function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    if (profile.fork < Amsterdam) | word_is_zero(v) | (src == dst) then {
-        ()
-    } else {
-        k_log(
-            EIP7708_SYSTEM_ADDRESS,
-            LogTopics3((EIP7708_TRANSFER_TOPIC, address_to_word(src), address_to_word(dst))),
-            LogDataWord(v),
-        )
-    }
+    let value_is_zero = word_is_zero(v);
+    if (profile.fork < Amsterdam) | value_is_zero | (src == dst) then {
+        return ()
+    };
+    let source = address_to_word(src);
+    let destination = address_to_word(dst);
+    let topics = LogTopics3((EIP7708_TRANSFER_TOPIC, source, destination));
+    let data = LogDataWord(v);
+    k_log(EIP7708_SYSTEM_ADDRESS, topics, data)
 }
 
 /*! Emits the EIP-7708 burn log when a selfdestruct deletion burns a
@@ -148,9 +162,12 @@ function k_emit_transfer_log(src : address, dst : address, v : word) -> unit = {
 function k_emit_burn_log(a : address, v : word) -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    if (profile.fork < Amsterdam) | word_is_zero(v) then {
-        ()
-    } else {
-        k_log(EIP7708_SYSTEM_ADDRESS, LogTopics2((EIP7708_BURN_TOPIC, address_to_word(a))), LogDataWord(v))
-    }
+    let value_is_zero = word_is_zero(v);
+    if (profile.fork < Amsterdam) | value_is_zero then {
+        return ()
+    };
+    let address = address_to_word(a);
+    let topics = LogTopics2((EIP7708_BURN_TOPIC, address));
+    let data = LogDataWord(v);
+    k_log(EIP7708_SYSTEM_ADDRESS, topics, data)
 }

@@ -2,11 +2,23 @@
 # evm-sail — specification validation entry point
 #
 #   make check          type-check the specification project
-#   make lint           sail --all-warnings on the program roots
+#   make lint           Sail warnings plus typed readability checks
 #   make fmt            format every *.sail in place with `sail --fmt`
 #   make fmt-check      verify every *.sail matches `sail --fmt`
 #   make c-spec         generate and compile-check the specification C model
 #   make c-optimised    generate and compile-check the optimized C model
+#   make c-optimised-conformance
+#                       compile-check and audit optimized generated-C style
+#   make c-optimised-lint-report
+#                       order Clang findings by planned compiler cleanup pass
+#   make c-optimised-clang-tidy
+#                       enforce the comprehensive clang-tidy policy
+#   make c-optimised-format-report
+#                       report clang-format drift in optimized C
+#   make c-optimised-clang-format
+#                       enforce the optimized-C clang-format policy
+#   make sail-readability-lint-report
+#                       inventory typed-Sail and common-Jib cleanup findings
 #   make eest-smoke     run one embedded v0.6.2 stateless fixture
 #   make extract-python generate and smoke-test the complete Python model
 #   make python-lint    lint the generated Python model with pinned Ruff
@@ -27,6 +39,11 @@ SAIL_Z3_FLAGS := --memo-z3 --memo-z3-path $(Z3_MEMO_PATH)
 LAKE ?= lake
 COQC ?= opam exec -- rocq c
 PYTHON ?= python3
+CLANG_TIDY ?= clang-tidy
+CLANG_FORMAT ?= clang-format
+CLANG ?= clang
+LINT_JOBS ?= 8
+LINT_PROFILE ?= comprehensive
 UV ?= uv
 GMP_CFLAGS ?= $(shell pkg-config --cflags gmp 2>/dev/null)
 DOCS_VENV ?= .venv-docs
@@ -53,7 +70,10 @@ C_OPT_GENERATED_DIR := $(C_OPT_BUILD_DIR)/generated
 C_OPT_GENERATED_INCLUDE_DIR := $(C_OPT_GENERATED_DIR)/include
 C_OPT_GENERATED_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/spec
 C_OPT_GENERATED_MANIFEST := $(C_OPT_GENERATED_SOURCE_DIR)/sources.list
-C_OPT_GENERATED_OBJECT_DIR := $(C_OPT_BUILD_DIR)/model
+C_OPT_PACKAGE_MANIFEST := $(C_OPT_GENERATED_DIR)/src/sources.list
+C_OPT_STAGED_FFI_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/ffi
+C_OPT_EXTRA_SAIL_FLAGS ?=
+C_OPT_SPECIALIZE_LOG_FLAGS ?= --c-specialize-log
 C_OPT_PACKAGE       := evmsail
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
@@ -70,6 +90,11 @@ PYTHON_PACKAGE      := $(PYTHON_DIR)/evm
 PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
 PYTHON_HOST_CONTRACT := $(CONTRACTS_DIR)/HostContract.py
 PYTHON_CACHE_DIR    := $(abspath .agent-tmp/python-cache)
+SAIL_READABILITY_DIR := build/lint/sail-readability
+SAIL_READABILITY_SOURCE_LOG := $(SAIL_READABILITY_DIR)/source.log
+SAIL_READABILITY_JIB_LOG := $(SAIL_READABILITY_DIR)/jib.log
+SAIL_READABILITY_REPORT := $(SAIL_READABILITY_DIR)/report.txt
+SAIL_READABILITY_JSON_REPORT := $(SAIL_READABILITY_DIR)/report.json
 # Run Ruff's complete default error family: import correctness, syntax and
 # invalid constructs, unused/rebound/undefined names, and related Python
 # errors. In particular F821 checks every generated annotation; explicit
@@ -82,7 +107,7 @@ LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
 LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
-C_SPEC_HEADERS      := sail_failure.h region_access.h hash.h precompiles.h output.h \
+C_SPEC_HEADERS      := sail_failure.h exceptions.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
 C_OPTIMIZED_INCLUDE_DIR := ffi/optimized/include
@@ -93,16 +118,17 @@ C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
                               EvmMemorySliceFields \
                               CodeRegionSliceFields \
                               LogDataSliceFields \
-                              OutputSliceFields
+                              OutputSliceFields \
+                              PreparedAuthorizationList
 C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := $(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER))
 C_OPTIMIZED_BYTE_POINTER_FLAGS := \
-	--c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=stateless_input_at \
-	--c-optimized-byte-pointer-field ScratchSliceFields.bytes=scratch_at \
-	--c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=memory_at \
-	--c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=code_at \
-	--c-optimized-byte-pointer-field CodeFields.bytes=code_at \
-	--c-optimized-byte-pointer-field LogDataSliceFields.bytes=log_data_at \
-	--c-optimized-byte-pointer-field OutputSliceFields.bytes=output_at
+	--c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct \
+	--c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct \
+	--c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct \
+	--c-optimized-byte-pointer-field CodeRegionSliceFields.bytes=__direct \
+	--c-optimized-byte-pointer-field CodeFields.bytes=__direct \
+	--c-optimized-byte-pointer-field LogDataSliceFields.bytes=__direct \
+	--c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct
 C_SPEC_INCLUDES     := $(foreach header,$(C_SPEC_HEADERS),--c-include $(header))
 C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve leaf_child_ref \
@@ -113,6 +139,11 @@ C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve decode_stateless_input_ref
 C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve resume_frame \
+                        --c-preserve validation_debug_record \
+                        --c-preserve write_invalid_result \
+                        --c-preserve sload_cost \
+                        --c-preserve sstore_sentry_cost \
+                        --c-preserve sstore_costs \
                         --c-preserve process_transaction \
                         --c-preserve compute_state_root \
                         --c-preserve decode_stateless_input_ref
@@ -138,12 +169,12 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all c-optimised c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test zisk-guest
+.PHONY: all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
 	@echo "  make check          - type-check the model ($(MODEL))"
-	@echo "  make lint           - sail --all-warnings on the program roots"
+	@echo "  make lint           - Sail warnings plus typed readability checks"
 	@echo "  make fmt            - format every *.sail with sail --fmt"
 	@echo "  make fmt-check      - verify *.sail match sail --fmt"
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
@@ -151,6 +182,12 @@ help:
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
+	@echo "  make c-optimised-conformance - compile-check and audit optimized generated-C style"
+	@echo "  make c-optimised-lint-report - run comprehensive Clang checks, ordered by compiler cleanup pass"
+	@echo "  make c-optimised-clang-tidy - require all clang-tidy checks over generated and FFI C"
+	@echo "  make c-optimised-format-report - report clang-format drift over generated and FFI C"
+	@echo "  make c-optimised-clang-format - require generated and FFI C to match .clang-format"
+	@echo "  make sail-readability-lint-report - inventory typed-Sail and common-Jib cleanup findings"
 	@echo "  make check-optimized-ffi - enforce the allocation-free optimized C boundary"
 	@echo "  make extract-coq    - generate and validate the complete Coq model"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
@@ -167,12 +204,14 @@ check:
 	$(SAIL) $(SAIL_Z3_FLAGS) $(MODEL)
 
 # Two checks (each recipe is a single-line shell command; Make 3.81 has no
-# .ONESHELL). (1) sail --all-warnings on the project entries type-checks every
-# reachable definition. (2) banner-box alignment: inside a /* ===...=== */ box,
-# every comment line must be the same width as the divider, so the closing */
-# columns line up.
+# .ONESHELL). (1) Sail's ordinary warnings and typed readability diagnostics
+# type-check every reachable definition and gate source-actionable hygiene.
+# Post-Jib findings remain an inventory because they describe compiler-created
+# structure rather than source defects. (2) banner-box alignment: inside a
+# /* ===...=== */ box, every comment line must be the same width as the divider,
+# so the closing */ columns line up.
 lint:
-	@o=$$($(SAIL) $(SAIL_Z3_FLAGS) --all-warnings $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (sail warnings)"; exit 1; fi; \
+	@o=$$($(SAIL) $(SAIL_Z3_FLAGS) --all-warnings --lint-readability $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (Sail warnings or readability findings)"; exit 1; fi; \
 	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
 	echo "lint: clean"
 	@$(PYTHON) tools/docs_lint.py . || { echo "lint: FAILED (docs style)"; exit 1; }
@@ -180,7 +219,7 @@ lint:
 # one sail call per file: the files $include each other, so a single multi-file
 # invocation double-loads them and errors.
 fmt:
-	@for f in $(SAIL_FILES); do $(SAIL) $(SAIL_Z3_FLAGS) --fmt --fmt-emit file "$$f"; done; echo "formatted $$(echo $(SAIL_FILES) | wc -w | tr -d ' ') file(s) with sail --fmt"
+	@rc=0; for f in $(SAIL_FILES); do $(SAIL) $(SAIL_Z3_FLAGS) --fmt --fmt-emit file "$$f" || { echo "  format failed: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "formatted $$(echo $(SAIL_FILES) | wc -w | tr -d ' ') file(s) with sail --fmt" || exit 1
 
 fmt-check:
 	@rc=0; for f in $(SAIL_FILES); do $(SAIL) $(SAIL_Z3_FLAGS) --fmt --fmt-emit stdout "$$f" 2>/dev/null | diff -q "$$f" - >/dev/null 2>&1 || { echo "  needs formatting: $$f"; rc=1; }; done; [ "$$rc" -eq 0 ] && echo "fmt-check: clean" || exit 1
@@ -288,6 +327,7 @@ c-spec:
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
 
 c-optimised: check-optimized-ffi
+	rm -rf $(C_OPT_GENERATED_DIR)
 	mkdir -p $(C_OPT_GENERATED_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
 		--c-optimized-model --c-package $(C_OPT_PACKAGE) \
@@ -296,28 +336,62 @@ c-optimised: check-optimized-ffi
 		--c-optimized-include-dir $(C_OPTIMIZED_INCLUDE_DIR) \
 		$(C_OPTIMIZED_EXTERNAL_TYPE_FLAGS) \
 		$(C_OPTIMIZED_BYTE_POINTER_FLAGS) \
-		$(C_OPT_PRESERVE_FLAGS) --c-specialize-log \
+		$(C_OPT_PRESERVE_FLAGS) $(C_OPT_SPECIALIZE_LOG_FLAGS) \
+		$(C_OPT_EXTRA_SAIL_FLAGS) \
 		$(C_OPTIMISED_SPLICE_FLAGS) \
 		$(MODEL) --variable EVM_DEBUG=off
+	$(PYTHON) tools/package_optimised_c.py $(C_OPT_GENERATED_DIR)
 	test -s $(C_OPT_GENERATED_MANIFEST)
+	test -s $(C_OPT_PACKAGE_MANIFEST)
 	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
-	@sail_lib="$$($(SAIL) --dir)/lib"; \
-		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
-		mkdir -p $(C_OPT_GENERATED_OBJECT_DIR); \
-		count=0; \
-		while IFS= read -r relative || [ -n "$$relative" ]; do \
-			[ -z "$$relative" ] && continue; \
-			source="$(C_OPT_GENERATED_SOURCE_DIR)/$$relative"; \
-			test -s "$$source" || { echo "missing generated optimized source: $$relative"; exit 1; }; \
-			object_name=$$(printf '%s' "$${relative%.c}" | tr '/' '_'); \
-			$(CC) -O2 -w -Wno-error=implicit-function-declaration \
-				-DEVMSAIL_MODEL_H=\"$(C_OPT_PACKAGE)/spec.h\" \
-				-I$(C_OPT_GENERATED_INCLUDE_DIR) -Izkvm/runtime/sail256 -Izkvm/runtime \
-				-I"$$sail_lib" -I$(C_OPTIMIZED_INCLUDE_DIR) -I$(C_OPTIMIZED_SOURCE_DIR) -Iffi \
-				-c "$$source" -o "$(C_OPT_GENERATED_OBJECT_DIR)/$$object_name.o"; \
-			count=$$((count + 1)); \
-		done < $(C_OPT_GENERATED_MANIFEST); \
-		test "$$count" -gt 0
+	$(MAKE) --no-print-directory -C $(C_OPT_GENERATED_DIR) CC="$(CC)"
+	test -s $(C_OPT_GENERATED_DIR)/libevmsail.a
+
+c-optimised-conformance: c-optimised
+	$(PYTHON) tools/check_optimised_c.py $(C_OPT_GENERATED_DIR)
+
+# Advisory by default: this is the compiler-pass work queue. The deterministic
+# conformance target and semantic fixtures remain gates while we burn down the
+# baseline. Diagnostics are deduplicated and ordered by the pass that should
+# own the fix instead of by translation-unit traversal order.
+c-optimised-lint-report: c-optimised-conformance
+	$(PYTHON) tools/lint_optimised_c.py --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
+		--profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+# This is intentionally separate from c-optimised-conformance: extraction and
+# the deterministic source contract remain runnable on machines without
+# clang-tidy, while reviewers and CI can opt into the richer AST diagnostics.
+c-optimised-clang-tidy: c-optimised-conformance
+	$(PYTHON) tools/lint_optimised_c.py --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
+		--require-clang-tidy --strict --profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+# Keep the report target read-only. The explicit clang-format target produces
+# the pretty-C review artifact from canonical compiler output and verifies both
+# generated and handwritten optimized C against the same policy.
+c-optimised-format-report: c-optimised-conformance
+	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+		--jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+c-optimised-clang-format: c-optimised-conformance
+	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+		--fix --strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+# Source diagnostics run both before elaboration and after type/effect
+# checking. Post-Jib diagnostics run in the common lowering, before backend
+# presentation passes. Keep both raw
+# logs: the report is an inventory, while the logs retain complete locations
+# and source excerpts for individual fixes.
+sail-readability-lint-report:
+	mkdir -p $(SAIL_READABILITY_DIR)
+	$(SAIL) $(SAIL_Z3_FLAGS) --no-color --lint-readability --just-check $(MODEL) \
+		> $(SAIL_READABILITY_SOURCE_LOG) 2>&1
+	$(MAKE) --no-print-directory c-optimised SAIL="$(SAIL)" \
+		C_OPT_EXTRA_SAIL_FLAGS="--no-color --lint-readability" C_OPT_SPECIALIZE_LOG_FLAGS= \
+		> $(SAIL_READABILITY_JIB_LOG) 2>&1
+	$(PYTHON) tools/summarize_sail_readability.py \
+		--source-log $(SAIL_READABILITY_SOURCE_LOG) --jib-log $(SAIL_READABILITY_JIB_LOG) \
+		--output $(SAIL_READABILITY_REPORT) --json-output $(SAIL_READABILITY_JSON_REPORT)
+	@cat $(SAIL_READABILITY_REPORT)
 
 extract-lean:
 	mkdir -p $(LEAN_MODEL_DIR)

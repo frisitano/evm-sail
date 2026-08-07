@@ -6,7 +6,7 @@ block) with the witness as base, plus the EIP-161/EIP-684 predicates and
 value transfer.
 */
 
-val stateless_account_by_key : (hash, hash) -> option(AccountInfo)
+val stateless_account_by_key : (hash, hash) -> Account
 
 /*! Field-wise inequality of account tuples. */
 function account_info_changed(c : AccountInfo, o : AccountInfo) -> bool =
@@ -23,8 +23,9 @@ function account_changed(c : Account, o : Account) -> bool =
 
 /*! Installs a new tuple, collapsing to the non-existent form when it is
     EIP-161-empty. */
-function account_set_info(acc : Account, info : AccountInfo) -> Account =
-    if account_info_empty(info) then {
+function account_set_info(acc : Account, info : AccountInfo) -> Account = {
+    let empty = account_info_empty(info);
+    if empty then {
         {
             acc with
             info = { EMPTY_ACCOUNT_INFO with storage_root = acc.info.storage_root },
@@ -34,6 +35,7 @@ function account_set_info(acc : Account, info : AccountInfo) -> Account =
     } else {
         { acc with info = info,  present = true }
     }
+}
 
 /*! Marks the account's storage cleared (fresh storage generation). */
 function account_clear_storage(acc : Account) -> Account =
@@ -55,8 +57,10 @@ function account_delete(acc : Account) -> Account =
 /*! Clears nonce, code, and storage while preserving a nonzero balance.
     Amsterdam applies this form to an account created and selfdestructed in
     the same transaction (EIP-8246). */
-function account_clear_preserving_balance(acc : Account) -> Account =
-    account_set_info(account_clear_storage(acc), { acc.info with nonce = 0,  code_hash = KECCAK_EMPTY })
+function account_clear_preserving_balance(acc : Account) -> Account = {
+    let cleared_storage = account_clear_storage(acc);
+    account_set_info(cleared_storage, { acc.info with nonce = 0,  code_hash = KECCAK_EMPTY })
+}
 
 /*! Writes a whole-account row to the transaction overlay. */
 function store_account(a : address, v : Account) -> unit =
@@ -66,7 +70,8 @@ function store_account(a : address, v : Account) -> unit =
     fast paths when existence/storage state is unchanged, and a storage
     clear when the tuple collapses to empty. */
 function store_account_info(a : address, acc : Account, info : AccountInfo) -> unit = {
-    if account_info_empty(info) then {
+    let empty = account_info_empty(info);
+    if empty then {
         storage_tx_clear(a)
     };
     let next = account_set_info(acc, info);
@@ -93,24 +98,19 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
     before consulting block-scoped state. */
 function k_aload(a : address) -> Account = {
     let tx_account = acct_tx_get(a);
-    match tx_account {
-        Some(acc) => return acc,
-        None() => (),
+    if tx_account.found then {
+        return tx_account.account
     };
 
     bal_account_touch(a);
 
     let block_account = acct_block_get(a);
-    match block_account {
-        Some(acc) => return acc,
-        None() => (),
+    if block_account.found then {
+        return block_account.account
     };
 
     let address_hash = keccak256_address(a);
-    let account : Account = match stateless_account_by_key(k_parent_state_root, address_hash) {
-        Some(info) => account_from_info(info),
-        None() => EMPTY_ACCOUNT,
-    };
+    let account = stateless_account_by_key(k_parent_state_root, address_hash);
     acct_block_cache(a, address_hash, account);
     account
 }
@@ -131,7 +131,8 @@ function k_account_exists(a : address) -> bool = k_aload(a).present
 /*! The EIP-161 "empty" test on the live account: zero nonce, zero
     balance, no code. */
 function k_account_is_empty(a : address) -> bool = {
-    account_info_empty(k_aload(a).info)
+    let account = k_aload(a);
+    account_info_empty(account.info)
 }
 
 /*! The `CREATE`/`CREATE2`/create-transaction address-collision test
@@ -154,13 +155,15 @@ function k_account_occupied(a : address) -> bool = {
 function k_transfer(src : address, dst : address, v : word) -> unit = {
     let src_acc = k_aload(src);
     let dst_acc = k_aload(dst);
-    if word_is_zero(v) | (src == dst) then {
-        ()
-    } else {
-        store_account_info(src, src_acc, { src_acc.info with balance = alu_sub(src_acc.info.balance, v) });
-        store_account_info(dst, dst_acc, { dst_acc.info with balance = alu_add(dst_acc.info.balance, v) });
-        k_emit_transfer_log(src, dst, v)
-    }
+    let value_is_zero = word_is_zero(v);
+    if value_is_zero | (src == dst) then {
+        return ()
+    };
+    let source_balance = alu_sub(src_acc.info.balance, v);
+    store_account_info(src, src_acc, { src_acc.info with balance = source_balance });
+    let destination_balance = alu_add(dst_acc.info.balance, v);
+    store_account_info(dst, dst_acc, { dst_acc.info with balance = destination_balance });
+    k_emit_transfer_log(src, dst, v)
 }
 
 /* Increment an account's nonce. EIP-2681 guards every path that reaches a
@@ -173,7 +176,7 @@ function k_bump_nonce(a : address) -> unit = {
     if nonce < sizeof(account_nonce_bound) then {
         store_account_info(a, cur, { cur.info with nonce = nonce + 1 })
     } else {
-        throw InvalidBlock(ExecutionInvalid)
+        fatal_error(ExecutionInvalid)
     }
 }
 
@@ -181,16 +184,22 @@ function k_bump_nonce(a : address) -> unit = {
 val k_add_balance : forall 'value, 0 <= 'value & 'value < 2 ^ 256. (address, int('value)) -> unit
 function k_add_balance(a, v) = {
     let cur = k_aload(a);
-    if not_bool(word_is_zero(v)) then {
-        store_account_info(a, cur, { cur.info with balance = alu_add(cur.info.balance, v) })
+    let value_is_zero = word_is_zero(v);
+    let value_is_nonzero = not_bool(value_is_zero);
+    if value_is_nonzero then {
+        let balance = alu_add(cur.info.balance, v);
+        store_account_info(a, cur, { cur.info with balance = balance })
     }
 }
 
 /*! Debits `v` wei (no-op when zero; caller guarantees sufficiency). */
 function k_sub_balance(a : address, v : word) -> unit = {
     let cur = k_aload(a);
-    if not_bool(word_is_zero(v)) then {
-        store_account_info(a, cur, { cur.info with balance = alu_sub(cur.info.balance, v) })
+    let value_is_zero = word_is_zero(v);
+    let value_is_nonzero = not_bool(value_is_zero);
+    if value_is_nonzero then {
+        let balance = alu_sub(cur.info.balance, v);
+        store_account_info(a, cur, { cur.info with balance = balance })
     }
 }
 
@@ -198,5 +207,6 @@ function k_sub_balance(a : address, v : word) -> unit = {
 function k_clear_storage(a : address) -> unit = {
     let cur = k_aload(a);
     storage_tx_clear(a);
-    store_account(a, account_clear_storage(cur))
+    let cleared = account_clear_storage(cur);
+    store_account(a, cleared)
 }

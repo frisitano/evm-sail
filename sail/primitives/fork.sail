@@ -44,8 +44,7 @@ let Homestead : int(homestead_fork_value) = sizeof(homestead_fork_value)
 /*! EIP-140 REVERT, EIP-211 returndata; precompiles 0x05-0x08. */
 let Byzantium : int(byzantium_fork_value) = sizeof(byzantium_fork_value)
 /*! EIP-145 shifts, EIP-1014 CREATE2, EIP-1052 EXTCODEHASH. */
-let Constantinople : int(constantinople_fork_value) =
-    sizeof(constantinople_fork_value)
+let Constantinople : int(constantinople_fork_value) = sizeof(constantinople_fork_value)
 /*! EIP-1344 CHAINID, EIP-2200 SSTORE metering. */
 let Istanbul : int(istanbul_fork_value) = sizeof(istanbul_fork_value)
 /*! EIP-2929/2930 access lists and warm/cold access costs. */
@@ -53,11 +52,9 @@ let Berlin : int(berlin_fork_value) = sizeof(berlin_fork_value)
 /*! EIP-1559 fee market and EIP-3529 refund reduction. */
 let London : int(london_fork_value) = sizeof(london_fork_value)
 /*! Difficulty-bomb-only schema fork; execution rules remain London. */
-let ArrowGlacier : int(arrow_glacier_fork_value) =
-    sizeof(arrow_glacier_fork_value)
+let ArrowGlacier : int(arrow_glacier_fork_value) = sizeof(arrow_glacier_fork_value)
 /*! Difficulty-bomb-only schema fork; execution rules remain London. */
-let GrayGlacier : int(gray_glacier_fork_value) =
-    sizeof(gray_glacier_fork_value)
+let GrayGlacier : int(gray_glacier_fork_value) = sizeof(gray_glacier_fork_value)
 /*! EIP-4399 PREVRANDAO replaces DIFFICULTY. */
 let Paris : int(paris_fork_value) = sizeof(paris_fork_value)
 /*! EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode. */

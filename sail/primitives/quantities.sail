@@ -269,14 +269,31 @@ type y_parity = range(0, 1)
 type merkle_depth = range(0, 64)
 /*! An EVM instruction byte. */
 type opcode = range(0, 255)
-/*! The largest one-based precompile identifier admitted by the model. */
-type precompile_id_bound : Int = 256
 /*! The closed first-order selector for the precompile catalog. Availability,
     gas pricing, and execution are separate interpreters of this identifier so
     their protocol equations remain explicit without function-valued records. */
-type precompile_id = range(1, precompile_id_bound)
-/*! An active precompile identifier, or zero for an ordinary address. */
-type precompile_selector = range(0, precompile_id_bound)
+enum PrecompileId = {
+    NotPrecompile,
+    Ecrecover,
+    Sha256,
+    Ripemd160,
+    Identity,
+    Modexp,
+    Bn254Add,
+    Bn254Mul,
+    Bn254Pairing,
+    Blake2f,
+    KzgPointEvaluation,
+    BlsG1Add,
+    BlsG1Msm,
+    BlsG2Add,
+    BlsG2Msm,
+    BlsPairing,
+    BlsMapFpToG1,
+    BlsMapFp2ToG2,
+    P256Verify,
+}
+type precompile_id = PrecompileId
 /*! The round count supplied to the BLAKE2 compression precompile. */
 type blake2_rounds = range(0, 2 ^ 32 - 1)
 /*! A fixed-point discount factor used by BLS precompile pricing. */
@@ -291,15 +308,6 @@ type bloom_u64_bit = range(0, 63)
 type ancestor_hash_count = range(0, 256)
 /*! An index into the 256 most recent ancestor block hashes. */
 type ancestor_index = range(0, 255)
-
-/*! Converts a word to an account nonce when it fits the protocol field. */
-function word_to_account_nonce(value : word) -> option(account_nonce) = {
-    if value <= sizeof(account_nonce_bound) then {
-        Some(value)
-    } else {
-        None()
-    }
-}
 
 /*! Embeds an EIP-2681 account nonce in the EVM word domain. */
 function word_of_account_nonce(value : account_nonce) -> account_nonce = value
@@ -320,16 +328,6 @@ function word_of_block_timestamp(value : block_timestamp) -> block_timestamp = v
 
 /*! Converts a chain identifier to the value exposed by CHAINID. */
 function word_of_chain_identifier(value : chain_identifier) -> chain_identifier = value
-
-/*! Encodes a precompiled-contract identifier directly as its 20-byte
-    address.  Identifiers currently occupy only the two least-significant
-    bytes, including Osaka's `0x0100` P256VERIFY address. */
-function precompile_id_to_address(value : precompile_id) -> address = {
-    var result : address = ZERO_ADDRESS;
-    result[19] = get_slice_int(8, value, 0);
-    result[18] = get_slice_int(8, value, 8);
-    result
-}
 
 /* Each host byte arena has its own semantic address-space boundary. Keeping
  * the bounds nominally separate allows an executable backend to refine one
@@ -447,7 +445,7 @@ type memory_region_word_bound : Int = 2 ^ 27
     boundary; the exact live-gas check remains the protocol affordability
     rule. */
 type memory_cost_input('words : Int) -> Bool =
-    0 <= 'words & 'words <= memory_region_word_bound
+    0 <= 'words
 
 /* A range describes the mathematical EVM address selected by an opcode.  Its
  * materializability is established separately by the memory-expansion cost:
@@ -461,7 +459,7 @@ type memory_valid_range('off : Int, 'len : Int) -> Bool =
     executable splices may strengthen this representation boundary after
     proving that every excluded endpoint is unaffordable. */
 type memory_expansion_endpoint('required : Int) -> Bool =
-    0 <= 'required & 'required <= memory_region_bound
+    0 <= 'required
 
 /*! Relates a canonical memory operand to its exclusive endpoint. A zero-size
     operand accesses no memory, so both its retained range and endpoint are
@@ -516,8 +514,7 @@ function memory_range(off, len) = struct { off = off, len = len }
 let EMPTY_MEMORY_RANGE : MemoryRangeFields(0, 0) = memory_range(0, 0)
 
 /*! The canonical inactive memory operand. */
-let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) =
-    struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
+let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) = struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
 
 /*! An absolute byte position in the code arena. */
 type code_pointer = range(0, code_region_bound)

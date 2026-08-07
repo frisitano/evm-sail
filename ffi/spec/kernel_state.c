@@ -31,12 +31,12 @@ typedef struct { uint64_t w[4]; } word256;
 
 typedef struct { uint8_t b[20]; } address160;
 
-static inline word256 sail_word256(sail_u256 v) {
+static inline word256 sail_word256(u256 v) {
   word256 r;
   sail_word_to_be_words4(r.w, v);
   return r;
 }
-static inline address160 sail_address160(sail_fixed_bytes_20 v) {
+static inline address160 sail_address160(fixed_bytes_20 v) {
   address160 r;
   evmsail_address_to_be_bytes(r.b, v);
   return r;
@@ -111,12 +111,12 @@ unit warm_reset(uint64_t current_transaction_epoch) {
   warm_slot.n = 0;
   return UNIT;
 }
-bool account_is_warm(sail_fixed_bytes_20 a) {
+bool account_is_warm(fixed_bytes_20 a) {
   address160 k = sail_address160(a);
   return av_find(&warm_addr, &k) >= 0;
 }
 
-unit account_mark_warm(sail_fixed_bytes_20 a) {
+unit account_mark_warm(fixed_bytes_20 a) {
   address160 k = sail_address160(a);
   if (av_find(&warm_addr, &k) >= 0) return UNIT;
   if (!av_reserve(&warm_addr, warm_addr.n + 1)) abort();
@@ -125,13 +125,13 @@ unit account_mark_warm(sail_fixed_bytes_20 a) {
   return UNIT;
 }
 
-bool storage_is_warm(sail_fixed_bytes_20 a, const sail_u256 s) {
+bool storage_is_warm(fixed_bytes_20 a, const u256 s) {
   address160 ka = sail_address160(a);
   word256 ks = sail_word256((s));
   return sv_find(&warm_slot, &ka, &ks) >= 0;
 }
 
-unit storage_mark_warm(sail_fixed_bytes_20 a, const sail_u256 s) {
+unit storage_mark_warm(fixed_bytes_20 a, const u256 s) {
   address160 ka = sail_address160(a);
   word256 ks = sail_word256((s));
   if (sv_find(&warm_slot, &ka, &ks) >= 0) return UNIT;
@@ -202,24 +202,24 @@ unit authorization_tracker_reset(uint64_t count_hint) {
   return UNIT;
 }
 
-bool authorization_tracker_seen(sail_fixed_bytes_20 authority) {
+bool authorization_tracker_seen(fixed_bytes_20 authority) {
   address160 key = sail_address160(authority);
   return auth_tracker_find(&key, 0) != NULL;
 }
 
-bool authorization_tracker_originally_delegated(sail_fixed_bytes_20 authority) {
+bool authorization_tracker_originally_delegated(fixed_bytes_20 authority) {
   address160 key = sail_address160(authority);
   auth_tracker_entry *entry = auth_tracker_find(&key, 0);
   return entry != NULL && entry->originally_delegated != 0;
 }
 
-bool authorization_tracker_delegation_set(sail_fixed_bytes_20 authority) {
+bool authorization_tracker_delegation_set(fixed_bytes_20 authority) {
   address160 key = sail_address160(authority);
   auth_tracker_entry *entry = auth_tracker_find(&key, 0);
   return entry != NULL && entry->delegation_set != 0;
 }
 
-unit authorization_tracker_commit(sail_fixed_bytes_20 authority,
+unit authorization_tracker_commit(fixed_bytes_20 authority,
                                   bool originally_delegated,
                                   bool sets_delegation) {
   address160 key = sail_address160(authority);
@@ -234,15 +234,15 @@ unit authorization_tracker_commit(sail_fixed_bytes_20 authority,
  * slot j = keccak of the (j+1)-blocks-back witness header. Writes come from
  * the witness-header pass; reads are guarded Sail-side by k_n_headers, so
  * stale slots are unreachable and no reset is needed. */
-static sail_fixed_bytes_32 hdrhash[256];
+static fixed_bytes_32 hdrhash[256];
 
-unit ancestor_hash_write(uint64_t j, sail_fixed_bytes_32 h) {
+unit ancestor_hash_write(uint64_t j, fixed_bytes_32 h) {
   if (j < 256) hdrhash[j] = h;
   return UNIT;
 }
-sail_fixed_bytes_32 ancestor_hash_read( uint64_t j) {
-  static const sail_fixed_bytes_32 zero = {{0}};
-  const sail_fixed_bytes_32 *value = j < 256 ? &hdrhash[j] : &zero;
+fixed_bytes_32 ancestor_hash_read( uint64_t j) {
+  static const fixed_bytes_32 zero = {{0}};
+  const fixed_bytes_32 *value = j < 256 ? &hdrhash[j] : &zero;
   return (*value);
 }
 
@@ -336,7 +336,7 @@ uint64_t logs_tx_count(const unit u) {
   (void)u;
   return logs_n - tx_log_start;
 }
-unit log_begin(sail_fixed_bytes_20 a) {
+unit log_begin(fixed_bytes_20 a) {
   if (logrec_reserve(logs_n + 1)) {
     log_rec *r = &logs[logs_n++];
     r->a = sail_address160(a);
@@ -348,7 +348,7 @@ unit log_begin(sail_fixed_bytes_20 a) {
   }
   return UNIT;
 }
-unit log_add_topic(sail_u256 t) {
+unit log_add_topic(u256 t) {
   if (logs_n && topics_reserve(topics_n + 1)) {
     log_topics[topics_n++] = sail_word256(t);
     logs[logs_n - 1].topic_cnt++;
@@ -363,7 +363,7 @@ unit log_add_data_bulk(const uint8_t *p, uint64_t n) {
   }
   return UNIT;
 }
-unit log_add_data_word(sail_u256 value) {
+unit log_add_data_word(u256 value) {
   uint8_t bytes[32];
   sail_word_to_be_bytes(bytes, value);
   return log_add_data_bulk(bytes, sizeof(bytes));
@@ -375,13 +375,13 @@ void logs_revert_last(void) {
   data_n = removed->data_off;
 }
 uint64_t log_count(const unit u) { (void)u; return logs_n; }
-sail_fixed_bytes_20 log_addr( uint64_t i) {
+fixed_bytes_20 log_addr( uint64_t i) {
   static const address160 zero = {{0}};
   const address160 *value = (i < logs_n) ? &logs[i].a : &zero;
   return evmsail_address_from_be_bytes(value->b);
 }
 uint64_t log_topic_count(uint64_t i) { return (i < logs_n) ? logs[i].topic_cnt : 0; }
-sail_u256 log_topic( uint64_t i,
+u256 log_topic( uint64_t i,
                                uint64_t j) {
   static const word256 zero = {{0, 0, 0, 0}};
   const word256 *t = &zero;
@@ -417,8 +417,8 @@ unit evmsail_block_logs_bloom_reset(unit ignored) {
   return UNIT;
 }
 
-static sail_fixed_bytes_256 logs_bloom_from_words(const uint64_t words[32]) {
-  sail_fixed_bytes_256 bloom;
+static fixed_bytes_256 logs_bloom_from_words(const uint64_t words[32]) {
+  fixed_bytes_256 bloom;
   memcpy(bloom.bytes, words, sizeof(bloom.bytes));
   return bloom;
 }
@@ -444,7 +444,7 @@ bool evmsail_receipt_logs_bloom_write(uint64_t start, uint64_t count,
   return true;
 }
 
-sail_fixed_bytes_256 evmsail_block_logs_bloom(unit ignored) {
+fixed_bytes_256 evmsail_block_logs_bloom(unit ignored) {
   (void)ignored;
   return logs_bloom_from_words(block_logs_bloom);
 }
@@ -504,8 +504,8 @@ static jentry *jrn_push(uint32_t tag) {
   return e;
 }
 
-unit state_journal_push_transient(sail_fixed_bytes_20 a, sail_u256 slot,
-                                  sail_u256 prior) {
+unit state_journal_push_transient(fixed_bytes_20 a, u256 slot,
+                                  u256 prior) {
   jentry *e = jrn_push(JT_TRAN);
   e->a = sail_address160(a);
   e->w0 = sail_word256(slot);
@@ -563,9 +563,9 @@ static void journal_revert_to(uint32_t target) {
   while (jrn_n > target) {
     const jentry *e = &jrn[--jrn_n];
     if (e->tag == JT_TRAN) {
-      sail_fixed_bytes_20 address = be_bytes_to_sail_address(e->a.b);
-      sail_u256 slot = be_words4_to_sail_word(e->w0.w);
-      sail_u256 prior = be_words4_to_sail_word(e->w1.w);
+      fixed_bytes_20 address = be_bytes_to_sail_address(e->a.b);
+      u256 slot = be_words4_to_sail_word(e->w0.w);
+      u256 prior = be_words4_to_sail_word(e->w1.w);
       transient_storage_restore(address, slot, prior);
     } else if (e->tag == JT_WARMA) {
       av_remove_once(&warm_addr, &e->a);

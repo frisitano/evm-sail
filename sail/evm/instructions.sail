@@ -69,7 +69,8 @@ union ast = {
 /*! Decodes the immediate shared by EIP-8024 `DUPN` and `SWAPN` into
     their one-based deep-stack index (17–235). */
 function decode_single_stack_index(immediate : byte) -> deep_stack_index = {
-    assert(deep_stack_immediate_valid(immediate));
+    let valid = deep_stack_immediate_valid(immediate);
+    assert(valid);
     let value : opcode = unsigned(immediate);
     if value <= 90 then {
         value + 145
@@ -82,7 +83,8 @@ function decode_single_stack_index(immediate : byte) -> deep_stack_index = {
 /*! Decodes the EIP-8024 `EXCHANGE` immediate into the two zero-based
     stack depths that it exchanges. */
 function decode_exchange_stack_indices(immediate : byte) -> (stack_index, stack_index) = {
-    assert(exchange_immediate_valid(immediate));
+    let valid = exchange_immediate_valid(immediate);
+    assert(valid);
     let shifted : byte = xor_vec(immediate, 0x8f);
     let quotient : range(0, 15) = unsigned(shifted[7 .. 4]);
     let remainder : range(0, 15) = unsigned(shifted[3 .. 0]);

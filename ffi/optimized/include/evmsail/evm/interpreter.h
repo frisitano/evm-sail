@@ -8,8 +8,4 @@
  * and its implementation are injected only into optimized C builds. Standard
  * C and proof extraction continue to use interpreter.sail directly.
  */
-struct OutputSliceFields;
-
-struct OutputSliceFields interpret(unit);
-
 #endif

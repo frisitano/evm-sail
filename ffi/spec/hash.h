@@ -16,20 +16,20 @@ struct zCodeRegionSliceFields;
 struct zOutputSliceFields;
 struct zLogDataSliceFields;
 
-sail_fixed_bytes_32 host_keccak_stateless_input(
+fixed_bytes_32 host_keccak_stateless_input(
     struct zStatelessInputSliceFields input);
-sail_fixed_bytes_32 host_keccak_scratch(struct zScratchSliceFields input);
-sail_fixed_bytes_32 host_keccak_memory(struct zEvmMemorySliceFields input);
-sail_fixed_bytes_32 host_keccak_code(struct zCodeRegionSliceFields input);
-sail_fixed_bytes_32 host_keccak_output(struct zOutputSliceFields input);
-sail_fixed_bytes_32 host_keccak_log_data(struct zLogDataSliceFields input);
-sail_fixed_bytes_32 host_sha256_stateless_input(
+fixed_bytes_32 host_keccak_scratch(struct zScratchSliceFields input);
+fixed_bytes_32 host_keccak_memory(struct zEvmMemorySliceFields input);
+fixed_bytes_32 host_keccak_code(struct zCodeRegionSliceFields input);
+fixed_bytes_32 host_keccak_output(struct zOutputSliceFields input);
+fixed_bytes_32 host_keccak_log_data(struct zLogDataSliceFields input);
+fixed_bytes_32 host_sha256_stateless_input(
     struct zStatelessInputSliceFields input);
-sail_fixed_bytes_32 host_sha256_scratch(struct zScratchSliceFields input);
-sail_fixed_bytes_32 host_sha256_memory(struct zEvmMemorySliceFields input);
-sail_fixed_bytes_32 host_keccak_word(const sail_u256 input);
-sail_fixed_bytes_32 host_keccak_address(sail_fixed_bytes_20 input);
-sail_fixed_bytes_32 host_sha256_pair(
-    sail_fixed_bytes_32 left, sail_fixed_bytes_32 right);
+fixed_bytes_32 host_sha256_scratch(struct zScratchSliceFields input);
+fixed_bytes_32 host_sha256_memory(struct zEvmMemorySliceFields input);
+fixed_bytes_32 host_keccak_word(const u256 input);
+fixed_bytes_32 host_keccak_address(fixed_bytes_20 input);
+fixed_bytes_32 host_sha256_pair(
+    fixed_bytes_32 left, fixed_bytes_32 right);
 
 #endif

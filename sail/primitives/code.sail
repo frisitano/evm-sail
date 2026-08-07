@@ -55,20 +55,16 @@ let EMPTY_CODE_SLICE : CodeSlice = code_slice(EMPTY_CODE_REGION_SLICE)
     one validity-sensitive immediate byte. Keeping this classification in the
     specification lets instruction fetch and PUSH-aware code analysis share
     one dispatch without introducing a function-valued decoder. */
-enum DeepStackOperation = {
-    DeepStackDuplicate,
-    DeepStackSwap,
-    DeepStackExchange,
-}
+enum DeepStackOperation = { DeepStackDuplicate, DeepStackSwap, DeepStackExchange, NotDeepStackOperation }
 
-/*! Classifies an opcode as one of Amsterdam's immediate deep-stack
-    operations. */
-function deep_stack_operation(opcode : opcode) -> option(DeepStackOperation) =
+/*! Classifies an opcode against Amsterdam's immediate deep-stack
+    operations; every other opcode maps to the non-member. */
+function deep_stack_operation(opcode : opcode) -> DeepStackOperation =
     match opcode {
-        230 => Some(DeepStackDuplicate),
-        231 => Some(DeepStackSwap),
-        232 => Some(DeepStackExchange),
-        _ => None(),
+        230 => DeepStackDuplicate,
+        231 => DeepStackSwap,
+        232 => DeepStackExchange,
+        _ => NotDeepStackOperation,
     }
 
 /*! Whether an EIP-8024 `DUPN`/`SWAPN` immediate is valid. Invalid
@@ -88,14 +84,13 @@ function exchange_immediate_valid(immediate : byte) -> bool = {
 /*! Applies the immediate-validity rule selected by a decoded deep-stack
     operation. `DUPN` and `SWAPN` share the single-index encoding, while
     `EXCHANGE` uses the pair encoding. */
-function deep_stack_operation_immediate_valid(
-    operation : DeepStackOperation,
-    immediate : byte,
-) -> bool = match operation {
-    DeepStackDuplicate => deep_stack_immediate_valid(immediate),
-    DeepStackSwap => deep_stack_immediate_valid(immediate),
-    DeepStackExchange => exchange_immediate_valid(immediate),
-}
+function deep_stack_operation_immediate_valid(operation : DeepStackOperation, immediate : byte) -> bool =
+    match operation {
+        DeepStackDuplicate => deep_stack_immediate_valid(immediate),
+        DeepStackSwap => deep_stack_immediate_valid(immediate),
+        DeepStackExchange => exchange_immediate_valid(immediate),
+        NotDeepStackOperation => false,
+    }
 
 /*! Executable code: its byte address, length, and resolved `JUMPDEST` table.
     The flat dependent record keeps the byte address and length relationship
@@ -119,17 +114,19 @@ type Code = {
 
 /*! Combines an executable byte span with its completed analysis without
     nesting one slice record inside another. */
-val analyzed_code : forall 'off 'len,
-    code_region_valid_range('off, 'len) & code_valid_length('len).
-    (CodeRegionSliceFields('off, 'len), jump_table_index) -> CodeFields('off, 'len)
+val analyzed_code : forall 'off 'len, code_region_valid_range('off, 'len) & code_valid_length('len). (
+        CodeRegionSliceFields('off, 'len),
+        jump_table_index,
+    ) -> CodeFields('off, 'len)
 function analyzed_code(bytes, jumpdests) =
     struct { bytes = bytes.bytes, len = bytes.len, jumpdests = jumpdests }
 
 /*! Reconstructs the nominal byte-span view used by generic region readers.
     Optimized C preserves the pointer representation through this projection. */
-val code_bytes : forall 'off 'len,
-    code_region_valid_range('off, 'len) & code_valid_length('len).
-    CodeFields('off, 'len) -> CodeRegionSliceFields('off, 'len)
+val code_bytes : forall 'off 'len, code_region_valid_range('off, 'len) & code_valid_length('len). CodeFields('off, 'len) -> CodeRegionSliceFields(
+        'off,
+        'len,
+    )
 function code_bytes(code) = struct { bytes = code.bytes, len = code.len }
 
 let EMPTY_CODE : Code = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE)

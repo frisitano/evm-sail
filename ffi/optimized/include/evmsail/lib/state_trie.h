@@ -3,7 +3,4 @@
 
 #include "evmsail/prelude.h"
 
-Hash32
-compute_state_root(unit ignored);
-
 #endif

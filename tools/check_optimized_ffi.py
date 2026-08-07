@@ -43,6 +43,7 @@ FORBIDDEN_C_SEMANTIC_TAG = re.compile(
 RAW_MODEL_TYPE = re.compile(
     r"\b(?:sail_fixed_bytes_(?:u64_lanes_20|u64_lanes_32|256)|sail_u256)\b"
 )
+FORBIDDEN_MPT_STATUS = re.compile(r"\b(?:mpt_status|mpt_fail)\b")
 SAIL_C_BINDING = re.compile(r'\bc\s*:\s*"([^"]+)"')
 
 
@@ -191,6 +192,12 @@ def main() -> int:
                 line = source.count("\n", 0, match.start()) + 1
                 errors.append(
                     f"{relative}:{line}: source-owned semantic dispatch tag in C: "
+                    f"{match.group(0)}"
+                )
+            for match in FORBIDDEN_MPT_STATUS.finditer(source):
+                line = source.count("\n", 0, match.start()) + 1
+                errors.append(
+                    f"{relative}:{line}: deferred MPT fatal status: "
                     f"{match.group(0)}"
                 )
 
