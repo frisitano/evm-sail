@@ -66,6 +66,17 @@ case "$EVM_DEBUG" in
   off|on) ;;
   *) echo "error: EVM_DEBUG must be off or on" >&2; exit 2 ;;
 esac
+# Experimental: lower constant-armed generated switches to static const
+# tables (--c-const-match-tables). Build-only; default off.
+EVM_CONST_TABLES="${EVM_CONST_TABLES:-off}"
+case "$EVM_CONST_TABLES" in
+  off|on) ;;
+  *) echo "error: EVM_CONST_TABLES must be off or on" >&2; exit 2 ;;
+esac
+CONST_TABLE_FLAGS=()
+if [ "$EVM_CONST_TABLES" = on ]; then
+  CONST_TABLE_FLAGS=(--c-const-match-tables)
+fi
 PROFILE_OBJ=""
 
 # Both guests use the standard LP64 soft-float ABI. Spike models RV64IM with
@@ -240,6 +251,7 @@ compile_common() {
         --c-preserve sload_cost --c-preserve sstore_sentry_cost \
         --c-preserve sstore_costs \
         --c-specialize-log "${MODEL_INCLUDE_FLAGS[@]}" \
+        ${CONST_TABLE_FLAGS[@]+"${CONST_TABLE_FLAGS[@]}"} \
         "${optimized_splice_flags[@]}" \
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \

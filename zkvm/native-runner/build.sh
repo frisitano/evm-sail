@@ -55,6 +55,17 @@ case "$EVM_BUILD_MODE" in
   standard|optimized) ;;
   *) echo "error: EVM_BUILD_MODE must be standard or optimized" >&2; exit 2 ;;
 esac
+# Experimental: lower constant-armed generated switches to static const
+# tables (--c-const-match-tables). Build-only; default off.
+EVM_CONST_TABLES="${EVM_CONST_TABLES:-off}"
+case "$EVM_CONST_TABLES" in
+  off|on) ;;
+  *) echo "error: EVM_CONST_TABLES must be off or on" >&2; exit 2 ;;
+esac
+CONST_TABLE_FLAGS=()
+if [ "$EVM_CONST_TABLES" = on ]; then
+  CONST_TABLE_FLAGS=(--c-const-match-tables)
+fi
 if [ "$EVM_BUILD_MODE" = standard ] && [ "$EVM_PROFILE" = on ]; then
   echo "error: EVM_PROFILE=on is available only for optimized builds" >&2
   exit 2
@@ -217,6 +228,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     --c-optimized-byte-pointer-field CodeFields.bytes=__direct
     --c-optimized-byte-pointer-field LogDataSliceFields.bytes=__direct
     --c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct
+    ${CONST_TABLE_FLAGS[@]+"${CONST_TABLE_FLAGS[@]}"}
     "${PRESERVE_FLAGS[@]}"
   )
 else
