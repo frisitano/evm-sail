@@ -34,6 +34,9 @@ C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
 C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 OPTIMIZED_PACKAGE="evmsail"
 OPTIMIZED_GENERATED="$BUILD/generated"
+# Sail regenerates this tree unconditionally; start from empty so the
+# packager's header-collision check never trips on a stale staging copy.
+rm -rf "$OPTIMIZED_GENERATED"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 mkdir -p "$BUILD"

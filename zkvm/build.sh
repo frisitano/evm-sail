@@ -42,6 +42,9 @@ C_PROFILE_DIR="$C_OPTIMISED_DIR/profile"
 C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 OPTIMIZED_PACKAGE="evmsail"
 OPTIMIZED_GENERATED="$BUILD/generated"
+# Sail regenerates this tree unconditionally; start from empty so the
+# packager's header-collision check never trips on a stale staging copy.
+rm -rf "$OPTIMIZED_GENERATED"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 
@@ -108,6 +111,17 @@ if [ "$PLATFORM" = zisk ]; then
   if [ "$EVM_DEBUG" = on ]; then
     CFLAGS+=(-DEVMSAIL_DEBUG)
   fi
+fi
+# EVM_LTO=on compiles every C object as LTO bitcode; cmd_zisk_lib then runs
+# the link-time optimization in a gcc partial link so the final Rust link
+# consumes one ordinary machine-code object (rust-lld cannot read GIMPLE).
+EVM_LTO="${EVM_LTO:-off}"
+case "$EVM_LTO" in
+  on|off) ;;
+  *) echo "error: EVM_LTO must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_LTO" = on ]; then
+  CFLAGS+=(-flto)
 fi
 # --gc-sections drops the unused Sail diagnostic/format surface (and its
 # gmp_printf/asprintf references).
@@ -351,19 +365,39 @@ cmd_zisk_lib() {
   compile_common
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
+  # The platform entry points are called only from the later Rust link, so
+  # keep these two objects out of LTO: as machine code they root the LTO
+  # symbol graph and stop zkvm_start/heap_region from being internalized.
+  "$GCC" "${CFLAGS[@]}" -fno-lto -I"$lib" -Wall -Wextra \
       -c "$RT/harness.c" -o "$BUILD/harness.o"
-  "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -fno-lto -I"$lib" -Wall -Wextra \
       -c "$HERE/zisk/platform.c" -o "$BUILD/zisk_platform.o"
   compile_profile_scope
   # `ar crs` updates an existing archive without removing members that are no
   # longer named. Recreate it so renamed/deleted backend objects cannot survive a
   # rebuild and contribute stale symbols to the final guest.
   rm -f "$BUILD/libevmsail_zisk.a"
-  "$AR" crs "$BUILD/libevmsail_zisk.a" \
-      "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
-      "${MODEL_BACKEND_OBJS[@]}" \
-      ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}"
+  if [ "$EVM_LTO" = on ]; then
+    # Run LTO now: a relocatable partial link over the bitcode objects emits
+    # one optimized machine-code object the Rust linker can consume. The
+    # entry points are only referenced by the later Rust link, so pin them
+    # against LTO internalization.
+    local lto_roots=(-Wl,-u,zkvm_start -Wl,-u,zkvm_exit -Wl,-u,heap_region)
+    if [ "$EVM_DEBUG" = on ]; then
+      lto_roots+=(-Wl,-u,zisk_report_debug)
+    fi
+    "$GCC" "${CFLAGS[@]}" -r -nostdlib "${lto_roots[@]}" \
+        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
+        "${MODEL_BACKEND_OBJS[@]}" \
+        ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}" \
+        -o "$BUILD/evmsail_lto.o"
+    "$AR" crs "$BUILD/libevmsail_zisk.a" "$BUILD/evmsail_lto.o"
+  else
+    "$AR" crs "$BUILD/libevmsail_zisk.a" \
+        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
+        "${MODEL_BACKEND_OBJS[@]}" \
+        ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}"
+  fi
   echo "built $BUILD/libevmsail_zisk.a"
 }
 
