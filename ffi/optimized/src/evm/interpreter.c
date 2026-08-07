@@ -92,7 +92,7 @@ static bool stack_operation_succeeded(enum stack_rewrite_status status)
 #define EXECUTE_STACK(name, inputs, outputs)                                                       \
   do {                                                                                             \
     if (stack_operation_succeeded(stack_validate(inputs, outputs)))                                \
-      EXECUTE(name);                                                                               \
+      ((void)execute_##name());                                                                               \
   } while (0)
 
 #define EXECUTE_STACK_CALL(call, inputs, outputs)                                                  \

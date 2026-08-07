@@ -39,7 +39,7 @@ void htif_puts(const char *s)
 
 #ifdef EVMSAIL_DEBUG
 extern _Bool validation_failure_present;
-extern uint64_t validation_failure_scope;
+extern uint8_t validation_failure_scope;
 extern int validation_failure_reason;
 
 static char hex_digit(unsigned value)
