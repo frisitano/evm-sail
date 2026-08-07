@@ -5,7 +5,7 @@ The host-side mutable state stores, as bodyless axioms: transient storage
 (EIP-1153), the two-layer account and storage overlays (transaction over
 block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
 and the log store. Frame rollback is specified separately by the closed
-[state-journal operation algebra][module-host-journal].
+[state-journal operation algebra](journal.md).
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts
