@@ -1,5 +1,15 @@
 /* Native implementation of the same standard read_input/write_output ABI used
  * by the zkVM guest, plus the reusable test-process lifecycle. */
+/* System headers first: the register-file compatibility macros in the
+ * generated headers can share spellings with SDK identifiers (message). */
+#include <pthread.h>
+#include <setjmp.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "evmsail/host/region_access.h"
 #include "evmsail/host/frame_stack.h"
 #include "evmsail/exceptions.h"
@@ -8,14 +18,6 @@
 #include "test/native.h"
 #include "test_utils.h"
 #include "zkvm_io.h"
-
-#include <pthread.h>
-#include <setjmp.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 /* The standard Sail RTS refers to these hooks, which a standalone generated
  * main normally owns.  Native model builds deliberately use --c-no-main and

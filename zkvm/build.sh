@@ -77,6 +77,42 @@ CONST_TABLE_FLAGS=()
 if [ "$EVM_CONST_TABLES" = on ]; then
   CONST_TABLE_FLAGS=(--c-const-match-tables)
 fi
+# Experimental: merge model registers into one struct so every access shares
+# a single base materialization (--c-register-file). Debug-module registers
+# stay plain globals so the ZisK debug reporter's externs keep linking.
+EVM_REGISTER_FILE="${EVM_REGISTER_FILE:-off}"
+case "$EVM_REGISTER_FILE" in
+  off|on) ;;
+  *) echo "error: EVM_REGISTER_FILE must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_REGISTER_FILE" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-register-file)
+  if [ "$EVM_DEBUG" = on ]; then
+    CONST_TABLE_FLAGS+=(--c-register-file-exclude host/debug_enabled)
+  fi
+fi
+# Experimental: EVM_GENERATED_INTERP=on keeps the GENERATED Sail interpreter
+# loop instead of the hand-written C override. The evm/interpreter.sail splice
+# (which rebinds interpret to the C loop) is swapped for
+# evm/interpreter_generated.sail ($[c_inline] annotations only), and the
+# hand-written ffi/optimized/src/evm/interpreter.c is dropped from the staged
+# source manifest so the generated interpret() is the one linked.
+EVM_GENERATED_INTERP="${EVM_GENERATED_INTERP:-off}"
+case "$EVM_GENERATED_INTERP" in
+  off|on) ;;
+  *) echo "error: EVM_GENERATED_INTERP must be off or on" >&2; exit 2 ;;
+esac
+# Experimental: EVM_INLINE_ATTR=on passes --c-inline-attr so functions
+# annotated $[c_inline] in the optimised splices are inlined into their
+# callers (dispatch fusion for the generated interpreter).
+EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
+case "$EVM_INLINE_ATTR" in
+  off|on) ;;
+  *) echo "error: EVM_INLINE_ATTR must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_INLINE_ATTR" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-inline-attr)
+fi
 PROFILE_OBJ=""
 
 # Both guests use the standard LP64 soft-float ABI. Spike models RV64IM with
@@ -217,6 +253,9 @@ compile_common() {
     local relative
     while IFS= read -r relative || [ -n "$relative" ]; do
       [ -z "$relative" ] && continue
+      if [ "$EVM_GENERATED_INTERP" = on ] && [ "$relative" = "evm/interpreter.sail" ]; then
+        relative="evm/interpreter_generated.sail"
+      fi
       optimized_splice_flags+=(--splice "$C_OPTIMISED_DIR/$relative")
     done < "$C_OPTIMISED_MANIFEST"
     local profile_splice_flags=()
@@ -257,6 +296,11 @@ compile_common() {
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" )
     python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
+    if [ "$EVM_GENERATED_INTERP" = on ]; then
+      grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
+        > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"
+      mv "$OPTIMIZED_STAGED_FFI/sources.list.tmp" "$OPTIMIZED_STAGED_FFI/sources.list"
+    fi
   fi
   # 2. Compile the generated model.  Proven small ranges lower to native
   #    integers; mathematical int/nat values use sail256's exact bounded ABI.

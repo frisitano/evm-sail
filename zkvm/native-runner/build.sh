@@ -66,6 +66,34 @@ CONST_TABLE_FLAGS=()
 if [ "$EVM_CONST_TABLES" = on ]; then
   CONST_TABLE_FLAGS=(--c-const-match-tables)
 fi
+# Experimental: merged register-file struct (--c-register-file); the native
+# test harness keeps debug registers as globals for its diagnostics.
+EVM_REGISTER_FILE="${EVM_REGISTER_FILE:-off}"
+case "$EVM_REGISTER_FILE" in
+  off|on) ;;
+  *) echo "error: EVM_REGISTER_FILE must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_REGISTER_FILE" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-register-file --c-register-file-exclude host/debug_enabled)
+fi
+# Experimental: EVM_GENERATED_INTERP=on keeps the GENERATED Sail interpreter
+# loop (splices evm/interpreter_generated.sail instead of evm/interpreter.sail
+# and drops the hand-written evm/interpreter.c from the staged manifest);
+# EVM_INLINE_ATTR=on passes --c-inline-attr for $[c_inline] dispatch fusion.
+# See zkvm/build.sh for the authoritative description.
+EVM_GENERATED_INTERP="${EVM_GENERATED_INTERP:-off}"
+case "$EVM_GENERATED_INTERP" in
+  off|on) ;;
+  *) echo "error: EVM_GENERATED_INTERP must be off or on" >&2; exit 2 ;;
+esac
+EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
+case "$EVM_INLINE_ATTR" in
+  off|on) ;;
+  *) echo "error: EVM_INLINE_ATTR must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_INLINE_ATTR" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-inline-attr)
+fi
 if [ "$EVM_BUILD_MODE" = standard ] && [ "$EVM_PROFILE" = on ]; then
   echo "error: EVM_PROFILE=on is available only for optimized builds" >&2
   exit 2
@@ -249,6 +277,9 @@ fi
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   while IFS= read -r relative || [ -n "$relative" ]; do
     [ -z "$relative" ] && continue
+    if [ "$EVM_GENERATED_INTERP" = on ] && [ "$relative" = "evm/interpreter.sail" ]; then
+      relative="evm/interpreter_generated.sail"
+    fi
     SAIL_CMD+=(--splice "$C_OPTIMISED_DIR/$relative")
   done < "$C_OPTIMISED_MANIFEST"
   if [ "$EVM_PROFILE" = on ]; then
@@ -268,6 +299,11 @@ fi
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
+  if [ "$EVM_GENERATED_INTERP" = on ]; then
+    grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
+      > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"
+    mv "$OPTIMIZED_STAGED_FFI/sources.list.tmp" "$OPTIMIZED_STAGED_FFI/sources.list"
+  fi
 fi
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. In optimized
