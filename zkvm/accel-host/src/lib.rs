@@ -596,6 +596,135 @@ pub unsafe extern "C" fn zkvm_secp256k1_verify(
     ZKVM_EOK
 }
 
+/* ========================= 256-bit arithmetic ========================= */
+
+/// Host-side provider for the `ffi/zkvm_bigint.h` 256-bit arithmetic
+/// contract: unsigned divrem plus full-width (512-bit product / 257-bit sum)
+/// modular reduction. Operands are `[u64; 4]` limbs, least significant
+/// first. The zero-divisor EVM rules live in the Sail model, so a zero
+/// divisor or modulus here is a caller bug (division panics on it).
+mod u256 {
+    /// `x >= y` over equal-length limb slices, least significant first.
+    fn ge(x: &[u64], y: &[u64]) -> bool {
+        for i in (0..x.len()).rev() {
+            if x[i] != y[i] {
+                return x[i] > y[i];
+            }
+        }
+        true
+    }
+
+    /// `x -= y` over equal-length limb slices; requires `x >= y`.
+    fn sub_assign(x: &mut [u64], y: &[u64]) {
+        let mut borrow = 0u64;
+        for i in 0..x.len() {
+            let (d, b1) = x[i].overflowing_sub(y[i]);
+            let (d, b2) = d.overflowing_sub(borrow);
+            x[i] = d;
+            borrow = (b1 | b2) as u64;
+        }
+        debug_assert_eq!(borrow, 0);
+    }
+
+    /// Bit-serial restoring division of a wide dividend (up to 8 limbs) by a
+    /// nonzero 4-limb divisor: `(quotient, remainder)`. The remainder
+    /// accumulator holds 5 limbs so `r << 1 | bit` (< 2^257) never truncates.
+    pub fn divrem_wide(u: &[u64], v: &[u64; 4]) -> ([u64; 8], [u64; 4]) {
+        assert!(u.len() <= 8 && *v != [0u64; 4]);
+        let mut vx = [0u64; 5];
+        vx[..4].copy_from_slice(v);
+        let mut q = [0u64; 8];
+        let mut r = [0u64; 5];
+        let bits = match u.iter().rposition(|&limb| limb != 0) {
+            Some(top) => top * 64 + 64 - u[top].leading_zeros() as usize,
+            None => 0,
+        };
+        for i in (0..bits).rev() {
+            let mut carry = (u[i / 64] >> (i % 64)) & 1;
+            for limb in r.iter_mut() {
+                let shifted = (*limb << 1) | carry;
+                carry = *limb >> 63;
+                *limb = shifted;
+            }
+            if ge(&r, &vx) {
+                sub_assign(&mut r, &vx);
+                q[i / 64] |= 1 << (i % 64);
+            }
+        }
+        (q, [r[0], r[1], r[2], r[3]])
+    }
+
+    /// Full 512-bit schoolbook product of two 4-limb values.
+    pub fn mul_wide(a: &[u64; 4], b: &[u64; 4]) -> [u64; 8] {
+        let mut out = [0u64; 8];
+        for i in 0..4 {
+            let mut carry = 0u128;
+            for j in 0..4 {
+                carry += a[i] as u128 * b[j] as u128 + out[i + j] as u128;
+                out[i + j] = carry as u64;
+                carry >>= 64;
+            }
+            out[i + 4] = carry as u64;
+        }
+        out
+    }
+
+    /// Full 257-bit sum of two 4-limb values (5 limbs, no truncation).
+    pub fn add_wide(a: &[u64; 4], b: &[u64; 4]) -> [u64; 5] {
+        let mut out = [0u64; 5];
+        let mut carry = 0u64;
+        for i in 0..4 {
+            let (s, c1) = a[i].overflowing_add(b[i]);
+            let (s, c2) = s.overflowing_add(carry);
+            out[i] = s;
+            carry = (c1 | c2) as u64;
+        }
+        out[4] = carry;
+        out
+    }
+}
+
+#[inline]
+unsafe fn limbs4<'a>(p: *const u64) -> &'a [u64; 4] {
+    &*(p as *const [u64; 4])
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn zkvm_u256_divrem(
+    a: *const u64,
+    b: *const u64,
+    quotient: *mut u64,
+    remainder: *mut u64,
+) {
+    let (q, r) = u256::divrem_wide(limbs4(a), limbs4(b));
+    core::ptr::copy_nonoverlapping(q.as_ptr(), quotient, 4);
+    core::ptr::copy_nonoverlapping(r.as_ptr(), remainder, 4);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn zkvm_u256_mulmod(
+    a: *const u64,
+    b: *const u64,
+    n: *const u64,
+    out: *mut u64,
+) {
+    let product = u256::mul_wide(limbs4(a), limbs4(b));
+    let (_, r) = u256::divrem_wide(&product, limbs4(n));
+    core::ptr::copy_nonoverlapping(r.as_ptr(), out, 4);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn zkvm_u256_addmod(
+    a: *const u64,
+    b: *const u64,
+    n: *const u64,
+    out: *mut u64,
+) {
+    let sum = u256::add_wide(limbs4(a), limbs4(b));
+    let (_, r) = u256::divrem_wide(&sum, limbs4(n));
+    core::ptr::copy_nonoverlapping(r.as_ptr(), out, 4);
+}
+
 /* ============================== tests ================================= */
 #[cfg(test)]
 mod tests {
@@ -723,6 +852,79 @@ mod tests {
         let mut a = [0u8; 32];
         unsafe { zkvm_keccak256(pubkey.as_ptr(), 64, a.as_mut_ptr()); }
         assert_eq!(a[12..], hex("7156526fbd7a3c72969b54f64e42c10fbb768c8a")[..]);
+    }
+
+    #[test]
+    fn u256_divrem() {
+        let divrem = |a: [u64; 4], b: [u64; 4]| {
+            let (mut q, mut r) = ([0u64; 4], [0u64; 4]);
+            unsafe { zkvm_u256_divrem(a.as_ptr(), b.as_ptr(), q.as_mut_ptr(), r.as_mut_ptr()) };
+            (q, r)
+        };
+        let max = [u64::MAX; 4];
+        // b = 1: q = a, r = 0
+        assert_eq!(divrem(max, [1, 0, 0, 0]), (max, [0; 4]));
+        // a < b boundary: q = 0, r = a
+        assert_eq!(divrem([5, 0, 0, 0], [6, 0, 0, 0]), ([0; 4], [5, 0, 0, 0]));
+        assert_eq!(divrem([0, 0, 0, 7], [1, 0, 0, 7]), ([0; 4], [0, 0, 0, 7]));
+        // a == b: q = 1, r = 0
+        assert_eq!(divrem(max, max), ([1, 0, 0, 0], [0; 4]));
+        // (2^256 - 1) / 3 = 0x5555..55 exactly (2^256 ≡ 1 mod 3)
+        assert_eq!(divrem(max, [3, 0, 0, 0]), ([0x5555555555555555; 4], [0; 4]));
+        // multi-limb divisor: (2^192 + 5) / 2^128 = 2^64, r = 5
+        assert_eq!(
+            divrem([5, 0, 0, 1], [0, 0, 1, 0]),
+            ([0, 1, 0, 0], [5, 0, 0, 0])
+        );
+        // r < b just below the divisor
+        assert_eq!(
+            divrem([u64::MAX, u64::MAX, 0, 0], [0, 0, 1, 0]),
+            ([0; 4], [u64::MAX, u64::MAX, 0, 0])
+        );
+        // zero dividend
+        assert_eq!(divrem([0; 4], max), ([0; 4], [0; 4]));
+    }
+
+    #[test]
+    fn u256_addmod() {
+        let addmod = |a: [u64; 4], b: [u64; 4], n: [u64; 4]| {
+            let mut out = [0u64; 4];
+            unsafe { zkvm_u256_addmod(a.as_ptr(), b.as_ptr(), n.as_ptr(), out.as_mut_ptr()) };
+            out
+        };
+        let max = [u64::MAX; 4];
+        // n = 1: always 0
+        assert_eq!(addmod(max, max, [1, 0, 0, 0]), [0; 4]);
+        // operands >= n
+        assert_eq!(addmod([10, 0, 0, 0], [11, 0, 0, 0], [7, 0, 0, 0]), [0, 0, 0, 0]);
+        // no 2^256 truncation: (2^256 - 1) + 1 = 2^256 ≡ 2 mod 7 (truncated sum would give 0)
+        assert_eq!(addmod(max, [1, 0, 0, 0], [7, 0, 0, 0]), [2, 0, 0, 0]);
+        // (2^256 - 1) + (2^256 - 1) mod (2^256 - 1) = 0
+        assert_eq!(addmod(max, max, max), [0; 4]);
+        // sum below the modulus passes through
+        assert_eq!(addmod([3, 0, 0, 0], [4, 0, 0, 0], [9, 0, 0, 0]), [7, 0, 0, 0]);
+    }
+
+    #[test]
+    fn u256_mulmod() {
+        let mulmod = |a: [u64; 4], b: [u64; 4], n: [u64; 4]| {
+            let mut out = [0u64; 4];
+            unsafe { zkvm_u256_mulmod(a.as_ptr(), b.as_ptr(), n.as_ptr(), out.as_mut_ptr()) };
+            out
+        };
+        let max = [u64::MAX; 4];
+        // n = 1: always 0
+        assert_eq!(mulmod(max, max, [1, 0, 0, 0]), [0; 4]);
+        // operands >= n
+        assert_eq!(mulmod([10, 0, 0, 0], [11, 0, 0, 0], [7, 0, 0, 0]), [5, 0, 0, 0]);
+        // full 512-bit product: 2^128 * 2^128 = 2^256 ≡ 1 mod (2^256 - 1)
+        // (the 2^256-truncated product would be 0)
+        let two128 = [0, 0, 1, 0];
+        assert_eq!(mulmod(two128, two128, max), [1, 0, 0, 0]);
+        // (2^256 - 1)^2 mod 2^256 - 1 = 0
+        assert_eq!(mulmod(max, max, max), [0; 4]);
+        // product below the modulus passes through
+        assert_eq!(mulmod([3, 0, 0, 0], [4, 0, 0, 0], [13, 0, 0, 0]), [12, 0, 0, 0]);
     }
 
     #[test]
