@@ -112,6 +112,11 @@ if [ "$PLATFORM" = zisk ]; then
     CFLAGS+=(-DEVMSAIL_DEBUG)
   fi
 fi
+# EVM_INTERP=threaded selects the computed-goto interpreter dispatch
+# experiment in the optimized backend; default keeps the switch dispatch.
+if [ "${EVM_INTERP:-switch}" = threaded ]; then
+  CFLAGS+=(-DEVMSAIL_INTERP_THREADED)
+fi
 # EVM_LTO=on compiles every C object as LTO bitcode; cmd_zisk_lib then runs
 # the link-time optimization in a gcc partial link so the final Rust link
 # consumes one ordinary machine-code object (rust-lld cannot read GIMPLE).

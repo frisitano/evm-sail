@@ -250,6 +250,7 @@ static void interpreter_execute_invalid(void)
   EXECUTE(invalid);
 }
 
+#ifndef EVMSAIL_INTERP_THREADED
 static void interpreter_execute_simple(uint8_t opcode)
 {
   if (opcode >= 0x80 && opcode <= 0x8f) {
@@ -543,6 +544,7 @@ static void interpreter_execute_simple(uint8_t opcode)
     return;
   }
 }
+#endif /* !EVMSAIL_INTERP_THREADED */
 
 static Bytes frame_output(void)
 {
@@ -561,6 +563,612 @@ static Bytes frame_output(void)
   }
 }
 
+
+#ifdef EVMSAIL_INTERP_THREADED
+/* Threaded-dispatch experiment: one 256-entry label table replaces the
+ * range-check cascade, the switch bounds test, and the loop-back jump.
+ * Semantics are byte-identical to the switch interpreter below. */
+Bytes interpret(void)
+{
+  frame_stack_reset();
+  current_account_context_enter(message.address);
+
+  static const void *const interp_dispatch[256] = {
+    [0x00] = &&op_00,
+    [0x01] = &&op_01,
+    [0x02] = &&op_02,
+    [0x03] = &&op_03,
+    [0x04] = &&op_04,
+    [0x05] = &&op_05,
+    [0x06] = &&op_06,
+    [0x07] = &&op_07,
+    [0x08] = &&op_08,
+    [0x09] = &&op_09,
+    [0x0a] = &&op_0a,
+    [0x0b] = &&op_0b,
+    [0x0c ... 0x0f] = &&op_invalid,
+    [0x10] = &&op_10,
+    [0x11] = &&op_11,
+    [0x12] = &&op_12,
+    [0x13] = &&op_13,
+    [0x14] = &&op_14,
+    [0x15] = &&op_15,
+    [0x16] = &&op_16,
+    [0x17] = &&op_17,
+    [0x18] = &&op_18,
+    [0x19] = &&op_19,
+    [0x1a] = &&op_1a,
+    [0x1b] = &&op_1b,
+    [0x1c] = &&op_1c,
+    [0x1d] = &&op_1d,
+    [0x1e] = &&op_1e,
+    [0x1f] = &&op_invalid,
+    [0x20] = &&op_20,
+    [0x21 ... 0x2f] = &&op_invalid,
+    [0x30] = &&op_30,
+    [0x31] = &&op_31,
+    [0x32] = &&op_32,
+    [0x33] = &&op_33,
+    [0x34] = &&op_34,
+    [0x35] = &&op_35,
+    [0x36] = &&op_36,
+    [0x37] = &&op_37,
+    [0x38] = &&op_38,
+    [0x39] = &&op_39,
+    [0x3a] = &&op_3a,
+    [0x3b] = &&op_3b,
+    [0x3c] = &&op_3c,
+    [0x3d] = &&op_3d,
+    [0x3e] = &&op_3e,
+    [0x3f] = &&op_3f,
+    [0x40] = &&op_40,
+    [0x41] = &&op_41,
+    [0x42] = &&op_42,
+    [0x43] = &&op_43,
+    [0x44] = &&op_44,
+    [0x45] = &&op_45,
+    [0x46] = &&op_46,
+    [0x47] = &&op_47,
+    [0x48] = &&op_48,
+    [0x49] = &&op_49,
+    [0x4a] = &&op_4a,
+    [0x4b] = &&op_4b,
+    [0x4c ... 0x4f] = &&op_invalid,
+    [0x50] = &&op_50,
+    [0x51] = &&op_51,
+    [0x52] = &&op_52,
+    [0x53] = &&op_53,
+    [0x54] = &&op_54,
+    [0x55] = &&op_55,
+    [0x56] = &&op_56,
+    [0x57] = &&op_57,
+    [0x58] = &&op_58,
+    [0x59] = &&op_59,
+    [0x5a] = &&op_5a,
+    [0x5b] = &&op_5b,
+    [0x5c] = &&op_5c,
+    [0x5d] = &&op_5d,
+    [0x5e] = &&op_5e,
+    [0x5f] = &&op_push,
+    [0x60] = &&op_push,
+    [0x61] = &&op_push,
+    [0x62] = &&op_push,
+    [0x63] = &&op_push,
+    [0x64] = &&op_push,
+    [0x65] = &&op_push,
+    [0x66] = &&op_push,
+    [0x67] = &&op_push,
+    [0x68] = &&op_push,
+    [0x69] = &&op_push,
+    [0x6a] = &&op_push,
+    [0x6b] = &&op_push,
+    [0x6c] = &&op_push,
+    [0x6d] = &&op_push,
+    [0x6e] = &&op_push,
+    [0x6f] = &&op_push,
+    [0x70] = &&op_push,
+    [0x71] = &&op_push,
+    [0x72] = &&op_push,
+    [0x73] = &&op_push,
+    [0x74] = &&op_push,
+    [0x75] = &&op_push,
+    [0x76] = &&op_push,
+    [0x77] = &&op_push,
+    [0x78] = &&op_push,
+    [0x79] = &&op_push,
+    [0x7a] = &&op_push,
+    [0x7b] = &&op_push,
+    [0x7c] = &&op_push,
+    [0x7d] = &&op_push,
+    [0x7e] = &&op_push,
+    [0x7f] = &&op_push,
+    [0x80] = &&op_dup,
+    [0x81] = &&op_dup,
+    [0x82] = &&op_dup,
+    [0x83] = &&op_dup,
+    [0x84] = &&op_dup,
+    [0x85] = &&op_dup,
+    [0x86] = &&op_dup,
+    [0x87] = &&op_dup,
+    [0x88] = &&op_dup,
+    [0x89] = &&op_dup,
+    [0x8a] = &&op_dup,
+    [0x8b] = &&op_dup,
+    [0x8c] = &&op_dup,
+    [0x8d] = &&op_dup,
+    [0x8e] = &&op_dup,
+    [0x8f] = &&op_dup,
+    [0x90] = &&op_swap,
+    [0x91] = &&op_swap,
+    [0x92] = &&op_swap,
+    [0x93] = &&op_swap,
+    [0x94] = &&op_swap,
+    [0x95] = &&op_swap,
+    [0x96] = &&op_swap,
+    [0x97] = &&op_swap,
+    [0x98] = &&op_swap,
+    [0x99] = &&op_swap,
+    [0x9a] = &&op_swap,
+    [0x9b] = &&op_swap,
+    [0x9c] = &&op_swap,
+    [0x9d] = &&op_swap,
+    [0x9e] = &&op_swap,
+    [0x9f] = &&op_swap,
+    [0xa0] = &&op_log,
+    [0xa1] = &&op_log,
+    [0xa2] = &&op_log,
+    [0xa3] = &&op_log,
+    [0xa4] = &&op_log,
+    [0xa5 ... 0xe5] = &&op_invalid,
+    [0xe6] = &&op_ext,
+    [0xe7] = &&op_ext,
+    [0xe8] = &&op_ext,
+    [0xe9 ... 0xef] = &&op_invalid,
+    [0xf0] = &&op_f0,
+    [0xf1] = &&op_f1,
+    [0xf2] = &&op_f2,
+    [0xf3] = &&op_f3,
+    [0xf4] = &&op_f4,
+    [0xf5] = &&op_f5,
+    [0xf6 ... 0xf9] = &&op_invalid,
+    [0xfa] = &&op_fa,
+    [0xfb ... 0xfc] = &&op_invalid,
+    [0xfd] = &&op_fd,
+    [0xfe] = &&op_invalid,
+    [0xff] = &&op_ff,
+  };
+
+  uint8_t opcode;
+  uint32_t immediate_offset;
+  const struct CodeFields *code;
+
+interp_next:
+  if (frame_status.kind != Kind_Running) {
+    Bytes output = frame_output();
+    struct FrameContinuation continuation;
+    memset(&continuation, 0, sizeof(continuation));
+    continuation.kind = (enum kind_FrameContinuation)Kind_Empty;
+    frame_stack_pop(&continuation);
+    if (continuation.kind == Kind_Empty) {
+      return output;
+    }
+    resume_frame(continuation, output);
+    goto interp_next;
+  }
+  code = &frame_code;
+  {
+    uint32_t current = pc;
+    if (current >= code->len) {
+      EXECUTE(stop);
+      goto interp_next;
+    }
+    opcode = code->bytes[current];
+    immediate_offset = current + 1U;
+    pc = immediate_offset;
+  }
+  goto *interp_dispatch[opcode];
+
+  op_push:
+  if (opcode == 0x5f && active_fork() < EVMSAIL_FORK_SHANGHAI) {
+    interpreter_execute_invalid();
+  } else {
+    uint8_t width = (uint8_t)(opcode - 0x5f);
+    pc = immediate_offset + width;
+    interpreter_execute_push(width, read_push(code, immediate_offset, width));
+  }
+  goto interp_next;
+
+  op_ext:
+  if (active_fork() < EVMSAIL_FORK_AMSTERDAM) {
+    goto op_invalid;
+  }
+  {
+    uint8_t immediate = immediate_offset < code->len ? code->bytes[immediate_offset] : 0;
+    bool valid = (opcode == 0xe8 ? (immediate <= 81 || immediate >= 128)
+                                 : (immediate <= 90 || immediate >= 128)) != 0;
+    if (valid) {
+      pc = immediate_offset + 1;
+    }
+    if (opcode == 0xe6) {
+      interpreter_execute_dupn(immediate, valid);
+    } else if (opcode == 0xe7) {
+      interpreter_execute_swapn(immediate, valid);
+    } else {
+      interpreter_execute_exchange(immediate, valid);
+    }
+  }
+  goto interp_next;
+
+  op_dup:
+  interpreter_execute_dup((uint64_t)opcode - 0x7f);
+  goto interp_next;
+
+  op_swap:
+  interpreter_execute_swap((uint64_t)opcode - 0x8f);
+  goto interp_next;
+
+  op_log:
+  interpreter_execute_log((uint8_t)(opcode - 0xa0));
+  goto interp_next;
+
+  op_00:
+
+    EXECUTE(stop);
+    goto interp_next;
+  op_01:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_add);
+    goto interp_next;
+  op_02:
+
+    EXECUTE_BINARY(GAS_LOW, alu_mul);
+    goto interp_next;
+  op_03:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_sub);
+    goto interp_next;
+  op_04:
+
+    EXECUTE_BINARY(GAS_LOW, alu_div);
+    goto interp_next;
+  op_05:
+
+    EXECUTE_BINARY(GAS_LOW, alu_sdiv);
+    goto interp_next;
+  op_06:
+
+    EXECUTE_BINARY(GAS_LOW, alu_mod);
+    goto interp_next;
+  op_07:
+
+    EXECUTE_BINARY(GAS_LOW, alu_smod);
+    goto interp_next;
+  op_08:
+
+    EXECUTE_TERNARY(GAS_MID, alu_addmod);
+    goto interp_next;
+  op_09:
+
+    EXECUTE_TERNARY(GAS_MID, alu_mulmod);
+    goto interp_next;
+  op_0a:
+
+    interpreter_execute_exp();
+    goto interp_next;
+  op_0b:
+
+    EXECUTE_BINARY(GAS_LOW, alu_signextend);
+    goto interp_next;
+  op_10:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_lt);
+    goto interp_next;
+  op_11:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_gt);
+    goto interp_next;
+  op_12:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_slt);
+    goto interp_next;
+  op_13:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_sgt);
+    goto interp_next;
+  op_14:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_eq);
+    goto interp_next;
+  op_15:
+
+    EXECUTE_UNARY(GAS_VERYLOW, alu_iszero);
+    goto interp_next;
+  op_16:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_and);
+    goto interp_next;
+  op_17:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_or);
+    goto interp_next;
+  op_18:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_xor);
+    goto interp_next;
+  op_19:
+
+    EXECUTE_UNARY(GAS_VERYLOW, alu_not);
+    goto interp_next;
+  op_1a:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_byte);
+    goto interp_next;
+  op_1b:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_shl);
+    goto interp_next;
+  op_1c:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_shr);
+    goto interp_next;
+  op_1d:
+
+    EXECUTE_BINARY(GAS_VERYLOW, alu_sar);
+    goto interp_next;
+  op_1e:
+
+    if (active_fork() >= EVMSAIL_FORK_OSAKA) {
+      EXECUTE_UNARY(GAS_LOW, alu_clz);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_20:
+
+    EXECUTE_STACK(keccak256, 2, 1);
+    goto interp_next;
+  op_30:
+
+    EXECUTE_STACK(address, 0, 1);
+    goto interp_next;
+  op_31:
+
+    EXECUTE_STACK(balance, 1, 1);
+    goto interp_next;
+  op_32:
+
+    EXECUTE_STACK(origin, 0, 1);
+    goto interp_next;
+  op_33:
+
+    EXECUTE_STACK(caller, 0, 1);
+    goto interp_next;
+  op_34:
+
+    EXECUTE_STACK(callvalue, 0, 1);
+    goto interp_next;
+  op_35:
+
+    EXECUTE_STACK(calldataload, 1, 1);
+    goto interp_next;
+  op_36:
+
+    EXECUTE_STACK(calldatasize, 0, 1);
+    goto interp_next;
+  op_37:
+
+    EXECUTE_STACK(calldatacopy, 3, 0);
+    goto interp_next;
+  op_38:
+
+    EXECUTE_STACK(codesize, 0, 1);
+    goto interp_next;
+  op_39:
+
+    EXECUTE_STACK(codecopy, 3, 0);
+    goto interp_next;
+  op_3a:
+
+    EXECUTE_STACK(gasprice, 0, 1);
+    goto interp_next;
+  op_3b:
+
+    EXECUTE_STACK(extcodesize, 1, 1);
+    goto interp_next;
+  op_3c:
+
+    EXECUTE_STACK(extcodecopy, 4, 0);
+    goto interp_next;
+  op_3d:
+
+    EXECUTE_STACK(returndatasize, 0, 1);
+    goto interp_next;
+  op_3e:
+
+    EXECUTE_STACK(returndatacopy, 3, 0);
+    goto interp_next;
+  op_3f:
+
+    EXECUTE_STACK(extcodehash, 1, 1);
+    goto interp_next;
+  op_40:
+
+    EXECUTE_STACK(blockhash, 1, 1);
+    goto interp_next;
+  op_41:
+
+    EXECUTE_STACK(coinbase, 0, 1);
+    goto interp_next;
+  op_42:
+
+    EXECUTE_STACK(timestamp, 0, 1);
+    goto interp_next;
+  op_43:
+
+    EXECUTE_STACK(number, 0, 1);
+    goto interp_next;
+  op_44:
+
+    EXECUTE_STACK(prevrandao, 0, 1);
+    goto interp_next;
+  op_45:
+
+    EXECUTE_STACK(gaslimit, 0, 1);
+    goto interp_next;
+  op_46:
+
+    EXECUTE_STACK(chainid, 0, 1);
+    goto interp_next;
+  op_47:
+
+    EXECUTE_STACK(selfbalance, 0, 1);
+    goto interp_next;
+  op_48:
+
+    if (active_fork() >= EVMSAIL_FORK_LONDON) {
+      EXECUTE_STACK(basefee, 0, 1);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_49:
+
+    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+      EXECUTE_STACK(blobhash, 1, 1);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_4a:
+
+    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+      EXECUTE_STACK(blobbasefee, 0, 1);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_4b:
+
+    if (active_fork() >= EVMSAIL_FORK_AMSTERDAM) {
+      EXECUTE_STACK(slotnum, 0, 1);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_50:
+
+    interpreter_execute_pop();
+    goto interp_next;
+  op_51:
+
+    EXECUTE_STACK(mload, 1, 1);
+    goto interp_next;
+  op_52:
+
+    EXECUTE_STACK(mstore, 2, 0);
+    goto interp_next;
+  op_53:
+
+    EXECUTE_STACK(mstore8, 2, 0);
+    goto interp_next;
+  op_54:
+
+    EXECUTE_STACK(sload, 1, 1);
+    goto interp_next;
+  op_55:
+
+    EXECUTE_STACK(sstore, 2, 0);
+    goto interp_next;
+  op_56:
+
+    EXECUTE_STACK(jump, 1, 0);
+    goto interp_next;
+  op_57:
+
+    EXECUTE_STACK(jumpi, 2, 0);
+    goto interp_next;
+  op_58:
+
+    EXECUTE_STACK(pc, 0, 1);
+    goto interp_next;
+  op_59:
+
+    EXECUTE_STACK(msize, 0, 1);
+    goto interp_next;
+  op_5a:
+
+    EXECUTE_STACK(gas, 0, 1);
+    goto interp_next;
+  op_5b:
+
+    EXECUTE(jumpdest);
+    goto interp_next;
+  op_5c:
+
+    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+      EXECUTE_STACK(tload, 1, 1);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_5d:
+
+    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+      EXECUTE_STACK(tstore, 2, 0);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_5e:
+
+    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+      EXECUTE_STACK(mcopy, 3, 0);
+    } else {
+      interpreter_execute_invalid();
+    }
+    goto interp_next;
+  op_f0:
+
+    EXECUTE_STACK_FRAME_ENTRY(create, 3, 1);
+    goto interp_next;
+  op_f1:
+
+    EXECUTE_STACK_FRAME_ENTRY(call, 7, 1);
+    goto interp_next;
+  op_f2:
+
+    EXECUTE_STACK_FRAME_ENTRY(callcode, 7, 1);
+    goto interp_next;
+  op_f3:
+
+    EXECUTE_STACK(return, 2, 0);
+    goto interp_next;
+  op_f4:
+
+    EXECUTE_STACK_FRAME_ENTRY(delegatecall, 6, 1);
+    goto interp_next;
+  op_f5:
+
+    EXECUTE_STACK_FRAME_ENTRY(create2, 4, 1);
+    goto interp_next;
+  op_fa:
+
+    EXECUTE_STACK_FRAME_ENTRY(staticcall, 6, 1);
+    goto interp_next;
+  op_fd:
+
+    EXECUTE_STACK(revert, 2, 0);
+    goto interp_next;
+  op_ff:
+
+    EXECUTE_STACK(selfdestruct, 1, 0);
+    goto interp_next;
+  op_invalid:
+
+    interpreter_execute_invalid();
+    goto interp_next;
+}
+#else
 Bytes interpret(void)
 {
   frame_stack_reset();
@@ -624,3 +1232,4 @@ Bytes interpret(void)
     resume_frame(continuation, output);
   }
 }
+#endif /* EVMSAIL_INTERP_THREADED */
