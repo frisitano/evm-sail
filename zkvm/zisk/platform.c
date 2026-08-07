@@ -38,9 +38,9 @@ void htif_puts(const char *s)
 }
 
 #ifdef EVMSAIL_DEBUG
-extern _Bool zvalidation_failure_present;
-extern uint64_t zvalidation_failure_scope;
-extern int zvalidation_failure_reason;
+extern _Bool validation_failure_present;
+extern uint64_t validation_failure_scope;
+extern int validation_failure_reason;
 
 static char hex_digit(unsigned value)
 {
@@ -50,15 +50,43 @@ static char hex_digit(unsigned value)
 void zisk_report_debug(void)
 {
     char line[] = "validation_failure=0 scope=00 reason=00\n";
-    unsigned scope = (unsigned)zvalidation_failure_scope & 0xffu;
-    unsigned reason = (unsigned)zvalidation_failure_reason & 0xffu;
+    unsigned scope = (unsigned)validation_failure_scope & 0xffu;
+    unsigned reason = (unsigned)validation_failure_reason & 0xffu;
 
-    line[19] = zvalidation_failure_present ? '1' : '0';
+    line[19] = validation_failure_present ? '1' : '0';
     line[27] = hex_digit(scope >> 4);
     line[28] = hex_digit(scope & 0xfu);
     line[37] = hex_digit(reason >> 4);
     line[38] = hex_digit(reason & 0xfu);
     sys_write(2, (const uint8_t *)line, sizeof line - 1);
+    /* ziskemu discards guest stderr and does not propagate the guest exit
+     * status, so append the verdict to the public output where the padding
+     * of the fixed 256-byte ZisK output region makes it directly visible. */
+    {
+        extern void write_output(const uint8_t *output, size_t size);
+        extern _Bool validation_debug_gas_present;
+        extern uint64_t validation_debug_header_gas_actual;
+        extern uint64_t validation_debug_header_gas_expected;
+        extern uint64_t validation_debug_execution_gas;
+        extern uint64_t validation_debug_state_gas;
+        uint64_t gas[4];
+        uint8_t tag[7 + sizeof gas];
+        tag[0] = 0xdb;
+        tag[1] = 0x9a;
+        tag[2] = validation_failure_present ? 1u : 0u;
+        tag[3] = (uint8_t)scope;
+        tag[4] = (uint8_t)reason;
+        tag[5] = validation_debug_gas_present ? 1u : 0u;
+        tag[6] = 0xdb;
+        gas[0] = validation_debug_header_gas_actual;
+        gas[1] = validation_debug_header_gas_expected;
+        gas[2] = validation_debug_execution_gas;
+        gas[3] = validation_debug_state_gas;
+        for (unsigned i = 0; i < sizeof gas; i++) {
+            tag[7 + i] = ((const uint8_t *)gas)[i];
+        }
+        write_output(tag, sizeof tag);
+    }
 }
 #endif
 

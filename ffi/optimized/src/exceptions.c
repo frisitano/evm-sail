@@ -2,7 +2,7 @@
 
 #include "evmsail/spec/lib/ssz/stateless_input.h"
 #include "evmsail/spec/exceptions.h"
-#ifdef EVMSAIL_NATIVE_TEST
+#if defined(EVMSAIL_NATIVE_TEST) || defined(EVMSAIL_DEBUG)
 #include "evmsail/spec/host/debug_enabled.h"
 #else
 #include "evmsail/spec/host/debug_disabled.h"

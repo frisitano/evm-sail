@@ -26,6 +26,14 @@ GUEST_NORETURN void guest_finish(void)
 #ifdef EVMSAIL_NATIVE_TEST
   native_finish();
 #else
+#if defined(EVMSAIL_DEBUG) && defined(EVMSAIL_PLATFORM_ZISK)
+  /* fatal_error terminates here without returning through the Rust
+   * entrypoint, so the debug verdict must be reported before exit. */
+  {
+    extern void zisk_report_debug(void);
+    zisk_report_debug();
+  }
+#endif
   exit(EXIT_SUCCESS);
 #endif
 }
