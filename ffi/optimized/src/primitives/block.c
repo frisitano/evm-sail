@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 
-bool logs_bloom_matches_ref(LogsBloom computed, struct StatelessInputSliceFields reference)
+bool logs_bloom_matches_ref(bytes256 computed, Bytes reference)
 {
   const uint64_t reference_len = reference.len;
   const uint8_t *reference_bytes = reference.bytes;

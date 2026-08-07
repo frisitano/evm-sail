@@ -21,16 +21,15 @@ enum TxType = {
     SetCodeTx,
 }
 
-/*! The canonical EIP-2718 wire discriminant. Keeping the reversible encoding
-    as a mapping gives decoders and encoders one authoritative definition:
-    encoders apply it forwards, while decoders validate and apply it
-    backwards before dispatching on the semantic transaction type. */
-mapping tx_envelope_type : TxType <-> byte = {
-    LegacyTx <-> 0x00,
-    AccessListTx <-> 0x01,
-    FeeMarketTx <-> 0x02,
-    BlobTx <-> 0x03,
-    SetCodeTx <-> 0x04,
+/*! The canonical EIP-2718 wire discriminant. Encoding is total over the
+    closed transaction-type algebra; decoding handles the remaining byte
+    values explicitly at its validation boundary. */
+function tx_envelope_type(t : TxType) -> byte = match t {
+    LegacyTx => 0x00,
+    AccessListTx => 0x01,
+    FeeMarketTx => 0x02,
+    BlobTx => 0x03,
+    SetCodeTx => 0x04,
 }
 
 /*! The two transaction-signature encodings. Legacy transactions use the
@@ -50,36 +49,11 @@ struct TxTypeSemantics = {
 
 /*! Derives the protocol requirements of one transaction envelope. */
 function tx_type_semantics(t : TxType) -> TxTypeSemantics = match t {
-    LegacyTx => struct {
-        minimum_fork = Frontier,
-        signature = LegacySignature,
-        blob = false,
-        set_code = false,
-    },
-    AccessListTx => struct {
-        minimum_fork = Berlin,
-        signature = TypedSignature,
-        blob = false,
-        set_code = false,
-    },
-    FeeMarketTx => struct {
-        minimum_fork = London,
-        signature = TypedSignature,
-        blob = false,
-        set_code = false,
-    },
-    BlobTx => struct {
-        minimum_fork = Cancun,
-        signature = TypedSignature,
-        blob = true,
-        set_code = false,
-    },
-    SetCodeTx => struct {
-        minimum_fork = Prague,
-        signature = TypedSignature,
-        blob = false,
-        set_code = true,
-    },
+    LegacyTx => struct { minimum_fork = Frontier, signature = LegacySignature, blob = false, set_code = false },
+    AccessListTx => struct { minimum_fork = Berlin, signature = TypedSignature, blob = false, set_code = false },
+    FeeMarketTx => struct { minimum_fork = London, signature = TypedSignature, blob = false, set_code = false },
+    BlobTx => struct { minimum_fork = Cancun, signature = TypedSignature, blob = true, set_code = false },
+    SetCodeTx => struct { minimum_fork = Prague, signature = TypedSignature, blob = false, set_code = true },
 }
 
 /*md
@@ -123,6 +97,23 @@ type TransactionInputSlice = {
 
 /*! A collection count whose entries are encoded inside one transaction. */
 type transaction_item_count = range(0, transaction_length_bound)
+
+/*! EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
+    Amsterdam's least expensive authorization costs 7,816 execution gas.
+    Successful transaction validity therefore proves that no executable
+    authorization list can contain more entries than this bound. */
+type prepared_authorization_count_bound : Int = div(eip7825_transaction_gas_limit, 7816)
+type prepared_authorization_count = range(0, prepared_authorization_count_bound)
+
+/*! Authorizations decoded and signature-recovered after transaction validity
+    but before any world-state mutation. The semantic model retains an
+    immutable list. Optimized C represents the same ordered collection as a
+    cursor into a fixed-capacity transaction workspace. */
+$[c_repr { representation = external, name = PreparedAuthorizationList }]
+struct PreparedAuthorizationList = {
+    entries : list(Authorization),
+    count : prepared_authorization_count,
+}
 
 /*! A validated EIP-2930 access-list content span. Entries remain in their
     canonical RLP encoding and are consumed with a cursor when prewarming. */
@@ -227,9 +218,11 @@ type Transaction = {
 
 /*! Packs a transaction whose concrete blob limit is still in scope into the
     existential transaction surface used by envelope dispatch. */
-function pack_transaction forall 'blob_limit, transaction_blob_limit_value('blob_limit). (
-    tx : TransactionFields('blob_limit)
-) -> Transaction = tx
+function pack_transaction forall 'blob_limit, transaction_blob_limit_value('blob_limit). (tx :
+    TransactionFields('blob_limit)) -> (
+    Transaction
+) =
+    tx
 
 /*! The bounded topic operands of one `LOG0`–`LOG4` instruction. Keeping the
     arity in the constructor avoids allocating a Sail list for at most four
@@ -334,13 +327,7 @@ struct ReceiptFields(
 /*! Constructs a receipt while keeping each consumed-gas quantity tied to its
     own dependent index when proof backends pack the result existentially. */
 val receipt_fields : forall 'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
-                          receipt_gas_relation(
-                              'limit,
-                              'regular_limit,
-                              'gas_used,
-                              'execution_gas,
-                              'state_gas,
-                          ). (
+                       receipt_gas_relation('limit, 'regular_limit, 'gas_used, 'execution_gas, 'state_gas). (
         int('limit),
         int('regular_limit),
         TxType,
@@ -349,13 +336,7 @@ val receipt_fields : forall 'limit 'regular_limit 'gas_used 'execution_gas 'stat
         int('execution_gas),
         int('state_gas),
         LogSeriesRef,
-    ) -> ReceiptFields(
-        'limit,
-        'regular_limit,
-        'gas_used,
-        'execution_gas,
-        'state_gas,
-    )
+    ) -> ReceiptFields('limit, 'regular_limit, 'gas_used, 'execution_gas, 'state_gas)
 function receipt_fields(_limit, _regular_limit, tx_type, success, gas_used, execution_gas, state_gas, logs) =
     struct {
         tx_type = tx_type,
@@ -392,13 +373,7 @@ type ReceiptWithin(
 /*! Packs a fully related receipt behind its three hidden gas witnesses at one
     named boundary. */
 val receipt_within : forall 'limit 'regular_limit 'gas_used 'execution_gas 'state_gas,
-                          receipt_gas_relation(
-                              'limit,
-                              'regular_limit,
-                              'gas_used,
-                              'execution_gas,
-                              'state_gas,
-                          ). (
+                       receipt_gas_relation('limit, 'regular_limit, 'gas_used, 'execution_gas, 'state_gas). (
         int('limit),
         int('regular_limit),
         TxType,

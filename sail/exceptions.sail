@@ -94,8 +94,7 @@ enum FatalError = {
 
 /*! Terminal validation failure. C binds this operation to the guest failure
     boundary; semantic extraction retains the explicit non-returning body. */
-val fatal_error = impure { c: "fatal_error" } :
-  FatalError -> unit
+val fatal_error = impure { c: "fatal_error" } : forall ('a : Type). FatalError -> 'a
 
 function fatal_error(_reason) = exit(())
 

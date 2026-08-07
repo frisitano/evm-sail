@@ -7,6 +7,6 @@
 #include <stdint.h>
 
 /* Private rollback write: does not append another undo entry. */
-void transient_storage_restore(AccountId account_id, U256 slot, U256 v);
+void transient_storage_restore(AccountId account_id, u256 slot, u256 v);
 
 #endif

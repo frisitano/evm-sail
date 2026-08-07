@@ -42,13 +42,13 @@ static uint64_t load_le_u64(const uint8_t *bytes)
   return result;
 }
 
-U256 ssz_u256(struct StatelessInputSliceFields input, uint32_t offset)
+u256 ssz_u256(Bytes input, uint32_t offset)
 {
   if (offset > input.len || UINT64_C(32) > input.len - offset) {
     fatal_error(InvalidConfig);
   }
   const uint8_t *source = input.bytes + offset;
-  return (U256){
+  return (u256){
       .limbs =
           {
               load_le_u64(source),
@@ -59,10 +59,9 @@ U256 ssz_u256(struct StatelessInputSliceFields input, uint32_t offset)
   };
 }
 
-static struct StatelessInputSliceFields source_span(struct StatelessInputSliceFields container,
-                                                    uint32_t start, uint32_t stop)
+static Bytes source_span(Bytes container, uint32_t start, uint32_t stop)
 {
-  struct StatelessInputSliceFields result = {
+  Bytes result = {
       .bytes = container.bytes + start,
       .len = stop - start,
   };
@@ -85,8 +84,8 @@ static bool offsets_ordered(const uint32_t *offsets, uint32_t count, uint32_t fi
   return true;
 }
 
-static bool variable_list_ref(struct StatelessInputSliceFields bytes, uint32_t maximum_count,
-                              uint32_t maximum_item_length, struct BoundedSszListRef *result)
+static bool variable_list_ref(Bytes bytes, uint32_t maximum_count, uint32_t maximum_item_length,
+                              struct BoundedSszListRef *result)
 {
   uint32_t count = 0;
   if (bytes.len != 0) {
@@ -108,8 +107,8 @@ static bool variable_list_ref(struct StatelessInputSliceFields bytes, uint32_t m
   return true;
 }
 
-static bool fixed_list_ref(struct StatelessInputSliceFields bytes, uint32_t width,
-                           uint32_t maximum_count, struct BoundedSszListRef *result)
+static bool fixed_list_ref(Bytes bytes, uint32_t width, uint32_t maximum_count,
+                           struct BoundedSszListRef *result)
 {
   if (bytes.len % width != 0) {
     return false;
@@ -124,7 +123,7 @@ static bool fixed_list_ref(struct StatelessInputSliceFields bytes, uint32_t widt
   return true;
 }
 
-struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFields input)
+struct StatelessInputRef decode_stateless_input_ref(Bytes input)
 {
   enum {
     STATELESS_INPUT_FIXED_LENGTH = 18,
@@ -160,7 +159,7 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
   }
   result.protocol = schema_protocol_profile(source[0]);
 
-  const struct StatelessInputSliceFields body = source_span(input, SSZ_BODY, input.len);
+  const Bytes body = source_span(input, SSZ_BODY, input.len);
   const uint8_t *body_source = source + SSZ_BODY;
   const uint32_t body_length = body.len;
   const uint32_t body_offsets[4] = {load_le_u32(body_source), load_le_u32(body_source + 4),
@@ -170,8 +169,7 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
   }
 
   result.new_payload_request = source_span(body, body_offsets[0], body_offsets[1]);
-  const struct StatelessInputSliceFields witness =
-      source_span(body, body_offsets[1], body_offsets[2]);
+  const Bytes witness = source_span(body, body_offsets[1], body_offsets[2]);
   result.chain_config = source_span(body, body_offsets[2], body_offsets[3]);
   result.public_keys = source_span(body, body_offsets[3], body_length);
 
@@ -188,7 +186,7 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
   result.execution_payload =
       source_span(result.new_payload_request, npr_offsets[0], npr_offsets[1]);
   result.versioned_hashes = source_span(result.new_payload_request, npr_offsets[1], npr_offsets[2]);
-  const struct StatelessInputSliceFields requests =
+  const Bytes requests =
       source_span(result.new_payload_request, npr_offsets[2], result.new_payload_request.len);
 
   if (result.execution_payload.len < EXECUTION_PAYLOAD_FIXED_LENGTH) {
@@ -203,9 +201,9 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
     fatal_error(InvalidConfig);
   }
   result.extra_data = source_span(result.execution_payload, payload_offsets[0], payload_offsets[1]);
-  const struct StatelessInputSliceFields transactions =
+  const Bytes transactions =
       source_span(result.execution_payload, payload_offsets[1], payload_offsets[2]);
-  const struct StatelessInputSliceFields withdrawals =
+  const Bytes withdrawals =
       source_span(result.execution_payload, payload_offsets[2], payload_offsets[3]);
   result.block_access_list =
       source_span(result.execution_payload, payload_offsets[3], result.execution_payload.len);
@@ -243,12 +241,9 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
   if (!offsets_ordered(witness_offsets, 3, EXECUTION_WITNESS_FIXED_LENGTH, witness.len)) {
     fatal_error(InvalidConfig);
   }
-  const struct StatelessInputSliceFields witness_state =
-      source_span(witness, witness_offsets[0], witness_offsets[1]);
-  const struct StatelessInputSliceFields witness_codes =
-      source_span(witness, witness_offsets[1], witness_offsets[2]);
-  const struct StatelessInputSliceFields witness_headers =
-      source_span(witness, witness_offsets[2], witness.len);
+  const Bytes witness_state = source_span(witness, witness_offsets[0], witness_offsets[1]);
+  const Bytes witness_codes = source_span(witness, witness_offsets[1], witness_offsets[2]);
+  const Bytes witness_headers = source_span(witness, witness_offsets[2], witness.len);
   if (!variable_list_ref(witness_state, MAX_WITNESS_NODES, MAX_WITNESS_NODE_LENGTH,
                          &result.witness_state) ||
       !variable_list_ref(witness_codes, MAX_WITNESS_CODES, MAX_WITNESS_CODE_LENGTH,
@@ -271,7 +266,7 @@ struct StatelessInputRef decode_stateless_input_ref(struct StatelessInputSliceFi
 }
 
 /* The parameter is StatelessInputSliceLength(44) by type. */
-struct Withdrawal decode_withdrawal(struct StatelessInputSliceFields withdrawal)
+struct Withdrawal decode_withdrawal(Bytes withdrawal)
 {
   struct Withdrawal result;
   const uint8_t *source = withdrawal.bytes;
@@ -285,7 +280,7 @@ struct Withdrawal decode_withdrawal(struct StatelessInputSliceFields withdrawal)
   return result;
 }
 
-Hash32 sha256_request_digest(uint64_t request_type, struct StatelessInputSliceFields request)
+bytes32 sha256_request_digest(uint64_t request_type, Bytes request)
 {
   const uint64_t request_len = request.len;
   uint8_t *preimage = scratch_borrow(request_len + 1);

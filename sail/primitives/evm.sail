@@ -275,15 +275,15 @@ struct TxValidityFields(
 }
 
 val tx_validity_fields : forall 'limit 'regular 'intrinsic_execution 'intrinsic_state 'calldata_floor 'execution 'state,
-                              transaction_initial_gas_relation(
-                                  'limit,
-                                  'regular,
-                                  'intrinsic_execution,
-                                  'intrinsic_state,
-                                  'calldata_floor,
-                                  'execution,
-                                  'state,
-                              ). (
+                           transaction_initial_gas_relation(
+                               'limit,
+                               'regular,
+                               'intrinsic_execution,
+                               'intrinsic_state,
+                               'calldata_floor,
+                               'execution,
+                               'state,
+                           ). (
         address,
         account_nonce,
         TransactionInitialGasFields(
@@ -298,15 +298,7 @@ val tx_validity_fields : forall 'limit 'regular 'intrinsic_execution 'intrinsic_
         word,
         word,
         word,
-    ) -> TxValidityFields(
-        'limit,
-        'regular,
-        'intrinsic_execution,
-        'intrinsic_state,
-        'calldata_floor,
-        'execution,
-        'state,
-    )
+    ) -> TxValidityFields('limit, 'regular, 'intrinsic_execution, 'intrinsic_state, 'calldata_floor, 'execution, 'state)
 function tx_validity_fields(sender, nonce_before, gas, blob_fee, gas_price, priority_fee) =
     struct {
         sender = sender,
@@ -426,25 +418,19 @@ struct TxFrameGasSnapshotFields(
     own index. Keeping this boundary explicit also lets proof backends retain
     the five distinct existential witnesses when the snapshot is packed. */
 val tx_frame_gas_snapshot_fields : forall 'limit 'regular 'calldata_floor 'remaining 'state_used,
-                                        tx_frame_gas_snapshot_relation(
-                                            'limit,
-                                            'regular,
-                                            'calldata_floor,
-                                            'remaining,
-                                            'state_used,
-                                        ). (
+                                     tx_frame_gas_snapshot_relation(
+                                         'limit,
+                                         'regular,
+                                         'calldata_floor,
+                                         'remaining,
+                                         'state_used,
+                                     ). (
         int('limit),
         int('regular),
         int('calldata_floor),
         int('remaining),
         int('state_used),
-    ) -> TxFrameGasSnapshotFields(
-        'limit,
-        'regular,
-        'calldata_floor,
-        'remaining,
-        'state_used,
-    )
+    ) -> TxFrameGasSnapshotFields('limit, 'regular, 'calldata_floor, 'remaining, 'state_used)
 function tx_frame_gas_snapshot_fields(limit, regular, calldata_floor, remaining, state_used) =
     struct {
         admitted_limit = limit,

@@ -58,10 +58,11 @@ if [ "${EVM_BUILD_MODE:-optimized}" = standard ]; then
     "$BUILD/region_access.o" "$BUILD/model_address_result.o"
     "$BUILD/model_frame_stack.o"
   )
-  HOST_SOURCES=(capacity memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output)
+  HOST_SOURCES=(capacity exceptions memory scratch transient_storage state_db stack code_db kernel_state trie_node_db precompiles output)
   for hc in "${HOST_SOURCES[@]}"; do HOST_OBJS+=("$BUILD/$hc.o"); done
 else
   OPTIMIZED_MODEL_MANIFEST="$BUILD/generated/src/spec/sources.list"
+  OPTIMIZED_STAGED_FFI="$BUILD/generated/src/ffi"
   [ -s "$OPTIMIZED_MODEL_MANIFEST" ] || { echo "error: missing generated model manifest" >&2; exit 2; }
   while IFS= read -r relative || [ -n "$relative" ]; do
     [ -z "$relative" ] && continue
@@ -72,12 +73,12 @@ else
   [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
   while IFS= read -r relative || [ -n "$relative" ]; do
     case "$relative" in ''|'#'*) continue ;; esac
-    source="$ROOT/ffi/optimized/src/$relative"
+    source="$OPTIMIZED_STAGED_FFI/$relative"
     [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
     object_name="${relative%.c}"
     object_name="${object_name//\//__}"
     MODEL_BACKEND_OBJS+=("$BUILD/optimized__${object_name}.o")
-  done < "$ROOT/ffi/optimized/sources.list"
+  done < "$OPTIMIZED_STAGED_FFI/sources.list"
 fi
 if [ "${EVM_PROFILE:-off}" = on ]; then HOST_OBJS+=("$BUILD/cycle_scopes.o"); fi
 case "$(uname -s)" in

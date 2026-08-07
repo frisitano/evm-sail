@@ -464,7 +464,7 @@ static bool accelerator_p256_verify_bytes(const uint8_t *bytes, uint64_t len)
 
 /* Sail: yparity is y_parity = range(0, 1)
  * (sail/host/accelerators.sail, sail/primitives/quantities.sail). */
-struct AddressResult precompile_ecrecover_hash_sig(Hash32 hash, uint8_t yparity, U256 r, U256 s)
+struct AddressResult precompile_ecrecover_hash_sig(bytes32 hash, uint8_t yparity, u256 r, u256 s)
 {
   struct AddressResult result = {0};
   uint8_t address[20] = {0};
@@ -475,7 +475,7 @@ struct AddressResult precompile_ecrecover_hash_sig(Hash32 hash, uint8_t yparity,
   memset(&public_key, 0, sizeof public_key);
   sail_word_to_be_bytes(signature.data, r);
   sail_word_to_be_bytes(signature.data + 32, s);
-  memcpy(hash_value.data, hash_bytes_const(&hash), sizeof hash_value.data);
+  memcpy(hash_value.data, bytes32_data(&hash), sizeof hash_value.data);
   bool ok = zkvm_secp256k1_ecrecover(&hash_value, &signature, yparity, &public_key) == ZKVM_EOK;
   if (ok) {
     ok = zkvm_keccak256(public_key.data, sizeof public_key.data, &address_hash) == ZKVM_EOK;

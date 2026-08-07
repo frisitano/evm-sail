@@ -5,11 +5,11 @@ primitives/block.sail
 host/code.sail
 host/output.sail
 kernel/logs.sail
-kernel/storage.sail
 kernel/accounts.sail
 kernel/lifecycle.sail
 evm/machine.sail
 evm/gas.sail
+evm/execute.sail
 evm/interpreter.sail
 evm/transaction.sail
 lib/ssz/stateless_input.sail

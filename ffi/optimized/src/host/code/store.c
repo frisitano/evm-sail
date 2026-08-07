@@ -70,7 +70,7 @@ typedef struct {
   /* Byte location resolved when the row was created. */
   const uint8_t *bytes;
   /* Content key: the keccak-256 digest of the code bytes. */
-  Hash32 code_hash;
+  bytes32 code_hash;
   /* Code length in bytes; real rows are nonzero. */
   uint32_t len;
   /* Completed byte-addressed JUMPDEST analysis for exactly these bytes. */
@@ -78,7 +78,7 @@ typedef struct {
   /* Whether the bytes are a well-formed EIP-7702 delegation designator. */
   uint8_t is_delegation;
   /* Delegate decoded from the designator; zero unless is_delegation. */
-  Address delegate;
+  bytes20 delegate;
 } CodeEntry;
 
 /* Complete code-table allocation, backed by the guest workspace.
@@ -125,7 +125,7 @@ void code_workspace_bind(void)
   code_arena.jumpdests_len = 0;
 }
 
-uint8_t *jumpdest_table_alloc(struct CodeRegionSliceFields code)
+uint8_t *jumpdest_table_alloc(Bytes code)
 {
   const uint64_t len = code.len;
   if (len == 0) {
@@ -159,11 +159,12 @@ uint8_t *code_region_intern_copy(const uint8_t *src, uint32_t len)
   return dst;
 }
 
-static uint64_t code_db_hash(const Hash32 *key)
+static uint64_t code_db_hash(const bytes32 *key)
 {
   uint64_t h = 0xcbf29ce484222325ULL;
-  for (size_t i = 0; i < sizeof(key->bytes); ++i) {
-    h ^= key->bytes[i];
+  const uint8_t *bytes = bytes32_data(key);
+  for (size_t i = 0; i < 32; ++i) {
+    h ^= bytes[i];
     h *= 0x100000001b3ULL;
   }
   return h;
@@ -172,7 +173,7 @@ static uint64_t code_db_hash(const Hash32 *key)
 /* Finds the bucket holding this hash's CodeId, or the empty bucket where it
  * would be inserted. Rows never fill the bucket array, so an unbounded probe
  * chain is a corrupted index. */
-static uint32_t code_bucket_locate(const Hash32 *key)
+static uint32_t code_bucket_locate(const bytes32 *key)
 {
   uint32_t bucket = (uint32_t)(code_db_hash(key) & code_table.bucket_mask);
   for (uint32_t probes = 0; probes < code_table.bucket_count; probes++) {
@@ -191,7 +192,7 @@ static uint32_t code_bucket_locate(const Hash32 *key)
   GUEST_ABORT();
 }
 
-static const CodeEntry *code_db_get(const Hash32 *key)
+static const CodeEntry *code_db_get(const bytes32 *key)
 {
   const CodeId id = code_table.buckets[code_bucket_locate(key)];
   return id == CODE_ID_NONE ? NULL : &code_table.entries[id];
@@ -217,16 +218,12 @@ void code_db_reset(void)
 }
 #endif
 
-static bool hash32_is_zero(const Hash32 *h)
+static bool hash32_is_zero(const bytes32 *h)
 {
-  uint8_t combined = 0;
-  for (size_t i = 0; i < sizeof(h->bytes); ++i) {
-    combined |= h->bytes[i];
-  }
-  return combined == 0;
+  return (h->lanes[0] | h->lanes[1] | h->lanes[2] | h->lanes[3]) == UINT64_C(0);
 }
 
-static bool code_keccak_bytes(const uint8_t *src, size_t len, Hash32 *key)
+static bool code_keccak_bytes(const uint8_t *src, size_t len, bytes32 *key)
 {
   zkvm_keccak256_hash digest;
   _Static_assert(sizeof(*key) == sizeof(zkvm_keccak256_hash),
@@ -240,10 +237,10 @@ static bool code_keccak_bytes(const uint8_t *src, size_t len, Hash32 *key)
 
 /* Content-address direct code and JUMPDEST spans. CodeId is allocated only
  * for a new hash-table row and stays private to this file. */
-static Hash32 code_db_store_view(const uint8_t *bytes, uint32_t len, uint8_t *jumpdests)
+static bytes32 code_db_store_view(const uint8_t *bytes, uint32_t len, uint8_t *jumpdests)
 {
   static const uint8_t empty = 0;
-  Hash32 result = {{0}};
+  bytes32 result = {{0}};
   if (len == 0) {
     if (bytes == NULL && jumpdests == NULL) {
       (void)code_keccak_bytes(&empty, 0, &result);
@@ -284,7 +281,7 @@ static Hash32 code_db_store_view(const uint8_t *bytes, uint32_t len, uint8_t *ju
   return result;
 }
 
-Hash32 code_db_store_indexed(struct CodeFields code)
+bytes32 code_db_store_indexed(struct CodeFields code)
 {
   return code_db_store_view(code.bytes, code.len, code.jumpdests);
 }
@@ -295,7 +292,7 @@ Hash32 code_db_store_indexed(struct CodeFields code)
  * Amsterdam's EIP-8024 immediate byte is skipped only when valid; an invalid
  * immediate remains the next opcode.
  */
-static uint8_t *code_db_analyze_region(struct CodeRegionSliceFields code, bool amsterdam_or_later)
+static uint8_t *code_db_analyze_region(Bytes code, bool amsterdam_or_later)
 {
   const uint64_t len = code.len;
   if (len == 0) {
@@ -340,7 +337,7 @@ static uint8_t *code_db_analyze_region(struct CodeRegionSliceFields code, bool a
 
 /* Sail-facing analysis of a nonempty code region; analysis failure on a
  * nonempty region is workspace exhaustion and fails closed. */
-uint8_t *code_db_analyze_indexed(struct CodeRegionSliceFields code, bool amsterdam_or_later)
+uint8_t *code_db_analyze_indexed(Bytes code, bool amsterdam_or_later)
 {
   uint8_t *jumpdest_ref = code_db_analyze_region(code, amsterdam_or_later);
   if (code.len != 0 && !jumpdest_ref) {
@@ -360,15 +357,15 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len, bool amster
     return true;
   }
   const uint32_t code_len = (uint32_t)len;
-  const struct CodeRegionSliceFields code = {
-      .bytes = sail_read_only_bytes(src),
+  const Bytes code = {
+      .bytes = src,
       .len = code_len,
   };
   uint8_t *jumpdests = code_db_analyze_region(code, amsterdam_or_later);
   if (!jumpdests) {
     return false;
   }
-  const Hash32 key = code_db_store_view(src, code_len, jumpdests);
+  const bytes32 key = code_db_store_view(src, code_len, jumpdests);
   return (!hash32_is_zero(&key)) != 0;
 }
 
@@ -376,7 +373,7 @@ bool code_db_insert_analyzed_bytes(const uint8_t *src, uint64_t len, bool amster
 /* Return the code region and its associated JUMPDEST table as one invariant.
  * the selected model code adapter assembles the generated Code result. */
 
-bool code_db_lookup_view(Hash32 h, const uint8_t **bytes, uint32_t *len, uint8_t **jumpdests)
+bool code_db_lookup_view(bytes32 h, const uint8_t **bytes, uint32_t *len, uint8_t **jumpdests)
 {
   const CodeId id = code_table.buckets[code_bucket_locate(&h)];
   if (id == CODE_ID_NONE) {
@@ -398,7 +395,7 @@ bool code_db_lookup_view(Hash32 h, const uint8_t **bytes, uint32_t *len, uint8_t
 /* EIP-7702 delegation probe in one call (this runs on every CALL-family
  * target). The classification was computed when the row was stored, so the
  * probe is a table lookup with no byte access. */
-struct AddressResult code_db_read_delegation(Hash32 h)
+struct AddressResult code_db_read_delegation(bytes32 h)
 {
   struct AddressResult result = {0};
   const CodeEntry *e = code_db_get(&h);

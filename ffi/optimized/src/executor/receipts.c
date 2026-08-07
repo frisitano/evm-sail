@@ -51,7 +51,7 @@ void receipt_table_reset(void)
   receipt_table.bytes_length = 0;
 }
 
-void receipt_table_push(uint32_t index, struct ScratchSliceFields value)
+void receipt_table_push(uint32_t index, Bytes value)
 {
   const uint64_t length = value.len;
   const uint8_t *source = value.bytes;
@@ -86,12 +86,12 @@ bool receipt_record_span(uint64_t index, const uint8_t **bytes, uint64_t *length
   return true;
 }
 
-Hash32 receipt_table_root(uint32_t count)
+bytes32 receipt_table_root(uint32_t count)
 {
   return mpt_receipt_table_root(count);
 }
 
-bool block_logs_bloom_matches(struct StatelessInputSliceFields reference)
+bool block_logs_bloom_matches(Bytes reference)
 {
   return receipt_runtime_block_bloom_matches(reference.bytes, reference.len);
 }

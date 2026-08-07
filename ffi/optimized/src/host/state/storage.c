@@ -28,14 +28,14 @@
 /* ======================================================================== */
 
 typedef struct {
-  U256 slot;
+  u256 slot;
   uint32_t warm_epoch;
 } StorageSchema;
 
 typedef struct {
   /* Immutable authenticated identity. The terminal belongs to the owning
    * account's storage-witness arena; encoded bytes remain in stateless input. */
-  Hash32 secure_key;
+  bytes32 secure_key;
   NodeId terminal_node;
   uint8_t prestate_exists;
 } StorageTrieBinding;
@@ -52,7 +52,7 @@ static StorageTable storage_table;
 static const StorageId STORAGE_NO_ROW = UINT32_MAX;
 static StorageId storage_schema_active_begin = 0;
 
-static StorageId lookup_storage_id(AccountId account_id, const U256 *slot)
+static StorageId lookup_storage_id(AccountId account_id, const u256 *slot)
 {
   StorageId begin;
   uint32_t count;
@@ -68,7 +68,7 @@ static StorageId lookup_storage_id(AccountId account_id, const U256 *slot)
 /* StorageIds are append-stable and grouped into the contiguous interval owned
  * by the active AccountEntry. BAL preload is the sole construction phase; the
  * executor loader rejects duplicate slots by their expected StorageId. */
-StorageId storage_schema_insert(AccountId account_id, const U256 *slot, const Hash32 *secure_key)
+StorageId storage_schema_insert(AccountId account_id, const u256 *slot, const bytes32 *secure_key)
 {
   if (account_id == ACCOUNT_ID_NONE || account_id >= account_id_count()) {
     GUEST_ABORT();
@@ -99,7 +99,7 @@ StorageId storage_schema_insert(AccountId account_id, const U256 *slot, const Ha
 
 /* Execution and BAL history operate only over the sealed, block-local
  * schema. A missing account/slot pair is therefore a BAL violation. */
-StorageId get_storage_id(AccountId account_id, const U256 *slot)
+StorageId get_storage_id(AccountId account_id, const u256 *slot)
 {
   const StorageId id = lookup_storage_id(account_id, slot);
   if (id == STORAGE_NO_ROW) {
@@ -123,26 +123,41 @@ void storage_schema_account_end(AccountId id)
 /* Construction ordering is owned by the single executor BAL loader. */
 void storage_schema_seal(void) {}
 
-bool storage_is_warm(Address address, const U256 slot)
+StorageId storage_resolve_slot(const u256 slot)
 {
-  const AccountId account_id = lookup_account_id(&address);
-  if (account_id == ACCOUNT_ID_NONE) {
-    return false;
-  }
-  const StorageId storage_id = lookup_storage_id(account_id, &slot);
+  const AccountId account_id = current_account_context_id();
+  return lookup_storage_id(account_id, &slot);
+}
+
+bool storage_id_is_warm(StorageId storage_id)
+{
   if (storage_id == STORAGE_NO_ROW) {
     return false;
   }
   return storage_table.schema[storage_id].warm_epoch >= current_warm_epoch;
 }
 
-void storage_mark_warm(Address address, const U256 slot)
+void storage_mark_warm(bytes20 address, const u256 slot)
 {
   const AccountId account_id = lookup_account_id(&address);
   if (account_id == ACCOUNT_ID_NONE) {
     return;
   }
   const StorageId storage_id = lookup_storage_id(account_id, &slot);
+  if (storage_id == STORAGE_NO_ROW) {
+    return;
+  }
+
+  uint32_t *warm_epoch = &storage_table.schema[storage_id].warm_epoch;
+  if (*warm_epoch < current_warm_epoch) {
+    const uint32_t prior_epoch = *warm_epoch;
+    state_journal_push_warm_storage(storage_id, prior_epoch);
+    *warm_epoch = current_warm_epoch;
+  }
+}
+
+void storage_id_mark_warm(StorageId storage_id)
+{
   if (storage_id == STORAGE_NO_ROW) {
     return;
   }
@@ -165,7 +180,7 @@ uint32_t storage_id_count(void)
   return storage_table.n;
 }
 
-const U256 *storage_id_slot(StorageId id)
+const u256 *storage_id_slot(StorageId id)
 {
   return &storage_table.schema[id].slot;
 }
@@ -196,14 +211,14 @@ void storage_tx_reset(void)
   }
 }
 
-void storage_tx_clear(Address a)
+void storage_tx_clear(bytes20 a)
 {
   const AccountId account_id = get_account_id(&a);
   account_clear_storage_generation(account_id);
 }
 
 /* read member: fresh binds curr == orig = value; existing is only marked */
-void storage_block_initialize(AccountId account_id, StorageId storage_id, U256 value,
+void storage_block_initialize(AccountId account_id, StorageId storage_id, u256 value,
                               NodeId terminal_node, bool prestate_exists)
 {
   StorageState *state = &storage_table.states[storage_id];
@@ -221,11 +236,10 @@ void storage_block_initialize(AccountId account_id, StorageId storage_id, U256 v
 }
 
 /* Returns the transaction-start/committed view used after BAL accounting. */
-bool storage_block_view(AccountId account_id, const U256 *slot, StorageView *view)
+bool storage_block_view(AccountId account_id, StorageId storage_id, StorageView *view)
 {
   const StorageGeneration original_generation =
       account_transaction_original_storage_generation(account_id);
-  const StorageId storage_id = lookup_storage_id(account_id, slot);
   if (storage_id == STORAGE_NO_ROW) {
     return false;
   }
@@ -238,8 +252,8 @@ bool storage_block_view(AccountId account_id, const U256 *slot, StorageView *vie
   const StorageGeneration visible_generation =
       (int)active ? state->transaction_original_generation : state->storage_generation;
   if (visible_generation != original_generation) {
-    view->current = (U256){{0}};
-    view->original = (U256){{0}};
+    view->current = (u256){{0}};
+    view->original = (u256){{0}};
     return true;
   }
   view->current = (int)active ? state->transaction_original : state->current;
@@ -250,13 +264,12 @@ bool storage_block_view(AccountId account_id, const U256 *slot, StorageView *vie
 /* Returns an active transaction value. A row invalidated by a fresh storage
  * generation is reported separately so the kernel can record the BAL read
  * before resolving the semantic value to zero. */
-StorageViewStatus storage_transaction_view(AccountId account_id, const U256 *slot,
+StorageViewStatus storage_transaction_view(AccountId account_id, StorageId storage_id,
                                            StorageView *view)
 {
   const StorageGeneration generation = account_storage_generation(account_id);
   const StorageGeneration original_generation =
       account_transaction_original_storage_generation(account_id);
-  const StorageId storage_id = lookup_storage_id(account_id, slot);
   if (storage_id != STORAGE_NO_ROW) {
     const StorageState *state = &storage_table.states[storage_id];
     if (state->transaction_epoch == current_warm_epoch) {
@@ -274,12 +287,11 @@ StorageViewStatus storage_transaction_view(AccountId account_id, const U256 *slo
 /* Write the active generation directly. Sail supplies the transaction-start
  * original from the preceding semantic SLOAD. Rollback records only fields
  * whose values actually change. */
-void host_storage_update(Address a, U256 s, U256 v, U256 orig)
+void storage_update_by_id(StorageId storage_id, u256 v, u256 orig)
 {
-  const AccountId account_id = get_account_id(&a);
+  const AccountId account_id = current_account_context_id();
   account_transaction_touch(account_id);
   const StorageGeneration generation = account_storage_generation(account_id);
-  const StorageId storage_id = lookup_storage_id(account_id, &s);
   if (storage_id == STORAGE_NO_ROW) {
     fatal_error(InvalidBlockAccessList);
   }
@@ -302,7 +314,7 @@ void host_storage_update(Address a, U256 s, U256 v, U256 orig)
   }
 }
 
-void storage_value_restore(StorageId id, U256 prior)
+void storage_value_restore(StorageId id, u256 prior)
 {
   storage_table.states[id].current = prior;
 }
@@ -322,7 +334,7 @@ void storage_transaction_forget(StorageId id)
 
 /* The account's committed storage generation is switched by account merge.
  * Rows from older generations become invisible without a range scan. */
-void storage_block_clear(Address a)
+void storage_block_clear(bytes20 a)
 {
   (void)get_account_id(&a);
 }
@@ -334,7 +346,7 @@ void storage_block_clear(Address a)
 /* EELS account_has_storage: a nonempty write map in either the surviving
    transaction generation or the cumulative block overlay counts as storage.
    The authenticated pre-state root is checked in Sail. */
-bool storage_has_writes(Address a)
+bool storage_has_writes(bytes20 a)
 {
   const AccountId account_id = get_account_id(&a);
   const StorageGeneration generation = account_storage_generation(account_id);
@@ -361,7 +373,7 @@ uint32_t storage_trie_candidates(AccountId account_id, StorageId *begin,
 }
 
 bool storage_trie_binding_order_key(StorageId storage_id, StorageGeneration generation,
-                                    NodeId *terminal_node, Hash32 *secure_key)
+                                    NodeId *terminal_node, bytes32 *secure_key)
 {
   const StorageTrieBinding *binding = &storage_table.trie_bindings[storage_id];
   if (binding->terminal_node == EVMSAIL_NODE_ID_UNLINKED ||
@@ -421,14 +433,14 @@ void storage_transaction_merge(uint32_t current_transaction_epoch)
       const StorageSchema *schema = &storage_table.schema[storage_id];
       StorageState *state = &storage_table.states[storage_id];
       const bool active = state->transaction_epoch == current_warm_epoch;
-      U256 original_value = {{0}};
+      u256 original_value = {{0}};
       if (active) {
         original_value = state->transaction_original;
       } else if (state->storage_generation == original_generation) {
         original_value = state->current;
       }
-      const U256 final_value =
-          state->storage_generation == final_generation ? state->current : (U256){{0}};
+      const u256 final_value =
+          state->storage_generation == final_generation ? state->current : (u256){{0}};
       if (word_equal(&final_value, &original_value)) {
         continue;
       }

@@ -6,7 +6,7 @@
  * writes each complete preimage once into borrowed shared scratch.
  */
 
-val optimized_tx_signing_hash = impure { c: "tx_signing_hash" } : (byte, StatelessInputSlice, word) -> hash
+val tx_signing_hash_for_envelope = impure { c: "tx_signing_hash" } : (byte, StatelessInputSlice, word) -> hash
 
 function tx_signing_hash(t : TxType, content_src : StatelessInputSlice, v : word) -> hash =
-    optimized_tx_signing_hash(tx_envelope_type(t), content_src, v)
+    tx_signing_hash_for_envelope(tx_envelope_type(t), content_src, v)

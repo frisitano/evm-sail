@@ -58,7 +58,7 @@ bool output_buffer_store_bytes(const uint8_t *source, uint64_t len) {
   return true;
 }
 
-bool output_buffer_store_word(const sail_u256 word) {
+bool output_buffer_store_word(const u256 word) {
   if (!reserve(32)) {
     buffer.length = 0;
     return false;
@@ -68,8 +68,8 @@ bool output_buffer_store_word(const sail_u256 word) {
   return true;
 }
 
-bool output_buffer_store_words(const sail_u256 first,
-                               const sail_u256 second) {
+bool output_buffer_store_words(const u256 first,
+                               const u256 second) {
   if (!reserve(64)) {
     buffer.length = 0;
     return false;

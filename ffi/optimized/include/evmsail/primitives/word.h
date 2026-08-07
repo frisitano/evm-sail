@@ -9,7 +9,7 @@
 /*
  * Optimized-C refinements of the direct endian-conversion equations in
  * prelude.sail. Fixed byte vectors use canonical protocol order, while
- * U256 limbs are least-significant first. Keeping these definitions in
+ * u256 limbs are least-significant first. Keeping these definitions in
  * the generated model translation unit lets ordinary C optimization inline
  * every load/store into its caller.
  */
@@ -33,12 +33,14 @@ static inline void store_be32(uint8_t bytes[4], uint32_t value)
   bytes[3] = (uint8_t)value;
 }
 
-static inline Address address_from_word(U256 value)
+static inline bytes20 address_from_word(u256 value)
 {
-  Address result;
-  store_be32(result.bytes, (uint32_t)value.limbs[2]);
-  store_be64(result.bytes + 4, value.limbs[1]);
-  store_be64(result.bytes + 12, value.limbs[0]);
+  bytes20 result = {{0}};
+  result.lanes[0] = (uint64_t)__builtin_bswap32((uint32_t)value.limbs[2]) |
+                    ((__builtin_bswap64(value.limbs[1]) & UINT64_C(0xffffffff)) << 32);
+  result.lanes[1] = (__builtin_bswap64(value.limbs[1]) >> 32) |
+                    ((__builtin_bswap64(value.limbs[0]) & UINT64_C(0xffffffff)) << 32);
+  result.lanes[2] = __builtin_bswap64(value.limbs[0]) >> 32;
   return result;
 }
 

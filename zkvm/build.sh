@@ -43,6 +43,7 @@ C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 OPTIMIZED_PACKAGE="evmsail"
 OPTIMIZED_GENERATED="$BUILD/generated"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
+OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -79,7 +80,7 @@ FFI_ROOT="$ROOT/ffi"
 if [ -z "${GUEST:-}" ]; then
   MODEL_FFI="$FFI_ROOT/optimized"
   MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
-  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
+  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$OPTIMIZED_STAGED_FFI")
 else
   MODEL_FFI="$FFI_ROOT/spec"
   MODEL_SOURCE="$BUILD/zkvm_block.c"
@@ -201,6 +202,7 @@ compile_common() {
         --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h \
         --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h \
         --c-optimized-external-type OutputSliceFields=evmsail/host/types.h \
+        --c-optimized-external-type PreparedAuthorizationList=evmsail/host/types.h \
         --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct \
         --c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct \
         --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct \
@@ -210,11 +212,14 @@ compile_common() {
         --c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct \
         --c-preserve main --c-preserve resume_frame \
         --c-preserve validation_debug_record --c-preserve write_invalid_result \
+        --c-preserve sload_cost --c-preserve sstore_sentry_cost \
+        --c-preserve sstore_costs \
         --c-specialize-log "${MODEL_INCLUDE_FLAGS[@]}" \
         "${optimized_splice_flags[@]}" \
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" )
+    python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
   fi
   # 2. Compile the generated model.  Proven small ranges lower to native
   #    integers; mathematical int/nat values use sail256's exact bounded ABI.
@@ -252,7 +257,7 @@ compile_common() {
   if [ -z "${GUEST:-}" ]; then
     while IFS= read -r relative || [ -n "$relative" ]; do
       case "$relative" in ''|'#'*) continue ;; esac
-      local source="$MODEL_FFI/src/$relative"
+      local source="$OPTIMIZED_STAGED_FFI/$relative"
       [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
       local object_name="${relative%.c}"
       object_name="${object_name//\//__}"
@@ -261,7 +266,7 @@ compile_common() {
           -Wno-unused "$MODEL_HEADER_FLAG" \
           -c "$source" -o "$object"
       MODEL_BACKEND_OBJS+=("$object")
-    done < "$MODEL_FFI/sources.list"
+    done < "$OPTIMIZED_STAGED_FFI/sources.list"
   else
     local source_and_name source object
     local -a backend_sources=(

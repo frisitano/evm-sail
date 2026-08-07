@@ -21,6 +21,6 @@ const uint8_t *evm_memory_base(void);
 uint64_t evm_memory_capacity(void);
 uint8_t *evm_memory_write_region(uint64_t off, uint64_t len);
 unit mem_move(uint64_t dst, uint64_t src, uint64_t len);
-sail_u256 mem_load_word(uint64_t off);
-unit mem_store_word(uint64_t off, const sail_u256 w);
+u256 mem_load_word(uint64_t off);
+unit mem_store_word(uint64_t off, const u256 w);
 #endif

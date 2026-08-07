@@ -6,6 +6,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-uint8_t *jumpdest_table_alloc(struct CodeRegionSliceFields code);
+uint8_t *jumpdest_table_alloc(Bytes code);
 
 #endif

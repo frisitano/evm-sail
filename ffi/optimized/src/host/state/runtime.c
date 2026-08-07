@@ -33,7 +33,7 @@ void warm_reset(uint32_t current_transaction_epoch)
 /* --------------------- EIP-7702 authority tracker ---------------------- */
 
 typedef struct {
-  Address key;
+  bytes20 key;
   uint32_t epoch;
   uint8_t originally_delegated;
   uint8_t delegation_set;
@@ -43,11 +43,12 @@ static auth_tracker_entry *auth_tracker;
 static uint32_t auth_tracker_limit;
 static uint32_t auth_tracker_epoch = 1U;
 
-static uint64_t auth_tracker_hash(const Address *a)
+static uint64_t auth_tracker_hash(const bytes20 *a)
 {
   uint64_t h = UINT64_C(1469598103934665603);
+  const uint8_t *bytes = bytes20_data(a);
   for (unsigned i = 0; i < 20; ++i) {
-    h ^= a->bytes[i];
+    h ^= bytes[i];
     h *= UINT64_C(1099511628211);
   }
   h ^= h >> 32;
@@ -56,7 +57,7 @@ static uint64_t auth_tracker_hash(const Address *a)
   return h;
 }
 
-static auth_tracker_entry *auth_tracker_find(const Address *key, int insert)
+static auth_tracker_entry *auth_tracker_find(const bytes20 *key, int insert)
 {
   uint32_t slot = (uint32_t)auth_tracker_hash(key) & (auth_tracker_limit - 1);
   for (;;) {
@@ -78,7 +79,7 @@ static auth_tracker_entry *auth_tracker_find(const Address *key, int insert)
   }
 }
 
-void authorization_tracker_reset(uint32_t count_hint)
+void authorization_tracker_reset(uint16_t count_hint)
 {
   uint64_t need = count_hint < 8 ? 16 : UINT64_C(2) * count_hint;
   uint32_t cap = 16;
@@ -93,24 +94,24 @@ void authorization_tracker_reset(uint32_t count_hint)
   }
 }
 
-bool authorization_tracker_seen(Address authority)
+bool authorization_tracker_seen(bytes20 authority)
 {
   return auth_tracker_find(&authority, 0) != NULL;
 }
 
-bool authorization_tracker_originally_delegated(Address authority)
+bool authorization_tracker_originally_delegated(bytes20 authority)
 {
   auth_tracker_entry *entry = auth_tracker_find(&authority, 0);
   return (entry != NULL && entry->originally_delegated != 0) != 0;
 }
 
-bool authorization_tracker_delegation_set(Address authority)
+bool authorization_tracker_delegation_set(bytes20 authority)
 {
   auth_tracker_entry *entry = auth_tracker_find(&authority, 0);
   return (entry != NULL && entry->delegation_set != 0) != 0;
 }
 
-void authorization_tracker_commit(Address authority, bool originally_delegated,
+void authorization_tracker_commit(bytes20 authority, bool originally_delegated,
                                   bool sets_delegation)
 {
   auth_tracker_entry *entry = auth_tracker_find(&authority, 1);

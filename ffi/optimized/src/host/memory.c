@@ -78,7 +78,7 @@ void mem_clear(void)
  * MEMORY_MAXDEPTH. The optimized Sail boundary represents the new empty
  * frame directly as a NULL, zero-length slice; its arena pointer is minted by
  * mem_expand only if the frame later establishes memory. */
-struct EvmMemorySliceFields mem_frame_enter_slice(void)
+Bytes mem_frame_enter_slice(void)
 {
   if (h_top + 1 >= MEMORY_MAXDEPTH) {
     GUEST_ABORT();
@@ -86,7 +86,7 @@ struct EvmMemorySliceFields mem_frame_enter_slice(void)
   h_top++;
   f_base[h_top] = f_base[h_top - 1] + f_len[h_top - 1];
   f_len[h_top] = 0;
-  return (struct EvmMemorySliceFields){.bytes = NULL, .len = 0};
+  return (Bytes){.bytes = NULL, .len = 0};
 }
 
 /* leave a sub-call: pop the checkpoint. The dead frame's bytes sit above the
@@ -137,7 +137,7 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len)
 /* MLOAD: the 32-byte big-endian word at off. No establishment -- reads past
  * the extent are zeros, and charge_expansion precedes every MLOAD so the
  * gas-side watermark already covers the range. */
-U256 mem_load_word(uint32_t off)
+u256 mem_load_word(uint32_t off)
 {
   uint64_t offset = off;
   uint8_t buf[32];
@@ -149,7 +149,7 @@ U256 mem_load_word(uint32_t off)
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
-void mem_store_word(uint32_t off, U256 w)
+void mem_store_word(uint32_t off, u256 w)
 {
   uint8_t buf[32];
   sail_word_to_be_bytes(buf, w);

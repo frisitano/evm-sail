@@ -39,7 +39,7 @@ static void account_from_view(struct Account *account, const AccountView *view)
   account->selfdestructed = view->selfdestructed;
 }
 
-bool account_preload(Hash32 parent_state_root, AccountId account_id, Hash32 address_hash,
+bool account_preload(bytes32 parent_state_root, AccountId account_id, bytes32 address_hash,
                      struct Account *account, NodeId *storage_root_node)
 {
   *account = empty_account();
@@ -62,7 +62,7 @@ bool account_preload(Hash32 parent_state_root, AccountId account_id, Hash32 addr
   return true;
 }
 
-struct Account k_aload(Hash32 parent_state_root, Address address)
+struct Account k_aload(bytes32 parent_state_root, bytes20 address)
 {
   (void)parent_state_root;
   struct Account account = empty_account();
@@ -81,14 +81,14 @@ struct Account k_aload(Hash32 parent_state_root, Address address)
   return account;
 }
 
-void store_account(Address address, struct Account account)
+void store_account(bytes20 address, struct Account account)
 {
   host_account_update(address, account.info.nonce, account.info.balance, account.info.code_hash,
                       account.present, account.storage_cleared, account.created,
                       account.selfdestructed);
 }
 
-void store_account_info(Address address, struct Account account, struct AccountInfo info)
+void store_account_info(bytes20 address, struct Account account, struct AccountInfo info)
 {
   const bool empty = account_fields_empty(info.nonce, &info.balance, &info.code_hash);
   if (empty) {

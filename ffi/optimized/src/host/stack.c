@@ -2,13 +2,14 @@
  *
  * The stack was a Sail list(word): every PUSH heap-allocated a cons cell (a
  * malloc per stack operation, millions per block). Here each call frame has a
- * flat array of U256 rows with O(1) push/pop/peek/set; the per-depth frames
+ * flat array of u256 rows with O(1) push/pop/peek/set; the per-depth frames
  * are bound once to the guest workspace and reused across calls, so execution
- * performs no allocation. Frames form a stack: stack_enter_frame on call,
- * stack_leave_frame on return, stack_reset per transaction.
+ * performs no allocation. Frames form a stack:
+ * operand_stack_push_empty_frame on call, operand_stack_pop_frame on return,
+ * and stack_reset per transaction.
  *
- * Words cross both FFIs as inferred inline U256 values and are stored as
- * U256 rows directly; limbs[0] is the least-significant limb.
+ * Words cross both FFIs as inferred inline u256 values and are stored as
+ * u256 rows directly; limbs[0] is the least-significant limb.
  *
  * Bounds policy: the EVM's protocol limits (1024-word stack, 1024 call
  * depth) are enforced by the Sail EVM layer before these calls, so the host
@@ -26,7 +27,7 @@
 #define EVM_STACK_LIMIT 1024u
 
 typedef struct {
-  U256 words[GUEST_OPERAND_FRAME_WORDS];
+  u256 words[GUEST_OPERAND_FRAME_WORDS];
   uint16_t height;
 } OperandFrame;
 
@@ -36,7 +37,7 @@ typedef struct {
 } OperandStack;
 
 static OperandStack operand_stack;
-static const U256 stack_zero = {{0}};
+static const u256 stack_zero = {{0}};
 
 void stack_workspace_bind(void)
 {
@@ -51,7 +52,7 @@ void stack_reset(void)
   operand_stack.frames[0].height = 0;
 }
 
-void stack_enter_frame(void)
+void operand_stack_push_empty_frame(void)
 {
   if (operand_stack.depth + 1U >= GUEST_OPERAND_FRAMES) {
     GUEST_ABORT();
@@ -60,7 +61,7 @@ void stack_enter_frame(void)
   operand_stack.frames[operand_stack.depth].height = 0;
 }
 
-void stack_leave_frame(void)
+void operand_stack_pop_frame(void)
 {
   if (operand_stack.depth == 0) {
     GUEST_ABORT();
@@ -73,25 +74,25 @@ uint16_t stack_depth(void)
   return operand_stack.frames[operand_stack.depth].height;
 }
 
-U256 stack_pop_word(void)
+u256 stack_pop_word(void)
 {
   OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   return frame->words[--frame->height];
 }
 
-void stack_push_word(const U256 word)
+void stack_push_word(const u256 word)
 {
   OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   frame->words[frame->height++] = word;
 }
 
-U256 stack_peek_word(uint16_t index)
+u256 stack_peek_word(uint16_t index)
 {
   const OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   return index >= frame->height ? stack_zero : frame->words[frame->height - 1U - index];
 }
 
-void stack_set_word(uint16_t index, U256 word)
+void stack_set_word(uint16_t index, u256 word)
 {
   OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   frame->words[frame->height - 1U - index] = word;
@@ -111,7 +112,7 @@ static enum stack_rewrite_status stack_effect_status(const OperandFrame *frame, 
   return EVMSAIL_STACK_REWRITE_OK;
 }
 
-enum stack_rewrite_status stack_rewrite(uint32_t inputs, uint32_t outputs, U256 **rows)
+enum stack_rewrite_status stack_rewrite(uint32_t inputs, uint32_t outputs, u256 **rows)
 {
   OperandFrame *frame = &operand_stack.frames[operand_stack.depth];
   const enum stack_rewrite_status status = stack_effect_status(frame, inputs, outputs);
@@ -153,7 +154,7 @@ enum stack_rewrite_status stack_swap(uint32_t other_depth)
     return EVMSAIL_STACK_REWRITE_UNDERFLOW;
   }
 
-  const U256 temporary = frame->words[frame->height - 1U];
+  const u256 temporary = frame->words[frame->height - 1U];
   frame->words[frame->height - 1U] = frame->words[frame->height - 1U - other_depth];
   frame->words[frame->height - 1U - other_depth] = temporary;
   return EVMSAIL_STACK_REWRITE_OK;
@@ -167,7 +168,7 @@ enum stack_rewrite_status stack_exchange(uint32_t left_depth, uint32_t right_dep
     return EVMSAIL_STACK_REWRITE_UNDERFLOW;
   }
 
-  const U256 temporary = frame->words[frame->height - 1U - left_depth];
+  const u256 temporary = frame->words[frame->height - 1U - left_depth];
   frame->words[frame->height - 1U - left_depth] = frame->words[frame->height - 1U - right_depth];
   frame->words[frame->height - 1U - right_depth] = temporary;
   return EVMSAIL_STACK_REWRITE_OK;

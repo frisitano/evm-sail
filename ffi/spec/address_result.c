@@ -7,8 +7,8 @@
 #include <string.h>
 
 struct zAddressResult precompile_ecrecover_hash_sig(
-     sail_fixed_bytes_32 hash,
-    uint64_t yparity, const sail_u256 r, const sail_u256 s) {
+     fixed_bytes_32 hash,
+    uint64_t yparity, const u256 r, const u256 s) {
   struct zAddressResult value;
   struct zAddressResult *result = &value;
   uint8_t address[20];
@@ -19,7 +19,7 @@ struct zAddressResult precompile_ecrecover_hash_sig(
 }
 
 struct zAddressResult code_db_read_delegation(
-     sail_fixed_bytes_32 hash) {
+     fixed_bytes_32 hash) {
   struct zAddressResult value;
   struct zAddressResult *result = &value;
   uint8_t address[20];

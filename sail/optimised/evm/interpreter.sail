@@ -7,7 +7,7 @@
  * This definition replaces `interpret` from `evm/interpreter.sail` when the
  * optimized C splice is selected.
  */
-val optimized_interpret = impure { c: "interpret" } : unit -> OutputSlice
+val interpret_execution = impure { c: "interpret" } : unit -> OutputSlice
 
 function interpret() -> OutputSlice =
-    optimized_interpret()
+    interpret_execution()

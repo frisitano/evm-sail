@@ -48,7 +48,7 @@
  * storage incarnation; clearing storage increments it in O(1). */
 typedef struct {
   /* Canonical 20-byte address and the table's lookup identity. */
-  Address address;
+  bytes20 address;
   /* First StorageId in this account's contiguous BAL-defined interval. */
   StorageId storage_begin;
   /* Number of StorageIds owned by this account. */
@@ -74,13 +74,13 @@ typedef struct {
   /* Stable semantic account selected by this reorderable binding. */
   AccountId account_id;
   /* Canonical secure account-trie key: keccak256(address). */
-  Hash32 secure_key;
+  bytes32 secure_key;
   /* Witness node at which authenticated account lookup terminated. */
   NodeId terminal_node;
   /* Root NodeId of the account's authenticated pre-state storage trie. */
   NodeId storage_root_node;
   /* Canonical digest retained even when the root node is not witnessed. */
-  Hash32 storage_root;
+  bytes32 storage_root;
   /* Whether authenticated pre-state contained this account. */
   uint8_t prestate_exists;
 } AccountTrieBinding;
@@ -118,6 +118,16 @@ static AccountTable acct_table = {
     .count = 1U,
 };
 
+/* The active EVM frame has one deterministic state-owning account. Keep its
+ * stable AccountId together with a direct workspace-backed row pointer so
+ * frame-local state operations do not repeatedly probe or compare addresses. */
+typedef struct {
+  AccountId id;
+  AccountEntry *entry;
+} CurrentAccountContext;
+
+static CurrentAccountContext current_account_context;
+
 /* Distinct AccountIds touched by the current transaction. */
 static AccountId *acct_tx_rows;
 static uint32_t acct_tx_rows_n = 0;
@@ -131,12 +141,12 @@ static StorageId *transaction_storage_ids;
  *
  * The first address bytes supply the initial bucket because Ethereum addresses
  * are already hash-derived. Linear probing resolves collisions and full
- * Address equality validates a candidate. A miss returns ACCOUNT_ID_NONE;
+ * bytes20 equality validates a candidate. A miss returns ACCOUNT_ID_NONE;
  * execution APIs decide whether that miss is a BAL violation. */
-AccountId lookup_account_id(const Address *address)
+AccountId lookup_account_id(const bytes20 *address)
 {
   uint32_t bucket = 0;
-  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket = (uint32_t)address->lanes[0];
   bucket &= acct_table.bucket_mask;
   for (;;) {
     const AccountId id = acct_table.buckets[bucket];
@@ -152,13 +162,55 @@ AccountId lookup_account_id(const Address *address)
 
 /* Resolves a required execution account. The BAL is the complete block-local
  * schema, so absence is a protocol error rather than a dynamic insertion. */
-AccountId get_account_id(const Address *address)
+AccountId get_account_id(const bytes20 *address)
 {
   const AccountId id = lookup_account_id(address);
   if (id == ACCOUNT_ID_NONE) {
     fatal_error(InvalidBlockAccessList);
   }
   return id;
+}
+
+void current_account_context_invalidate(void)
+{
+  current_account_context.id = ACCOUNT_ID_NONE;
+  current_account_context.entry = NULL;
+}
+
+/* Installs the current frame's state owner once. External account lookups never
+ * update this context. */
+void current_account_context_enter(bytes20 address)
+{
+  const AccountId id = lookup_account_id(&address);
+  if (id == ACCOUNT_ID_NONE) {
+    fatal_error(InvalidBlockAccessList);
+  }
+  current_account_context.id = id;
+  current_account_context.entry = &acct_table.entries[id];
+}
+
+AccountId current_account_context_id(void)
+{
+  if (current_account_context.entry == NULL) {
+    GUEST_ABORT();
+  }
+  return current_account_context.id;
+}
+
+/* Suspended frames retain only the stable dense ID. Reconstructing the pointer
+ * is O(1) and avoids storing a process pointer in Sail-visible continuation
+ * state. */
+void current_account_context_restore(AccountId id)
+{
+  if (id == ACCOUNT_ID_NONE) {
+    current_account_context_invalidate();
+    return;
+  }
+  if (id >= acct_table.count) {
+    GUEST_ABORT();
+  }
+  current_account_context.id = id;
+  current_account_context.entry = &acct_table.entries[id];
 }
 
 /* Reports whether storage updates may contribute to this account's post-state.
@@ -173,7 +225,7 @@ bool account_exists(AccountId id)
  * BAL loading must present strictly increasing, duplicate-free addresses. This
  * gives deterministic AccountIds and validates canonical BAL order while the
  * schema is built. Runtime account creation never reaches this function. */
-AccountId account_schema_insert(const Address *address)
+AccountId account_schema_insert(const bytes20 *address)
 {
   if (acct_table.count >= acct_table.capacity || acct_table.bucket_count == 0) {
     GUEST_ABORT();
@@ -184,7 +236,7 @@ AccountId account_schema_insert(const Address *address)
   }
 
   uint32_t bucket = 0;
-  memcpy(&bucket, address->bytes, sizeof(bucket));
+  bucket = (uint32_t)address->lanes[0];
   bucket &= acct_table.bucket_mask;
   while (acct_table.buckets[bucket] != ACCOUNT_ID_NONE) {
     const AccountId existing = acct_table.buckets[bucket];
@@ -210,7 +262,7 @@ AccountId account_schema_insert(const Address *address)
 
 /* A missing BAL row is observably cold. The later semantic account access is
  * responsible for rejecting a deficient BAL after the access charge is paid. */
-bool account_is_warm(Address address)
+bool account_is_warm(bytes20 address)
 {
   const AccountId id = lookup_account_id(&address);
   if (id == ACCOUNT_ID_NONE) {
@@ -221,7 +273,7 @@ bool account_is_warm(Address address)
 
 /* Marks an existing BAL account warm. A missing row remains untracked so a
  * charge-only path can halt out of gas without spuriously rejecting the BAL. */
-void account_mark_warm(Address address)
+void account_mark_warm(bytes20 address)
 {
   const AccountId id = lookup_account_id(&address);
   if (id == ACCOUNT_ID_NONE) {
@@ -249,7 +301,7 @@ uint32_t account_id_count(void)
 }
 
 /* Returns the canonical address belonging to a stable AccountId. */
-const Address *account_id_address(AccountId id)
+const bytes20 *account_id_address(AccountId id)
 {
   return &acct_table.entries[id].address;
 }
@@ -436,6 +488,7 @@ void acct_db_reset(void)
 {
   acct_table.count = 1u;
   acct_tx_rows_n = 0;
+  current_account_context_invalidate();
   return;
 }
 #endif
@@ -462,9 +515,9 @@ void acct_tx_reset(void)
  * lookup terminal and storage-root NodeIds are retained in AccountTrieBinding.
  * Bindings are written at AccountId - 1 while BAL loading is still in stable
  * AccountId order. */
-void account_block_initialize(AccountId account_id, Hash32 address_hash, uint64_t nonce,
-                              U256 balance, Hash32 storage_root, NodeId storage_root_node,
-                              Hash32 code_hash, bool exists, bool storage_cleared,
+void account_block_initialize(AccountId account_id, bytes32 address_hash, uint64_t nonce,
+                              u256 balance, bytes32 storage_root, NodeId storage_root_node,
+                              bytes32 code_hash, bool exists, bool storage_cleared,
                               NodeId terminal_node)
 {
   AccountState *state = &acct_table.states[account_id];
@@ -494,7 +547,7 @@ void account_block_initialize(AccountId account_id, Hash32 address_hash, uint64_
 /* Returns the active transaction overlay when this account has been touched
  * in the current transaction. The storage root remains authenticated trie
  * metadata and is assembled with the semantic value at this boundary. */
-bool account_transaction_view(const Address *address, AccountView *view)
+bool account_transaction_view(const bytes20 *address, AccountView *view)
 {
   const AccountId id = lookup_account_id(address);
   if (id == ACCOUNT_ID_NONE) {
@@ -518,7 +571,7 @@ bool account_transaction_view(const Address *address, AccountView *view)
 
 /* Returns the value frozen at transaction start, or the committed block value
  * when the account has not yet been touched in this transaction. */
-bool account_block_view(const Address *address, AccountView *view)
+bool account_block_view(const bytes20 *address, AccountView *view)
 {
   const AccountId id = lookup_account_id(address);
   if (id == ACCOUNT_ID_NONE) {
@@ -548,7 +601,7 @@ uint32_t account_trie_binding_count(void)
 
 /* Exposes only the compact sort key needed by the MPT-owned sorter. Before the
  * final permutation, index is the binding-array position, not an AccountId. */
-void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, Hash32 *secure_key)
+void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, bytes32 *secure_key)
 {
   const AccountTrieBinding *binding = &acct_table.trie_bindings[index];
   *terminal_node = binding->terminal_node;
@@ -606,7 +659,7 @@ bool account_trie_binding_get(uint32_t index, AccountTrieView *view)
 
 /* Returns the directly mutable transaction view after capturing its
  * transaction-start value. Callers journal only the field they mutate. */
-static AccountState *account_state_for_write(Address address, AccountId *id_out)
+static AccountState *account_state_for_write(bytes20 address, AccountId *id_out)
 {
   const AccountId id = get_account_id(&address);
   account_transaction_touch(id);
@@ -617,7 +670,7 @@ static AccountState *account_state_for_write(Address address, AccountId *id_out)
 /* Replaces every semantic account field in the active transaction view.
  * Storage roots remain trie metadata. A logical clear advances the owning
  * AccountEntry generation rather than adding a boolean to AccountState. */
-void host_account_update(Address address, uint64_t nonce, U256 balance, Hash32 code_hash,
+void host_account_update(bytes20 address, uint64_t nonce, u256 balance, bytes32 code_hash,
                          bool exists, bool storage_cleared, bool created, bool selfdestructed)
 {
   const AccountId id = get_account_id(&address);
@@ -655,7 +708,7 @@ void host_account_update(Address address, uint64_t nonce, U256 balance, Hash32 c
 }
 
 /* Updates only the transaction-visible balance. */
-void acct_tx_set_balance(Address a, const U256 balance)
+void acct_tx_set_balance(bytes20 a, const u256 balance)
 {
   AccountId id;
   AccountState *state = account_state_for_write(a, &id);
@@ -666,7 +719,7 @@ void acct_tx_set_balance(Address a, const U256 balance)
 }
 
 /* Updates only the transaction-visible nonce. */
-void acct_tx_set_nonce(Address a, uint64_t nonce)
+void acct_tx_set_nonce(bytes20 a, uint64_t nonce)
 {
   AccountId id;
   AccountState *state = account_state_for_write(a, &id);
@@ -677,7 +730,7 @@ void acct_tx_set_nonce(Address a, uint64_t nonce)
 }
 
 /* Updates only the transaction-visible code hash. */
-void acct_tx_set_code_hash(Address a, Hash32 code_hash)
+void acct_tx_set_code_hash(bytes20 a, bytes32 code_hash)
 {
   AccountId id;
   AccountState *state = account_state_for_write(a, &id);
@@ -704,7 +757,7 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
     const AccountId account_id = acct_tx_rows[i];
     AccountState *state = &acct_table.states[account_id];
     AccountEntry *entry = &acct_table.entries[account_id];
-    const Address address = acct_table.entries[account_id].address;
+    const bytes20 address = acct_table.entries[account_id].address;
     const bool deleted =
         (state->selfdestructed && (!semantics.delete_only_created || state->created)) != 0;
 
@@ -721,7 +774,7 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
       }
       entry->storage_generation++;
       if (!semantics.preserve_selfdestruct_balance || word_all_zero(&state->current.balance)) {
-        state->current.balance = (U256){{0}};
+        state->current.balance = (u256){{0}};
         state->current.exists = false;
       } else {
         state->current.exists = true;
@@ -778,4 +831,5 @@ void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count
   WORKSPACE_BIND(acct_tx_rows, account_count);
   WORKSPACE_BIND(transaction_storage_ids, storage_count);
   acct_table.count = 1U;
+  current_account_context_invalidate();
 }

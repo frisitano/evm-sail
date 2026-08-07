@@ -10,25 +10,25 @@
  * accumulated and compared against the header commitment entirely in C, so
  * no Sail bloom value is ever materialized.
  */
-val optimized_receipt_table_reset = impure { c: "receipt_table_reset" } : unit -> unit
-val optimized_receipt_table_push = impure { c: "receipt_table_push" } : (transaction_count, ScratchSlice) -> unit
-val optimized_receipt_table_root = impure { c: "receipt_table_root" } : transaction_count -> hash
-val optimized_block_logs_bloom_matches = impure { c: "block_logs_bloom_matches" } : LogsBloomRef -> bool
+val receipt_table_reset = impure { c: "receipt_table_reset" } : unit -> unit
+val receipt_table_push = impure { c: "receipt_table_push" } : (transaction_count, ScratchSlice) -> unit
+val receipt_table_root = impure { c: "receipt_table_root" } : transaction_count -> hash
+val block_logs_bloom_matches_ref = impure { c: "block_logs_bloom_matches" } : LogsBloomRef -> bool
 
 function receipt_store_begin() -> source_pointer = {
-    optimized_receipt_table_reset();
+    receipt_table_reset();
     0
 }
 
 function receipt_store_append(receipt, cumulative_gas_used, index) = {
     let mark = scratch_begin();
     let value = receipt_encoded(receipt, cumulative_gas_used);
-    optimized_receipt_table_push(index, value);
+    receipt_table_push(index, value);
     scratch_rewind(mark)
 }
 
 function receipt_store_root(_records_start : source_pointer, count : transaction_count) -> hash =
-    optimized_receipt_table_root(count)
+    receipt_table_root(count)
 
 function block_logs_bloom_matches(_logs : LogSeriesRef, reference : LogsBloomRef) -> bool =
-    optimized_block_logs_bloom_matches(reference)
+    block_logs_bloom_matches_ref(reference)

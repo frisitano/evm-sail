@@ -16,6 +16,7 @@
 #include "evmsail/spec/primitives/code.h"
 #include "evmsail/spec/evm/machine.h"
 #include "evmsail/spec/exceptions.h"
+#include "host/state/internal.h"
 #include "evmsail/spec/evm/gas.h"
 #include "evmsail/spec/prelude.h"
 #include "evmsail/spec/evm/execute.h"
@@ -29,23 +30,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-static struct OutputSliceFields empty_slice(void)
+static Bytes empty_slice(void)
 {
-  return (struct OutputSliceFields){
+  return (Bytes){
       .len = 0,
       .bytes = NULL,
   };
 }
 
-static U256 read_push(const struct CodeFields *code, uint32_t offset, uint8_t width)
+static u256 read_push(const struct CodeFields *code, uint32_t offset, uint8_t width)
 {
-  U256 value = {{0, 0, 0, 0}};
+  u256 value = {{0, 0, 0, 0}};
   uint32_t available = offset < code->len ? code->len - offset : 0;
   if (available > width) {
     available = width;
   }
 
-  /* EVM immediates are big-endian; U256 stores least-significant limbs
+  /* EVM immediates are big-endian; u256 stores least-significant limbs
    * first. Bytes beyond the end of code remain zero as required by PUSH. */
   for (uint32_t i = 0; i < available; i++) {
     uint32_t byte_from_low = width - 1U - i;
@@ -100,13 +101,25 @@ static bool stack_operation_succeeded(enum stack_rewrite_status status)
       (call);                                                                                      \
   } while (0)
 
+/* CALL- and CREATE-family handlers install a child frame only on their
+ * successful frame-entry path. Update the optimized host's private account
+ * context exactly at that semantic boundary; failed calls leave call_depth
+ * and the parent context unchanged. */
+#define EXECUTE_STACK_FRAME_ENTRY(name, inputs, outputs)                                           \
+  do {                                                                                             \
+    uint16_t parent_depth = call_depth;                                                            \
+    EXECUTE_STACK(name, inputs, outputs);                                                          \
+    if (call_depth != parent_depth)                                                                \
+      current_account_context_enter(message.address);                                              \
+  } while (0)
+
 /* The opcode set is closed. Expand the three stack shapes at each call site so
  * the selected ALU operation remains a direct call and can be inlined. */
 #define EXECUTE_UNARY(gas, operation)                                                              \
   do {                                                                                             \
     if (!charge_opcode(gas))                                                                       \
       break;                                                                                       \
-    U256 *rows = NULL;                                                                             \
+    u256 *rows = NULL;                                                                             \
     if (stack_operation_succeeded(stack_rewrite(1, 1, &rows)))                                     \
       rows[0] = operation(rows[0]);                                                                \
   } while (0)
@@ -115,7 +128,7 @@ static bool stack_operation_succeeded(enum stack_rewrite_status status)
   do {                                                                                             \
     if (!charge_opcode(gas))                                                                       \
       break;                                                                                       \
-    U256 *rows = NULL;                                                                             \
+    u256 *rows = NULL;                                                                             \
     if (stack_operation_succeeded(stack_rewrite(2, 1, &rows)))                                     \
       rows[0] = operation(rows[1], rows[0]);                                                       \
   } while (0)
@@ -124,14 +137,14 @@ static bool stack_operation_succeeded(enum stack_rewrite_status status)
   do {                                                                                             \
     if (!charge_opcode(gas))                                                                       \
       break;                                                                                       \
-    U256 *rows = NULL;                                                                             \
+    u256 *rows = NULL;                                                                             \
     if (stack_operation_succeeded(stack_rewrite(3, 1, &rows)))                                     \
       rows[0] = operation(rows[2], rows[1], rows[0]);                                              \
   } while (0)
 
 static void interpreter_execute_exp(void)
 {
-  U256 *rows = NULL;
+  u256 *rows = NULL;
   if (!stack_operation_succeeded(stack_rewrite(2, 1, &rows))) {
     return;
   }
@@ -141,12 +154,12 @@ static void interpreter_execute_exp(void)
   rows[0] = alu_exp(rows[1], rows[0]);
 }
 
-static void interpreter_execute_push(uint8_t width, U256 value)
+static void interpreter_execute_push(uint8_t width, u256 value)
 {
   if (!charge_opcode(width == 0 ? GAS_BASE : GAS_VERYLOW)) {
     return;
   }
-  U256 *rows = NULL;
+  u256 *rows = NULL;
   if (!stack_operation_succeeded(stack_rewrite(0, 1, &rows))) {
     return;
   }
@@ -174,7 +187,7 @@ static void interpreter_execute_pop(void)
   if (!charge_opcode(GAS_BASE)) {
     return;
   }
-  U256 *rows = NULL;
+  u256 *rows = NULL;
   (void)stack_operation_succeeded(stack_rewrite(1, 0, &rows));
 }
 
@@ -499,25 +512,25 @@ static void interpreter_execute_simple(uint8_t opcode)
     }
     return;
   case 0xf0:
-    EXECUTE_STACK(create, 3, 1);
+    EXECUTE_STACK_FRAME_ENTRY(create, 3, 1);
     return;
   case 0xf1:
-    EXECUTE_STACK(call, 7, 1);
+    EXECUTE_STACK_FRAME_ENTRY(call, 7, 1);
     return;
   case 0xf2:
-    EXECUTE_STACK(callcode, 7, 1);
+    EXECUTE_STACK_FRAME_ENTRY(callcode, 7, 1);
     return;
   case 0xf3:
     EXECUTE_STACK(return, 2, 0);
     return;
   case 0xf4:
-    EXECUTE_STACK(delegatecall, 6, 1);
+    EXECUTE_STACK_FRAME_ENTRY(delegatecall, 6, 1);
     return;
   case 0xf5:
-    EXECUTE_STACK(create2, 4, 1);
+    EXECUTE_STACK_FRAME_ENTRY(create2, 4, 1);
     return;
   case 0xfa:
-    EXECUTE_STACK(staticcall, 6, 1);
+    EXECUTE_STACK_FRAME_ENTRY(staticcall, 6, 1);
     return;
   case 0xfd:
     EXECUTE_STACK(revert, 2, 0);
@@ -531,7 +544,7 @@ static void interpreter_execute_simple(uint8_t opcode)
   }
 }
 
-static struct OutputSliceFields frame_output(void)
+static Bytes frame_output(void)
 {
   if (frame_status.kind != Kind_Halted) {
     return empty_slice();
@@ -548,9 +561,10 @@ static struct OutputSliceFields frame_output(void)
   }
 }
 
-struct OutputSliceFields interpret(void)
+Bytes interpret(void)
 {
   frame_stack_reset();
+  current_account_context_enter(message.address);
 
   for (;;) {
     if (frame_status.kind == Kind_Running) {
@@ -599,7 +613,7 @@ struct OutputSliceFields interpret(void)
       continue;
     }
 
-    struct OutputSliceFields output = frame_output();
+    Bytes output = frame_output();
     struct FrameContinuation continuation;
     memset(&continuation, 0, sizeof(continuation));
     continuation.kind = (enum kind_FrameContinuation)Kind_Empty;

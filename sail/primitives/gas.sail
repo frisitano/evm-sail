@@ -29,8 +29,7 @@ type block_gas_limit_bound : Int = ssz_uint_bound
 
 /*! EIP-7928 charges one BAL item against each 2,000 units of block gas. */
 type block_access_list_item_gas : Int = 2000
-let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) =
-    sizeof(block_access_list_item_gas)
+let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) = sizeof(block_access_list_item_gas)
 
 /*! Available gas in a running EVM frame. */
 type gas = nat
@@ -71,8 +70,7 @@ struct GasCharge = {
     cost : gas_cost,
 }
 
-let GAS_CHARGE_UNAFFORDABLE : GasCharge =
-    struct { affordable = false, cost = GAS_COST_ZERO }
+let GAS_CHARGE_UNAFFORDABLE : GasCharge = struct { affordable = false, cost = GAS_COST_ZERO }
 
 function gas_charge(cost : gas_cost) -> GasCharge =
     struct { affordable = true, cost = cost }
@@ -113,8 +111,9 @@ type transaction_execution_gas_limit_value : Int = eip7825_transaction_gas_limit
     EIP-7825 per-transaction cap. */
 type transaction_execution_gas = range(0, transaction_execution_gas_limit_value)
 
-let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value) =
-    sizeof(transaction_execution_gas_limit_value)
+let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value) = sizeof(
+    transaction_execution_gas_limit_value
+)
 
 /*! Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
     draws spill only from the regular-gas pool, which is capped by EIP-7825. */

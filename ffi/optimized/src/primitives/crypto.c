@@ -12,80 +12,107 @@
 
 static const uint8_t hash_empty = 0;
 
-#define DEFINE_POINTER_SLICE_HASH(name, slice_type, algorithm, digest_type)                        \
-  Hash32 name(struct slice_type input)                                                             \
-  {                                                                                                \
-    const uint64_t len = input.len;                                                                \
-    const uint8_t *bytes = input.bytes;                                                            \
-    digest_type native_digest = {{0}};                                                             \
-    Hash32 digest = {{0}};                                                                         \
-    _Static_assert(sizeof(digest) == sizeof(native_digest),                                        \
-                   "accelerator digest must be 32 bytes");                                         \
-    if ((!bytes && len != 0) ||                                                                    \
-        algorithm(len ? bytes : &hash_empty, (size_t)len, &native_digest) != ZKVM_EOK)             \
-      memset(&native_digest, 0, sizeof(native_digest));                                            \
-    memcpy(&digest, &native_digest, sizeof digest);                                                \
-    return digest;                                                                                 \
+static bytes32 keccak_bytes(const uint8_t *bytes, uint64_t len)
+{
+  zkvm_keccak256_hash native_digest = {{0}};
+  _Static_assert(sizeof(bytes32) == sizeof(native_digest), "accelerator digest must be 32 bytes");
+  if ((!bytes && len != 0) || len > SIZE_MAX ||
+      zkvm_keccak256(len ? bytes : &hash_empty, (size_t)len, &native_digest) != ZKVM_EOK) {
+    memset(&native_digest, 0, sizeof(native_digest));
   }
+  return hash_from_be_bytes(native_digest.data);
+}
 
-DEFINE_POINTER_SLICE_HASH(host_keccak_stateless_input, StatelessInputSliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
-DEFINE_POINTER_SLICE_HASH(host_keccak_scratch, ScratchSliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
-DEFINE_POINTER_SLICE_HASH(host_keccak_memory, EvmMemorySliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
-DEFINE_POINTER_SLICE_HASH(host_keccak_output, OutputSliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
-DEFINE_POINTER_SLICE_HASH(host_keccak_log_data, LogDataSliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
-DEFINE_POINTER_SLICE_HASH(host_sha256_stateless_input, StatelessInputSliceFields, zkvm_sha256,
-                          zkvm_sha256_hash)
-DEFINE_POINTER_SLICE_HASH(host_sha256_scratch, ScratchSliceFields, zkvm_sha256, zkvm_sha256_hash)
-DEFINE_POINTER_SLICE_HASH(host_sha256_memory, EvmMemorySliceFields, zkvm_sha256, zkvm_sha256_hash)
-DEFINE_POINTER_SLICE_HASH(host_keccak_code, CodeRegionSliceFields, zkvm_keccak256,
-                          zkvm_keccak256_hash)
+static bytes32 sha256_bytes(const uint8_t *bytes, uint64_t len)
+{
+  zkvm_sha256_hash native_digest = {{0}};
+  _Static_assert(sizeof(bytes32) == sizeof(native_digest), "accelerator digest must be 32 bytes");
+  if ((!bytes && len != 0) || len > SIZE_MAX ||
+      zkvm_sha256(len ? bytes : &hash_empty, (size_t)len, &native_digest) != ZKVM_EOK) {
+    memset(&native_digest, 0, sizeof(native_digest));
+  }
+  return hash_from_be_bytes(native_digest.data);
+}
 
-#undef DEFINE_POINTER_SLICE_HASH
+bytes32 host_keccak_stateless_input(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
 
-Hash32 host_keccak_word(const U256 input)
+bytes32 host_keccak_scratch(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
+
+bytes32 host_keccak_memory(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
+
+bytes32 host_keccak_output(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
+
+bytes32 host_keccak_log_data(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
+
+bytes32 host_sha256_stateless_input(Bytes input)
+{
+  return sha256_bytes(input.bytes, input.len);
+}
+
+bytes32 host_sha256_scratch(Bytes input)
+{
+  return sha256_bytes(input.bytes, input.len);
+}
+
+bytes32 host_sha256_memory(Bytes input)
+{
+  return sha256_bytes(input.bytes, input.len);
+}
+
+bytes32 host_keccak_code(Bytes input)
+{
+  return keccak_bytes(input.bytes, input.len);
+}
+
+bytes32 host_keccak_word(const u256 input)
 {
   uint8_t bytes[32];
   zkvm_keccak256_hash native_digest = {{0}};
-  Hash32 digest = {{0}};
-  _Static_assert(sizeof(digest) == sizeof(zkvm_keccak256_hash),
+  _Static_assert(sizeof(bytes32) == sizeof(zkvm_keccak256_hash),
                  "accelerator digest must be 32 bytes");
   sail_word_to_be_bytes(bytes, input);
   if (zkvm_keccak256(bytes, sizeof(bytes), &native_digest) != ZKVM_EOK) {
     memset(&native_digest, 0, sizeof native_digest);
   }
-  memcpy(&digest, &native_digest, sizeof digest);
-  return digest;
+  return hash_from_be_bytes(native_digest.data);
 }
 
-Hash32 host_keccak_address(Address input)
+bytes32 host_keccak_address(bytes20 input)
 {
   zkvm_keccak256_hash native_digest = {{0}};
-  Hash32 digest = {{0}};
-  _Static_assert(sizeof(digest) == sizeof(zkvm_keccak256_hash),
+  _Static_assert(sizeof(bytes32) == sizeof(zkvm_keccak256_hash),
                  "accelerator digest must be 32 bytes");
-  if (zkvm_keccak256(address_bytes_const(&input), 20, &native_digest) != ZKVM_EOK) {
+  if (zkvm_keccak256(bytes20_data(&input), 20, &native_digest) != ZKVM_EOK) {
     memset(&native_digest, 0, sizeof native_digest);
   }
-  memcpy(&digest, &native_digest, sizeof digest);
-  return digest;
+  return hash_from_be_bytes(native_digest.data);
 }
 
-Hash32 host_sha256_pair(Hash32 left, Hash32 right)
+bytes32 host_sha256_pair(bytes32 left, bytes32 right)
 {
   uint8_t bytes[64];
   zkvm_sha256_hash native_digest = {{0}};
-  Hash32 digest = {{0}};
-  _Static_assert(sizeof(digest) == sizeof(zkvm_sha256_hash), "accelerator digest must be 32 bytes");
-  memcpy(bytes, hash_bytes_const(&left), 32);
-  memcpy(bytes + 32, hash_bytes_const(&right), 32);
+  _Static_assert(sizeof(bytes32) == sizeof(zkvm_sha256_hash),
+                 "accelerator digest must be 32 bytes");
+  memcpy(bytes, bytes32_data(&left), 32);
+  memcpy(bytes + 32, bytes32_data(&right), 32);
   if (zkvm_sha256(bytes, sizeof(bytes), &native_digest) != ZKVM_EOK) {
     memset(&native_digest, 0, sizeof native_digest);
   }
-  memcpy(&digest, &native_digest, sizeof digest);
-  return digest;
+  return hash_from_be_bytes(native_digest.data);
 }

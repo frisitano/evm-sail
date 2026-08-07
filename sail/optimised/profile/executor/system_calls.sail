@@ -50,8 +50,7 @@ function system_call(tgt : address, input : hash) -> unit = {
 
 function system_call_checked(tgt : address) -> ScratchSlice = {
     if k_code_key(tgt) == KECCAK_EMPTY then {
-        fatal_error(ExecutionInvalid);
-        exit(())
+        fatal_error(ExecutionInvalid)
     } else {
         memory_reset();
         let parent_memory = memory_frame_enter();
@@ -69,19 +68,23 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
             memory_frame_leave(parent_memory);
             k_journal_revert();
             profiled_system_call_merge();
-            fatal_error(ExecutionInvalid);
-            exit(())
+            fatal_error(ExecutionInvalid)
         }
     }
 }
 
 /*! Profiles one dequeued request stream and validates it byte for byte
     against the input's committed request bytes. */
-function profiled_validate_request_stream(scope : cycle_scope_id, tgt : address, expected : StatelessInputSlice) -> unit = {
+function profiled_validate_request_stream(
+    scope : cycle_scope_id,
+    tgt : address,
+    expected : StatelessInputSlice,
+) -> (
+    unit
+) = {
     let dequeued = profiled_system_call_checked(scope, tgt);
     if not_bool(region_slices_equal(dequeued, expected)) then {
-        fatal_error(InvalidExecutionRequests);
-        exit(())
+        fatal_error(InvalidExecutionRequests)
     }
 }
 
@@ -93,11 +96,8 @@ function validate_execution_requests(input_ref : StatelessInputRef) -> unit = {
     if profile.fork >= Amsterdam then {
         profiled_validate_request_stream(43, BUILDER_DEPOSIT_REQUEST_ADDR, input_ref.builder_deposit_requests);
         profiled_validate_request_stream(44, BUILDER_EXIT_REQUEST_ADDR, input_ref.builder_exit_requests)
-    } else {
-        if   (region_slice_length(input_ref.builder_deposit_requests) != 0)
-           | (region_slice_length(input_ref.builder_exit_requests) != 0) then {
-            fatal_error(InvalidExecutionRequests);
-            exit(())
-        }
+    } else if (region_slice_length(input_ref.builder_deposit_requests) != 0) |
+        (region_slice_length(input_ref.builder_exit_requests) != 0) then {
+        fatal_error(InvalidExecutionRequests)
     }
 }

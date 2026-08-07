@@ -16,7 +16,8 @@ function fatal_error_set_input(_input_ref) = ()
 function main() -> unit = {
     scratch_reset();
     validation_debug_reset();
-    let input_ref = decode_stateless_input_ref(stateless_input());
+    let input_bytes = stateless_input();
+    let input_ref = decode_stateless_input_ref(input_bytes);
     fatal_error_set_input(input_ref);
     verify_stateless_payload(input_ref);
     write_validation_result(input_ref, true)

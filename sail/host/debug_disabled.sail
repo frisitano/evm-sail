@@ -14,21 +14,29 @@ function validation_debug_reset() -> unit = ()
 
 /*! Discards the optional block gas split in production builds. */
 val validation_debug_capture_block_gas : forall 'actual 'expected 'execution 'state,
-       0 <= 'actual
-    &  'actual <= block_gas_limit_bound
-    &  0 <= 'expected
-    &  'expected <= block_gas_limit_bound
-    &  0 <= 'execution
-    &  'execution <= block_gas_limit_bound
-    &  0 <= 'state
-    &  'state <= block_gas_limit_bound.
-    (int('actual), int('expected), int('execution), int('state)) -> unit
-function validation_debug_capture_block_gas(
-    _actual,
-    _expected,
-    _execution,
-    _state,
-) -> unit = ()
+                                              0
+                                           <= 'actual
+                                           &  'actual
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'expected
+                                           &  'expected
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'execution
+                                           &  'execution
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'state
+                                           &  'state
+                                           <= block_gas_limit_bound. (
+        int('actual),
+        int('expected),
+        int('execution),
+        int('state),
+    ) -> unit
+function validation_debug_capture_block_gas(_actual, _expected, _execution, _state) -> unit =
+    ()
 
 /*! Records the failing validation stage and reason for host
     inspection; a later record overwrites an earlier one. */

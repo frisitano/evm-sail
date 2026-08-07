@@ -24,8 +24,8 @@ static inline enum FatalError witness_error(uint64_t status)
 
 /* EIP-161 emptiness over semantic account fields; existence is considered by
  * the caller because an absent account and an empty existing account differ. */
-static inline bool account_fields_empty(uint64_t nonce, const U256 *balance,
-                                        const Hash32 *code_hash)
+static inline bool account_fields_empty(uint64_t nonce, const u256 *balance,
+                                        const bytes32 *code_hash)
 {
   return (nonce == 0 && word_all_zero(balance) && hash_equal(code_hash, &EVMSAIL_KECCAK_EMPTY)) !=
          0;
@@ -37,8 +37,8 @@ static inline bool account_fields_empty(uint64_t nonce, const U256 *balance,
  * lives in AccountTrieBinding until final account RLP encoding. */
 typedef struct {
   uint64_t nonce;
-  U256 balance;
-  Hash32 code_hash;
+  u256 balance;
+  bytes32 code_hash;
   uint8_t exists;
 } AccountValue;
 
@@ -61,9 +61,9 @@ typedef struct {
  * value used by root construction; transaction_original is the frozen value
  * used by SSTORE pricing and BAL change validation. */
 typedef struct {
-  U256 current;
-  U256 original;
-  U256 transaction_original;
+  u256 current;
+  u256 original;
+  u256 transaction_original;
   StorageGeneration storage_generation;
   StorageGeneration transaction_original_generation;
   uint32_t transaction_epoch;
@@ -74,7 +74,7 @@ typedef struct {
  * directly mutable AccountValue, so the state owner assembles it here. */
 typedef struct {
   AccountValue value;
-  Hash32 storage_root;
+  bytes32 storage_root;
   bool storage_cleared;
   bool created;
   bool selfdestructed;
@@ -89,8 +89,8 @@ typedef enum {
 } StorageViewStatus;
 
 typedef struct {
-  U256 current;
-  U256 original;
+  u256 current;
+  u256 original;
 } StorageView;
 
 /* Journal-restorable account fields; each entry restores exactly one field,
@@ -105,18 +105,22 @@ typedef enum {
 } AccountRestoreField;
 
 typedef union {
-  U256 balance;
+  u256 balance;
   uint64_t nonce;
-  Hash32 code_hash;
+  bytes32 code_hash;
   bool flag;
 } AccountRestorePrior;
 
 uint32_t account_id_count(void);
 void account_schema_prepare(uint32_t account_count);
-AccountId account_schema_insert(const Address *address);
-const Address *account_id_address(AccountId id);
-AccountId lookup_account_id(const Address *address);
-AccountId get_account_id(const Address *address);
+AccountId account_schema_insert(const bytes20 *address);
+const bytes20 *account_id_address(AccountId id);
+AccountId lookup_account_id(const bytes20 *address);
+AccountId get_account_id(const bytes20 *address);
+void current_account_context_enter(bytes20 address);
+AccountId current_account_context_id(void);
+void current_account_context_restore(AccountId id);
+void current_account_context_invalidate(void);
 void account_storage_range_bind(AccountId id, StorageId begin, uint32_t count);
 void account_storage_range(AccountId id, StorageId *begin, uint32_t *count);
 void account_warm_restore(AccountId id, uint32_t prior_epoch);
@@ -125,8 +129,8 @@ StorageGeneration account_transaction_original_storage_generation(AccountId id);
 void account_storage_generation_restore(AccountId id, StorageGeneration generation);
 void account_clear_storage_generation(AccountId id);
 bool account_exists(AccountId id);
-bool account_transaction_view(const Address *address, AccountView *view);
-bool account_block_view(const Address *address, AccountView *view);
+bool account_transaction_view(const bytes20 *address, AccountView *view);
+bool account_block_view(const bytes20 *address, AccountView *view);
 void account_field_restore(AccountId id, AccountRestoreField field, AccountRestorePrior prior);
 void account_transaction_touch(AccountId id);
 uint32_t account_transaction_count(void);
@@ -139,20 +143,24 @@ StorageId account_transaction_storage_id_at(AccountId id, uint32_t index);
 
 extern uint32_t current_warm_epoch;
 
-StorageId storage_schema_insert(AccountId account_id, const U256 *slot, const Hash32 *secure_key);
-StorageId get_storage_id(AccountId account_id, const U256 *slot);
+StorageId storage_schema_insert(AccountId account_id, const u256 *slot, const bytes32 *secure_key);
+StorageId get_storage_id(AccountId account_id, const u256 *slot);
+StorageId storage_resolve_slot(u256 slot);
+bool storage_id_is_warm(StorageId storage_id);
+void storage_id_mark_warm(StorageId storage_id);
+void storage_update_by_id(StorageId storage_id, u256 value, u256 original);
 uint32_t storage_id_count(void);
-const U256 *storage_id_slot(StorageId id);
+const u256 *storage_id_slot(StorageId id);
 void storage_schema_account_begin(AccountId id);
 void storage_schema_account_end(AccountId id);
 void storage_schema_seal(void);
 void storage_warm_restore(StorageId id, uint32_t prior_epoch);
-void storage_value_restore(StorageId id, U256 prior);
+void storage_value_restore(StorageId id, u256 prior);
 void storage_generation_restore(StorageId id, StorageGeneration prior);
 void storage_transaction_forget(StorageId id);
-StorageViewStatus storage_transaction_view(AccountId account_id, const U256 *slot,
+StorageViewStatus storage_transaction_view(AccountId account_id, StorageId storage_id,
                                            StorageView *view);
-bool storage_block_view(AccountId account_id, const U256 *slot, StorageView *view);
+bool storage_block_view(AccountId account_id, StorageId storage_id, StorageView *view);
 
 void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count);
 void storage_state_workspace_bind(uint32_t storage_count);

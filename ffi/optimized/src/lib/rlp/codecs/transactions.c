@@ -1,6 +1,7 @@
 /* Optimized whole-transaction RLP decoding. */
 #include "evmsail/prelude.h"
 
+#include "evmsail/host/accelerators.h"
 #include "evmsail/lib/rlp/codecs/transaction_signing.h"
 #include "evmsail/host/region_access.h"
 #include "evmsail/primitives/crypto.h"
@@ -8,9 +9,11 @@
 #include "evmsail/spec/primitives/tx.h"
 #include "evmsail/spec/exceptions.h"
 #include "lib/rlp/decoding.h"
+#include "lib/rlp/encoding.h"
 #include "primitives/hash.h"
 #include "primitives/value.h"
 #include "evmsail/primitives/word.h"
+#include "workspace.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -72,16 +75,16 @@ _Noreturn static void decode_failure(enum FatalError reason, const char *locatio
   fatal_error(reason);
 }
 
-static struct StatelessInputSliceFields content_slice(const rlp_item *item)
+static Bytes content_slice(const rlp_item *item)
 {
-  struct StatelessInputSliceFields result = {
-      .bytes = sail_read_only_bytes(item->content),
+  Bytes result = {
+      .bytes = item->content,
       .len = item->content_len,
   };
   return result;
 }
 
-static Address low_address(U256 value)
+static bytes20 low_address(u256 value)
 {
   return address_from_word(value);
 }
@@ -100,7 +103,7 @@ static bool decode_access_list(const rlp_item *field, struct AccessListRef *resu
     rlp_item entry_fields[2];
     rlp_cursor entry_children;
     rlp_cursor keys;
-    U256 ignored;
+    u256 ignored;
     if (!rlp_take_item(&entries, &entry) || !rlp_item_list(&entry, &entry_children) ||
         !rlp_take_fields(entry_children, entry_fields, 2) ||
         !rlp_word_raw(&entry_fields[0], &ignored) || !rlp_item_list(&entry_fields[1], &keys)) {
@@ -163,15 +166,8 @@ static bool validate_authorizations(const rlp_item *field,
   uint32_t count = 0;
   while (tuples.remaining != 0) {
     rlp_item tuple;
-    rlp_item fields[6];
     rlp_cursor children;
-    U256 word;
-    uint64_t integer;
-    if (!rlp_take_item(&tuples, &tuple) || !rlp_item_list(&tuple, &children) ||
-        !rlp_take_fields(children, fields, 6) || !rlp_quantity_word(&fields[0], &word) ||
-        !rlp_word_raw(&fields[1], &word) || !rlp_quantity_u64(&fields[2], &integer) ||
-        !rlp_quantity_u64(&fields[3], &integer) || !rlp_quantity_word(&fields[4], &word) ||
-        !rlp_quantity_word(&fields[5], &word)) {
+    if (!rlp_take_item(&tuples, &tuple) || !rlp_item_list(&tuple, &children)) {
       return false;
     }
     ++count;
@@ -182,12 +178,130 @@ static bool validate_authorizations(const rlp_item *field,
   return true;
 }
 
+static struct Authorization *prepared_authorizations;
+
+void prepared_authorizations_workspace_bind(void)
+{
+  WORKSPACE_BIND(prepared_authorizations, GUEST_PREPARED_AUTHORIZATIONS);
+}
+
+static bytes32 authorization_signing_hash(u256 chain_id, bytes20 address, uint64_t nonce)
+{
+  enum { AUTHORIZATION_SIGNING_PREIMAGE_BYTES = 66 };
+  uint8_t preimage[AUTHORIZATION_SIGNING_PREIMAGE_BYTES];
+  const uint64_t content_len =
+      rlp_quantity_size_u256(chain_id) + 21U + rlp_quantity_size_u64(nonce);
+  uint8_t *cursor = preimage;
+  *cursor++ = 0x05;
+  cursor = rlp_write_list_prefix(cursor, content_len);
+  cursor = rlp_write_u256(cursor, chain_id);
+  cursor = rlp_write_string_prefix(cursor, 20, address_byte(&address, 0));
+  memcpy(cursor, bytes20_data(&address), 20);
+  cursor += 20;
+  cursor = rlp_write_u64(cursor, nonce);
+  if ((size_t)(cursor - preimage) > sizeof preimage) {
+    GUEST_ABORT();
+  }
+  return keccak_bytes(preimage, (uint64_t)(cursor - preimage));
+}
+
+static struct Authorization prepare_authorization(const rlp_item *tuple)
+{
+  rlp_item fields[6];
+  rlp_cursor children;
+  u256 chain_id;
+  u256 address_word;
+  u256 parity_word;
+  u256 r;
+  u256 s;
+  uint64_t nonce;
+  if (!rlp_item_list(tuple, &children) || !rlp_take_fields(children, fields, 6) ||
+      !rlp_quantity_word(&fields[0], &chain_id) || !rlp_word_raw(&fields[1], &address_word) ||
+      !rlp_quantity_u64(&fields[2], &nonce) || !rlp_quantity_word(&fields[3], &parity_word) ||
+      !rlp_quantity_word(&fields[4], &r) || !rlp_quantity_word(&fields[5], &s)) {
+    decode_failure(RlpDecode, "optimized prepared authorization fields");
+  }
+
+  const u256 one = {{1, 0, 0, 0}};
+  const bool parity_zero = word_all_zero(&parity_word);
+  const bool parity_one = word_equal(&parity_word, &one);
+  const bool parity_valid = parity_zero || parity_one;
+  const bytes20 address = low_address(address_word);
+  struct AddressResult recovered = {0};
+  if (parity_valid) {
+    const bytes32 signing_hash = authorization_signing_hash(chain_id, address, nonce);
+    recovered = precompile_ecrecover_hash_sig(signing_hash, parity_one ? 1U : 0U, r, s);
+  }
+
+  static const u256 secp_n = {
+      .limbs = {UINT64_C(0xbfd25e8cd0364141), UINT64_C(0xbaaedce6af48a03b),
+                UINT64_C(0xfffffffffffffffe), UINT64_C(0xffffffffffffffff)},
+  };
+  static const u256 secp_n_half = {
+      .limbs = {UINT64_C(0xdfe92f46681b20a0), UINT64_C(0x5d576e7357a4501d),
+                UINT64_C(0xffffffffffffffff), UINT64_C(0x7fffffffffffffff)},
+  };
+  const u256 zero = {{0, 0, 0, 0}};
+  return (struct Authorization){
+      .valid_sig = recovered.success && word_compare(&zero, &r) < 0 &&
+                   word_compare(&r, &secp_n) < 0 && word_compare(&zero, &s) < 0 &&
+                   word_compare(&s, &secp_n_half) <= 0 && nonce != UINT64_MAX,
+      .authority = recovered.address,
+      .address = address,
+      .nonce = nonce,
+      .chain_id = chain_id,
+  };
+}
+
+PreparedAuthorizationList prepare_authorizations(struct AuthorizationListRefFields authorizations)
+{
+  if (authorizations.count > GUEST_PREPARED_AUTHORIZATIONS || prepared_authorizations == NULL) {
+    decode_failure(ExecutionInvalid, "optimized prepared authorization capacity");
+  }
+  const uint16_t count = (uint16_t)authorizations.count;
+  rlp_cursor tuples = {
+      .next = authorizations.encoded.bytes,
+      .remaining = authorizations.encoded.len,
+  };
+  for (uint16_t index = 0; index < count; ++index) {
+    rlp_item tuple;
+    if (!rlp_take_item(&tuples, &tuple)) {
+      decode_failure(RlpDecode, "optimized prepared authorization item");
+    }
+    prepared_authorizations[index] = prepare_authorization(&tuple);
+  }
+  if (tuples.remaining != 0) {
+    decode_failure(RlpDecode, "optimized prepared authorization count");
+  }
+  return (PreparedAuthorizationList){.offset = 0, .count = count};
+}
+
+struct Authorization prepared_authorization_head(PreparedAuthorizationList authorizations)
+{
+  if (authorizations.count == 0 || authorizations.offset >= GUEST_PREPARED_AUTHORIZATIONS) {
+    decode_failure(ExecutionInvalid, "optimized prepared authorization head");
+  }
+  return prepared_authorizations[authorizations.offset];
+}
+
+PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList authorizations,
+                                                      uint16_t count)
+{
+  if (count == 0 || count != authorizations.count ||
+      authorizations.offset >= GUEST_PREPARED_AUTHORIZATIONS) {
+    decode_failure(ExecutionInvalid, "optimized prepared authorization tail");
+  }
+  ++authorizations.offset;
+  --authorizations.count;
+  return authorizations;
+}
+
 static bool decode_common_fields(struct TransactionFields *result, const rlp_item *nonce,
                                  const rlp_item *gas, const rlp_item *recipient,
                                  const rlp_item *value, const rlp_item *data, const rlp_item *v,
                                  const rlp_item *r, const rlp_item *s, bool nonce_is_u64)
 {
-  U256 recipient_word;
+  u256 recipient_word;
   uint64_t gas_limit = 0;
   uint64_t nonce_u64 = 0;
   if ((!nonce_is_u64 && !rlp_quantity_word(nonce, &result->nonce)) ||
@@ -198,7 +312,7 @@ static bool decode_common_fields(struct TransactionFields *result, const rlp_ite
     return false;
   }
   if (nonce_is_u64) {
-    const U256 widened = {{nonce_u64, 0, 0, 0}};
+    const u256 widened = {{nonce_u64, 0, 0, 0}};
     result->nonce = widened;
   }
   result->gas_limit = gas_limit;
@@ -208,9 +322,7 @@ static bool decode_common_fields(struct TransactionFields *result, const rlp_ite
   return true;
 }
 
-struct TransactionFields decode_transaction(struct StatelessInputSliceFields transaction,
-                                            struct StatelessInputSliceFields public_key,
-                                            uint8_t blob_limit)
+struct TransactionFields decode_transaction(Bytes transaction, Bytes public_key, uint8_t blob_limit)
 {
   struct TransactionFields result;
   memset(&result, 0, sizeof(result));
@@ -241,11 +353,11 @@ struct TransactionFields decode_transaction(struct StatelessInputSliceFields tra
     decode_failure(RlpDecode, "optimized transaction fields");
   }
 
-  const struct StatelessInputSliceFields public_key_body = {
+  const Bytes public_key_body = {
       .bytes = public_key.bytes + 1,
       .len = 64,
   };
-  const Hash32 sender_hash = host_keccak_stateless_input(public_key_body);
+  const bytes32 sender_hash = host_keccak_stateless_input(public_key_body);
   result.sender = hash_low_address(&sender_hash);
   result.tx_type = (enum TxType)type;
 
@@ -307,8 +419,8 @@ struct TransactionFields decode_transaction(struct StatelessInputSliceFields tra
   /* Both pointers belong to the validated transaction slice and RLP fields
    * are ordered, so this distance is in the 32-bit host-region domain. */
   const uint32_t signing_length = (uint32_t)(v->source - first_signed->source);
-  const struct StatelessInputSliceFields signing_fields = {
-      .bytes = sail_read_only_bytes(first_signed->source),
+  const Bytes signing_fields = {
+      .bytes = first_signed->source,
       .len = signing_length,
   };
   result.signing_hash = tx_signing_hash(type, signing_fields, result.sig_v);

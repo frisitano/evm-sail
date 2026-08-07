@@ -9,10 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static struct zStorageBlockRow storage_value_out(sail_fixed_bytes_20 addr,
-                                                 sail_u256 slot) {
+static struct zStorageBlockRow storage_value_out(fixed_bytes_20 addr,
+                                                 u256 slot) {
   struct zStorageBlockRow out;
-  sail_u256 curr, orig;
+  u256 curr, orig;
   if (storage_row_probe(1, addr, slot, &curr, &orig)) {
     out.zfound = true;
     out.zvalue.zcurr = curr;
@@ -25,7 +25,7 @@ static struct zStorageBlockRow storage_value_out(sail_fixed_bytes_20 addr,
 }
 
 void storage_tx_get(struct zStorageTxLookup *out, struct zStorageKey key) {
-  sail_u256 curr, orig;
+  u256 curr, orig;
   const uint64_t status =
       storage_row_probe(0, key.zaddr, key.zslot, &curr, &orig);
   if (status == 1) {
@@ -46,7 +46,7 @@ struct zStorageBlockRow storage_block_get(struct zStorageKey key) {
 }
 
 void storage_block_iter_next(struct zStorageBlockIterResult *out,
-                             const sail_fixed_bytes_20 addr) {
+                             const fixed_bytes_20 addr) {
   struct zStorageTrieEntry *trie_entry =
       &out->variants.zStorageBlockIterRow;
   struct zStorageEntry *entry = &trie_entry->zentry;
@@ -63,7 +63,7 @@ void storage_block_iter_next(struct zStorageBlockIterResult *out,
 }
 
 static struct zAccountRow account_out(uint64_t layer,
-                                      const sail_fixed_bytes_20 addr) {
+                                      const fixed_bytes_20 addr) {
   struct zAccountRow out;
   struct zAccount *account = &out.zaccount;
   if (acct_row_probe(layer, addr, &account->zinfo.znonce,
@@ -89,16 +89,16 @@ unit storage_block_put(struct zStorageEntry entry) {
                                entry.zvalue.zcurr, entry.zvalue.zorig);
 }
 
-unit storage_block_cache(struct zStorageKey key, const sail_fixed_bytes_32 slot_hash,
-                         const sail_u256 value) {
+unit storage_block_cache(struct zStorageKey key, const fixed_bytes_32 slot_hash,
+                         const u256 value) {
   return storage_block_cache_raw(key.zaddr, key.zslot, slot_hash, value);
 }
 
-struct zAccountRow acct_tx_get(const sail_fixed_bytes_20 addr) {
+struct zAccountRow acct_tx_get(const fixed_bytes_20 addr) {
   return account_out(0, addr);
 }
 
-struct zAccountRow acct_block_get(const sail_fixed_bytes_20 addr) {
+struct zAccountRow acct_block_get(const fixed_bytes_20 addr) {
   return account_out(1, addr);
 }
 
@@ -126,7 +126,7 @@ void acct_block_iter_next(struct zAcctBlockIterResult *out,
   }
 }
 
-unit acct_tx_update(const sail_fixed_bytes_20 addr, struct zAccount account) {
+unit acct_tx_update(const fixed_bytes_20 addr, struct zAccount account) {
   return acct_tx_update_raw(
       addr, account.zinfo.znonce, account.zinfo.zbalance,
       account.zinfo.zstorage_root, account.zinfo.zcode_hash, account.zpresent,
@@ -144,7 +144,7 @@ unit acct_block_write(struct zAcctEntry entry) {
       orig->zstorage_cleared);
 }
 
-unit acct_block_cache(const sail_fixed_bytes_20 addr, const sail_fixed_bytes_32 address_hash,
+unit acct_block_cache(const fixed_bytes_20 addr, const fixed_bytes_32 address_hash,
                       struct zAccount account) {
   return acct_block_cache_raw(
       addr, address_hash, account.zinfo.znonce, account.zinfo.zbalance,
@@ -187,10 +187,10 @@ void acct_tx_pop(struct zAcctTxPopResult *out, unit u) {
 void bal_iter_next(struct zBalIterEntry *out, unit u) {
   (void)u;
 
-  sail_fixed_bytes_20 address;
-  sail_u256 slot;
-  sail_u256 value;
-  sail_fixed_bytes_32 code_hash;
+  fixed_bytes_20 address;
+  u256 slot;
+  u256 value;
+  fixed_bytes_32 code_hash;
   uint64_t index;
   uint64_t nonce;
 

@@ -28,8 +28,7 @@ GAS_DECLARATION = re.compile(
     r"(?:bool|u?int(?:8|16|32|64)_t|u128|u256|u320)\s+G_[A-Za-z0-9_]+\s*;"
 )
 FUNCTION_START = re.compile(
-    r"^u256 stateless_input_slice_load\(struct StatelessInputSliceFields s, "
-    r"uint32_t off\)$"
+    r"^u256 stateless_input_slice_load\(Bytes s, uint32_t off\)$"
 )
 FATAL_MATCH_FAILURE = re.compile(
     r"fatal_error\([^;]+\);\s*sail_match_failure\(", re.MULTILINE

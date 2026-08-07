@@ -18,10 +18,10 @@ NibblePath nibble_path_empty(void)
   return path;
 }
 
-NibblePath nibble_path_from_secure_key(const Hash32 *hash)
+NibblePath nibble_path_from_secure_key(const bytes32 *hash)
 {
   NibblePath path;
-  const uint8_t *bytes = hash_bytes_const(hash);
+  const uint8_t *bytes = bytes32_data(hash);
   path.len = 64;
   for (size_t i = 0; i < 32; ++i) {
     path.nibbles[2 * i] = bytes[i] >> 4;
@@ -97,13 +97,13 @@ unsigned nibble_path_common(const NibblePath *a, const NibblePath *b)
   return common;
 }
 
-uint8_t mpt_hash_nibble(const Hash32 *key, unsigned position)
+uint8_t mpt_hash_nibble(const bytes32 *key, unsigned position)
 {
-  const uint8_t byte = hash_bytes_const(key)[position / 2];
+  const uint8_t byte = bytes32_data(key)[position / 2];
   return (position & 1) ? byte & 0x0f : byte >> 4;
 }
 
-bool mpt_key_matches(const Hash32 *key, unsigned position, const NibblePath *path)
+bool mpt_key_matches(const bytes32 *key, unsigned position, const NibblePath *path)
 {
   if (position + path->len > MPT_SECURE_KEY_NIBBLES) {
     return false;

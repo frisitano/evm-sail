@@ -29,8 +29,8 @@ bool rlp_exact_list(const uint8_t *source, uint32_t source_len, rlp_cursor *chil
 bool rlp_take_fields(rlp_cursor children, rlp_item *fields, uint32_t field_count);
 bool rlp_canonical_bytes(const rlp_item *item);
 bool rlp_canonical_uint(const rlp_item *item, uint32_t maximum_len);
-bool rlp_word_raw(const rlp_item *item, U256 *value);
-bool rlp_quantity_word(const rlp_item *item, U256 *value);
+bool rlp_word_raw(const rlp_item *item, u256 *value);
+bool rlp_quantity_word(const rlp_item *item, u256 *value);
 bool rlp_quantity_u64(const rlp_item *item, uint64_t *value);
 
 #endif

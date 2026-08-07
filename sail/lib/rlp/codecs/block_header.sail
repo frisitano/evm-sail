@@ -65,20 +65,26 @@ function block_header_hash(
      * Amsterdam header-content maximum of 749 bytes. Keep that semantic
      * bound instead of reconstructing a generic backend byte length. */
     if 749 < content_length then {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     };
     let bounded_content_length : range(0, 749) = tmod_nat(content_length, 750);
     let content_len = bounded_content_length;
-    let encoder = rlp_encoder_begin(rlp_list_size(content_len));
+    let encoded_length = rlp_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_length);
     rlp_write_list_prefix(content_len);
-    rlp_write_word(hash_to_word(header.parent_hash));
-    rlp_write_word(hash_to_word(EMPTY_OMMER_HASH));
+    let parent_hash = hash_to_word(header.parent_hash);
+    rlp_write_word(parent_hash);
+    let ommer_hash = hash_to_word(EMPTY_OMMER_HASH);
+    rlp_write_word(ommer_hash);
     rlp_write_addr(header.fee_recipient);
-    rlp_write_word(hash_to_word(header.state_root));
-    rlp_write_word(hash_to_word(transactions_root));
-    rlp_write_word(hash_to_word(header.receipts_root));
-    rlp_write_logs_bloom(logs_bloom_from_ref(header.logs_bloom));
+    let state_root = hash_to_word(header.state_root);
+    rlp_write_word(state_root);
+    let transactions_root_word = hash_to_word(transactions_root);
+    rlp_write_word(transactions_root_word);
+    let receipts_root = hash_to_word(header.receipts_root);
+    rlp_write_word(receipts_root);
+    let logs_bloom = logs_bloom_from_ref(header.logs_bloom);
+    rlp_write_logs_bloom(logs_bloom);
     rlp_write_uint(0);
     rlp_write_uint(header.number);
     rlp_write_uint(header.gas_limit);
@@ -92,19 +98,23 @@ function block_header_hash(
         rlp_write_uint_word(header.base_fee)
     };
     if profile.fork >= Shanghai then {
-        rlp_write_word(hash_to_word(withdrawals_root))
+        let withdrawals_root_word = hash_to_word(withdrawals_root);
+        rlp_write_word(withdrawals_root_word)
     };
 
     if profile.fork >= Cancun then {
         rlp_write_uint(header.blob_gas_used);
         rlp_write_uint(header.excess_blob_gas);
-        rlp_write_word(hash_to_word(header.parent_beacon_block_root))
+        let parent_beacon_block_root = hash_to_word(header.parent_beacon_block_root);
+        rlp_write_word(parent_beacon_block_root)
     };
     if profile.fork >= Prague then {
-        rlp_write_word(hash_to_word(requests_hash))
+        let requests_hash_word = hash_to_word(requests_hash);
+        rlp_write_word(requests_hash_word)
     };
     if profile.fork >= Amsterdam then {
-        rlp_write_word(hash_to_word(block_access_list_hash));
+        let block_access_list_hash_word = hash_to_word(block_access_list_hash);
+        rlp_write_word(block_access_list_hash_word);
         rlp_write_uint(header.slot_number)
     };
     let encoded = rlp_encoder_finish(encoder);

@@ -3,7 +3,7 @@
 
 #include "evmsail/spec/kernel/environment.h"
 #include "lib/mpt/trie.h"
-Hash32 compute_state_root(void)
+bytes32 compute_state_root(void)
 {
   return mpt_compute_state_root(k_parent_state_root);
 }

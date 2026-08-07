@@ -34,14 +34,14 @@ bool output_buffer_store_bytes(const uint8_t *source, uint64_t len)
   return true;
 }
 
-bool output_buffer_store_word(const U256 word)
+bool output_buffer_store_word(const u256 word)
 {
   sail_word_to_be_bytes(buffer->bytes, word);
   buffer->length = 32;
   return true;
 }
 
-bool output_buffer_store_words(const U256 first, const U256 second)
+bool output_buffer_store_words(const u256 first, const u256 second)
 {
   sail_word_to_be_bytes(buffer->bytes, first);
   sail_word_to_be_bytes(buffer->bytes + 32, second);
@@ -80,9 +80,9 @@ bool output_buffer_finish(uint64_t len)
 }
 /* Sail optimized_output_buffer_slice is called only with the length of the
  * buffer contents just stored (sail/optimised/host/output.sail). */
-struct OutputSliceFields output_buffer_slice(uint32_t len)
+Bytes output_buffer_slice(uint32_t len)
 {
-  struct OutputSliceFields out;
+  Bytes out;
   out.bytes = len == 0 ? NULL : buffer->bytes;
   out.len = len;
   return out;

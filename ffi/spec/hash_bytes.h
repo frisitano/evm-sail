@@ -11,18 +11,18 @@
 #include <stdint.h>
 #include <string.h>
 
-static inline int evmsail_hash_compare(const sail_fixed_bytes_32 *a,
-                                       const sail_fixed_bytes_32 *b) {
+static inline int evmsail_hash_compare(const fixed_bytes_32 *a,
+                                       const fixed_bytes_32 *b) {
   return memcmp(a->bytes, b->bytes, sizeof(a->bytes));
 }
 
-static inline int evmsail_hash_equal(const sail_fixed_bytes_32 *a,
-                                     const sail_fixed_bytes_32 *b) {
+static inline int evmsail_hash_equal(const fixed_bytes_32 *a,
+                                     const fixed_bytes_32 *b) {
   return evmsail_hash_compare(a, b) == 0;
 }
 
-static inline sail_fixed_bytes_32 evmsail_hash_from_sail_word(sail_u256 value) {
-  sail_fixed_bytes_32 result = {{0}};
+static inline fixed_bytes_32 evmsail_hash_from_sail_word(u256 value) {
+  fixed_bytes_32 result = {{0}};
   for (size_t i = 0; i < sizeof(result.bytes); ++i) {
     const size_t bit = 8 * (sizeof(result.bytes) - 1 - i);
     result.bytes[i] =
@@ -31,8 +31,8 @@ static inline sail_fixed_bytes_32 evmsail_hash_from_sail_word(sail_u256 value) {
   return result;
 }
 
-static inline sail_u256 evmsail_hash_to_sail_word(const sail_fixed_bytes_32 *value) {
-  sail_u256 result = {{0}};
+static inline u256 evmsail_hash_to_sail_word(const fixed_bytes_32 *value) {
+  u256 result = {{0}};
   for (size_t i = 0; i < sizeof(value->bytes); ++i) {
     const size_t bit = 8 * (sizeof(value->bytes) - 1 - i);
     result.limbs[bit / 64] |=

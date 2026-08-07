@@ -514,8 +514,7 @@ function memory_range(off, len) = struct { off = off, len = len }
 let EMPTY_MEMORY_RANGE : MemoryRangeFields(0, 0) = memory_range(0, 0)
 
 /*! The canonical inactive memory operand. */
-let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) =
-    struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
+let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) = struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
 
 /*! An absolute byte position in the code arena. */
 type code_pointer = range(0, code_region_bound)

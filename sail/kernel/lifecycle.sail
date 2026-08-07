@@ -39,20 +39,11 @@ struct TransactionMergeSemantics = {
 /*! Selects the complete transaction-end lifecycle semantics for one fork. */
 function transaction_merge_semantics(fork : Fork) -> TransactionMergeSemantics =
     if fork >= Amsterdam then {
-        struct {
-            delete_only_created = true,
-            preserve_selfdestruct_balance = true,
-        }
+        struct { delete_only_created = true, preserve_selfdestruct_balance = true }
     } else if fork >= Cancun then {
-        struct {
-            delete_only_created = true,
-            preserve_selfdestruct_balance = false,
-        }
+        struct { delete_only_created = true, preserve_selfdestruct_balance = false }
     } else {
-        struct {
-            delete_only_created = false,
-            preserve_selfdestruct_balance = false,
-        }
+        struct { delete_only_created = false, preserve_selfdestruct_balance = false }
     }
 
 /*! Whether a selfdestructed account is cleared at transaction end: always
@@ -75,16 +66,17 @@ function k_tx_merge() -> unit = {
 
     /* Each pop advances a cursor over a protocol-sized host table. */
     while more termination_measure(2 ^ 64) do {
-        match acct_tx_pop() {
+        let popped_account = acct_tx_pop();
+        match popped_account {
             AcctTxPopRow(e) => {
                 var curr : Account = e.value.curr;
                 let deleted = account_deleted_at_tx_end(semantics, curr);
                 if deleted then {
-                    if semantics.preserve_selfdestruct_balance then {
-                        curr = account_clear_preserving_balance(curr)
-                    } else {
-                        curr = account_delete(curr)
-                    };
+                    let cleared_account =
+                        if semantics.preserve_selfdestruct_balance
+                        then account_clear_preserving_balance(curr)
+                        else account_delete(curr);
+                    curr = cleared_account;
 
                     /* The account's active transaction generation belongs to
                        the deleted incarnation. Retire it before the storage
@@ -92,7 +84,8 @@ function k_tx_merge() -> unit = {
                        block-layer clear. */
                     storage_tx_clear(e.addr)
                 };
-                if deleted | (curr.storage_cleared & not_bool(e.value.orig.storage_cleared)) then {
+                let original_storage_retained = not_bool(e.value.orig.storage_cleared);
+                if deleted | (curr.storage_cleared & original_storage_retained) then {
                     storage_block_clear(e.addr)
                 };
                 if curr.info.nonce != e.value.orig.info.nonce then {
@@ -105,7 +98,8 @@ function k_tx_merge() -> unit = {
                     bal_code_change(k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 };
                 curr = { curr with created = false,  selfdestructed = false };
-                if account_changed(curr, e.value.orig) then {
+                let changed = account_changed(curr, e.value.orig);
+                if changed then {
                     acct_block_write(struct { addr = e.addr, value = struct { curr = curr, orig = e.value.orig } })
                 }
             },
@@ -116,7 +110,8 @@ function k_tx_merge() -> unit = {
 
     /* Each pop advances a cursor over a protocol-sized host table. */
     while more termination_measure(2 ^ 64) do {
-        match storage_tx_pop() {
+        let popped_storage = storage_tx_pop();
+        match popped_storage {
             StorageTxPopRow(e) => {
                 let account = acct_block_get(e.key.addr);
                 if account.found then {

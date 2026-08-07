@@ -70,6 +70,7 @@ enum {
    * regular-transaction gas ceiling therefore admits at most 2,146 tuples.
    * The authorization tracker uses power-of-two open addressing below 50%
    * load, so the first sufficient workspace is 8,192 buckets. */
+  GUEST_PREPARED_AUTHORIZATIONS = (1U << 24) / 7816U,
   GUEST_AUTHORIZATION_ENTRIES = 8192U,
   GUEST_LOG_RECORDS = 65536U,
   GUEST_LOG_TOPICS = 4U * GUEST_LOG_RECORDS,
@@ -107,6 +108,7 @@ void code_workspace_bind(void);
 void frame_stack_workspace_bind(void);
 void memory_workspace_bind(void);
 void output_workspace_bind(void);
+void prepared_authorizations_workspace_bind(void);
 void scratch_workspace_bind(void);
 void stack_workspace_bind(void);
 void state_runtime_workspace_bind(void);

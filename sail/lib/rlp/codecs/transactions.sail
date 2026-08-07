@@ -74,9 +74,11 @@ function decode_access_list_entries(cursor) =
         let entry_fields = rlp_cursor_advance(entry_fields, keys_f.source.len);
         rlp_cursor_expect_end(entry_fields);
 
-        let addr = word_to_address(rlp_decode_word(addr_f));
+        let address_word = rlp_decode_word(addr_f);
+        let addr = word_to_address(address_word);
         let tail = decode_access_list_entries(next);
-        let result = decode_access_list_keys(rlp_decode_list(keys_f), addr, tail);
+        let keys = rlp_decode_list(keys_f);
+        let result = decode_access_list_keys(keys, addr, tail);
         struct { address_count = result.address_count + 1, slot_count = result.slot_count }
     }
 termination_measure decode_access_list_entries(cursor) =
@@ -90,15 +92,15 @@ function decode_access_list forall 'source_off 'source_len 'content_len,
     AccessListRef
 ) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
-        let decoded = decode_access_list_entries(rlp_decode_list(f));
+        let entries = rlp_decode_list(f);
+        let decoded = decode_access_list_entries(entries);
         struct {
             encoded = transaction_rlp_content(f),
             address_count = decoded.address_count,
             slot_count = decoded.slot_count,
         }
     } else {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     }
 }
 
@@ -131,25 +133,24 @@ function decode_blob_hash_items forall 'source_off 'source_len 'limit,
     } else {
         let item = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, item.source.len);
+        let item_prefix = slice_byte(item.source, 0);
         if    item.is_list
            |  item.source.len
            != BLOB_HASH_RLP_LENGTH
            |  item.content_len
            != BLOB_HASH_LENGTH
-           |  slice_byte(item.source, 0)
+           |  item_prefix
            != 0xa0 then {
-            fatal_error(RlpDecode);
-            exit(())
+            fatal_error(RlpDecode)
         };
-        if slice_byte(item.source, 1) != 0x01 then {
-            fatal_error(ExecutionInvalid);
-            exit(())
+        let version = slice_byte(item.source, 1);
+        if version != 0x01 then {
+            fatal_error(ExecutionInvalid)
         };
         if count < limit then {
             decode_blob_hash_items(next, limit, count + 1)
         } else {
-            fatal_error(RlpDecode);
-            exit(())
+            fatal_error(RlpDecode)
         }
     }
 termination_measure decode_blob_hash_items(cursor, limit, count) =
@@ -168,7 +169,9 @@ function decode_blob_hashes forall 'source_off 'source_len 'content_len 'limit,
     BlobHashesFields('limit)
 ) = {
     let bytes = transaction_rlp_content(f);
-    struct { bytes = bytes, count = decode_blob_hash_items(rlp_decode_list(f), limit, 0) }
+    let items = rlp_decode_list(f);
+    let count = decode_blob_hash_items(items, limit, 0);
+    struct { bytes = bytes, count = count }
 }
 
 /* ---- EIP-7702 authorization-tuple recovery ---------------------------------
@@ -182,7 +185,8 @@ function decode_blob_hashes forall 'source_off 'source_len 'content_len 'limit,
  * applies the chain-id / account nonce / code checks. */
 /* The unconsumed authorization-list content span strictly decreases on every call. */
 /*! Structurally validates and counts the remaining authorization tuples.
-    Signature recovery is deliberately deferred until execution. */
+    Field decoding and signature recovery are deliberately deferred until
+    transaction validity has established the gas-derived collection bound. */
 val validate_auth_tuples : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
         RlpCursor('source_off, 'source_len),
         transaction_item_count,
@@ -194,31 +198,11 @@ function validate_auth_tuples(cursor, count) =
     } else {
         let tuple = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, tuple.source.len);
-        let fields = rlp_decode_list(tuple);
-        let chain_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, chain_f.source.len);
-        let addr_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, addr_f.source.len);
-        let nonce_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, nonce_f.source.len);
-        let y_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, y_f.source.len);
-        let _ = rlp_decode_bool(y_f);
-        let r_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, r_f.source.len);
-        let s_f = rlp_decode_item(fields);
-        let fields = rlp_cursor_advance(fields, s_f.source.len);
-        rlp_cursor_expect_end(fields);
-        let _ = rlp_decode_u256(chain_f);
-        let _ = word_to_address(rlp_decode_word(addr_f));
-        let _ = rlp_decode_uint64(nonce_f);
-        let _ = rlp_decode_u256(r_f);
-        let _ = rlp_decode_u256(s_f);
+        let _ = rlp_decode_list(tuple);
         if count < sizeof(transaction_length_bound) then {
             validate_auth_tuples(next, count + 1)
         } else {
-            fatal_error(RlpDecode);
-            exit(())
+            fatal_error(RlpDecode)
         }
     }
 termination_measure validate_auth_tuples(cursor, count) =
@@ -232,13 +216,12 @@ function decode_auth_list forall 'source_off 'source_len 'content_len,
     AuthorizationListRef
 ) = {
     if f.source.len <= sizeof(transaction_length_bound) then {
-        authorization_list_ref(
-            transaction_rlp_content(f),
-            validate_auth_tuples(rlp_decode_list(f), 0),
-        )
+        let content = transaction_rlp_content(f);
+        let tuples = rlp_decode_list(f);
+        let count = validate_auth_tuples(tuples, 0);
+        authorization_list_ref(content, count)
     } else {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     }
 }
 
@@ -270,10 +253,12 @@ function decode_authorization(tuple) = {
     let auth_nonce : account_nonce = rlp_decode_uint64(nonce_f);
     let r = rlp_decode_u256(r_f);
     let s = rlp_decode_u256(s_f);
-    let auth_addr = word_to_address(rlp_decode_word(addr_f));
+    let address_word = rlp_decode_word(addr_f);
+    let auth_addr = word_to_address(address_word);
+    let signing_hash = auth_signing_hash(chain_id, auth_addr, auth_nonce);
     let (ok, authority) : (bool, address) = match y {
-        RlpOk(false) => ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), 0, r, s),
-        RlpOk(true) => ecrecover_addr(auth_signing_hash(chain_id, auth_addr, auth_nonce), 1, r, s),
+        RlpOk(false) => ecrecover_addr(signing_hash, 0, r, s),
+        RlpOk(true) => ecrecover_addr(signing_hash, 1, r, s),
         RlpInvalidValue() => (false, ZERO_ADDRESS),
     };
     struct {
@@ -291,6 +276,59 @@ function decode_authorization(tuple) = {
     }
 }
 
+/*! Decodes the exact counted tuple sequence once, preserving wire order. */
+val prepare_authorization_entries : forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
+        RlpCursor('source_off, 'source_len),
+        prepared_authorization_count,
+    ) -> list(Authorization)
+function prepare_authorization_entries(cursor, count) =
+    if count == 0 then {
+        if cursor.len != 0 then {
+            fatal_error(RlpDecode)
+        };
+        [||]
+    } else {
+        if cursor.len == 0 then {
+            fatal_error(RlpDecode)
+        };
+        let tuple = rlp_decode_item(cursor);
+        let next = rlp_cursor_advance(cursor, tuple.source.len);
+        let authorization = decode_authorization(tuple);
+        authorization :: prepare_authorization_entries(next, count - 1)
+    }
+termination_measure prepare_authorization_entries(cursor, count) = count
+
+/*! Materializes a transaction's authorizations only after successful validity
+    has made this narrowing guard unreachable for protocol-valid input. */
+function prepare_authorizations(authorizations : AuthorizationListRef) -> PreparedAuthorizationList = {
+    if authorizations.count <= sizeof(prepared_authorization_count_bound) then {
+        let encoded : StatelessInputSlice = authorizations.encoded;
+        let entries = prepare_authorization_entries(encoded, authorizations.count);
+        struct { entries = entries, count = authorizations.count }
+    } else {
+        fatal_error(ExecutionInvalid)
+    }
+}
+
+/*! Reads the current prepared entry. Callers carry the decreasing count that
+    proves this operation is not applied to the empty collection. */
+function prepared_authorization_head(authorizations : PreparedAuthorizationList) -> Authorization =
+    match authorizations.entries {
+        authorization :: _ => authorization,
+        [||] => fatal_error(ExecutionInvalid),
+    }
+
+/*! Advances the immutable prepared collection by one entry. */
+val prepared_authorization_tail : forall 'count, 0 < 'count & 'count <= prepared_authorization_count_bound. (
+        PreparedAuthorizationList,
+        int('count),
+    ) -> PreparedAuthorizationList
+function prepared_authorization_tail(authorizations, count) =
+    match authorizations.entries {
+        _ :: entries => struct { entries = entries, count = count - 1 },
+        [||] => fatal_error(ExecutionInvalid),
+    }
+
 /*! The calldata/initcode span of the data field within the envelope. The RLP
     cursor existentially hides its bounded source length, so this boundary
     reifies the already-established transaction-envelope invariant. */
@@ -303,8 +341,7 @@ function tx_input_span forall 'source_off 'source_len 'content_len,
     if content.len <= sizeof(transaction_length_bound) then {
         content
     } else {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     }
 }
 
@@ -324,8 +361,7 @@ function tx_sig_span(first, signature) = {
     let start_offset = start;
     let stop_offset = stop;
     if stop_offset < start_offset then {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     } else {
         stateless_input_slice(start_offset, stop_offset - start_offset)
     }
@@ -373,6 +409,10 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
     rlp_cursor_expect_end(fields);
     let v = rlp_decode_word(v_f);
     let gp = rlp_decode_u256(gp_f);
+    let recipient_word = rlp_decode_word(to_f);
+    let recipient = word_to_address(recipient_word);
+    let signing_span = tx_sig_span(nonce_f, v_f);
+    let signing_hash = tx_signing_hash(LegacyTx, signing_span, v);
     struct {
         tx_type = LegacyTx,
         sender = sender,
@@ -381,7 +421,7 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
         chain_id = 0,
         gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_decode_word(to_f)),
+        recipient = recipient,
         value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = EMPTY_ACCESS_LIST_REF,
@@ -391,7 +431,7 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
-        signing_hash = tx_signing_hash(LegacyTx, tx_sig_span(nonce_f, v_f), v),
+        signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
         sig_s = rlp_decode_u256(s_f),
@@ -433,6 +473,10 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
     let v = rlp_decode_word(v_f);
     let gp = rlp_decode_u256(gp_f);
     let access_list = decode_access_list(al_f);
+    let recipient_word = rlp_decode_word(to_f);
+    let recipient = word_to_address(recipient_word);
+    let signing_span = tx_sig_span(chain_f, v_f);
+    let signing_hash = tx_signing_hash(AccessListTx, signing_span, v);
     struct {
         tx_type = AccessListTx,
         sender = sender,
@@ -441,7 +485,7 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
         chain_id = rlp_decode_uint64(chain_f),
         gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_decode_word(to_f)),
+        recipient = recipient,
         value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
@@ -451,7 +495,7 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
-        signing_hash = tx_signing_hash(AccessListTx, tx_sig_span(chain_f, v_f), v),
+        signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
         sig_s = rlp_decode_u256(s_f),
@@ -494,6 +538,10 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
     rlp_cursor_expect_end(fields);
     let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
+    let recipient_word = rlp_decode_word(to_f);
+    let recipient = word_to_address(recipient_word);
+    let signing_span = tx_sig_span(chain_f, v_f);
+    let signing_hash = tx_signing_hash(FeeMarketTx, signing_span, v);
     struct {
         tx_type = FeeMarketTx,
         sender = sender,
@@ -502,7 +550,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
         chain_id = rlp_decode_uint64(chain_f),
         gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_decode_word(to_f)),
+        recipient = recipient,
         value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
@@ -512,7 +560,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
-        signing_hash = tx_signing_hash(FeeMarketTx, tx_sig_span(chain_f, v_f), v),
+        signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
         sig_s = rlp_decode_u256(s_f),
@@ -562,6 +610,10 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
     let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
     let blob_hashes = decode_blob_hashes(bh_f, blob_limit);
+    let recipient_word = rlp_decode_word(to_f);
+    let recipient = word_to_address(recipient_word);
+    let signing_span = tx_sig_span(chain_f, v_f);
+    let signing_hash = tx_signing_hash(BlobTx, signing_span, v);
     struct {
         tx_type = BlobTx,
         sender = sender,
@@ -570,7 +622,7 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
         chain_id = rlp_decode_uint64(chain_f),
         gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_decode_word(to_f)),
+        recipient = recipient,
         value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
@@ -580,7 +632,7 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = blob_hashes,
         pubkey = pubkey,
-        signing_hash = tx_signing_hash(BlobTx, tx_sig_span(chain_f, v_f), v),
+        signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
         sig_s = rlp_decode_u256(s_f),
@@ -626,15 +678,21 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     let v = rlp_decode_word(v_f);
     let access_list = decode_access_list(al_f);
     let authorizations = decode_auth_list(auth_f);
+    let decoded_nonce = rlp_decode_uint64(nonce_f);
+    let nonce = word_of_account_nonce(decoded_nonce);
+    let recipient_word = rlp_decode_word(to_f);
+    let recipient = word_to_address(recipient_word);
+    let signing_span = tx_sig_span(chain_f, v_f);
+    let signing_hash = tx_signing_hash(SetCodeTx, signing_span, v);
     struct {
         tx_type = SetCodeTx,
         sender = sender,
         raw = tx,
-        nonce = word_of_account_nonce(rlp_decode_uint64(nonce_f)),
+        nonce = nonce,
         chain_id = rlp_decode_uint64(chain_f),
         gas_limit = rlp_decode_gas(gas_f),
         is_create = to_f.content_len == 0,
-        recipient = word_to_address(rlp_decode_word(to_f)),
+        recipient = recipient,
         value = rlp_decode_u256(value_f),
         input_src = tx_input_span(data_f),
         access_list = access_list,
@@ -644,7 +702,7 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
         authorizations = authorizations,
         blob_hashes = EMPTY_BLOB_HASHES,
         pubkey = pubkey,
-        signing_hash = tx_signing_hash(SetCodeTx, tx_sig_span(chain_f, v_f), v),
+        signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
         sig_s = rlp_decode_u256(s_f),
@@ -680,39 +738,49 @@ val rlp_decode_tx : forall 'tx_off 'tx_len 'public_key_off 'blob_limit,
         int('blob_limit),
     ) -> Transaction
 function rlp_decode_tx(tx, pubkey, blob_limit) = {
-    let sender = word_to_address(hash_to_word(keccak256(sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH))));
+    let public_key_body = sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH);
+    let public_key_hash = keccak256(public_key_body);
+    let public_key_word = hash_to_word(public_key_hash);
+    let sender = word_to_address(public_key_word);
     let tx_length = tx.len;
-    let b0 : byte = if tx_length == 0 then {
-            fatal_error(RlpDecode);
-            exit(())
-        } else {
-            slice_byte(tx, 0)
-        };
-    let ttype : byte = if b0[7 .. 6] == 0b11 then { 0x00 } else { b0 }; /* 0xc0 = RLP list tag */
+    let b0 : byte =
+        if tx_length == 0 then fatal_error(RlpDecode) else slice_byte(tx, 0);
+    let ttype : byte =
+        if b0[7 .. 6] == 0b11 then 0x00 else b0; /* 0xc0 = RLP list tag */
     let typed = ttype != 0x00;
-    let payload : TransactionInputSlice = if typed then {
-            if 1 <= tx_length then {
-                sub_slice(tx, 1, tx_length - 1)
-            } else {
-                fatal_error(RlpDecode);
-                exit(())
-            }
-        } else {
-            tx
-        };
+    let payload : TransactionInputSlice =
+        if typed then if 1 <= tx_length then sub_slice(tx, 1, tx_length - 1) else fatal_error(RlpDecode) else tx;
     let payload_input : StatelessInputSlice = payload;
     let fields = rlp_node_cursor(payload_input);
 
-    if not_bool(tx_envelope_type_backwards_matches(ttype)) then {
-        fatal_error(RlpDecode);
-        exit(())
+    let tx_type : TxType = match ttype {
+        0x00 => LegacyTx,
+        0x01 => AccessListTx,
+        0x02 => FeeMarketTx,
+        0x03 => BlobTx,
+        0x04 => SetCodeTx,
+        _ => fatal_error(RlpDecode),
     };
-    let tx_type : TxType = tx_envelope_type(ttype);
     match tx_type {
-        LegacyTx => pack_transaction(decode_legacy_tx(tx, pubkey, sender, fields)),
-        AccessListTx => pack_transaction(decode_access_list_tx(tx, pubkey, sender, fields)),
-        FeeMarketTx => pack_transaction(decode_fee_market_tx(tx, pubkey, sender, fields)),
-        BlobTx => pack_transaction(decode_blob_tx(tx, pubkey, blob_limit, sender, fields)),
-        SetCodeTx => pack_transaction(decode_set_code_tx(tx, pubkey, sender, fields)),
+        LegacyTx => {
+            let decoded = decode_legacy_tx(tx, pubkey, sender, fields);
+            pack_transaction(decoded)
+        },
+        AccessListTx => {
+            let decoded = decode_access_list_tx(tx, pubkey, sender, fields);
+            pack_transaction(decoded)
+        },
+        FeeMarketTx => {
+            let decoded = decode_fee_market_tx(tx, pubkey, sender, fields);
+            pack_transaction(decoded)
+        },
+        BlobTx => {
+            let decoded = decode_blob_tx(tx, pubkey, blob_limit, sender, fields);
+            pack_transaction(decoded)
+        },
+        SetCodeTx => {
+            let decoded = decode_set_code_tx(tx, pubkey, sender, fields);
+            pack_transaction(decoded)
+        },
     }
 }

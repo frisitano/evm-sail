@@ -10,9 +10,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-static struct CodeRegionSliceFields code_region_value(uint8_t *bytes, uint32_t len)
+static Bytes code_region_value(const uint8_t *bytes, uint32_t len)
 {
-  struct CodeRegionSliceFields out;
+  Bytes out;
   out.bytes = bytes;
   out.len = len;
   return out;
@@ -20,7 +20,7 @@ static struct CodeRegionSliceFields code_region_value(uint8_t *bytes, uint32_t l
 
 /* Unstable source bytes are copied into the arena and registered; workspace
  * exhaustion fails closed. */
-static struct CodeRegionSliceFields code_region_from_bytes(const uint8_t *bytes, uint32_t len)
+static Bytes code_region_from_bytes(const uint8_t *bytes, uint32_t len)
 {
   if (len == 0) {
     return code_region_value(0, 0);
@@ -39,7 +39,7 @@ static struct CodeRegionSliceFields code_region_from_bytes(const uint8_t *bytes,
  * input pointer and the bytes are never copied. A slice that fails
  * re-validation against the live input is structural corruption, not a
  * witness deficiency. */
-struct CodeRegionSliceFields code_region_from_input(struct StatelessInputSliceFields input)
+Bytes code_region_from_input(Bytes input)
 {
   const uint32_t len = input.len;
   if (len == 0) {
@@ -49,28 +49,28 @@ struct CodeRegionSliceFields code_region_from_input(struct StatelessInputSliceFi
   if (!bytes) {
     GUEST_ABORT();
   }
-  return code_region_value(sail_read_only_bytes(bytes), len);
+  return code_region_value(bytes, len);
 }
 
-#define DEFINE_CODE_REGION_FROM(name, type)                                                        \
-  struct CodeRegionSliceFields name(struct type input)                                             \
+#define DEFINE_CODE_REGION_FROM(name)                                                              \
+  Bytes name(Bytes input)                                                                          \
   {                                                                                                \
     return code_region_from_bytes(input.bytes, input.len);                                         \
   }
 
-DEFINE_CODE_REGION_FROM(code_region_from_memory, EvmMemorySliceFields)
-DEFINE_CODE_REGION_FROM(code_region_from_output, OutputSliceFields)
+DEFINE_CODE_REGION_FROM(code_region_from_memory)
+DEFINE_CODE_REGION_FROM(code_region_from_output)
 
 #undef DEFINE_CODE_REGION_FROM
 
-struct CodeRegionSliceFields code_region_from_delegation(Address address)
+Bytes code_region_from_delegation(bytes20 address)
 {
   uint8_t bytes[23] = {0xef, 0x01, 0x00};
   address_to_be_bytes(bytes + 3, address);
   return code_region_from_bytes(bytes, sizeof(bytes));
 }
 
-struct CodeFields code_db_resolve_indexed(Hash32 hash)
+struct CodeFields code_db_resolve_indexed(bytes32 hash)
 {
   struct CodeFields code = {0};
   if (hash_equal(&hash, &EVMSAIL_KECCAK_EMPTY)) {
@@ -83,7 +83,7 @@ struct CodeFields code_db_resolve_indexed(Hash32 hash)
   if (!code_db_lookup_view(hash, &bytes, &len, &jumpdests)) {
     fatal_error(WitnessDeficient);
   }
-  code.bytes = sail_read_only_bytes(bytes);
+  code.bytes = bytes;
   code.len = len;
   code.jumpdests = jumpdests;
   return code;

@@ -12,7 +12,8 @@ function k_code_key(a : address) -> hash = k_aload(a).info.code_hash
     not `KECCAK_EMPTY`. */
 function k_get_codehash(a : address) -> hash = {
     let acc = k_aload(a);
-    if not_bool(acc.present) then {
+    let missing = not_bool(acc.present);
+    if missing then {
         ZERO_HASH
     } else {
         acc.info.code_hash
@@ -33,7 +34,8 @@ function k_deploy_code(a : address, code : CodeSlice) -> unit = {
 function k_set_delegation(a : address, target : address) -> unit = {
     let cur = k_aload(a);
     let execution_profile = k_execution_profile;
-    let code = validated_code_slice(code_region_from_delegation(target));
+    let code_region = code_region_from_delegation(target);
+    let code = validated_code_slice(code_region);
     let h : hash = code_db_insert(code, execution_profile.protocol.fork);
     store_account_info(a, cur, { cur.info with code_hash = h })
 }
@@ -54,13 +56,16 @@ function k_deleg_target(a : address) -> (bool, address) = {
 
 /*! `EXTCODESIZE`: the account's code length in bytes. */
 function k_get_code_size(a : address) -> code_length = {
-    let code = code_db_resolve(k_code_key(a));
+    let code_key = k_code_key(a);
+    let code = code_db_resolve(code_key);
     code.len
 }
 
 /*! `EXTCODECOPY`: copies account code into frame memory, zero-padded
     past the end. */
 function k_code_copy(a : address, dst : memory_pointer, off : word, len : memory_length) -> unit = {
-    let code = code_db_resolve(k_code_key(a));
-    slice_copy_word_offset(code_bytes(code), dst, off, len)
+    let code_key = k_code_key(a);
+    let code = code_db_resolve(code_key);
+    let bytes = code_bytes(code);
+    slice_copy_word_offset(bytes, dst, off, len)
 }

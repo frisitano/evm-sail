@@ -393,8 +393,7 @@ static int htr_item_root(enum htr_item_kind kind, const uint8_t *bytes, htr_root
  * `count` is within 2^depth at every call: request lists are checked by
  * htr_request_list, transactions and withdrawals are bounded by their Sail
  * list-reference types, and versioned hashes by MAX_BLOB_COMMITMENTS. */
-static int htr_list_root(enum htr_item_kind kind, struct StatelessInputSliceFields span,
-                         uint64_t count, htr_root out)
+static int htr_list_root(enum htr_item_kind kind, Bytes span, uint64_t count, htr_root out)
 {
   struct htr_accumulator acc;
   htr_accumulator_init(&acc, htr_list_layout[kind].depth);
@@ -421,8 +420,7 @@ static int htr_list_root(enum htr_item_kind kind, struct StatelessInputSliceFiel
 
 /* Request-list shape enforcement: this is the only bound on the raw request
  * slices. */
-static int htr_request_list(enum htr_item_kind kind, struct StatelessInputSliceFields span,
-                            htr_root out)
+static int htr_request_list(enum htr_item_kind kind, Bytes span, htr_root out)
 {
   const uint64_t item_size = htr_list_layout[kind].item_size;
   const uint64_t count = span.len / item_size;
@@ -479,7 +477,7 @@ static int htr_execution_requests(const struct StatelessInputRef *input, htr_roo
   return 1;
 }
 
-Hash32 htr_new_payload_request(struct StatelessInputRef input_ref)
+bytes32 htr_new_payload_request(struct StatelessInputRef input_ref)
 {
   htr_root leaves[4] = {{0}};
   htr_root root = {0};

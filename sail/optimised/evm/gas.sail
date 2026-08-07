@@ -8,16 +8,12 @@ function memory_required_size(start, size) =
     } else if start <= sizeof(memory_region_bound) then {
         let (bounded_start as 'bounded_start) :
                 {'bounded_start,
-                 'bounded_start == 'start
-                 & 0 <= 'bounded_start
-                 & 'bounded_start <= memory_region_bound.
+                 'bounded_start == 'start & 0 <= 'bounded_start & 'bounded_start <= memory_region_bound.
                  int('bounded_start)} = start;
         if size <= sizeof(memory_region_bound) - bounded_start then {
             let (bounded_size as 'bounded_size) :
                     {'bounded_size,
-                     'bounded_size == 'size
-                     & 0 < 'bounded_size
-                     & 'bounded_size <= memory_region_bound - 'bounded_start.
+                     'bounded_size == 'size & 0 < 'bounded_size & 'bounded_size <= memory_region_bound - 'bounded_start.
                      int('bounded_size)} = size;
             bounded_start + bounded_size
         } else {
@@ -39,7 +35,11 @@ function memory_expansion_cost(required_size) =
         } else {
             let old_cost = mem_cost(old_words);
             let new_cost = mem_cost(new_words);
-            if old_cost <= new_cost then { new_cost - old_cost } else { 0 }
+            if old_cost <= new_cost then {
+                new_cost - old_cost
+            } else {
+                0
+            }
         }
     } else {
         2 ^ 64

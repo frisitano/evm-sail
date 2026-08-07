@@ -99,6 +99,7 @@ val acct_block_iter_begin = impure { c: "acct_block_iter_begin" } : unit -> unit
 /*! Returns the next account update candidate and its cached secure key in
     ascending secure-key order, or reports traversal exhaustion. */
 val acct_block_iter_next = impure { c: "acct_block_iter_next" } : unit -> AcctBlockIterResult
+
 /* EIP-7928 block-access-list recorder */
 /*! Clears the block-access-list recorder (start of block execution). */
 val bal_reset = impure { c: "bal_reset" } : unit -> unit
@@ -177,7 +178,7 @@ val storage_mark_warm = impure { c: "storage_mark_warm" } : (address, word) -> u
 
 /* EIP-7702 transaction-local authority bookkeeping */
 /*! Clears and pre-sizes the authorization tracker for one transaction. */
-val authorization_tracker_reset = impure { c: "authorization_tracker_reset" } : transaction_item_count -> unit
+val authorization_tracker_reset = impure { c: "authorization_tracker_reset" } : prepared_authorization_count -> unit
 /*! Whether a successfully applied authorization for this authority was seen. */
 val authorization_tracker_seen = impure { c: "authorization_tracker_seen" } : address -> bool
 /*! Whether the authority was delegated before its first successful tuple. */

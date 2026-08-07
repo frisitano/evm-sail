@@ -16,7 +16,7 @@
 #include <string.h>
 
 typedef struct {
-  Address address;
+  bytes20 address;
   uint32_t topic_offset;
   uint32_t topic_count;
   uint32_t data_offset;
@@ -25,7 +25,7 @@ typedef struct {
 
 typedef struct {
   LogRecord *records;
-  U256 *topics;
+  u256 *topics;
   uint8_t *data;
   uint32_t record_count;
   uint32_t topic_count;
@@ -73,7 +73,7 @@ uint64_t logs_tx_count(void)
   return log_table.record_count - log_table.transaction_start;
 }
 
-void log_begin(Address address)
+void log_begin(bytes20 address)
 {
   if (log_table.record_count >= log_table.record_capacity) {
     GUEST_ABORT();
@@ -87,7 +87,7 @@ void log_begin(Address address)
   record->data_length = 0;
 }
 
-void log_add_topic(U256 topic)
+void log_add_topic(u256 topic)
 {
   if (log_table.record_count == 0 || log_table.topic_count >= log_table.topic_capacity) {
     GUEST_ABORT();
@@ -109,7 +109,7 @@ void log_add_data_bulk(const uint8_t *bytes, uint64_t length)
   log_table.records[log_table.record_count - 1].data_length += (uint32_t)length;
 }
 
-void log_add_data_word(U256 value)
+void log_add_data_word(u256 value)
 {
   uint8_t bytes[32];
   sail_word_to_be_bytes(bytes, value);
@@ -117,7 +117,7 @@ void log_add_data_word(U256 value)
 }
 
 /* LOG payloads are copied from active-frame memory into the log-data arena. */
-void log_add_data_memory(struct EvmMemorySliceFields data)
+void log_add_data_memory(Bytes data)
 {
   const uint64_t len = data.len;
   const uint8_t *p = data.bytes;
@@ -141,7 +141,7 @@ uint64_t log_count(void)
   return log_table.record_count;
 }
 
-Address log_addr(uint64_t index)
+bytes20 log_addr(uint64_t index)
 {
   return log_table.records[index].address;
 }
@@ -151,7 +151,7 @@ uint64_t log_topic_count(uint64_t index)
   return log_table.records[index].topic_count;
 }
 
-U256 log_topic(uint64_t log_index, uint64_t topic_index)
+u256 log_topic(uint64_t log_index, uint64_t topic_index)
 {
   return log_table.topics[log_table.records[log_index].topic_offset + topic_index];
 }
@@ -203,7 +203,7 @@ bool receipt_runtime_bloom_write(uint64_t start, uint64_t count, uint8_t out[256
   memset(out, 0, 256);
   for (uint64_t offset = 0; offset < count; ++offset) {
     const LogRecord *record = &log_table.records[start + offset];
-    if (!bloom_write_bytes(out, address_bytes_const(&record->address), 20)) {
+    if (!bloom_write_bytes(out, bytes20_data(&record->address), 20)) {
       return false;
     }
     for (uint32_t topic = 0; topic < record->topic_count; ++topic) {
@@ -227,7 +227,7 @@ uint32_t log_data_off(uint64_t index)
   return log_table.records[index].data_offset;
 }
 
-struct LogDataSliceFields host_log_data_slice(uint64_t index)
+Bytes host_log_data_slice(uint64_t index)
 {
   if (index >= log_table.record_count) {
     GUEST_ABORT();
@@ -237,7 +237,7 @@ struct LogDataSliceFields host_log_data_slice(uint64_t index)
       record->data_length > log_table.data_length - record->data_offset) {
     GUEST_ABORT();
   }
-  return (struct LogDataSliceFields){
+  return (Bytes){
       .bytes = record->data_length == 0 ? NULL : log_table.data + record->data_offset,
       .len = record->data_length,
   };

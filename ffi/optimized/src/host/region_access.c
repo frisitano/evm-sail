@@ -67,38 +67,38 @@ bool stateless_input_offset(const uint8_t *pointer, size_t len, uint32_t *off)
   return true;
 }
 
-static void full_input_value(struct StatelessInputSliceFields *out)
+static void full_input_value(Bytes *out)
 {
   acquire_private_input();
   if (private_input_size > UINT32_MAX) {
     fatal_error(InvalidConfig);
   }
-  out->bytes = private_input_size == 0 ? NULL : sail_read_only_bytes(private_input);
+  out->bytes = private_input_size == 0 ? NULL : private_input;
   out->len = (uint32_t)private_input_size;
 }
 
-struct StatelessInputSliceFields stateless_input(void)
+Bytes stateless_input(void)
 {
-  struct StatelessInputSliceFields out;
+  Bytes out;
   full_input_value(&out);
   return out;
 }
 
-struct EvmMemorySliceFields mem_expand(uint32_t len)
+Bytes mem_expand(uint32_t len)
 {
-  struct EvmMemorySliceFields out;
+  Bytes out;
   const uint64_t base = evm_memory_expand(len);
   if (base > evm_memory_capacity() || len > evm_memory_capacity() - base) {
     GUEST_ABORT();
   }
-  out.bytes = len == 0 ? NULL : sail_read_only_bytes(evm_memory_base() + base);
+  out.bytes = len == 0 ? NULL : evm_memory_base() + base;
   out.len = len;
   return out;
 }
 
-struct StatelessInputSliceFields nodedb_lookup(Hash32 hash)
+Bytes nodedb_lookup(bytes32 hash)
 {
-  struct StatelessInputSliceFields out;
+  Bytes out;
   uint32_t off = 0;
   uint32_t len = 0;
   nodedb_lookup_span(hash, &off, &len);
@@ -106,7 +106,7 @@ struct StatelessInputSliceFields nodedb_lookup(Hash32 hash)
   if (off > private_input_size || len > private_input_size - off) {
     GUEST_ABORT();
   }
-  out.bytes = len == 0 ? NULL : sail_read_only_bytes(private_input + off);
+  out.bytes = len == 0 ? NULL : private_input + off;
   out.len = len;
   return out;
 }
@@ -161,7 +161,7 @@ static bool region_strided_zero(const uint8_t *bytes, uint64_t len, uint64_t sta
 
 /* Sail slice_load wrappers call only under index < s.len
  * (sail/host/region_access.sail). */
-static U256 region_load_word(const uint8_t *source, uint64_t len, uint64_t index)
+static u256 region_load_word(const uint8_t *source, uint64_t len, uint64_t index)
 {
   uint8_t bytes[32] = {0};
   uint64_t count = len - index;
@@ -174,7 +174,7 @@ static U256 region_load_word(const uint8_t *source, uint64_t len, uint64_t index
 
 /* Sail slice_load_n wrappers call only under index < s.len with
  * 0 <= 'n <= 32 (sail/host/region_access.sail). */
-static U256 region_load_n_word(const uint8_t *source, uint64_t len, uint64_t index,
+static u256 region_load_n_word(const uint8_t *source, uint64_t len, uint64_t index,
                                uint64_t requested)
 {
   uint8_t bytes[32] = {0};
@@ -211,88 +211,87 @@ static void region_copy_to_memory(const uint8_t *source, uint64_t len, uint64_t 
   memset(destination + count, 0, (size_t)(requested - count));
 }
 
-#define DEFINE_SLICE_BYTE(prefix, type)                                                            \
-  uint64_t prefix##_byte_at(struct type slice, uint32_t index)                                     \
+#define DEFINE_SLICE_BYTE(prefix)                                                                  \
+  uint64_t prefix##_byte_at(Bytes slice, uint32_t index)                                           \
   {                                                                                                \
     return region_byte_at(SLICE_PTR(slice), SLICE_LEN(slice), index);                              \
   }
 
-#define DEFINE_SLICE_LOAD(prefix, type)                                                            \
-  U256 prefix##_load_word(struct type slice, uint32_t index)                                       \
+#define DEFINE_SLICE_LOAD(prefix)                                                                  \
+  u256 prefix##_load_word(Bytes slice, uint32_t index)                                             \
   {                                                                                                \
     return region_load_word(SLICE_PTR(slice), SLICE_LEN(slice), index);                            \
   }
 
-#define DEFINE_SLICE_LOAD_N(prefix, type)                                                          \
-  U256 prefix##_load_n_word(struct type slice, uint32_t index, uint8_t len)                        \
+#define DEFINE_SLICE_LOAD_N(prefix)                                                                \
+  u256 prefix##_load_n_word(Bytes slice, uint32_t index, uint8_t len)                              \
   {                                                                                                \
     return region_load_n_word(SLICE_PTR(slice), SLICE_LEN(slice), index, len);                     \
   }
 
-#define DEFINE_SLICE_COPY(prefix, type)                                                            \
-  void prefix##_copy_to_memory(struct type slice, uint32_t dst, uint32_t index, uint32_t len)      \
+#define DEFINE_SLICE_COPY(prefix)                                                                  \
+  void prefix##_copy_to_memory(Bytes slice, uint32_t dst, uint32_t index, uint32_t len)            \
   {                                                                                                \
     region_copy_to_memory(SLICE_PTR(slice), SLICE_LEN(slice), dst, index, len);                    \
   }
 
-DEFINE_SLICE_BYTE(stateless_input, StatelessInputSliceFields)
-DEFINE_SLICE_BYTE(memory_slice, EvmMemorySliceFields)
-DEFINE_SLICE_BYTE(scratch_slice, ScratchSliceFields)
-DEFINE_SLICE_BYTE(log_data_slice, LogDataSliceFields)
-DEFINE_SLICE_BYTE(output_slice, OutputSliceFields)
+DEFINE_SLICE_BYTE(stateless_input)
+DEFINE_SLICE_BYTE(memory_slice)
+DEFINE_SLICE_BYTE(scratch_slice)
+DEFINE_SLICE_BYTE(log_data_slice)
+DEFINE_SLICE_BYTE(output_slice)
 
-DEFINE_SLICE_LOAD(stateless_input, StatelessInputSliceFields)
-DEFINE_SLICE_LOAD(memory_slice, EvmMemorySliceFields)
-DEFINE_SLICE_LOAD(scratch_slice, ScratchSliceFields)
-DEFINE_SLICE_LOAD(log_data_slice, LogDataSliceFields)
-DEFINE_SLICE_LOAD(output_slice, OutputSliceFields)
+DEFINE_SLICE_LOAD(stateless_input)
+DEFINE_SLICE_LOAD(memory_slice)
+DEFINE_SLICE_LOAD(scratch_slice)
+DEFINE_SLICE_LOAD(log_data_slice)
+DEFINE_SLICE_LOAD(output_slice)
 
-DEFINE_SLICE_LOAD_N(stateless_input, StatelessInputSliceFields)
-DEFINE_SLICE_LOAD_N(scratch_slice, ScratchSliceFields)
+DEFINE_SLICE_LOAD_N(stateless_input)
+DEFINE_SLICE_LOAD_N(scratch_slice)
 
-DEFINE_SLICE_COPY(stateless_input, StatelessInputSliceFields)
-DEFINE_SLICE_COPY(memory_slice, EvmMemorySliceFields)
-DEFINE_SLICE_COPY(output_slice, OutputSliceFields)
+DEFINE_SLICE_COPY(stateless_input)
+DEFINE_SLICE_COPY(memory_slice)
+DEFINE_SLICE_COPY(output_slice)
 
 #undef DEFINE_SLICE_BYTE
 #undef DEFINE_SLICE_LOAD
 #undef DEFINE_SLICE_LOAD_N
 #undef DEFINE_SLICE_COPY
 
-uint64_t code_region_byte_at(struct CodeRegionSliceFields slice, uint32_t index)
+uint64_t code_region_byte_at(Bytes slice, uint32_t index)
 {
   return region_byte_at(slice.bytes, slice.len, index);
 }
 
-U256 code_region_load_word(struct CodeRegionSliceFields slice, uint32_t index)
+u256 code_region_load_word(Bytes slice, uint32_t index)
 {
   return region_load_word(slice.bytes, slice.len, index);
 }
 
-U256 code_region_load_n_word(struct CodeRegionSliceFields slice, uint32_t index, uint8_t len)
+u256 code_region_load_n_word(Bytes slice, uint32_t index, uint8_t len)
 {
   return region_load_n_word(slice.bytes, slice.len, index, len);
 }
 
-void code_region_copy_to_memory(struct CodeRegionSliceFields slice, uint32_t dst, uint32_t index,
-                                uint32_t len)
+void code_region_copy_to_memory(Bytes slice, uint32_t dst, uint32_t index, uint32_t len)
 {
   region_copy_to_memory(slice.bytes, slice.len, dst, index, len);
 }
 
-uint32_t stateless_input_count_nonzero(struct StatelessInputSliceFields slice)
+uint32_t stateless_input_count_nonzero(Bytes slice)
 {
   return (uint32_t)region_count_nonzero(SLICE_PTR(slice), SLICE_LEN(slice));
 }
 
-bool stateless_input_strided_zero(struct StatelessInputSliceFields slice, uint32_t start,
-                                  uint32_t stride, uint32_t width, uint32_t count)
+bool stateless_input_strided_zero(Bytes slice, uint32_t start, uint32_t stride, uint32_t width,
+                                  uint32_t count)
 {
   return region_strided_zero(SLICE_PTR(slice), SLICE_LEN(slice), start, stride, width, count);
 }
 
-bool memory_slice_strided_zero(struct EvmMemorySliceFields slice, uint32_t start, uint32_t stride,
-                               uint32_t width, uint32_t count)
+bool memory_slice_strided_zero(Bytes slice, uint32_t start, uint32_t stride, uint32_t width,
+                               uint32_t count)
 {
   return region_strided_zero(SLICE_PTR(slice), SLICE_LEN(slice), start, stride, width, count);
 }
@@ -309,35 +308,33 @@ static bool regions_equal(const uint8_t *left, uint64_t left_len, const uint8_t 
   return memcmp(left, right, (size_t)left_len) == 0;
 }
 
-bool scratch_input_slices_equal(struct ScratchSliceFields left,
-                                struct StatelessInputSliceFields right)
+bool scratch_input_slices_equal(Bytes left, Bytes right)
 {
   return regions_equal(SLICE_PTR(left), SLICE_LEN(left), SLICE_PTR(right), SLICE_LEN(right));
 }
 
-bool log_input_slices_equal(struct LogDataSliceFields left, struct StatelessInputSliceFields right)
+bool log_input_slices_equal(Bytes left, Bytes right)
 {
   return regions_equal(SLICE_PTR(left), SLICE_LEN(left), SLICE_PTR(right), SLICE_LEN(right));
 }
 
-bool input_code_slices_equal(struct StatelessInputSliceFields left,
-                             struct CodeRegionSliceFields right)
+bool input_code_slices_equal(Bytes left, Bytes right)
 {
   return regions_equal(SLICE_PTR(left), SLICE_LEN(left), right.bytes, right.len);
 }
 
-static struct ScratchSliceFields scratch_result_value(uint64_t end)
+static Bytes scratch_result_value(uint64_t end)
 {
   if (end > UINT32_MAX) {
     fatal_error(InvalidConfig);
   }
-  return (struct ScratchSliceFields){
-      .bytes = end == 0 ? NULL : sail_read_only_bytes(scratch_base()),
+  return (Bytes){
+      .bytes = end == 0 ? NULL : scratch_base(),
       .len = (uint32_t)end,
   };
 }
 
-struct ScratchSliceFields scratch_store_byte(uint32_t off, uint64_t data)
+Bytes scratch_store_byte(uint32_t off, uint64_t data)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 1);
@@ -351,8 +348,7 @@ struct ScratchSliceFields scratch_store_byte(uint32_t off, uint64_t data)
   return scratch_result_value(dst + 1);
 }
 
-static struct ScratchSliceFields scratch_store_region(uint64_t dst, const uint8_t *source,
-                                                      uint64_t len)
+static Bytes scratch_store_region(uint64_t dst, const uint8_t *source, uint64_t len)
 {
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && (!out || !source)) {
@@ -367,27 +363,27 @@ static struct ScratchSliceFields scratch_store_region(uint64_t dst, const uint8_
   return scratch_result_value(dst + len);
 }
 
-#define DEFINE_SCRATCH_STORE(name, type)                                                           \
-  struct ScratchSliceFields name(uint32_t off, struct type slice)                                  \
+#define DEFINE_SCRATCH_STORE(name)                                                                 \
+  Bytes name(uint32_t off, Bytes slice)                                                            \
   {                                                                                                \
     return scratch_store_region(off, SLICE_PTR(slice), SLICE_LEN(slice));                          \
   }
 
-DEFINE_SCRATCH_STORE(scratch_store_stateless_input, StatelessInputSliceFields)
-DEFINE_SCRATCH_STORE(scratch_store_scratch, ScratchSliceFields)
-DEFINE_SCRATCH_STORE(scratch_store_log_data, LogDataSliceFields)
-DEFINE_SCRATCH_STORE(scratch_store_output, OutputSliceFields)
+DEFINE_SCRATCH_STORE(scratch_store_stateless_input)
+DEFINE_SCRATCH_STORE(scratch_store_scratch)
+DEFINE_SCRATCH_STORE(scratch_store_log_data)
+DEFINE_SCRATCH_STORE(scratch_store_output)
 
 #undef DEFINE_SCRATCH_STORE
 
-struct ScratchSliceFields scratch_store_address(uint32_t off, Address data)
+Bytes scratch_store_address(uint32_t off, bytes20 data)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
   if (!out) {
     fatal_error(InvalidConfig);
   }
-  memcpy(out, address_bytes_const(&data), 20);
+  memcpy(out, bytes20_data(&data), 20);
   if (!scratch_commit(dst, 20)) {
     fatal_error(InvalidConfig);
   }
@@ -395,7 +391,7 @@ struct ScratchSliceFields scratch_store_address(uint32_t off, Address data)
 }
 
 /* Sail host_scratch_store_b256: 0 <= 'len <= 32 (sail/host/scratch.sail). */
-struct ScratchSliceFields scratch_store_b256(uint32_t off, Hash32 data, uint8_t len)
+Bytes scratch_store_b256(uint32_t off, bytes32 data, uint8_t len)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, len);
@@ -403,7 +399,7 @@ struct ScratchSliceFields scratch_store_b256(uint32_t off, Hash32 data, uint8_t 
     fatal_error(InvalidConfig);
   }
   if (len != 0) {
-    memcpy(out, hash_bytes_const(&data), (size_t)len);
+    memcpy(out, bytes32_data(&data), (size_t)len);
   }
   if (!scratch_commit(dst, len)) {
     fatal_error(InvalidConfig);
@@ -411,7 +407,7 @@ struct ScratchSliceFields scratch_store_b256(uint32_t off, Hash32 data, uint8_t 
   return scratch_result_value(dst + len);
 }
 
-struct ScratchSliceFields scratch_store_fixed_bytes_256(uint64_t off, LogsBloom data)
+Bytes scratch_store_fixed_bytes_256(uint64_t off, bytes256 data)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
@@ -427,8 +423,7 @@ struct ScratchSliceFields scratch_store_fixed_bytes_256(uint64_t off, LogsBloom 
   return scratch_result_value(dst + 256);
 }
 
-struct ScratchSliceFields region_scratch_store_receipt_logs_bloom(uint64_t off, uint64_t start,
-                                                                  uint64_t count)
+Bytes region_scratch_store_receipt_logs_bloom(uint64_t off, uint64_t start, uint64_t count)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
@@ -442,7 +437,7 @@ struct ScratchSliceFields region_scratch_store_receipt_logs_bloom(uint64_t off, 
 }
 
 /* Sail host_scratch_store_word: 0 <= 'len <= 32 (sail/host/scratch.sail). */
-struct ScratchSliceFields scratch_store_word(uint32_t off, const U256 data, uint8_t len)
+Bytes scratch_store_word(uint32_t off, const u256 data, uint8_t len)
 {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, len);
@@ -459,18 +454,18 @@ struct ScratchSliceFields scratch_store_word(uint32_t off, const U256 data, uint
   return scratch_result_value(dst + len);
 }
 
-bool public_output_write(struct ScratchSliceFields output)
+bool public_output_write(Bytes output)
 {
   write_output(SLICE_PTR(output), (size_t)SLICE_LEN(output));
   return true;
 }
 
-bool output_buffer_store_memory(struct EvmMemorySliceFields slice)
+bool output_buffer_store_memory(Bytes slice)
 {
   return output_buffer_store_bytes(SLICE_PTR(slice), SLICE_LEN(slice));
 }
 
-bool output_buffer_store_input(struct StatelessInputSliceFields slice)
+bool output_buffer_store_input(Bytes slice)
 {
   return output_buffer_store_bytes(SLICE_PTR(slice), SLICE_LEN(slice));
 }

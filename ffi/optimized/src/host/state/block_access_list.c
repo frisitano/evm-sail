@@ -24,7 +24,7 @@ typedef struct {
   union {
     uint64_t word[4];
     uint64_t nonce;
-    Hash32 code_hash;
+    bytes32 code_hash;
   } value;
 } BalHistoryRow;
 
@@ -106,7 +106,7 @@ void bal_storage_schema_initialize(StorageId id)
   bal_storage[id].block_epoch = 0;
 }
 
-static AccountId bal_account_activate(const Address *address)
+static AccountId bal_account_activate(const bytes20 *address)
 {
   const AccountId id = get_account_id(address);
   BalAccountState *account = &bal_accounts[id];
@@ -122,7 +122,7 @@ static AccountId bal_account_activate(const Address *address)
   return id;
 }
 
-static StorageId bal_storage_activate(AccountId account_id, const U256 *slot)
+static StorageId bal_storage_activate(AccountId account_id, const u256 *slot)
 {
   const StorageId storage_id = get_storage_id(account_id, slot);
   BalStorageState *bal = &bal_storage[storage_id];
@@ -163,13 +163,13 @@ static BalHistoryRow *bal_append_history(BalHistoryRow *rows, uint32_t *length, 
   return entry;
 }
 
-void bal_note_account_touch(Address a)
+void bal_note_account_touch(bytes20 a)
 {
   (void)bal_account_activate(&a);
 }
 
-void bal_note_storage_change(uint64_t transaction_epoch, Address address, const U256 slot,
-                             const U256 value)
+void bal_note_storage_change(uint64_t transaction_epoch, bytes20 address, const u256 slot,
+                             const u256 value)
 {
   const AccountId account_id = bal_account_activate(&address);
   const StorageId storage_id = bal_storage_activate(account_id, &slot);
@@ -180,14 +180,14 @@ void bal_note_storage_change(uint64_t transaction_epoch, Address address, const 
   sail_word_to_le_words4(row->value.word, value);
 }
 
-void bal_note_storage_read(Address a, const U256 slot)
+void bal_note_storage_read(bytes20 a, const u256 slot)
 {
   const AccountId account_id = bal_account_activate(&a);
   const StorageId storage_id = bal_storage_activate(account_id, &slot);
   bal_storage[storage_id].read = 1;
 }
 
-void bal_note_balance_change(uint64_t transaction_epoch, Address address, const U256 value)
+void bal_note_balance_change(uint64_t transaction_epoch, bytes20 address, const u256 value)
 {
   const AccountId account_id = bal_account_activate(&address);
   BalAccountState *account = &bal_accounts[account_id];
@@ -197,7 +197,7 @@ void bal_note_balance_change(uint64_t transaction_epoch, Address address, const 
   sail_word_to_le_words4(row->value.word, value);
 }
 
-void bal_note_nonce_change(uint64_t transaction_epoch, Address address, uint64_t nonce)
+void bal_note_nonce_change(uint64_t transaction_epoch, bytes20 address, uint64_t nonce)
 {
   const AccountId account_id = bal_account_activate(&address);
   BalAccountState *account = &bal_accounts[account_id];
@@ -207,7 +207,7 @@ void bal_note_nonce_change(uint64_t transaction_epoch, Address address, uint64_t
   row->value.nonce = nonce;
 }
 
-void bal_note_code_change(uint64_t transaction_epoch, Address address, Hash32 code_hash)
+void bal_note_code_change(uint64_t transaction_epoch, bytes20 address, bytes32 code_hash)
 {
   const AccountId account_id = bal_account_activate(&address);
   BalAccountState *account = &bal_accounts[account_id];
@@ -224,8 +224,8 @@ static int bal_account_order_compare(AccountId a, AccountId b)
 
 static int bal_storage_order_compare(StorageId a, StorageId b)
 {
-  const Address *left_address = account_id_address(bal_storage[a].account_id);
-  const Address *right_address = account_id_address(bal_storage[b].account_id);
+  const bytes20 *left_address = account_id_address(bal_storage[a].account_id);
+  const bytes20 *right_address = account_id_address(bal_storage[b].account_id);
   int comparison = address_compare(left_address, right_address);
   if (comparison) {
     return comparison;
@@ -300,7 +300,7 @@ static int bal_storage_belongs_to_active(StorageId storage_id)
 }
 
 enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_id, uint64_t *index,
-                                      U256 *value, uint64_t *nonce, Hash32 *code_hash)
+                                      u256 *value, uint64_t *nonce, bytes32 *code_hash)
 {
   for (;;) {
     switch (bal_stream_phase) {
@@ -310,10 +310,10 @@ enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_
         return BAL_ITER_EMPTY;
       }
       bal_active_account_index = bal_account_order[bal_account_cursor++];
-      const Address *account = account_id_address(bal_active_account_index);
+      const bytes20 *account = account_id_address(bal_active_account_index);
       while (bal_storage_cursor < bal_storage_order_n) {
         const StorageId candidate_id = bal_storage_order[bal_storage_cursor];
-        const Address *candidate = account_id_address(bal_storage[candidate_id].account_id);
+        const bytes20 *candidate = account_id_address(bal_storage[candidate_id].account_id);
         if (address_compare(candidate, account) >= 0) {
           break;
         }

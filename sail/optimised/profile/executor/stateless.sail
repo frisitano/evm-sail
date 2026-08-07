@@ -11,27 +11,22 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
         result.state_gas_used,
     );
     if result.header_gas_used != header.gas_used then {
-        fatal_error(InvalidGasUsed);
-        exit(())
+        fatal_error(InvalidGasUsed)
     };
     if (profile.fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
-        fatal_error(InvalidBlobGasUsed);
-        exit(())
+        fatal_error(InvalidBlobGasUsed)
     };
     cycle_scope_start(19);
     let poststate = compute_state_root();
     cycle_scope_end(19);
     if poststate != header.state_root then {
-        fatal_error(InvalidStateRoot);
-        exit(())
+        fatal_error(InvalidStateRoot)
     };
     if result.receipts_root != header.receipts_root then {
-        fatal_error(InvalidReceiptsRoot);
-        exit(())
+        fatal_error(InvalidReceiptsRoot)
     };
     if not_bool(block_logs_bloom_matches(result.logs, header.logs_bloom)) then {
-        fatal_error(InvalidLogsBloom);
-        exit(())
+        fatal_error(InvalidLogsBloom)
     };
     if profile.fork >= Amsterdam then {
         cycle_scope_start(20);

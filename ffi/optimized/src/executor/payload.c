@@ -11,16 +11,16 @@
 
 /* Request types are ordered 0..4; empty request lists contribute no digest
  * (EIP-7685). */
-Hash32 execution_requests_hash(struct StatelessInputRef input_ref)
+bytes32 execution_requests_hash(struct StatelessInputRef input_ref)
 {
-  const struct StatelessInputSliceFields requests[5] = {
+  const Bytes requests[5] = {
       input_ref.deposits,
       input_ref.withdrawal_requests,
       input_ref.consolidation_requests,
       input_ref.builder_deposit_requests,
       input_ref.builder_exit_requests,
   };
-  Hash32 digests[5];
+  bytes32 digests[5];
   uint64_t count = 0;
   for (uint8_t type = 0; type < 5; ++type) {
     if (requests[type].len == 0) {
@@ -31,12 +31,12 @@ Hash32 execution_requests_hash(struct StatelessInputRef input_ref)
   return sha256_bytes((const uint8_t *)digests, count * sizeof(*digests));
 }
 
-Hash32 transaction_trie_root(struct BoundedSszListRef transactions)
+bytes32 transaction_trie_root(struct BoundedSszListRef transactions)
 {
   return mpt_transaction_trie_root(transactions);
 }
 
-Hash32 withdrawals_trie_root(struct BoundedSszListRef withdrawals)
+bytes32 withdrawals_trie_root(struct BoundedSszListRef withdrawals)
 {
   return mpt_withdrawals_trie_root(withdrawals);
 }

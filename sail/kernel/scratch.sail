@@ -38,7 +38,8 @@ function scratch_begin() -> source_pointer = {
 val scratch_reserve : forall 'len, source_valid_length('len). int('len) -> source_pointer
 function scratch_reserve(len) = {
     let arena = scratch_arena;
-    assert(host_scratch_reserve(arena.len, len), "scratch reserve");
+    let reserved = host_scratch_reserve(arena.len, len);
+    assert(reserved, "scratch reserve");
     arena.len
 }
 

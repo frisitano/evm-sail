@@ -51,7 +51,8 @@ function do_jump(destination_value : word) -> unit = {
     let code_length = frame_code_len();
     if destination_value < code_length then {
         let destination : code_pointer = destination_value;
-        if frame_jumpdest_valid(destination) then {
+        let valid_destination = frame_jumpdest_valid(destination);
+        if valid_destination then {
             pc = destination
         } else {
             exc_halt(InvalidJump)
@@ -65,7 +66,10 @@ function do_jump(destination_value : word) -> unit = {
 function pop_log_topics(count : log_topic_count) -> LogTopics =
     match count {
         0 => LogTopics0(),
-        1 => LogTopics1(pop()),
+        1 => {
+            let t0 = pop();
+            LogTopics1(t0)
+        },
         2 => {
             let t0 = pop();
             let t1 = pop();
@@ -98,280 +102,432 @@ dispatch boundary before calling a generated body, without materializing an
 */
 /*! Implements `ADD`. */
 function execute_add() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_add(a, b))
+    let result = alu_add(a, b);
+    push(result)
 }
 
 /*! Implements `MUL`. */
 function execute_mul() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_mul(a, b))
+    let result = alu_mul(a, b);
+    push(result)
 }
 
 /*! Implements `SUB`. */
 function execute_sub() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_sub(a, b))
+    let result = alu_sub(a, b);
+    push(result)
 }
 
 /*! Implements unsigned `DIV`. */
 function execute_div() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_div(a, b))
+    let result = alu_div(a, b);
+    push(result)
 }
 
 /*! Implements signed `SDIV`. */
 function execute_sdiv() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_sdiv(a, b))
+    let result = alu_sdiv(a, b);
+    push(result)
 }
 
 /*! Implements unsigned `MOD`. */
 function execute_mod() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_mod(a, b))
+    let result = alu_mod(a, b);
+    push(result)
 }
 
 /*! Implements signed `SMOD`. */
 function execute_smod() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_smod(a, b))
+    let result = alu_smod(a, b);
+    push(result)
 }
 
 /*! Implements `ADDMOD`. */
 function execute_addmod() -> unit = {
-    if not_bool(charge(G_mid)) then { return () };
+    let gas_charged = charge(G_mid);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
     let n = pop();
-    push(alu_addmod(a, b, n))
+    let result = alu_addmod(a, b, n);
+    push(result)
 }
 
 /*! Implements `MULMOD`. */
 function execute_mulmod() -> unit = {
-    if not_bool(charge(G_mid)) then { return () };
+    let gas_charged = charge(G_mid);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
     let n = pop();
-    push(alu_mulmod(a, b, n))
+    let result = alu_mulmod(a, b, n);
+    push(result)
 }
 
 /*! Implements `EXP`, including exponent-dependent gas. */
 function execute_exp() -> unit = {
     let a = pop();
     let e = pop();
-    if not_bool(charge(exp_gas(e))) then { return () };
-    push(alu_exp(a, e))
+    let gas_cost = exp_gas(e);
+    let gas_charged = charge(gas_cost);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let result = alu_exp(a, e);
+    push(result)
 }
 
 /*! Implements `SIGNEXTEND`. */
 function execute_signextend() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let bi = pop();
     let v = pop();
-    push(alu_signextend(bi, v))
+    let result = alu_signextend(bi, v);
+    push(result)
 }
 
 /*! Implements unsigned `LT`. */
 function execute_lt() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_lt(a, b))
+    let result = alu_lt(a, b);
+    push(result)
 }
 
 /*! Implements unsigned `GT`. */
 function execute_gt() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_gt(a, b))
+    let result = alu_gt(a, b);
+    push(result)
 }
 
 /*! Implements signed `SLT`. */
 function execute_slt() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_slt(a, b))
+    let result = alu_slt(a, b);
+    push(result)
 }
 
 /*! Implements signed `SGT`. */
 function execute_sgt() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_sgt(a, b))
+    let result = alu_sgt(a, b);
+    push(result)
 }
 
 /*! Implements `EQ`. */
 function execute_eq() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_eq(a, b))
+    let result = alu_eq(a, b);
+    push(result)
 }
 
 /*! Implements `ISZERO`. */
 function execute_iszero() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
-    push(alu_iszero(a))
+    let result = alu_iszero(a);
+    push(result)
 }
 
 /*! Implements bitwise `AND`. */
 function execute_and() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_and(a, b))
+    let result = alu_and(a, b);
+    push(result)
 }
 
 /*! Implements bitwise `OR`. */
 function execute_or() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_or(a, b))
+    let result = alu_or(a, b);
+    push(result)
 }
 
 /*! Implements bitwise `XOR`. */
 function execute_xor() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
     let b = pop();
-    push(alu_xor(a, b))
+    let result = alu_xor(a, b);
+    push(result)
 }
 
 /*! Implements bitwise `NOT`. */
 function execute_not() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let a = pop();
-    push(alu_not(a))
+    let result = alu_not(a);
+    push(result)
 }
 
 /*! Implements `BYTE`. */
 function execute_byte() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let i = pop();
     let x = pop();
-    push(alu_byte(i, x))
+    let result = alu_byte(i, x);
+    push(result)
 }
 
 /*! Implements logical left shift `SHL` (EIP-145). */
 function execute_shl() -> unit = {
     /* EIP-145 */
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let s = pop();
     let v = pop();
-    push(alu_shl(s, v))
+    let result = alu_shl(s, v);
+    push(result)
 }
 
 /*! Implements logical right shift `SHR` (EIP-145). */
 function execute_shr() -> unit = {
     /* EIP-145 */
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let s = pop();
     let v = pop();
-    push(alu_shr(s, v))
+    let result = alu_shr(s, v);
+    push(result)
 }
 
 /*! Implements arithmetic right shift `SAR` (EIP-145). */
 function execute_sar() -> unit = {
     /* EIP-145 */
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let s = pop();
     let v = pop();
-    push(alu_sar(s, v))
+    let result = alu_sar(s, v);
+    push(result)
 }
 
 /*! Implements count-leading-zeroes `CLZ` (EIP-7939). */
 function execute_clz() -> unit = {
     /* EIP-7939 */
-    if not_bool(charge(G_low)) then { return () };
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let x = pop();
-    push(alu_clz(x))
+    let result = alu_clz(x);
+    push(result)
 }
 
 /*! Implements `KECCAK256` over an expanded memory range. */
 function execute_keccak256() -> unit = {
     let offset_word = pop();
     let length_word = pop();
-    if not_bool(charge_keccak_gas(length_word)) then { return () };
+    let hashing_gas_charged = charge_keccak_gas(length_word);
+    if not_bool(hashing_gas_charged) then {
+        return ()
+    };
     let required_size = memory_required_size(offset_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(offset_word, length_word);
     expand_memory(access.required_size);
-    push(mem_keccak(access.range))
+    let digest = mem_keccak(access.range);
+    push(digest)
 }
 
 /*! Implements `ADDRESS`. */
 function execute_address() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(address_to_word(self_addr()))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let address = self_addr();
+    let address_word = address_to_word(address);
+    push(address_word)
 }
 
 /*! Implements `ORIGIN`. */
 function execute_origin() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_Origin))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let origin = k_env(F_Origin);
+    push(origin)
 }
 
 /*! Implements `CALLER`. */
 function execute_caller() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(address_to_word(message.caller))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let caller = address_to_word(message.caller);
+    push(caller)
 }
 
 /*! Implements `CALLVALUE`. */
 function execute_callvalue() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     push(message.value)
 }
 
 /*! Implements `GASPRICE`. */
 function execute_gasprice() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_GasPrice))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let gas_price = k_env(F_GasPrice);
+    push(gas_price)
 }
 
 /*! Implements `CALLDATASIZE`. */
 function execute_calldatasize() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let input = calldata;
-    push(word_of_byte_count(region_slice_length(input)))
+    let input_length = region_slice_length(input);
+    let length_word = word_of_byte_count(input_length);
+    push(length_word)
 }
 
 /*! Implements `CALLDATALOAD`. */
 function execute_calldataload() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let offset_word = pop();
-    push(slice_load_word_offset(calldata, offset_word))
+    let value = slice_load_word_offset(calldata, offset_word);
+    push(value)
 }
 
 /*! Implements `CALLDATACOPY`. */
 function execute_calldatacopy() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let copy_gas_charged = charge_copy_gas(length_word);
+    if not_bool(copy_gas_charged) then {
+        return ()
+    };
     let required_size = memory_required_size(destination_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(destination_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
@@ -380,61 +536,109 @@ function execute_calldatacopy() -> unit = {
 
 /*! Implements `CODESIZE`. */
 function execute_codesize() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(word_of_byte_count(frame_code_len()))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let code_length = frame_code_len();
+    let length_word = word_of_byte_count(code_length);
+    push(length_word)
 }
 
 /*! Implements `CODECOPY`. */
 function execute_codecopy() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let copy_gas_charged = charge_copy_gas(length_word);
+    if not_bool(copy_gas_charged) then {
+        return ()
+    };
     let required_size = memory_required_size(destination_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(destination_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
     let code = frame_code;
-    slice_copy_word_offset(code_bytes(code), range.off, source_word, range.len)
+    let bytes = code_bytes(code);
+    slice_copy_word_offset(bytes, range.off, source_word, range.len)
 }
 
 /*! Implements `BALANCE`, including warm/cold account access. */
 function execute_balance() -> unit = {
-    let a = word_to_address(pop());
+    let address_word = pop();
+    let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
-    if not_bool(charge(account_cost(warm))) then { return () };
+    let gas_cost = account_cost(warm);
+    let gas_charged = charge(gas_cost);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     k_account_mark_warm(a);
-    push(k_get_balance(a))
+    let balance = k_get_balance(a);
+    push(balance)
 }
 
 /*! Implements `SELFBALANCE`. */
 function execute_selfbalance() -> unit = {
-    if not_bool(charge(G_low)) then { return () };
-    push(k_get_balance(self_addr()))
+    let gas_charged = charge(G_low);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let address = self_addr();
+    let balance = k_get_balance(address);
+    push(balance)
 }
 
 /*! Implements `EXTCODESIZE`, including warm/cold account access. */
 function execute_extcodesize() -> unit = {
-    let a = word_to_address(pop());
+    let address_word = pop();
+    let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
-    if not_bool(charge(account_cost(warm) + external_code_read_cost())) then { return () };
+    let access_cost = account_cost(warm);
+    let read_cost = external_code_read_cost();
+    let gas_charged = charge(access_cost + read_cost);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     k_account_mark_warm(a);
-    push(word_of_byte_count(k_get_code_size(a)))
+    let code_size = k_get_code_size(a);
+    let size_word = word_of_byte_count(code_size);
+    push(size_word)
 }
 
 /*! Implements `EXTCODECOPY`, including access and copy gas. */
 function execute_extcodecopy() -> unit = {
-    let a = word_to_address(pop());
+    let address_word = pop();
+    let a = word_to_address(address_word);
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
     let warm = k_account_is_warm(a);
-    if not_bool(charge(account_cost(warm) + external_code_read_cost())) then { return () };
-    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let access_cost = account_cost(warm);
+    let read_cost = external_code_read_cost();
+    let access_gas_charged = charge(access_cost + read_cost);
+    if not_bool(access_gas_charged) then {
+        return ()
+    };
+    let copy_gas_charged = charge_copy_gas(length_word);
+    if not_bool(copy_gas_charged) then {
+        return ()
+    };
     let required_size = memory_required_size(destination_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(destination_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
@@ -444,28 +648,50 @@ function execute_extcodecopy() -> unit = {
 
 /*! Implements `EXTCODEHASH`, including warm/cold account access. */
 function execute_extcodehash() -> unit = {
-    let a = word_to_address(pop());
+    let address_word = pop();
+    let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
-    if not_bool(charge(account_cost(warm))) then { return () };
+    let gas_cost = account_cost(warm);
+    let gas_charged = charge(gas_cost);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     k_account_mark_warm(a);
-    push(hash_to_word(k_get_codehash(a)))
+    let code_hash = k_get_codehash(a);
+    let hash_word = hash_to_word(code_hash);
+    push(hash_word)
 }
 
 /*! Implements `RETURNDATASIZE`. */
 function execute_returndatasize() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(word_of_byte_count(returndata_size()))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let return_data_size = returndata_size();
+    let size_word = word_of_byte_count(return_data_size);
+    push(size_word)
 }
 
 /*! Implements bounds-checked `RETURNDATACOPY`. */
 function execute_returndatacopy() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let copy_gas_charged = charge_copy_gas(length_word);
+    if not_bool(copy_gas_charged) then {
+        return ()
+    };
     let required_size = memory_required_size(destination_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(destination_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
@@ -474,107 +700,181 @@ function execute_returndatacopy() -> unit = {
 
 /*! Implements `BLOCKHASH`. */
 function execute_blockhash() -> unit = {
-    if not_bool(charge(20)) then { return () };
-    push(hash_to_word(k_blockhash(pop())))
+    let gas_charged = charge(20);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let block_number = pop();
+    let block_hash = k_blockhash(block_number);
+    let hash_word = hash_to_word(block_hash);
+    push(hash_word)
 }
 
 /*! Implements `COINBASE`. */
 function execute_coinbase() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_Coinbase))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let coinbase = k_env(F_Coinbase);
+    push(coinbase)
 }
 
 /*! Implements `TIMESTAMP`. */
 function execute_timestamp() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_Timestamp))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let timestamp = k_env(F_Timestamp);
+    push(timestamp)
 }
 
 /*! Implements `NUMBER`. */
 function execute_number() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_Number))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let block_number = k_env(F_Number);
+    push(block_number)
 }
 
 /*! Implements `SLOTNUM`. */
 function execute_slotnum() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_SlotNumber))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let slot_number = k_env(F_SlotNumber);
+    push(slot_number)
 }
 
 /*! Implements `PREVRANDAO`. */
 function execute_prevrandao() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_PrevRandao))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let prev_randao = k_env(F_PrevRandao);
+    push(prev_randao)
 }
 
 /*! Implements `GASLIMIT`. */
 function execute_gaslimit() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_GasLimit))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let gas_limit = k_env(F_GasLimit);
+    push(gas_limit)
 }
 
 /*! Implements `CHAINID`. */
 function execute_chainid() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_ChainId))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let chain_id = k_env(F_ChainId);
+    push(chain_id)
 }
 
 /*! Implements `BASEFEE`. */
 function execute_basefee() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(k_env(F_BaseFee))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let base_fee = k_env(F_BaseFee);
+    push(base_fee)
 }
 
 /*! Implements `BLOBBASEFEE`. */
 function execute_blobbasefee() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let execution_profile = k_execution_profile;
-    push(blob_base_fee(execution_profile.protocol, k_header.excess_blob_gas))
+    let base_fee = blob_base_fee(execution_profile.protocol, k_header.excess_blob_gas);
+    push(base_fee)
 }
 
 /*! Implements `BLOBHASH`. */
 function execute_blobhash() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
-    push(k_blobhash(pop()))
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let index = pop();
+    let blob_hash = k_blobhash(index);
+    push(blob_hash)
 }
 
 /*! Implements `POP`. */
 function execute_pop() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let _ = pop()
 }
 
 /*! Implements `MLOAD`. */
 function execute_mload() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let offset_word = pop();
-    let required_size = memory_required_size(offset_word, u256(32));
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
-    let access = memory_access(offset_word, u256(32));
+    let word_size = u256(32);
+    let required_size = memory_required_size(offset_word, word_size);
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
+    let access = memory_access(offset_word, word_size);
     expand_memory(access.required_size);
-    push(mem_load(access.range.off))
+    let value = mem_load(access.range.off);
+    push(value)
 }
 
 /*! Implements `MSTORE`. */
 function execute_mstore() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let offset_word = pop();
     let v = pop();
-    let required_size = memory_required_size(offset_word, u256(32));
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
-    let access = memory_access(offset_word, u256(32));
+    let word_size = u256(32);
+    let required_size = memory_required_size(offset_word, word_size);
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
+    let access = memory_access(offset_word, word_size);
     expand_memory(access.required_size);
     mem_store(access.range.off, v)
 }
 
 /*! Implements `MSTORE8`. */
 function execute_mstore8() -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let offset_word = pop();
     let v = pop();
     let required_size = memory_required_size(offset_word, WORD_ONE);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(offset_word, WORD_ONE);
     expand_memory(access.required_size);
     mem_store_byte(access.range.off, v)
@@ -582,166 +882,224 @@ function execute_mstore8() -> unit = {
 
 /*! Implements `MSIZE`. */
 function execute_msize() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(word_of_nat_byte_count(memory_word_count(evm_memory_high_water()) * 32))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let high_water = evm_memory_high_water();
+    let words = memory_word_count(high_water);
+    let size = word_of_nat_byte_count(words * 32);
+    push(size)
 }
 
 /*! Implements overlapping memory copy `MCOPY` (EIP-5656). */
 function execute_mcopy() -> unit = {
     /* EIP-5656 */
-    if not_bool(charge(G_verylow)) then { return () };
+    let base_gas_charged = charge(G_verylow);
+    if not_bool(base_gas_charged) then {
+        return ()
+    };
     let destination_word = pop();
     let source_word = pop();
     let length_word = pop();
-    if not_bool(charge_copy_gas(length_word)) then { return () };
+    let copy_gas_charged = charge_copy_gas(length_word);
+    if not_bool(copy_gas_charged) then {
+        return ()
+    };
     let destination_required = memory_required_size(destination_word, length_word);
     let source_required = memory_required_size(source_word, length_word);
     let required_size =
-            if destination_required < source_required then {
-                source_required
-            } else {
-                destination_required
-            };
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+        if destination_required < source_required then source_required else destination_required;
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let destination = memory_access(destination_word, length_word);
     let source = memory_access(source_word, length_word);
     let materialized_required_size =
-            if destination.required_size < source.required_size then {
-                source.required_size
-            } else {
-                destination.required_size
-            };
+        if destination.required_size < source.required_size then source.required_size else destination.required_size;
     expand_memory(materialized_required_size);
-    mem_mcopy(
-        destination.range.off,
-        source.range.off,
-        destination.range.len,
-    )
+    mem_mcopy(destination.range.off, source.range.off, destination.range.len)
 }
 
 /*! Implements `SLOAD`, including warm/cold access gas. */
 function execute_sload() -> unit = {
     /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
     let s = pop();
-    let warm = k_slot_is_warm(self_addr(), s);
-    if not_bool(charge(sload_cost(warm))) then { return () };
-    k_slot_mark_warm(self_addr(), s);
-    push(k_sload(self_addr(), s).curr)
+    let address = self_addr();
+    let warm = k_slot_is_warm(address, s);
+    let gas_cost = sload_cost(warm);
+    let gas_charged = charge(gas_cost);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    k_slot_mark_warm(address, s);
+    let entry = k_sload(address, s);
+    push(entry.curr)
 }
 
 /*! Implements `SSTORE`, including fork-specific gas and refunds. */
 function execute_sstore() -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    if guard_static() then {
-        ()
-    } else {
-        if (profile.fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
-            exc_halt(OutOfGas)
-        } else {
-            let s = pop();
-            let v = pop();
-            let warm = k_slot_is_warm(self_addr(), s);
-            let cold = not_bool(warm);
-            if profile.fork >= Amsterdam then {
-                let access_cost = amsterdam_storage_access_cost(cold);
-                let sentry_cost = if access_cost < G_sstore_sentry then { G_sstore_sentry } else { access_cost };
-                if not_bool(check_execution_gas(sentry_cost)) then { return () }
-            };
-            k_slot_mark_warm(self_addr(), s);
-            let entry = k_sload(self_addr(), s);
-            let costs = sstore_costs(entry.orig, entry.curr, v, cold);
-            if costs.state_credit != 0 then {
-                credit_state_gas_refund(costs.state_credit)
-            };
-            if not_bool(charge(costs.execution)) then { return () };
-            if not_bool(charge_state_gas(costs.state_charge)) then { return () };
-            if not_bool(costs.refund == GAS_REFUND_ZERO) then {
-                record_refund(costs.refund)
-            };
-            if entry.curr != v then {
-                k_sstore(self_addr(), s, struct { curr = v, orig = entry.orig })
-            }
+    let write_protected = guard_static();
+    if write_protected then {
+        return ()
+    };
+    if (profile.fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
+        exc_halt(OutOfGas);
+        return ()
+    };
+    let s = pop();
+    let v = pop();
+    let address = self_addr();
+    let warm = k_slot_is_warm(address, s);
+    let cold = not_bool(warm);
+    if profile.fork >= Amsterdam then {
+        let sentry_cost = sstore_sentry_cost(cold);
+        let sentry_affordable = check_execution_gas(sentry_cost);
+        if not_bool(sentry_affordable) then {
+            return ()
         }
+    };
+    k_slot_mark_warm(address, s);
+    let entry = k_sload(address, s);
+    let costs = sstore_costs(entry.orig, entry.curr, v, cold);
+    if costs.state_credit != 0 then {
+        credit_state_gas_refund(costs.state_credit)
+    };
+    let execution_gas_charged = charge(costs.execution);
+    if not_bool(execution_gas_charged) then {
+        return ()
+    };
+    let state_gas_charged = charge_state_gas(costs.state_charge);
+    if not_bool(state_gas_charged) then {
+        return ()
+    };
+    if not_bool(costs.refund == GAS_REFUND_ZERO) then {
+        record_refund(costs.refund)
+    };
+    if entry.curr != v then {
+        k_sstore(address, s, struct { curr = v, orig = entry.orig })
     }
 }
 
 /*! Implements transient-storage load `TLOAD` (EIP-1153). */
 function execute_tload() -> unit = {
     /* EIP-1153 */
-    if not_bool(charge(G_warm_access)) then { return () };
+    let gas_charged = charge(G_warm_access);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let s = pop();
-    push(k_tload(self_addr(), s))
+    let address = self_addr();
+    let value = k_tload(address, s);
+    push(value)
 }
 
 /*! Implements transient-storage write `TSTORE` (EIP-1153). */
 function execute_tstore() -> unit = {
     /* EIP-1153 */
-    if guard_static() then {
-        ()
-    } else {
-        if not_bool(charge(G_warm_access)) then { return () };
-        let s = pop();
-        let v = pop();
-        k_tstore(self_addr(), s, v)
-    }
+    let write_protected = guard_static();
+    if write_protected then {
+        return ()
+    };
+    let gas_charged = charge(G_warm_access);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let s = pop();
+    let v = pop();
+    let address = self_addr();
+    k_tstore(address, s, v)
 }
 
 /*! Implements unconditional `JUMP`. */
 function execute_jump() -> unit = {
-    if not_bool(charge(G_mid)) then { return () };
+    let gas_charged = charge(G_mid);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let dest = pop();
     do_jump(dest)
 }
 
 /*! Implements conditional `JUMPI`. */
 function execute_jumpi() -> unit = {
-    if not_bool(charge(G_high)) then { return () };
+    let gas_charged = charge(G_high);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let dest = pop();
     let cond = pop();
-    if word_is_zero(cond) then {
-        ()
-    } else {
-        do_jump(dest)
-    }
+    let condition_is_zero = word_is_zero(cond);
+    if condition_is_zero then {
+        return ()
+    };
+    do_jump(dest)
 }
 
 /*! Implements `PC`, returning the current opcode position. */
 function execute_pc() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
-    push(alu_sub(word_of_byte_count(pc), WORD_ONE))
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let next_pc = word_of_byte_count(pc);
+    let opcode_pc = alu_sub(next_pc, WORD_ONE);
+    push(opcode_pc)
 }
 
 /*! Implements `GAS`, returning gas remaining after its own charge. */
 function execute_gas() -> unit = {
-    if not_bool(charge(G_base)) then { return () };
+    let gas_charged = charge(G_base);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     push_gas(gas_remaining)
 }
 
 /*! Implements `JUMPDEST`. */
 function execute_jumpdest() -> unit = {
-    if not_bool(charge(G_jumpdest)) then { return () }
+    let gas_charged = charge(G_jumpdest);
+    if not_bool(gas_charged) then {
+        return ()
+    }
 }
 
 /*! Implements the `PUSH0` through `PUSH32` family. */
 function execute_push(n : push_width, v : word) -> unit = {
     if n == 0 then {
-        if not_bool(charge(G_base)) then { return () }
+        let gas_charged = charge(G_base);
+        if not_bool(gas_charged) then {
+            return ()
+        }
     } else {
-        if not_bool(charge(G_verylow)) then { return () }
+        let gas_charged = charge(G_verylow);
+        if not_bool(gas_charged) then {
+            return ()
+        }
     };
     push(v)
 }
 
 /*! Implements the `DUP1` through `DUP16` family. */
 function execute_dup(n : stack_operation_index) -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
-    push(peek(n - 1))
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let value = peek(n - 1);
+    push(value)
 }
 
 /*! Implements the `SWAP1` through `SWAP16` family. */
 function execute_swap(n : stack_operation_index) -> unit = {
-    if not_bool(charge(G_verylow)) then { return () };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
     let top = peek(0);
     let other = peek(n);
     stack_set(0, other);
@@ -750,21 +1108,30 @@ function execute_swap(n : stack_operation_index) -> unit = {
 
 /*! Implements immediate deep-stack duplication `DUPN`. */
 function execute_dupn(immediate : byte) -> unit = {
-    if not_bool(deep_stack_immediate_valid(immediate)) then {
+    let valid_immediate = deep_stack_immediate_valid(immediate);
+    if not_bool(valid_immediate) then {
         exc_halt(InvalidOpcode)
     } else {
-        if not_bool(charge(G_verylow)) then { return () };
+        let gas_charged = charge(G_verylow);
+        if not_bool(gas_charged) then {
+            return ()
+        };
         let n = decode_single_stack_index(immediate);
-        push(peek(n - 1))
+        let value = peek(n - 1);
+        push(value)
     }
 }
 
 /*! Implements immediate deep-stack exchange `SWAPN`. */
 function execute_swapn(immediate : byte) -> unit = {
-    if not_bool(deep_stack_immediate_valid(immediate)) then {
+    let valid_immediate = deep_stack_immediate_valid(immediate);
+    if not_bool(valid_immediate) then {
         exc_halt(InvalidOpcode)
     } else {
-        if not_bool(charge(G_verylow)) then { return () };
+        let gas_charged = charge(G_verylow);
+        if not_bool(gas_charged) then {
+            return ()
+        };
         let n = decode_single_stack_index(immediate);
         let top = peek(0);
         let other = peek(n);
@@ -775,50 +1142,74 @@ function execute_swapn(immediate : byte) -> unit = {
 
 /*! Implements immediate pairwise deep-stack `EXCHANGE`. */
 function execute_exchange(immediate : byte) -> unit = {
-    if not_bool(exchange_immediate_valid(immediate)) then {
-        exc_halt(InvalidOpcode)
-    } else {
-        if not_bool(charge(G_verylow)) then { return () };
-        let (n, m) = decode_exchange_stack_indices(immediate);
-        let first = peek(n);
-        let second = peek(m);
-        stack_set(n, second);
-        stack_set(m, first)
-    }
+    let valid_immediate = exchange_immediate_valid(immediate);
+    if not_bool(valid_immediate) then {
+        exc_halt(InvalidOpcode);
+        return ()
+    };
+    let gas_charged = charge(G_verylow);
+    if not_bool(gas_charged) then {
+        return ()
+    };
+    let (n, m) = decode_exchange_stack_indices(immediate);
+    let first = peek(n);
+    let second = peek(m);
+    stack_set(n, second);
+    stack_set(m, first)
 }
 
 /*! Implements the `LOG0` through `LOG4` family. */
 function execute_log(n : log_topic_count) -> unit = {
-    if guard_static() then {
-        ()
-    } else {
-        let offset_word = pop();
-        let length_word = pop();
-        let topics = pop_log_topics(n);
-        if not_bool(charge_log_gas(n, length_word)) then { return () };
-        let required_size = memory_required_size(offset_word, length_word);
-        if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
-        let access = memory_access(offset_word, length_word);
-        expand_memory(access.required_size);
-        let range = access.range;
-        let data = active_memory_slice(range.off, range.len);
-        k_log(self_addr(), topics, LogDataMemory(evm_memory_slice(data.bytes, data.len)))
-    }
+    let write_protected = guard_static();
+    if write_protected then {
+        return ()
+    };
+    let offset_word = pop();
+    let length_word = pop();
+    let topics = pop_log_topics(n);
+    let log_gas_charged = charge_log_gas(n, length_word);
+    if not_bool(log_gas_charged) then {
+        return ()
+    };
+    let required_size = memory_required_size(offset_word, length_word);
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
+    let access = memory_access(offset_word, length_word);
+    expand_memory(access.required_size);
+    let range = access.range;
+    let data = active_memory_slice(range.off, range.len);
+    let address = self_addr();
+    let memory_slice = evm_memory_slice(data.bytes, data.len);
+    let log_data = LogDataMemory(memory_slice);
+    k_log(address, topics, log_data)
 }
 
 /*! Implements normal `STOP`. */
-function execute_stop() -> unit = frame_status = Halted(HaltStop())
+function execute_stop() -> unit = {
+    let reason = HaltStop();
+    frame_status = Halted(reason)
+}
 
 /*! Implements successful `RETURN`. */
 function execute_return() -> unit = {
     let offset_word = pop();
     let length_word = pop();
     let required_size = memory_required_size(offset_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(offset_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
-    frame_status = Halted(HaltReturn(freeze_output(active_memory_slice(range.off, range.len))))
+    let data = active_memory_slice(range.off, range.len);
+    let output = freeze_output(data);
+    let reason = HaltReturn(output);
+    frame_status = Halted(reason)
 }
 
 /*! Implements rollback-carrying `REVERT` (EIP-140). */
@@ -827,12 +1218,19 @@ function execute_revert() -> unit = {
     let offset_word = pop();
     let length_word = pop();
     let required_size = memory_required_size(offset_word, length_word);
-    if not_bool(charge(memory_expansion_cost(required_size))) then { return () };
+    let expansion_cost = memory_expansion_cost(required_size);
+    let expansion_gas_charged = charge(expansion_cost);
+    if not_bool(expansion_gas_charged) then {
+        return ()
+    };
     let access = memory_access(offset_word, length_word);
     expand_memory(access.required_size);
     let range = access.range;
     refill_frame_state_gas();
-    frame_status = Halted(HaltRevert(freeze_output(active_memory_slice(range.off, range.len))))
+    let data = active_memory_slice(range.off, range.len);
+    let output = freeze_output(data);
+    let reason = HaltRevert(output);
+    frame_status = Halted(reason)
 }
 
 /*! Implements exceptional invalid-opcode termination. */
@@ -845,58 +1243,84 @@ function execute_invalid() -> unit = {
 function execute_selfdestruct() -> unit = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    if guard_static() then {
-        ()
+    let write_protected = guard_static();
+    if write_protected then {
+        return ()
+    };
+    let beneficiary_word = pop();
+    let beneficiary = word_to_address(beneficiary_word);
+    let address = self_addr();
+    if profile.fork >= Amsterdam then {
+        let warm = k_account_is_warm(beneficiary);
+        let access_cost = 0 + G_selfdestruct + (if warm then G_zero else G_amsterdam_cold_account_access);
+        let execution_affordable = check_execution_gas(access_cost);
+        if not_bool(execution_affordable) then {
+            return ()
+        };
+        k_account_mark_warm(beneficiary);
+        let bal = k_get_balance(address);
+        let nonzero_balance = word_nonzero(bal);
+        let beneficiary_empty = k_account_is_empty(beneficiary);
+        let creates_account = nonzero_balance & beneficiary_empty;
+        let execution_cost =
+            if creates_account then access_cost + G_amsterdam_account_write else access_cost;
+        let execution_gas_charged = charge(execution_cost);
+        if not_bool(execution_gas_charged) then {
+            return ()
+        };
+        if creates_account then {
+            let state_gas_charged = charge_state_gas(G_amsterdam_state_new_account);
+            if not_bool(state_gas_charged) then {
+                return ()
+            }
+        };
+        k_transfer(address, beneficiary, bal);
+        let created = k_was_created(address);
+        if created then {
+            k_selfdestruct(address)
+        };
+        let reason = HaltSelfDestruct();
+        frame_status = Halted(reason)
     } else {
-        let beneficiary = word_to_address(pop());
-        if profile.fork >= Amsterdam then {
-            let warm = k_account_is_warm(beneficiary);
-            let access_cost = 0 + G_selfdestruct + (if warm then { G_zero } else { G_amsterdam_cold_account_access });
-            if not_bool(check_execution_gas(access_cost)) then { return () };
-                k_account_mark_warm(beneficiary);
-                let bal = k_get_balance(self_addr());
-                let creates_account = word_nonzero(bal) & k_account_is_empty(beneficiary);
-                let execution_cost = if creates_account then {
-                        access_cost + G_amsterdam_account_write
-                    } else {
-                        access_cost
-                    };
-                if not_bool(charge(execution_cost)) then { return () };
-            if creates_account then {
-                if not_bool(charge_state_gas(G_amsterdam_state_new_account)) then { return () }
-            };
-            k_transfer(self_addr(), beneficiary, bal);
-            if k_was_created(self_addr()) then {
-                k_selfdestruct(self_addr())
-            };
-            frame_status = Halted(HaltSelfDestruct())
+        let bal = k_get_balance(address);
+        let warm = k_account_is_warm(beneficiary);
+        let selfdestruct_gas_charged = charge(G_selfdestruct);
+        if not_bool(selfdestruct_gas_charged) then {
+            return ()
+        };
+        if not_bool(warm) then {
+            let cold_account_gas_charged = charge(G_cold_account);
+            if not_bool(cold_account_gas_charged) then {
+                return ()
+            }
+        };
+        k_account_mark_warm(beneficiary);
+        let nonzero_balance = word_nonzero(bal);
+        let beneficiary_empty = k_account_is_empty(beneficiary);
+        if nonzero_balance & beneficiary_empty then {
+            let new_account_gas_charged = charge(G_newaccount);
+            if not_bool(new_account_gas_charged) then {
+                return ()
+            }
+        };
+        let is_selfdestructed = k_is_selfdestructed(address);
+        let first_selfdestruct = not_bool(is_selfdestructed);
+        if (profile.fork < London) & first_selfdestruct then {
+            record_refund(R_selfdestruct_pre_london)
+        };
+        k_transfer(address, beneficiary, bal);
+        if profile.fork < Cancun then {
+            k_zero_balance(address);
+            k_selfdestruct(address)
         } else {
-            let bal = k_get_balance(self_addr());
-            let warm = k_account_is_warm(beneficiary);
-            if not_bool(charge(G_selfdestruct)) then { return () };
-            if not_bool(warm) then {
-                if not_bool(charge(G_cold_account)) then { return () }
-            };
-            k_account_mark_warm(beneficiary);
-            if word_nonzero(bal) & k_account_is_empty(beneficiary) then {
-                if not_bool(charge(G_newaccount)) then { return () }
-            };
-            let first_selfdestruct = not_bool(k_is_selfdestructed(self_addr()));
-            if (profile.fork < London) & first_selfdestruct then {
-                record_refund(R_selfdestruct_pre_london)
-            };
-            k_transfer(self_addr(), beneficiary, bal);
-            if profile.fork < Cancun then {
-                k_zero_balance(self_addr());
-                k_selfdestruct(self_addr())
-            } else {
-                if k_was_created(self_addr()) then {
-                    k_zero_balance(self_addr());
-                    k_selfdestruct(self_addr())
-                }
-            };
-            frame_status = Halted(HaltSelfDestruct())
-        }
+            let created = k_was_created(address);
+            if created then {
+                k_zero_balance(address);
+                k_selfdestruct(address)
+            }
+        };
+        let reason = HaltSelfDestruct();
+        frame_status = Halted(reason)
     }
 }
 
@@ -918,57 +1342,116 @@ function execute_staticcall() -> unit = run_call(StaticCall)
     their opcode body raises `InvalidOpcode` before accessing the stack. */
 function opcode_stack_effect(op : ast) -> (operand_stack_height, operand_stack_height) = match op {
     STOP() => (0, 0),
-    ADD() => (2, 1), MUL() => (2, 1), SUB() => (2, 1),
-    DIV() => (2, 1), SDIV() => (2, 1), MOD() => (2, 1), SMOD() => (2, 1),
-    ADDMOD() => (3, 1), MULMOD() => (3, 1), EXP() => (2, 1),
+    ADD() => (2, 1),
+    MUL() => (2, 1),
+    SUB() => (2, 1),
+    DIV() => (2, 1),
+    SDIV() => (2, 1),
+    MOD() => (2, 1),
+    SMOD() => (2, 1),
+    ADDMOD() => (3, 1),
+    MULMOD() => (3, 1),
+    EXP() => (2, 1),
     SIGNEXTEND() => (2, 1),
-    LT() => (2, 1), GT() => (2, 1), SLT() => (2, 1), SGT() => (2, 1),
-    EQ() => (2, 1), ISZERO() => (1, 1),
-    AND() => (2, 1), OR() => (2, 1), XOR() => (2, 1), NOT() => (1, 1),
-    BYTE() => (2, 1), SHL() => (2, 1), SHR() => (2, 1), SAR() => (2, 1),
+    LT() => (2, 1),
+    GT() => (2, 1),
+    SLT() => (2, 1),
+    SGT() => (2, 1),
+    EQ() => (2, 1),
+    ISZERO() => (1, 1),
+    AND() => (2, 1),
+    OR() => (2, 1),
+    XOR() => (2, 1),
+    NOT() => (1, 1),
+    BYTE() => (2, 1),
+    SHL() => (2, 1),
+    SHR() => (2, 1),
+    SAR() => (2, 1),
     CLZ() => (1, 1),
     KECCAK256() => (2, 1),
-    ADDRESS() => (0, 1), BALANCE() => (1, 1), ORIGIN() => (0, 1),
-    CALLER() => (0, 1), CALLVALUE() => (0, 1), CALLDATALOAD() => (1, 1),
-    CALLDATASIZE() => (0, 1), CALLDATACOPY() => (3, 0),
-    CODESIZE() => (0, 1), CODECOPY() => (3, 0), GASPRICE() => (0, 1),
-    EXTCODESIZE() => (1, 1), EXTCODECOPY() => (4, 0),
-    RETURNDATASIZE() => (0, 1), RETURNDATACOPY() => (3, 0),
+    ADDRESS() => (0, 1),
+    BALANCE() => (1, 1),
+    ORIGIN() => (0, 1),
+    CALLER() => (0, 1),
+    CALLVALUE() => (0, 1),
+    CALLDATALOAD() => (1, 1),
+    CALLDATASIZE() => (0, 1),
+    CALLDATACOPY() => (3, 0),
+    CODESIZE() => (0, 1),
+    CODECOPY() => (3, 0),
+    GASPRICE() => (0, 1),
+    EXTCODESIZE() => (1, 1),
+    EXTCODECOPY() => (4, 0),
+    RETURNDATASIZE() => (0, 1),
+    RETURNDATACOPY() => (3, 0),
     EXTCODEHASH() => (1, 1),
-    BLOCKHASH() => (1, 1), COINBASE() => (0, 1), TIMESTAMP() => (0, 1),
-    NUMBER() => (0, 1), PREVRANDAO() => (0, 1), GASLIMIT() => (0, 1),
-    CHAINID() => (0, 1), SELFBALANCE() => (0, 1), BASEFEE() => (0, 1),
-    BLOBHASH() => (1, 1), BLOBBASEFEE() => (0, 1), SLOTNUM() => (0, 1),
-    POP() => (1, 0), MLOAD() => (1, 1), MSTORE() => (2, 0),
-    MSTORE8() => (2, 0), SLOAD() => (1, 1), SSTORE() => (2, 0),
-    JUMP() => (1, 0), JUMPI() => (2, 0), PC() => (0, 1), MSIZE() => (0, 1),
-    GAS() => (0, 1), JUMPDEST() => (0, 0), TLOAD() => (1, 1),
-    TSTORE() => (2, 0), MCOPY() => (3, 0),
+    BLOCKHASH() => (1, 1),
+    COINBASE() => (0, 1),
+    TIMESTAMP() => (0, 1),
+    NUMBER() => (0, 1),
+    PREVRANDAO() => (0, 1),
+    GASLIMIT() => (0, 1),
+    CHAINID() => (0, 1),
+    SELFBALANCE() => (0, 1),
+    BASEFEE() => (0, 1),
+    BLOBHASH() => (1, 1),
+    BLOBBASEFEE() => (0, 1),
+    SLOTNUM() => (0, 1),
+    POP() => (1, 0),
+    MLOAD() => (1, 1),
+    MSTORE() => (2, 0),
+    MSTORE8() => (2, 0),
+    SLOAD() => (1, 1),
+    SSTORE() => (2, 0),
+    JUMP() => (1, 0),
+    JUMPI() => (2, 0),
+    PC() => (0, 1),
+    MSIZE() => (0, 1),
+    GAS() => (0, 1),
+    JUMPDEST() => (0, 0),
+    TLOAD() => (1, 1),
+    TSTORE() => (2, 0),
+    MCOPY() => (3, 0),
     PUSH(_, _) => (0, 1),
     DUP(n) => (n, n + 1),
     SWAP(n) => (n + 1, n + 1),
-    DUPN(immediate) => if deep_stack_immediate_valid(immediate) then {
+    DUPN(immediate) => {
+        let valid_immediate = deep_stack_immediate_valid(immediate);
+        if valid_immediate then {
             let n = decode_single_stack_index(immediate);
             (n, n + 1)
         } else {
             (0, 0)
-        },
-    SWAPN(immediate) => if deep_stack_immediate_valid(immediate) then {
+        }
+    },
+    SWAPN(immediate) => {
+        let valid_immediate = deep_stack_immediate_valid(immediate);
+        if valid_immediate then {
             let n = decode_single_stack_index(immediate);
             (n + 1, n + 1)
         } else {
             (0, 0)
-        },
-    EXCHANGE(immediate) => if exchange_immediate_valid(immediate) then {
+        }
+    },
+    EXCHANGE(immediate) => {
+        let valid_immediate = exchange_immediate_valid(immediate);
+        if valid_immediate then {
             let (_, higher) = decode_exchange_stack_indices(immediate);
             (higher + 1, higher + 1)
         } else {
             (0, 0)
-        },
+        }
+    },
     LOG(n) => (n + 2, 0),
-    opcode_CREATE() => (3, 1), CALL() => (7, 1), CALLCODE() => (7, 1),
-    RETURN() => (2, 0), DELEGATECALL() => (6, 1), CREATE2() => (4, 1),
-    STATICCALL() => (6, 1), REVERT() => (2, 0), INVALID() => (0, 0),
+    opcode_CREATE() => (3, 1),
+    CALL() => (7, 1),
+    CALLCODE() => (7, 1),
+    RETURN() => (2, 0),
+    DELEGATECALL() => (6, 1),
+    CREATE2() => (4, 1),
+    STATICCALL() => (6, 1),
+    REVERT() => (2, 0),
+    INVALID() => (0, 0),
     SELFDESTRUCT() => (1, 0),
 }
 
@@ -1081,7 +1564,8 @@ function execute_opcode(op : ast) -> unit = match op {
     effect, as part of the Yellow Paper exceptional-halt predicate. */
 function execute(op : ast) -> unit = {
     let (inputs, outputs) = opcode_stack_effect(op);
-    if validate_stack(inputs, outputs) then {
+    let stack_valid = validate_stack(inputs, outputs);
+    if stack_valid then {
         execute_opcode(op)
     }
 }

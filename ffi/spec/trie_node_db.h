@@ -21,8 +21,8 @@
  * packages a successful span with its source tag; this table stays unaware of
  * generated aggregate layouts. */
 unit nodedb_reset(const unit u);
-unit nodedb_insert(sail_fixed_bytes_32 kh, uint64_t off, uint64_t len);
-bool nodedb_lookup_span(sail_fixed_bytes_32 kh, uint64_t *off, uint64_t *len);
-void nodedb_insert_digest(const sail_fixed_bytes_32 *hash, uint64_t off, uint64_t len);
+unit nodedb_insert(fixed_bytes_32 kh, uint64_t off, uint64_t len);
+bool nodedb_lookup_span(fixed_bytes_32 kh, uint64_t *off, uint64_t *len);
+void nodedb_insert_digest(const fixed_bytes_32 *hash, uint64_t off, uint64_t len);
 
 #endif

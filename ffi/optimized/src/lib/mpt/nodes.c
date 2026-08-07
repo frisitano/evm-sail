@@ -38,7 +38,7 @@
 /* One digest probe bucket. A zeroed node_id denotes an empty bucket, so
  * every possible digest value (including all zeroes) remains representable. */
 typedef struct {
-  Hash32 digest;
+  bytes32 digest;
   NodeId node_id;
 } WitnessIndexEntry;
 
@@ -53,13 +53,13 @@ typedef struct {
   DecodedNode node;
   /* digest holds this node's keccak once digest_known is set. */
   bool digest_known;
-  Hash32 digest;
+  bytes32 digest;
   uint32_t generation;
 } WitnessNode;
 
 /* Memo of the most recent digest probe, hits and misses alike. */
 typedef struct {
-  Hash32 digest;
+  bytes32 digest;
   NodeId node_id;
   bool primed;
 } WitnessProbeMemo;
@@ -148,7 +148,7 @@ bool mpt_node_index_seal(void)
       continue;
     }
     uint32_t bucket = 0;
-    memcpy(&bucket, row->digest.bytes, sizeof(bucket));
+    bucket = (uint32_t)row->digest.lanes[0];
     bucket &= node_table.bucket_mask;
     for (;;) {
       WitnessIndexEntry *entry = &node_table.index[bucket];
@@ -227,7 +227,7 @@ bool mpt_node_span(NodeId node_id, ByteSpan *encoded)
   return true;
 }
 
-bool mpt_node_digest(NodeId node_id, Hash32 *digest)
+bool mpt_node_digest(NodeId node_id, bytes32 *digest)
 {
   WitnessNode *row = NULL;
   if (!witness_node_row(node_id, &row)) {
@@ -267,10 +267,10 @@ bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out)
  * bucket seed and needs no additional mixing. */
 static bool witness_append_inline(WitnessChild *ref);
 
-static uint32_t witness_digest_bucket(const Hash32 *digest)
+static uint32_t witness_digest_bucket(const bytes32 *digest)
 {
   uint32_t bucket = 0;
-  memcpy(&bucket, digest->bytes, sizeof(bucket));
+  bucket = (uint32_t)digest->lanes[0];
   return bucket & node_table.bucket_mask;
 }
 
@@ -311,7 +311,7 @@ static bool witness_append_inline(WitnessChild *ref)
   return (!row->decoded || witness_expand_decoded(&row->node)) != 0;
 }
 
-bool mpt_node_table_insert(const Hash32 *digest, ByteSpan encoded)
+bool mpt_node_table_insert(const bytes32 *digest, ByteSpan encoded)
 {
   node_table.memo.primed = false;
   if (encoded.len == 0 || node_table.sealed) {
@@ -331,7 +331,7 @@ bool mpt_node_table_insert(const Hash32 *digest, ByteSpan encoded)
   return witness_expand_decoded(&row->node);
 }
 
-static void witness_index_probe(const Hash32 *digest)
+static void witness_index_probe(const bytes32 *digest)
 {
   WitnessProbeMemo *memo = &node_table.memo;
   if (memo->primed && hash_equal(&memo->digest, digest)) {
@@ -358,7 +358,7 @@ static void witness_index_probe(const Hash32 *digest)
   }
 }
 
-static bool mpt_node_index_lookup(const Hash32 *digest, NodeId *node_id)
+static bool mpt_node_index_lookup(const bytes32 *digest, NodeId *node_id)
 {
   witness_index_probe(digest);
   if (node_id) {
@@ -367,7 +367,7 @@ static bool mpt_node_index_lookup(const Hash32 *digest, NodeId *node_id)
   return node_table.memo.node_id != MPT_NODE_ID_UNLINKED;
 }
 
-bool mpt_node_index_span(const Hash32 *digest, ByteSpan *encoded)
+bool mpt_node_index_span(const bytes32 *digest, ByteSpan *encoded)
 {
   NodeId node_id = MPT_NODE_ID_UNLINKED;
   if (!mpt_node_index_lookup(digest, &node_id)) {
@@ -404,7 +404,7 @@ bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_i
   if (kind == NODE_REFERENCE_INLINE) {
     fatal_error(WitnessDeficient);
   } else {
-    const Hash32 digest = hash_from_be_bytes(ref->encoded);
+    const bytes32 digest = hash_from_be_bytes(ref->encoded);
     if (!mpt_node_index_lookup(&digest, node_id)) {
       fatal_error(WitnessDeficient);
     }
@@ -416,7 +416,7 @@ bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_i
   return true;
 }
 
-bool mpt_bind_root(const Hash32 *root, NodeId *node_id)
+bool mpt_bind_root(const bytes32 *root, NodeId *node_id)
 {
   if (hash_equal(root, &EVMSAIL_EMPTY_TRIE_ROOT)) {
     *node_id = MPT_NODE_ID_EMPTY;
@@ -434,7 +434,7 @@ bool mpt_bind_root(const Hash32 *root, NodeId *node_id)
  * node is present in the witness it is already bound, and otherwise any
  * later traversal fails closed in mpt_node_span.
  */
-bool mpt_bind_storage_root_identity(const Hash32 *root, NodeId *node_id)
+bool mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id)
 {
   if (hash_equal(root, &EVMSAIL_EMPTY_TRIE_ROOT)) {
     *node_id = MPT_NODE_ID_EMPTY;

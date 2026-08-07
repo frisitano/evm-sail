@@ -40,11 +40,8 @@ register k_header : BlockHeader =
 /*! The per-transaction environment (`ORIGIN`, `GASPRICE`,
     `BLOBHASH`). */
 register k_tx : TxEnv =
-    (struct {
-        origin = ZERO_ADDRESS,
-        gas_price = ZERO_WORD,
-        blob_hashes = EMPTY_BLOB_HASHES,
-    } : TxEnvFields(blob_schedule_inactive_count))
+    struct { origin = ZERO_ADDRESS, gas_price = ZERO_WORD, blob_hashes = EMPTY_BLOB_HASHES } :
+        TxEnvFields(blob_schedule_inactive_count)
 /*! The current execution epoch: zero for pre-execution effects, transaction
     index plus one during transaction execution, and transaction count plus
     one for post-execution effects. EIP-2929 warmth and EIP-7928 BAL changes
@@ -81,16 +78,28 @@ enum EnvField = {
 function k_env(f : EnvField) -> word = {
     let active_tx = k_tx;
     match f {
-        F_Number => u256(word_of_block_number(k_header.number)),
-        F_Timestamp => u256(word_of_block_timestamp(k_header.timestamp)),
+        F_Number => {
+            let number = word_of_block_number(k_header.number);
+            u256(number)
+        },
+        F_Timestamp => {
+            let timestamp = word_of_block_timestamp(k_header.timestamp);
+            u256(timestamp)
+        },
         F_Coinbase => address_to_word(k_header.fee_recipient),
         F_BaseFee => k_header.base_fee,
-        F_ChainId => u256(word_of_chain_identifier(k_chain_id)),
+        F_ChainId => {
+            let chain_id = word_of_chain_identifier(k_chain_id);
+            u256(chain_id)
+        },
         F_GasLimit => u256(k_header.gas_limit),
         F_PrevRandao => k_header.prev_randao,
         F_Origin => address_to_word(active_tx.origin),
         F_GasPrice => active_tx.gas_price,
-        F_SlotNumber => u256(word_of_slot_number(k_header.slot_number)),
+        F_SlotNumber => {
+            let slot_number = word_of_slot_number(k_header.slot_number);
+            u256(slot_number)
+        },
     }
 }
 
@@ -109,14 +118,14 @@ function blockhash_word_distance(current, number) = current - number
     witness. */
 function k_blockhash(number_word : word) -> hash = {
     let current = k_header.number;
-    let current_word : word = u256(word_of_block_number(current));
+    let current_number = word_of_block_number(current);
+    let current_word : word = u256(current_number);
     if number_word < current_word then {
         let (distance_word as 'distance) = blockhash_word_distance(current_word, number_word);
         if distance_word <= 256 then {
             let distance : range(1, 256) = distance_word;
             if k_n_headers < distance then {
-                fatal_error(WitnessDeficient);
-                exit(())
+                fatal_error(WitnessDeficient)
             } else {
                 let index : ancestor_index = distance - 1;
                 ancestor_hash_read(index)

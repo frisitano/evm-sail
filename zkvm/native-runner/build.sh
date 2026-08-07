@@ -35,6 +35,7 @@ C_PROFILE_MANIFEST="$C_PROFILE_DIR/manifest"
 OPTIMIZED_PACKAGE="evmsail"
 OPTIMIZED_GENERATED="$BUILD/generated"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
+OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 mkdir -p "$BUILD"
 
 SAIL="$(bash "$ROOT/zkvm/resolve_optimized_sail.sh")"
@@ -77,7 +78,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
 else
   MODEL_FFI="$FFI_ROOT/optimized"
   MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
-  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$MODEL_FFI/include" -I"$MODEL_FFI/src")
+  MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$OPTIMIZED_STAGED_FFI")
 fi
 MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 
@@ -85,12 +86,12 @@ MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 # model/input umbrella: each external operation is declared by its subsystem.
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   MODEL_HEADERS=()
-  NATIVE_TEST_SOURCE="$MODEL_FFI/src/test/native.c"
-  NATIVE_DEBUG_SOURCE="$MODEL_FFI/src/test/debug.c"
+  NATIVE_TEST_SOURCE="$OPTIMIZED_STAGED_FFI/test/native.c"
+  NATIVE_DEBUG_SOURCE="$OPTIMIZED_STAGED_FFI/test/debug.c"
   ADDRESS_RESULT_SOURCE=""
 else
   MODEL_HEADERS=(
-    sail_failure.h region_access.h hash.h precompiles.h output.h scratch.h
+    sail_failure.h exceptions.h region_access.h hash.h precompiles.h output.h scratch.h
     memory.h transient_storage.h stack.h frame_stack.h code_db.h
     kernel_state.h trie_node_db.h state_db.h native_test.h
   )
@@ -183,6 +184,12 @@ PRESERVE_FLAGS=(
 )
 if [ "$EVM_BUILD_MODE" = standard ]; then
   PRESERVE_FLAGS+=(--c-preserve debug_account_storage_root)
+else
+  PRESERVE_FLAGS+=(
+    --c-preserve sload_cost
+    --c-preserve sstore_sentry_cost
+    --c-preserve sstore_costs
+  )
 fi
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 if [ "$EVM_BUILD_MODE" = optimized ]; then
@@ -199,6 +206,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     --c-optimized-external-type CodeRegionSliceFields=evmsail/host/types.h
     --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h
     --c-optimized-external-type OutputSliceFields=evmsail/host/types.h
+    --c-optimized-external-type PreparedAuthorizationList=evmsail/host/types.h
     --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct
     --c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct
     --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct
@@ -243,6 +251,9 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
   SAIL_CMD+=(-o "$BUILD/zkvm_block")
 fi
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
+fi
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. In optimized
 # builds the GMP-free sail256 runtime ships its own sail.h, so -I"$RUNTIME_DIR"
@@ -277,7 +288,7 @@ MODEL_BACKEND_OBJS=()
 if [ "$EVM_BUILD_MODE" = optimized ]; then
   while IFS= read -r relative || [ -n "$relative" ]; do
     case "$relative" in ''|'#'*) continue ;; esac
-    source="$MODEL_FFI/src/$relative"
+    source="$OPTIMIZED_STAGED_FFI/$relative"
     [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
     object_name="${relative%.c}"
     object_name="${object_name//\//__}"
@@ -286,7 +297,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
         "$MODEL_HEADER_FLAG" \
         -c "$source" -o "$object"
     MODEL_BACKEND_OBJS+=("$object")
-  done < "$MODEL_FFI/sources.list"
+  done < "$OPTIMIZED_STAGED_FFI/sources.list"
 else
   backend_sources=(
     "$MODEL_STATE_SOURCE:model_state"
@@ -326,7 +337,7 @@ fi
 # --- 6. C host backends + direct precompile adapter -------------------------
 HOST_OBJS=()
 if [ "$EVM_BUILD_MODE" = standard ]; then
-  HOST_SOURCES=(capacity.c memory.c scratch.c transient_storage.c stack.c code_db.c kernel_state.c precompiles.c output.c)
+  HOST_SOURCES=(capacity.c exceptions.c memory.c scratch.c transient_storage.c stack.c code_db.c kernel_state.c precompiles.c output.c)
   HOST_SOURCES+=(trie_node_db.c state_db.c)
   for source in "${HOST_SOURCES[@]}"; do
     object_name="$(basename "${source%.c}")"

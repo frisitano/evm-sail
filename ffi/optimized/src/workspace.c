@@ -1,6 +1,5 @@
 #include "workspace.h"
 
-#include <_abort.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -253,6 +252,7 @@ void workspace_prepare_execution(uint32_t account_count, uint32_t storage_count,
   stack_workspace_bind();
   frame_stack_workspace_bind();
   memory_workspace_bind();
+  prepared_authorizations_workspace_bind();
   state_runtime_workspace_bind();
   state_journal_workspace_bind(dynamic_capacities.journal_entries);
   transient_workspace_bind(dynamic_capacities.transient_entries);

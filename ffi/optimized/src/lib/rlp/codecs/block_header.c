@@ -56,9 +56,9 @@ static uint64_t block_header_content_size(const struct BlockHeader *header, uint
   return len;
 }
 
-Hash32 block_header_hash(struct BlockHeader header, Hash32 transactions_root,
-                         Hash32 withdrawals_root, Hash32 requests_hash,
-                         Hash32 block_access_list_hash)
+bytes32 block_header_hash(struct BlockHeader header, bytes32 transactions_root,
+                          bytes32 withdrawals_root, bytes32 requests_hash,
+                          bytes32 block_access_list_hash)
 {
   const uint64_t extra_len = header.extra_data.len;
   const uint8_t *extra_bytes = header.extra_data.bytes;
@@ -76,12 +76,12 @@ Hash32 block_header_hash(struct BlockHeader header, Hash32 transactions_root,
   uint8_t prev_randao[32];
   sail_word_to_be_bytes(prev_randao, header.prev_randao);
   uint8_t *cursor = rlp_write_list_prefix(preimage, content_len);
-  cursor = write_rlp_fixed(cursor, hash_bytes_const(&header.parent_hash), 32);
+  cursor = write_rlp_fixed(cursor, bytes32_data(&header.parent_hash), 32);
   cursor = write_rlp_fixed(cursor, empty_ommer_hash, 32);
-  cursor = write_rlp_fixed(cursor, address_bytes_const(&header.fee_recipient), 20);
-  cursor = write_rlp_fixed(cursor, hash_bytes_const(&header.state_root), 32);
-  cursor = write_rlp_fixed(cursor, hash_bytes_const(&transactions_root), 32);
-  cursor = write_rlp_fixed(cursor, hash_bytes_const(&header.receipts_root), 32);
+  cursor = write_rlp_fixed(cursor, bytes20_data(&header.fee_recipient), 20);
+  cursor = write_rlp_fixed(cursor, bytes32_data(&header.state_root), 32);
+  cursor = write_rlp_fixed(cursor, bytes32_data(&transactions_root), 32);
+  cursor = write_rlp_fixed(cursor, bytes32_data(&header.receipts_root), 32);
   cursor = write_rlp_fixed(cursor, logs_bloom_bytes, 256);
   cursor = rlp_write_u64(cursor, 0);
   cursor = rlp_write_u64(cursor, header.number);
@@ -101,18 +101,18 @@ Hash32 block_header_hash(struct BlockHeader header, Hash32 transactions_root,
     cursor = rlp_write_u256(cursor, header.base_fee);
   }
   if (fork >= EVMSAIL_FORK_SHANGHAI) {
-    cursor = write_rlp_fixed(cursor, hash_bytes_const(&withdrawals_root), 32);
+    cursor = write_rlp_fixed(cursor, bytes32_data(&withdrawals_root), 32);
   }
   if (fork >= EVMSAIL_FORK_CANCUN) {
     cursor = rlp_write_u64(cursor, header.blob_gas_used);
     cursor = rlp_write_u64(cursor, header.excess_blob_gas);
-    cursor = write_rlp_fixed(cursor, hash_bytes_const(&header.parent_beacon_block_root), 32);
+    cursor = write_rlp_fixed(cursor, bytes32_data(&header.parent_beacon_block_root), 32);
   }
   if (fork >= EVMSAIL_FORK_PRAGUE) {
-    cursor = write_rlp_fixed(cursor, hash_bytes_const(&requests_hash), 32);
+    cursor = write_rlp_fixed(cursor, bytes32_data(&requests_hash), 32);
   }
   if (fork >= EVMSAIL_FORK_AMSTERDAM) {
-    cursor = write_rlp_fixed(cursor, hash_bytes_const(&block_access_list_hash), 32);
+    cursor = write_rlp_fixed(cursor, bytes32_data(&block_access_list_hash), 32);
     cursor = rlp_write_u64(cursor, header.slot_number);
   }
   if ((uint64_t)(cursor - preimage) != total) {

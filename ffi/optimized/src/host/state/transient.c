@@ -16,12 +16,12 @@
 
 typedef struct {
   AccountId account_id;
-  U256 slot;
+  u256 slot;
 } TransientKey;
 
 typedef struct {
   TransientKey key;
-  U256 value;
+  u256 value;
   uint32_t epoch;
 } TransientEntry;
 
@@ -88,7 +88,7 @@ static uint32_t transient_table_find(const TransientKey *key, uint64_t hash)
   }
 }
 
-static void transient_table_set(const TransientKey *key, U256 value)
+static void transient_table_set(const TransientKey *key, u256 value)
 {
   const uint32_t i = transient_table_find(key, transient_key_hash(key));
   TransientEntry *entry = &transient_table.entries[i];
@@ -119,27 +119,27 @@ void transient_storage_reset(void)
 /* Store a value and make the update part of the current semantic checkpoint.
  * Transient storage is a total map with default zero, so restoring an absent
  * key as an explicit zero is observationally identical. */
-void transient_storage_write(Address addr, const U256 slot, const U256 v)
+void transient_storage_write(bytes20 addr, const u256 slot, const u256 v)
 {
   const AccountId account_id = get_account_id(&addr);
   const TransientKey key = {.account_id = account_id, .slot = slot};
   TransientEntry *entry = transient_table_get(&key);
-  const U256 prior = entry ? entry->value : (U256){{0}};
+  const u256 prior = entry ? entry->value : (u256){{0}};
   state_journal_push_transient(account_id, slot, prior);
   transient_table_set(&key, v);
 }
 
-void transient_storage_restore(AccountId account_id, U256 slot, U256 v)
+void transient_storage_restore(AccountId account_id, u256 slot, u256 v)
 {
   const TransientKey key = {.account_id = account_id, .slot = slot};
   transient_table_set(&key, v);
 }
 
 /* the 256-bit value at (address, slot); 0 if absent */
-U256 transient_storage_read(Address addr, const U256 slot)
+u256 transient_storage_read(bytes20 addr, const u256 slot)
 {
   const AccountId account_id = get_account_id(&addr);
   const TransientKey key = {.account_id = account_id, .slot = slot};
   TransientEntry *entry = transient_table_get(&key);
-  return entry ? entry->value : (U256){{0}};
+  return entry ? entry->value : (u256){{0}};
 }

@@ -20,15 +20,19 @@ function decode_state_account(value : StatelessInputSlice) -> AccountInfo = {
     let code = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, code.source.len);
     rlp_cursor_expect_end(fields);
-    let storage_root = if storage.content_len == 0 then {
+    let storage_root =
+        if storage.content_len == 0 then {
             EMPTY_TRIE_ROOT
         } else {
-            word_to_hash(rlp_decode_word(storage))
+            let storage_word = rlp_decode_word(storage);
+            word_to_hash(storage_word)
         };
-    let code_hash = if code.content_len == 0 then {
+    let code_hash =
+        if code.content_len == 0 then {
             KECCAK_EMPTY
         } else {
-            word_to_hash(rlp_decode_word(code))
+            let code_word = rlp_decode_word(code);
+            word_to_hash(code_word)
         };
     struct {
         nonce = rlp_decode_uint64(nonce),
@@ -56,11 +60,14 @@ function encode_state_account(info : AccountInfo, storage_root : hash) -> Scratc
     let storage_root_length = rlp_word_size();
     let code_hash_length = rlp_word_size();
     let content_len = nonce_length + balance_length + storage_root_length + code_hash_length;
-    let encoder = rlp_encoder_begin(rlp_list_size(content_len));
+    let encoded_length = rlp_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_length);
     rlp_write_list_prefix(content_len);
     rlp_write_uint(info.nonce);
     rlp_write_uint_word(info.balance);
-    rlp_write_word(hash_to_word(storage_root));
-    rlp_write_word(hash_to_word(info.code_hash));
+    let storage_root_word = hash_to_word(storage_root);
+    rlp_write_word(storage_root_word);
+    let code_hash_word = hash_to_word(info.code_hash);
+    rlp_write_word(code_hash_word);
     rlp_encoder_finish(encoder)
 }

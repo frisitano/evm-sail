@@ -24,9 +24,9 @@ void nodedb_reset(void)
   mpt_node_arena_reset();
 }
 
-void nodedb_insert(Hash32 digest, uint32_t input_offset, uint32_t encoded_length)
+void nodedb_insert(bytes32 digest, uint32_t input_offset, uint32_t encoded_length)
 {
-  const struct StatelessInputSliceFields input = stateless_input();
+  const Bytes input = stateless_input();
   if (input_offset > input.len || encoded_length > input.len - input_offset) {
     fatal_error(WitnessDeficient);
   }
@@ -36,7 +36,7 @@ void nodedb_insert(Hash32 digest, uint32_t input_offset, uint32_t encoded_length
   }
 }
 
-bool nodedb_lookup_span(Hash32 digest, uint32_t *input_offset, uint32_t *encoded_length)
+bool nodedb_lookup_span(bytes32 digest, uint32_t *input_offset, uint32_t *encoded_length)
 {
   ByteSpan encoded;
   uint32_t off = 0;

@@ -134,7 +134,7 @@ bool rlp_canonical_uint(const rlp_item *item, uint32_t maximum_len)
           (item->content_len == 0 || item->content[0] != 0)) != 0;
 }
 
-bool rlp_word_raw(const rlp_item *item, U256 *value)
+bool rlp_word_raw(const rlp_item *item, u256 *value)
 {
   if (item->is_list || item->content_len > 32) {
     return false;
@@ -145,7 +145,7 @@ bool rlp_word_raw(const rlp_item *item, U256 *value)
   return true;
 }
 
-bool rlp_quantity_word(const rlp_item *item, U256 *value)
+bool rlp_quantity_word(const rlp_item *item, u256 *value)
 {
   return (item->canonical && (item->content_len == 0 || item->content[0] != 0) &&
           rlp_word_raw(item, value)) != 0;

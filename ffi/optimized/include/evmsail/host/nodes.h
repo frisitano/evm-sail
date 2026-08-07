@@ -23,7 +23,7 @@ typedef uint32_t NodeId;
  * EVMSAIL_NODE_ID_EMPTY is only an edge sentinel. Neither sentinel is ever
  * bound to an encoded witness node in this index.
  */
-void nodedb_insert(Hash32 digest, uint32_t input_offset, uint32_t encoded_length);
-bool nodedb_lookup_span(Hash32 digest, uint32_t *input_offset, uint32_t *encoded_length);
+void nodedb_insert(bytes32 digest, uint32_t input_offset, uint32_t encoded_length);
+bool nodedb_lookup_span(bytes32 digest, uint32_t *input_offset, uint32_t *encoded_length);
 
 #endif

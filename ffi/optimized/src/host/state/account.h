@@ -16,37 +16,37 @@
 struct Account;
 struct AcctEntry;
 
-void host_account_update(Address address, uint64_t nonce, U256 balance, Hash32 code_hash,
+void host_account_update(bytes20 address, uint64_t nonce, u256 balance, bytes32 code_hash,
                          bool exists, bool storage_cleared, bool created, bool selfdestructed);
-void acct_tx_set_balance(Address address, U256 balance);
-void acct_tx_set_nonce(Address address, uint64_t nonce);
-void acct_tx_set_code_hash(Address address, Hash32 code_hash);
+void acct_tx_set_balance(bytes20 address, u256 balance);
+void acct_tx_set_nonce(bytes20 address, uint64_t nonce);
+void acct_tx_set_code_hash(bytes20 address, bytes32 code_hash);
 /* Minimal borrowed view used while reducing one ordered account-trie binding.
  * Large semantic values remain module-owned and stable for the duration of a
  * post-state-root pass. Mutations continue through the semantic setters above
  * so this module preserves journal and generation invariants. */
 typedef struct {
   AccountId account_id;
-  const Hash32 *secure_key;
+  const bytes32 *secure_key;
   NodeId storage_base_node;
-  const Hash32 *storage_base_root;
-  const Hash32 *original_storage_root;
+  const bytes32 *storage_base_root;
+  const bytes32 *original_storage_root;
   NodeId terminal_node;
   uint64_t nonce;
-  const U256 *balance;
-  const Hash32 *code_hash;
+  const u256 *balance;
+  const bytes32 *code_hash;
   bool current_live;
   bool original_exists;
   bool fields_changed;
 } AccountTrieView;
 
 uint32_t account_trie_binding_count(void);
-void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, Hash32 *secure_key);
+void account_trie_binding_order_key(uint32_t index, NodeId *terminal_node, bytes32 *secure_key);
 void account_trie_bindings_permute(uint32_t *destinations, uint32_t count);
 bool account_trie_binding_get(uint32_t index, AccountTrieView *view);
-void account_block_initialize(AccountId account_id, Hash32 address_hash, uint64_t nonce,
-                              U256 balance, Hash32 storage_root, NodeId storage_root_node,
-                              Hash32 code_hash, bool exists, bool storage_cleared,
+void account_block_initialize(AccountId account_id, bytes32 address_hash, uint64_t nonce,
+                              u256 balance, bytes32 storage_root, NodeId storage_root_node,
+                              bytes32 code_hash, bool exists, bool storage_cleared,
                               NodeId terminal_node);
 
 #endif

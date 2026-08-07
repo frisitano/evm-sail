@@ -3,11 +3,11 @@
 /* The optimized host returns the newly-entered memory frame as its native
  * pointer-bearing slice. Canonical and proof backends retain the semantic
  * arena coordinate exposed by `mem_frame_enter`. */
-val optimized_mem_frame_enter = impure { c: "mem_frame_enter_slice" } : unit -> EvmMemorySlice
+val mem_frame_enter_slice = impure { c: "mem_frame_enter_slice" } : unit -> EvmMemorySlice
 
 function memory_frame_enter() -> EvmMemorySlice = {
     let parent = evm_memory;
-    evm_memory = optimized_mem_frame_enter();
+    evm_memory = mem_frame_enter_slice();
     parent
 }
 
@@ -18,8 +18,7 @@ function conserved_gas_add(left, right) =
     if right <= sizeof(block_gas_limit_bound) - left then {
         left + right
     } else {
-        fatal_error(ExecutionInvalid);
-        exit(())
+        fatal_error(ExecutionInvalid)
     }
 
 /* Optimized `gas` is a uint64 range, so reduction modulo 2^256 is the

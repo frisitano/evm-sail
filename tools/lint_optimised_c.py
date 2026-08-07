@@ -151,6 +151,8 @@ def stable_analyzer_checkers(clang: str) -> list[str]:
 
 
 def finding_owner(finding: Finding) -> str:
+    if finding.path.startswith("build/c-optimised/generated/src/ffi/"):
+        return "optimized FFI"
     if finding.path.startswith("build/c-optimised/generated/"):
         return "generated compiler output"
     if finding.path.startswith("ffi/optimized/"):
@@ -257,8 +259,16 @@ def main() -> int:
     generated = args.generated.resolve()
     generated_source = generated / "src/spec"
     generated_manifest = generated_source / "sources.list"
-    ffi_source = ROOT / "ffi/optimized/src"
-    ffi_manifest = ROOT / "ffi/optimized/sources.list"
+    packaged_ffi_source = generated / "src/ffi"
+    packaged_ffi_manifest = packaged_ffi_source / "sources.list"
+    if packaged_ffi_manifest.is_file():
+        ffi_source = packaged_ffi_source
+        ffi_manifest = packaged_ffi_manifest
+        packaged = True
+    else:
+        ffi_source = ROOT / "ffi/optimized/src"
+        ffi_manifest = ROOT / "ffi/optimized/sources.list"
+        packaged = False
     if not generated_manifest.is_file():
         print(f"optimized C lint: missing generated manifest: {generated_manifest}")
         return 2
@@ -279,30 +289,35 @@ def main() -> int:
         print(f"optimized C lint: {error}")
         return 2
 
-    sail = shutil.which(args.sail) or args.sail
-    sail_dir_result = subprocess.run(
-        [sail, "--dir"],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if sail_dir_result.returncode != 0:
-        print("optimized C lint: cannot resolve the custom Sail library directory")
-        return 2
-    sail_lib = Path(sail_dir_result.stdout.strip()) / "lib"
     flags = [
         "-std=c11",
         '-DEVMSAIL_MODEL_H="evmsail/spec.h"',
         f"-I{generated / 'include'}",
-        f"-I{ROOT / 'zkvm/runtime/sail256'}",
-        f"-I{ROOT / 'zkvm/runtime'}",
-        f"-I{sail_lib}",
-        f"-I{ROOT / 'ffi/optimized/include'}",
         f"-I{ffi_source}",
-        f"-I{ROOT / 'ffi'}",
     ]
+    if not packaged:
+        sail = shutil.which(args.sail) or args.sail
+        sail_dir_result = subprocess.run(
+            [sail, "--dir"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if sail_dir_result.returncode != 0:
+            print("optimized C lint: cannot resolve the custom Sail library directory")
+            return 2
+        sail_lib = Path(sail_dir_result.stdout.strip()) / "lib"
+        flags.extend(
+            [
+                f"-I{ROOT / 'zkvm/runtime/sail256'}",
+                f"-I{ROOT / 'zkvm/runtime'}",
+                f"-I{sail_lib}",
+                f"-I{ROOT / 'ffi/optimized/include'}",
+                f"-I{ROOT / 'ffi'}",
+            ]
+        )
     focused_warnings = [
         "-Werror=unused-label",
         "-Werror=unused-variable",
@@ -364,15 +379,19 @@ def main() -> int:
             ]
         )
         if tidy is not None:
-            tidy_checks = []
+            # Both handwritten FFI modules and generated modules intentionally
+            # include the generated package umbrella.  Asking include-cleaner
+            # to replace that stable ABI boundary with direct, generator-owned
+            # module headers makes the FFI depend on extraction partitioning.
+            disabled_tidy_checks = ["-misc-include-cleaner"]
             if source.is_relative_to(generated):
                 # Generated modules include their package umbrella by design;
-                # direct include ownership would duplicate the full type graph
-                # in every split module. Recursive generated functions likewise
-                # preserve explicit recursive Sail equations; recursion policy
-                # belongs at the semantic source boundary, not in a C style
-                # checker that cannot distinguish bounded structural recursion.
-                tidy_checks.append("--checks=-misc-include-cleaner,-misc-no-recursion")
+                # recursive generated functions preserve explicit recursive
+                # Sail equations. Recursion policy belongs at the semantic
+                # source boundary, not in a C style checker that cannot
+                # distinguish bounded structural recursion.
+                disabled_tidy_checks.append("-misc-no-recursion")
+            tidy_checks = [f"--checks={','.join(disabled_tidy_checks)}"]
             commands.append(
                 [
                     tidy,

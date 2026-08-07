@@ -34,21 +34,28 @@ function validation_debug_reset() -> unit = {
 
 /*! Retains the block gas split for native failure diagnostics. */
 val validation_debug_capture_block_gas : forall 'actual 'expected 'execution 'state,
-       0 <= 'actual
-    &  'actual <= block_gas_limit_bound
-    &  0 <= 'expected
-    &  'expected <= block_gas_limit_bound
-    &  0 <= 'execution
-    &  'execution <= block_gas_limit_bound
-    &  0 <= 'state
-    &  'state <= block_gas_limit_bound.
-    (int('actual), int('expected), int('execution), int('state)) -> unit
-function validation_debug_capture_block_gas(
-    actual,
-    expected,
-    execution,
-    state,
-) -> unit = {
+                                              0
+                                           <= 'actual
+                                           &  'actual
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'expected
+                                           &  'expected
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'execution
+                                           &  'execution
+                                           <= block_gas_limit_bound
+                                           &  0
+                                           <= 'state
+                                           &  'state
+                                           <= block_gas_limit_bound. (
+        int('actual),
+        int('expected),
+        int('execution),
+        int('state),
+    ) -> unit
+function validation_debug_capture_block_gas(actual, expected, execution, state) -> unit = {
     validation_debug_gas_present = true;
     validation_debug_header_gas_actual = actual;
     validation_debug_header_gas_expected = expected;
@@ -70,14 +77,7 @@ function debug_account_storage_root(a : address) -> hash = {
     let account = acct_block_get(a);
     if account.found then {
         let account = account.account;
-        trie_root(
-            if account.storage_cleared then {
-                EMPTY_TRIE_ROOT
-            } else {
-                account.info.storage_root
-            },
-            StorageTrieUpdates(a),
-        ).root
+        trie_root(if account.storage_cleared then EMPTY_TRIE_ROOT else account.info.storage_root, StorageTrieUpdates(a)).root
     } else {
         EMPTY_TRIE_ROOT
     }

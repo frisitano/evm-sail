@@ -3,6 +3,6 @@
 
 #include "evmsail/prelude.h"
 
-Hash32 sha256_request_digest(uint64_t request_type, struct StatelessInputSliceFields request);
+bytes32 sha256_request_digest(uint64_t request_type, Bytes request);
 
 #endif

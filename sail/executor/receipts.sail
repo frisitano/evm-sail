@@ -26,19 +26,14 @@ function receipt_store_begin() -> source_pointer =
 
 /*! Splits the first retained record from an execution-ordered record span. */
 function receipt_record_pop(records : ScratchSlice) -> (ScratchSlice, ScratchSlice) = {
-    let records : ScratchSliceAtLeast(8) = if EIGHT_BYTE_LENGTH <= records.len then {
-            records
-        } else {
-            fatal_error(WitnessDeficient);
-            exit(())
-    };
+    let records : ScratchSliceAtLeast(8) =
+        if EIGHT_BYTE_LENGTH <= records.len then records else fatal_error(WitnessDeficient);
     let value_length = decode_scratch_uint(records, 0);
     let payload = slice_suffix(records, EIGHT_BYTE_LENGTH);
     if value_length <= payload.len then {
         (sub_slice(payload, 0, value_length), slice_suffix(payload, value_length))
     } else {
-        fatal_error(WitnessDeficient);
-        exit(())
+        fatal_error(WitnessDeficient)
     }
 }
 
@@ -65,5 +60,7 @@ function receipt_store_root(records_start : source_pointer, count : transaction_
 /*! Compares the block logs bloom of one consecutive retained log range with
     the payload-header commitment (YP §4.4.1). The range covers exactly the
     logs retained by the block's transaction receipts. */
-function block_logs_bloom_matches(logs : LogSeriesRef, reference : LogsBloomRef) -> bool =
-    logs_bloom_matches_ref(bloom_add_logs(EMPTY_LOGS_BLOOM, logs), reference)
+function block_logs_bloom_matches(logs : LogSeriesRef, reference : LogsBloomRef) -> bool = {
+    let logs_bloom = bloom_add_logs(EMPTY_LOGS_BLOOM, logs);
+    logs_bloom_matches_ref(logs_bloom, reference)
+}

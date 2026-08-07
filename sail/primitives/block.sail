@@ -36,8 +36,10 @@ function logs_bloom_from_ref(reference : LogsBloomRef) -> LogsBloom = {
 }
 
 /*! Compares the computed block bloom with the payload-header commitment. */
-function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) -> bool =
-    logs_bloom_equal(computed, logs_bloom_from_ref(reference))
+function logs_bloom_matches_ref(computed : LogsBloom, reference : LogsBloomRef) -> bool = {
+    let expected = logs_bloom_from_ref(reference);
+    logs_bloom_equal(computed, expected)
+}
 
 /*! The execution-payload header fields the model reads and validates
     (YP §4.4). Scalar wire bounds come from the consensus/Amsterdam SSZ
@@ -73,9 +75,7 @@ struct BlockHeader = {
 
 /*! `keccak256(rlp([]))` — the ommers hash of every post-merge block
     (EIP-3675 requires an empty ommers list). */
-let EMPTY_OMMER_HASH : hash = word_to_hash(
-    u256(unsigned(0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347)),
-)
+let EMPTY_OMMER_HASH : hash = hash_from_bits(0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347)
 
 /*! An EIP-4895 beacon-chain withdrawal: index, validator, recipient,
     and amount in gwei. */

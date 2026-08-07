@@ -14,8 +14,8 @@ by each precompile; the field modulus and blob element count validate their
 respective algebraic inputs.
 */
 let ACCELERATOR_INPUT_MAX : int(2097152) = 2097152
-let FIELD_ELEMENTS_PER_BLOB : word = u256(unsigned(0x0000000000000000000000000000000000000000000000000000000000001000))
-let BLS_MODULUS : word = u256(unsigned(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001))
+let FIELD_ELEMENTS_PER_BLOB : word = word_from_bits(0x0000000000000000000000000000000000000000000000000000000000001000)
+let BLS_MODULUS : word = word_from_bits(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001)
 
 let BLAKE2F_INPUT_LENGTH : int(213) = 213
 let BLAKE2F_FINAL_BLOCK_OFFSET : int(212) = 212
@@ -49,24 +49,24 @@ let BLS_G2_POINT_OFFSET : int(128) = 128
 /* Full-width address constants keep precompile recognition as ordinary
  * address equality. Construct them through the canonical word conversion so
  * their representation is identical to transaction and CALL targets. */
-let PRECOMPILE_ADDRESS_1 : address = word_to_address(u256(1))
-let PRECOMPILE_ADDRESS_2 : address = word_to_address(u256(2))
-let PRECOMPILE_ADDRESS_3 : address = word_to_address(u256(3))
-let PRECOMPILE_ADDRESS_4 : address = word_to_address(u256(4))
-let PRECOMPILE_ADDRESS_5 : address = word_to_address(u256(5))
-let PRECOMPILE_ADDRESS_6 : address = word_to_address(u256(6))
-let PRECOMPILE_ADDRESS_7 : address = word_to_address(u256(7))
-let PRECOMPILE_ADDRESS_8 : address = word_to_address(u256(8))
-let PRECOMPILE_ADDRESS_9 : address = word_to_address(u256(9))
-let PRECOMPILE_ADDRESS_10 : address = word_to_address(u256(10))
-let PRECOMPILE_ADDRESS_11 : address = word_to_address(u256(11))
-let PRECOMPILE_ADDRESS_12 : address = word_to_address(u256(12))
-let PRECOMPILE_ADDRESS_13 : address = word_to_address(u256(13))
-let PRECOMPILE_ADDRESS_14 : address = word_to_address(u256(14))
-let PRECOMPILE_ADDRESS_15 : address = word_to_address(u256(15))
-let PRECOMPILE_ADDRESS_16 : address = word_to_address(u256(16))
-let PRECOMPILE_ADDRESS_17 : address = word_to_address(u256(17))
-let PRECOMPILE_ADDRESS_256 : address = word_to_address(u256(256))
+let PRECOMPILE_ADDRESS_1 : address = address_from_nat(1)
+let PRECOMPILE_ADDRESS_2 : address = address_from_nat(2)
+let PRECOMPILE_ADDRESS_3 : address = address_from_nat(3)
+let PRECOMPILE_ADDRESS_4 : address = address_from_nat(4)
+let PRECOMPILE_ADDRESS_5 : address = address_from_nat(5)
+let PRECOMPILE_ADDRESS_6 : address = address_from_nat(6)
+let PRECOMPILE_ADDRESS_7 : address = address_from_nat(7)
+let PRECOMPILE_ADDRESS_8 : address = address_from_nat(8)
+let PRECOMPILE_ADDRESS_9 : address = address_from_nat(9)
+let PRECOMPILE_ADDRESS_10 : address = address_from_nat(10)
+let PRECOMPILE_ADDRESS_11 : address = address_from_nat(11)
+let PRECOMPILE_ADDRESS_12 : address = address_from_nat(12)
+let PRECOMPILE_ADDRESS_13 : address = address_from_nat(13)
+let PRECOMPILE_ADDRESS_14 : address = address_from_nat(14)
+let PRECOMPILE_ADDRESS_15 : address = address_from_nat(15)
+let PRECOMPILE_ADDRESS_16 : address = address_from_nat(16)
+let PRECOMPILE_ADDRESS_17 : address = address_from_nat(17)
+let PRECOMPILE_ADDRESS_256 : address = address_from_nat(256)
 
 /*! A precompile's outcome: success and the EVM-visible output bytes.
     Failure consumes the frame's gas like any exceptional call. */
@@ -88,7 +88,8 @@ function precompile_failure() -> PrecompileResult =
 val accelerator_result : forall 'output_len, source_valid_length('output_len). (bool, int('output_len)) -> PrecompileResult
 function accelerator_result(success, output_len) =
     if success then {
-        precompile_success(output_buffer_slice(output_len))
+        let output = output_buffer_slice(output_len);
+        precompile_success(output)
     } else {
         precompile_failure()
     }
@@ -96,7 +97,8 @@ function accelerator_result(success, output_len) =
 /*! `IDENTITY` (0x04): the input, copied through the output buffer. */
 function copied_result(data : CalldataSlice) -> PrecompileResult = {
     let output = freeze_output(data);
-    if output.len == calldata_slice_length(data) then {
+    let input_length = calldata_slice_length(data);
+    if output.len == input_length then {
         precompile_success(output)
     } else {
         precompile_failure()
@@ -104,8 +106,12 @@ function copied_result(data : CalldataSlice) -> PrecompileResult = {
 }
 
 /*! A 32-byte `0`/`1` result word (pairing checks). */
-function boolean_result(value : bool) -> PrecompileResult =
-    precompile_success(output_buffer_word(if value then { WORD_ONE } else { WORD_ZERO }))
+function boolean_result(value : bool) -> PrecompileResult = {
+    let result_word =
+        if value then WORD_ONE else WORD_ZERO;
+    let output = output_buffer_word(result_word);
+    precompile_success(output)
+}
 
 /*! Whether address `n` is an active precompile at the current fork:
     1–4 always; 5–8 from Byzantium; 9 from Istanbul; 10 from Cancun
@@ -139,12 +145,14 @@ function precompile_active_at_fork(n : precompile_id) -> bool = {
 
 /*! Returns the active precompile represented by `target`, or
     `NotPrecompile` when it is an ordinary address at the current fork. */
-function precompile_id_if_active(candidate : precompile_id) -> precompile_id =
-    if precompile_active_at_fork(candidate) then {
+function precompile_id_if_active(candidate : precompile_id) -> precompile_id = {
+    let active = precompile_active_at_fork(candidate);
+    if active then {
         candidate
     } else {
         NotPrecompile
     }
+}
 
 function precompile_id_for_address(bytes : address) -> precompile_id = {
     match bytes {
@@ -174,17 +182,21 @@ function precompile_id_for_address(bytes : address) -> precompile_id = {
     yields a successful call with empty output. */
 function run_ecrecover(input : CalldataSlice) -> PrecompileResult = {
     let v = slice_load(input, PRECOMPILE_WORD_OFFSET);
-    let valid_v = (v == u256(27)) | (v == u256(28));
+    let v_27 = u256(27);
+    let v_28 = u256(28);
+    let valid_v = (v == v_27) | (v == v_28);
     if valid_v then {
-        let parity : y_parity = if v == u256(27) then { 0 } else { 1 };
-        let (recovered, address) = ecrecover_addr(
-            word_to_hash(slice_load(input, 0)),
-            parity,
-            slice_load(input, PRECOMPILE_DOUBLE_WORD_OFFSET),
-            slice_load(input, ECRECOVER_S_OFFSET),
-        );
+        let parity : y_parity =
+            if v == v_27 then 0 else 1;
+        let message_word = slice_load(input, 0);
+        let message_hash = word_to_hash(message_word);
+        let r = slice_load(input, PRECOMPILE_DOUBLE_WORD_OFFSET);
+        let s = slice_load(input, ECRECOVER_S_OFFSET);
+        let (recovered, address) = ecrecover_addr(message_hash, parity, r, s);
         if recovered then {
-            precompile_success(output_buffer_word(address_to_word(address)))
+            let address_word = address_to_word(address);
+            let output = output_buffer_word(address_word);
+            precompile_success(output)
         } else {
             precompile_success(EMPTY_OUTPUT_SLICE)
         }
@@ -194,12 +206,18 @@ function run_ecrecover(input : CalldataSlice) -> PrecompileResult = {
 }
 
 /*! `SHA256` (0x02). */
-function run_sha256(input : CalldataSlice) -> PrecompileResult =
-    precompile_success(output_buffer_word(hash_to_word(sha256(input))))
+function run_sha256(input : CalldataSlice) -> PrecompileResult = {
+    let digest = sha256(input);
+    let digest_word = hash_to_word(digest);
+    let output = output_buffer_word(digest_word);
+    precompile_success(output)
+}
 
 /*! `RIPEMD160` (0x03): 20-byte digest, left-padded to 32. */
-function run_ripemd160(input : CalldataSlice) -> PrecompileResult =
-    accelerator_result(accelerator_ripemd160(input), PRECOMPILE_WORD_LENGTH)
+function run_ripemd160(input : CalldataSlice) -> PrecompileResult = {
+    let success = accelerator_ripemd160(input);
+    accelerator_result(success, PRECOMPILE_WORD_LENGTH)
+}
 
 /*! `MODEXP` (0x05, EIP-198): arbitrary-precision modular
     exponentiation; a zero-length modulus yields empty output, and inputs
@@ -210,22 +228,23 @@ function run_modexp(input : CalldataSlice) -> PrecompileResult = {
     let modulus_len : word = pc_word(input, 64, 32);
     if modulus_len == 0 then {
         precompile_success(EMPTY_OUTPUT_SLICE)
+    } else if   ACCELERATOR_INPUT_MAX
+              < base_len
+              | ACCELERATOR_INPUT_MAX
+              < exponent_len
+              | ACCELERATOR_INPUT_MAX
+              < modulus_len then {
+        precompile_failure()
     } else {
-        if ACCELERATOR_INPUT_MAX < base_len | ACCELERATOR_INPUT_MAX < exponent_len | ACCELERATOR_INPUT_MAX < modulus_len then {
+        let bounded_base : range(0, 2097152) = base_len;
+        let bounded_exponent : range(0, 2097152) = exponent_len;
+        let bounded_modulus : range(0, 2097152) = modulus_len;
+        let input_end : range(96, 96 + 3 * 2097152) = 96 + bounded_base + bounded_exponent + bounded_modulus;
+        if ACCELERATOR_INPUT_MAX < input_end then {
             precompile_failure()
         } else {
-            let bounded_base : range(0, 2097152) = base_len;
-            let bounded_exponent : range(0, 2097152) = exponent_len;
-            let bounded_modulus : range(0, 2097152) = modulus_len;
-            let input_end : range(96, 96 + 3 * 2097152) = 96 + bounded_base + bounded_exponent + bounded_modulus;
-            if ACCELERATOR_INPUT_MAX < input_end then {
-                precompile_failure()
-            } else {
-                accelerator_result(
-                    accelerator_modexp(input, bounded_base, bounded_exponent, bounded_modulus),
-                    bounded_modulus,
-                )
-            }
+            let success = accelerator_modexp(input, bounded_base, bounded_exponent, bounded_modulus);
+            accelerator_result(success, bounded_modulus)
         }
     }
 }
@@ -236,46 +255,60 @@ function pairing_result(result : pairing_check_result) -> PrecompileResult =
     if result < 2 then {
         precompile_failure()
     } else {
-        boolean_result(tmod_nat(result, 2) == 1)
+        let parity = tmod_nat(result, 2);
+        boolean_result(parity == 1)
     }
 
 /*! `BLAKE2F` (0x09, EIP-152): the compression function; the input must
     be exactly 213 bytes with a 0/1 final-block flag. */
 function run_blake2f(input : CalldataSlice) -> PrecompileResult = {
     let final_byte = slice_byte(input, BLAKE2F_FINAL_BLOCK_OFFSET);
-    if (calldata_slice_length(input) != BLAKE2F_INPUT_LENGTH) | ((final_byte != 0x00) & (final_byte != 0x01)) then {
+    let input_length = calldata_slice_length(input);
+    if (input_length != BLAKE2F_INPUT_LENGTH) | ((final_byte != 0x00) & (final_byte != 0x01)) then {
         precompile_failure()
     } else {
-        let final_block : y_parity = if final_byte == 0x00 then { 0 } else { 1 };
-        accelerator_result(accelerator_blake2f(input, pc_blake2_rounds(input), final_block), BLAKE2F_OUTPUT_LENGTH)
+        let final_block : y_parity =
+            if final_byte == 0x00 then 0 else 1;
+        let rounds = pc_blake2_rounds(input);
+        let success = accelerator_blake2f(input, rounds, final_block);
+        accelerator_result(success, BLAKE2F_OUTPUT_LENGTH)
     }
 }
 
 /*! The EIP-4844 versioned-hash binding: the input's claimed hash must
     equal `0x01 ‖ sha256(commitment)[1:]`. */
 function kzg_versioned_hash_matches(input : CalldataSlice) -> bool = {
-    let commitment_hash = sha256(sub_slice(input, KZG_COMMITMENT_OFFSET, KZG_COMMITMENT_LENGTH));
+    let commitment = sub_slice(input, KZG_COMMITMENT_OFFSET, KZG_COMMITMENT_LENGTH);
+    let commitment_hash = sha256(commitment);
     var expected = commitment_hash;
     expected[0] = 0x01;
-    word_to_hash(slice_load(input, 0)) == expected
+    let claimed_word = slice_load(input, 0);
+    let claimed_hash = word_to_hash(claimed_word);
+    claimed_hash == expected
 }
 
 /*! `POINT_EVALUATION` (0x0a, EIP-4844): verifies a KZG proof; success
     returns the field-elements-per-blob and BLS modulus constants. */
-function run_kzg_point_evaluation(input : CalldataSlice) -> PrecompileResult =
-    if calldata_slice_length(input) != KZG_INPUT_LENGTH then {
+function run_kzg_point_evaluation(input : CalldataSlice) -> PrecompileResult = {
+    let input_length = calldata_slice_length(input);
+    if input_length != KZG_INPUT_LENGTH then {
         precompile_failure()
     } else {
-        if not_bool(kzg_versioned_hash_matches(input)) then {
+        let versioned_hash_matches = kzg_versioned_hash_matches(input);
+        let invalid_versioned_hash = not_bool(versioned_hash_matches);
+        if invalid_versioned_hash then {
             precompile_failure()
         } else {
-            if accelerator_kzg_point_evaluation(input) then {
-                precompile_success(output_buffer_words(FIELD_ELEMENTS_PER_BLOB, BLS_MODULUS))
+            let valid_proof = accelerator_kzg_point_evaluation(input);
+            if valid_proof then {
+                let output = output_buffer_words(FIELD_ELEMENTS_PER_BLOB, BLS_MODULUS);
+                precompile_success(output)
             } else {
                 precompile_failure()
             }
         }
     }
+}
 
 /*! The EIP-2537 padding rule for G1 points: every 48-byte Fp value is
     padded to 64 bytes with sixteen leading zero bytes, checked with one
@@ -308,16 +341,21 @@ function bls_g2_padding(input, base, stride, count) = {
 }
 
 /*! `BLS12_G1ADD` (0x0b, EIP-2537). */
-function run_bls_g1_add(input : CalldataSlice) -> PrecompileResult =
-    if calldata_slice_length(input) != BLS_G1_ADD_INPUT_LENGTH then {
+function run_bls_g1_add(input : CalldataSlice) -> PrecompileResult = {
+    let input_length = calldata_slice_length(input);
+    if input_length != BLS_G1_ADD_INPUT_LENGTH then {
         precompile_failure()
     } else {
-        if not_bool(bls_g1_padding(input, 0, BLS_G1_POINT_LENGTH, TWO_COMPONENTS)) then {
+        let valid_padding = bls_g1_padding(input, 0, BLS_G1_POINT_LENGTH, TWO_COMPONENTS);
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_g1_add(input), BLS_G1_POINT_LENGTH)
+            let success = accelerator_bls_g1_add(input);
+            accelerator_result(success, BLS_G1_POINT_LENGTH)
         }
     }
+}
 
 /*! `BLS12_G1MSM` (0x0c, EIP-2537): input is `k` 160-byte pairs. */
 function run_bls_g1_msm(input : CalldataSlice) -> PrecompileResult = {
@@ -327,25 +365,33 @@ function run_bls_g1_msm(input : CalldataSlice) -> PrecompileResult = {
     if (length == 0) | (length != pairs * item_length) then {
         precompile_failure()
     } else {
-        if not_bool(bls_g1_padding(input, 0, BLS_G1_MSM_ITEM_LENGTH, pairs)) then {
+        let valid_padding = bls_g1_padding(input, 0, BLS_G1_MSM_ITEM_LENGTH, pairs);
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_g1_msm(input), BLS_G1_POINT_LENGTH)
+            let success = accelerator_bls_g1_msm(input);
+            accelerator_result(success, BLS_G1_POINT_LENGTH)
         }
     }
 }
 
 /*! `BLS12_G2ADD` (0x0d, EIP-2537). */
-function run_bls_g2_add(input : CalldataSlice) -> PrecompileResult =
-    if calldata_slice_length(input) != BLS_G2_ADD_INPUT_LENGTH then {
+function run_bls_g2_add(input : CalldataSlice) -> PrecompileResult = {
+    let input_length = calldata_slice_length(input);
+    if input_length != BLS_G2_ADD_INPUT_LENGTH then {
         precompile_failure()
     } else {
-        if not_bool(bls_g2_padding(input, 0, BLS_G2_POINT_LENGTH, TWO_COMPONENTS)) then {
+        let valid_padding = bls_g2_padding(input, 0, BLS_G2_POINT_LENGTH, TWO_COMPONENTS);
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_g2_add(input), BLS_G2_POINT_LENGTH)
+            let success = accelerator_bls_g2_add(input);
+            accelerator_result(success, BLS_G2_POINT_LENGTH)
         }
     }
+}
 
 /*! `BLS12_G2MSM` (0x0e, EIP-2537): input is `k` 288-byte pairs. */
 function run_bls_g2_msm(input : CalldataSlice) -> PrecompileResult = {
@@ -355,10 +401,13 @@ function run_bls_g2_msm(input : CalldataSlice) -> PrecompileResult = {
     if (length == 0) | (length != pairs * item_length) then {
         precompile_failure()
     } else {
-        if not_bool(bls_g2_padding(input, 0, BLS_G2_MSM_ITEM_LENGTH, pairs)) then {
+        let valid_padding = bls_g2_padding(input, 0, BLS_G2_MSM_ITEM_LENGTH, pairs);
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_g2_msm(input), BLS_G2_POINT_LENGTH)
+            let success = accelerator_bls_g2_msm(input);
+            accelerator_result(success, BLS_G2_POINT_LENGTH)
         }
     }
 }
@@ -373,9 +422,11 @@ function run_bls_pairing(input : CalldataSlice) -> PrecompileResult = {
         precompile_failure()
     } else {
         let pair_count : source_length = pairs;
-        if bls_g1_padding(input, 0, BLS_PAIRING_ITEM_LENGTH, pair_count) &
-            bls_g2_padding(input, BLS_G2_POINT_OFFSET, BLS_PAIRING_ITEM_LENGTH, pair_count) then {
-            pairing_result(accelerator_bls_pairing(input))
+        let valid_g1_padding = bls_g1_padding(input, 0, BLS_PAIRING_ITEM_LENGTH, pair_count);
+        let valid_g2_padding = bls_g2_padding(input, BLS_G2_POINT_OFFSET, BLS_PAIRING_ITEM_LENGTH, pair_count);
+        if valid_g1_padding & valid_g2_padding then {
+            let result = accelerator_bls_pairing(input);
+            pairing_result(result)
         } else {
             precompile_failure()
         }
@@ -383,40 +434,55 @@ function run_bls_pairing(input : CalldataSlice) -> PrecompileResult = {
 }
 
 /*! `BLS12_MAP_FP_TO_G1` (0x10, EIP-2537). */
-function run_bls_map_fp_to_g1(input : CalldataSlice) -> PrecompileResult =
-    if calldata_slice_length(input) != BLS_PADDED_FIELD_LENGTH then {
+function run_bls_map_fp_to_g1(input : CalldataSlice) -> PrecompileResult = {
+    let input_length = calldata_slice_length(input);
+    if input_length != BLS_PADDED_FIELD_LENGTH then {
         precompile_failure()
     } else {
-        if not_bool(slice_strided_zero(input, 0, BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, 1)) then {
+        let valid_padding = slice_strided_zero(input, 0, BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, 1);
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_map_fp_to_g1(input), BLS_G1_POINT_LENGTH)
+            let success = accelerator_bls_map_fp_to_g1(input);
+            accelerator_result(success, BLS_G1_POINT_LENGTH)
         }
     }
+}
 
 /*! `BLS12_MAP_FP2_TO_G2` (0x11, EIP-2537). */
-function run_bls_map_fp2_to_g2(input : CalldataSlice) -> PrecompileResult =
-    if calldata_slice_length(input) != BLS_G1_POINT_LENGTH then {
+function run_bls_map_fp2_to_g2(input : CalldataSlice) -> PrecompileResult = {
+    let input_length = calldata_slice_length(input);
+    if input_length != BLS_G1_POINT_LENGTH then {
         precompile_failure()
     } else {
-        if not_bool(slice_strided_zero(input, 0, BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, TWO_COMPONENTS)) then {
+        let valid_padding = slice_strided_zero(
+            input,
+            0,
+            BLS_PADDED_FIELD_LENGTH,
+            BLS_FIELD_PADDING_LENGTH,
+            TWO_COMPONENTS,
+        );
+        let invalid_padding = not_bool(valid_padding);
+        if invalid_padding then {
             precompile_failure()
         } else {
-            accelerator_result(accelerator_bls_map_fp2_to_g2(input), BLS_G2_POINT_LENGTH)
+            let success = accelerator_bls_map_fp2_to_g2(input);
+            accelerator_result(success, BLS_G2_POINT_LENGTH)
         }
     }
+}
 
 /*! `P256VERIFY` (0x100, EIP-7951): every malformed or invalid signature
     is a successful call with empty output; only a valid signature
     returns the word one. */
 function run_p256_verify(input : CalldataSlice) -> PrecompileResult = {
-    let verified = if calldata_slice_length(input) == P256_INPUT_LENGTH then {
-            accelerator_p256_verify(input)
-        } else {
-            false
-        };
+    let input_length = calldata_slice_length(input);
+    let verified =
+        if input_length == P256_INPUT_LENGTH then accelerator_p256_verify(input) else false;
     if verified then {
-        precompile_success(output_buffer_word(WORD_ONE))
+        let output = output_buffer_word(WORD_ONE);
+        precompile_success(output)
     } else {
         precompile_success(EMPTY_OUTPUT_SLICE)
     }
@@ -432,13 +498,20 @@ function run_precompile_slice(num : precompile_id, input : CalldataSlice) -> Pre
         Ripemd160 => run_ripemd160(input),
         Identity => copied_result(input),
         Modexp => run_modexp(input),
-        Bn254Add => accelerator_result(accelerator_bn254_add(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
-        Bn254Mul => accelerator_result(accelerator_bn254_mul(input), PRECOMPILE_DOUBLE_WORD_LENGTH),
+        Bn254Add => {
+            let success = accelerator_bn254_add(input);
+            accelerator_result(success, PRECOMPILE_DOUBLE_WORD_LENGTH)
+        },
+        Bn254Mul => {
+            let success = accelerator_bn254_mul(input);
+            accelerator_result(success, PRECOMPILE_DOUBLE_WORD_LENGTH)
+        },
         Bn254Pairing => {
             let input_length = calldata_slice_length(input);
             let item_length = BN254_PAIRING_ITEM_LENGTH;
             if input_length == (input_length / item_length) * item_length then {
-                pairing_result(accelerator_bn254_pairing(input))
+                let result = accelerator_bn254_pairing(input);
+                pairing_result(result)
             } else {
                 precompile_failure()
             }

@@ -3,6 +3,7 @@
  * Amsterdam's BAL defines the dense block-local account and storage schema.
  * Build that schema before executing the first transaction so subsequent
  * state access and final BAL authentication share the same stable IDs. */
+
 function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
     scratch_reset();
     let input = decode_stateless_input(input_ref);

@@ -11,9 +11,12 @@ function create2_address(sender : address, salt : word, init_hash : hash) -> add
     let mark = scratch_reserve(85);
     scratch_push_byte(0xff);
     scratch_push_address(sender);
-    scratch_push_b256(word_to_hash(salt), WORD_BYTE_LENGTH);
+    let salt_hash = word_to_hash(salt);
+    scratch_push_b256(salt_hash, WORD_BYTE_LENGTH);
     scratch_push_b256(init_hash, WORD_BYTE_LENGTH);
-    let digest = keccak256(scratch_finish(mark));
+    let preimage = scratch_finish(mark);
+    let digest = keccak256(preimage);
     scratch_rewind(mark);
-    word_to_address(hash_to_word(digest))
+    let digest_word = hash_to_word(digest);
+    word_to_address(digest_word)
 }

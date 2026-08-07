@@ -6,12 +6,13 @@
  * while the host resolver checks that the resulting span belongs to its
  * nominal backing region.
  */
-val optimized_output_buffer_slice = impure { c: "output_buffer_slice" } : forall 'len,
-                                                                                    source_valid_length('len). int('len) -> OutputSlice
+val nonempty_output_buffer_slice = impure { c: "output_buffer_slice" } : forall 'len, source_valid_length('len). int(
+        'len,
+    ) -> OutputSlice
 
 function output_buffer_slice(len) =
     if len == 0 then {
         EMPTY_OUTPUT_SLICE
     } else {
-        optimized_output_buffer_slice(len)
+        nonempty_output_buffer_slice(len)
     }

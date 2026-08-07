@@ -20,7 +20,10 @@ function rlp_write_node_ref(r : NodeRef) -> unit =
         EmptyRef() => scratch_push_byte(0x80),
         InputInlineRef(node) => scratch_push_slice(node),
         ScratchInlineRef(node) => scratch_push_b256(node.data, node.len),
-        HashRef(h) => rlp_write_word(hash_to_word(h)),
+        HashRef(h) => {
+            let hash_word = hash_to_word(h);
+            rlp_write_word(hash_word)
+        },
     }
 
 /*! Returns the canonical RLP width of a compact trie path. */
@@ -41,11 +44,16 @@ function rlp_write_hex_prefix(path : TriePath, is_leaf : bool) -> unit = {
     let first = hex_prefix_first_byte(path, is_leaf);
     rlp_write_string_prefix(encoded_length, first);
     scratch_push_byte(first);
-    var index : hex_prefix_cursor = if tmod_nat(length, 2) != 0 then { 1 } else { 0 };
+    let odd_length = tmod_nat(length, 2) != 0;
+    var index : hex_prefix_cursor =
+        if odd_length then 1 else 0;
     while index < length termination_measure(length - index) do {
         let current : trie_path_cursor = tmod_nat(index, 65);
         let next : trie_path_cursor = tmod_nat(current + 1, 65);
-        scratch_push_byte(append(path_nibble(path, current), path_nibble(path, next)));
+        let high = path_nibble(path, current);
+        let low = path_nibble(path, next);
+        let path_byte = append(high, low);
+        scratch_push_byte(path_byte);
         index = next + 1
     }
 }
@@ -54,23 +62,31 @@ function rlp_write_hex_prefix(path : TriePath, is_leaf : bool) -> unit = {
     bytes, otherwise its hash (YP Appendix D, Eq. 207). */
 function child_ref(encoded : ScratchSlice) -> NodeRef =
     if encoded.len < MPT_HASH_LENGTH then {
-        ScratchInlineRef(inline_node_from_slice(encoded))
+        let inline_node = inline_node_from_slice(encoded);
+        ScratchInlineRef(inline_node)
     } else {
-        HashRef(keccak256(encoded))
+        let node_hash = keccak256(encoded);
+        HashRef(node_hash)
     }
 
 /*! A compact presence bitset for the sixteen children of a branch. */
 type branch_mask = bits(16)
 
 /*! Returns the one-hot presence mask for a branch-child nibble. */
-function branch_mask_for(index : nibble) -> branch_mask =
-    sail_shiftleft(0x0001, unsigned(index))
+function branch_mask_for(index : nibble) -> branch_mask = {
+    let shift = unsigned(index);
+    sail_shiftleft(0x0001, shift)
+}
 
-function branch_mask_has(mask : branch_mask, index : nibble) -> bool =
-    and_vec(mask, branch_mask_for(index)) != 0x0000
+function branch_mask_has(mask : branch_mask, index : nibble) -> bool = {
+    let index_mask = branch_mask_for(index);
+    and_vec(mask, index_mask) != 0x0000
+}
 
-function branch_mask_set(mask : branch_mask, index : nibble) -> branch_mask =
-    or_vec(mask, branch_mask_for(index))
+function branch_mask_set(mask : branch_mask, index : nibble) -> branch_mask = {
+    let index_mask = branch_mask_for(index);
+    or_vec(mask, index_mask)
+}
 
 /* Yellow Paper Appendix D, Eq. 208. Keep leaf values in their native
  * representation; only a sub-32-byte node is materialized into InlineNode. */
@@ -78,23 +94,31 @@ function branch_mask_set(mask : branch_mask, index : nibble) -> branch_mask =
     representation: long nodes hash the RLP framing and value as segments;
     only an inline node materializes a slice. */
 function input_leaf_child_ref(key : TriePath, value : StatelessInputSlice) -> NodeRef = {
-    let content_len = rlp_scratch_length_add(rlp_hex_prefix_size(key, true), rlp_scratch_slice_size(value));
-    let encoder = rlp_encoder_begin(rlp_scratch_list_size(content_len));
+    let path_size = rlp_hex_prefix_size(key, true);
+    let value_size = rlp_scratch_slice_size(value);
+    let content_len = rlp_scratch_length_add(path_size, value_size);
+    let encoded_size = rlp_scratch_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_size);
     rlp_write_list_prefix(content_len);
     rlp_write_hex_prefix(key, true);
     rlp_write_slice(value);
-    let result = child_ref(rlp_encoder_finish(encoder));
+    let encoded = rlp_encoder_finish(encoder);
+    let result = child_ref(encoded);
     rlp_encoder_rewind(encoder);
     result
 }
 
 function scratch_leaf_child_ref(key : TriePath, value : ScratchSlice) -> NodeRef = {
-    let content_len = rlp_scratch_length_add(rlp_hex_prefix_size(key, true), rlp_scratch_slice_size(value));
-    let encoder = rlp_encoder_begin(rlp_scratch_list_size(content_len));
+    let path_size = rlp_hex_prefix_size(key, true);
+    let value_size = rlp_scratch_slice_size(value);
+    let content_len = rlp_scratch_length_add(path_size, value_size);
+    let encoded_size = rlp_scratch_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_size);
     rlp_write_list_prefix(content_len);
     rlp_write_hex_prefix(key, true);
     rlp_write_slice(value);
-    let result = child_ref(rlp_encoder_finish(encoder));
+    let encoded = rlp_encoder_finish(encoder);
+    let result = child_ref(encoded);
     rlp_encoder_rewind(encoder);
     result
 }
@@ -110,11 +134,13 @@ function extension_child_ref(key : TriePath, childref : NodeRef) -> NodeRef = {
     let path_length = rlp_hex_prefix_size(key, false);
     let child_length = node_ref_size(childref);
     let content_len = path_length + child_length;
-    let encoder = rlp_encoder_begin(rlp_list_size(content_len));
+    let encoded_size = rlp_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_size);
     rlp_write_list_prefix(content_len);
     rlp_write_hex_prefix(key, false);
     rlp_write_node_ref(childref);
-    let result = child_ref(rlp_encoder_finish(encoder));
+    let encoded = rlp_encoder_finish(encoder);
+    let result = child_ref(encoded);
     rlp_encoder_rewind(encoder);
     result
 }
@@ -124,7 +150,8 @@ function branch_child_ref(mask : branch_mask, children : BranchRefs) -> NodeRef 
     var content_length : branch_content_length = 1;
     var child_bit : branch_mask = 0x0001;
     foreach (i from 0 to 15) {
-        if and_vec(mask, child_bit) != 0x0000 then {
+        let child_present = and_vec(mask, child_bit) != 0x0000;
+        if child_present then {
             let child_length = node_ref_size(children[i]);
             content_length = branch_content_length_add(content_length, child_length)
         } else {
@@ -134,11 +161,13 @@ function branch_child_ref(mask : branch_mask, children : BranchRefs) -> NodeRef 
     };
 
     let scratch_content_length = rlp_scratch_length_add(content_length, 0);
-    let encoder = rlp_encoder_begin(rlp_scratch_list_size(scratch_content_length));
+    let encoded_size = rlp_scratch_list_size(scratch_content_length);
+    let encoder = rlp_encoder_begin(encoded_size);
     rlp_write_list_prefix(content_length);
     child_bit = 0x0001;
     foreach (i from 0 to 15) {
-        if and_vec(mask, child_bit) != 0x0000 then {
+        let child_present = and_vec(mask, child_bit) != 0x0000;
+        if child_present then {
             rlp_write_node_ref(children[i])
         } else {
             scratch_push_byte(0x80)
@@ -146,7 +175,8 @@ function branch_child_ref(mask : branch_mask, children : BranchRefs) -> NodeRef 
         child_bit = sail_shiftleft(child_bit, 1)
     };
     scratch_push_byte(0x80);
-    let result = child_ref(rlp_encoder_finish(encoder));
+    let encoded = rlp_encoder_finish(encoder);
+    let result = child_ref(encoded);
     rlp_encoder_rewind(encoder);
     result
 }
@@ -165,24 +195,23 @@ function trie_ref_to_root(r : NodeRef) -> hash =
 function input_node_to_ref(node : StatelessInputSlice) -> NodeRef =
     if node.len == 0 then {
         EmptyRef()
+    } else if node.len < MPT_HASH_LENGTH then {
+        InputInlineRef(node)
     } else {
-        if node.len < MPT_HASH_LENGTH then {
-            InputInlineRef(node)
-        } else {
-            HashRef(keccak256(node))
-        }
+        let node_hash = keccak256(node);
+        HashRef(node_hash)
     }
 
 /*! The reference form of freshly encoded scratch node bytes. */
 function scratch_node_to_ref(node : ScratchSlice) -> NodeRef =
     if node.len == 0 then {
         EmptyRef()
+    } else if node.len < MPT_HASH_LENGTH then {
+        let inline_node = inline_node_from_slice(node);
+        ScratchInlineRef(inline_node)
     } else {
-        if node.len < MPT_HASH_LENGTH then {
-            ScratchInlineRef(inline_node_from_slice(node))
-        } else {
-            HashRef(keccak256(node))
-        }
+        let node_hash = keccak256(node);
+        HashRef(node_hash)
     }
 
 overload node_to_ref = {input_node_to_ref, scratch_node_to_ref}
@@ -239,15 +268,14 @@ function input_field_to_ref forall 'source_off 'source_len 'content_len,
         if f.source.len < MPT_HASH_LENGTH then {
             InputInlineRef(f.source)
         } else {
-            fatal_error(RlpDecode);
-            exit(())
+            fatal_error(RlpDecode)
         }
+    } else if f.content_len == MPT_HASH_LENGTH then {
+        let word = rlp_decode_word(f);
+        let hash = word_to_hash(word);
+        HashRef(hash)
     } else {
-        if f.content_len == MPT_HASH_LENGTH then {
-            HashRef(word_to_hash(rlp_decode_word(f)))
-        } else {
-            EmptyRef()
-        }
+        EmptyRef()
     }
 
 function scratch_field_to_ref forall 'source_off 'source_len 'content_len,
@@ -256,13 +284,14 @@ function scratch_field_to_ref forall 'source_off 'source_len 'content_len,
     NodeRef
 ) =
     if f.is_list then {
-        ScratchInlineRef(inline_node_from_slice(f.source))
+        let inline_node = inline_node_from_slice(f.source);
+        ScratchInlineRef(inline_node)
+    } else if f.content_len == MPT_HASH_LENGTH then {
+        let word = scratch_rlp_decode_word(f);
+        let hash = word_to_hash(word);
+        HashRef(hash)
     } else {
-        if f.content_len == MPT_HASH_LENGTH then {
-            HashRef(word_to_hash(scratch_rlp_decode_word(f)))
-        } else {
-            EmptyRef()
-        }
+        EmptyRef()
     }
 
 /*! Decodes branch children 2 through 15, followed by the branch value. */
@@ -283,7 +312,8 @@ function decode_input_branch_node forall 'source_off 'source_len, source_valid_r
         let value = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, value.source.len);
         rlp_cursor_expect_end(next);
-        InputBranchNode(children, rlp_item_content(value))
+        let content = rlp_item_content(value);
+        InputBranchNode(children, content)
     }
 termination_measure decode_input_branch_node(cursor, index, children) = 16 - index
 
@@ -304,7 +334,8 @@ function decode_scratch_branch_node forall 'source_off 'source_len, source_valid
         let value = scratch_rlp_decode_item(cursor);
         let next = scratch_rlp_cursor_advance(cursor, value.source.len);
         scratch_rlp_cursor_expect_end(next);
-        ScratchBranchNode(children, scratch_rlp_item_content(value))
+        let content = scratch_rlp_item_content(value);
+        ScratchBranchNode(children, content)
     }
 termination_measure decode_scratch_branch_node(cursor, index, children) = 16 - index
 
@@ -312,8 +343,7 @@ termination_measure decode_scratch_branch_node(cursor, index, children) = 16 - i
     (2 = leaf or extension by the HP flag; 17 = branch). */
 function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
     if node.len == 0 then {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     };
     let fields = rlp_node_cursor(node);
     let first = rlp_decode_item(fields);
@@ -323,17 +353,20 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
     if fields.len == 0 then {
         let (is_leaf, path) = hex_prefix_decode_ref(first);
         if is_leaf then {
-            InputLeafNode(path, rlp_item_content(second))
+            let value = rlp_item_content(second);
+            InputLeafNode(path, value)
         } else {
-            if path_len(path) == 0 then {
-                fatal_error(RlpDecode);
-                exit(())
+            let path_length = path_len(path);
+            if path_length == 0 then {
+                fatal_error(RlpDecode)
             } else {
-                InputExtensionNode(path, input_field_to_ref(second))
+                let child = input_field_to_ref(second);
+                InputExtensionNode(path, child)
             }
         }
     } else {
-        var children : BranchRefs = vector_init(16, EmptyRef());
+        let empty_child = EmptyRef();
+        var children : BranchRefs = vector_init(16, empty_child);
         children[0] = input_field_to_ref(first);
         children[1] = input_field_to_ref(second);
         decode_input_branch_node(fields, 2, children)
@@ -349,17 +382,20 @@ function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
     if fields.len == 0 then {
         let (is_leaf, path) = scratch_hex_prefix_decode_ref(first);
         if is_leaf then {
-            ScratchLeafNode(path, scratch_rlp_item_content(second))
+            let value = scratch_rlp_item_content(second);
+            ScratchLeafNode(path, value)
         } else {
-            if path_len(path) == 0 then {
-                fatal_error(RlpDecode);
-                exit(())
+            let path_length = path_len(path);
+            if path_length == 0 then {
+                fatal_error(RlpDecode)
             } else {
-                ScratchExtensionNode(path, scratch_field_to_ref(second))
+                let child = scratch_field_to_ref(second);
+                ScratchExtensionNode(path, child)
             }
         }
     } else {
-        var children : BranchRefs = vector_init(16, EmptyRef());
+        let empty_child = EmptyRef();
+        var children : BranchRefs = vector_init(16, empty_child);
         children[0] = scratch_field_to_ref(first);
         children[1] = scratch_field_to_ref(second);
         decode_scratch_branch_node(fields, 2, children)
@@ -373,12 +409,11 @@ function resolve_witness_ref(r : NodeRef) -> StatelessInputSlice =
     match r {
         EmptyRef() => EMPTY_STATELESS_INPUT_SLICE,
         InputInlineRef(node) => node,
-        ScratchInlineRef(_) => { fatal_error(WitnessDeficient); exit(()) },
+        ScratchInlineRef(_) => fatal_error(WitnessDeficient),
         HashRef(h) => {
             let node = node_db_lookup(h);
             if node.len == 0 then {
-                fatal_error(WitnessDeficient);
-                exit(())
+                fatal_error(WitnessDeficient)
             } else {
                 node
             }
@@ -388,17 +423,26 @@ function resolve_witness_ref(r : NodeRef) -> StatelessInputSlice =
 /*! Re-keys a decoded child node under `prefix` without copying a leaf
     value. */
 function merge_ext_node(prefix : TriePath, childnode : StatelessInputSlice) -> NodeRef = {
-    if path_len(prefix) == 0 then {
+    let prefix_length = path_len(prefix);
+    if prefix_length == 0 then {
         node_to_ref(childnode)
+    } else if childnode.len == 0 then {
+        EmptyRef()
     } else {
-        if childnode.len == 0 then {
-            EmptyRef()
-        } else {
-            match decode_input_trie_node(childnode) {
-                InputLeafNode(path, value) => input_leaf_child_ref(path_concat(prefix, path), value),
-                InputExtensionNode(path, child) => extension_child_ref(path_concat(prefix, path), child),
-                _ => extension_child_ref(prefix, node_to_ref(childnode)),
-            }
+        let decoded = decode_input_trie_node(childnode);
+        match decoded {
+            InputLeafNode(path, value) => {
+                let merged_path = path_concat(prefix, path);
+                input_leaf_child_ref(merged_path, value)
+            },
+            InputExtensionNode(path, child) => {
+                let merged_path = path_concat(prefix, path);
+                extension_child_ref(merged_path, child)
+            },
+            _ => {
+                let childref = node_to_ref(childnode);
+                extension_child_ref(prefix, childref)
+            },
         }
     }
 }
@@ -408,23 +452,39 @@ function merge_ext_node(prefix : TriePath, childnode : StatelessInputSlice) -> N
     reference is wrapped in an extension, which is canonical only when the
     referenced node is a branch. */
 function merge_ext_ref(prefix : TriePath, childref : NodeRef) -> NodeRef = {
-    if path_len(prefix) == 0 then {
+    let prefix_length = path_len(prefix);
+    if prefix_length == 0 then {
         childref
     } else {
         match childref {
             EmptyRef() => EmptyRef(),
             HashRef(_) => extension_child_ref(prefix, childref),
             InputInlineRef(node) => {
-                match decode_input_trie_node(node) {
-                    InputLeafNode(path, value) => input_leaf_child_ref(path_concat(prefix, path), value),
-                    InputExtensionNode(path, child) => extension_child_ref(path_concat(prefix, path), child),
+                let decoded = decode_input_trie_node(node);
+                match decoded {
+                    InputLeafNode(path, value) => {
+                        let merged_path = path_concat(prefix, path);
+                        input_leaf_child_ref(merged_path, value)
+                    },
+                    InputExtensionNode(path, child) => {
+                        let merged_path = path_concat(prefix, path);
+                        extension_child_ref(merged_path, child)
+                    },
                     _ => extension_child_ref(prefix, childref),
                 }
             },
             ScratchInlineRef(node) => {
-                match decode_scratch_trie_node(inline_node_slice(node)) {
-                    ScratchLeafNode(path, value) => scratch_leaf_child_ref(path_concat(prefix, path), value),
-                    ScratchExtensionNode(path, child) => extension_child_ref(path_concat(prefix, path), child),
+                let node_slice = inline_node_slice(node);
+                let decoded = decode_scratch_trie_node(node_slice);
+                match decoded {
+                    ScratchLeafNode(path, value) => {
+                        let merged_path = path_concat(prefix, path);
+                        scratch_leaf_child_ref(merged_path, value)
+                    },
+                    ScratchExtensionNode(path, child) => {
+                        let merged_path = path_concat(prefix, path);
+                        extension_child_ref(merged_path, child)
+                    },
                     _ => extension_child_ref(prefix, childref),
                 }
             },

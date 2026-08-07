@@ -31,9 +31,9 @@ bool mpt_node_index_seal(void);
  * traversal reaches it, matching the reference's per-root walk. Duplicate
  * digests keep the first binding. Returns false when capacity is exhausted;
  * the node is then simply absent and later resolution fails closed. */
-bool mpt_node_table_insert(const Hash32 *digest, ByteSpan encoded);
+bool mpt_node_table_insert(const bytes32 *digest, ByteSpan encoded);
 /* Resolve a digest directly to its borrowed input encoding. */
-bool mpt_node_index_span(const Hash32 *digest, ByteSpan *encoded);
+bool mpt_node_index_span(const bytes32 *digest, ByteSpan *encoded);
 
 /* --- payload column ----------------------------------------------------- */
 
@@ -41,7 +41,7 @@ bool mpt_node_index_span(const Hash32 *digest, ByteSpan *encoded);
  * bindings whose node material is absent from the witness. */
 bool mpt_node_span(NodeId node_id, ByteSpan *encoded);
 /* Memoized keccak of a node's encoding. */
-bool mpt_node_digest(NodeId node_id, Hash32 *digest);
+bool mpt_node_digest(NodeId node_id, bytes32 *digest);
 /* Memoized structural decode; returns a pointer into the payload column. */
 bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out);
 
@@ -52,9 +52,9 @@ bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out);
 bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_id);
 /* Resolve a trie root digest to its witness NodeId; fails closed when the
  * root node is absent from the witness. */
-bool mpt_bind_root(const Hash32 *root, NodeId *node_id);
+bool mpt_bind_root(const bytes32 *root, NodeId *node_id);
 /* Bind a storage root to a real witness node when present. Missing material
  * remains unresolved; the owning account retains the root digest. */
-bool mpt_bind_storage_root_identity(const Hash32 *root, NodeId *node_id);
+bool mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id);
 
 #endif

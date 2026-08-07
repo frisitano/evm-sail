@@ -174,11 +174,11 @@ typedef struct {
   bool changed;
 } SubtreeMergeResult;
 
-static bool mpt_merge_update_source_node(NodeId base_node, const Hash32 *base_root,
-                                         MptUpdateSource source, Hash32 *root, bool *changed);
+static bool mpt_merge_update_source_node(NodeId base_node, const bytes32 *base_root,
+                                         MptUpdateSource source, bytes32 *root, bool *changed);
 
 /* Root of the most recent state-root computation. */
-static Hash32 mpt_last_root;
+static bytes32 mpt_last_root;
 
 /*
  * One workspace is shared by all sequential storage-trie builds and the final
@@ -189,7 +189,7 @@ static OrderedTrieBuilder ordered_trie_workspace;
 static bool mpt_variable_list_item(const struct BoundedSszListRef *items, ByteSpan bytes,
                                    uint64_t index, ByteSpan *item);
 
-static bool mpt_word_zero(U256 value)
+static bool mpt_word_zero(u256 value)
 {
   return (value.limbs[0] | value.limbs[1] | value.limbs[2] | value.limbs[3]) == 0;
 }
@@ -347,11 +347,11 @@ static bool mpt_make_child_reference(const uint8_t *encoded, size_t len, NodeRef
     *out = mpt_inline_reference(encoded, len);
     return true;
   }
-  Hash32 digest;
+  bytes32 digest;
   if (!mpt_keccak(encoded, len, &digest)) {
     return false;
   }
-  *out = mpt_hash_reference(hash_bytes_const(&digest));
+  *out = mpt_hash_reference(bytes32_data(&digest));
   return true;
 }
 
@@ -532,7 +532,7 @@ static bool mpt_resolve_input_reference(const NodeReference *ref, ByteSpan *out)
     out->len = ref->len;
     return true;
   }
-  const Hash32 hash = hash_from_be_bytes(ref->bytes);
+  const bytes32 hash = hash_from_be_bytes(ref->bytes);
   if (!mpt_node_index_span(&hash, out)) {
     fatal_error(WitnessDeficient);
   }
@@ -550,11 +550,11 @@ static bool mpt_node_reference(ByteSpan encoded, uint32_t node_id, NodeReference
     *out = mpt_inline_reference(encoded.data, encoded.len);
     return true;
   }
-  Hash32 digest;
+  bytes32 digest;
   if (!mpt_node_digest(node_id, &digest)) {
     return false;
   }
-  *out = mpt_hash_reference(hash_bytes_const(&digest));
+  *out = mpt_hash_reference(bytes32_data(&digest));
   return true;
 }
 
@@ -563,8 +563,8 @@ static bool mpt_node_reference(ByteSpan encoded, uint32_t node_id, NodeReference
  * This is the iterative counterpart of trie_lookup/trie_walk in the Sail
  * specification. It deliberately returns a borrowed leaf-value span.
  */
-static bool mpt_point_lookup_node(NodeId root_node, const Hash32 *key, ByteSpan *value,
-                                  Hash32 *leaf_digest, uint8_t *leaf_postfix_len,
+static bool mpt_point_lookup_node(NodeId root_node, const bytes32 *key, ByteSpan *value,
+                                  bytes32 *leaf_digest, uint8_t *leaf_postfix_len,
                                   NodeId *terminal_node)
 {
   value->data = NULL;
@@ -637,8 +637,8 @@ static bool mpt_point_lookup_node(NodeId root_node, const Hash32 *key, ByteSpan 
   return true;
 }
 
-static bool mpt_point_lookup(const Hash32 *root, const Hash32 *key, ByteSpan *value,
-                             Hash32 *leaf_digest, uint8_t *leaf_postfix_len, NodeId *terminal_node)
+static bool mpt_point_lookup(const bytes32 *root, const bytes32 *key, ByteSpan *value,
+                             bytes32 *leaf_digest, uint8_t *leaf_postfix_len, NodeId *terminal_node)
 {
   NodeId root_node = MPT_NODE_ID_UNLINKED;
   if (!mpt_bind_root(root, &root_node)) {
@@ -668,7 +668,7 @@ static bool mpt_decode_u64_item(const RlpItem *item, uint64_t *value)
   return true;
 }
 
-static bool mpt_decode_word_item(const RlpItem *item, U256 *value)
+static bool mpt_decode_word_item(const RlpItem *item, u256 *value)
 {
   if (!mpt_uint_canonical(item, 32)) {
     return false;
@@ -679,7 +679,7 @@ static bool mpt_decode_word_item(const RlpItem *item, U256 *value)
   return true;
 }
 
-static bool mpt_decode_hash_item(const RlpItem *item, const Hash32 *empty, Hash32 *value)
+static bool mpt_decode_hash_item(const RlpItem *item, const bytes32 *empty, bytes32 *value)
 {
   if (item->list || item->content.len > 32) {
     fatal_error(RlpDecode);
@@ -688,7 +688,7 @@ static bool mpt_decode_hash_item(const RlpItem *item, const Hash32 *empty, Hash3
     *value = *empty;
     return true;
   }
-  uint8_t *bytes = hash_bytes(value);
+  uint8_t *bytes = bytes32_data_mut(value);
   memset(bytes, 0, 32);
   memcpy(bytes + 32 - item->content.len, item->content.data, item->content.len);
   return true;
@@ -975,7 +975,7 @@ static bool ordered_trie_builder_finish_ref(OrderedTrieBuilder *builder, NodeRef
           pending_node_finalize(&pending, root)) != 0;
 }
 
-static bool ordered_trie_builder_finish(OrderedTrieBuilder *builder, Hash32 *root)
+static bool ordered_trie_builder_finish(OrderedTrieBuilder *builder, bytes32 *root)
 {
   NodeReference ref;
   if (!ordered_trie_builder_finish_ref(builder, &ref)) {
@@ -1025,7 +1025,7 @@ static bool mpt_rlp_uint64(ByteWriter *writer, uint64_t value)
   return mpt_rlp_string(writer, bytes, len);
 }
 
-static bool mpt_rlp_word(ByteWriter *writer, U256 value)
+static bool mpt_rlp_word(ByteWriter *writer, u256 value)
 {
   uint8_t bytes[32];
   sail_word_to_be_bytes(bytes, value);
@@ -1043,7 +1043,7 @@ static size_t mpt_rlp_uint64_size(uint64_t value)
   return mpt_rlp_string_size(bytes, len);
 }
 
-static size_t mpt_rlp_word_size(U256 value)
+static size_t mpt_rlp_word_size(u256 value)
 {
   uint8_t bytes[32];
   sail_word_to_be_bytes(bytes, value);
@@ -1054,7 +1054,7 @@ static size_t mpt_rlp_word_size(U256 value)
   return mpt_rlp_string_size(bytes + first, 32 - first);
 }
 
-static bool mpt_encode_storage(U256 value, uint8_t out[MPT_ENCODED_VALUE_MAX], uint8_t *out_len)
+static bool mpt_encode_storage(u256 value, uint8_t out[MPT_ENCODED_VALUE_MAX], uint8_t *out_len)
 {
   ByteWriter writer = {out, 0, MPT_ENCODED_VALUE_MAX};
   if (!mpt_rlp_word(&writer, value)) {
@@ -1064,16 +1064,15 @@ static bool mpt_encode_storage(U256 value, uint8_t out[MPT_ENCODED_VALUE_MAX], u
   return true;
 }
 
-static bool mpt_encode_account(uint64_t nonce, U256 balance, const Hash32 *storage_root,
-                               const Hash32 *code_hash, uint8_t out[MPT_ENCODED_VALUE_MAX],
+static bool mpt_encode_account(uint64_t nonce, u256 balance, const bytes32 *storage_root,
+                               const bytes32 *code_hash, uint8_t out[MPT_ENCODED_VALUE_MAX],
                                uint8_t *out_len)
 {
   const size_t content = mpt_rlp_uint64_size(nonce) + mpt_rlp_word_size(balance) + 33 + 33;
   ByteWriter writer = {out, 0, MPT_ENCODED_VALUE_MAX};
   if (!mpt_rlp_prefix(&writer, true, content) || !mpt_rlp_uint64(&writer, nonce) ||
-      !mpt_rlp_word(&writer, balance) ||
-      !mpt_rlp_string(&writer, hash_bytes_const(storage_root), 32) ||
-      !mpt_rlp_string(&writer, hash_bytes_const(code_hash), 32)) {
+      !mpt_rlp_word(&writer, balance) || !mpt_rlp_string(&writer, bytes32_data(storage_root), 32) ||
+      !mpt_rlp_string(&writer, bytes32_data(code_hash), 32)) {
     return false;
   }
   *out_len = (uint8_t)writer.len;
@@ -1127,10 +1126,10 @@ static bool mpt_original_account_value(uint32_t terminal_node, ByteSpan *value)
   return true;
 }
 
-static bool mpt_make_account_update(const AccountTrieView *meta, const Hash32 *storage_root,
+static bool mpt_make_account_update(const AccountTrieView *meta, const bytes32 *storage_root,
                                     TrieUpdate *update)
 {
-  const Hash32 original_storage_root = *meta->original_storage_root;
+  const bytes32 original_storage_root = *meta->original_storage_root;
   memset(update, 0, sizeof(*update));
   update->key = nibble_path_from_secure_key(meta->secure_key);
   update->is_delete = ((!meta->current_live) != 0);
@@ -1187,7 +1186,7 @@ static bool mpt_update_source_next(MptUpdateSource *source, TrieUpdate *update, 
       return false;
     }
 
-    Hash32 post = *meta.storage_base_root;
+    bytes32 post = *meta.storage_base_root;
     StorageGeneration storage_generation;
     const uint32_t storage_count =
         mpt_storage_updates_prepare(meta.account_id, &storage_generation);
@@ -1229,8 +1228,8 @@ static bool mpt_order_less(MptOrderKind kind, const TrieUpdateBuffer *updates, u
 {
   NodeId left_node;
   NodeId right_node;
-  Hash32 left_key;
-  Hash32 right_key;
+  bytes32 left_key;
+  bytes32 right_key;
   switch (kind) {
   case MPT_ORDER_ACCOUNT_BINDINGS:
     account_trie_binding_order_key(left, &left_node, &left_key);
@@ -1335,7 +1334,7 @@ uint32_t mpt_storage_updates_prepare(AccountId account_id, StorageGeneration *ge
   uint32_t count = 0;
   for (StorageId id = begin; id < begin + candidates; ++id) {
     NodeId terminal_node;
-    Hash32 secure_key;
+    bytes32 secure_key;
     if (storage_trie_binding_order_key(id, order_workspace.storage_generation, &terminal_node,
                                        &secure_key)) {
       order_workspace.order[count++] = id;
@@ -1777,7 +1776,7 @@ static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t
   return true;
 }
 
-static bool mpt_reference_root(const NodeReference *ref, Hash32 *root)
+static bool mpt_reference_root(const NodeReference *ref, bytes32 *root)
 {
   if (ref->kind == NODE_REFERENCE_EMPTY) {
     *root = EVMSAIL_EMPTY_TRIE_ROOT;
@@ -1790,8 +1789,8 @@ static bool mpt_reference_root(const NodeReference *ref, Hash32 *root)
   return mpt_keccak(ref->bytes, ref->len, root);
 }
 
-static bool mpt_merge_collected_updates_from_node(NodeId base_node, const Hash32 *base_root,
-                                                  TrieUpdateBuffer *updates, Hash32 *root,
+static bool mpt_merge_collected_updates_from_node(NodeId base_node, const bytes32 *base_root,
+                                                  TrieUpdateBuffer *updates, bytes32 *root,
                                                   bool *changed)
 {
   *changed = false;
@@ -1829,7 +1828,7 @@ static bool mpt_merge_collected_updates_from_node(NodeId base_node, const Hash32
   if (!mpt_node_span(base_node, &encoded) || encoded.len == 0) {
     fatal_error(WitnessDeficient);
   }
-  Hash32 original_root;
+  bytes32 original_root;
   if (!mpt_node_digest(base_node, &original_root) || !hash_equal(base_root, &original_root)) {
     fatal_error(WitnessDeficient);
   }
@@ -1853,8 +1852,8 @@ static bool mpt_merge_collected_updates_from_node(NodeId base_node, const Hash32
   return mpt_reference_root(effective, root);
 }
 
-static bool mpt_merge_collected_updates(const Hash32 *base_root, TrieUpdateBuffer *updates,
-                                        Hash32 *root, bool *changed)
+static bool mpt_merge_collected_updates(const bytes32 *base_root, TrieUpdateBuffer *updates,
+                                        bytes32 *root, bool *changed)
 {
   if (updates->count == 0) {
     *changed = false;
@@ -1875,8 +1874,8 @@ static bool mpt_merge_collected_updates(const Hash32 *base_root, TrieUpdateBuffe
 }
 
 // NOLINTNEXTLINE(misc-no-recursion)
-static bool mpt_merge_update_source_node(NodeId base_node, const Hash32 *base_root,
-                                         MptUpdateSource source, Hash32 *root, bool *changed)
+static bool mpt_merge_update_source_node(NodeId base_node, const bytes32 *base_root,
+                                         MptUpdateSource source, bytes32 *root, bool *changed)
 {
   return (mpt_collect_ordered_updates(source, &mpt_updates) &&
           mpt_merge_collected_updates_from_node(base_node, base_root, &mpt_updates, root,
@@ -1888,19 +1887,28 @@ static TrieUpdateBuffer mpt_account_update_buffer;
 void mpt_workspace_bind(uint32_t account_count, uint32_t storage_count)
 {
   const uint32_t order_count = account_count > storage_count ? account_count : storage_count;
+  /* While recursively rebuilding one changed secure-key path, each active
+   * branch may retain the other 15 original children in this frontier.  The
+   * terminal subtree may additionally contain every semantic update plus one
+   * original leaf.  This is the exact structural bound; sizing only from the
+   * storage-update count under-allocates account-root merges. */
+  const size_t merge_entry_capacity =
+      (size_t)order_count + ((size_t)MPT_SECURE_KEY_NIBBLES * 15U) + 1U;
   mpt_updates.capacity = storage_count;
   mpt_account_update_buffer.capacity = account_count;
-  mpt_merge_entries.capacity = (size_t)storage_count + 1U;
+  mpt_merge_entries.count = 0;
+  mpt_merge_entries.capacity = merge_entry_capacity;
   order_workspace_capacity = order_count;
   WORKSPACE_BIND(mpt_updates.entries, storage_count);
   WORKSPACE_BIND(mpt_account_update_buffer.entries, account_count);
   WORKSPACE_BIND(order_workspace.order, order_count);
   WORKSPACE_BIND(order_workspace.destinations, order_count);
-  WORKSPACE_BIND(mpt_merge_entries.entries, (size_t)storage_count + 1U);
+  WORKSPACE_BIND(mpt_merge_entries.entries, merge_entry_capacity);
 }
 
 void mpt_reset(void)
 {
+  mpt_merge_entries.count = 0;
   memset(&ordered_trie_workspace, 0, sizeof(ordered_trie_workspace));
   ordered_trie_builder_reset(&ordered_trie_workspace);
 }
@@ -2019,7 +2027,7 @@ void mpt_index_witness_nodes(struct BoundedSszListRef nodes)
   mpt_node_arena_begin();
   for (uint64_t index = 0; index < nodes.count; ++index) {
     ByteSpan node = {0};
-    Hash32 digest = {{0}};
+    bytes32 digest = {{0}};
     if (!mpt_variable_list_item(&nodes, bytes, index, &node) ||
         node.len > MPT_MAX_WITNESS_NODE_LENGTH || !mpt_keccak(node.data, node.len, &digest)) {
       fatal_error(InvalidConfig);
@@ -2067,18 +2075,18 @@ static bool mpt_ordered_insert(TrieEntry *item, uint64_t count, uint64_t positio
   return ordered_trie_builder_insert(&ordered_trie_workspace, item, next_key);
 }
 
-static void mpt_ordered_root_finish(Hash32 *root)
+static void mpt_ordered_root_finish(bytes32 *root)
 {
   if (!ordered_trie_builder_finish(&ordered_trie_workspace, root)) {
     memset(root, 0, sizeof(*root));
   }
 }
 
-Hash32 mpt_transaction_trie_root(struct BoundedSszListRef transactions)
+bytes32 mpt_transaction_trie_root(struct BoundedSszListRef transactions)
 {
   mpt_reset();
   ByteSpan bytes = {0};
-  Hash32 root = {{0}};
+  bytes32 root = {{0}};
   if (transactions.count > (UINT64_C(1) << 20) || !mpt_resolve_list(&transactions, &bytes)) {
     fatal_error(InvalidConfig);
   }
@@ -2102,7 +2110,7 @@ Hash32 mpt_transaction_trie_root(struct BoundedSszListRef transactions)
   return root;
 }
 
-Hash32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals)
+bytes32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals)
 {
   enum {
     MPT_WITHDRAWAL_SIZE = 44,
@@ -2112,7 +2120,7 @@ Hash32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals)
   };
   mpt_reset();
   ByteSpan bytes = {0};
-  Hash32 root = {{0}};
+  bytes32 root = {{0}};
   if (withdrawals.count > 16 || !mpt_resolve_list(&withdrawals, &bytes) ||
       bytes.len != (size_t)withdrawals.count * MPT_WITHDRAWAL_SIZE) {
     fatal_error(InvalidConfig);
@@ -2155,9 +2163,9 @@ Hash32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals)
   return root;
 }
 
-Hash32 mpt_receipt_table_root(uint64_t count)
+bytes32 mpt_receipt_table_root(uint64_t count)
 {
-  Hash32 root = {{0}};
+  bytes32 root = {{0}};
   if (count != receipt_record_count()) {
     fatal_error(WitnessDeficient);
   }
@@ -2193,8 +2201,8 @@ Hash32 mpt_receipt_table_root(uint64_t count)
   return root;
 }
 
-void stateless_account_read(Hash32 root, Hash32 address_hash, struct AccountInfo *info, bool *found,
-                            NodeId *terminal_node, NodeId *storage_root_node)
+void stateless_account_read(bytes32 root, bytes32 address_hash, struct AccountInfo *info,
+                            bool *found, NodeId *terminal_node, NodeId *storage_root_node)
 {
   *found = false;
   *storage_root_node = MPT_NODE_ID_EMPTY;
@@ -2208,7 +2216,7 @@ void stateless_account_read(Hash32 root, Hash32 address_hash, struct AccountInfo
   }
 }
 
-void stateless_storage_read(NodeId root_node, Hash32 slot_hash, U256 *value_out, bool *found,
+void stateless_storage_read(NodeId root_node, bytes32 slot_hash, u256 *value_out, bool *found,
                             NodeId *terminal_node)
 {
   *found = false;
@@ -2230,9 +2238,9 @@ void stateless_storage_read(NodeId root_node, Hash32 slot_hash, U256 *value_out,
   }
 }
 
-Hash32 mpt_compute_state_root(Hash32 parent_state_root)
+bytes32 mpt_compute_state_root(bytes32 parent_state_root)
 {
-  Hash32 root = {{0}};
+  bytes32 root = {{0}};
   const uint32_t account_count = mpt_account_updates_prepare();
   const MptUpdateSource account_source = {
       .kind = MPT_UPDATE_SOURCE_ACCOUNTS,
@@ -2251,7 +2259,7 @@ Hash32 mpt_compute_state_root(Hash32 parent_state_root)
 }
 
 #ifdef EVMSAIL_NATIVE_TEST
-Hash32 mpt_last_state_root(void)
+bytes32 mpt_last_state_root(void)
 {
   return mpt_last_root;
 }

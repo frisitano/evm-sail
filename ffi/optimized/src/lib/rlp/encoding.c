@@ -20,16 +20,16 @@
 
 static const uint8_t preimage_empty = 0;
 
-Hash32 zero_hash(void)
+bytes32 zero_hash(void)
 {
-  Hash32 result = {{0}};
+  bytes32 result = {{0}};
   return result;
 }
 
-Hash32 keccak_bytes(const uint8_t *bytes, uint64_t len)
+bytes32 keccak_bytes(const uint8_t *bytes, uint64_t len)
 {
   zkvm_keccak256_hash native_digest;
-  Hash32 digest = {{0}};
+  bytes32 digest = {{0}};
   _Static_assert(sizeof(digest) == sizeof(zkvm_keccak256_hash),
                  "accelerator digest must be 32 bytes");
   if (len <= UINT32_MAX &&
@@ -39,10 +39,10 @@ Hash32 keccak_bytes(const uint8_t *bytes, uint64_t len)
   return digest;
 }
 
-Hash32 sha256_bytes(const uint8_t *bytes, uint64_t len)
+bytes32 sha256_bytes(const uint8_t *bytes, uint64_t len)
 {
   zkvm_sha256_hash native_digest;
-  Hash32 digest = {{0}};
+  bytes32 digest = {{0}};
   _Static_assert(sizeof(digest) == sizeof(zkvm_sha256_hash), "accelerator digest must be 32 bytes");
   if (len <= UINT32_MAX &&
       zkvm_sha256(len ? bytes : &preimage_empty, (size_t)len, &native_digest) == ZKVM_EOK) {
@@ -66,15 +66,15 @@ static unsigned be_u64_width(uint64_t value)
   return width;
 }
 
-static unsigned u256_width(U256 value)
+static unsigned u256_width(u256 value)
 {
-  uint8_t bytes[32];
-  sail_word_to_be_bytes(bytes, value);
-  unsigned first = 0;
-  while (first < sizeof(bytes) && bytes[first] == 0) {
-    ++first;
+  for (size_t limb = 4; limb != 0; --limb) {
+    const uint64_t value_limb = value.limbs[limb - 1];
+    if (value_limb != 0) {
+      return (unsigned)((limb - 1) * sizeof(value_limb)) + be_u64_width(value_limb);
+    }
   }
-  return (unsigned)sizeof(bytes) - first;
+  return 0;
 }
 
 uint64_t rlp_quantity_size_u64(uint64_t value)
@@ -85,7 +85,7 @@ uint64_t rlp_quantity_size_u64(uint64_t value)
   return 1 + be_u64_width(value);
 }
 
-uint64_t rlp_quantity_size_u256(U256 value)
+uint64_t rlp_quantity_size_u256(u256 value)
 {
   const unsigned width = u256_width(value);
   if (width == 0) {
@@ -166,21 +166,26 @@ uint8_t *rlp_write_u64(uint8_t *out, uint64_t value)
   return write_be_length(out, value, width);
 }
 
-uint8_t *rlp_write_u256(uint8_t *out, U256 value)
+uint8_t *rlp_write_u256(uint8_t *out, u256 value)
 {
-  uint8_t bytes[32];
-  sail_word_to_be_bytes(bytes, value);
   const unsigned width = u256_width(value);
   if (width == 0) {
     *out++ = 0x80;
     return out;
   }
-  const uint8_t *first = bytes + sizeof(bytes) - width;
-  if (width == 1 && first[0] < 0x80) {
-    *out++ = first[0];
+  if (width == 1 && value.limbs[0] < 0x80) {
+    *out++ = (uint8_t)value.limbs[0];
     return out;
   }
   *out++ = (uint8_t)(0x80 + width);
-  memcpy(out, first, width);
-  return out + width;
+
+  const unsigned top_limb = (width - 1) / 8;
+  const unsigned top_width = width - (top_limb * 8);
+  out = write_be_length(out, value.limbs[top_limb], top_width);
+  for (unsigned limb = top_limb; limb != 0; --limb) {
+    const uint64_t big_endian_limb = __builtin_bswap64(value.limbs[limb - 1]);
+    memcpy(out, &big_endian_limb, sizeof(big_endian_limb));
+    out += sizeof(big_endian_limb);
+  }
+  return out;
 }

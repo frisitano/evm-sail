@@ -35,7 +35,7 @@ typedef struct {
   size_t len;
 } ByteSpan;
 
-static inline bool mpt_keccak(const uint8_t *data, size_t len, Hash32 *out)
+static inline bool mpt_keccak(const uint8_t *data, size_t len, bytes32 *out)
 {
   static const uint8_t empty[1] = {0};
   zkvm_keccak256_hash digest;

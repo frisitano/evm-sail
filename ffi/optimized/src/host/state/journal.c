@@ -40,8 +40,8 @@ typedef struct {
   union {
     struct {
       AccountId account_id;
-      U256 slot;
-      U256 prior;
+      u256 slot;
+      u256 prior;
     } transient;
     struct {
       uint32_t id;
@@ -54,7 +54,7 @@ typedef struct {
     AccountId account_id;
     struct {
       StorageId storage_id;
-      U256 prior;
+      u256 prior;
     } storage_value;
     struct {
       StorageId storage_id;
@@ -87,7 +87,7 @@ static StateJournalEntry *push(StateJournalTag tag)
   return entry;
 }
 
-void state_journal_push_transient(AccountId account_id, U256 slot, U256 prior)
+void state_journal_push_transient(AccountId account_id, u256 slot, u256 prior)
 {
   StateJournalEntry *entry = push(JOURNAL_TRANSIENT_CHANGED);
   entry->data.transient.account_id = account_id;
@@ -109,7 +109,7 @@ void state_journal_push_warm_storage(StorageId id, uint32_t prior_epoch)
   entry->data.warm.prior_epoch = prior_epoch;
 }
 
-void state_journal_push_account_balance(AccountId id, U256 prior)
+void state_journal_push_account_balance(AccountId id, u256 prior)
 {
   StateJournalEntry *entry = push(JOURNAL_ACCOUNT_BALANCE_CHANGED);
   entry->data.account_field.account_id = id;
@@ -123,7 +123,7 @@ void state_journal_push_account_nonce(AccountId id, uint64_t prior)
   entry->data.account_field.prior.nonce = prior;
 }
 
-void state_journal_push_account_code_hash(AccountId id, Hash32 prior)
+void state_journal_push_account_code_hash(AccountId id, bytes32 prior)
 {
   StateJournalEntry *entry = push(JOURNAL_ACCOUNT_CODE_HASH_CHANGED);
   entry->data.account_field.account_id = id;
@@ -168,7 +168,7 @@ void state_journal_push_log_appended(void)
   (void)push(JOURNAL_LOG_APPENDED);
 }
 
-void state_journal_push_storage_value(StorageId id, U256 prior)
+void state_journal_push_storage_value(StorageId id, u256 prior)
 {
   StateJournalEntry *entry = push(JOURNAL_STORAGE_VALUE_CHANGED);
   entry->data.storage_value.storage_id = id;

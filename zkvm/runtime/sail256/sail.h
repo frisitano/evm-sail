@@ -293,14 +293,6 @@ typedef struct {
   uint64_t bits;
 } sbits;
 
-/* Native representation selected from a proven 256-bit unsigned bound. Defining it in the
- * runtime makes the same ABI available to injected FFI headers before the
- * generated model header is included. */
-#ifndef SAIL_U256_DEFINED
-#define SAIL_U256_DEFINED
-typedef struct { uint64_t limbs[4]; } sail_u256;
-#endif
-
 // For backwards compatibility
 typedef uint64_t mach_bits;
 sbits CREATE_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction);

@@ -10,19 +10,19 @@
 #include "workspace.h"
 #include <stdint.h>
 
-static Hash32 *ancestor_hashes;
+static bytes32 *ancestor_hashes;
 
 void environment_workspace_bind(void)
 {
   WORKSPACE_BIND(ancestor_hashes, GUEST_ANCESTOR_HASHES);
 }
 
-void ancestor_hash_write(uint8_t index, Hash32 hash)
+void ancestor_hash_write(uint8_t index, bytes32 hash)
 {
   ancestor_hashes[index] = hash;
 }
 
-Hash32 ancestor_hash_read(uint8_t index)
+bytes32 ancestor_hash_read(uint8_t index)
 {
   return ancestor_hashes[index];
 }

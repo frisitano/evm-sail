@@ -1,5 +1,6 @@
 /* Optimized C validation boundary for `sail/main.sail`. The optimized SSZ
  * decoder retains the decoded input for `fatal_error`. */
+
 function main() -> unit = {
     scratch_reset();
     validation_debug_reset();

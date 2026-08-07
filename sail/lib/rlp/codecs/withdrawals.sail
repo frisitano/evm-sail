@@ -19,12 +19,12 @@ function withdrawal_rlp(withdrawal : StatelessInputSliceLength(44)) -> ScratchSl
     let amount_length = rlp_uint_size(amount);
     let content_length = index_length + validator_index_length + address_length + amount_length;
     if 48 < content_length then {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     };
     let bounded_content_length : range(0, 48) = tmod_nat(content_length, 49);
     let content_len = bounded_content_length;
-    let encoder = rlp_encoder_begin(rlp_list_size(content_len));
+    let encoded_length = rlp_list_size(content_len);
+    let encoder = rlp_encoder_begin(encoded_length);
     rlp_write_list_prefix(content_len);
     rlp_write_uint(index);
     rlp_write_uint(validator_index);

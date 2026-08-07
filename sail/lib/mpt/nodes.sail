@@ -28,20 +28,20 @@ union TrieLeafValue = {
 function inline_node_from_scratch_slice(bytes : ScratchSlice) -> InlineNode = {
     let length = bytes.len;
     if length < MPT_HASH_LENGTH then {
-        struct { data = word_to_hash(slice_load(bytes, 0)), len = length }
+        let encoded = slice_load(bytes, 0);
+        struct { data = word_to_hash(encoded), len = length }
     } else {
-        fatal_error(WitnessDeficient);
-        exit(())
+        fatal_error(WitnessDeficient)
     }
 }
 
 function inline_node_from_input_slice(bytes : StatelessInputSlice) -> InlineNode = {
     let length = bytes.len;
     if length < MPT_HASH_LENGTH then {
-        struct { data = word_to_hash(slice_load(bytes, 0)), len = length }
+        let encoded = slice_load(bytes, 0);
+        struct { data = word_to_hash(encoded), len = length }
     } else {
-        fatal_error(WitnessDeficient);
-        exit(())
+        fatal_error(WitnessDeficient)
     }
 }
 
@@ -88,6 +88,5 @@ function branch_content_length_add(current : branch_content_length, addition : r
     if addition <= 529 - current then {
         current + addition
     } else {
-        fatal_error(RlpDecode);
-        exit(())
+        fatal_error(RlpDecode)
     }

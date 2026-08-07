@@ -5,14 +5,12 @@
  * Optimized guests scan the same code iteratively so the guest stack does not
  * grow once per opcode for large deployed contracts.
  */
-val optimized_analyze_code = impure { c: "code_db_analyze_indexed" } :
-    (CodeSlice, bool) -> jump_table_index
+val analyze_code_indexed = impure { c: "code_db_analyze_indexed" } : (CodeSlice, bool) -> jump_table_index
 
-val optimized_code_db_resolve = impure { c: "code_db_resolve_indexed" } :
-    hash -> Code
+val code_db_resolve_indexed = impure { c: "code_db_resolve_indexed" } : hash -> Code
 
 function analyze_code(code : CodeSlice, fork : Fork) -> jump_table_index =
-    optimized_analyze_code(code, fork >= Amsterdam)
+    analyze_code_indexed(code, fork >= Amsterdam)
 
 function code_db_resolve(code_hash : hash) -> Code =
-    optimized_code_db_resolve(code_hash)
+    code_db_resolve_indexed(code_hash)

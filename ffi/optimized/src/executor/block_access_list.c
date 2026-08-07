@@ -111,9 +111,9 @@ static void bal_end(const rlp_cursor *cursor)
   }
 }
 
-static U256 bal_decode_word(const rlp_item *item)
+static u256 bal_decode_word(const rlp_item *item)
 {
-  U256 value;
+  u256 value;
   bal_uint(item, 32);
   if (!rlp_word_raw(item, &value)) {
     GUEST_ABORT();
@@ -218,8 +218,8 @@ static void bal_measure_accounts(rlp_cursor accounts, BalShape *shape)
 
 /* Shared per-slot preload for storage changes and reads: strict slot order,
  * dense-ID postcondition (the O(1) duplicate-slot check), and item count. */
-static StorageId bal_preload_slot(AccountId account_id, NodeId storage_root_node, U256 slot,
-                                  U256 *previous_slot, bool *have_previous_slot)
+static StorageId bal_preload_slot(AccountId account_id, NodeId storage_root_node, u256 slot,
+                                  u256 *previous_slot, bool *have_previous_slot)
 {
   if (*have_previous_slot && word_compare(previous_slot, &slot) >= 0) {
     fatal_error(InvalidBlockAccessList);
@@ -244,7 +244,7 @@ static void bal_initialize_storage_changes(const rlp_item *field, AccountId acco
                                            NodeId storage_root_node)
 {
   rlp_cursor slots;
-  U256 previous_slot = {{0}};
+  u256 previous_slot = {{0}};
   bool have_previous_slot = false;
   bal_list(field, &slots);
   while (slots.remaining != 0) {
@@ -262,7 +262,7 @@ static void bal_initialize_storage_changes(const rlp_item *field, AccountId acco
     if (changes.remaining == 0) {
       fatal_error(InvalidBlockAccessList);
     }
-    const U256 slot = bal_decode_word(&slot_item);
+    const u256 slot = bal_decode_word(&slot_item);
     const StorageId storage_id =
         bal_preload_slot(account_id, storage_root_node, slot, &previous_slot, &have_previous_slot);
     while (changes.remaining != 0) {
@@ -277,13 +277,13 @@ static void bal_initialize_storage_reads(const rlp_item *field, AccountId accoun
                                          NodeId storage_root_node)
 {
   rlp_cursor reads;
-  U256 previous_slot = {{0}};
+  u256 previous_slot = {{0}};
   bool have_previous_slot = false;
   bal_list(field, &reads);
   while (reads.remaining != 0) {
     rlp_item slot_item;
     bal_take(&reads, &slot_item);
-    const U256 slot = bal_decode_word(&slot_item);
+    const u256 slot = bal_decode_word(&slot_item);
     const StorageId storage_id =
         bal_preload_slot(account_id, storage_root_node, slot, &previous_slot, &have_previous_slot);
     bal_expect(BAL_ITER_STORAGE_READ, account_id, storage_id, NULL);
@@ -302,8 +302,8 @@ static void bal_initialize_account_changes(const rlp_item *field, AccountId acco
   }
 }
 
-void initialize_block_access_list_state(struct StatelessInputSliceFields bytes,
-                                        Hash32 parent_state_root, uint32_t transaction_count)
+void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
+                                        uint32_t transaction_count)
 {
   bal_expected_count = 0;
   bal_expected_item_count = 0;
@@ -316,7 +316,7 @@ void initialize_block_access_list_state(struct StatelessInputSliceFields bytes,
   }
 
   rlp_cursor accounts;
-  Address previous_address = {{0}};
+  bytes20 previous_address = {{0}};
   bool have_previous_address = false;
   bal_list(&root, &accounts);
 
@@ -349,13 +349,13 @@ void initialize_block_access_list_state(struct StatelessInputSliceFields bytes,
       fatal_error(InvalidBlockAccessList);
     }
 
-    const Address address = address_from_be_bytes(address_item.content);
+    const bytes20 address = address_from_be_bytes(address_item.content);
     if (have_previous_address && address_compare(&previous_address, &address) >= 0) {
       fatal_error(InvalidBlockAccessList);
     }
     previous_address = address;
     have_previous_address = true;
-    const Hash32 address_hash = host_keccak_address(address);
+    const bytes32 address_hash = host_keccak_address(address);
     const AccountId account_id = account_schema_insert(&address);
     struct Account account;
     NodeId storage_root_node = EVMSAIL_NODE_ID_EMPTY;
@@ -387,7 +387,7 @@ void initialize_block_access_list_state(struct StatelessInputSliceFields bytes,
   storage_schema_seal();
 }
 
-static void bal_expect_word(const rlp_item *item, U256 expected)
+static void bal_expect_word(const rlp_item *item, u256 expected)
 {
   bal_uint(item, 32);
   uint8_t bytes[32];
@@ -415,7 +415,7 @@ static void bal_expect_u64(const rlp_item *item, uint64_t expected)
   }
 }
 
-static void bal_expect_code(const rlp_item *item, Hash32 code_hash)
+static void bal_expect_code(const rlp_item *item, bytes32 code_hash)
 {
   bal_bytes(item);
 
@@ -435,7 +435,7 @@ static void bal_expect_code(const rlp_item *item, Hash32 code_hash)
 /* One `[index, value]` pair splitter; the recorder tag selects the value
  * comparator. */
 static void bal_expect_pair(const rlp_item *pair, enum bal_iter_tag tag, uint64_t expected_index,
-                            U256 expected_word, uint64_t expected_nonce, Hash32 code_hash)
+                            u256 expected_word, uint64_t expected_nonce, bytes32 code_hash)
 {
   rlp_cursor fields;
   rlp_item index;
@@ -470,8 +470,8 @@ static void bal_validate_expected(const BalExpectedEntry *expected)
   StorageId storage_id = UINT32_MAX;
   uint64_t index = 0;
   uint64_t nonce = 0;
-  U256 value = {{0}};
-  Hash32 code_hash = {{0}};
+  u256 value = {{0}};
+  bytes32 code_hash = {{0}};
   const enum bal_iter_tag tag =
       bal_iter_next_probe(&account_id, &storage_id, &index, &value, &nonce, &code_hash);
 
@@ -496,7 +496,7 @@ static void bal_validate_expected(const BalExpectedEntry *expected)
 
 /* Both consumers receive the same decoded block field under the same fork
  * gate, so the expected stream needs no source-identity re-check. */
-void validate_block_access_list(struct StatelessInputSliceFields bytes, uint64_t block_gas_limit)
+void validate_block_access_list(Bytes bytes, uint64_t block_gas_limit)
 {
   (void)bytes;
   bal_prepare_iter();
@@ -508,8 +508,8 @@ void validate_block_access_list(struct StatelessInputSliceFields bytes, uint64_t
   StorageId storage_id = UINT32_MAX;
   uint64_t index = 0;
   uint64_t nonce = 0;
-  U256 value = {{0}};
-  Hash32 code_hash = {{0}};
+  u256 value = {{0}};
+  bytes32 code_hash = {{0}};
   if (bal_iter_next_probe(&account_id, &storage_id, &index, &value, &nonce, &code_hash) !=
       BAL_ITER_EMPTY) {
     fatal_error(InvalidBlockAccessList);

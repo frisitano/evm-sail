@@ -4,6 +4,9 @@
 # Sail/JIB lowering or in the owning handwritten source, never patched into
 # generated output. Do not use `*`: clang-tidy ships mutually incompatible
 # vendor, embedded-HLS, C++, and project-specific style guides.
+# In C, using a bool as a condition or ternary selector is the direct,
+# type-correct spelling. The implicit-bool checker asks for noisy integer casts
+# that are useful only for mixed C/C++ style policies.
 Checks: >
   -*,
   bugprone-*,
@@ -19,6 +22,7 @@ Checks: >
   -readability-function-size,
   -readability-identifier-length,
   -readability-identifier-naming,
+  -readability-implicit-bool-conversion,
   -readability-magic-numbers,
   -portability-avoid-pragma-once
 WarningsAsErrors: '*'

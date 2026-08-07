@@ -65,11 +65,8 @@ struct TrieUpdateCursor = {
 /*! Opens a pull cursor by fetching only its first update. */
 function trie_updates_begin(source : TrieUpdateSource) -> TrieUpdateCursor = {
     let first = trie_update_source_next(source);
-    let relation : TrieUpdateRelation = if first.available then {
-            UpdateUnderPrefix(first.update.key)
-        } else {
-            UpdateSourceExhausted()
-        };
+    let relation : TrieUpdateRelation =
+        if first.available then UpdateUnderPrefix(first.update.key) else UpdateSourceExhausted();
     struct { source = source, current = first.update, relation = relation }
 }
 
@@ -87,23 +84,21 @@ function updates_empty(updates : TrieUpdateCursor) -> bool =
     `UpdateUnderPrefix(path_postfix)` when that depth reaches their subtree. */
 function trie_updates_pop(updates : TrieUpdateCursor) -> (TrieUpdate, TrieUpdateCursor) =
     match updates.relation {
-        UpdateSourceExhausted(_) => { fatal_error(WitnessDeficient); exit(()) },
+        UpdateSourceExhausted(_) => fatal_error(WitnessDeficient),
         _ => {
             let current = updates.current;
             let successor = trie_update_source_next(updates.source);
-            let next : TrieUpdateCursor = if successor.available then {
+            let next : TrieUpdateCursor =
+                if successor.available then {
+                    let common_prefix_len = common_prefix_length(current.key, successor.update.key);
                     struct {
                         source = updates.source,
                         current = successor.update,
-                        relation = UpdateBeyondPrefix(common_prefix_length(current.key, successor.update.key)),
+                        relation = UpdateBeyondPrefix(common_prefix_len),
                     }
                 } else {
-                    struct {
-                        source = updates.source,
-                        current = EMPTY_TRIE_UPDATE,
-                        relation = UpdateSourceExhausted(),
-                    }
-            };
+                    struct { source = updates.source, current = EMPTY_TRIE_UPDATE, relation = UpdateSourceExhausted() }
+                };
             (current, next)
         },
     }
@@ -113,33 +108,34 @@ function trie_updates_pop(updates : TrieUpdateCursor) -> (TrieUpdate, TrieUpdate
     prefix computed by [trie_updates_pop][] decides whether the successor has
     reached the subtree where traversal should resume. */
 function trie_updates_rebase(updates : TrieUpdateCursor, prefix : TriePath) -> TrieUpdateCursor =
+    let prefix_len = path_len(prefix) in
     match updates.relation {
         UpdateSourceExhausted(_) => updates,
         UpdateUnderPrefix(_) => updates,
-        UpdateBeyondPrefix(common_prefix_len) => if path_len(prefix) <= common_prefix_len then {
-                struct {
-                    source = updates.source,
-                    current = updates.current,
-                    relation = UpdateUnderPrefix(path_drop(updates.current.key, path_len(prefix))),
-                }
-            } else {
-                updates
-            },
+        UpdateBeyondPrefix(common_prefix_len) => if prefix_len <= common_prefix_len then {
+            let path_postfix = path_drop(updates.current.key, prefix_len);
+            struct { source = updates.source, current = updates.current, relation = UpdateUnderPrefix(path_postfix) }
+        } else {
+            updates
+        },
     }
 
 /*! Moves an under-prefix active update through one selected child edge. */
 function trie_updates_descend(updates : TrieUpdateCursor) -> TrieUpdateCursor =
     match updates.relation {
-        UpdateUnderPrefix(path_postfix) => if path_len(path_postfix) == 0 then {
-            fatal_error(WitnessDeficient);
-            exit(())
-        } else {
-            var descended = updates;
-            descended.relation = UpdateUnderPrefix(path_drop(path_postfix, 1));
-            descended
+        UpdateUnderPrefix(path_postfix) => {
+            let postfix_len = path_len(path_postfix);
+            if postfix_len == 0 then {
+                fatal_error(WitnessDeficient)
+            } else {
+                let child_postfix = path_drop(path_postfix, 1);
+                var descended = updates;
+                descended.relation = UpdateUnderPrefix(child_postfix);
+                descended
+            }
         },
-        UpdateBeyondPrefix(_) => { fatal_error(WitnessDeficient); exit(()) },
-        UpdateSourceExhausted(_) => { fatal_error(WitnessDeficient); exit(()) },
+        UpdateBeyondPrefix(_) => fatal_error(WitnessDeficient),
+        UpdateSourceExhausted(_) => fatal_error(WitnessDeficient),
     }
 
 /*md
@@ -175,11 +171,15 @@ function trie_empty_subtree() -> TrieItem =
 function trie_leaf(path : TriePath, value : TrieLeafValue) -> TrieItem =
     struct { path = path, value = LeafItem(value) }
 
-function trie_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem =
-    trie_leaf(path, InputTrieLeaf(value))
+function trie_input_leaf(path : TriePath, value : StatelessInputSlice) -> TrieItem = {
+    let leaf_value = InputTrieLeaf(value);
+    trie_leaf(path, leaf_value)
+}
 
-function trie_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem =
-    trie_leaf(path, ScratchTrieLeaf(value))
+function trie_scratch_leaf(path : TriePath, value : ScratchSlice) -> TrieItem = {
+    let leaf_value = ScratchTrieLeaf(value);
+    trie_leaf(path, leaf_value)
+}
 
 function trie_branch(path : TriePath, childref : NodeRef) -> TrieItem =
     struct { path = path, value = BranchItem(childref) }
@@ -194,23 +194,23 @@ function trie_subtree(path : TriePath, childref : NodeRef) -> TrieItem =
     (fail-closed). */
 function trie_child_ref(it : TrieItem, depth : trie_path_len) -> NodeRef = {
     let suffix = path_drop(it.path, depth);
+    let suffix_len = path_len(suffix);
     match it.value {
         EmptySubtree() => EmptyRef(),
         LeafItem(value) => leaf_child_ref(suffix, value),
-        BranchItem(subref) => if path_len(suffix) == 0 then {
+        BranchItem(subref) => if suffix_len == 0 then {
             subref
         } else {
             merge_ext_ref(suffix, subref)
         },
-        SubtreeItem(subref) => if path_len(suffix) == 0 then {
+        SubtreeItem(subref) => if suffix_len == 0 then {
             subref
         } else {
             match subref {
                 HashRef(h) => {
                     let node = node_db_lookup(h);
                     if node.len == 0 then {
-                        fatal_error(WitnessDeficient);
-                        exit(())
+                        fatal_error(WitnessDeficient)
                     } else {
                         merge_ext_node(suffix, node)
                     }
@@ -251,8 +251,12 @@ struct TrieChildren = {
 
 /*! Constructs an empty child accumulator. `only` is meaningful iff exactly
     one child has been added. */
-function trie_children_empty() -> TrieChildren =
-    struct { mask = 0x0000, children = vector_init(16, EmptyRef()), only = trie_empty_subtree(), count = 0 }
+function trie_children_empty() -> TrieChildren = {
+    let empty_ref = EmptyRef();
+    let children = vector_init(16, empty_ref);
+    let empty_subtree = trie_empty_subtree();
+    struct { mask = 0x0000, children = children, only = empty_subtree, count = 0 }
+}
 
 /*! Adds one recursively built child at `index`; an empty subtree
     contributes nothing. */
@@ -269,26 +273,20 @@ function trie_children_add(
         _ => {
             let depth = path_len(prefix);
             let child_count = children.count;
-            let child_depth : range(1, 64) = if depth < 64 then {
-                    depth + 1
-                } else {
-                    fatal_error(WitnessDeficient);
-                    exit(())
-                };
-            let next_child_count : range(1, 16) = if child_count < 16 then {
-                    child_count + 1
-                } else {
-                    fatal_error(WitnessDeficient);
-                    exit(())
-                };
-            let child_prefix = path_concat(prefix, path_single(index));
-            if not_bool(path_prefix_of(child_prefix, child.path)) then {
-                fatal_error(WitnessDeficient);
-                exit(())
+            let child_depth : range(1, 64) =
+                if depth < 64 then depth + 1 else fatal_error(WitnessDeficient);
+            let next_child_count : range(1, 16) =
+                if child_count < 16 then child_count + 1 else fatal_error(WitnessDeficient);
+            let child_segment = path_single(index);
+            let child_prefix = path_concat(prefix, child_segment);
+            let path_below_child = path_prefix_of(child_prefix, child.path);
+            let path_outside_child = not_bool(path_below_child);
+            if path_outside_child then {
+                fatal_error(WitnessDeficient)
             };
-            if branch_mask_has(children.mask, index) then {
-                fatal_error(WitnessDeficient);
-                exit(())
+            let child_already_present = branch_mask_has(children.mask, index);
+            if child_already_present then {
+                fatal_error(WitnessDeficient)
             };
             var updated = children;
             updated.mask = branch_mask_set(updated.mask, index);
@@ -304,17 +302,19 @@ function trie_children_add(
 function trie_children_finish(prefix : TriePath, children : TrieChildren) -> TrieItem =
     if children.count == 0 then {
         struct { path = prefix, value = EmptySubtree() }
+    } else if children.count == 1 then {
+        children.only
     } else {
-        if children.count == 1 then {
-            children.only
-        } else {
-            trie_branch(prefix, branch_child_ref(children.mask, children.children))
-        }
+        let branch_ref = branch_child_ref(children.mask, children.children);
+        trie_branch(prefix, branch_ref)
     }
 
 /*! Converts a recursively assembled top-level item to the committed root. */
 function trie_subtree_root(subtree : TrieItem) -> hash =
     match subtree.value {
         EmptySubtree() => EMPTY_TRIE_ROOT,
-        _ => trie_ref_to_root(trie_child_ref(subtree, 0)),
+        _ => {
+            let root_ref = trie_child_ref(subtree, 0);
+            trie_ref_to_root(root_ref)
+        },
     }

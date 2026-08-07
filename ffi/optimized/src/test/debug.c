@@ -37,7 +37,7 @@ static void append_u64(uint64_t value)
     append_byte((unsigned char)(value >> (8 * index)));
 }
 
-static void append_word(U256 value)
+static void append_word(u256 value)
 {
   uint64_t words[4];
   sail_word_to_be_words4(words, value);
@@ -48,7 +48,7 @@ static void append_word(U256 value)
   }
 }
 
-static void append_address(Address value)
+static void append_address(bytes20 value)
 {
   uint8_t bytes[20];
   address_to_be_bytes(bytes, value);
@@ -56,11 +56,10 @@ static void append_address(Address value)
     append_byte(bytes[index]);
 }
 
-static void append_hash(Hash32 value)
+static void append_hash(bytes32 value)
 {
-  uint8_t bytes[32];
-  memcpy(bytes, hash_bytes_const(&value), sizeof bytes);
-  for (size_t index = 0; index < sizeof bytes; index++)
+  const uint8_t *bytes = bytes32_data(&value);
+  for (size_t index = 0; index < 32; index++)
     append_byte(bytes[index]);
 }
 
@@ -115,8 +114,8 @@ static void append_accounts(bool state_available)
     AccountTrieView view;
     if (!account_trie_binding_get(index, &view) || !account_exists(view.account_id))
       continue;
-    const Address address = *account_id_address(view.account_id);
-    const Hash32 storage_root = *view.original_storage_root;
+    const bytes20 address = *account_id_address(view.account_id);
+    const bytes32 storage_root = *view.original_storage_root;
     append_hash(*view.secure_key);
     append_address(address);
     append_u64(view.nonce);
@@ -131,7 +130,7 @@ static void append_accounts(bool state_available)
 unsigned long guest_debug_dump(const unsigned char **out)
 {
   dump_len = 0;
-  Hash32 root = {{0}};
+  bytes32 root = {{0}};
   const bool validation_failed = validation_failure_present;
   bool state_available = !validation_failed;
   if (state_available) {

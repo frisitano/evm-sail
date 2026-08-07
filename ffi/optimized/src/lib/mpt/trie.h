@@ -18,16 +18,16 @@ struct TriePath;
  * Whole-operation ordered payload tries. C owns SSZ item navigation,
  * RLP(index) ordering, leaf framing, and use of the shared MPT workspace.
  */
-Hash32 mpt_transaction_trie_root(struct BoundedSszListRef transactions);
-Hash32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals);
+bytes32 mpt_transaction_trie_root(struct BoundedSszListRef transactions);
+bytes32 mpt_withdrawals_trie_root(struct BoundedSszListRef withdrawals);
 
 /*
  * Internal authenticated point readers used by the complete optimized state
  * operations. The standard model retains the explicit trie and RLP equations.
  */
-void stateless_account_read(Hash32 root, Hash32 address_hash, struct AccountInfo *info, bool *found,
-                            NodeId *terminal_node, NodeId *storage_root_node);
-void stateless_storage_read(NodeId root_node, Hash32 slot_hash, U256 *value, bool *found,
+void stateless_account_read(bytes32 root, bytes32 address_hash, struct AccountInfo *info,
+                            bool *found, NodeId *terminal_node, NodeId *storage_root_node);
+void stateless_storage_read(NodeId root_node, bytes32 slot_hash, u256 *value, bool *found,
                             NodeId *terminal_node);
 
 /* Reusable state-binding ordering. Account bindings are permuted once inside
@@ -46,12 +46,12 @@ void mpt_reset(void);
 
 /* Receipt ownership lives in executor/receipts.c. The MPT consumes that
  * module's immutable record stream and owns only ordering/construction. */
-Hash32 mpt_receipt_table_root(uint64_t count);
+bytes32 mpt_receipt_table_root(uint64_t count);
 
-Hash32 mpt_compute_state_root(Hash32 parent_state_root);
+bytes32 mpt_compute_state_root(bytes32 parent_state_root);
 #ifdef EVMSAIL_NATIVE_TEST
 /* Diagnostic latch of the most recent state root (src/test/debug.c). */
-Hash32 mpt_last_state_root(void);
+bytes32 mpt_last_state_root(void);
 #endif
 
 #endif

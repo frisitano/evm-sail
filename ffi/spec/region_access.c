@@ -137,7 +137,7 @@ static void expanded_memory_value(struct zEvmMemorySliceFields *out,
 }
 
 static void node_lookup_value(struct zStatelessInputSliceFields *out,
-                              sail_fixed_bytes_32 hash) {
+                              fixed_bytes_32 hash) {
   uint64_t off = 0;
   uint64_t len = 0;
   nodedb_lookup_span(hash, &off, &len);
@@ -157,7 +157,7 @@ struct zEvmMemorySliceFields mem_expand(uint64_t len) {
   return out;
 }
 
-struct zStatelessInputSliceFields nodedb_lookup(sail_fixed_bytes_32 hash) {
+struct zStatelessInputSliceFields nodedb_lookup(fixed_bytes_32 hash) {
   struct zStatelessInputSliceFields out;
   node_lookup_value(&out, hash);
   return out;
@@ -200,7 +200,7 @@ static bool region_strided_zero(span_resolver resolve, uint64_t off,
   return true;
 }
 
-static sail_u256 region_load_word(span_resolver resolve, uint64_t off,
+static u256 region_load_word(span_resolver resolve, uint64_t off,
                                   uint64_t len, uint64_t index) {
   uint8_t bytes[32] = {0};
   if (index < len) {
@@ -212,7 +212,7 @@ static sail_u256 region_load_word(span_resolver resolve, uint64_t off,
   return be_bytes_to_sail_word(bytes);
 }
 
-static sail_u256 region_load_n_word(span_resolver resolve, uint64_t off,
+static u256 region_load_n_word(span_resolver resolve, uint64_t off,
                                     uint64_t len, uint64_t index,
                                     uint64_t requested) {
   uint8_t bytes[32] = {0};
@@ -257,13 +257,13 @@ static unit region_copy_to_memory(span_resolver resolve, uint64_t off,
   }
 
 #define DEFINE_SLICE_LOAD(prefix, type, resolver)                             \
-  sail_u256 prefix##_load_word(struct type slice, uint64_t index) {            \
+  u256 prefix##_load_word(struct type slice, uint64_t index) {            \
     return region_load_word(resolver, SLICE_OFF(slice), SLICE_LEN(slice),      \
                             index);                                             \
   }
 
 #define DEFINE_SLICE_LOAD_N(prefix, type, resolver)                           \
-  sail_u256 prefix##_load_n_word(struct type slice, uint64_t index,            \
+  u256 prefix##_load_n_word(struct type slice, uint64_t index,            \
                                  uint64_t len) {                               \
     return region_load_n_word(resolver, SLICE_OFF(slice), SLICE_LEN(slice),    \
                               index, len);                                      \
@@ -362,7 +362,7 @@ bool input_code_slices_equal(struct zStatelessInputSliceFields left,
 }
 
 bool evmsail_logs_bloom_matches_ref(
-    sail_fixed_bytes_256 computed, struct zStatelessInputSliceFields reference) {
+    fixed_bytes_256 computed, struct zStatelessInputSliceFields reference) {
   const uint64_t reference_len = SLICE_LEN(reference);
   const uint8_t *reference_bytes =
       evmsail_stateless_input_ptr(SLICE_OFF(reference), reference_len);
@@ -430,7 +430,7 @@ DEFINE_SCRATCH_STORE(scratch_store_output, zOutputSliceFields,
 #undef DEFINE_SCRATCH_STORE
 
 void scratch_store_address(struct zScratchSliceFields *result,
-                           uint64_t off, sail_fixed_bytes_20 data) {
+                           uint64_t off, fixed_bytes_20 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
   if (!out) abort();
@@ -440,7 +440,7 @@ void scratch_store_address(struct zScratchSliceFields *result,
 }
 
 void scratch_store_b256(struct zScratchSliceFields *result,
-                        uint64_t off, sail_fixed_bytes_32 data,
+                        uint64_t off, fixed_bytes_32 data,
                         uint64_t len) {
   const uint64_t dst = off;
   if (len > 32) abort();
@@ -453,7 +453,7 @@ void scratch_store_b256(struct zScratchSliceFields *result,
 
 void scratch_store_fixed_bytes_256(struct zScratchSliceFields *result,
                                    uint64_t off,
-                                   sail_fixed_bytes_256 data) {
+                                   fixed_bytes_256 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out) abort();
@@ -474,7 +474,7 @@ void scratch_store_receipt_logs_bloom(
 
 void scratch_store_word(struct zScratchSliceFields *result,
                         uint64_t off,
-                        const sail_u256 data, uint64_t len) {
+                        const u256 data, uint64_t len) {
   const uint64_t dst = off;
   if (len > 32) abort();
   uint8_t *out = scratch_prepare(dst, len);
@@ -508,7 +508,7 @@ bool output_buffer_store_input(struct zStatelessInputSliceFields slice) {
       SLICE_LEN(slice));
 }
 
-sail_fixed_bytes_32 code_db_store_indexed(struct zCodeFields code) {
+fixed_bytes_32 code_db_store_indexed(struct zCodeFields code) {
   return code_db_store_indexed_bytes(
       evmsail_code_ptr(code.zbytes, code.zlen), code.zlen, code.zjumpdests);
 }
