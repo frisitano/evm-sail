@@ -76,6 +76,19 @@ esac
 if [ "$EVM_REGISTER_FILE" = on ]; then
   CONST_TABLE_FLAGS+=(--c-register-file --c-register-file-exclude host/debug_enabled)
 fi
+# Experimental: thread the register-file base pointer through generated
+# functions (--c-register-file-thread); requires EVM_REGISTER_FILE=on.
+EVM_REGISTER_FILE_THREAD="${EVM_REGISTER_FILE_THREAD:-off}"
+case "$EVM_REGISTER_FILE_THREAD" in
+  off|on) ;;
+  *) echo "error: EVM_REGISTER_FILE_THREAD must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_REGISTER_FILE_THREAD" = on ]; then
+  if [ "$EVM_REGISTER_FILE" != on ]; then
+    echo "error: EVM_REGISTER_FILE_THREAD=on requires EVM_REGISTER_FILE=on" >&2; exit 2
+  fi
+  CONST_TABLE_FLAGS+=(--c-register-file-thread)
+fi
 # Experimental: EVM_GENERATED_INTERP=on keeps the GENERATED Sail interpreter
 # loop (splices evm/interpreter_generated.sail instead of evm/interpreter.sail
 # and drops the hand-written evm/interpreter.c from the staged manifest);

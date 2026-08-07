@@ -91,6 +91,21 @@ if [ "$EVM_REGISTER_FILE" = on ]; then
     CONST_TABLE_FLAGS+=(--c-register-file-exclude host/debug_enabled)
   fi
 fi
+# Experimental: thread the register-file base pointer through generated
+# functions (--c-register-file-thread) so member accesses become single
+# offset loads/stores from an argument register instead of re-materializing
+# the struct address per function. Requires EVM_REGISTER_FILE=on.
+EVM_REGISTER_FILE_THREAD="${EVM_REGISTER_FILE_THREAD:-off}"
+case "$EVM_REGISTER_FILE_THREAD" in
+  off|on) ;;
+  *) echo "error: EVM_REGISTER_FILE_THREAD must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_REGISTER_FILE_THREAD" = on ]; then
+  if [ "$EVM_REGISTER_FILE" != on ]; then
+    echo "error: EVM_REGISTER_FILE_THREAD=on requires EVM_REGISTER_FILE=on" >&2; exit 2
+  fi
+  CONST_TABLE_FLAGS+=(--c-register-file-thread)
+fi
 # Experimental: EVM_GENERATED_INTERP=on keeps the GENERATED Sail interpreter
 # loop instead of the hand-written C override. The evm/interpreter.sail splice
 # (which rebinds interpret to the C loop) is swapped for
@@ -406,6 +421,11 @@ cmd_guest() {
   # Spike implements the standard accelerator surface through its MMIO device.
   "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -I"$ROOT/zkvm" -Wall -Wextra \
       -c "$RT/accel_guest.c" -o "$BUILD/accel_guest.o"
+  # Spike has no arithmetic precompile: the portable software provider owns
+  # the zkvm_bigint.h contract here. The ZisK library build links
+  # zkvm/zisk/bigint.c instead; the two providers must never co-link.
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+      -c "$RT/bigint_portable.c" -o "$BUILD/bigint_portable.o"
   ACCEL="$ROOT/zkvm/accel-host"; ACCEL_LIB="$ACCEL/target/release"
   if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
     ( cd "$ACCEL" && cargo build --release --target-dir target )
@@ -444,6 +464,11 @@ cmd_zisk_lib() {
       -c "$RT/harness.c" -o "$BUILD/harness.o"
   "$GCC" "${CFLAGS[@]}" ${entry_lto[@]+"${entry_lto[@]}"} -I"$lib" -Wall -Wextra \
       -c "$HERE/zisk/platform.c" -o "$BUILD/zisk_platform.o"
+  # ZisK provider for the zkvm_bigint.h contract: forwards to the ziskos
+  # zisklib arith256 exports, resolved by the final guest link (Rust crate
+  # graph or libziskos.a). The Spike-only portable provider must not co-link.
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+      -c "$HERE/zisk/bigint.c" -o "$BUILD/zisk_bigint.o"
   compile_profile_scope
   # `ar crs` updates an existing archive without removing members that are no
   # longer named. Recreate it so renamed/deleted backend objects cannot survive a
@@ -459,14 +484,16 @@ cmd_zisk_lib() {
       lto_roots+=(-Wl,-u,zisk_report_debug)
     fi
     "$GCC" "${CFLAGS[@]}" -r -nostdlib "${lto_roots[@]}" \
-        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
+        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" \
+        "$BUILD/zisk_bigint.o" "$BUILD/sail.o" \
         "${MODEL_BACKEND_OBJS[@]}" \
         ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}" \
         -o "$BUILD/evmsail_lto.o"
     "$AR" crs "$BUILD/libevmsail_zisk.a" "$BUILD/evmsail_lto.o"
   else
     "$AR" crs "$BUILD/libevmsail_zisk.a" \
-        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" "$BUILD/sail.o" \
+        "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" \
+        "$BUILD/zisk_bigint.o" "$BUILD/sail.o" \
         "${MODEL_BACKEND_OBJS[@]}" \
         ${PROFILE_OBJ:+"$PROFILE_OBJ"} "${MODEL_OBJS[@]}"
   fi
@@ -477,7 +504,7 @@ link_guest() {
   "$GCC" "${CFLAGS[@]}" "${LDFLAGS[@]}" \
       "$BUILD/start.o" "$BUILD/htif.o" "$BUILD/zkvm_io.o" \
       "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/sail.o" \
-      "$BUILD/accel_guest.o" "${MODEL_BACKEND_OBJS[@]}" \
+      "$BUILD/accel_guest.o" "$BUILD/bigint_portable.o" "${MODEL_BACKEND_OBJS[@]}" \
       ${PROFILE_OBJ:+"$PROFILE_OBJ"} \
       "${MODEL_OBJS[@]}" \
       -o "$BUILD/zkvm_guest.elf"
