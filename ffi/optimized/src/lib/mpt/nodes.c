@@ -10,7 +10,8 @@
  *      Bucket position is not node identity.
  *      WitnessNode is indexed directly by NodeId: the
  *      borrowed encoding span, the memoized digest, and the memoized decoded
- *      view. A generation stamp resets the logical arena in O(1).
+ *      view. Resetting the row count and index resets the logical arena in
+ *      O(1); live NodeIds are always re-derived from the current arena.
  *   3. WitnessProbeMemo caches the most recent digest probe, hits and misses
  *      alike, because consecutive operations often ask for the same digest
  *      while linking and then walking a child.
@@ -54,7 +55,6 @@ typedef struct {
   /* digest holds this node's keccak once digest_known is set. */
   bool digest_known;
   bytes32 digest;
-  uint32_t generation;
 } WitnessNode;
 
 /* Memo of the most recent digest probe, hits and misses alike. */
@@ -77,13 +77,12 @@ typedef struct {
   uint32_t bucket_count;
   uint32_t bucket_mask;
   uint32_t node_count;
-  uint32_t generation;
   bool sealed;
 } WitnessNodeTable;
 
 /* Singleton witness-node table. Column storage is assigned once from the
  * shared guest workspace by mpt_node_table_workspace_bind. */
-static WitnessNodeTable node_table = {.generation = 1};
+static WitnessNodeTable node_table;
 
 static bool witness_bucket_empty(const WitnessIndexEntry *entry)
 {
@@ -96,10 +95,6 @@ static bool witness_bucket_empty(const WitnessIndexEntry *entry)
 
 void mpt_node_arena_reset(void)
 {
-  ++node_table.generation;
-  if (node_table.generation == 0) {
-    node_table.generation = 1;
-  }
   node_table.index = NULL;
   node_table.nodes = NULL;
   node_table.index_count = 0;
@@ -188,67 +183,48 @@ static WitnessNode *witness_node_append(ByteSpan encoded, NodeId *node_id)
   row->len = encoded.len;
   row->decoded = false;
   row->digest_known = false;
-  row->generation = node_table.generation;
   return row;
 }
 
-/* Resolves a NodeId to its current-generation payload row. */
-static bool witness_node_row(NodeId node_id, WitnessNode **row_out)
+/* Resolves a NodeId to its payload row. Live NodeIds never outlast an arena
+ * reset: every id is re-derived from the current arena, so no per-row
+ * generation check is needed. */
+static WitnessNode *witness_node_row(NodeId node_id)
 {
   if (node_id == MPT_NODE_ID_UNLINKED || node_id == MPT_NODE_ID_EMPTY ||
       node_id >= node_table.node_count) {
     fatal_error(WitnessDeficient);
   }
-  WitnessNode *row = &node_table.nodes[node_id];
-  if (row->generation != node_table.generation) {
-    fatal_error(WitnessDeficient);
-  }
-  *row_out = row;
-  return true;
+  return &node_table.nodes[node_id];
 }
 
-bool mpt_node_span(NodeId node_id, ByteSpan *encoded)
+/* Every appended row carries a nonempty borrowed encoding (mpt_node_table_insert
+ * rejects empty spans), so a resolved row's span is never zero length. */
+void mpt_node_span(NodeId node_id, ByteSpan *encoded)
 {
   if (node_id == MPT_NODE_ID_EMPTY) {
     encoded->data = NULL;
     encoded->len = 0;
-    return true;
+    return;
   }
-  WitnessNode *row = NULL;
-  if (!witness_node_row(node_id, &row)) {
-    return false;
-  }
-  /* Identity-only bindings carry a digest but no witness material. */
-  if (row->len == 0) {
-    fatal_error(WitnessDeficient);
-  }
+  const WitnessNode *row = witness_node_row(node_id);
   encoded->data = row->data;
   encoded->len = row->len;
-  return true;
 }
 
-bool mpt_node_digest(NodeId node_id, bytes32 *digest)
+void mpt_node_digest(NodeId node_id, bytes32 *digest)
 {
-  WitnessNode *row = NULL;
-  if (!witness_node_row(node_id, &row)) {
-    return false;
-  }
+  WitnessNode *row = witness_node_row(node_id);
   if (!row->digest_known) {
-    if (!mpt_keccak(row->data, row->len, &row->digest)) {
-      return false;
-    }
+    mpt_keccak(row->data, row->len, &row->digest);
     row->digest_known = true;
   }
   *digest = row->digest;
-  return true;
 }
 
-bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out)
+void mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out)
 {
-  WitnessNode *row = NULL;
-  if (!witness_node_row(node_id, &row)) {
-    return false;
-  }
+  WitnessNode *row = witness_node_row(node_id);
   if (!row->decoded) {
     if (!mpt_decode_trusted_state_node((ByteSpan){row->data, row->len}, &row->node)) {
       fatal_error(RlpDecode);
@@ -256,7 +232,6 @@ bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out)
     row->decoded = true;
   }
   *node_out = &row->node;
-  return true;
 }
 
 /* ======================================================================== */
@@ -303,9 +278,7 @@ static bool witness_append_inline(WitnessChild *ref)
     return false;
   }
   *ref->node_id = node_id;
-  if (!mpt_keccak(encoded.data, encoded.len, &row->digest)) {
-    return false;
-  }
+  mpt_keccak(encoded.data, encoded.len, &row->digest);
   row->digest_known = true;
   row->decoded = mpt_decode_trusted_state_node(encoded, &row->node);
   return (!row->decoded || witness_expand_decoded(&row->node)) != 0;
@@ -369,14 +342,13 @@ static bool mpt_node_index_lookup(const bytes32 *digest, NodeId *node_id)
 
 bool mpt_node_index_span(const bytes32 *digest, ByteSpan *encoded)
 {
+  /* The digest index is rebuilt from the live payload rows at seal time,
+   * so an index hit is always a live, nonempty row. */
   NodeId node_id = MPT_NODE_ID_UNLINKED;
   if (!mpt_node_index_lookup(digest, &node_id)) {
     return false;
   }
   const WitnessNode *row = &node_table.nodes[node_id];
-  if (row->generation != node_table.generation || row->len == 0) {
-    return false;
-  }
   encoded->data = row->data;
   encoded->len = row->len;
   return true;
@@ -386,7 +358,7 @@ bool mpt_node_index_span(const bytes32 *digest, ByteSpan *encoded)
 /* EDGE LINKING AND ROOT BINDING                                            */
 /* ======================================================================== */
 
-bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_id)
+void mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_id)
 {
   const NodeReferenceKind kind = mpt_witness_child_kind(ref);
   if (kind == NODE_REFERENCE_EMPTY) {
@@ -394,38 +366,34 @@ bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_i
     *node_id = MPT_NODE_ID_EMPTY;
     encoded->data = NULL;
     encoded->len = 0;
-    return true;
+    return;
   }
   if (*ref->node_id != MPT_NODE_ID_UNLINKED) {
     *node_id = *ref->node_id;
-    return mpt_node_span(*node_id, encoded);
+    mpt_node_span(*node_id, encoded);
+    return;
   }
 
   if (kind == NODE_REFERENCE_INLINE) {
     fatal_error(WitnessDeficient);
-  } else {
-    const bytes32 digest = hash_from_be_bytes(ref->encoded);
-    if (!mpt_node_index_lookup(&digest, node_id)) {
-      fatal_error(WitnessDeficient);
-    }
-    if (!mpt_node_span(*node_id, encoded)) {
-      return false;
-    }
   }
+  const bytes32 digest = hash_from_be_bytes(ref->encoded);
+  if (!mpt_node_index_lookup(&digest, node_id)) {
+    fatal_error(WitnessDeficient);
+  }
+  mpt_node_span(*node_id, encoded);
   *ref->node_id = *node_id;
-  return true;
 }
 
-bool mpt_bind_root(const bytes32 *root, NodeId *node_id)
+void mpt_bind_root(const bytes32 *root, NodeId *node_id)
 {
   if (hash_equal(root, &EVMSAIL_EMPTY_TRIE_ROOT)) {
     *node_id = MPT_NODE_ID_EMPTY;
-    return true;
+    return;
   }
   if (!mpt_node_index_lookup(root, node_id)) {
     fatal_error(WitnessDeficient);
   }
-  return true;
 }
 
 /*
@@ -434,14 +402,13 @@ bool mpt_bind_root(const bytes32 *root, NodeId *node_id)
  * node is present in the witness it is already bound, and otherwise any
  * later traversal fails closed in mpt_node_span.
  */
-bool mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id)
+void mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id)
 {
   if (hash_equal(root, &EVMSAIL_EMPTY_TRIE_ROOT)) {
     *node_id = MPT_NODE_ID_EMPTY;
-    return true;
+    return;
   }
   if (!mpt_node_index_lookup(root, node_id)) {
     *node_id = MPT_NODE_ID_UNLINKED;
   }
-  return true;
 }

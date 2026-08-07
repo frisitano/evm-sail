@@ -30,8 +30,10 @@ NibblePath nibble_path_from_secure_key(const bytes32 *hash)
   return path;
 }
 
-bool nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *out)
+void nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *out)
 {
+  /* This cap check realizes the Sail path_concat throw; it is a genuine
+   * validation failure, not a defensive re-check. */
   if ((unsigned)a->len + b->len > MPT_SECURE_KEY_NIBBLES) {
     fatal_error(WitnessDeficient);
   }
@@ -39,7 +41,6 @@ bool nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *ou
   out->len = a->len + b->len;
   memcpy(out->nibbles, a->nibbles, a->len);
   memcpy(out->nibbles + a->len, b->nibbles, b->len);
-  return true;
 }
 
 NibblePath nibble_path_drop(const NibblePath *path, unsigned count)

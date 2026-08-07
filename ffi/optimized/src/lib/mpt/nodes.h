@@ -37,24 +37,28 @@ bool mpt_node_index_span(const bytes32 *digest, ByteSpan *encoded);
 
 /* --- payload column ----------------------------------------------------- */
 
-/* Borrowed encoding of a materialized node; fails closed on identity-only
- * bindings whose node material is absent from the witness. */
-bool mpt_node_span(NodeId node_id, ByteSpan *encoded);
+/* The payload accessors below fail closed only via fatal_error, so they
+ * return no status: an unresolved or out-of-range NodeId is a witness
+ * deficiency, never a recoverable miss. */
+
+/* Borrowed encoding of a materialized node. */
+void mpt_node_span(NodeId node_id, ByteSpan *encoded);
 /* Memoized keccak of a node's encoding. */
-bool mpt_node_digest(NodeId node_id, bytes32 *digest);
-/* Memoized structural decode; returns a pointer into the payload column. */
-bool mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out);
+void mpt_node_digest(NodeId node_id, bytes32 *digest);
+/* Memoized structural decode; yields a pointer into the payload column. */
+void mpt_decode_cached_node(NodeId node_id, DecodedNode **node_out);
 
 /* --- edge linking and root binding -------------------------------------- */
 
 /* Resolve one decoded child edge to a stable NodeId plus its encoding,
- * stamping the id back into the parent's child slot. */
-bool mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_id);
+ * stamping the id back into the parent's child slot; fails closed on
+ * missing witness material. */
+void mpt_link_witness_child(WitnessChild *ref, ByteSpan *encoded, NodeId *node_id);
 /* Resolve a trie root digest to its witness NodeId; fails closed when the
  * root node is absent from the witness. */
-bool mpt_bind_root(const bytes32 *root, NodeId *node_id);
+void mpt_bind_root(const bytes32 *root, NodeId *node_id);
 /* Bind a storage root to a real witness node when present. Missing material
  * remains unresolved; the owning account retains the root digest. */
-bool mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id);
+void mpt_bind_storage_root_identity(const bytes32 *root, NodeId *node_id);
 
 #endif

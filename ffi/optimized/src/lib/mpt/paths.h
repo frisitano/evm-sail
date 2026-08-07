@@ -16,7 +16,9 @@ typedef struct {
 
 NibblePath nibble_path_empty(void);
 NibblePath nibble_path_from_secure_key(const bytes32 *hash);
-bool nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *out);
+/* Concatenation whose only failure (secure-key overflow) is the Sail
+ * path_concat throw, realized directly via fatal_error. */
+void nibble_path_concat(const NibblePath *a, const NibblePath *b, NibblePath *out);
 NibblePath nibble_path_drop(const NibblePath *path, unsigned count);
 NibblePath nibble_path_slice(const NibblePath *path, unsigned start, unsigned len);
 NibblePath nibble_path_single(unsigned nibble);
