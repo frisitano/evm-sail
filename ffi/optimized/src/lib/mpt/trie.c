@@ -763,9 +763,13 @@ static bool trie_entry_pending(const TrieEntry *item, unsigned depth, PendingNod
   return true;
 }
 
+/* ordered_trie_builder_push is the single owner of frame initialization, so
+ * reset only invalidates the live prefix instead of clearing the whole
+ * frame array. */
 static void ordered_trie_builder_reset(OrderedTrieBuilder *builder)
 {
-  memset(builder, 0, sizeof(*builder));
+  builder->frame_count = 0;
+  builder->complete = false;
   builder->root = pending_node_empty();
 }
 
@@ -774,12 +778,12 @@ static void ordered_trie_builder_push(OrderedTrieBuilder *builder, unsigned dept
   if (depth >= 64 || builder->frame_count >= 64) {
     fatal_error(WitnessDeficient);
   }
+  /* mask alone tracks child occupancy: attach writes a children slot as it
+   * sets the slot's mask bit, and branch encoding reads a slot only under
+   * its mask bit, so stale slots from earlier builds are never read. */
   TrieBranchFrame *frame = &builder->frames[builder->frame_count++];
-  memset(frame, 0, sizeof(*frame));
   frame->depth = (uint8_t)depth;
-  for (unsigned i = 0; i < 16; ++i) {
-    frame->children[i] = mpt_empty_reference();
-  }
+  frame->mask = 0;
 }
 
 static void ordered_trie_builder_attach(OrderedTrieBuilder *builder, const NibblePath *path,
@@ -1472,7 +1476,6 @@ static void mpt_merge_add_rebuilt_child(const NibblePath *prefix, const NibblePa
  * adjacent-pair property on every insert. */
 static bool mpt_build_pending_subtree(size_t begin, PendingNode *root)
 {
-  memset(&ordered_trie_workspace, 0, sizeof(ordered_trie_workspace));
   ordered_trie_builder_reset(&ordered_trie_workspace);
   for (size_t index = begin; index < mpt_merge_entries.count; ++index) {
     const NibblePath *next =
@@ -1813,7 +1816,6 @@ void mpt_workspace_bind(uint32_t account_count, uint32_t storage_count)
 void mpt_reset(void)
 {
   mpt_merge_entries.count = 0;
-  memset(&ordered_trie_workspace, 0, sizeof(ordered_trie_workspace));
   ordered_trie_builder_reset(&ordered_trie_workspace);
 }
 
