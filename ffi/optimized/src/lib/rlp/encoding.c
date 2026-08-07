@@ -183,7 +183,7 @@ uint8_t *rlp_write_u256(uint8_t *out, u256 value)
   const unsigned top_width = width - (top_limb * 8);
   out = write_be_length(out, value.limbs[top_limb], top_width);
   for (unsigned limb = top_limb; limb != 0; --limb) {
-    const uint64_t big_endian_limb = __builtin_bswap64(value.limbs[limb - 1]);
+    const uint64_t big_endian_limb = bswap64(value.limbs[limb - 1]);
     memcpy(out, &big_endian_limb, sizeof(big_endian_limb));
     out += sizeof(big_endian_limb);
   }

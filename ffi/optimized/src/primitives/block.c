@@ -3,6 +3,7 @@
 #include "evmsail/prelude.h"
 
 #include "evmsail/primitives/block.h"
+#include "primitives/value.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -21,7 +22,7 @@ bool logs_bloom_matches_ref(bytes256 computed, Bytes reference)
     const size_t reference_offset = sizeof(computed.bytes) - ((word + 1) * sizeof(uint64_t));
     memcpy(&computed_word, computed.bytes + (word * sizeof(uint64_t)), sizeof(computed_word));
     memcpy(&reference_word, reference_bytes + reference_offset, sizeof(reference_word));
-    if (computed_word != __builtin_bswap64(reference_word)) {
+    if (computed_word != bswap64(reference_word)) {
       return false;
     }
   }

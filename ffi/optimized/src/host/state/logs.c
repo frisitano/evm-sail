@@ -191,7 +191,7 @@ bool receipt_runtime_block_bloom_matches(const uint8_t *reference, uint64_t leng
     memcpy(&reference_word,
            reference + sizeof(block_logs_bloom_words) - ((word + 1) * sizeof(uint64_t)),
            sizeof(reference_word));
-    if (block_logs_bloom_words[word] != __builtin_bswap64(reference_word)) {
+    if (block_logs_bloom_words[word] != bswap64(reference_word)) {
       return false;
     }
   }
