@@ -44,13 +44,15 @@ void frame_stack_push(struct FrameContinuation continuation)
   frame_stack.slots[frame_stack.top++] = continuation;
 }
 
-void frame_stack_pop(struct FrameContinuation *out)
+struct FrameContinuation frame_stack_pop(void)
 {
+  struct FrameContinuation out;
   if (frame_stack.top == 0) {
-    out->kind = Kind_Empty;
-    return;
+    out.kind = Kind_Empty;
+    return out;
   }
   frame_stack.top--;
-  *out = frame_stack.slots[frame_stack.top];
+  out = frame_stack.slots[frame_stack.top];
   current_account_context_restore(frame_stack.current_account_ids[frame_stack.top]);
+  return out;
 }

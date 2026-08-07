@@ -745,10 +745,7 @@ Bytes interpret(void)
 interp_next:
   if (frame_status.kind != Kind_Running) {
     Bytes output = frame_output();
-    struct FrameContinuation continuation;
-    memset(&continuation, 0, sizeof(continuation));
-    continuation.kind = (enum kind_FrameContinuation)Kind_Empty;
-    frame_stack_pop(&continuation);
+    struct FrameContinuation continuation = frame_stack_pop();
     if (continuation.kind == Kind_Empty) {
       return output;
     }
@@ -1222,10 +1219,7 @@ Bytes interpret(void)
     }
 
     Bytes output = frame_output();
-    struct FrameContinuation continuation;
-    memset(&continuation, 0, sizeof(continuation));
-    continuation.kind = (enum kind_FrameContinuation)Kind_Empty;
-    frame_stack_pop(&continuation);
+    struct FrameContinuation continuation = frame_stack_pop();
     if (continuation.kind == Kind_Empty) {
       return output;
     }

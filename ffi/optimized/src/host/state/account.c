@@ -18,6 +18,7 @@
 #include "evmsail/prelude.h"
 #include "evmsail/host/state/primitives.h"
 #include "evmsail/host/nodes.h"
+#include "evmsail/spec/evm/machine.h"
 #include "evmsail/spec/exceptions.h"
 #include "host/state/account.h"
 #include "evmsail/spec/kernel/lifecycle.h"
@@ -120,10 +121,17 @@ static AccountTable acct_table = {
 
 /* The active EVM frame has one deterministic state-owning account. Keep its
  * stable AccountId together with a direct workspace-backed row pointer so
- * frame-local state operations do not repeatedly probe or compare addresses. */
+ * frame-local state operations do not repeatedly probe or compare addresses.
+ * The entered address is retained so the context can heal itself against the
+ * model's `message.address` register: the hand-written interpreter loop
+ * enters the context eagerly at every frame installation, but the GENERATED
+ * interpreter loop (EVM_GENERATED_INTERP=on) has no such hook, so
+ * current_account_context_id() re-enters whenever the active frame owner
+ * changed. */
 typedef struct {
   AccountId id;
   AccountEntry *entry;
+  bytes20 address;
 } CurrentAccountContext;
 
 static CurrentAccountContext current_account_context;
@@ -187,12 +195,20 @@ void current_account_context_enter(bytes20 address)
   }
   current_account_context.id = id;
   current_account_context.entry = &acct_table.entries[id];
+  current_account_context.address = address;
 }
 
 AccountId current_account_context_id(void)
 {
-  /* A context is entered before any opcode executes; enter fatals on a BAL
-   * miss, so the context is always populated here. */
+  /* Self-heal against the active frame owner. Frame installation paths that
+   * enter the context eagerly (the hand-written interpreter loop) make this
+   * comparison a cheap constant-true check; the generated interpreter loop
+   * relies on it entirely. Enter fatals on a BAL miss, so a healed context
+   * is always populated. */
+  if (current_account_context.id == ACCOUNT_ID_NONE ||
+      !address_equal(&current_account_context.address, &message.address)) {
+    current_account_context_enter(message.address);
+  }
   return current_account_context.id;
 }
 
@@ -207,6 +223,7 @@ void current_account_context_restore(AccountId id)
   }
   current_account_context.id = id;
   current_account_context.entry = &acct_table.entries[id];
+  current_account_context.address = acct_table.entries[id].address;
 }
 
 /* Reports whether storage updates may contribute to this account's post-state.
