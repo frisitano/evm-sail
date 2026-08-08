@@ -37,6 +37,12 @@ plus the generated sources extracted from the Sail model:
 | Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) | [`extractions/coq/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/src) |
 | Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) | [`extractions/python/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python/src) |
 
+All of these are produced by a
+[custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)
+(branch `evm-sail` of a Sail fork), which adds the bound-driven C
+specialization, the splice mechanism, and the proof-aware narrowing
+policies these extractions rely on.
+
 The Sail source these are extracted from is
 [`sail/`](https://github.com/frisitano/evm-sail/tree/main/sail); the
 optimized C refinements applied on top of it are

@@ -247,6 +247,11 @@ Rules that this campaign's failures made non-negotiable:
 
 ## Compiler work: landed and underway
 
+All of this lives in a [Sail fork](https://github.com/frisitano/sail/tree/evm-sail)
+(branch `evm-sail`); the repository resolves it through
+`zkvm/resolve_optimized_sail.sh`, and upstream Sail is not a supported
+substitute for these targets.
+
 | area | status |
 | --- | --- |
 | bound-driven C specialization (ranges → native types, semantic proofs, transitive clones) | landed |

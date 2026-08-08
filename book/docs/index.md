@@ -11,7 +11,9 @@ workbench for asking hard questions about the guests that prove it.
 
 One source defines the state transition function. From it we extract a
 reference implementation in C, proof objects for Lean and Coq, an
-executable Python rendering, and a research-centric optimised zkEVM guest.
+executable Python rendering, and a research-centric optimised zkEVM guest
+— through a [custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)
+that lowers the specification's semantic types to machine representations.
 
 ## What this is for
 
