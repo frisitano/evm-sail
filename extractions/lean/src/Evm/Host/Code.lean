@@ -65,63 +65,6 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules. -/
 
-/- Type quantifiers: _reclimit : Nat, table : Nat, fork : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
-  : Nat, pc : Nat, (code_valid_length pc), 0 ≤ code_dependentWitness0 ∧
-  0 ≤ code_dependentWitness1 ∧
-  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ fork ∧
-  fork ≤ 16, 0 ≤ table ∧ table ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
-def _rec_analyze_code_from (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) (table : Nat) (pc : Nat) (_reclimit : Nat) : SailM Unit := do
-  let code_dependentWitness0 := (code).1
-  let code_dependentWitness1 := ((code).2).1
-  let code := ((code).2).2
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      let position := pc
-      let code_len := code.len
-      if ((position <b code_len) : Bool)
-      then
-        (do
-          let opcode ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ position)
-          if ((opcode == 0x5B#8) : Bool)
-          then
-            (do
-              let marked ← do (jumpdest_table_mark table code_len position)
-              assert marked "JUMPDEST mark")
-          else (pure ())
-          let opcode_value := (BitVec.toNatInt opcode)
-          let step ← (( do
-            if (((96 ≤b opcode_value) && (opcode_value ≤b 127)) : Bool)
-            then (pure (opcode_value - 94))
-            else
-              (do
-                if ((fork ≥b Amsterdam) : Bool)
-                then
-                  (do
-                    let operation := (deep_stack_operation opcode_value)
-                    let immediate ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ (position + 1))
-                    let immediate_valid :=
-                      (deep_stack_operation_immediate_valid operation immediate)
-                    if (immediate_valid : Bool)
-                    then (pure 2)
-                    else (pure 1))
-                else (pure 1)) ) : SailM Nat )
-          if ((step <b (code_len - position)) : Bool)
-          then
-            (do
-              let added := (position + step)
-              (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table added _reclimit_pred))
-          else (pure ()))
-      else (pure ()))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
 /- Type quantifiers: table : Nat, fork : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 :
   Nat, pc : Nat, (code_valid_length pc), 0 ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
@@ -133,23 +76,58 @@ def analyze_code_from (code : (Sigma fun (k_off : Nat) =>
   let code_dependentWitness0 := (code).1
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
-  let _measure :=
-    (let code_len := code.len
-    let position := pc
-    (code_len -i position) : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table pc (_measure + 1))
+  let code_len := code.len
+  let scanning : Bool := true
+  let position : Nat := pc
+  let (position, scanning) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(code_len -i position)) (fun (position, scanning) => (pure (scanning && ((position <b code_len) : Bool)))) (position, scanning)
+      fun (position, scanning) => do
+        assert true "loop dummy assert"
+        let current := position
+        let opcode ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ current)
+        if ((opcode == 0x5B#8) : Bool)
+        then
+          (do
+            let marked ← do (jumpdest_table_mark table code_len current)
+            assert marked "JUMPDEST mark")
+        else (pure ())
+        let opcode_value := (BitVec.toNatInt opcode)
+        let step ← (( do
+          if (((96 ≤b opcode_value) && (opcode_value ≤b 127)) : Bool)
+          then (pure (opcode_value - 94))
+          else
+            (do
+              if ((fork ≥b Amsterdam) : Bool)
+              then
+                (do
+                  let operation := (deep_stack_operation opcode_value)
+                  let immediate ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ (current + 1))
+                  let immediate_valid := (deep_stack_operation_immediate_valid operation immediate)
+                  if (immediate_valid : Bool)
+                  then (pure 2)
+                  else (pure 1))
+              else (pure 1)) ) : SailM Nat )
+        let (position, scanning) : (Nat × Bool) :=
+          if ((step <b (code_len -i current)) : Bool)
+          then
+            (let position : Nat := (current + step)
+            (position, scanning))
+          else
+            (let scanning : Bool := false
+            (position, scanning))
+        (pure (position, scanning))
+    (pure loop_vars) ) : SailM (Nat × Bool) )
+  (pure ())
 
 /-- The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
 are data even when they contain `0x5b`. The completed bitmap remains a
 first-class Sail value; the host never scans opcodes. -/
-/- Type quantifiers: k_ex550302_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex550300_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550302_
-  ∧ k_ex550302_ ≤ 16 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550300_
+  ∧ k_ex550300_ ≤ 16 -/
 def analyze_code (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
@@ -165,12 +143,12 @@ def analyze_code (code : (Sigma fun (k_off : Nat) =>
       (pure table))
 
 /-- Analyzes and stores code, returning its content hash. -/
-/- Type quantifiers: k_ex550309_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex550307_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550309_
-  ∧ k_ex550309_ ≤ 16 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550307_
+  ∧ k_ex550307_ ≤ 16 -/
 def code_db_insert (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM (Vector (BitVec 8) 32) := do
   let code_dependentWitness0 := (code).1
@@ -234,7 +212,8 @@ def code_db_resolve (code_hash : (Vector (BitVec 8) 32)) : SailM (Sigma fun (k_o
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) := do
   if _sailIf0 : ((code_hash == KECCAK_EMPTY) : Bool) = true
   then
-    (pure (EMPTY_CODE : (Sigma fun (k_off : Nat) =>
+    (pure ((⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
       (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))))
   else
     (do

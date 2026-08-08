@@ -106,43 +106,43 @@ clears) are capped per EIP-3529.
 | `PER_AUTH_BASE` | `12500` | Per authorization (EIP-7702) |
 | `PER_EMPTY_ACCOUNT` | `25000` | Per authorization of a new account (EIP-7702) | -/
 
-def G_transaction : Nat := 21000
+abbrev G_transaction : Nat := 21000
 
-def G_txcreate : Nat := 32000
+abbrev G_txcreate : Nat := 32000
 
-def G_txdatazero : Nat := 4
+abbrev G_txdatazero : Nat := 4
 
-def G_txdatanonzero : Nat := 16
+abbrev G_txdatanonzero : Nat := 16
 
-def G_access_list_address : Nat := 2400
+abbrev G_access_list_address : Nat := 2400
 
-def G_access_list_storage_key : Nat := 1900
+abbrev G_access_list_storage_key : Nat := 1900
 
-def PER_AUTH_BASE : Nat := 12500
+abbrev PER_AUTH_BASE : Nat := 12500
 
-def PER_EMPTY_ACCOUNT : Nat := 25000
+abbrev PER_EMPTY_ACCOUNT : Nat := 25000
 
-def AMSTERDAM_TX_BASE : Nat := 12000
+abbrev AMSTERDAM_TX_BASE : Nat := 12000
 
-def AMSTERDAM_CREATE_ACCESS : Nat := 11000
+abbrev AMSTERDAM_CREATE_ACCESS : Nat := 11000
 
-def AMSTERDAM_COLD_ACCOUNT_ACCESS : Nat := 3000
+abbrev AMSTERDAM_COLD_ACCOUNT_ACCESS : Nat := 3000
 
-def AMSTERDAM_TX_VALUE_COST : Nat := 4244
+abbrev AMSTERDAM_TX_VALUE_COST : Nat := 4244
 
-def AMSTERDAM_TRANSFER_LOG_COST : Nat := 1756
+abbrev AMSTERDAM_TRANSFER_LOG_COST : Nat := 1756
 
-def AMSTERDAM_ACCESS_LIST_ADDRESS : Nat := 3000
+abbrev AMSTERDAM_ACCESS_LIST_ADDRESS : Nat := 3000
 
-def AMSTERDAM_ACCESS_LIST_SLOT : Nat := 3000
+abbrev AMSTERDAM_ACCESS_LIST_SLOT : Nat := 3000
 
-def AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : Nat := 1280
+abbrev AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : Nat := 1280
 
-def AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : Nat := 2048
+abbrev AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : Nat := 2048
 
-def AMSTERDAM_AUTH_BASE : Nat := 7816
+abbrev AMSTERDAM_AUTH_BASE : Nat := 7816
 
-def AMSTERDAM_CALLDATA_FLOOR_BYTE : Nat := 64
+abbrev AMSTERDAM_CALLDATA_FLOOR_BYTE : Nat := 64
 
 def undefined_IntrinsicGasCost (_ : Unit) : SailM IntrinsicGasCost := do
   (pure { execution := ← (undefined_nat ()),
@@ -315,7 +315,7 @@ def transaction_upfront_cost (max_fee : Nat) (gas_limit : Nat) (value : Nat) (ma
 
 /-- Computes transaction costs as mathematical naturals, narrowing only the
 externally observable word-valued results. -/
-/- Type quantifiers: k_ex553028_ : Nat, k_ex553027_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
+/- Type quantifiers: k_ex553026_ : Nat, k_ex553025_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
   : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7 : Nat, profile_dependentWitness6
   : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4 : Nat, profile_dependentWitness3
   : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1 : Nat, profile_dependentWitness0
@@ -400,8 +400,8 @@ externally observable word-valued results. -/
   profile_dependentWitness6 = (2 ^ 64 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
   profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553027_ ∧
-  k_ex553027_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex553028_ ∧ k_ex553028_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
+  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553025_ ∧
+  k_ex553025_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex553026_ ∧ k_ex553026_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
 def transaction_costs (profile : (Sigma fun (k_fork : Nat) =>
   (Sigma fun (k_target : Nat) =>
   (Sigma fun (k_maximum : Nat) =>
@@ -542,8 +542,7 @@ def transaction_gas_allowance_fields (value : Nat) (_total_limit : Nat) (regular
     if ((value <b regular_limit) : Bool)
     then value
     else regular_limit
-  { total := value,
-    regular := regular }
+  {  }
 
 /- Type quantifiers: value : Nat, total_limit : Nat, regular_limit : Nat, 0 ≤ value ∧
   0 ≤ regular_limit ∧ regular_limit ≤ total_limit ∧ total_limit ≤ block_gas_limit_bound -/
@@ -667,8 +666,8 @@ def process_auth (au : Authorization) : SailM Nat := do
 decoded authorization count proves this guard unreachable in valid input;
 spelling it at the narrowing boundary keeps proof extraction independent
 of the Coq backend's treatment of existential range indices. -/
-/- Type quantifiers: k_ex553096_ : Nat, k_ex553095_ : Nat, 0 ≤ k_ex553095_ ∧
-  k_ex553095_ ≤ 12500, 0 ≤ k_ex553096_ ∧ k_ex553096_ ≤ (12500 * 2 ^ 30) -/
+/- Type quantifiers: k_ex553094_ : Nat, k_ex553093_ : Nat, 0 ≤ k_ex553093_ ∧
+  k_ex553093_ ≤ 12500, 0 ≤ k_ex553094_ ∧ k_ex553094_ ≤ (12500 * 2 ^ 30) -/
 def authorization_refund_add (item : Nat) (accumulated : Nat) : SailM Nat := do
   let bound := (12500 *i (2 ^i 30))
   if ((accumulated ≤b (bound - item)) : Bool)
@@ -713,7 +712,7 @@ def process_auth_list (authorizations : PreparedAuthorizationList) : SailM Nat :
 execution-gas and state-gas components. Tuple-local signature and chain
 checks precede all authority-state reads; a valid tuple warms its authority
 before checking code and nonce, as required by EIP-7702. -/
-/- Type quantifiers: k_ex553101_ : Bool -/
+/- Type quantifiers: k_ex553099_ : Bool -/
 def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) : SailM Bool := SailME.run do
   let authority := au.authority
   let chain_id_is_zero := (word_is_zero au.chain_id)
@@ -786,7 +785,7 @@ def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)
   else (pure ())
   (pure true)
 
-/- Type quantifiers: _reclimit : Nat, k_ex553103_ : Bool, count : Nat, 0 ≤ count ∧
+/- Type quantifiers: _reclimit : Nat, k_ex553101_ : Bool, count : Nat, 0 ≤ count ∧
   count ≤ ((2 ^ 24) / 7816), 0 ≤ _reclimit -/
 def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (_reclimit : Nat) : SailM Bool := do
   match _reclimit with
@@ -812,7 +811,7 @@ def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationLi
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: k_ex553106_ : Bool, count : Nat, 0 ≤ count ∧ count ≤ ((2 ^ 24) / 7816) -/
+/- Type quantifiers: k_ex553104_ : Bool, count : Nat, 0 ≤ count ∧ count ≤ ((2 ^ 24) / 7816) -/
 def process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) : SailM Bool := do
   let _measure := (count : Int)
   if ((_measure <b 0) : Bool)
@@ -924,9 +923,9 @@ EIP-2930 transactions carry a single `gas_price`, passed as
 `(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
 an invalid sub-base-fee price (rejected later by validity) never
 underflows. -/
-/- Type quantifiers: k_ex553165_ : Nat, k_ex553164_ : Nat, k_ex553163_ : Nat, 0 ≤ k_ex553163_ ∧
-  k_ex553163_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex553164_ ∧ k_ex553164_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex553165_ ∧ k_ex553165_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex553163_ : Nat, k_ex553162_ : Nat, k_ex553161_ : Nat, 0 ≤ k_ex553161_ ∧
+  k_ex553161_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex553162_ ∧ k_ex553162_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex553163_ ∧ k_ex553163_ ≤ (2 ^ 256 - 1) -/
 def eff_gas_price_for (base_fee : Nat) (max_fee : Nat) (max_priority_fee : Nat) : (Nat × Nat) :=
   let max_fee_below_base := (word_ule max_fee base_fee)
   let price : Nat :=
@@ -1176,7 +1175,7 @@ def enter_transaction_frame (v : (Sigma fun (k_limit : Nat) =>
   (memory_reset ())
   (returndata_clear ())
   writeReg calldata EMPTY_CALLDATA
-  writeReg frame_code ((EMPTY_CODE).2).2
+  writeReg frame_code ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩
   writeReg frame_refund GAS_REFUND_ZERO
   writeReg frame_status (Running ())
 
@@ -1301,9 +1300,9 @@ def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat)
 from `(sender, nonce_before)`, fails outright on an address collision
 (all gas consumed, no initcode runs — EIP-684/EIP-7610), and
 otherwise deploys via the initcode path. -/
-/- Type quantifiers: k_ex553248_ : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553248_ ∧
-  k_ex553248_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex553246_ : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
+  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553246_ ∧
+  k_ex553246_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (nonce_before : Nat) : SailM Unit := do
   let tx_dependentWitness0 := (tx).1
@@ -1385,7 +1384,7 @@ runs a direct recipient precompile or interprets the selected code. At
 Amsterdam the preparation phase has already resolved and charged a
 recipient delegation; a delegated recipient never dispatches a precompile
 directly. -/
-/- Type quantifiers: k_ex553252_ : Bool, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
+/- Type quantifiers: k_ex553250_ : Bool, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
   tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9 -/
 def run_call_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (delegated : Bool) : SailM Unit := do

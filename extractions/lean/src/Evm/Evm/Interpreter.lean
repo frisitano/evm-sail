@@ -101,12 +101,12 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex552940_ : Nat, k_ex552939_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+/- Type quantifiers: k_ex552938_ : Nat, k_ex552937_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
   : Nat, 0 ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex552939_
-  ∧ k_ex552939_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552940_ ∧ k_ex552940_ ≤ 32 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex552937_
+  ∧ k_ex552937_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552938_ ∧ k_ex552938_ ≤ 32 -/
 def read_push (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
@@ -519,16 +519,13 @@ def interpret (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
               let (next_pc, next_top, next_mem, next_gas) ← do
                 (do
                     let dependentArg3 := (← readReg evm_memory)
-                    let publicResult ← (execute instruction fetched_pc (← readReg stack_top)
-                    dependentArg3 (← readReg gas_remaining))
-                    pure ((((fun (dependentValue0, dependentValue1, dependentValue2, dependentValue3) => (dependentValue0, dependentValue1, ⟨_, ⟨_, dependentValue2⟩⟩, dependentValue3)) (((fun (dependentValue0, dependentValue1, dependentValue2, dependentValue3) => (dependentValue0, dependentValue1, ((dependentValue2).2).2, dependentValue3)) (publicResult)))) : (Nat × (BitVec 64) × (Sigma
-                    fun (k_off : Nat) =>
-                    (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))) × Nat))))
+                    (execute instruction fetched_pc (← readReg stack_top) dependentArg3
+                    (← readReg gas_remaining)))
               writeReg pc next_pc
               writeReg stack_top next_top
               writeReg evm_memory next_mem
               writeReg gas_remaining next_gas
-              (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
+              (pure ((interpreting : Bool), (result : (Sigma fun (k_off : Nat) =>
                 (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))))))
           else
             (do
@@ -543,21 +540,21 @@ def interpret (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
                     (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : (Sigma fun
                     (k_off : Nat) => (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))
                   let interpreting : Bool := false
-                  (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
+                  (pure ((interpreting : Bool), (result : (Sigma fun (k_off : Nat) =>
                     (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))))))
                 | continuation =>
                   (do
                     (resume_frame continuation ⟨_, ⟨_, output⟩⟩)
-                    (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
+                    (pure ((interpreting : Bool), (result : (Sigma fun (k_off : Nat) =>
                       (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))))) ) : SailM
                 (Bool × (Sigma fun (k_off : Nat) =>
                 (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) )
-              (pure ((interpreting, result) : (Bool × (Sigma fun (k_off : Nat) =>
+              (pure ((interpreting : Bool), (result : (Sigma fun (k_off : Nat) =>
                 (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))))) ) : SailM
           (Bool × (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) )
         let call_tree_steps_remaining : Int := (call_tree_steps_remaining -i 1)
-        (pure ((call_tree_steps_remaining, interpreting, result) : (Int × Bool × (Sigma fun
+        (pure ((call_tree_steps_remaining : Int), (interpreting : Bool), (result : (Sigma fun
           (k_off : Nat) => (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))))
     (pure loop_vars) ) : SailM
     (Int × Bool × (Sigma fun (k_off : Nat) =>

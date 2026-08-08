@@ -71,7 +71,7 @@ The fixed offsets and lengths describe the canonical byte layouts accepted
 by each precompile; the field modulus and blob element count validate their
 respective algebraic inputs. -/
 
-def ACCELERATOR_INPUT_MAX : Nat := 2097152
+abbrev ACCELERATOR_INPUT_MAX : Nat := 2097152
 
 def FIELD_ELEMENTS_PER_BLOB : word :=
   (word_from_bits 0x0000000000000000000000000000000000000000000000000000000000001000#256)
@@ -79,55 +79,55 @@ def FIELD_ELEMENTS_PER_BLOB : word :=
 def BLS_MODULUS : word :=
   (word_from_bits 0x73EDA753299D7D483339D80809A1D80553BDA402FFFE5BFEFFFFFFFF00000001#256)
 
-def BLAKE2F_INPUT_LENGTH : Nat := 213
+abbrev BLAKE2F_INPUT_LENGTH : Nat := 213
 
-def BLAKE2F_FINAL_BLOCK_OFFSET : Nat := 212
+abbrev BLAKE2F_FINAL_BLOCK_OFFSET : Nat := 212
 
-def BLAKE2F_OUTPUT_LENGTH : Nat := DOUBLE_WORD_BYTE_LENGTH
+abbrev BLAKE2F_OUTPUT_LENGTH : Nat := 64
 
-def KZG_INPUT_LENGTH : Nat := 192
+abbrev KZG_INPUT_LENGTH : Nat := 192
 
-def KZG_COMMITMENT_OFFSET : Nat := 96
+abbrev KZG_COMMITMENT_OFFSET : Nat := 96
 
-def KZG_COMMITMENT_LENGTH : Nat := 48
+abbrev KZG_COMMITMENT_LENGTH : Nat := 48
 
-def BLS_FIELD_PADDING_LENGTH : Nat := 16
+abbrev BLS_FIELD_PADDING_LENGTH : Nat := 16
 
-def BLS_PADDED_FIELD_LENGTH : Nat := DOUBLE_WORD_BYTE_LENGTH
+abbrev BLS_PADDED_FIELD_LENGTH : Nat := 64
 
-def BLS_G1_POINT_LENGTH : Nat := 128
+abbrev BLS_G1_POINT_LENGTH : Nat := 128
 
-def BLS_G2_POINT_LENGTH : Nat := 256
+abbrev BLS_G2_POINT_LENGTH : Nat := 256
 
-def BLS_G2_FINAL_FIELD_OFFSET : Nat := 192
+abbrev BLS_G2_FINAL_FIELD_OFFSET : Nat := 192
 
-def BLS_G1_ADD_INPUT_LENGTH : Nat := 256
+abbrev BLS_G1_ADD_INPUT_LENGTH : Nat := 256
 
-def BLS_G1_MSM_ITEM_LENGTH : Nat := 160
+abbrev BLS_G1_MSM_ITEM_LENGTH : Nat := 160
 
-def BLS_G2_ADD_INPUT_LENGTH : Nat := 512
+abbrev BLS_G2_ADD_INPUT_LENGTH : Nat := 512
 
-def BLS_G2_MSM_ITEM_LENGTH : Nat := 288
+abbrev BLS_G2_MSM_ITEM_LENGTH : Nat := 288
 
-def BLS_PAIRING_ITEM_LENGTH : Nat := 384
+abbrev BLS_PAIRING_ITEM_LENGTH : Nat := 384
 
-def P256_INPUT_LENGTH : Nat := 160
+abbrev P256_INPUT_LENGTH : Nat := 160
 
-def BN254_PAIRING_ITEM_LENGTH : Nat := 192
+abbrev BN254_PAIRING_ITEM_LENGTH : Nat := 192
 
-def PRECOMPILE_WORD_LENGTH : Nat := WORD_BYTE_LENGTH
+abbrev PRECOMPILE_WORD_LENGTH : Nat := 32
 
-def PRECOMPILE_DOUBLE_WORD_LENGTH : Nat := DOUBLE_WORD_BYTE_LENGTH
+abbrev PRECOMPILE_DOUBLE_WORD_LENGTH : Nat := 64
 
-def PRECOMPILE_WORD_OFFSET : Nat := 32
+abbrev PRECOMPILE_WORD_OFFSET : Nat := 32
 
-def PRECOMPILE_DOUBLE_WORD_OFFSET : Nat := 64
+abbrev PRECOMPILE_DOUBLE_WORD_OFFSET : Nat := 64
 
 def ECRECOVER_S_OFFSET : source_pointer := 96
 
-def TWO_COMPONENTS : Nat := 2
+abbrev TWO_COMPONENTS : Nat := 2
 
-def BLS_G2_POINT_OFFSET : Nat := 128
+abbrev BLS_G2_POINT_OFFSET : Nat := 128
 
 /-- A successful result carrying `output`. -/
 /- Type quantifiers: output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
@@ -147,7 +147,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex552583_ : Bool, output_len : Nat, (source_valid_length output_len) -/
+/- Type quantifiers: k_ex552581_ : Bool, output_len : Nat, (source_valid_length output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then
@@ -164,7 +164,7 @@ def copied_result (data : CalldataSlice) : SailM PrecompileResult := do
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex552586_ : Bool -/
+/- Type quantifiers: k_ex552584_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   let result_word :=
     if (value : Bool)

@@ -567,9 +567,14 @@ def memory_access_relation (k_off : Int) (k_len : Int) (k_required : Int) : Prop
 /-- The indexed fields of an EVM memory range. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (memory_valid_range k_off k_len) -/
 structure MemoryRangeFields (k_off : Nat) (k_len : Nat) where
-  off : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def MemoryRangeFields.off {k_off : Nat} {k_len : Nat} (_ : (MemoryRangeFields k_off k_len))
+  : Nat :=
+  k_off
+@[simp] def MemoryRangeFields.len {k_off : Nat} {k_len : Nat} (_ : (MemoryRangeFields k_off k_len))
+  : Nat :=
+  k_len
 
 /-- A memory range retaining its offset, length, and containment proof. -/
 abbrev MemoryRange :=
@@ -580,8 +585,11 @@ contributes to the shared expansion plan. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, k_required : Nat, (memory_access_relation k_off k_len k_required) -/
 structure MemoryAccessFields (k_off : Nat) (k_len : Nat) (k_required : Nat) where
   range : (MemoryRangeFields k_off k_len)
-  required_size : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def MemoryAccessFields.required_size {k_off : Nat} {k_len : Nat} {k_required : Nat}
+  (_ : (MemoryAccessFields k_off k_len k_required)) : Nat :=
+  k_required
 
 /-- A memory operand retaining its range/endpoint relationship existentially. -/
 abbrev MemoryAccess :=
@@ -598,6 +606,11 @@ abbrev code_length := Nat
 /-- The representation invariant required of executable code, including
 enough cursor headroom for a complete PUSH32 immediate. -/
 def code_valid_length (k_len : Int) : Prop := 0 ≤ k_len ∧ (k_len + 32) ≤ code_region_bound
+
+/-- An opcode-aligned scan cursor: a code position that still carries the
+PUSH32 immediate headroom, so reading past the current opcode stays in
+the code region. -/
+abbrev code_scan_position := Nat
 
 /-- The maximum block gas limit admitted by the execution-payload SSZ
 `uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
@@ -748,9 +761,14 @@ abbrev transaction_refund_divisor := Nat
 by the nominal type rather than a runtime field. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (stateless_input_valid_range k_off k_len) -/
 structure StatelessInputSliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def StatelessInputSliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (StatelessInputSliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def StatelessInputSliceFields.len {k_off : Nat} {k_len : Nat}
+  (_ : (StatelessInputSliceFields k_off k_len)) : Nat :=
+  k_len
 
 /-- A stateless-input range with its coordinate and length packed
 existentially. -/
@@ -773,9 +791,14 @@ abbrev StatelessInputSliceAtMost (k_maximum : Int) :=
 the nominal type rather than a runtime field. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (scratch_valid_range k_off k_len) -/
 structure ScratchSliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def ScratchSliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (ScratchSliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def ScratchSliceFields.len {k_off : Nat} {k_len : Nat}
+  (_ : (ScratchSliceFields k_off k_len)) : Nat :=
+  k_len
 
 /-- A scratch-arena range with its coordinate and length packed
 existentially. -/
@@ -796,9 +819,14 @@ optimized ABI), so a suspended parent's range remains valid while a child
 frame is active. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (memory_region_valid_range k_off k_len) -/
 structure EvmMemorySliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def EvmMemorySliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (EvmMemorySliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def EvmMemorySliceFields.len {k_off : Nat} {k_len : Nat}
+  (_ : (EvmMemorySliceFields k_off k_len)) : Nat :=
+  k_len
 
 /-- An EVM-memory range with its coordinate and length packed
 existentially. -/
@@ -816,9 +844,14 @@ abbrev EvmMemorySliceAtLeast (k_minimum : Int) :=
 /-- A range in the content-addressed executable-code arena. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len) -/
 structure CodeRegionSliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def CodeRegionSliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (CodeRegionSliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def CodeRegionSliceFields.len {k_off : Nat} {k_len : Nat}
+  (_ : (CodeRegionSliceFields k_off k_len)) : Nat :=
+  k_len
 
 /-- A code-region range with its coordinate and length packed
 existentially. -/
@@ -828,9 +861,14 @@ abbrev CodeRegionSlice :=
 /-- A range in the transaction-log data arena. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (log_data_valid_range k_off k_len) -/
 structure LogDataSliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def LogDataSliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (LogDataSliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def LogDataSliceFields.len {k_off : Nat} {k_len : Nat}
+  (_ : (LogDataSliceFields k_off k_len)) : Nat :=
+  k_len
 
 /-- A log-data range with its coordinate and length packed existentially. -/
 abbrev LogDataSlice :=
@@ -843,9 +881,14 @@ abbrev LogDataSliceLength (k_required : Int) :=
 /-- A range in the frame-output buffer. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (output_region_valid_range k_off k_len) -/
 structure OutputSliceFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def OutputSliceFields.bytes {k_off : Nat} {k_len : Nat}
+  (_ : (OutputSliceFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def OutputSliceFields.len {k_off : Nat} {k_len : Nat} (_ : (OutputSliceFields k_off k_len))
+  : Nat :=
+  k_len
 
 /-- A frame-output range with its coordinate and length packed
 existentially. -/
@@ -1051,10 +1094,13 @@ code hash remains the stable code-DB key. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len) ∧
   (code_valid_length k_len) -/
 structure CodeFields (k_off : Nat) (k_len : Nat) where
-  bytes : Nat
-  len : Nat
   jumpdests : jump_table_index
   deriving BEq, Inhabited, Repr
+
+@[simp] def CodeFields.bytes {k_off : Nat} {k_len : Nat} (_ : (CodeFields k_off k_len)) : Nat :=
+  k_off
+@[simp] def CodeFields.len {k_off : Nat} {k_len : Nat} (_ : (CodeFields k_off k_len)) : Nat :=
+  k_len
 
 /-- Existential executable-code value whose concrete byte address and length
 remain correlated inside `CodeFields`. -/
@@ -1090,8 +1136,11 @@ encoding and its content are statically contained by the source slice. -/
 structure RlpFieldRef (k_source_off : Nat) (k_source_len : Nat) (k_content_len : Nat) where
   source : (StatelessInputSliceFields k_source_off k_source_len)
   is_list : Bool
-  content_len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def RlpFieldRef.content_len {k_source_off : Nat} {k_source_len : Nat} {k_content_len : Nat}
+  (_ : (RlpFieldRef k_source_off k_source_len k_content_len)) : Nat :=
+  k_content_len
 
 /-- A one-pass RLP cursor is the unconsumed suffix of its source. Decoding
 yields a field whose length witnesses a valid advance; the caller owns the
@@ -1106,8 +1155,11 @@ acquiring a runtime byte-source tag. -/
 structure ScratchRlpFieldRef (k_source_off : Nat) (k_source_len : Nat) (k_content_len : Nat) where
   source : (ScratchSliceFields k_source_off k_source_len)
   is_list : Bool
-  content_len : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def ScratchRlpFieldRef.content_len {k_source_off : Nat} {k_source_len : Nat}
+  {k_content_len : Nat} (_ : (ScratchRlpFieldRef k_source_off k_source_len k_content_len)) : Nat :=
+  k_content_len
 
 /-- A one-pass RLP cursor over a scratch-arena node encoding, nominally
 distinct from the stateless-input cursor. -/
@@ -1215,10 +1267,17 @@ existential indices retain the selected schedule's equations wherever the
 value is consumed. -/
 /- Type quantifiers: k_target : Nat, k_maximum : Nat, k_denominator : Nat, (blob_schedule_parameters k_target k_maximum k_denominator) -/
 structure BlobScheduleFields (k_target : Nat) (k_maximum : Nat) (k_denominator : Nat) where
-  target : Nat
-  max : Nat
-  base_fee_update_fraction : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def BlobScheduleFields.target {k_target : Nat} {k_maximum : Nat} {k_denominator : Nat}
+  (_ : (BlobScheduleFields k_target k_maximum k_denominator)) : Nat :=
+  k_target
+@[simp] def BlobScheduleFields.max {k_target : Nat} {k_maximum : Nat} {k_denominator : Nat}
+  (_ : (BlobScheduleFields k_target k_maximum k_denominator)) : Nat :=
+  k_maximum
+@[simp] def BlobScheduleFields.base_fee_update_fraction {k_target : Nat} {k_maximum : Nat}
+  {k_denominator : Nat} (_ : (BlobScheduleFields k_target k_maximum k_denominator)) : Nat :=
+  k_denominator
 
 /-- An admitted blob schedule with its three parameters packed
 existentially. -/
@@ -1361,16 +1420,65 @@ structure ProtocolProfileFields
   (k_fork : Nat) (k_target : Nat) (k_maximum : Nat) (k_denominator : Nat) (k_code_limit : Nat) (k_initcode_limit
   : Nat) (k_transaction_total_gas_limit : Nat) (k_transaction_regular_gas_limit : Nat) (k_transaction_blob_limit
   : Nat) (k_refund_divisor : Nat) where
-  fork : Nat
   blob_schedule : (BlobScheduleFields k_target k_maximum k_denominator)
-  excess_blob_gas_limit : (profile_excess_blob_gas_limit k_fork k_target k_maximum k_denominator)
-  deployed_code_size_limit : Nat
-  initcode_size_limit : Nat
-  transaction_total_gas_limit : Nat
-  transaction_regular_gas_limit : Nat
-  transaction_blob_limit : Nat
-  refund_divisor : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def ProtocolProfileFields.fork {k_fork : Nat} {k_target : Nat} {k_maximum : Nat}
+  {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_fork
+@[simp] def ProtocolProfileFields.excess_blob_gas_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : (profile_excess_blob_gas_limit k_fork k_target k_maximum k_denominator) :=
+  (if ( k_fork < 11  : Bool) then 0 else (256 * k_denominator + (k_maximum - k_target) * 2 ^ 17))
+@[simp] def ProtocolProfileFields.deployed_code_size_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_code_limit
+@[simp] def ProtocolProfileFields.initcode_size_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_initcode_limit
+@[simp] def ProtocolProfileFields.transaction_total_gas_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_transaction_total_gas_limit
+@[simp] def ProtocolProfileFields.transaction_regular_gas_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_transaction_regular_gas_limit
+@[simp] def ProtocolProfileFields.transaction_blob_limit {k_fork : Nat} {k_target : Nat}
+  {k_maximum : Nat} {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_transaction_blob_limit
+@[simp] def ProtocolProfileFields.refund_divisor {k_fork : Nat} {k_target : Nat} {k_maximum : Nat}
+  {k_denominator : Nat} {k_code_limit : Nat} {k_initcode_limit : Nat}
+  {k_transaction_total_gas_limit : Nat} {k_transaction_regular_gas_limit : Nat}
+  {k_transaction_blob_limit : Nat} {k_refund_divisor : Nat}
+  (_ : (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))
+  : Nat :=
+  k_refund_divisor
 
 /-- A protocol profile with its parameter tuple packed existentially;
 unpacking recovers the admitted combination's equations. -/
@@ -1414,12 +1522,38 @@ fixed system-call limits. -/
 structure GasLimitsFields
   (k_block_limit : Nat) (k_profile_total_limit : Nat) (k_profile_regular_limit : Nat) (k_transaction_total_limit
   : Nat) (k_transaction_regular_limit : Nat) where
-  block_limit : Nat
-  transaction_total_limit : Nat
-  transaction_regular_limit : Nat
-  system_regular_limit : Nat
-  system_state_limit : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def GasLimitsFields.block_limit {k_block_limit : Nat} {k_profile_total_limit : Nat}
+  {k_profile_regular_limit : Nat} {k_transaction_total_limit : Nat}
+  {k_transaction_regular_limit : Nat}
+  (_ : (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))
+  : Nat :=
+  k_block_limit
+@[simp] def GasLimitsFields.transaction_total_limit {k_block_limit : Nat}
+  {k_profile_total_limit : Nat} {k_profile_regular_limit : Nat} {k_transaction_total_limit : Nat}
+  {k_transaction_regular_limit : Nat}
+  (_ : (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))
+  : Nat :=
+  k_transaction_total_limit
+@[simp] def GasLimitsFields.transaction_regular_limit {k_block_limit : Nat}
+  {k_profile_total_limit : Nat} {k_profile_regular_limit : Nat} {k_transaction_total_limit : Nat}
+  {k_transaction_regular_limit : Nat}
+  (_ : (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))
+  : Nat :=
+  k_transaction_regular_limit
+@[simp] def GasLimitsFields.system_regular_limit {k_block_limit : Nat} {k_profile_total_limit : Nat}
+  {k_profile_regular_limit : Nat} {k_transaction_total_limit : Nat}
+  {k_transaction_regular_limit : Nat}
+  (_ : (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))
+  : Nat :=
+  30000000
+@[simp] def GasLimitsFields.system_state_limit {k_block_limit : Nat} {k_profile_total_limit : Nat}
+  {k_profile_regular_limit : Nat} {k_transaction_total_limit : Nat}
+  {k_transaction_regular_limit : Nat}
+  (_ : (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))
+  : Nat :=
+  0
 
 /-- Gas limits with their five indices packed existentially. -/
 abbrev GasLimits :=
@@ -1697,8 +1831,11 @@ derive refund bounds from the number of admitted tuples. -/
 /- Type quantifiers: k_count : Nat, 0 ≤ k_count ∧ k_count ≤ transaction_length_bound -/
 structure AuthorizationListRefFields (k_count : Nat) where
   encoded : StatelessInputSlice
-  count : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def AuthorizationListRefFields.count {k_count : Nat}
+  (_ : (AuthorizationListRefFields k_count)) : Nat :=
+  k_count
 
 /-- An authorization-list reference packing its admitted tuple count
 existentially. -/
@@ -1810,11 +1947,21 @@ structure ReceiptFields
   Nat) where
   tx_type : TxType
   success : Bool
-  gas_used : Nat
-  execution_gas : Nat
-  state_gas : Nat
   logs : LogSeriesRef
   deriving BEq, Inhabited, Repr
+
+@[simp] def ReceiptFields.gas_used {k_limit : Nat} {k_regular_limit : Nat} {k_gas_used : Nat}
+  {k_execution_gas : Nat} {k_state_gas : Nat}
+  (_ : (ReceiptFields k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas)) : Nat :=
+  k_gas_used
+@[simp] def ReceiptFields.execution_gas {k_limit : Nat} {k_regular_limit : Nat} {k_gas_used : Nat}
+  {k_execution_gas : Nat} {k_state_gas : Nat}
+  (_ : (ReceiptFields k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas)) : Nat :=
+  k_execution_gas
+@[simp] def ReceiptFields.state_gas {k_limit : Nat} {k_regular_limit : Nat} {k_gas_used : Nat}
+  {k_execution_gas : Nat} {k_state_gas : Nat}
+  (_ : (ReceiptFields k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas)) : Nat :=
+  k_state_gas
 
 /-- A receipt retaining the transaction limits that bounded each gas
 contribution. -/
@@ -1920,9 +2067,14 @@ ordinary EVM execution. -/
 /- Type quantifiers: k_total : Nat, k_regular : Nat, 0 ≤ k_regular ∧
   k_regular ≤ k_total ∧ k_total ≤ block_gas_limit_bound -/
 structure TransactionGasAllowanceFields (k_total : Nat) (k_regular : Nat) where
-  total : Nat
-  regular : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def TransactionGasAllowanceFields.total {k_total : Nat} {k_regular : Nat}
+  (_ : (TransactionGasAllowanceFields k_total k_regular)) : Nat :=
+  k_total
+@[simp] def TransactionGasAllowanceFields.regular {k_total : Nat} {k_regular : Nat}
+  (_ : (TransactionGasAllowanceFields k_total k_regular)) : Nat :=
+  k_regular
 
 /-- A transaction gas allowance with existentially hidden total and regular
 budgets. -/
@@ -1956,14 +2108,50 @@ transaction conservation relation. -/
 structure TransactionInitialGasFields
   (k_total : Nat) (k_regular : Nat) (k_intrinsic_execution : Nat) (k_intrinsic_state : Nat) (k_calldata_floor
   : Nat) (k_execution : Nat) (k_state : Nat) where
-  admitted_limit : Nat
-  regular_limit : Nat
-  intrinsic_execution : Nat
-  intrinsic_state : Nat
-  calldata_floor : Nat
-  execution_remaining : Nat
-  state_remaining : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def TransactionInitialGasFields.admitted_limit {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_total
+@[simp] def TransactionInitialGasFields.regular_limit {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_regular
+@[simp] def TransactionInitialGasFields.intrinsic_execution {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_intrinsic_execution
+@[simp] def TransactionInitialGasFields.intrinsic_state {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_intrinsic_state
+@[simp] def TransactionInitialGasFields.calldata_floor {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_calldata_floor
+@[simp] def TransactionInitialGasFields.execution_remaining {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_execution
+@[simp] def TransactionInitialGasFields.state_remaining {k_total : Nat} {k_regular : Nat}
+  {k_intrinsic_execution : Nat} {k_intrinsic_state : Nat} {k_calldata_floor : Nat}
+  {k_execution : Nat} {k_state : Nat}
+  (_ : (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))
+  : Nat :=
+  k_state
 
 /-- The initial gas state with every conserved quantity hidden
 existentially. -/
@@ -2063,12 +2251,33 @@ transaction admission and conservation proof. -/
 structure TxFrameGasSnapshotFields
   (k_limit : Nat) (k_regular : Nat) (k_calldata_floor : Nat) (k_remaining : Nat) (k_state_used : Nat)
   where
-  admitted_limit : Nat
-  regular_limit : Nat
-  calldata_floor : Nat
-  remaining : Nat
-  state_used : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def TxFrameGasSnapshotFields.admitted_limit {k_limit : Nat} {k_regular : Nat}
+  {k_calldata_floor : Nat} {k_remaining : Nat} {k_state_used : Nat}
+  (_ : (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used)) : Nat
+  :=
+  k_limit
+@[simp] def TxFrameGasSnapshotFields.regular_limit {k_limit : Nat} {k_regular : Nat}
+  {k_calldata_floor : Nat} {k_remaining : Nat} {k_state_used : Nat}
+  (_ : (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used)) : Nat
+  :=
+  k_regular
+@[simp] def TxFrameGasSnapshotFields.calldata_floor {k_limit : Nat} {k_regular : Nat}
+  {k_calldata_floor : Nat} {k_remaining : Nat} {k_state_used : Nat}
+  (_ : (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used)) : Nat
+  :=
+  k_calldata_floor
+@[simp] def TxFrameGasSnapshotFields.remaining {k_limit : Nat} {k_regular : Nat}
+  {k_calldata_floor : Nat} {k_remaining : Nat} {k_state_used : Nat}
+  (_ : (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used)) : Nat
+  :=
+  k_remaining
+@[simp] def TxFrameGasSnapshotFields.state_used {k_limit : Nat} {k_regular : Nat}
+  {k_calldata_floor : Nat} {k_remaining : Nat} {k_state_used : Nat}
+  (_ : (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used)) : Nat
+  :=
+  k_state_used
 
 /-- A top-level frame gas snapshot with existentially hidden gas totals. -/
 abbrev TxFrameGasSnapshot :=
@@ -2891,10 +3100,17 @@ header gas limit. -/
 /- Type quantifiers: k_limit : Nat, k_execution : Nat, k_state : Nat, k_receipts : Nat, (block_gas_usage_relation k_limit k_execution k_state k_receipts) -/
 structure BlockGasUsageFields (k_limit : Nat) (k_execution : Nat) (k_state : Nat) (k_receipts : Nat)
   where
-  execution : Nat
-  state : Nat
-  receipts : Nat
   deriving BEq, Inhabited, Repr
+
+@[simp] def BlockGasUsageFields.execution {k_limit : Nat} {k_execution : Nat} {k_state : Nat}
+  {k_receipts : Nat} (_ : (BlockGasUsageFields k_limit k_execution k_state k_receipts)) : Nat :=
+  k_execution
+@[simp] def BlockGasUsageFields.state {k_limit : Nat} {k_execution : Nat} {k_state : Nat}
+  {k_receipts : Nat} (_ : (BlockGasUsageFields k_limit k_execution k_state k_receipts)) : Nat :=
+  k_state
+@[simp] def BlockGasUsageFields.receipts {k_limit : Nat} {k_execution : Nat} {k_state : Nat}
+  {k_receipts : Nat} (_ : (BlockGasUsageFields k_limit k_execution k_state k_receipts)) : Nat :=
+  k_receipts
 
 /-- A block gas accumulator existentially hiding its current totals while
 retaining their relationship to the concrete header limit. -/

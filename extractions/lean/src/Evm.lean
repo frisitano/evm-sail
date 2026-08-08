@@ -70,7 +70,7 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg k_parent_state_root ZERO_HASH
   writeReg k_n_headers 0
   writeReg k_chain_id 1
-  writeReg k_execution_profile (((((((((((((DEFAULT_EXECUTION_PROFILE).2).2).2).2).2).2).2).2).2).2).2).2).2
+  writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (((((((((((((DEFAULT_EXECUTION_PROFILE).2).2).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   writeReg k_header { number := 0,
                       timestamp := 0,
                       extra_data := ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩,
@@ -100,7 +100,7 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg frame_status (Running ())
   writeReg message DEFAULT_MESSAGE
   writeReg call_depth 0
-  writeReg frame_code ((EMPTY_CODE).2).2
+  writeReg frame_code ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩
   writeReg calldata EMPTY_CALLDATA
   writeReg returndata ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩
   writeReg evm_memory ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩

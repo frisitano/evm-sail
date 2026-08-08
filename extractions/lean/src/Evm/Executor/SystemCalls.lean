@@ -85,61 +85,61 @@ The deposit offsets describe the ABI-encoded `DepositEvent` payload, while
 `SYSTEM_CALL_INPUT_LENGTH` is the fixed input length of each block-start
 system call. -/
 
-def SYSTEM_CALL_INPUT_LENGTH : Nat := WORD_BYTE_LENGTH
+abbrev SYSTEM_CALL_INPUT_LENGTH : Nat := 32
 
-def DEPOSIT_EVENT_DATA_LENGTH : Nat := 576
+abbrev DEPOSIT_EVENT_DATA_LENGTH : Nat := 576
 
-def DEPOSIT_PUBKEY_HEAD : Nat := 0
+abbrev DEPOSIT_PUBKEY_HEAD : Nat := 0
 
-def DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD : Nat := 32
+abbrev DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD : Nat := 32
 
-def DEPOSIT_AMOUNT_HEAD : Nat := 64
+abbrev DEPOSIT_AMOUNT_HEAD : Nat := 64
 
-def DEPOSIT_SIGNATURE_HEAD : Nat := 96
+abbrev DEPOSIT_SIGNATURE_HEAD : Nat := 96
 
-def DEPOSIT_INDEX_HEAD : Nat := 128
+abbrev DEPOSIT_INDEX_HEAD : Nat := 128
 
-def DEPOSIT_PUBKEY_LENGTH_WORD : Nat := 160
+abbrev DEPOSIT_PUBKEY_LENGTH_WORD : Nat := 160
 
-def DEPOSIT_PUBKEY_DATA : Nat := 192
+abbrev DEPOSIT_PUBKEY_DATA : Nat := 192
 
-def DEPOSIT_PUBKEY_LENGTH : Nat := 48
+abbrev DEPOSIT_PUBKEY_LENGTH : Nat := 48
 
-def DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD : Nat := 256
+abbrev DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD : Nat := 256
 
-def DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA : Nat := 288
+abbrev DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA : Nat := 288
 
-def DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH : Nat := WORD_BYTE_LENGTH
+abbrev DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH : Nat := 32
 
-def DEPOSIT_AMOUNT_LENGTH_WORD : Nat := 320
+abbrev DEPOSIT_AMOUNT_LENGTH_WORD : Nat := 320
 
-def DEPOSIT_AMOUNT_DATA : Nat := 352
+abbrev DEPOSIT_AMOUNT_DATA : Nat := 352
 
-def DEPOSIT_AMOUNT_LENGTH : Nat := EIGHT_BYTE_LENGTH
+abbrev DEPOSIT_AMOUNT_LENGTH : Nat := 8
 
-def DEPOSIT_SIGNATURE_LENGTH_WORD : Nat := 384
+abbrev DEPOSIT_SIGNATURE_LENGTH_WORD : Nat := 384
 
-def DEPOSIT_SIGNATURE_DATA : Nat := 416
+abbrev DEPOSIT_SIGNATURE_DATA : Nat := 416
 
-def DEPOSIT_SIGNATURE_LENGTH : Nat := 96
+abbrev DEPOSIT_SIGNATURE_LENGTH : Nat := 96
 
-def DEPOSIT_INDEX_LENGTH_WORD : Nat := 512
+abbrev DEPOSIT_INDEX_LENGTH_WORD : Nat := 512
 
-def DEPOSIT_INDEX_DATA : Nat := 544
+abbrev DEPOSIT_INDEX_DATA : Nat := 544
 
-def DEPOSIT_INDEX_LENGTH : Nat := EIGHT_BYTE_LENGTH
+abbrev DEPOSIT_INDEX_LENGTH : Nat := 8
 
-def DEPOSIT_REQUEST_LENGTH : Nat := 192
+abbrev DEPOSIT_REQUEST_LENGTH : Nat := 192
 
-def DEPOSIT_REQUEST_PUBKEY : Nat := 0
+abbrev DEPOSIT_REQUEST_PUBKEY : Nat := 0
 
-def DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS : Nat := 48
+abbrev DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS : Nat := 48
 
-def DEPOSIT_REQUEST_AMOUNT : Nat := 80
+abbrev DEPOSIT_REQUEST_AMOUNT : Nat := 80
 
-def DEPOSIT_REQUEST_SIGNATURE : Nat := 88
+abbrev DEPOSIT_REQUEST_SIGNATURE : Nat := 88
 
-def DEPOSIT_REQUEST_INDEX : Nat := 184
+abbrev DEPOSIT_REQUEST_INDEX : Nat := 184
 
 /-- Enters a top-level protocol system-call frame. The caller has already
 made a fresh memory frame and, for a word input, frozen the
@@ -187,23 +187,14 @@ def system_call (tgt : (Vector (BitVec 8) 20)) (input : (Vector (BitVec 8) 32)) 
       let (_, expanded_memory) ← do
         (do
             let dependentArg0 := (← readReg evm_memory)
-            let publicResult ← (memory_expand_to dependentArg0 ((input_range).2).2.len)
-            pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, ⟨_, ⟨_, dependentValue1⟩⟩)) (((fun (dependentValue0, dependentValue1) => (((dependentValue0).2).2, ((dependentValue1).2).2)) (publicResult)))) : ((Sigma
-            fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))) × (Sigma
-            fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))))))
+            (memory_expand_to dependentArg0 ((input_range).2).2.len))
       writeReg evm_memory expanded_memory
       let input_word := (hash_to_word input)
       (mem_store_word ((input_range).2).2.off input_word)
       let (input_slice, accessed_memory) ← do
         (do
             let dependentArg0 := (← readReg evm_memory)
-            let publicResult ← (active_memory_slice dependentArg0 ((input_range).2).2.off
-            ((input_range).2).2.len)
-            pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, ⟨_, ⟨_, dependentValue1⟩⟩)) (((fun (dependentValue0, dependentValue1) => (((dependentValue0).2).2, ((dependentValue1).2).2)) (publicResult)))) : ((Sigma
-            fun (k_syn_off : Nat) =>
-            (Sigma fun (k_syn_len : Nat) => (EvmMemorySliceFields k_syn_off k_syn_len))) × (Sigma
-            fun (k_syn_off : Nat) =>
-            (Sigma fun (k_syn_len : Nat) => (EvmMemorySliceFields k_syn_off k_syn_len)))))))
+            (active_memory_slice dependentArg0 ((input_range).2).2.off ((input_range).2).2.len))
       writeReg evm_memory accessed_memory
       let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
       let memory_input := (evm_memory_slice ((input_slice).2).2.bytes ((input_slice).2).2.len)
@@ -298,7 +289,8 @@ def authenticate_deposit_request (data : (Sigma fun (k_off : Nat) =>
   let ⟨_, data⟩ ← (( do
     if _sailIf0 : ((data.len == DEPOSIT_EVENT_DATA_LENGTH) : Bool) = true
     then
-      (pure ((⟨_, data⟩ : (Sigma fun (expected_dependentWitness0 : Nat) =>
+      (pure ((⟨_, (cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) (data))⟩ : (Sigma
+        fun (expected_dependentWitness0 : Nat) =>
         (LogDataSliceFields expected_dependentWitness0 576))) : (Sigma fun
         (expected_dependentWitness0 : Nat) => (LogDataSliceFields expected_dependentWitness0 576))))
     else
@@ -412,9 +404,9 @@ def authenticate_deposit_logs (logs : LogSeriesRef) (expected : (Sigma fun (k_of
       fun (offset, remaining) => do
         assert true "loop dummy assert"
         let index ← do (log_store_index_add logs.start offset)
-        let matches ← do (deposit_log_matches index)
+        let matches' ← do (deposit_log_matches index)
         let ⟨_, ⟨_, remaining⟩⟩ ← (( do
-          if _sailIf0 : (matches : Bool) = true
+          if _sailIf0 : (matches' : Bool) = true
           then
             (do
               let ⟨_, ⟨_, data⟩⟩ ← do (read_log_data index)
@@ -428,10 +420,10 @@ def authenticate_deposit_logs (logs : LogSeriesRef) (expected : (Sigma fun (k_of
           (Sigma fun (expected_dependentWitness1 : Nat) =>
           (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))) )
         let offset ← (log_store_index_increment offset)
-        (pure ((((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) ((offset, remaining))) : (Nat × (Sigma
-          fun (expected_dependentWitness0 : Nat) =>
+        (pure ((offset : Nat), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma fun
+          (expected_dependentWitness0 : Nat) =>
           (Sigma fun (expected_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))))) : (Nat × (Sigma
+          (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1)))) : (Sigma
           fun (expected_dependentWitness0 : Nat) =>
           (Sigma fun (expected_dependentWitness1 : Nat) =>
           (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))))))
@@ -455,9 +447,9 @@ def validate_request_stream (tgt : (Vector (BitVec 8) 20)) (expected : (Sigma fu
   let expected_dependentWitness1 := ((expected).2).1
   let expected := ((expected).2).2
   let ⟨_, ⟨_, dequeued⟩⟩ ← do (system_call_checked tgt)
-  let matches ← do
+  let matches' ← do
     (scratch_input_slices_equal ⟨_, ⟨_, dequeued⟩⟩ ⟨_, ⟨_, expected⟩⟩)
-  let mismatch := (! matches)
+  let mismatch := (! matches')
   if (mismatch : Bool)
   then (fatal_error InvalidExecutionRequests)
   else (pure ())

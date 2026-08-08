@@ -68,53 +68,53 @@ precomputed zero root at that depth, or the hash of its two children. Source
 references are indexed only when recursion reaches a live leaf, so no leaf
 list or explicit Merkle frontier is materialized. -/
 
-def HTR_BYTE_LIST_LIMIT : Nat := 1073741824
+abbrev HTR_BYTE_LIST_LIMIT : Nat := 1073741824
 
-def HTR_DEPOSIT_LENGTH : Nat := 192
+abbrev HTR_DEPOSIT_LENGTH : Nat := 192
 
-def HTR_DEPOSIT_PUBKEY : Nat := 0
+abbrev HTR_DEPOSIT_PUBKEY : Nat := 0
 
-def HTR_DEPOSIT_PUBKEY_LENGTH : Nat := 48
+abbrev HTR_DEPOSIT_PUBKEY_LENGTH : Nat := 48
 
-def HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS : Nat := 48
+abbrev HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS : Nat := 48
 
-def HTR_DEPOSIT_AMOUNT : Nat := 80
+abbrev HTR_DEPOSIT_AMOUNT : Nat := 80
 
-def HTR_DEPOSIT_SIGNATURE : Nat := 88
+abbrev HTR_DEPOSIT_SIGNATURE : Nat := 88
 
-def HTR_DEPOSIT_SIGNATURE_LENGTH : Nat := 96
+abbrev HTR_DEPOSIT_SIGNATURE_LENGTH : Nat := 96
 
-def HTR_DEPOSIT_INDEX : Nat := 184
+abbrev HTR_DEPOSIT_INDEX : Nat := 184
 
-def HTR_WITHDRAWAL_REQUEST_LENGTH : Nat := 76
+abbrev HTR_WITHDRAWAL_REQUEST_LENGTH : Nat := 76
 
-def HTR_REQUEST_SOURCE_ADDRESS : Nat := 0
+abbrev HTR_REQUEST_SOURCE_ADDRESS : Nat := 0
 
-def HTR_REQUEST_SOURCE_PUBKEY : Nat := 20
+abbrev HTR_REQUEST_SOURCE_PUBKEY : Nat := 20
 
-def HTR_REQUEST_PUBKEY_LENGTH : Nat := 48
+abbrev HTR_REQUEST_PUBKEY_LENGTH : Nat := 48
 
-def HTR_WITHDRAWAL_REQUEST_AMOUNT : Nat := 68
+abbrev HTR_WITHDRAWAL_REQUEST_AMOUNT : Nat := 68
 
-def HTR_CONSOLIDATION_REQUEST_LENGTH : Nat := 116
+abbrev HTR_CONSOLIDATION_REQUEST_LENGTH : Nat := 116
 
-def HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : Nat := 68
+abbrev HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY : Nat := 68
 
-def HTR_BUILDER_DEPOSIT_LENGTH : Nat := 184
+abbrev HTR_BUILDER_DEPOSIT_LENGTH : Nat := 184
 
-def HTR_BUILDER_DEPOSIT_PUBKEY : Nat := 0
+abbrev HTR_BUILDER_DEPOSIT_PUBKEY : Nat := 0
 
-def HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS : Nat := 48
+abbrev HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS : Nat := 48
 
-def HTR_BUILDER_DEPOSIT_AMOUNT : Nat := 80
+abbrev HTR_BUILDER_DEPOSIT_AMOUNT : Nat := 80
 
-def HTR_BUILDER_DEPOSIT_SIGNATURE : Nat := 88
+abbrev HTR_BUILDER_DEPOSIT_SIGNATURE : Nat := 88
 
-def HTR_BUILDER_EXIT_LENGTH : Nat := 68
+abbrev HTR_BUILDER_EXIT_LENGTH : Nat := 68
 
-def HTR_BUILDER_EXIT_SOURCE_ADDRESS : Nat := 0
+abbrev HTR_BUILDER_EXIT_SOURCE_ADDRESS : Nat := 0
 
-def HTR_BUILDER_EXIT_PUBKEY : Nat := 20
+abbrev HTR_BUILDER_EXIT_PUBKEY : Nat := 20
 
 def SSZ_ZERO_HASH_01 : hash :=
   (hash_from_bits 0xF5A5FD42D16A20302798EF6ED309979B43003D2320D9F0E8EA9831A92759FB4B#256)
@@ -522,11 +522,11 @@ def htr_bytes_subtree (bytes : (Sigma fun (k_off : Nat) =>
   else (_rec_htr_bytes_subtree ⟨_, ⟨_, bytes⟩⟩ start count depth (_measure + 1))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex554817_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex554815_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
-  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex554817_ ∧
-  k_ex554817_ ≤ 25 -/
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex554815_ ∧
+  k_ex554815_ ≤ 25 -/
 def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1

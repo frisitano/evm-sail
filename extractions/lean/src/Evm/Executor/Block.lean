@@ -74,9 +74,7 @@ accounting, withdrawals, and block-end request collection. -/
 
 /- Type quantifiers: _limit : Nat, 0 ≤ _limit ∧ _limit ≤ block_gas_limit_bound -/
 def block_gas_usage_empty (_limit : Nat) : (BlockGasUsageFields _limit 0 0 0) :=
-  { execution := 0,
-    state := 0,
-    receipts := 0 }
+  {  }
 
 /- Type quantifiers: k_limit : Nat, k_execution : Nat, k_state : Nat, k_receipts : Nat, add_execution
   : Nat, add_state : Nat, add_receipt : Nat, (block_gas_usage_relation k_limit k_execution k_state k_receipts)
@@ -87,9 +85,7 @@ def block_gas_usage_empty (_limit : Nat) : (BlockGasUsageFields _limit 0 0 0) :=
   add_state ≤ (k_limit - k_state) ∧
   0 ≤ add_receipt ∧ add_receipt ≤ (add_execution + add_state) -/
 def block_gas_usage_add (usage : (BlockGasUsageFields k_limit k_execution k_state k_receipts)) (add_execution : Nat) (add_state : Nat) (add_receipt : Nat) : (BlockGasUsageFields k_limit (k_execution + add_execution) (k_state + add_state) (k_receipts + add_receipt)) :=
-  { execution := (k_execution + add_execution),
-    state := (k_state + add_state),
-    receipts := (k_receipts + add_receipt) }
+  {  }
 
 def PRE_MERGE_BLOCK_REWARD := (BitVec.toNatInt 0x1BC16D674EC80000#64)
 
@@ -234,11 +230,10 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                 then
                   (do
                     (fatal_error GasUsedExceedsLimit)
-                    (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
-                      (k_execution : Nat) =>
+                    (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                       (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
@@ -270,18 +265,13 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                     let ⟨_, ⟨_, remaining_deposits⟩⟩ ←
                       (authenticate_deposit_logs receipt.logs remaining_deposits)
                     let blob_gas_acc : Nat := next_blob_gas
-                    (pure ((((fun (dependentValue0, dependentValue1, dependentValue2) => (dependentValue0, ⟨_, ⟨_, ⟨_, dependentValue1⟩⟩⟩, ⟨_, ⟨_, dependentValue2⟩⟩)) ((blob_gas_acc, gas_usage, remaining_deposits))) : (Nat × (Sigma
-                      fun (k_execution : Nat) =>
+                    (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), ((⟨_, ⟨_, remaining_deposits⟩⟩ : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))) : (Nat × (Sigma
-                      fun (k_execution : Nat) =>
-                      (Sigma fun (k_state : Nat) =>
-                      (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                       (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
@@ -294,12 +284,11 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                 (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                 (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
                 )
-              (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
-                (k_execution : Nat) =>
+              (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
-                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
-                (expected_deposits_dependentWitness0 : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
+                fun (expected_deposits_dependentWitness0 : Nat) =>
                 (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                 (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
           else
@@ -309,11 +298,10 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                 then
                   (do
                     (fatal_error GasUsedExceedsLimit)
-                    (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
-                      (k_execution : Nat) =>
+                    (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                       (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
@@ -359,18 +347,13 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                       (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))
                       )
                     let blob_gas_acc : Nat := next_blob_gas
-                    (pure ((((fun (dependentValue0, dependentValue1, dependentValue2) => (dependentValue0, ⟨_, ⟨_, ⟨_, dependentValue1⟩⟩⟩, ⟨_, ⟨_, dependentValue2⟩⟩)) ((blob_gas_acc, gas_usage, remaining_deposits))) : (Nat × (Sigma
-                      fun (k_execution : Nat) =>
+                    (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), ((⟨_, ⟨_, remaining_deposits⟩⟩ : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))) : (Nat × (Sigma
-                      fun (k_execution : Nat) =>
-                      (Sigma fun (k_state : Nat) =>
-                      (Sigma fun (k_receipts : Nat) =>
-                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
                       fun (expected_deposits_dependentWitness0 : Nat) =>
                       (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                       (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
@@ -383,12 +366,11 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                 (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                 (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
                 )
-              (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
-                (k_execution : Nat) =>
+              (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
-                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
-                (expected_deposits_dependentWitness0 : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
+                fun (expected_deposits_dependentWitness0 : Nat) =>
                 (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
                 (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
           ) : SailM
@@ -402,17 +384,17 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
           )
         let cursor_empty := (ssz_list_cursor_empty cursor)
         let cursor_has_item : Bool := (! cursor_empty)
-        (pure ((blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) : (Nat × (BoundedSszListCursor (2 ^ 20)) × Bool × (Sigma
+        (pure ((blob_gas_acc : Nat), (cursor : (BoundedSszListCursor (2 ^ 20))), (cursor_has_item : Bool), (gas_usage : (Sigma
           fun (k_execution : Nat) =>
           (Sigma fun (k_state : Nat) =>
           (Sigma fun (k_receipts : Nat) =>
-          (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+          (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (keys : (Sigma fun
           (expected_deposits_dependentWitness0 : Nat) =>
           (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Sigma
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))), (remaining_deposits : (Sigma
           fun (expected_deposits_dependentWitness0 : Nat) =>
           (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Vector (BitVec 8) 20))))
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))), (tx0_to : (Vector (BitVec 8) 20))))
     (pure loop_vars) ) : SailM
     (Nat × (BoundedSszListCursor (2 ^ 20)) × Bool × (Sigma fun (k_execution : Nat) =>
     (Sigma fun (k_state : Nat) =>

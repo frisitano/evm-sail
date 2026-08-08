@@ -161,8 +161,10 @@ def rlp_ref_hdr (b : (Sigma fun (k_off : Nat) =>
 
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
 def rlp_decode_list (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM (StatelessInputSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len) := do
-  if (f.is_list : Bool)
-  then (pure (stateless_input_sub_slice f.source (k_source_len - k_content_len) k_content_len))
+  if _sailIf0 : (f.is_list : Bool) = true
+  then
+    (pure ((cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) ((stateless_input_sub_slice
+        f.source (k_source_len - k_content_len) k_content_len))) : (StatelessInputSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len)))
   else (fatal_error RlpDecode)
 
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
@@ -186,8 +188,7 @@ def rlp_decode_item (cursor : (StatelessInputSliceFields k_source_off k_source_l
     (let field_source := (stateless_input_sub_slice cursor 0 full_len)
     let field : (RlpFieldRef k_source_off full_len content_len) :=
       { source := field_source,
-        is_list := is_list,
-        content_len := content_len }
+        is_list := is_list }
     (pure ((⟨_, ⟨_, field⟩⟩ : (Sigma fun (k_syn_content_len : Nat) =>
       (Sigma fun (k_syn_full_len : Nat) =>
       (RlpFieldRef k_source_off k_syn_full_len k_syn_content_len)))) : (Sigma fun
@@ -225,8 +226,7 @@ def rlp_single_ref (item : (StatelessInputSliceFields k_source_off k_source_len)
       then
         (let field : (RlpFieldRef k_source_off k_source_len content_len) :=
           { source := item,
-            is_list := is_list,
-            content_len := content_len }
+            is_list := is_list }
         (pure ((⟨_, field⟩ : (Sigma fun (k_syn_content_len : Nat) =>
           (RlpFieldRef k_source_off k_source_len k_syn_content_len))) : (Sigma fun
           (k_syn_content_len : Nat) => (RlpFieldRef k_source_off k_source_len k_syn_content_len)))))
@@ -360,8 +360,10 @@ def scratch_rlp_ref_hdr (b : (Sigma fun (k_off : Nat) =>
 
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
 def scratch_rlp_decode_list (f : (ScratchRlpFieldRef k_source_off k_source_len k_content_len)) : SailM (ScratchSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len) := do
-  if (f.is_list : Bool)
-  then (pure (scratch_sub_slice f.source (k_source_len - k_content_len) k_content_len))
+  if _sailIf0 : (f.is_list : Bool) = true
+  then
+    (pure ((cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) ((scratch_sub_slice
+        f.source (k_source_len - k_content_len) k_content_len))) : (ScratchSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len)))
   else (fatal_error RlpDecode)
 
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len) -/
@@ -386,8 +388,7 @@ def scratch_rlp_decode_item (cursor : (ScratchSliceFields k_source_off k_source_
     (let field_source := (scratch_sub_slice cursor 0 full_len)
     let field : (ScratchRlpFieldRef k_source_off full_len content_len) :=
       { source := field_source,
-        is_list := is_list,
-        content_len := content_len }
+        is_list := is_list }
     (pure ((⟨_, ⟨_, field⟩⟩ : (Sigma fun (k_syn_content_len : Nat) =>
       (Sigma fun (k_syn_full_len : Nat) =>
       (ScratchRlpFieldRef k_source_off k_syn_full_len k_syn_content_len)))) : (Sigma fun
@@ -426,8 +427,7 @@ def scratch_rlp_single_ref (item : (ScratchSliceFields k_source_off k_source_len
       then
         (let field : (ScratchRlpFieldRef k_source_off k_source_len content_len) :=
           { source := item,
-            is_list := is_list,
-            content_len := content_len }
+            is_list := is_list }
         (pure ((⟨_, field⟩ : (Sigma fun (k_syn_content_len : Nat) =>
           (ScratchRlpFieldRef k_source_off k_source_len k_syn_content_len))) : (Sigma fun
           (k_syn_content_len : Nat) =>

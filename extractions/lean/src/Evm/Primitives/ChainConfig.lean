@@ -62,9 +62,7 @@ repeated inside the SSZ body. Pure data — no registers, no externs. -/
 
 /- Type quantifiers: target : Nat, maximum : Nat, denominator : Nat, (blob_schedule_parameters target maximum denominator) -/
 def blob_schedule (target : Nat) (maximum : Nat) (denominator : Nat) : (BlobScheduleFields target maximum denominator) :=
-  { target := target,
-    max := maximum,
-    base_fee_update_fraction := denominator }
+  {  }
 
 /- Type quantifiers: fork : Nat, target : Nat, maximum : Nat, denominator : Nat, 0 ≤ fork ∧
   fork ≤ amsterdam_fork_value ∧ (blob_schedule_parameters target maximum denominator) -/
@@ -128,11 +126,7 @@ def gas_limits_for (profile : (ProtocolProfileFields k_fork k_target k_maximum k
     if ((transaction_total_limit <b k_profile_regular_limit) : Bool)
     then transaction_total_limit
     else k_profile_regular_limit
-  { block_limit := block_limit,
-    transaction_total_limit := transaction_total_limit,
-    transaction_regular_limit := transaction_regular_limit,
-    system_regular_limit := SYSTEM_CALL_GAS_LIMIT,
-    system_state_limit := 0 }
+  {  }
 
 /- Type quantifiers: k_fork : Nat, k_target : Nat, k_maximum : Nat, k_denominator : Nat, k_code_limit
   : Nat, k_initcode_limit : Nat, k_profile_total_limit : Nat, k_profile_regular_limit : Nat, k_transaction_blob_limit
@@ -161,15 +155,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
   match schema_fork with
   | 0x0A =>
     (let profile :=
-      ({ fork := Berlin,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Berlin 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 0,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 2 } : (ProtocolProfileFields 5 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 2))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 5 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 2))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -183,15 +169,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x0B =>
     (let profile :=
-      ({ fork := London,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit London 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 0,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 5 } : (ProtocolProfileFields 6 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 6 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -205,15 +183,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x0C =>
     (let profile :=
-      ({ fork := ArrowGlacier,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit ArrowGlacier 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 0,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 5 } : (ProtocolProfileFields 7 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 7 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -227,15 +197,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x0D =>
     (let profile :=
-      ({ fork := GrayGlacier,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit GrayGlacier 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 0,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 5 } : (ProtocolProfileFields 8 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 8 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -249,15 +211,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x0E =>
     (let profile :=
-      ({ fork := Paris,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Paris 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 0,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 5 } : (ProtocolProfileFields 9 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 9 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -271,15 +225,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x0F =>
     (let profile :=
-      ({ fork := Shanghai,
-         blob_schedule := (blob_schedule 0 0 1),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Shanghai 0 0 1),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 0,
-         refund_divisor := 5 } : (ProtocolProfileFields 10 0 0 1 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
+      ({ blob_schedule := (blob_schedule 0 0 1) } : (ProtocolProfileFields 10 0 0 1 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -293,15 +239,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x10 =>
     (let profile :=
-      ({ fork := Cancun,
-         blob_schedule := (blob_schedule 3 6 3338477),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Cancun 3 6 3338477),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 6,
-         refund_divisor := 5 } : (ProtocolProfileFields 11 3 6 3338477 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 6 5))
+      ({ blob_schedule := (blob_schedule 3 6 3338477) } : (ProtocolProfileFields 11 3 6 3338477 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 6 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -315,15 +253,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x11 =>
     (let profile :=
-      ({ fork := Prague,
-         blob_schedule := (blob_schedule 6 9 5007716),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Prague 6 9 5007716),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := ((2 ^i 64) - 1),
-         transaction_blob_limit := 9,
-         refund_divisor := 5 } : (ProtocolProfileFields 12 6 9 5007716 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 9 5))
+      ({ blob_schedule := (blob_schedule 6 9 5007716) } : (ProtocolProfileFields 12 6 9 5007716 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 9 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -337,15 +267,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x12 =>
     (let profile :=
-      ({ fork := Osaka,
-         blob_schedule := (blob_schedule 6 9 5007716),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Osaka 6 9 5007716),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := (2 ^i 24),
-         transaction_regular_gas_limit := (2 ^i 24),
-         transaction_blob_limit := 6,
-         refund_divisor := 5 } : (ProtocolProfileFields 13 6 9 5007716 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
+      ({ blob_schedule := (blob_schedule 6 9 5007716) } : (ProtocolProfileFields 13 6 9 5007716 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -359,15 +281,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x13 =>
     (let profile :=
-      ({ fork := BPO1,
-         blob_schedule := (blob_schedule 10 15 8346193),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit BPO1 10 15 8346193),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := (2 ^i 24),
-         transaction_regular_gas_limit := (2 ^i 24),
-         transaction_blob_limit := 6,
-         refund_divisor := 5 } : (ProtocolProfileFields 14 10 15 8346193 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
+      ({ blob_schedule := (blob_schedule 10 15 8346193) } : (ProtocolProfileFields 14 10 15 8346193 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -381,15 +295,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | 0x14 =>
     (let profile :=
-      ({ fork := BPO2,
-         blob_schedule := (blob_schedule 14 21 11684671),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit BPO2 14 21 11684671),
-         deployed_code_size_limit := 24576,
-         initcode_size_limit := 49152,
-         transaction_total_gas_limit := (2 ^i 24),
-         transaction_regular_gas_limit := (2 ^i 24),
-         transaction_blob_limit := 6,
-         refund_divisor := 5 } : (ProtocolProfileFields 15 14 21 11684671 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
+      ({ blob_schedule := (blob_schedule 14 21 11684671) } : (ProtocolProfileFields 15 14 21 11684671 24576 49152 (2 ^ 24) (2 ^ 24) 6 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -403,15 +309,7 @@ def schema_protocol_profile (schema_fork : (BitVec 8)) : (Sigma fun (k_fork : Na
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))))
   | _ =>
     (let profile :=
-      ({ fork := Amsterdam,
-         blob_schedule := (blob_schedule 14 21 11684671),
-         excess_blob_gas_limit := (compute_profile_excess_blob_gas_limit Amsterdam 14 21 11684671),
-         deployed_code_size_limit := 65536,
-         initcode_size_limit := 131072,
-         transaction_total_gas_limit := ((2 ^i 64) - 1),
-         transaction_regular_gas_limit := (2 ^i 24),
-         transaction_blob_limit := 6,
-         refund_divisor := 5 } : (ProtocolProfileFields 16 14 21 11684671 65536 131072 (2 ^ 64 - 1) (2 ^ 24) 6 5))
+      ({ blob_schedule := (blob_schedule 14 21 11684671) } : (ProtocolProfileFields 16 14 21 11684671 65536 131072 (2 ^ 64 - 1) (2 ^ 24) 6 5))
     ((pack_protocol_profile profile) : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
@@ -433,8 +331,7 @@ def DEFAULT_PROTOCOL_PROFILE : ProtocolProfile := (schema_protocol_profile 0x15#
 
 def DEFAULT_EXECUTION_PROFILE : ExecutionProfile :=
   ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
-    ((((((((((((((((((((DEFAULT_PROTOCOL_PROFILE).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2).2
-    0)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    ((((((((((DEFAULT_PROTOCOL_PROFILE).2).2).2).2).2).2).2).2).2).2 0)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
 
 def undefined_ChainConfig (_ : Unit) : SailM ChainConfig := do
   (pure { chain_id := ← (undefined_range 0 ((2 ^i 64) - 1)) })

@@ -69,13 +69,7 @@ def tx_env (origin : (Vector (BitVec 8) 20)) (gas_price : Nat) (blob_hashes : (B
 /- Type quantifiers: total : Nat, regular : Nat, intrinsic_execution : Nat, intrinsic_state : Nat, calldata_floor
   : Nat, execution : Nat, state : Nat, (transaction_initial_gas_relation total regular intrinsic_execution intrinsic_state calldata_floor execution state) -/
 def transaction_initial_gas_fields (total : Nat) (regular : Nat) (intrinsic_execution : Nat) (intrinsic_state : Nat) (calldata_floor : Nat) (execution : Nat) (state : Nat) : (TransactionInitialGasFields total regular intrinsic_execution intrinsic_state calldata_floor execution state) :=
-  { admitted_limit := total,
-    regular_limit := regular,
-    intrinsic_execution := intrinsic_execution,
-    intrinsic_state := intrinsic_state,
-    calldata_floor := calldata_floor,
-    execution_remaining := execution,
-    state_remaining := state }
+  {  }
 
 /- Type quantifiers: priority_fee : Nat, gas_price : Nat, blob_fee : Nat, nonce_before : Nat, k_limit
   : Nat, k_regular : Nat, k_intrinsic_execution : Nat, k_intrinsic_state : Nat, k_calldata_floor :
@@ -94,11 +88,7 @@ def tx_validity_fields (sender : (Vector (BitVec 8) 20)) (nonce_before : Nat) (g
 /- Type quantifiers: limit : Nat, regular : Nat, calldata_floor : Nat, remaining : Nat, state_used :
   Nat, (tx_frame_gas_snapshot_relation limit regular calldata_floor remaining state_used) -/
 def tx_frame_gas_snapshot_fields (limit : Nat) (regular : Nat) (calldata_floor : Nat) (remaining : Nat) (state_used : Nat) : (TxFrameGasSnapshotFields limit regular calldata_floor remaining state_used) :=
-  { admitted_limit := limit,
-    regular_limit := regular,
-    calldata_floor := calldata_floor,
-    remaining := remaining,
-    state_used := state_used }
+  {  }
 
 def undefined_CallKind (_ : Unit) : SailM CallKind := do
   (internal_pick [Call, CallCode, DelegateCall, StaticCall])

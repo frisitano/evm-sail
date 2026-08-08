@@ -148,16 +148,13 @@ def word_of_chain_identifier (value : Nat) : Nat :=
 
 /- Type quantifiers: off : Nat, len : Nat, (memory_valid_range off len) -/
 def memory_range (off : Nat) (len : Nat) : (MemoryRangeFields off len) :=
-  { off := off,
-    len := len }
+  {  }
 
 /-- The canonical inactive range used for a zero-sized operand or halt. -/
 def EMPTY_MEMORY_RANGE : (MemoryRangeFields 0 0) := (memory_range 0 0)
 
 /-- The canonical inactive memory operand. -/
-def EMPTY_MEMORY_ACCESS : (MemoryAccessFields 0 0 0) :=
-  { range := EMPTY_MEMORY_RANGE,
-    required_size := 0 }
+def EMPTY_MEMORY_ACCESS : (MemoryAccessFields 0 0 0) := { range := EMPTY_MEMORY_RANGE }
 
 /- Type quantifiers: value : Nat, 0 ≤ value -/
 def word_of_nat_byte_count (value : Nat) : SailM Nat := do
@@ -165,7 +162,7 @@ def word_of_nat_byte_count (value : Nat) : SailM Nat := do
   then (pure (u256 value))
   else
     (do
-      assert false "sail/primitives/quantities.sail:603.20-603.21"
+      assert false "sail/primitives/quantities.sail:607.20-607.21"
       throw Error.Exit)
 
 /- Type quantifiers: value : Nat, (source_valid_length value) -/

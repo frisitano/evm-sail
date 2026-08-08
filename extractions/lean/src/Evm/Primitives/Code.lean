@@ -147,16 +147,12 @@ def deep_stack_operation_immediate_valid (operation : DeepStackOperation) (immed
 /- Type quantifiers: jumpdests : Nat, k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len)
   ∧ (code_valid_length k_len), 0 ≤ jumpdests ∧ jumpdests ≤ (2 ^ 64 - 1) -/
 def analyzed_code (bytes : (CodeRegionSliceFields k_off k_len)) (jumpdests : Nat) : (CodeFields k_off k_len) :=
-  { bytes := k_off,
-    len := k_len,
-    jumpdests := jumpdests }
+  { jumpdests := jumpdests }
 
 /- Type quantifiers: k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len) ∧
   (code_valid_length k_len) -/
 def code_bytes (code : (CodeFields k_off k_len)) : (CodeRegionSliceFields k_off k_len) :=
-  { bytes := k_off,
-    len := k_len }
+  {  }
 
-def EMPTY_CODE : Code :=
-  ⟨_, ⟨_, (analyzed_code ((((EMPTY_CODE_SLICE).2).2).2).2 EMPTY_JUMP_TABLE)⟩⟩
+def EMPTY_CODE : Code := ⟨_, ⟨_, (analyzed_code ((EMPTY_CODE_SLICE).2).2 EMPTY_JUMP_TABLE)⟩⟩
 

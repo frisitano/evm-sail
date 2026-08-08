@@ -116,7 +116,7 @@ remaining path is absorbed into it. This is the one place a delete
 collapse can demand node material: an unknown-type hash reference
 absorbing a nonempty suffix resolves its node from the witness db
 (fail-closed). -/
-/- Type quantifiers: k_ex553489_ : Nat, 0 ≤ k_ex553489_ ∧ k_ex553489_ ≤ 64 -/
+/- Type quantifiers: k_ex553487_ : Nat, 0 ≤ k_ex553487_ ∧ k_ex553487_ ≤ 64 -/
 def trie_child_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
   let suffix ← do (path_drop it.path depth)
   let suffix_len := (path_len suffix)
@@ -319,7 +319,7 @@ def update_child_ranges_remaining (updates : TrieUpdateCursor) : SailM Nat := do
 /-- Remaining event order while one existing path is merged with update child
 ranges. The next event is either that path's nibble or the active update's
 nibble, whichever is earlier. -/
-/- Type quantifiers: k_ex553496_ : Bool -/
+/- Type quantifiers: k_ex553494_ : Bool -/
 def overlay_child_ranges_remaining (updates : TrieUpdateCursor) (existing_pending : Bool) (existing_nibble : (BitVec 4)) : SailM Nat := do
   let update_pending := (update_under_current_prefix updates)
   let update_position ← (( do
@@ -472,7 +472,7 @@ def next_changed_account_trie_update (_ : Unit) : SailM TrieUpdateFetch := do
         (pure (result, searching))
     (pure loop_vars) ) : SailM (TrieUpdateFetch × Bool) )
   (pure result)
-/- Type quantifiers: _reclimit : Nat, k_ex553539_ : Nat, 0 ≤ k_ex553539_ ∧ k_ex553539_ ≤ 64, 0
+/- Type quantifiers: _reclimit : Nat, k_ex553537_ : Nat, 0 ≤ k_ex553537_ ∧ k_ex553537_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_overlay_extension_subtree (childref : NodeRef) (child_prefix : TriePath) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   match _reclimit with
@@ -584,11 +584,11 @@ def _rec_overlay_extension_subtree (childref : NodeRef) (child_prefix : TriePath
               (pure ((← (trie_children_finish evm_prefix' children)), remaining)))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
-/- Type quantifiers: _reclimit : Nat, k_ex553530_ : Nat, value_dependentWitness1 : Nat, value_dependentWitness0
+/- Type quantifiers: _reclimit : Nat, k_ex553528_ : Nat, value_dependentWitness1 : Nat, value_dependentWitness0
   : Nat, 0 ≤ value_dependentWitness0 ∧
   0 ≤ value_dependentWitness1 ∧
-  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex553530_ ∧
-  k_ex553530_ ≤ 64, 0 ≤ _reclimit -/
+  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex553528_ ∧
+  k_ex553528_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_overlay_leaf_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   let value_dependentWitness0 := (value).1
@@ -773,7 +773,7 @@ def trie_updates_pop (updates : TrieUpdateCursor) : SailM (TrieUpdate × TrieUpd
                   current := EMPTY_TRIE_UPDATE,
                   relation := (UpdateSourceExhausted ()) }) ) : SailM TrieUpdateCursor )
       (pure (current, next)))
-/- Type quantifiers: _reclimit : Nat, k_ex553521_ : Nat, 0 ≤ k_ex553521_ ∧ k_ex553521_ ≤ 64, 0
+/- Type quantifiers: _reclimit : Nat, k_ex553519_ : Nat, 0 ≤ k_ex553519_ ∧ k_ex553519_ ≤ 64, 0
   ≤ _reclimit -/
 def _rec_updates_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   match _reclimit with
@@ -963,15 +963,12 @@ def _rec_witness_subtree (node : (Sigma fun (k_off : Nat) =>
                   (pure ((← (trie_children_finish evm_prefix' built)), remaining))))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
-end
-
 /- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
 def overlay_extension_subtree (childref : NodeRef) (child_prefix : TriePath) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   let _measure := ((64 - cursor) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else (_rec_overlay_extension_subtree childref child_prefix updates evm_prefix' cursor (_measure + 1))
-
 /- Type quantifiers: cursor : Nat, value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0
   ≤ value_dependentWitness0 ∧
   0 ≤ value_dependentWitness1 ∧
@@ -986,14 +983,12 @@ def overlay_leaf_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else (_rec_overlay_leaf_subtree updates evm_prefix' key ⟨_, ⟨_, value⟩⟩ cursor (_measure + 1))
-
 /- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
 def updates_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   let _measure := ((64 - cursor) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else (_rec_updates_subtree updates evm_prefix' cursor (_measure + 1))
-
 /- Type quantifiers: cursor : Nat, node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
   node_dependentWitness0 ∧
   0 ≤ node_dependentWitness1 ∧
@@ -1007,4 +1002,5 @@ def witness_subtree (node : (Sigma fun (k_off : Nat) =>
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else (_rec_witness_subtree ⟨_, ⟨_, node⟩⟩ evm_prefix' updates cursor (_measure + 1))
+end
 

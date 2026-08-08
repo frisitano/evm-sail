@@ -74,113 +74,113 @@ consumers explicit source spans. -/
 
 /-- The input starts with a 2-byte big-endian schema id; the SSZ body
 follows. -/
-def SSZ_BODY : Nat := 2
+abbrev SSZ_BODY : Nat := 2
 
-def IN_NPR_OFF : Nat := 0
+abbrev IN_NPR_OFF : Nat := 0
 
-def IN_WITNESS_OFF : Nat := 4
+abbrev IN_WITNESS_OFF : Nat := 4
 
-def IN_CHAIN_CONFIG_OFF : Nat := 8
+abbrev IN_CHAIN_CONFIG_OFF : Nat := 8
 
-def IN_PUBLIC_KEYS_OFF : Nat := 12
+abbrev IN_PUBLIC_KEYS_OFF : Nat := 12
 
-def NPR_PAYLOAD_OFF : Nat := 0
+abbrev NPR_PAYLOAD_OFF : Nat := 0
 
-def NPR_VHASHES_OFF : Nat := 4
+abbrev NPR_VHASHES_OFF : Nat := 4
 
-def NPR_BEACON_ROOT : Nat := 8
+abbrev NPR_BEACON_ROOT : Nat := 8
 
-def NPR_REQUESTS_OFF : Nat := 40
+abbrev NPR_REQUESTS_OFF : Nat := 40
 
-def REQ_DEPOSITS_OFF : Nat := 0
+abbrev REQ_DEPOSITS_OFF : Nat := 0
 
-def REQ_WITHDRAWALS_OFF : Nat := 4
+abbrev REQ_WITHDRAWALS_OFF : Nat := 4
 
-def REQ_CONSOLIDATIONS_OFF : Nat := 8
+abbrev REQ_CONSOLIDATIONS_OFF : Nat := 8
 
-def REQ_BUILDER_DEPOSITS_OFF : Nat := 12
+abbrev REQ_BUILDER_DEPOSITS_OFF : Nat := 12
 
-def REQ_BUILDER_EXITS_OFF : Nat := 16
+abbrev REQ_BUILDER_EXITS_OFF : Nat := 16
 
-def PL_FEE_RECIPIENT : Nat := 32
+abbrev PL_FEE_RECIPIENT : Nat := 32
 
-def PL_STATE_ROOT : Nat := 52
+abbrev PL_STATE_ROOT : Nat := 52
 
-def PL_RECEIPTS_ROOT : Nat := 84
+abbrev PL_RECEIPTS_ROOT : Nat := 84
 
-def PL_LOGS_BLOOM : Nat := 116
+abbrev PL_LOGS_BLOOM : Nat := 116
 
-def PL_PREV_RANDAO : Nat := 372
+abbrev PL_PREV_RANDAO : Nat := 372
 
-def PL_BLOCK_NUMBER : Nat := 404
+abbrev PL_BLOCK_NUMBER : Nat := 404
 
-def PL_GAS_LIMIT : Nat := 412
+abbrev PL_GAS_LIMIT : Nat := 412
 
-def PL_GAS_USED : Nat := 420
+abbrev PL_GAS_USED : Nat := 420
 
-def PL_TIMESTAMP : Nat := 428
+abbrev PL_TIMESTAMP : Nat := 428
 
-def PL_EXTRA_OFF : Nat := 436
+abbrev PL_EXTRA_OFF : Nat := 436
 
-def PL_BASE_FEE : Nat := 440
+abbrev PL_BASE_FEE : Nat := 440
 
-def PL_BLOCK_HASH : Nat := 472
+abbrev PL_BLOCK_HASH : Nat := 472
 
-def PL_TXS_OFF : Nat := 504
+abbrev PL_TXS_OFF : Nat := 504
 
-def PL_WDS_OFF : Nat := 508
+abbrev PL_WDS_OFF : Nat := 508
 
-def PL_BLOB_GAS_USED : Nat := 512
+abbrev PL_BLOB_GAS_USED : Nat := 512
 
-def PL_EXCESS_BLOB_GAS : Nat := 520
+abbrev PL_EXCESS_BLOB_GAS : Nat := 520
 
-def PL_BAL_OFF : Nat := 528
+abbrev PL_BAL_OFF : Nat := 528
 
-def PL_SLOT_NUMBER : Nat := 532
+abbrev PL_SLOT_NUMBER : Nat := 532
 
-def WD_SIZE : Nat := 44
+abbrev WD_SIZE : Nat := 44
 
-def WD_INDEX : Nat := 0
+abbrev WD_INDEX : Nat := 0
 
-def WD_VALIDATOR_INDEX : Nat := 8
+abbrev WD_VALIDATOR_INDEX : Nat := 8
 
-def WD_ADDRESS : Nat := 16
+abbrev WD_ADDRESS : Nat := 16
 
-def WD_AMOUNT : Nat := 36
+abbrev WD_AMOUNT : Nat := 36
 
-def CC_CHAIN_ID : Nat := 0
+abbrev CC_CHAIN_ID : Nat := 0
 
-def CC_ACTIVE_FORK_OFF : Nat := 8
+abbrev CC_ACTIVE_FORK_OFF : Nat := 8
 
-def FC_ACTIVATION_OFF : Nat := 0
+abbrev FC_ACTIVATION_OFF : Nat := 0
 
-def FA_BLOCK_NUMBER_OFF : Nat := 0
+abbrev FA_BLOCK_NUMBER_OFF : Nat := 0
 
-def FA_TIMESTAMP_OFF : Nat := 4
+abbrev FA_TIMESTAMP_OFF : Nat := 4
 
-def WIT_STATE_OFF : Nat := 0
+abbrev WIT_STATE_OFF : Nat := 0
 
-def WIT_CODES_OFF : Nat := 4
+abbrev WIT_CODES_OFF : Nat := 4
 
-def WIT_HEADERS_OFF : Nat := 8
+abbrev WIT_HEADERS_OFF : Nat := 8
 
-def STATELESS_INPUT_FIXED_LENGTH : Nat := 18
+abbrev STATELESS_INPUT_FIXED_LENGTH : Nat := 18
 
-def STATELESS_INPUT_BODY_FIXED_LENGTH : Nat := 16
+abbrev STATELESS_INPUT_BODY_FIXED_LENGTH : Nat := 16
 
-def NEW_PAYLOAD_REQUEST_FIXED_LENGTH : Nat := 44
+abbrev NEW_PAYLOAD_REQUEST_FIXED_LENGTH : Nat := 44
 
-def EXECUTION_PAYLOAD_FIXED_LENGTH : Nat := 540
+abbrev EXECUTION_PAYLOAD_FIXED_LENGTH : Nat := 540
 
-def EXECUTION_REQUESTS_FIXED_LENGTH : Nat := 20
+abbrev EXECUTION_REQUESTS_FIXED_LENGTH : Nat := 20
 
-def EXECUTION_WITNESS_FIXED_LENGTH : Nat := 12
+abbrev EXECUTION_WITNESS_FIXED_LENGTH : Nat := 12
 
-def PUBLIC_KEY_LENGTH : Nat := 65
+abbrev PUBLIC_KEY_LENGTH : Nat := 65
 
-def CHAIN_CONFIG_HEADER_LENGTH : Nat := 12
+abbrev CHAIN_CONFIG_HEADER_LENGTH : Nat := 12
 
-def CHAIN_CONFIG_MIN_LENGTH : Nat := 24
+abbrev CHAIN_CONFIG_MIN_LENGTH : Nat := 24
 
 def MAX_EXTRA_DATA_LENGTH : Nat := (2 ^i 5)
 
@@ -264,11 +264,11 @@ def ssz_list_pop (cursor : (BoundedSszListCursor k_maximum)) : SailM ((Sigma fun
       then (fatal_error InvalidConfig)
       else (pure ())
       let item := (stateless_input_sub_slice bytes current_value item_length)
-      (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, { items := items,
-                                                                                                                          index := next_index,
-                                                                                                                          current := next }))) : ((Sigma
-        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum))) : ((Sigma
-        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum)))))
+      (pure (((⟨_, ⟨_, item⟩⟩ : (Sigma fun (k_off : Nat) =>
+        (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma fun
+        (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))), ({ items := items,
+                                                                                                    index := next_index,
+                                                                                                    current := next } : (BoundedSszListCursor k_maximum)))))
   else
     (do
       (fatal_error InvalidConfig))
@@ -345,9 +345,9 @@ def ssz_fixed_list_pop (items : (BoundedSszListRef k_maximum)) (item_size : Nat)
       { bytes := ⟨_, ⟨_, (stateless_input_slice_suffix bytes width)⟩⟩,
         count := (count - 1),
         max_item_length := items.max_item_length }
-    (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, rest))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListRef k_maximum))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListRef k_maximum)))))
+    (pure (((⟨_, ⟨_, item⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))), (rest : (BoundedSszListRef k_maximum)))))
   else
     (do
       (fatal_error InvalidConfig))
@@ -392,7 +392,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex553928_ : Nat, 0 ≤ k_ex553928_ ∧ k_ex553928_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex553926_ : Nat, 0 ≤ k_ex553926_ ∧ k_ex553926_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -403,10 +403,10 @@ def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_o
     (let stop_pointer : Nat := stop
     let span_length := (stop - current_value)
     let span := (stateless_input_sub_slice bytes current_value span_length)
-    (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((span, { bytes := ⟨_, ⟨_, bytes⟩⟩,
-                                                                                                                        current := stop_pointer }))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor)) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor))))
+    (pure (((⟨_, ⟨_, span⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))), ({ bytes := ⟨_, ⟨_, bytes⟩⟩,
+                                                                                                  current := stop_pointer } : SszContainerCursor))))
   else
     (do
       (fatal_error InvalidConfig))
@@ -876,8 +876,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex553999_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex553999_ ∧ k_ex553999_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex553997_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex553997_ ∧ k_ex553997_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1371,11 +1371,11 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex554107_ : Nat, k_ex554106_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
+/- Type quantifiers: k_ex554105_ : Nat, k_ex554104_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
   : Nat, 0 ≤ cc_dependentWitness0 ∧
   0 ≤ cc_dependentWitness1 ∧ (cc_dependentWitness0 + cc_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex554106_ ∧ k_ex554106_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex554107_ ∧
-  k_ex554107_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex554104_ ∧ k_ex554104_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex554105_ ∧
+  k_ex554105_ ≤ (2 ^ 64 - 1) -/
 def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
   let cc_dependentWitness0 := (cc).1
@@ -1461,20 +1461,20 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
   writeReg k_chain_id chain_config.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex612208_ : Nat) =>
+    fun (k_ex612204_ : Nat) =>
+    (Sigma fun (k_ex612205_ : Nat) =>
+    (Sigma fun (k_ex612206_ : Nat) =>
+    (Sigma fun (k_ex612207_ : Nat) =>
+    (Sigma fun (k_ex612208_ : Nat) =>
     (Sigma fun (k_ex612209_ : Nat) =>
     (Sigma fun (k_ex612210_ : Nat) =>
     (Sigma fun (k_ex612211_ : Nat) =>
     (Sigma fun (k_ex612212_ : Nat) =>
     (Sigma fun (k_ex612213_ : Nat) =>
     (Sigma fun (k_ex612214_ : Nat) =>
-    (Sigma fun (k_ex612215_ : Nat) =>
-    (Sigma fun (k_ex612216_ : Nat) =>
-    (Sigma fun (k_ex612217_ : Nat) =>
-    (Sigma fun (k_ex612218_ : Nat) =>
-    (ExecutionProfileFields k_ex612208_ k_ex612209_ k_ex612210_ k_ex612211_ k_ex612212_ k_ex612213_ k_ex612214_ k_ex612215_ k_ex612216_ k_ex612217_ k_ex612218_ (if ( k_ex612218_
-    < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_) (if ( (if ( k_ex612218_ < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_)
-    < k_ex612215_  : Bool) then (if ( k_ex612218_ < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_) else k_ex612215_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    (ExecutionProfileFields k_ex612204_ k_ex612205_ k_ex612206_ k_ex612207_ k_ex612208_ k_ex612209_ k_ex612210_ k_ex612211_ k_ex612212_ k_ex612213_ k_ex612214_ (if ( k_ex612214_
+    < k_ex612210_  : Bool) then k_ex612214_ else k_ex612210_) (if ( (if ( k_ex612214_ < k_ex612210_  : Bool) then k_ex612214_ else k_ex612210_)
+    < k_ex612211_  : Bool) then (if ( k_ex612214_ < k_ex612210_  : Bool) then k_ex612214_ else k_ex612210_) else k_ex612211_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,

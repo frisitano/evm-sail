@@ -163,8 +163,7 @@ def authorization_list_ref (encoded : (Sigma fun (k_off : Nat) =>
   let encoded_dependentWitness0 := (encoded).1
   let encoded_dependentWitness1 := ((encoded).2).1
   let encoded := ((encoded).2).2
-  { encoded := ⟨_, ⟨_, encoded⟩⟩,
-    count := count }
+  { encoded := ⟨_, ⟨_, encoded⟩⟩ }
 
 def EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef :=
   ⟨_, (authorization_list_ref ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩ 0)⟩
@@ -188,8 +187,8 @@ def log_store_index_increment (value : Nat) : SailM Nat := do
       throw Error.Exit)
 
 /-- Adds a relative log offset to its series start without wrapping. -/
-/- Type quantifiers: k_ex549654_ : Nat, k_ex549653_ : Nat, 0 ≤ k_ex549653_ ∧
-  k_ex549653_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549654_ ∧ k_ex549654_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex549667_ : Nat, k_ex549666_ : Nat, 0 ≤ k_ex549666_ ∧
+  k_ex549666_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549667_ ∧ k_ex549667_ ≤ (2 ^ 64 - 1) -/
 def log_store_index_add (left : Nat) (right : Nat) : SailM Nat := do
   if ((right ≤b (((2 ^i 64) - 1) - left)) : Bool)
   then (pure (left + right))
@@ -202,17 +201,14 @@ def undefined_LogSeriesRef (_ : Unit) : SailM LogSeriesRef := do
   (pure { start := ← (undefined_range 0 ((2 ^i 64) - 1)),
           count := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
-/- Type quantifiers: k_ex549710_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex549723_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation _limit _regular_limit gas_used execution_gas state_gas) -/
 def receipt_fields (_limit : Nat) (_regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (ReceiptFields _limit _regular_limit gas_used execution_gas state_gas) :=
   { tx_type := tx_type,
     success := success,
-    gas_used := gas_used,
-    execution_gas := execution_gas,
-    state_gas := state_gas,
     logs := logs }
 
-/- Type quantifiers: k_ex549756_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex549769_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation limit regular_limit gas_used execution_gas state_gas) -/
 def receipt_within (limit : Nat) (regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (Sigma
   fun (k_syn_state_gas : Nat) =>

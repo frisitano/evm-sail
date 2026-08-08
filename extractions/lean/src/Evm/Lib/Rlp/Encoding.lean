@@ -77,15 +77,15 @@ suffix.
 Malformed RLP terminates validation with `fatal_error(RlpDecode)` at the
 point where the invalid encoding is detected. -/
 
-def RLP_SHORT_LENGTH_LIMIT : Nat := 55
+abbrev RLP_SHORT_LENGTH_LIMIT : Nat := 55
 
-def RLP_WORD_LENGTH_LIMIT : Nat := WORD_BYTE_LENGTH
+abbrev RLP_WORD_LENGTH_LIMIT : Nat := 32
 
-def RLP_UINT64_LENGTH_LIMIT : Nat := EIGHT_BYTE_LENGTH
+abbrev RLP_UINT64_LENGTH_LIMIT : Nat := 8
 
-def RLP_ENCODED_WORD_LENGTH : Nat := 33
+abbrev RLP_ENCODED_WORD_LENGTH : Nat := 33
 
-def RLP_ENCODED_ADDRESS_LENGTH : Nat := 21
+abbrev RLP_ENCODED_ADDRESS_LENGTH : Nat := 21
 
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 33 -/
 def rlp_scratch_small_length (value : Nat) : Nat :=
@@ -172,7 +172,7 @@ def rlp_input_slice_size (data : (StatelessInputSliceFields k_off k_len)) : Sail
 
 /-- Returns the materializable RLP width of a byte slice after its caller has
 selected the backing region and loaded the first byte. -/
-/- Type quantifiers: k_ex550527_ : Nat, 0 ≤ k_ex550527_ ∧ k_ex550527_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex550525_ : Nat, 0 ≤ k_ex550525_ ∧ k_ex550525_ ≤ (2 ^ 32 - 1) -/
 def rlp_materialized_slice_size (length : Nat) (first : (BitVec 8)) : SailM Nat := do
   if (((length == 1) && ((BitVec.access first 7) == 0#1)) : Bool)
   then (pure 1)

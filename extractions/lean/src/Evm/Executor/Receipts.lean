@@ -110,17 +110,16 @@ def receipt_record_pop (records : (Sigma fun (k_off : Nat) =>
   let payload := (scratch_slice_suffix records EIGHT_BYTE_LENGTH)
   if _sailIf0 : ((value_length ≤b payload.len) : Bool) = true
   then
-    (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, ⟨_, ⟨_, dependentValue1⟩⟩)) (((scratch_sub_slice
-        payload 0 value_length), (scratch_slice_suffix payload value_length)))) : ((Sigma fun
+    (pure (((⟨_, ⟨_, (scratch_sub_slice payload 0 value_length)⟩⟩ : (Sigma fun
       (records_dependentWitness0 : Nat) =>
       (Sigma fun (records_dependentWitness1 : Nat) =>
-      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1))) × (Sigma fun
+      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1)))) : (Sigma fun
       (records_dependentWitness0 : Nat) =>
       (Sigma fun (records_dependentWitness1 : Nat) =>
-      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1))))) : ((Sigma fun
-      (records_dependentWitness0 : Nat) =>
+      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1)))), ((⟨_, ⟨_, (scratch_slice_suffix
+        payload value_length)⟩⟩ : (Sigma fun (records_dependentWitness0 : Nat) =>
       (Sigma fun (records_dependentWitness1 : Nat) =>
-      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1))) × (Sigma fun
+      (ScratchSliceFields records_dependentWitness0 records_dependentWitness1)))) : (Sigma fun
       (records_dependentWitness0 : Nat) =>
       (Sigma fun (records_dependentWitness1 : Nat) =>
       (ScratchSliceFields records_dependentWitness0 records_dependentWitness1))))))
@@ -168,19 +167,18 @@ def indexed_receipt_parts (source : IndexedTrieSource) : SailM ((Sigma fun (k_of
     (do
       if _sailIf0 : ((receipts.count == 0) : Bool) = true
       then
-        (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, ⟨_, ⟨_, dependentValue1⟩⟩)) ((EMPTY_SCRATCH_SLICE, receipts.bytes))) : ((Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) × (Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : ((Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) × (Sigma
+        (pure (((⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat)
+          => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))), (receipts.bytes : (Sigma
           fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))
       else
         (do
           (receipt_record_pop receipts.bytes)))
   | _ =>
-    (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, ⟨_, ⟨_, dependentValue1⟩⟩)) ((EMPTY_SCRATCH_SLICE, EMPTY_SCRATCH_SLICE))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) × (Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) × (Sigma
+    (pure (((⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))), ((⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩ : (Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma
       fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))
 
 /-- Opens one source at its first canonical trie key. -/
@@ -222,27 +220,24 @@ def indexed_trie_pop (source : IndexedTrieSource) (cursor : IndexedTrieCursor) :
     | .IndexedTransactions txs =>
       (do
         let ⟨_, ⟨_, transaction⟩⟩ ← do (ssz_list_at txs index_item.index)
-        (pure ((((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) (((InputTrieLeaf
-            ⟨_, ⟨_, transaction⟩⟩), remaining))) : (TrieLeafValue × (Sigma fun
-          (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : (TrieLeafValue × (Sigma
+        (pure (((InputTrieLeaf ⟨_, ⟨_, transaction⟩⟩) : TrieLeafValue), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma
+          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma
           fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))))))
     | .IndexedWithdrawals wds =>
       (do
         let ⟨_, ⟨_, withdrawal⟩⟩ ← do (ssz_fixed_list_at wds index_item.index WD_SIZE)
         let ⟨_, ⟨_, encoded_withdrawal⟩⟩ ← do
           (withdrawal_rlp ⟨_, ⟨_, withdrawal⟩⟩)
-        (pure ((((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) (((ScratchTrieLeaf
-            ⟨_, ⟨_, encoded_withdrawal⟩⟩), remaining))) : (TrieLeafValue × (Sigma fun
-          (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : (TrieLeafValue × (Sigma
+        (pure (((ScratchTrieLeaf ⟨_, ⟨_, encoded_withdrawal⟩⟩) : TrieLeafValue), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma
+          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma
           fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))))))
     | .IndexedReceipts _ =>
       (do
         let (t__95, remaining) ← (( do
           if _sailIf0 : ((index_item.index == 0) : Bool) = true
           then
-            (pure ((((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) (((ScratchTrieLeaf
-                cursor.receipt_zero), remaining))) : (TrieLeafValue × (Sigma fun (k_off : Nat) =>
-              (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : (TrieLeafValue × (Sigma
+            (pure (((ScratchTrieLeaf cursor.receipt_zero) : TrieLeafValue), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma
+              fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma
               fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))
           else
             (do
@@ -251,14 +246,13 @@ def indexed_trie_pop (source : IndexedTrieSource) (cursor : IndexedTrieCursor) :
                 (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) :=
                 (rest : (Sigma fun (k_off : Nat) =>
                 (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))
-              (pure ((((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) (((ScratchTrieLeaf
-                  receipt), remaining))) : (TrieLeafValue × (Sigma fun (k_off : Nat) =>
-                (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))) : (TrieLeafValue × (Sigma
+              (pure (((ScratchTrieLeaf receipt) : TrieLeafValue), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : (Sigma
                 fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))))))
           ) : SailM
           (TrieLeafValue × (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) )
-        (pure ((t__95, remaining) : (TrieLeafValue × (Sigma fun (k_off : Nat) =>
+        (pure ((t__95 : TrieLeafValue), (remaining : (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))) ) : SailM
     (TrieLeafValue × (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) )
@@ -348,8 +342,8 @@ def indexed_receipt_trie_root (receipts : ReceiptRecordsRef) : SailM (Vector (Bi
 
 /-- Computes the canonical receipts root over the retained records after the
 last transaction has executed, then releases the retained region. -/
-/- Type quantifiers: k_ex554298_ : Nat, k_ex554297_ : Nat, 0 ≤ k_ex554297_ ∧
-  k_ex554297_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex554298_ ∧ k_ex554298_ ≤ (2 ^ 20) -/
+/- Type quantifiers: k_ex554296_ : Nat, k_ex554295_ : Nat, 0 ≤ k_ex554295_ ∧
+  k_ex554295_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex554296_ ∧ k_ex554296_ ≤ (2 ^ 20) -/
 def receipt_store_root (records_start : Nat) (count : Nat) : SailM (Vector (BitVec 8) 32) := do
   let ⟨_, ⟨_, records⟩⟩ ← do (scratch_finish records_start)
   let root ← do

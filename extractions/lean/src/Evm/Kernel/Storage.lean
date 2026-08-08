@@ -66,7 +66,7 @@ open AcctBlockIterResult
 Warm/cold accounting (EIP-2929), persistent storage (`SLOAD`/`SSTORE`),
 and transient storage (EIP-1153), over the host state stores. -/
 
-/- Type quantifiers: k_ex551748_ : Nat, 0 ≤ k_ex551748_ ∧ k_ex551748_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551746_ : Nat, 0 ≤ k_ex551746_ ∧ k_ex551746_ ≤ (2 ^ 256 - 1) -/
 def storage_key (a : (Vector (BitVec 8) 20)) (s : Nat) : StorageKey :=
   { addr := a,
     slot := s }
@@ -244,18 +244,18 @@ def k_account_mark_warm (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   else (account_mark_warm a)
 
 /-- Returns a storage slot's EIP-2929 warm bit without changing state. -/
-/- Type quantifiers: k_ex551749_ : Nat, 0 ≤ k_ex551749_ ∧ k_ex551749_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551747_ : Nat, 0 ≤ k_ex551747_ ∧ k_ex551747_ ≤ (2 ^ 256 - 1) -/
 def k_slot_is_warm (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Bool := do
   (storage_is_warm a s)
 
 /-- Marks a storage slot warm after the caller has paid its access charge. -/
-/- Type quantifiers: k_ex551750_ : Nat, 0 ≤ k_ex551750_ ∧ k_ex551750_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551748_ : Nat, 0 ≤ k_ex551748_ ∧ k_ex551748_ ≤ (2 ^ 256 - 1) -/
 def k_slot_mark_warm (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Unit := do
   (storage_mark_warm a s)
 
 /-- Warms an explicitly addressed storage slot while preparing a transaction's
 access list, before any EVM frame owns the execution context. -/
-/- Type quantifiers: k_ex551751_ : Nat, 0 ≤ k_ex551751_ ∧ k_ex551751_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551749_ : Nat, 0 ≤ k_ex551749_ ∧ k_ex551749_ ≤ (2 ^ 256 - 1) -/
 def k_prewarm_slot (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Unit := do
   (storage_mark_warm a s)
 
@@ -301,7 +301,7 @@ def decode_state_account (value : (Sigma fun (k_off : Nat) =>
           code_hash := code_hash })
 
 /-- Constructs a path from high-aligned data and a nibble length. -/
-/- Type quantifiers: k_ex551758_ : Nat, 0 ≤ k_ex551758_ ∧ k_ex551758_ ≤ 64 -/
+/- Type quantifiers: k_ex551756_ : Nat, 0 ≤ k_ex551756_ ∧ k_ex551756_ ≤ 64 -/
 def path_new (data : (Vector (BitVec 8) 32)) (len : Nat) : TriePath :=
   { data := data,
     len := len }
@@ -332,7 +332,7 @@ def branch_refs_get (children : (Vector NodeRef 16)) (index : (BitVec 4)) : Node
   | 0xE => (GetElem?.getElem! children 14)
   | _ => (GetElem?.getElem! children 15)
 
-def MPT_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
+abbrev MPT_HASH_LENGTH : Nat := 32
 
 /-- The reference denoted by a child field: an inline list, a 32-byte
 hash, or empty. -/
@@ -355,8 +355,8 @@ def input_field_to_ref (f : (RlpFieldRef k_source_off k_source_len k_content_len
       else (pure (EmptyRef ())))
 
 /-- Decodes branch children 2 through 15, followed by the branch value. -/
-/- Type quantifiers: _reclimit : Nat, k_ex551794_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
-  ≤ k_ex551794_ ∧ k_ex551794_ ≤ 16, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex551792_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ k_ex551792_ ∧ k_ex551792_ ≤ 16, 0 ≤ _reclimit -/
 def _rec_decode_input_branch_node (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) (_reclimit : Nat) : SailM InputTrieNode := do
   match _reclimit with
   | 0 =>
@@ -397,7 +397,7 @@ def decode_input_branch_node (cursor : (StatelessInputSliceFields k_source_off k
 def path_empty (_ : Unit) : TriePath :=
   (path_new ZERO_HASH 0)
 
-def HEX_PREFIX_MAX_LENGTH : Nat := 33
+abbrev HEX_PREFIX_MAX_LENGTH : Nat := 33
 
 /-- Decodes a compact path directly from its RLP source span, returning
 the leaf flag and the path. -/
@@ -506,7 +506,7 @@ def path_byte_index (i : Nat) : SailM Nat := do
       throw Error.Exit)
 
 /-- The `i`-th nibble, most significant first; out of range yields `0`. -/
-/- Type quantifiers: k_ex551839_ : Nat, 0 ≤ k_ex551839_ ∧ k_ex551839_ ≤ 64 -/
+/- Type quantifiers: k_ex551837_ : Nat, 0 ≤ k_ex551837_ ∧ k_ex551837_ ≤ 64 -/
 def path_nibble (path : TriePath) (i : Nat) : SailM (BitVec 4) := do
   let length := (path_len path)
   if ((length ≤b i) : Bool)
@@ -521,7 +521,7 @@ def path_nibble (path : TriePath) (i : Nat) : SailM (BitVec 4) := do
       else (pure (Sail.BitVec.extractLsb (GetElem?.getElem! bytes byte_index) 3 0)))
 
 /-- Whether `seg` occurs in `key` at nibble position `pos`. -/
-/- Type quantifiers: k_ex551840_ : Nat, 0 ≤ k_ex551840_ ∧ k_ex551840_ ≤ 64 -/
+/- Type quantifiers: k_ex551838_ : Nat, 0 ≤ k_ex551838_ ∧ k_ex551838_ ≤ 64 -/
 def path_matches (key : TriePath) (pos : Nat) (seg : TriePath) : SailM Bool := do
   let segment_len := (path_len seg)
   let key_len := (path_len key)
@@ -591,11 +591,11 @@ def resolve_witness_ref (r : NodeRef) : SailM (Sigma fun (k_off : Nat) =>
 
 /-- Walks the trie toward `key` from `pos`, returning the leaf value
 without copying it; absent paths yield empty bytes. -/
-/- Type quantifiers: _reclimit : Nat, k_ex551851_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+/- Type quantifiers: _reclimit : Nat, k_ex551849_ : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
   : Nat, 0 ≤ node_dependentWitness0 ∧
   0 ≤ node_dependentWitness1 ∧
-  (node_dependentWitness0 + node_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex551851_ ∧
-  k_ex551851_ ≤ 64, 0 ≤ _reclimit -/
+  (node_dependentWitness0 + node_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex551849_ ∧
+  k_ex551849_ ≤ 64, 0 ≤ _reclimit -/
 def _rec_trie_walk (node : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (key : TriePath) (pos : Nat) (_reclimit : Nat) : SailM (Sigma
   fun (node_dependentWitness0 : Nat) =>
@@ -626,8 +626,8 @@ def _rec_trie_walk (node : (Sigma fun (k_off : Nat) =>
           match decoded with
           | .InputLeafNode (path, value) =>
             (do
-              let matches ← do (path_matches key pos path)
-              if _sailIf1 : ((! matches) : Bool) = true
+              let matches' ← do (path_matches key pos path)
+              if _sailIf1 : ((! matches') : Bool) = true
               then
                 (pure ((⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩ : (Sigma fun
                   (node_dependentWitness0 : Nat) =>
@@ -666,8 +666,8 @@ def _rec_trie_walk (node : (Sigma fun (k_off : Nat) =>
                   (StatelessInputSliceFields node_dependentWitness0 node_dependentWitness1)))))
               else
                 (do
-                  let matches ← do (path_matches key pos path)
-                  if _sailIf2 : ((! matches) : Bool) = true
+                  let matches' ← do (path_matches key pos path)
+                  if _sailIf2 : ((! matches') : Bool) = true
                   then
                     (pure ((⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩ : (Sigma fun
                       (node_dependentWitness0 : Nat) =>
@@ -823,7 +823,7 @@ encoder removes slots that also have a storage change).
 [stateless_storage_by_key][] is the base primitive — an authenticated MPT
 point-get, one walk for both the witness and the harness-built alloc trie;
 everything above it (the overlay, the read-through, the journal) is common. -/
-/- Type quantifiers: k_ex551865_ : Nat, 0 ≤ k_ex551865_ ∧ k_ex551865_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551863_ : Nat, 0 ≤ k_ex551863_ ∧ k_ex551863_ ≤ (2 ^ 256 - 1) -/
 def k_sload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM StorageValue := SailME.run do
   let key := (storage_key a s)
   let tx_value ← do (storage_tx_get key)
@@ -855,7 +855,7 @@ def k_sload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM StorageValue := SailM
 /-- `SSTORE`: creates or updates the live transaction row. The preceding
 [k_sload][] supplies the transaction-original value; the host keeps
 clear generations and frame undo history private. -/
-/- Type quantifiers: k_ex551866_ : Nat, 0 ≤ k_ex551866_ ∧ k_ex551866_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551864_ : Nat, 0 ≤ k_ex551864_ ∧ k_ex551864_ ≤ (2 ^ 256 - 1) -/
 def k_sstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : StorageValue) : SailM Unit := do
   let key := (storage_key a s)
   (storage_tx_update
@@ -864,14 +864,14 @@ def k_sstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : StorageValue) : SailM U
 
 /-- `TLOAD` (EIP-1153): reads per-transaction transient storage, which is
 discarded at transaction end and is not part of the state trie. -/
-/- Type quantifiers: k_ex551867_ : Nat, 0 ≤ k_ex551867_ ∧ k_ex551867_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551865_ : Nat, 0 ≤ k_ex551865_ ∧ k_ex551865_ ≤ (2 ^ 256 - 1) -/
 def k_tload (a : (Vector (BitVec 8) 20)) (s : Nat) : SailM Nat := do
   (transient_load a s)
 
 /-- `TSTORE` (EIP-1153): writes transient storage. Frame rollback is part
 of the host's semantic checkpoint contract. -/
-/- Type quantifiers: k_ex551869_ : Nat, k_ex551868_ : Nat, 0 ≤ k_ex551868_ ∧
-  k_ex551868_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex551869_ ∧ k_ex551869_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551867_ : Nat, k_ex551866_ : Nat, 0 ≤ k_ex551866_ ∧
+  k_ex551866_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex551867_ ∧ k_ex551867_ ≤ (2 ^ 256 - 1) -/
 def k_tstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : Nat) : SailM Unit := do
   (transient_store a s v)
 

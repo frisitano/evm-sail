@@ -59,7 +59,7 @@ The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
 /-- The `CREATE` address (YP §7): the low 20 bytes of
 `keccak256(rlp([sender, nonce]))`. -/
-/- Type quantifiers: k_ex551061_ : Nat, 0 ≤ k_ex551061_ ∧ k_ex551061_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex551059_ : Nat, 0 ≤ k_ex551059_ ∧ k_ex551059_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   let address_length := (rlp_addr_size ())
   let nonce_length := (rlp_uint_word_size nonce)

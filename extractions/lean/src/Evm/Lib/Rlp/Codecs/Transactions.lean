@@ -126,9 +126,13 @@ decreasing_by all_goals exact Nat.lt_succ_self _
   (source_valid_length k_slot_bound) ∧ (source_valid_length (k_slot_bound + k_source_len)) -/
 def decode_access_list_keys (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (addr : (Vector (BitVec 8) 20)) (tail : (AccessListDecode k_address_bound k_slot_bound)) : SailM (AccessListDecode k_address_bound (k_slot_bound + k_source_len)) := do
   let _measure := (k_source_len : Int)
-  if ((_measure <b 0) : Bool)
+  if _sailIf0 : ((_measure <b 0) : Bool) = true
   then throw Error.Exit
-  else (_rec_decode_access_list_keys cursor addr tail (_measure + 1))
+  else
+    (do
+      (do
+        let indexRefinedResult ← (_rec_decode_access_list_keys cursor addr tail (_measure + 1))
+        pure (cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) (indexRefinedResult))))
 
 /- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
   ≤ _reclimit -/
@@ -140,8 +144,9 @@ def _rec_decode_access_list_entries (cursor : (StatelessInputSliceFields k_sourc
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((k_source_len == 0) : Bool)
-      then (pure EMPTY_ACCESS_LIST_DECODE)
+      if _sailIf0 : ((k_source_len == 0) : Bool) = true
+      then
+        (pure ((cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) (EMPTY_ACCESS_LIST_DECODE)) : (AccessListDecode k_source_len k_source_len)))
       else
         (do
           let ⟨_, ⟨_, entry⟩⟩ ← do (rlp_decode_item cursor)
@@ -183,16 +188,16 @@ def decode_access_list (f : (RlpFieldRef k_source_off k_source_len k_content_len
               slot_count := decoded.slot_count }))
   else (fatal_error RlpDecode)
 
-def BLOB_HASH_RLP_LENGTH : Nat := 33
+abbrev BLOB_HASH_RLP_LENGTH : Nat := 33
 
-def BLOB_HASH_LENGTH : Nat := WORD_BYTE_LENGTH
+abbrev BLOB_HASH_LENGTH : Nat := 32
 
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex551249_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex551247_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex551249_ ∧ k_ex551249_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex551247_ ∧ k_ex551247_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -505,7 +510,7 @@ def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
           max_fee := gp,
           max_blob_fee := ZERO_WORD,
           max_priority_fee := gp,
-          authorizations := EMPTY_AUTHORIZATION_LIST_REF,
+          authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
           pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
@@ -579,7 +584,7 @@ def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
           max_fee := gp,
           max_blob_fee := ZERO_WORD,
           max_priority_fee := gp,
-          authorizations := EMPTY_AUTHORIZATION_LIST_REF,
+          authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
           pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
@@ -654,7 +659,7 @@ def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
           max_fee := ← (rlp_decode_u256 mf_f),
           max_blob_fee := ZERO_WORD,
           max_priority_fee := ← (rlp_decode_u256 mp_f),
-          authorizations := EMPTY_AUTHORIZATION_LIST_REF,
+          authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
           pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
@@ -734,7 +739,7 @@ def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
           max_fee := ← (rlp_decode_u256 mf_f),
           max_blob_fee := ← (rlp_decode_u256 mbf_f),
           max_priority_fee := ← (rlp_decode_u256 mp_f),
-          authorizations := EMPTY_AUTHORIZATION_LIST_REF,
+          authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := blob_hashes,
           pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
