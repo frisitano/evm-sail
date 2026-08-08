@@ -8,14 +8,6 @@ contracts for the crypto core, the input oracle, and the mutable host
 stores — appears to every target as a set of bodyless typed parameters,
 and each target supplies (or assumes) those axioms in its own idiom.
 
-| target | contract layer | output |
-| --- | --- | --- |
-| **C (spec)** | GMP-backed reference ABI | the byte-exact reference validator used by the harness |
-| **C (optimized)** | fixed-layout ABI: 4×u64 words, u64-lane addresses, pointer-backed stores, cursor tokens | the research-centric optimised zkEVM guest |
-| **Lean** | axiom stubs for the host interface | the model as Lean definitions for proof work |
-| **Coq** | `ExternBoundary` parameters | the model as Coq definitions |
-| **Python** | host-contract protocol stubs | an executable Python rendering, comparable against `ethereum/execution-specs` |
-
 Both C backends compile against the *generated* model header and name its
 concrete types directly — layouts are never hand-mirrored. The optimized
 backend may additionally replace whole operations with semantically equal
@@ -29,19 +21,14 @@ Every target's contract layer and generated output lives in the
 repository — every target has the same shape, an axiom or contract layer
 plus the generated sources extracted from the Sail model:
 
-| target | contract layer | generated output |
+| target | generated output | contract layer |
 | --- | --- | --- |
-| C (reference) | [`extractions/c/spec/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/contract) | [`extractions/c/spec/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/src) |
-| C (optimized) | [`extractions/c/optimised/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/contract) | [`extractions/c/optimised/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/src) |
-| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/lean/contract/HostAxioms.lean) | [`extractions/lean/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/src) |
-| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) | [`extractions/coq/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/src) |
-| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) | [`extractions/python/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python/src) |
+| C (reference) | [`c/spec/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/src) — the byte-exact reference validator | [`c/spec/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/contract) — GMP-backed reference ABI |
+| C (optimised) | [`c/optimised/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/src) — the research-centric optimised zkEVM guest | [`c/optimised/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/contract) — fixed-layout ABI: 4×u64 words, u64-lane addresses, byte pointers, cursor tokens |
+| Lean | [`lean/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/src) — the model as Lean definitions | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/lean/contract/HostAxioms.lean) — host-interface axioms |
+| Coq | [`coq/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/src) — the model as Coq definitions | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) — boundary parameters |
+| Python | [`python/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python/src) — an executable rendering, comparable against `ethereum/execution-specs` | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) — host-contract protocol stubs |
 
-All of these are produced by a
-[custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)
-(branch `evm-sail` of a Sail fork), which adds the bound-driven C
-specialization, the splice mechanism, and the proof-aware narrowing
-policies these extractions rely on.
 
 The Sail source these are extracted from is
 [`sail/`](https://github.com/frisitano/evm-sail/tree/main/sail); the
