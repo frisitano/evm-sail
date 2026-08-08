@@ -361,6 +361,8 @@
   white-space: nowrap;
 }
 
+/* The groups are kept atomic with non-breaking spaces in the renderer, so the
+   line may only fold at the separators when the guest column is narrow. */
 .evmsail-perf-comparison__meta {
   display: block;
   margin-bottom: 0.18rem;
@@ -368,7 +370,6 @@
   text-align: right;
   font-size: 0.58rem;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .evmsail-perf-comparison__track {
@@ -397,6 +398,55 @@
 
 .evmsail-perf-table-wrap table {
   width: 100%;
+}
+
+/*
+ * The per-operation and per-scope tables are one shared grid: both spend the
+ * same width on their leading label columns and split the remainder equally
+ * between the guests, so a guest column is the same width in both tables.
+ * `--evmsail-perf-guest-count` is set by the renderer from the catalog.
+ */
+[data-evmsail-performance-dashboard] {
+  /* Leading label columns; the scope table splits this between scope and
+     family, the operation table spends it all on the operation name. */
+  --evmsail-perf-label-basis: 16rem;
+  --evmsail-perf-scope-column: 9.5rem;
+  /* Floor for one guest column, below which the wrapper scrolls instead. */
+  --evmsail-perf-guest-column: 9rem;
+}
+
+/*
+ * The theme lays a bare table out as an `inline-block` scroll box, which hides
+ * the real table box behind an anonymous one that `table-layout` cannot reach.
+ * The wrapper already scrolls, so these two tables opt back into a table box —
+ * at a specificity that outranks `.md-typeset table:not([class])`.
+ */
+.md-typeset .evmsail-perf-table-wrap--grid table:not([class]) {
+  display: table;
+  table-layout: fixed;
+  min-width: calc(
+    var(--evmsail-perf-label-basis) + var(--evmsail-perf-guest-count, 3) *
+      var(--evmsail-perf-guest-column)
+  );
+}
+
+.evmsail-perf-table-wrap--operations th:first-child {
+  width: var(--evmsail-perf-label-basis);
+}
+
+.evmsail-perf-table-wrap--scopes th:first-child {
+  width: var(--evmsail-perf-scope-column);
+}
+
+.evmsail-perf-table-wrap--scopes th:nth-child(2) {
+  width: calc(
+    var(--evmsail-perf-label-basis) - var(--evmsail-perf-scope-column)
+  );
+}
+
+.evmsail-perf-table-wrap--scopes td:first-child,
+.evmsail-perf-table-wrap--scopes td:nth-child(2) {
+  overflow-wrap: anywhere;
 }
 
 .evmsail-perf-function {

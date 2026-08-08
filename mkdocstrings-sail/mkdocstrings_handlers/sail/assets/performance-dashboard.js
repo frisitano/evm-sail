@@ -843,13 +843,15 @@
         );
         const executions =
           (entry.op_count || 0) + (entry.frop_count || 0);
+        // Non-breaking spaces keep each counter with its label, so a narrow
+        // guest column folds this line only at the separators.
         cell.insertBefore(
           element(
             "span",
             "evmsail-perf-comparison__meta",
-            `${number.format(executions)} executions · ` +
-              `OP ${number.format(entry.op_count || 0)} · ` +
-              `FROP ${number.format(entry.frop_count || 0)}`,
+            `${number.format(executions)}\u00a0executions · ` +
+              `OP\u00a0${number.format(entry.op_count || 0)} · ` +
+              `FROP\u00a0${number.format(entry.frop_count || 0)}`,
           ),
           cell.lastChild,
         );
@@ -1111,7 +1113,11 @@
 
     const detailSection = element("section", "evmsail-perf-section");
     const detailsHelp = element("p", "evmsail-perf-help");
-    const detailWrap = element("div", "evmsail-perf-table-wrap");
+    const detailWrap = element(
+      "div",
+      "evmsail-perf-table-wrap evmsail-perf-table-wrap--grid " +
+        "evmsail-perf-table-wrap--scopes",
+    );
     const detailTable = document.createElement("table");
     const detailHead = document.createElement("thead");
     const detailsHeader = document.createElement("tr");
@@ -1132,7 +1138,11 @@
     );
 
     const operationSection = element("section", "evmsail-perf-section");
-    const operationWrap = element("div", "evmsail-perf-table-wrap");
+    const operationWrap = element(
+      "div",
+      "evmsail-perf-table-wrap evmsail-perf-table-wrap--grid " +
+        "evmsail-perf-table-wrap--operations",
+    );
     const operationTable = document.createElement("table");
     const operationHead = document.createElement("thead");
     const operationsHeader = document.createElement("tr");
@@ -1303,6 +1313,12 @@
   // actually charged for. Instruction steps remain one toggle away.
   let measure = MEASURES.cost;
     let functionGuest = guests[0]?.name;
+    // The shared operation/scope grid reserves one column per guest, so its
+    // minimum table width has to know how many guests the catalog carries.
+    root.style.setProperty(
+      "--evmsail-perf-guest-count",
+      String(Math.max(1, guests.length)),
+    );
     renderLegend(view, guests);
 
     function applyMeasureButtons() {
