@@ -7,6 +7,14 @@ and a gas counter, and message calls and contract creations push new
 frames. Every operation is metered — a frame halts exceptionally the
 moment its gas is exhausted — so execution is total by construction.
 
+The section follows the Yellow Paper's state-passing transition
+μ′ = Ξ(μ): the hot machine state — the program counter, the remaining
+gas, the operand-stack cursor, and the frame-memory extent — is carried
+by value from the run loop through every opcode handler and returned
+updated. The frame registers behind those values are authoritative only
+at frame boundaries: frame save and restore around sub-calls, and the
+transaction wrapper.
+
 Read the pages in order:
 
 - [Machine state](machine.md) — the frame: operand stack, memory,

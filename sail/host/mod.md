@@ -41,5 +41,6 @@ natively, reached through the same axiom discipline.
 - [The output buffer](output.md) — frozen frame output and the public
   output stream.
 - [Scratch arena](scratch.md) — bulk byte construction space.
-- [The operand stack](stack.md) — the per-frame word stack.
+- [The operand stack](stack.md) — the per-frame word stack, addressed
+  through the carried cursor token.
 - [State store axioms](state.md) — the mutable state containers.
