@@ -15,6 +15,8 @@ import adapter
 import evm
 import evm.HostContract as host_contract
 from evm.evm import machine
+from evm.host.state import BalAccount, BalAccountEnd, BalEmpty, BalStorageChange
+from evm.primitives.account import StorageKey, StorageTxCleared, StorageTxMiss
 
 
 def expect_raises(error: type[BaseException], action) -> None:
@@ -217,6 +219,15 @@ def main() -> None:
         host_contract.stack_leave_frame()
         assert host_contract.stack_pop_word() == 7
 
+        isolated_host_state.stateless_input_bytes = b"\x05\x06\x07"
+        input_slice = host_contract.stateless_input()
+        assert input_slice.len == 3
+        assert int(host_contract.stateless_input_byte_at(input_slice, 2)) == 7
+        stored = host_contract.host_scratch_store_stateless_input(0, input_slice)
+        assert host_contract.stateless_input_keccak256(
+            input_slice
+        ) == host_contract.scratch_keccak256(stored.value)
+
         state_address = Bytes20(b"\x11" * 20)
         assert host_contract.account_is_warm(state_address) is False
         host_contract.account_mark_warm(state_address)
@@ -225,8 +236,35 @@ def main() -> None:
         host_contract.state_journal_checkpoint()
         host_contract.transient_store(state_address, 3, 9)
         assert host_contract.transient_load(state_address, 3) == 9
+        cold_address = Bytes20(b"\x22" * 20)
+        host_contract.account_mark_warm(cold_address)
+        host_contract.storage_mark_warm(cold_address, 4)
+        assert host_contract.account_is_warm(cold_address) is True
+        assert host_contract.storage_is_warm(cold_address, 4) is True
+        slot_key = StorageKey(addr=cold_address, slot=4)
+        assert isinstance(host_contract.storage_tx_get(slot_key), StorageTxMiss)
+        host_contract.storage_tx_clear(cold_address)
+        assert isinstance(host_contract.storage_tx_get(slot_key), StorageTxCleared)
         host_contract.state_journal_revert()
         assert host_contract.transient_load(state_address, 3) == 5
+        assert host_contract.account_is_warm(state_address) is True
+        assert host_contract.account_is_warm(cold_address) is False
+        assert host_contract.storage_is_warm(cold_address, 4) is False
+        assert isinstance(host_contract.storage_tx_get(slot_key), StorageTxMiss)
+
+        host_contract.bal_reset()
+        host_contract.bal_storage_change(1, state_address, 6, 7)
+        host_contract.bal_storage_change(2, state_address, 6, 8)
+        host_contract.bal_prepare_iter()
+        assert isinstance(host_contract.bal_iter_next(), BalAccount)
+        first = host_contract.bal_iter_next()
+        assert isinstance(first, BalStorageChange)
+        assert (first.value.index, first.value.value) == (1, 7)
+        second = host_contract.bal_iter_next()
+        assert isinstance(second, BalStorageChange)
+        assert (second.value.index, second.value.value) == (2, 8)
+        assert isinstance(host_contract.bal_iter_next(), BalAccountEnd)
+        assert isinstance(host_contract.bal_iter_next(), BalEmpty)
 
         host_contract.logs_tx_reset()
         host_contract.log_begin(state_address)

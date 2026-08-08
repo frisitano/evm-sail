@@ -22,11 +22,17 @@ backend commands.
 `contracts/HostContract.py` give the host
 account, persistent-storage, transient-storage, access-warmth, and log externs
 one extensional world-state semantics. The contract exposes total logical maps,
-transaction-entry originals, transaction snapshots, rollback, transaction
-commit, and exact ordered deltas. Sail's opaque `StateCheckpoint` is connected
-to a semantic snapshot only by a ghost relation; numeric handles, registries,
-cache rows, generations, undo cursors, allocation, physical cleanup, and
-copy-on-write rules are backend choices, not specification behavior.
+transaction-entry originals, epoch-valued EIP-2929 warmth, generation-gated
+storage clears, transaction commit, and exact ordered deltas. Frame rollback
+is the closed `StateJournalEntry` operation algebra of
+`sail/host/journal.sail`: every revertible mutation records the exact prior
+field, checkpoint and commit are markers inside the same ordered stream (a
+committed child's mutations stay revertible by its parent), and revert
+replays entries backwards to the innermost open checkpoint. No checkpoint
+handle crosses the boundary; a backend's physical journal storage is related
+to the reference entry stream only by a ghost relation. Registries, cache
+rows, undo cursors, allocation, physical cleanup, and copy-on-write rules
+remain backend choices, not specification behavior.
 
 ```sh
 rtk make check-contracts
