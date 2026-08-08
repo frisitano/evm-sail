@@ -25,11 +25,11 @@ function memory_required_size(start, size) =
 
 /*! Computes the exact incremental cost for materializable endpoints and uses
     the proven-unaffordable charge sentinel for every saturated endpoint. */
-function memory_expansion_cost(required_size) =
+function memory_expansion_cost(mem, required_size) =
     if required_size <= sizeof(memory_region_bound) then {
         let materialized_size : memory_length = required_size;
         let new_words = memory_word_count(materialized_size);
-        let old_words = memory_word_count(evm_memory_high_water());
+        let old_words = memory_word_count(memory_high_water(mem));
         if new_words <= old_words then {
             0
         } else {

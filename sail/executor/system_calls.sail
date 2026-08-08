@@ -71,7 +71,7 @@ function enter_system_call_frame(tgt : address, input : CalldataSlice) -> unit =
     state_gas_remaining = gas_limits.system_state_limit;
     state_gas_spilled = STATE_GAS_SPILL_ZERO;
     frame_refund = GAS_REFUND_ZERO;
-    stack_reset();
+    stack_top = stack_reset();
     returndata_clear();
     frame_status = Running();
     calldata = input;
@@ -102,10 +102,12 @@ function system_call(tgt : address, input : hash) -> unit = {
      * above that frame, so its own memory writes cannot mutate calldata. */
     memory_reset();
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-    let _ = memory_expand_to(input_range.len);
+    let (_, expanded_memory) = memory_expand_to(evm_memory, input_range.len);
+    evm_memory = expanded_memory;
     let input_word = hash_to_word(input);
     mem_store_word(input_range.off, input_word);
-    let input_slice = active_memory_slice(input_range.off, input_range.len);
+    let (input_slice, accessed_memory) = active_memory_slice(evm_memory, input_range.off, input_range.len);
+    evm_memory = accessed_memory;
     let parent_memory = memory_frame_enter();
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);

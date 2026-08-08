@@ -32,9 +32,11 @@ function system_call(tgt : address, input : hash) -> unit = {
     } else {
         memory_reset();
         let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-        let _ = memory_expand_to(input_range.len);
+        let (_, expanded_memory) = memory_expand_to(evm_memory, input_range.len);
+        evm_memory = expanded_memory;
         mem_store_word(input_range.off, hash_to_word(input));
-        let input_slice = active_memory_slice(input_range.off, input_range.len);
+        let (input_slice, accessed_memory) = active_memory_slice(evm_memory, input_range.off, input_range.len);
+        evm_memory = accessed_memory;
         let parent_memory = memory_frame_enter();
         enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.bytes, input_slice.len)));
         let _ = profiled_system_call_interpret();

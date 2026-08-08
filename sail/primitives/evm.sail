@@ -549,6 +549,7 @@ struct Message = {
 struct FrameCheckpoint = {
     pc : code_pointer,
     gas_remaining : gas,
+    stack_top : StackTop,
     state_gas_remaining : gas,
     state_gas_spilled : state_gas_spill,
     refund : gas_refund,

@@ -12,10 +12,15 @@
  * termination measure: that counter is an unbounded mathematical int that
  * exists only to supply a decreasing measure to total extraction targets,
  * and --c-require-bounded-int (implied by --c-optimized-model) rejects it.
- * Keep this loop in sync with the canonical definition. */
+ * Keep this loop in sync with the canonical definition.
+ *
+ * Every arm follows the state-passing convention: it computes the advanced
+ * program counter, validates the instruction stack effect against the
+ * carried cursor and gas, and threads the carried machine state through the
+ * narrow handler exactly as the canonical fetch/execute pipeline does. */
 
 $[c_inline]
-val fetch : unit -> ast
+val fetch : code_pointer -> (code_pointer, ast)
 
 $[c_inline]
 val decode_simple : opcode -> ast
@@ -31,1045 +36,1566 @@ val decode_simple : opcode -> ast
  * The canonical pipeline remains the definition for the spec build and
  * every extraction target. */
 $[c_inline]
-val step_fused : unit -> unit
+val step_fused : (code_pointer, StackTop, EvmMemorySlice, gas) -> (code_pointer, StackTop, EvmMemorySlice, gas)
 
-function step_fused() -> unit = {
+function step_fused(current, top, mem, g) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    let current = pc;
     let analyzed = frame_code;
     let code = code_bytes(analyzed);
     let code_length = code.len;
     let past_end = not_bool(current < code_length);
     if past_end then {
-        if validate_stack(0, 0) then {
+        let (stop_valid, g1) = validate_stack(g, top, 0, 0);
+        if stop_valid then {
             execute_stop()
-        }
+        };
+        (current, top, mem, g1)
     } else {
         let opcode_byte = slice_byte(code, current);
         let opcode : opcode = unsigned(opcode_byte);
         let immediate_offset : code_pointer = current + 1;
         match opcode {
             0 => {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
+                let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                if stack_valid then {
                     execute_stop()
-                }
+                };
+                (immediate_offset, top, mem, g1)
             },
             1 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_add()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_add(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             2 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_mul()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_mul(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             3 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_sub()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_sub(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             4 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_div()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_div(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             5 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_sdiv()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_sdiv(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             6 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_mod()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_mod(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             7 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_smod()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_smod(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             8 => {
-                pc = immediate_offset;
-                if validate_stack(3, 1) then {
-                    execute_addmod()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_addmod(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             9 => {
-                pc = immediate_offset;
-                if validate_stack(3, 1) then {
-                    execute_mulmod()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_mulmod(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             10 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_exp()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_exp(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             11 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_signextend()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_signextend(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             16 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_lt()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_lt(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             17 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_gt()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_gt(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             18 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_slt()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_slt(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             19 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_sgt()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_sgt(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             20 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_eq()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_eq(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             21 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_iszero()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_iszero(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             22 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_and()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_and(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             23 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_or()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_or(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             24 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_xor()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_xor(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             25 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_not()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_not(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             26 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_byte()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_byte(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             27 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_shl()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_shl(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             28 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_shr()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_shr(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             29 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_sar()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_sar(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             30 => {
-                pc = immediate_offset;
                 if profile.fork >= Osaka then {
-                    if validate_stack(1, 1) then {
-                        execute_clz()
+                    let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_clz(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             32 => {
-                pc = immediate_offset;
-                if validate_stack(2, 1) then {
-                    execute_keccak256()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 1);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_keccak256(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             48 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_address()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_address(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             49 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_balance()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_balance(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             50 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_origin()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_origin(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             51 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_caller()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_caller(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             52 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_callvalue()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_callvalue(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             53 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_calldataload()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_calldataload(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             54 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_calldatasize()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_calldatasize(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             55 => {
-                pc = immediate_offset;
-                if validate_stack(3, 0) then {
-                    execute_calldatacopy()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_calldatacopy(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             56 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_codesize()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_codesize(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             57 => {
-                pc = immediate_offset;
-                if validate_stack(3, 0) then {
-                    execute_codecopy()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_codecopy(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             58 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_gasprice()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_gasprice(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             59 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_extcodesize()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_extcodesize(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             60 => {
-                pc = immediate_offset;
-                if validate_stack(4, 0) then {
-                    execute_extcodecopy()
+                let (stack_valid, g1) = validate_stack(g, top, 4, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_extcodecopy(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             61 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_returndatasize()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_returndatasize(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             62 => {
-                pc = immediate_offset;
-                if validate_stack(3, 0) then {
-                    execute_returndatacopy()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_returndatacopy(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             63 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_extcodehash()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_extcodehash(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             64 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_blockhash()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_blockhash(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             65 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_coinbase()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_coinbase(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             66 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_timestamp()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_timestamp(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             67 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_number()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_number(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             68 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_prevrandao()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_prevrandao(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             69 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_gaslimit()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_gaslimit(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             70 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_chainid()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_chainid(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             71 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_selfbalance()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_selfbalance(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             72 => {
-                pc = immediate_offset;
                 if profile.fork >= London then {
-                    if validate_stack(0, 1) then {
-                        execute_basefee()
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_basefee(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             73 => {
-                pc = immediate_offset;
                 if profile.fork >= Cancun then {
-                    if validate_stack(1, 1) then {
-                        execute_blobhash()
+                    let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_blobhash(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             74 => {
-                pc = immediate_offset;
                 if profile.fork >= Cancun then {
-                    if validate_stack(0, 1) then {
-                        execute_blobbasefee()
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_blobbasefee(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             75 => {
-                pc = immediate_offset;
                 if profile.fork >= Amsterdam then {
-                    if validate_stack(0, 1) then {
-                        execute_slotnum()
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_slotnum(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             80 => {
-                pc = immediate_offset;
-                if validate_stack(1, 0) then {
-                    execute_pop()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 0);
+                if stack_valid then {
+                    let (top1, g2) = execute_pop(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             81 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_mload()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_mload(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             82 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_mstore()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_mstore(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             83 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_mstore8()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_mstore8(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             84 => {
-                pc = immediate_offset;
-                if validate_stack(1, 1) then {
-                    execute_sload()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_sload(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             85 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_sstore()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, g2) = execute_sstore(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             86 => {
-                pc = immediate_offset;
-                if validate_stack(1, 0) then {
-                    execute_jump()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 0);
+                if stack_valid then {
+                    let (pc1, top1, g2) = execute_jump(immediate_offset, top, g1);
+                    (pc1, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             87 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_jumpi()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (pc1, top1, g2) = execute_jumpi(immediate_offset, top, g1);
+                    (pc1, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             88 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_pc()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_pc(immediate_offset, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             89 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_msize()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_msize(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             90 => {
-                pc = immediate_offset;
-                if validate_stack(0, 1) then {
-                    execute_gas()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_gas(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             91 => {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
-                    execute_jumpdest()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                if stack_valid then {
+                    (immediate_offset, top, mem, execute_jumpdest(g1))
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             92 => {
-                pc = immediate_offset;
                 if profile.fork >= Cancun then {
-                    if validate_stack(1, 1) then {
-                        execute_tload()
+                    let (stack_valid, g1) = validate_stack(g, top, 1, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_tload(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             93 => {
-                pc = immediate_offset;
                 if profile.fork >= Cancun then {
-                    if validate_stack(2, 0) then {
-                        execute_tstore()
+                    let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                    if stack_valid then {
+                        let (top1, g2) = execute_tstore(top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             94 => {
-                pc = immediate_offset;
                 if profile.fork >= Cancun then {
-                    if validate_stack(3, 0) then {
-                        execute_mcopy()
+                    let (stack_valid, g1) = validate_stack(g, top, 3, 0);
+                    if stack_valid then {
+                        let (top1, mem1, g2) = execute_mcopy(top, mem, g1);
+                        (immediate_offset, top1, mem1, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 0) then {
-                    execute_invalid()
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             95 => {
-                pc = immediate_offset;
                 if profile.fork < Shanghai then {
-                    if validate_stack(0, 0) then {
-                        execute_invalid()
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
+                    } else {
+                        (immediate_offset, top, mem, g1)
                     }
-                } else if validate_stack(0, 1) then {
-                    execute_push(0, read_push(code, immediate_offset, 0))
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                    if stack_valid then {
+                        let (top1, g2) = execute_push(0, read_push(code, immediate_offset, 0), top, g1);
+                        (immediate_offset, top1, mem, g2)
+                    } else {
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             96 => {
                 let value = read_push(code, immediate_offset, 1);
-                pc = current + 2;
-                if validate_stack(0, 1) then {
-                    execute_push(1, value)
+                let after_immediate : code_pointer = current + 2;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(1, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             97 => {
                 let value = read_push(code, immediate_offset, 2);
-                pc = current + 3;
-                if validate_stack(0, 1) then {
-                    execute_push(2, value)
+                let after_immediate : code_pointer = current + 3;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(2, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             98 => {
                 let value = read_push(code, immediate_offset, 3);
-                pc = current + 4;
-                if validate_stack(0, 1) then {
-                    execute_push(3, value)
+                let after_immediate : code_pointer = current + 4;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(3, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             99 => {
                 let value = read_push(code, immediate_offset, 4);
-                pc = current + 5;
-                if validate_stack(0, 1) then {
-                    execute_push(4, value)
+                let after_immediate : code_pointer = current + 5;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(4, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             100 => {
                 let value = read_push(code, immediate_offset, 5);
-                pc = current + 6;
-                if validate_stack(0, 1) then {
-                    execute_push(5, value)
+                let after_immediate : code_pointer = current + 6;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(5, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             101 => {
                 let value = read_push(code, immediate_offset, 6);
-                pc = current + 7;
-                if validate_stack(0, 1) then {
-                    execute_push(6, value)
+                let after_immediate : code_pointer = current + 7;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(6, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             102 => {
                 let value = read_push(code, immediate_offset, 7);
-                pc = current + 8;
-                if validate_stack(0, 1) then {
-                    execute_push(7, value)
+                let after_immediate : code_pointer = current + 8;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(7, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             103 => {
                 let value = read_push(code, immediate_offset, 8);
-                pc = current + 9;
-                if validate_stack(0, 1) then {
-                    execute_push(8, value)
+                let after_immediate : code_pointer = current + 9;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(8, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             104 => {
                 let value = read_push(code, immediate_offset, 9);
-                pc = current + 10;
-                if validate_stack(0, 1) then {
-                    execute_push(9, value)
+                let after_immediate : code_pointer = current + 10;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(9, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             105 => {
                 let value = read_push(code, immediate_offset, 10);
-                pc = current + 11;
-                if validate_stack(0, 1) then {
-                    execute_push(10, value)
+                let after_immediate : code_pointer = current + 11;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(10, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             106 => {
                 let value = read_push(code, immediate_offset, 11);
-                pc = current + 12;
-                if validate_stack(0, 1) then {
-                    execute_push(11, value)
+                let after_immediate : code_pointer = current + 12;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(11, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             107 => {
                 let value = read_push(code, immediate_offset, 12);
-                pc = current + 13;
-                if validate_stack(0, 1) then {
-                    execute_push(12, value)
+                let after_immediate : code_pointer = current + 13;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(12, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             108 => {
                 let value = read_push(code, immediate_offset, 13);
-                pc = current + 14;
-                if validate_stack(0, 1) then {
-                    execute_push(13, value)
+                let after_immediate : code_pointer = current + 14;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(13, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             109 => {
                 let value = read_push(code, immediate_offset, 14);
-                pc = current + 15;
-                if validate_stack(0, 1) then {
-                    execute_push(14, value)
+                let after_immediate : code_pointer = current + 15;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(14, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             110 => {
                 let value = read_push(code, immediate_offset, 15);
-                pc = current + 16;
-                if validate_stack(0, 1) then {
-                    execute_push(15, value)
+                let after_immediate : code_pointer = current + 16;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(15, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             111 => {
                 let value = read_push(code, immediate_offset, 16);
-                pc = current + 17;
-                if validate_stack(0, 1) then {
-                    execute_push(16, value)
+                let after_immediate : code_pointer = current + 17;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(16, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             112 => {
                 let value = read_push(code, immediate_offset, 17);
-                pc = current + 18;
-                if validate_stack(0, 1) then {
-                    execute_push(17, value)
+                let after_immediate : code_pointer = current + 18;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(17, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             113 => {
                 let value = read_push(code, immediate_offset, 18);
-                pc = current + 19;
-                if validate_stack(0, 1) then {
-                    execute_push(18, value)
+                let after_immediate : code_pointer = current + 19;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(18, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             114 => {
                 let value = read_push(code, immediate_offset, 19);
-                pc = current + 20;
-                if validate_stack(0, 1) then {
-                    execute_push(19, value)
+                let after_immediate : code_pointer = current + 20;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(19, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             115 => {
                 let value = read_push(code, immediate_offset, 20);
-                pc = current + 21;
-                if validate_stack(0, 1) then {
-                    execute_push(20, value)
+                let after_immediate : code_pointer = current + 21;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(20, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             116 => {
                 let value = read_push(code, immediate_offset, 21);
-                pc = current + 22;
-                if validate_stack(0, 1) then {
-                    execute_push(21, value)
+                let after_immediate : code_pointer = current + 22;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(21, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             117 => {
                 let value = read_push(code, immediate_offset, 22);
-                pc = current + 23;
-                if validate_stack(0, 1) then {
-                    execute_push(22, value)
+                let after_immediate : code_pointer = current + 23;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(22, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             118 => {
                 let value = read_push(code, immediate_offset, 23);
-                pc = current + 24;
-                if validate_stack(0, 1) then {
-                    execute_push(23, value)
+                let after_immediate : code_pointer = current + 24;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(23, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             119 => {
                 let value = read_push(code, immediate_offset, 24);
-                pc = current + 25;
-                if validate_stack(0, 1) then {
-                    execute_push(24, value)
+                let after_immediate : code_pointer = current + 25;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(24, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             120 => {
                 let value = read_push(code, immediate_offset, 25);
-                pc = current + 26;
-                if validate_stack(0, 1) then {
-                    execute_push(25, value)
+                let after_immediate : code_pointer = current + 26;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(25, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             121 => {
                 let value = read_push(code, immediate_offset, 26);
-                pc = current + 27;
-                if validate_stack(0, 1) then {
-                    execute_push(26, value)
+                let after_immediate : code_pointer = current + 27;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(26, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             122 => {
                 let value = read_push(code, immediate_offset, 27);
-                pc = current + 28;
-                if validate_stack(0, 1) then {
-                    execute_push(27, value)
+                let after_immediate : code_pointer = current + 28;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(27, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             123 => {
                 let value = read_push(code, immediate_offset, 28);
-                pc = current + 29;
-                if validate_stack(0, 1) then {
-                    execute_push(28, value)
+                let after_immediate : code_pointer = current + 29;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(28, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             124 => {
                 let value = read_push(code, immediate_offset, 29);
-                pc = current + 30;
-                if validate_stack(0, 1) then {
-                    execute_push(29, value)
+                let after_immediate : code_pointer = current + 30;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(29, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             125 => {
                 let value = read_push(code, immediate_offset, 30);
-                pc = current + 31;
-                if validate_stack(0, 1) then {
-                    execute_push(30, value)
+                let after_immediate : code_pointer = current + 31;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(30, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             126 => {
                 let value = read_push(code, immediate_offset, 31);
-                pc = current + 32;
-                if validate_stack(0, 1) then {
-                    execute_push(31, value)
+                let after_immediate : code_pointer = current + 32;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(31, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             127 => {
                 let value = read_push(code, immediate_offset, 32);
-                pc = current + 33;
-                if validate_stack(0, 1) then {
-                    execute_push(32, value)
+                let after_immediate : code_pointer = current + 33;
+                let (stack_valid, g1) = validate_stack(g, top, 0, 1);
+                if stack_valid then {
+                    let (top1, g2) = execute_push(32, value, top, g1);
+                    (after_immediate, top1, mem, g2)
+                } else {
+                    (after_immediate, top, mem, g1)
                 }
             },
             128 => {
-                pc = immediate_offset;
-                if validate_stack(1, 2) then {
-                    execute_dup(1)
+                let (stack_valid, g1) = validate_stack(g, top, 1, 2);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(1, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             129 => {
-                pc = immediate_offset;
-                if validate_stack(2, 3) then {
-                    execute_dup(2)
+                let (stack_valid, g1) = validate_stack(g, top, 2, 3);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(2, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             130 => {
-                pc = immediate_offset;
-                if validate_stack(3, 4) then {
-                    execute_dup(3)
+                let (stack_valid, g1) = validate_stack(g, top, 3, 4);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(3, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             131 => {
-                pc = immediate_offset;
-                if validate_stack(4, 5) then {
-                    execute_dup(4)
+                let (stack_valid, g1) = validate_stack(g, top, 4, 5);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(4, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             132 => {
-                pc = immediate_offset;
-                if validate_stack(5, 6) then {
-                    execute_dup(5)
+                let (stack_valid, g1) = validate_stack(g, top, 5, 6);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(5, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             133 => {
-                pc = immediate_offset;
-                if validate_stack(6, 7) then {
-                    execute_dup(6)
+                let (stack_valid, g1) = validate_stack(g, top, 6, 7);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(6, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             134 => {
-                pc = immediate_offset;
-                if validate_stack(7, 8) then {
-                    execute_dup(7)
+                let (stack_valid, g1) = validate_stack(g, top, 7, 8);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(7, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             135 => {
-                pc = immediate_offset;
-                if validate_stack(8, 9) then {
-                    execute_dup(8)
+                let (stack_valid, g1) = validate_stack(g, top, 8, 9);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(8, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             136 => {
-                pc = immediate_offset;
-                if validate_stack(9, 10) then {
-                    execute_dup(9)
+                let (stack_valid, g1) = validate_stack(g, top, 9, 10);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(9, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             137 => {
-                pc = immediate_offset;
-                if validate_stack(10, 11) then {
-                    execute_dup(10)
+                let (stack_valid, g1) = validate_stack(g, top, 10, 11);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(10, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             138 => {
-                pc = immediate_offset;
-                if validate_stack(11, 12) then {
-                    execute_dup(11)
+                let (stack_valid, g1) = validate_stack(g, top, 11, 12);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(11, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             139 => {
-                pc = immediate_offset;
-                if validate_stack(12, 13) then {
-                    execute_dup(12)
+                let (stack_valid, g1) = validate_stack(g, top, 12, 13);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(12, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             140 => {
-                pc = immediate_offset;
-                if validate_stack(13, 14) then {
-                    execute_dup(13)
+                let (stack_valid, g1) = validate_stack(g, top, 13, 14);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(13, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             141 => {
-                pc = immediate_offset;
-                if validate_stack(14, 15) then {
-                    execute_dup(14)
+                let (stack_valid, g1) = validate_stack(g, top, 14, 15);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(14, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             142 => {
-                pc = immediate_offset;
-                if validate_stack(15, 16) then {
-                    execute_dup(15)
+                let (stack_valid, g1) = validate_stack(g, top, 15, 16);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(15, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             143 => {
-                pc = immediate_offset;
-                if validate_stack(16, 17) then {
-                    execute_dup(16)
+                let (stack_valid, g1) = validate_stack(g, top, 16, 17);
+                if stack_valid then {
+                    let (top1, g2) = execute_dup(16, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             144 => {
-                pc = immediate_offset;
-                if validate_stack(2, 2) then {
-                    execute_swap(1)
+                let (stack_valid, g1) = validate_stack(g, top, 2, 2);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(1, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             145 => {
-                pc = immediate_offset;
-                if validate_stack(3, 3) then {
-                    execute_swap(2)
+                let (stack_valid, g1) = validate_stack(g, top, 3, 3);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(2, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             146 => {
-                pc = immediate_offset;
-                if validate_stack(4, 4) then {
-                    execute_swap(3)
+                let (stack_valid, g1) = validate_stack(g, top, 4, 4);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(3, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             147 => {
-                pc = immediate_offset;
-                if validate_stack(5, 5) then {
-                    execute_swap(4)
+                let (stack_valid, g1) = validate_stack(g, top, 5, 5);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(4, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             148 => {
-                pc = immediate_offset;
-                if validate_stack(6, 6) then {
-                    execute_swap(5)
+                let (stack_valid, g1) = validate_stack(g, top, 6, 6);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(5, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             149 => {
-                pc = immediate_offset;
-                if validate_stack(7, 7) then {
-                    execute_swap(6)
+                let (stack_valid, g1) = validate_stack(g, top, 7, 7);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(6, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             150 => {
-                pc = immediate_offset;
-                if validate_stack(8, 8) then {
-                    execute_swap(7)
+                let (stack_valid, g1) = validate_stack(g, top, 8, 8);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(7, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             151 => {
-                pc = immediate_offset;
-                if validate_stack(9, 9) then {
-                    execute_swap(8)
+                let (stack_valid, g1) = validate_stack(g, top, 9, 9);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(8, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             152 => {
-                pc = immediate_offset;
-                if validate_stack(10, 10) then {
-                    execute_swap(9)
+                let (stack_valid, g1) = validate_stack(g, top, 10, 10);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(9, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             153 => {
-                pc = immediate_offset;
-                if validate_stack(11, 11) then {
-                    execute_swap(10)
+                let (stack_valid, g1) = validate_stack(g, top, 11, 11);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(10, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             154 => {
-                pc = immediate_offset;
-                if validate_stack(12, 12) then {
-                    execute_swap(11)
+                let (stack_valid, g1) = validate_stack(g, top, 12, 12);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(11, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             155 => {
-                pc = immediate_offset;
-                if validate_stack(13, 13) then {
-                    execute_swap(12)
+                let (stack_valid, g1) = validate_stack(g, top, 13, 13);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(12, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             156 => {
-                pc = immediate_offset;
-                if validate_stack(14, 14) then {
-                    execute_swap(13)
+                let (stack_valid, g1) = validate_stack(g, top, 14, 14);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(13, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             157 => {
-                pc = immediate_offset;
-                if validate_stack(15, 15) then {
-                    execute_swap(14)
+                let (stack_valid, g1) = validate_stack(g, top, 15, 15);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(14, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             158 => {
-                pc = immediate_offset;
-                if validate_stack(16, 16) then {
-                    execute_swap(15)
+                let (stack_valid, g1) = validate_stack(g, top, 16, 16);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(15, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             159 => {
-                pc = immediate_offset;
-                if validate_stack(17, 17) then {
-                    execute_swap(16)
+                let (stack_valid, g1) = validate_stack(g, top, 17, 17);
+                if stack_valid then {
+                    let (top1, g2) = execute_swap(16, top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             160 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_log(0)
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_log(0, top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             161 => {
-                pc = immediate_offset;
-                if validate_stack(3, 0) then {
-                    execute_log(1)
+                let (stack_valid, g1) = validate_stack(g, top, 3, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_log(1, top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             162 => {
-                pc = immediate_offset;
-                if validate_stack(4, 0) then {
-                    execute_log(2)
+                let (stack_valid, g1) = validate_stack(g, top, 4, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_log(2, top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             163 => {
-                pc = immediate_offset;
-                if validate_stack(5, 0) then {
-                    execute_log(3)
+                let (stack_valid, g1) = validate_stack(g, top, 5, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_log(3, top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             164 => {
-                pc = immediate_offset;
-                if validate_stack(6, 0) then {
-                    execute_log(4)
+                let (stack_valid, g1) = validate_stack(g, top, 6, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_log(4, top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
-            230 => if profile.fork >= Amsterdam then {
-                let immediate = slice_byte(code, immediate_offset);
-                let immediate_valid = deep_stack_operation_immediate_valid(DeepStackDuplicate, immediate);
-                pc =
-                    if immediate_valid then {
-                        current + 2
+            230 => {
+                if profile.fork >= Amsterdam then {
+                    let immediate = slice_byte(code, immediate_offset);
+                    let immediate_valid = deep_stack_operation_immediate_valid(DeepStackDuplicate, immediate);
+                    let after_instruction : code_pointer =
+                        if immediate_valid then current + 2 else immediate_offset;
+                    execute(DUPN(immediate), after_instruction, top, mem, g)
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
                     } else {
-                        immediate_offset
-                    };
-                execute(DUPN(immediate))
-            } else {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
-                    execute_invalid()
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
-            231 => if profile.fork >= Amsterdam then {
-                let immediate = slice_byte(code, immediate_offset);
-                let immediate_valid = deep_stack_operation_immediate_valid(DeepStackSwap, immediate);
-                pc =
-                    if immediate_valid then {
-                        current + 2
+            231 => {
+                if profile.fork >= Amsterdam then {
+                    let immediate = slice_byte(code, immediate_offset);
+                    let immediate_valid = deep_stack_operation_immediate_valid(DeepStackSwap, immediate);
+                    let after_instruction : code_pointer =
+                        if immediate_valid then current + 2 else immediate_offset;
+                    execute(SWAPN(immediate), after_instruction, top, mem, g)
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
                     } else {
-                        immediate_offset
-                    };
-                execute(SWAPN(immediate))
-            } else {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
-                    execute_invalid()
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
-            232 => if profile.fork >= Amsterdam then {
-                let immediate = slice_byte(code, immediate_offset);
-                let immediate_valid = deep_stack_operation_immediate_valid(DeepStackExchange, immediate);
-                pc =
-                    if immediate_valid then {
-                        current + 2
+            232 => {
+                if profile.fork >= Amsterdam then {
+                    let immediate = slice_byte(code, immediate_offset);
+                    let immediate_valid = deep_stack_operation_immediate_valid(DeepStackExchange, immediate);
+                    let after_instruction : code_pointer =
+                        if immediate_valid then current + 2 else immediate_offset;
+                    execute(EXCHANGE(immediate), after_instruction, top, mem, g)
+                } else {
+                    let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                    if stack_valid then {
+                        (immediate_offset, top, mem, execute_invalid(g1))
                     } else {
-                        immediate_offset
-                    };
-                execute(EXCHANGE(immediate))
-            } else {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
-                    execute_invalid()
+                        (immediate_offset, top, mem, g1)
+                    }
                 }
             },
             240 => {
-                pc = immediate_offset;
-                if validate_stack(3, 1) then {
-                    execute_create()
+                let (stack_valid, g1) = validate_stack(g, top, 3, 1);
+                if stack_valid then {
+                    execute_create(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             241 => {
-                pc = immediate_offset;
-                if validate_stack(7, 1) then {
-                    execute_call()
+                let (stack_valid, g1) = validate_stack(g, top, 7, 1);
+                if stack_valid then {
+                    execute_call(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             242 => {
-                pc = immediate_offset;
-                if validate_stack(7, 1) then {
-                    execute_callcode()
+                let (stack_valid, g1) = validate_stack(g, top, 7, 1);
+                if stack_valid then {
+                    execute_callcode(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             243 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_return()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_return(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             244 => {
-                pc = immediate_offset;
-                if validate_stack(6, 1) then {
-                    execute_delegatecall()
+                let (stack_valid, g1) = validate_stack(g, top, 6, 1);
+                if stack_valid then {
+                    execute_delegatecall(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             245 => {
-                pc = immediate_offset;
-                if validate_stack(4, 1) then {
-                    execute_create2()
+                let (stack_valid, g1) = validate_stack(g, top, 4, 1);
+                if stack_valid then {
+                    execute_create2(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             250 => {
-                pc = immediate_offset;
-                if validate_stack(6, 1) then {
-                    execute_staticcall()
+                let (stack_valid, g1) = validate_stack(g, top, 6, 1);
+                if stack_valid then {
+                    execute_staticcall(immediate_offset, top, mem, g1)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             253 => {
-                pc = immediate_offset;
-                if validate_stack(2, 0) then {
-                    execute_revert()
+                let (stack_valid, g1) = validate_stack(g, top, 2, 0);
+                if stack_valid then {
+                    let (top1, mem1, g2) = execute_revert(top, mem, g1);
+                    (immediate_offset, top1, mem1, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             255 => {
-                pc = immediate_offset;
-                if validate_stack(1, 0) then {
-                    execute_selfdestruct()
+                let (stack_valid, g1) = validate_stack(g, top, 1, 0);
+                if stack_valid then {
+                    let (top1, g2) = execute_selfdestruct(top, g1);
+                    (immediate_offset, top1, mem, g2)
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
             _ => {
-                pc = immediate_offset;
-                if validate_stack(0, 0) then {
-                    execute_invalid()
+                let (stack_valid, g1) = validate_stack(g, top, 0, 0);
+                if stack_valid then {
+                    (immediate_offset, top, mem, execute_invalid(g1))
+                } else {
+                    (immediate_offset, top, mem, g1)
                 }
             },
         }
@@ -1083,7 +1609,11 @@ function interpret() -> OutputSlice = {
     while interpreting do {
         let running = is_running();
         if running then {
-            step_fused()
+            let (next_pc, next_top, next_mem, next_gas) = step_fused(pc, stack_top, evm_memory, gas_remaining);
+            pc = next_pc;
+            stack_top = next_top;
+            evm_memory = next_mem;
+            gas_remaining = next_gas
         } else {
             let output = frame_output();
             let continuation = frame_stack_pop();

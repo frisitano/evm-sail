@@ -295,6 +295,15 @@ type push_width = range(0, 32)
 type operand_stack_height = range(0, 1024)
 /*! A zero-based index from the top of the operand stack. */
 type stack_index = range(0, 1023)
+/*! The abstract operand-stack cursor for the active frame, threaded by
+    value through the interpreter in the state-passing convention and held
+    in the `stack_top` frame register at frame boundaries. Opaque to Sail:
+    the spec backend represents it as the frame height, the optimized
+    backend as a raw row pointer; both fit one 64-bit value. */
+type StackTop = bits(64)
+/*! The number of slots an operand-stack cursor moves in one advance or
+    retreat. */
+type stack_slot_count = range(0, 1024)
 /*! A nonzero operand-stack position used by DUP and SWAP. */
 type stack_operation_index = range(1, 16)
 /*! The one-based deep-stack index decoded by EIP-8024 DUPN and SWAPN. */

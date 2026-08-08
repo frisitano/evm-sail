@@ -8,6 +8,12 @@ operands, and produces its result or effect. One match arm per opcode,
 grouped by family (arithmetic, bitwise, keccak, environment, block,
 stack/memory, storage, flow, push/dup/swap, log, system).
 
+Handlers follow the state-passing convention (YP μ′ = Ξ(μ)): each takes
+the machine state it uses — the carried gas, the operand-stack cursor,
+the memory cursor for the memory family, and the program counter for the
+flow family — by value and returns it updated. The registers behind these
+values are read and written only at frame boundaries.
+
 Pure compute is done here; every world effect is a kernel syscall
 (`k_*`). All gas and policy stays in the EVM: it marks-and-prices access
 via the kernel's returned warm bit (EIP-2929), decides whether an effect
@@ -21,9 +27,14 @@ opcode bodies live in [execute_opcode][].
 /*! The call-family runner (0 = `CALL`, 1 = `CALLCODE`,
     2 = `DELEGATECALL`, 3 = `STATICCALL`); defined with the
     interpreter. */
-val run_call : CallKind -> unit
+val run_call : (CallKind, code_pointer, StackTop, EvmMemorySlice, gas) -> (code_pointer, StackTop, EvmMemorySlice, gas)
 /*! The contract-creation runner; defined with the interpreter. */
-val run_create : CreateKind -> unit
+val run_create : (CreateKind, code_pointer, StackTop, EvmMemorySlice, gas) -> (
+        code_pointer,
+        StackTop,
+        EvmMemorySlice,
+        gas,
+    )
 
 /*md
 ## Helpers
@@ -33,62 +44,63 @@ val run_create : CreateKind -> unit
 function self_addr() -> address = message.address
 
 /*! EIP-214 write protection: any state-modifying opcode in a
-    `STATICCALL` frame halts exceptionally. State-changing opcodes call
-    this first; `true` means already halted. */
-function guard_static() -> bool =
+    `STATICCALL` frame halts exceptionally on the carried gas.
+    State-changing opcodes call this first; `true` means already
+    halted. */
+function guard_static(g : gas) -> (bool, gas) =
     if message.is_static then {
-        exc_halt(WriteProtection);
-        true
+        (true, exc_halt(g, WriteProtection))
     } else {
-        false
+        (false, g)
     }
 
 /*! `JUMP`/`JUMPI` target validity: the destination must be in code range
     and land on a `JUMPDEST` (the precomputed valid-destination set,
     YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
-    bytes that happen to equal `0x5b` are not valid. */
-function do_jump(destination_value : word) -> unit = {
+    bytes that happen to equal `0x5b` are not valid. Returns the next
+    program counter and the carried gas. */
+function do_jump(pc_in : code_pointer, g : gas, destination_value : word) -> (code_pointer, gas) = {
     let code_length = frame_code_len();
     if destination_value < code_length then {
         let destination : code_pointer = destination_value;
         let valid_destination = frame_jumpdest_valid(destination);
         if valid_destination then {
-            pc = destination
+            (destination, g)
         } else {
-            exc_halt(InvalidJump)
+            (pc_in, exc_halt(g, InvalidJump))
         }
     } else {
-        exc_halt(InvalidJump)
+        (pc_in, exc_halt(g, InvalidJump))
     }
 }
 
 /*! Pops `count` log topics from the stack into its bounded representation. */
-function pop_log_topics(count : log_topic_count) -> LogTopics =
+function pop_log_topics(count : log_topic_count, top : StackTop) -> (LogTopics, StackTop) =
     match count {
-        0 => LogTopics0(),
+        0 => (LogTopics0(), top),
         1 => {
-            let t0 = pop();
-            LogTopics1(t0)
+            let (t0, top1) = pop(top);
+            (LogTopics1(t0), top1)
         },
         2 => {
-            let t0 = pop();
-            let t1 = pop();
-            LogTopics2((t0, t1))
+            let (t0, top1) = pop(top);
+            let (t1, top2) = pop(top1);
+            (LogTopics2((t0, t1)), top2)
         },
         3 => {
-            let t0 = pop();
-            let t1 = pop();
-            let t2 = pop();
-            LogTopics3((t0, t1, t2))
+            let (t0, top1) = pop(top);
+            let (t1, top2) = pop(top1);
+            let (t2, top3) = pop(top2);
+            (LogTopics3((t0, t1, t2)), top3)
         },
         4 => {
-            let t0 = pop();
-            let t1 = pop();
-            let t2 = pop();
-            let t3 = pop();
-            LogTopics4((t0, t1, t2, t3))
+            let (t0, top1) = pop(top);
+            let (t1, top2) = pop(top1);
+            let (t2, top3) = pop(top2);
+            let (t3, top4) = pop(top3);
+            (LogTopics4((t0, t1, t2, t3)), top4)
         },
-        _ => LogTopics0(),
+        _ => (LogTopics0(), top),
     }
 
 /*md
@@ -96,1095 +108,1116 @@ function pop_log_topics(count : log_topic_count) -> LogTopics =
 
 Each semantic opcode constructor has a named body. The standard decoder
 validates the instruction's stack effect before dispatching its `ast` to these
-functions below. Optimized C applies the same validation at its raw-byte
-dispatch boundary before calling a generated body, without materializing an
-`ast`.
+functions below, so the bodies consume and produce operands unchecked.
+Optimized C applies the same validation at its raw-byte dispatch boundary
+before calling a generated body, without materializing an `ast`.
 */
 /*! Implements `ADD`. */
-function execute_add() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_add(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_add(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `MUL`. */
-function execute_mul() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_mul(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_mul(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `SUB`. */
-function execute_sub() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_sub(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_sub(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements unsigned `DIV`. */
-function execute_div() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_div(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_div(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements signed `SDIV`. */
-function execute_sdiv() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_sdiv(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_sdiv(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements unsigned `MOD`. */
-function execute_mod() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_mod(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_mod(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements signed `SMOD`. */
-function execute_smod() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_smod(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_smod(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `ADDMOD`. */
-function execute_addmod() -> unit = {
-    let gas_charged = charge(G_mid);
+function execute_addmod(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_mid);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
-    let n = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
+    let (n, top3) = pop(top2);
     let result = alu_addmod(a, b, n);
-    push(result)
+    (push(top3, result), g1)
 }
 
 /*! Implements `MULMOD`. */
-function execute_mulmod() -> unit = {
-    let gas_charged = charge(G_mid);
+function execute_mulmod(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_mid);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
-    let n = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
+    let (n, top3) = pop(top2);
     let result = alu_mulmod(a, b, n);
-    push(result)
+    (push(top3, result), g1)
 }
 
 /*! Implements `EXP`, including exponent-dependent gas. */
-function execute_exp() -> unit = {
-    let a = pop();
-    let e = pop();
+function execute_exp(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (a, top1) = pop(top);
+    let (e, top2) = pop(top1);
     let gas_cost = exp_gas(e);
-    let gas_charged = charge(gas_cost);
+    let (gas_charged, g1) = charge(g, gas_cost);
     if not_bool(gas_charged) then {
-        return ()
+        return (top2, g1)
     };
     let result = alu_exp(a, e);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `SIGNEXTEND`. */
-function execute_signextend() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_signextend(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let bi = pop();
-    let v = pop();
+    let (bi, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let result = alu_signextend(bi, v);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements unsigned `LT`. */
-function execute_lt() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_lt(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_lt(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements unsigned `GT`. */
-function execute_gt() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_gt(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_gt(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements signed `SLT`. */
-function execute_slt() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_slt(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_slt(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements signed `SGT`. */
-function execute_sgt() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_sgt(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_sgt(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `EQ`. */
-function execute_eq() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_eq(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_eq(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements `ISZERO`. */
-function execute_iszero() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_iszero(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
+    let (a, top1) = pop(top);
     let result = alu_iszero(a);
-    push(result)
+    (push(top1, result), g1)
 }
 
 /*! Implements bitwise `AND`. */
-function execute_and() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_and(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_and(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements bitwise `OR`. */
-function execute_or() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_or(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_or(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements bitwise `XOR`. */
-function execute_xor() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_xor(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
-    let b = pop();
+    let (a, top1) = pop(top);
+    let (b, top2) = pop(top1);
     let result = alu_xor(a, b);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements bitwise `NOT`. */
-function execute_not() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_not(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let a = pop();
+    let (a, top1) = pop(top);
     let result = alu_not(a);
-    push(result)
+    (push(top1, result), g1)
 }
 
 /*! Implements `BYTE`. */
-function execute_byte() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_byte(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let i = pop();
-    let x = pop();
+    let (i, top1) = pop(top);
+    let (x, top2) = pop(top1);
     let result = alu_byte(i, x);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements logical left shift `SHL` (EIP-145). */
-function execute_shl() -> unit = {
+function execute_shl(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-145 */
-    let gas_charged = charge(G_verylow);
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let s = pop();
-    let v = pop();
+    let (s, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let result = alu_shl(s, v);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements logical right shift `SHR` (EIP-145). */
-function execute_shr() -> unit = {
+function execute_shr(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-145 */
-    let gas_charged = charge(G_verylow);
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let s = pop();
-    let v = pop();
+    let (s, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let result = alu_shr(s, v);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements arithmetic right shift `SAR` (EIP-145). */
-function execute_sar() -> unit = {
+function execute_sar(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-145 */
-    let gas_charged = charge(G_verylow);
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let s = pop();
-    let v = pop();
+    let (s, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let result = alu_sar(s, v);
-    push(result)
+    (push(top2, result), g1)
 }
 
 /*! Implements count-leading-zeroes `CLZ` (EIP-7939). */
-function execute_clz() -> unit = {
+function execute_clz(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-7939 */
-    let gas_charged = charge(G_low);
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let x = pop();
+    let (x, top1) = pop(top);
     let result = alu_clz(x);
-    push(result)
+    (push(top1, result), g1)
 }
 
 /*! Implements `KECCAK256` over an expanded memory range. */
-function execute_keccak256() -> unit = {
-    let offset_word = pop();
-    let length_word = pop();
-    let hashing_gas_charged = charge_keccak_gas(length_word);
+function execute_keccak256(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (offset_word, top1) = pop(top);
+    let (length_word, top2) = pop(top1);
+    let (hashing_gas_charged, g1) = charge_keccak_gas(g, length_word);
     if not_bool(hashing_gas_charged) then {
-        return ()
+        return (top2, mem, g1)
     };
     let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g2) = charge(g1, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top2, mem, g2)
     };
     let access = memory_access(offset_word, length_word);
-    expand_memory(access.required_size);
-    let digest = mem_keccak(access.range);
-    push(digest)
+    let mem1 = expand_memory(mem, access.required_size);
+    let (digest, mem2) = mem_keccak(mem1, access.range);
+    (push(top2, digest), mem2, g2)
 }
 
 /*! Implements `ADDRESS`. */
-function execute_address() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_address(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let address = self_addr();
     let address_word = address_to_word(address);
-    push(address_word)
+    (push(top, address_word), g1)
 }
 
 /*! Implements `ORIGIN`. */
-function execute_origin() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_origin(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let origin = k_env(F_Origin);
-    push(origin)
+    (push(top, origin), g1)
 }
 
 /*! Implements `CALLER`. */
-function execute_caller() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_caller(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let caller = address_to_word(message.caller);
-    push(caller)
+    (push(top, caller), g1)
 }
 
 /*! Implements `CALLVALUE`. */
-function execute_callvalue() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_callvalue(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    push(message.value)
+    (push(top, message.value), g1)
 }
 
 /*! Implements `GASPRICE`. */
-function execute_gasprice() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_gasprice(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let gas_price = k_env(F_GasPrice);
-    push(gas_price)
+    (push(top, gas_price), g1)
 }
 
 /*! Implements `CALLDATASIZE`. */
-function execute_calldatasize() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_calldatasize(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let input = calldata;
     let input_length = region_slice_length(input);
     let length_word = word_of_byte_count(input_length);
-    push(length_word)
+    (push(top, length_word), g1)
 }
 
 /*! Implements `CALLDATALOAD`. */
-function execute_calldataload() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_calldataload(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let offset_word = pop();
+    let (offset_word, top1) = pop(top);
     let value = slice_load_word_offset(calldata, offset_word);
-    push(value)
+    (push(top1, value), g1)
 }
 
 /*! Implements `CALLDATACOPY`. */
-function execute_calldatacopy() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_calldatacopy(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let destination_word = pop();
-    let source_word = pop();
-    let length_word = pop();
-    let copy_gas_charged = charge_copy_gas(length_word);
+    let (destination_word, top1) = pop(top);
+    let (source_word, top2) = pop(top1);
+    let (length_word, top3) = pop(top2);
+    let (copy_gas_charged, g2) = charge_copy_gas(g1, length_word);
     if not_bool(copy_gas_charged) then {
-        return ()
+        return (top3, mem, g2)
     };
     let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g3) = charge(g2, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top3, mem, g3)
     };
     let access = memory_access(destination_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
-    slice_copy_word_offset(calldata, range.off, source_word, range.len)
+    slice_copy_word_offset(calldata, range.off, source_word, range.len);
+    (top3, mem1, g3)
 }
 
 /*! Implements `CODESIZE`. */
-function execute_codesize() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_codesize(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let code_length = frame_code_len();
     let length_word = word_of_byte_count(code_length);
-    push(length_word)
+    (push(top, length_word), g1)
 }
 
 /*! Implements `CODECOPY`. */
-function execute_codecopy() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_codecopy(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let destination_word = pop();
-    let source_word = pop();
-    let length_word = pop();
-    let copy_gas_charged = charge_copy_gas(length_word);
+    let (destination_word, top1) = pop(top);
+    let (source_word, top2) = pop(top1);
+    let (length_word, top3) = pop(top2);
+    let (copy_gas_charged, g2) = charge_copy_gas(g1, length_word);
     if not_bool(copy_gas_charged) then {
-        return ()
+        return (top3, mem, g2)
     };
     let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g3) = charge(g2, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top3, mem, g3)
     };
     let access = memory_access(destination_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
     let code = frame_code;
     let bytes = code_bytes(code);
-    slice_copy_word_offset(bytes, range.off, source_word, range.len)
+    slice_copy_word_offset(bytes, range.off, source_word, range.len);
+    (top3, mem1, g3)
 }
 
 /*! Implements `BALANCE`, including warm/cold account access. */
-function execute_balance() -> unit = {
-    let address_word = pop();
+function execute_balance(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (address_word, top1) = pop(top);
     let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
     let gas_cost = account_cost(warm);
-    let gas_charged = charge(gas_cost);
+    let (gas_charged, g1) = charge(g, gas_cost);
     if not_bool(gas_charged) then {
-        return ()
+        return (top1, g1)
     };
     k_account_mark_warm(a);
     let balance = k_get_balance(a);
-    push(balance)
+    (push(top1, balance), g1)
 }
 
 /*! Implements `SELFBALANCE`. */
-function execute_selfbalance() -> unit = {
-    let gas_charged = charge(G_low);
+function execute_selfbalance(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_low);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let address = self_addr();
     let balance = k_get_balance(address);
-    push(balance)
+    (push(top, balance), g1)
 }
 
 /*! Implements `EXTCODESIZE`, including warm/cold account access. */
-function execute_extcodesize() -> unit = {
-    let address_word = pop();
+function execute_extcodesize(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (address_word, top1) = pop(top);
     let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
     let access_cost = account_cost(warm);
     let read_cost = external_code_read_cost();
-    let gas_charged = charge(access_cost + read_cost);
+    let (gas_charged, g1) = charge(g, access_cost + read_cost);
     if not_bool(gas_charged) then {
-        return ()
+        return (top1, g1)
     };
     k_account_mark_warm(a);
     let code_size = k_get_code_size(a);
     let size_word = word_of_byte_count(code_size);
-    push(size_word)
+    (push(top1, size_word), g1)
 }
 
 /*! Implements `EXTCODECOPY`, including access and copy gas. */
-function execute_extcodecopy() -> unit = {
-    let address_word = pop();
+function execute_extcodecopy(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (address_word, top1) = pop(top);
     let a = word_to_address(address_word);
-    let destination_word = pop();
-    let source_word = pop();
-    let length_word = pop();
+    let (destination_word, top2) = pop(top1);
+    let (source_word, top3) = pop(top2);
+    let (length_word, top4) = pop(top3);
     let warm = k_account_is_warm(a);
     let access_cost = account_cost(warm);
     let read_cost = external_code_read_cost();
-    let access_gas_charged = charge(access_cost + read_cost);
+    let (access_gas_charged, g1) = charge(g, access_cost + read_cost);
     if not_bool(access_gas_charged) then {
-        return ()
+        return (top4, mem, g1)
     };
-    let copy_gas_charged = charge_copy_gas(length_word);
+    let (copy_gas_charged, g2) = charge_copy_gas(g1, length_word);
     if not_bool(copy_gas_charged) then {
-        return ()
+        return (top4, mem, g2)
     };
     let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g3) = charge(g2, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top4, mem, g3)
     };
     let access = memory_access(destination_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
     k_account_mark_warm(a);
-    k_code_copy(a, range.off, source_word, range.len)
+    k_code_copy(a, range.off, source_word, range.len);
+    (top4, mem1, g3)
 }
 
 /*! Implements `EXTCODEHASH`, including warm/cold account access. */
-function execute_extcodehash() -> unit = {
-    let address_word = pop();
+function execute_extcodehash(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (address_word, top1) = pop(top);
     let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
     let gas_cost = account_cost(warm);
-    let gas_charged = charge(gas_cost);
+    let (gas_charged, g1) = charge(g, gas_cost);
     if not_bool(gas_charged) then {
-        return ()
+        return (top1, g1)
     };
     k_account_mark_warm(a);
     let code_hash = k_get_codehash(a);
     let hash_word = hash_to_word(code_hash);
-    push(hash_word)
+    (push(top1, hash_word), g1)
 }
 
 /*! Implements `RETURNDATASIZE`. */
-function execute_returndatasize() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_returndatasize(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let return_data_size = returndata_size();
     let size_word = word_of_byte_count(return_data_size);
-    push(size_word)
+    (push(top, size_word), g1)
 }
 
 /*! Implements bounds-checked `RETURNDATACOPY`. */
-function execute_returndatacopy() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_returndatacopy(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let destination_word = pop();
-    let source_word = pop();
-    let length_word = pop();
-    let copy_gas_charged = charge_copy_gas(length_word);
+    let (destination_word, top1) = pop(top);
+    let (source_word, top2) = pop(top1);
+    let (length_word, top3) = pop(top2);
+    let (copy_gas_charged, g2) = charge_copy_gas(g1, length_word);
     if not_bool(copy_gas_charged) then {
-        return ()
+        return (top3, mem, g2)
     };
     let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g3) = charge(g2, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top3, mem, g3)
     };
     let access = memory_access(destination_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
-    returndata_copy_words(range.off, source_word, length_word)
+    let g4 = returndata_copy_words(g3, range.off, source_word, length_word);
+    (top3, mem1, g4)
 }
 
 /*! Implements `BLOCKHASH`. */
-function execute_blockhash() -> unit = {
-    let gas_charged = charge(20);
+function execute_blockhash(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, 20);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let block_number = pop();
+    let (block_number, top1) = pop(top);
     let block_hash = k_blockhash(block_number);
     let hash_word = hash_to_word(block_hash);
-    push(hash_word)
+    (push(top1, hash_word), g1)
 }
 
 /*! Implements `COINBASE`. */
-function execute_coinbase() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_coinbase(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let coinbase = k_env(F_Coinbase);
-    push(coinbase)
+    (push(top, coinbase), g1)
 }
 
 /*! Implements `TIMESTAMP`. */
-function execute_timestamp() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_timestamp(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let timestamp = k_env(F_Timestamp);
-    push(timestamp)
+    (push(top, timestamp), g1)
 }
 
 /*! Implements `NUMBER`. */
-function execute_number() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_number(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let block_number = k_env(F_Number);
-    push(block_number)
+    (push(top, block_number), g1)
 }
 
 /*! Implements `SLOTNUM`. */
-function execute_slotnum() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_slotnum(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let slot_number = k_env(F_SlotNumber);
-    push(slot_number)
+    (push(top, slot_number), g1)
 }
 
 /*! Implements `PREVRANDAO`. */
-function execute_prevrandao() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_prevrandao(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let prev_randao = k_env(F_PrevRandao);
-    push(prev_randao)
+    (push(top, prev_randao), g1)
 }
 
 /*! Implements `GASLIMIT`. */
-function execute_gaslimit() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_gaslimit(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let gas_limit = k_env(F_GasLimit);
-    push(gas_limit)
+    (push(top, gas_limit), g1)
 }
 
 /*! Implements `CHAINID`. */
-function execute_chainid() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_chainid(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let chain_id = k_env(F_ChainId);
-    push(chain_id)
+    (push(top, chain_id), g1)
 }
 
 /*! Implements `BASEFEE`. */
-function execute_basefee() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_basefee(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let base_fee = k_env(F_BaseFee);
-    push(base_fee)
+    (push(top, base_fee), g1)
 }
 
 /*! Implements `BLOBBASEFEE`. */
-function execute_blobbasefee() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_blobbasefee(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let execution_profile = k_execution_profile;
     let base_fee = blob_base_fee(execution_profile.protocol, k_header.excess_blob_gas);
-    push(base_fee)
+    (push(top, base_fee), g1)
 }
 
 /*! Implements `BLOBHASH`. */
-function execute_blobhash() -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_blobhash(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let index = pop();
+    let (index, top1) = pop(top);
     let blob_hash = k_blobhash(index);
-    push(blob_hash)
+    (push(top1, blob_hash), g1)
 }
 
 /*! Implements `POP`. */
-function execute_pop() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_pop(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let _ = pop()
+    let (_, top1) = pop(top);
+    (top1, g1)
 }
 
 /*! Implements `MLOAD`. */
-function execute_mload() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_mload(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let offset_word = pop();
+    let (offset_word, top1) = pop(top);
     let word_size = u256(32);
     let required_size = memory_required_size(offset_word, word_size);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g2) = charge(g1, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top1, mem, g2)
     };
     let access = memory_access(offset_word, word_size);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let value = mem_load(access.range.off);
-    push(value)
+    (push(top1, value), mem1, g2)
 }
 
 /*! Implements `MSTORE`. */
-function execute_mstore() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_mstore(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let offset_word = pop();
-    let v = pop();
+    let (offset_word, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let word_size = u256(32);
     let required_size = memory_required_size(offset_word, word_size);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g2) = charge(g1, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top2, mem, g2)
     };
     let access = memory_access(offset_word, word_size);
-    expand_memory(access.required_size);
-    mem_store(access.range.off, v)
+    let mem1 = expand_memory(mem, access.required_size);
+    mem_store(access.range.off, v);
+    (top2, mem1, g2)
 }
 
 /*! Implements `MSTORE8`. */
-function execute_mstore8() -> unit = {
-    let base_gas_charged = charge(G_verylow);
+function execute_mstore8(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let offset_word = pop();
-    let v = pop();
+    let (offset_word, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let required_size = memory_required_size(offset_word, WORD_ONE);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g2) = charge(g1, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top2, mem, g2)
     };
     let access = memory_access(offset_word, WORD_ONE);
-    expand_memory(access.required_size);
-    mem_store_byte(access.range.off, v)
+    let mem1 = expand_memory(mem, access.required_size);
+    mem_store_byte(access.range.off, v);
+    (top2, mem1, g2)
 }
 
 /*! Implements `MSIZE`. */
-function execute_msize() -> unit = {
-    let gas_charged = charge(G_base);
+function execute_msize(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let high_water = evm_memory_high_water();
+    let high_water = memory_high_water(mem);
     let words = memory_word_count(high_water);
     let size = word_of_nat_byte_count(words * 32);
-    push(size)
+    (push(top, size), mem, g1)
 }
 
 /*! Implements overlapping memory copy `MCOPY` (EIP-5656). */
-function execute_mcopy() -> unit = {
+function execute_mcopy(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
     /* EIP-5656 */
-    let base_gas_charged = charge(G_verylow);
+    let (base_gas_charged, g1) = charge(g, G_verylow);
     if not_bool(base_gas_charged) then {
-        return ()
+        return (top, mem, g1)
     };
-    let destination_word = pop();
-    let source_word = pop();
-    let length_word = pop();
-    let copy_gas_charged = charge_copy_gas(length_word);
+    let (destination_word, top1) = pop(top);
+    let (source_word, top2) = pop(top1);
+    let (length_word, top3) = pop(top2);
+    let (copy_gas_charged, g2) = charge_copy_gas(g1, length_word);
     if not_bool(copy_gas_charged) then {
-        return ()
+        return (top3, mem, g2)
     };
     let destination_required = memory_required_size(destination_word, length_word);
     let source_required = memory_required_size(source_word, length_word);
     let required_size =
         if destination_required < source_required then source_required else destination_required;
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g3) = charge(g2, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top3, mem, g3)
     };
     let destination = memory_access(destination_word, length_word);
     let source = memory_access(source_word, length_word);
     let materialized_required_size =
         if destination.required_size < source.required_size then source.required_size else destination.required_size;
-    expand_memory(materialized_required_size);
-    mem_mcopy(destination.range.off, source.range.off, destination.range.len)
+    let mem1 = expand_memory(mem, materialized_required_size);
+    mem_mcopy(destination.range.off, source.range.off, destination.range.len);
+    (top3, mem1, g3)
 }
 
 /*! Implements `SLOAD`, including warm/cold access gas. */
-function execute_sload() -> unit = {
+function execute_sload(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-2929: cold (2100) vs warm (100) by the slot's accessed-set bit */
-    let s = pop();
+    let (s, top1) = pop(top);
     let address = self_addr();
     let warm = k_slot_is_warm(address, s);
     let gas_cost = sload_cost(warm);
-    let gas_charged = charge(gas_cost);
+    let (gas_charged, g1) = charge(g, gas_cost);
     if not_bool(gas_charged) then {
-        return ()
+        return (top1, g1)
     };
     k_slot_mark_warm(address, s);
     let entry = k_sload(address, s);
-    push(entry.curr)
+    (push(top1, entry.curr), g1)
 }
 
 /*! Implements `SSTORE`, including fork-specific gas and refunds. */
-function execute_sstore() -> unit = {
+function execute_sstore(top : StackTop, g : gas) -> (StackTop, gas) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    let write_protected = guard_static();
+    let (write_protected, g0) = guard_static(g);
     if write_protected then {
-        return ()
+        return (top, g0)
     };
-    if (profile.fork < Amsterdam) & (gas_remaining <= G_callstipend) then {
-        exc_halt(OutOfGas);
-        return ()
+    if (profile.fork < Amsterdam) & (g0 <= G_callstipend) then {
+        return (top, exc_halt(g0, OutOfGas))
     };
-    let s = pop();
-    let v = pop();
+    let (s, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let address = self_addr();
     let warm = k_slot_is_warm(address, s);
     let cold = not_bool(warm);
     if profile.fork >= Amsterdam then {
         let sentry_cost = sstore_sentry_cost(cold);
-        let sentry_affordable = check_execution_gas(sentry_cost);
+        let (sentry_affordable, sentry_gas) = check_execution_gas(g0, sentry_cost);
         if not_bool(sentry_affordable) then {
-            return ()
+            return (top2, sentry_gas)
         }
     };
     k_slot_mark_warm(address, s);
     let entry = k_sload(address, s);
     let costs = sstore_costs(entry.orig, entry.curr, v, cold);
-    if costs.state_credit != 0 then {
-        credit_state_gas_refund(costs.state_credit)
-    };
-    let execution_gas_charged = charge(costs.execution);
+    let g1 : gas =
+        if costs.state_credit != 0 then credit_state_gas_refund(g0, costs.state_credit) else g0;
+    let (execution_gas_charged, g2) = charge(g1, costs.execution);
     if not_bool(execution_gas_charged) then {
-        return ()
+        return (top2, g2)
     };
-    let state_gas_charged = charge_state_gas(costs.state_charge);
+    let (state_gas_charged, g3) = charge_state_gas(g2, costs.state_charge);
     if not_bool(state_gas_charged) then {
-        return ()
+        return (top2, g3)
     };
     if not_bool(costs.refund == GAS_REFUND_ZERO) then {
         record_refund(costs.refund)
     };
     if entry.curr != v then {
         k_sstore(address, s, struct { curr = v, orig = entry.orig })
-    }
+    };
+    (top2, g3)
 }
 
 /*! Implements transient-storage load `TLOAD` (EIP-1153). */
-function execute_tload() -> unit = {
+function execute_tload(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-1153 */
-    let gas_charged = charge(G_warm_access);
+    let (gas_charged, g1) = charge(g, G_warm_access);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let s = pop();
+    let (s, top1) = pop(top);
     let address = self_addr();
     let value = k_tload(address, s);
-    push(value)
+    (push(top1, value), g1)
 }
 
 /*! Implements transient-storage write `TSTORE` (EIP-1153). */
-function execute_tstore() -> unit = {
+function execute_tstore(top : StackTop, g : gas) -> (StackTop, gas) = {
     /* EIP-1153 */
-    let write_protected = guard_static();
+    let (write_protected, g0) = guard_static(g);
     if write_protected then {
-        return ()
+        return (top, g0)
     };
-    let gas_charged = charge(G_warm_access);
+    let (gas_charged, g1) = charge(g0, G_warm_access);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let s = pop();
-    let v = pop();
+    let (s, top1) = pop(top);
+    let (v, top2) = pop(top1);
     let address = self_addr();
-    k_tstore(address, s, v)
+    k_tstore(address, s, v);
+    (top2, g1)
 }
 
 /*! Implements unconditional `JUMP`. */
-function execute_jump() -> unit = {
-    let gas_charged = charge(G_mid);
+function execute_jump(pc_in : code_pointer, top : StackTop, g : gas) -> (code_pointer, StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_mid);
     if not_bool(gas_charged) then {
-        return ()
+        return (pc_in, top, g1)
     };
-    let dest = pop();
-    do_jump(dest)
+    let (dest, top1) = pop(top);
+    let (next_pc, g2) = do_jump(pc_in, g1, dest);
+    (next_pc, top1, g2)
 }
 
 /*! Implements conditional `JUMPI`. */
-function execute_jumpi() -> unit = {
-    let gas_charged = charge(G_high);
+function execute_jumpi(pc_in : code_pointer, top : StackTop, g : gas) -> (code_pointer, StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_high);
     if not_bool(gas_charged) then {
-        return ()
+        return (pc_in, top, g1)
     };
-    let dest = pop();
-    let cond = pop();
+    let (dest, top1) = pop(top);
+    let (cond, top2) = pop(top1);
     let condition_is_zero = word_is_zero(cond);
     if condition_is_zero then {
-        return ()
+        return (pc_in, top2, g1)
     };
-    do_jump(dest)
+    let (next_pc, g2) = do_jump(pc_in, g1, dest);
+    (next_pc, top2, g2)
 }
 
-/*! Implements `PC`, returning the current opcode position. */
-function execute_pc() -> unit = {
-    let gas_charged = charge(G_base);
+/*! Implements `PC`, returning the current opcode position from the
+    carried, already-advanced program counter. */
+function execute_pc(pc_in : code_pointer, top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let next_pc = word_of_byte_count(pc);
+    let next_pc = word_of_byte_count(pc_in);
     let opcode_pc = alu_sub(next_pc, WORD_ONE);
-    push(opcode_pc)
+    (push(top, opcode_pc), g1)
 }
 
-/*! Implements `GAS`, returning gas remaining after its own charge. */
-function execute_gas() -> unit = {
-    let gas_charged = charge(G_base);
+/*! Implements `GAS`, returning the carried gas remaining after its own
+    charge. */
+function execute_gas(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_base);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    push_gas(gas_remaining)
+    (push_gas(top, g1), g1)
 }
 
 /*! Implements `JUMPDEST`. */
-function execute_jumpdest() -> unit = {
-    let gas_charged = charge(G_jumpdest);
-    if not_bool(gas_charged) then {
-        return ()
-    }
+function execute_jumpdest(g : gas) -> gas = {
+    let (_, g1) = charge(g, G_jumpdest);
+    g1
 }
 
 /*! Implements the `PUSH0` through `PUSH32` family. */
-function execute_push(n : push_width, v : word) -> unit = {
+function execute_push(n : push_width, v : word, top : StackTop, g : gas) -> (StackTop, gas) = {
     if n == 0 then {
-        let gas_charged = charge(G_base);
+        let (gas_charged, g1) = charge(g, G_base);
         if not_bool(gas_charged) then {
-            return ()
-        }
+            return (top, g1)
+        };
+        (push(top, v), g1)
     } else {
-        let gas_charged = charge(G_verylow);
+        let (gas_charged, g1) = charge(g, G_verylow);
         if not_bool(gas_charged) then {
-            return ()
-        }
-    };
-    push(v)
+            return (top, g1)
+        };
+        (push(top, v), g1)
+    }
 }
 
 /*! Implements the `DUP1` through `DUP16` family. */
-function execute_dup(n : stack_operation_index) -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_dup(n : stack_operation_index, top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let value = peek(n - 1);
-    push(value)
+    let value = peek(top, n - 1);
+    (push(top, value), g1)
 }
 
 /*! Implements the `SWAP1` through `SWAP16` family. */
-function execute_swap(n : stack_operation_index) -> unit = {
-    let gas_charged = charge(G_verylow);
+function execute_swap(n : stack_operation_index, top : StackTop, g : gas) -> (StackTop, gas) = {
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
-    let top = peek(0);
-    let other = peek(n);
-    stack_set(0, other);
-    stack_set(n, top)
+    let top_value = peek(top, 0);
+    let other = peek(top, n);
+    stack_set(top, 0, other);
+    stack_set(top, n, top_value);
+    (top, g1)
 }
 
 /*! Implements immediate deep-stack duplication `DUPN`. */
-function execute_dupn(immediate : byte) -> unit = {
+function execute_dupn(immediate : byte, top : StackTop, g : gas) -> (StackTop, gas) = {
     let valid_immediate = deep_stack_immediate_valid(immediate);
     if not_bool(valid_immediate) then {
-        exc_halt(InvalidOpcode)
+        (top, exc_halt(g, InvalidOpcode))
     } else {
-        let gas_charged = charge(G_verylow);
+        let (gas_charged, g1) = charge(g, G_verylow);
         if not_bool(gas_charged) then {
-            return ()
+            return (top, g1)
         };
         let n = decode_single_stack_index(immediate);
-        let value = peek(n - 1);
-        push(value)
+        let value = peek(top, n - 1);
+        (push(top, value), g1)
     }
 }
 
 /*! Implements immediate deep-stack exchange `SWAPN`. */
-function execute_swapn(immediate : byte) -> unit = {
+function execute_swapn(immediate : byte, top : StackTop, g : gas) -> (StackTop, gas) = {
     let valid_immediate = deep_stack_immediate_valid(immediate);
     if not_bool(valid_immediate) then {
-        exc_halt(InvalidOpcode)
+        (top, exc_halt(g, InvalidOpcode))
     } else {
-        let gas_charged = charge(G_verylow);
+        let (gas_charged, g1) = charge(g, G_verylow);
         if not_bool(gas_charged) then {
-            return ()
+            return (top, g1)
         };
         let n = decode_single_stack_index(immediate);
-        let top = peek(0);
-        let other = peek(n);
-        stack_set(0, other);
-        stack_set(n, top)
+        let top_value = peek(top, 0);
+        let other = peek(top, n);
+        stack_set(top, 0, other);
+        stack_set(top, n, top_value);
+        (top, g1)
     }
 }
 
 /*! Implements immediate pairwise deep-stack `EXCHANGE`. */
-function execute_exchange(immediate : byte) -> unit = {
+function execute_exchange(immediate : byte, top : StackTop, g : gas) -> (StackTop, gas) = {
     let valid_immediate = exchange_immediate_valid(immediate);
     if not_bool(valid_immediate) then {
-        exc_halt(InvalidOpcode);
-        return ()
+        return (top, exc_halt(g, InvalidOpcode))
     };
-    let gas_charged = charge(G_verylow);
+    let (gas_charged, g1) = charge(g, G_verylow);
     if not_bool(gas_charged) then {
-        return ()
+        return (top, g1)
     };
     let (n, m) = decode_exchange_stack_indices(immediate);
-    let first = peek(n);
-    let second = peek(m);
-    stack_set(n, second);
-    stack_set(m, first)
+    let first = peek(top, n);
+    let second = peek(top, m);
+    stack_set(top, n, second);
+    stack_set(top, m, first);
+    (top, g1)
 }
 
 /*! Implements the `LOG0` through `LOG4` family. */
-function execute_log(n : log_topic_count) -> unit = {
-    let write_protected = guard_static();
+function execute_log(
+    n : log_topic_count,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (StackTop, EvmMemorySlice, gas)
+) = {
+    let (write_protected, g0) = guard_static(g);
     if write_protected then {
-        return ()
+        return (top, mem, g0)
     };
-    let offset_word = pop();
-    let length_word = pop();
-    let topics = pop_log_topics(n);
-    let log_gas_charged = charge_log_gas(n, length_word);
+    let (offset_word, top1) = pop(top);
+    let (length_word, top2) = pop(top1);
+    let (topics, top3) = pop_log_topics(n, top2);
+    let (log_gas_charged, g1) = charge_log_gas(g0, n, length_word);
     if not_bool(log_gas_charged) then {
-        return ()
+        return (top3, mem, g1)
     };
     let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g2) = charge(g1, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top3, mem, g2)
     };
     let access = memory_access(offset_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
-    let data = active_memory_slice(range.off, range.len);
+    let (data, mem2) = active_memory_slice(mem1, range.off, range.len);
     let address = self_addr();
     let memory_slice = evm_memory_slice(data.bytes, data.len);
     let log_data = LogDataMemory(memory_slice);
-    k_log(address, topics, log_data)
+    k_log(address, topics, log_data);
+    (top3, mem2, g2)
 }
 
 /*! Implements normal `STOP`. */
@@ -1194,68 +1227,71 @@ function execute_stop() -> unit = {
 }
 
 /*! Implements successful `RETURN`. */
-function execute_return() -> unit = {
-    let offset_word = pop();
-    let length_word = pop();
+function execute_return(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
+    let (offset_word, top1) = pop(top);
+    let (length_word, top2) = pop(top1);
     let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g1) = charge(g, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top2, mem, g1)
     };
     let access = memory_access(offset_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
-    let data = active_memory_slice(range.off, range.len);
+    let (data, mem2) = active_memory_slice(mem1, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltReturn(output);
-    frame_status = Halted(reason)
+    frame_status = Halted(reason);
+    (top2, mem2, g1)
 }
 
 /*! Implements rollback-carrying `REVERT` (EIP-140). */
-function execute_revert() -> unit = {
+function execute_revert(top : StackTop, mem : EvmMemorySlice, g : gas) -> (StackTop, EvmMemorySlice, gas) = {
     /* EIP-140 */
-    let offset_word = pop();
-    let length_word = pop();
+    let (offset_word, top1) = pop(top);
+    let (length_word, top2) = pop(top1);
     let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_cost(required_size);
-    let expansion_gas_charged = charge(expansion_cost);
+    let expansion_cost = memory_expansion_cost(mem, required_size);
+    let (expansion_gas_charged, g1) = charge(g, expansion_cost);
     if not_bool(expansion_gas_charged) then {
-        return ()
+        return (top2, mem, g1)
     };
     let access = memory_access(offset_word, length_word);
-    expand_memory(access.required_size);
+    let mem1 = expand_memory(mem, access.required_size);
     let range = access.range;
-    refill_frame_state_gas();
-    let data = active_memory_slice(range.off, range.len);
+    let g2 = refill_frame_state_gas(g1);
+    let (data, mem2) = active_memory_slice(mem1, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltRevert(output);
-    frame_status = Halted(reason)
+    frame_status = Halted(reason);
+    (top2, mem2, g2)
 }
 
-/*! Implements exceptional invalid-opcode termination. */
-function execute_invalid() -> unit = {
-    gas_remaining = GAS_ZERO;
-    exc_halt(InvalidOpcode)
+/*! Implements exceptional invalid-opcode termination: all carried gas is
+    consumed before the exceptional halt. */
+function execute_invalid(g : gas) -> gas = {
+    let consumed = gas_sub(g, g);
+    exc_halt(consumed, InvalidOpcode)
 }
 
 /*! Implements `SELFDESTRUCT` with fork-specific semantics. */
-function execute_selfdestruct() -> unit = {
+function execute_selfdestruct(top : StackTop, g : gas) -> (StackTop, gas) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    let write_protected = guard_static();
+    let (write_protected, g0) = guard_static(g);
     if write_protected then {
-        return ()
+        return (top, g0)
     };
-    let beneficiary_word = pop();
+    let (beneficiary_word, top1) = pop(top);
     let beneficiary = word_to_address(beneficiary_word);
     let address = self_addr();
     if profile.fork >= Amsterdam then {
         let warm = k_account_is_warm(beneficiary);
         let access_cost = 0 + G_selfdestruct + (if warm then G_zero else G_amsterdam_cold_account_access);
-        let execution_affordable = check_execution_gas(access_cost);
+        let (execution_affordable, sentry_gas) = check_execution_gas(g0, access_cost);
         if not_bool(execution_affordable) then {
-            return ()
+            return (top1, sentry_gas)
         };
         k_account_mark_warm(beneficiary);
         let bal = k_get_balance(address);
@@ -1264,14 +1300,16 @@ function execute_selfdestruct() -> unit = {
         let creates_account = nonzero_balance & beneficiary_empty;
         let execution_cost =
             if creates_account then access_cost + G_amsterdam_account_write else access_cost;
-        let execution_gas_charged = charge(execution_cost);
+        let (execution_gas_charged, g1) = charge(g0, execution_cost);
         if not_bool(execution_gas_charged) then {
-            return ()
+            return (top1, g1)
         };
+        var g2 : gas = g1;
         if creates_account then {
-            let state_gas_charged = charge_state_gas(G_amsterdam_state_new_account);
+            let (state_gas_charged, state_gas) = charge_state_gas(g1, G_amsterdam_state_new_account);
+            g2 = state_gas;
             if not_bool(state_gas_charged) then {
-                return ()
+                return (top1, state_gas)
             }
         };
         k_transfer(address, beneficiary, bal);
@@ -1280,27 +1318,32 @@ function execute_selfdestruct() -> unit = {
             k_selfdestruct(address)
         };
         let reason = HaltSelfDestruct();
-        frame_status = Halted(reason)
+        frame_status = Halted(reason);
+        (top1, g2)
     } else {
         let bal = k_get_balance(address);
         let warm = k_account_is_warm(beneficiary);
-        let selfdestruct_gas_charged = charge(G_selfdestruct);
+        let (selfdestruct_gas_charged, g1) = charge(g0, G_selfdestruct);
         if not_bool(selfdestruct_gas_charged) then {
-            return ()
+            return (top1, g1)
         };
+        var g2 : gas = g1;
         if not_bool(warm) then {
-            let cold_account_gas_charged = charge(G_cold_account);
+            let (cold_account_gas_charged, cold_gas) = charge(g1, G_cold_account);
+            g2 = cold_gas;
             if not_bool(cold_account_gas_charged) then {
-                return ()
+                return (top1, cold_gas)
             }
         };
         k_account_mark_warm(beneficiary);
         let nonzero_balance = word_nonzero(bal);
         let beneficiary_empty = k_account_is_empty(beneficiary);
+        var g3 : gas = g2;
         if nonzero_balance & beneficiary_empty then {
-            let new_account_gas_charged = charge(G_newaccount);
+            let (new_account_gas_charged, new_account_gas) = charge(g2, G_newaccount);
+            g3 = new_account_gas;
             if not_bool(new_account_gas_charged) then {
-                return ()
+                return (top1, new_account_gas)
             }
         };
         let is_selfdestructed = k_is_selfdestructed(address);
@@ -1320,22 +1363,71 @@ function execute_selfdestruct() -> unit = {
             }
         };
         let reason = HaltSelfDestruct();
-        frame_status = Halted(reason)
+        frame_status = Halted(reason);
+        (top1, g3)
     }
 }
 
 /*! Implements `CREATE` through the common create runner. */
-function execute_create() -> unit = run_create(CreateByNonce)
+function execute_create(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_create(CreateByNonce, pc_in, top, mem, g)
 /*! Implements `CREATE2` through the common create runner. */
-function execute_create2() -> unit = run_create(CreateBySalt)
+function execute_create2(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_create(CreateBySalt, pc_in, top, mem, g)
 /*! Implements `CALL` through the common call runner. */
-function execute_call() -> unit = run_call(Call)
+function execute_call(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_call(Call, pc_in, top, mem, g)
 /*! Implements `CALLCODE` through the common call runner. */
-function execute_callcode() -> unit = run_call(CallCode)
+function execute_callcode(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_call(CallCode, pc_in, top, mem, g)
 /*! Implements `DELEGATECALL` through the common call runner. */
-function execute_delegatecall() -> unit = run_call(DelegateCall)
+function execute_delegatecall(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_call(DelegateCall, pc_in, top, mem, g)
 /*! Implements `STATICCALL` through the common call runner. */
-function execute_staticcall() -> unit = run_call(StaticCall)
+function execute_staticcall(
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    run_call(StaticCall, pc_in, top, mem, g)
 
 /*! The Yellow Paper stack effect `(delta, alpha)` for every decoded
     instruction. Invalid deep-stack immediates have no stack effect because
@@ -1456,116 +1548,376 @@ function opcode_stack_effect(op : ast) -> (operand_stack_height, operand_stack_h
 }
 
 /*! Standard decoded-opcode dispatcher. Each arm invokes the same narrow
-    semantic function used directly by the optimized raw-byte interpreter. */
-function execute_opcode(op : ast) -> unit = match op {
-    STOP() => execute_stop(),
-    /* ---- arithmetic (pure) ---- */
-    ADD() => execute_add(),
-    MUL() => execute_mul(),
-    SUB() => execute_sub(),
-    DIV() => execute_div(),
-    SDIV() => execute_sdiv(),
-    MOD() => execute_mod(),
-    SMOD() => execute_smod(),
-    ADDMOD() => execute_addmod(),
-    MULMOD() => execute_mulmod(),
-    EXP() => execute_exp(),
-    SIGNEXTEND() => execute_signextend(),
-    /* ---- comparison / bitwise (pure) ---- */
-    LT() => execute_lt(),
-    GT() => execute_gt(),
-    SLT() => execute_slt(),
-    SGT() => execute_sgt(),
-    EQ() => execute_eq(),
-    ISZERO() => execute_iszero(),
-    AND() => execute_and(),
-    OR() => execute_or(),
-    XOR() => execute_xor(),
-    NOT() => execute_not(),
-    BYTE() => execute_byte(),
-    SHL() => execute_shl(),
-    SHR() => execute_shr(),
-    SAR() => execute_sar(),
-    CLZ() => execute_clz(),
-    /* ---- keccak: hash via kernel primitive ---- */
-    KECCAK256() => execute_keccak256(),
-    /* ---- environment / account (kernel reads, EVM prices them) ---- */
-    ADDRESS() => execute_address(),
-    ORIGIN() => execute_origin(),
-    CALLER() => execute_caller(),
-    CALLVALUE() => execute_callvalue(),
-    GASPRICE() => execute_gasprice(),
-    CALLDATASIZE() => execute_calldatasize(),
-    CALLDATALOAD() => execute_calldataload(),
-    CALLDATACOPY() => execute_calldatacopy(),
-    CODESIZE() => execute_codesize(),
-    CODECOPY() => execute_codecopy(),
-    BALANCE() => execute_balance(),
-    SELFBALANCE() => execute_selfbalance(),
-    EXTCODESIZE() => execute_extcodesize(),
-    EXTCODECOPY() => execute_extcodecopy(),
-    EXTCODEHASH() => execute_extcodehash(),
-    RETURNDATASIZE() => execute_returndatasize(),
-    RETURNDATACOPY() => execute_returndatacopy(),
-    /* ---- block (kernel reads) ---- */
-    BLOCKHASH() => execute_blockhash(),
-    COINBASE() => execute_coinbase(),
-    TIMESTAMP() => execute_timestamp(),
-    NUMBER() => execute_number(),
-    SLOTNUM() => execute_slotnum(),
-    PREVRANDAO() => execute_prevrandao(),
-    GASLIMIT() => execute_gaslimit(),
-    CHAINID() => execute_chainid(),
-    BASEFEE() => execute_basefee(),
-    BLOBBASEFEE() => execute_blobbasefee(),
-    BLOBHASH() => execute_blobhash(),
-    /* ---- stack / memory (pure, user-space) ---- */
-    POP() => execute_pop(),
-    MLOAD() => execute_mload(),
-    MSTORE() => execute_mstore(),
-    MSTORE8() => execute_mstore8(),
-    MSIZE() => execute_msize(),
-    MCOPY() => execute_mcopy(),
-    /* ---- storage: gas/decision in EVM, effect in kernel ---- */
-    SLOAD() => execute_sload(),
-    SSTORE() => execute_sstore(),
-    TLOAD() => execute_tload(),
-    TSTORE() => execute_tstore(),
-    /* ---- flow (pure over own code) ---- */
-    JUMP() => execute_jump(),
-    JUMPI() => execute_jumpi(),
-    PC() => execute_pc(),
-    GAS() => execute_gas(),
-    JUMPDEST() => execute_jumpdest(),
-    /* ---- push / dup / swap (pure) ---- */
-    PUSH(n, v) => execute_push(n, v),
-    DUP(n) => execute_dup(n),
-    SWAP(n) => execute_swap(n),
-    DUPN(immediate) => execute_dupn(immediate),
-    SWAPN(immediate) => execute_swapn(immediate),
-    EXCHANGE(immediate) => execute_exchange(immediate),
-    /* ---- log: EVM checks/prices, kernel records ---- */
-    LOG(n) => execute_log(n),
-    /* ---- system ---- */
-    opcode_CREATE() => execute_create(),
-    CREATE2() => execute_create2(),
-    CALL() => execute_call(),
-    CALLCODE() => execute_callcode(),
-    DELEGATECALL() => execute_delegatecall(),
-    STATICCALL() => execute_staticcall(),
-    RETURN() => execute_return(),
-    REVERT() => execute_revert(),
-    INVALID() => execute_invalid(),
-    SELFDESTRUCT() => execute_selfdestruct(),
-}
+    semantic function used directly by the optimized raw-byte interpreter,
+    threading exactly the machine state that family carries. */
+function execute_opcode(
+    op : ast,
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) =
+    match op {
+        STOP() => {
+            execute_stop();
+            (pc_in, top, mem, g)
+        },
+        /* ---- arithmetic (pure) ---- */
+        ADD() => {
+            let (top1, g1) = execute_add(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        MUL() => {
+            let (top1, g1) = execute_mul(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SUB() => {
+            let (top1, g1) = execute_sub(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        DIV() => {
+            let (top1, g1) = execute_div(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SDIV() => {
+            let (top1, g1) = execute_sdiv(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        MOD() => {
+            let (top1, g1) = execute_mod(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SMOD() => {
+            let (top1, g1) = execute_smod(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        ADDMOD() => {
+            let (top1, g1) = execute_addmod(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        MULMOD() => {
+            let (top1, g1) = execute_mulmod(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        EXP() => {
+            let (top1, g1) = execute_exp(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SIGNEXTEND() => {
+            let (top1, g1) = execute_signextend(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        /* ---- comparison / bitwise (pure) ---- */
+        LT() => {
+            let (top1, g1) = execute_lt(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        GT() => {
+            let (top1, g1) = execute_gt(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SLT() => {
+            let (top1, g1) = execute_slt(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SGT() => {
+            let (top1, g1) = execute_sgt(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        EQ() => {
+            let (top1, g1) = execute_eq(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        ISZERO() => {
+            let (top1, g1) = execute_iszero(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        AND() => {
+            let (top1, g1) = execute_and(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        OR() => {
+            let (top1, g1) = execute_or(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        XOR() => {
+            let (top1, g1) = execute_xor(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        NOT() => {
+            let (top1, g1) = execute_not(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        BYTE() => {
+            let (top1, g1) = execute_byte(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SHL() => {
+            let (top1, g1) = execute_shl(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SHR() => {
+            let (top1, g1) = execute_shr(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SAR() => {
+            let (top1, g1) = execute_sar(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CLZ() => {
+            let (top1, g1) = execute_clz(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        /* ---- keccak: hash via kernel primitive ---- */
+        KECCAK256() => {
+            let (top1, mem1, g1) = execute_keccak256(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        /* ---- environment / account (kernel reads, EVM prices them) ---- */
+        ADDRESS() => {
+            let (top1, g1) = execute_address(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        ORIGIN() => {
+            let (top1, g1) = execute_origin(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CALLER() => {
+            let (top1, g1) = execute_caller(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CALLVALUE() => {
+            let (top1, g1) = execute_callvalue(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        GASPRICE() => {
+            let (top1, g1) = execute_gasprice(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CALLDATASIZE() => {
+            let (top1, g1) = execute_calldatasize(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CALLDATALOAD() => {
+            let (top1, g1) = execute_calldataload(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CALLDATACOPY() => {
+            let (top1, mem1, g1) = execute_calldatacopy(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        CODESIZE() => {
+            let (top1, g1) = execute_codesize(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CODECOPY() => {
+            let (top1, mem1, g1) = execute_codecopy(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        BALANCE() => {
+            let (top1, g1) = execute_balance(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SELFBALANCE() => {
+            let (top1, g1) = execute_selfbalance(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        EXTCODESIZE() => {
+            let (top1, g1) = execute_extcodesize(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        EXTCODECOPY() => {
+            let (top1, mem1, g1) = execute_extcodecopy(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        EXTCODEHASH() => {
+            let (top1, g1) = execute_extcodehash(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        RETURNDATASIZE() => {
+            let (top1, g1) = execute_returndatasize(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        RETURNDATACOPY() => {
+            let (top1, mem1, g1) = execute_returndatacopy(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        /* ---- block (kernel reads) ---- */
+        BLOCKHASH() => {
+            let (top1, g1) = execute_blockhash(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        COINBASE() => {
+            let (top1, g1) = execute_coinbase(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        TIMESTAMP() => {
+            let (top1, g1) = execute_timestamp(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        NUMBER() => {
+            let (top1, g1) = execute_number(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SLOTNUM() => {
+            let (top1, g1) = execute_slotnum(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        PREVRANDAO() => {
+            let (top1, g1) = execute_prevrandao(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        GASLIMIT() => {
+            let (top1, g1) = execute_gaslimit(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        CHAINID() => {
+            let (top1, g1) = execute_chainid(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        BASEFEE() => {
+            let (top1, g1) = execute_basefee(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        BLOBBASEFEE() => {
+            let (top1, g1) = execute_blobbasefee(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        BLOBHASH() => {
+            let (top1, g1) = execute_blobhash(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        /* ---- stack / memory (pure, user-space) ---- */
+        POP() => {
+            let (top1, g1) = execute_pop(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        MLOAD() => {
+            let (top1, mem1, g1) = execute_mload(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        MSTORE() => {
+            let (top1, mem1, g1) = execute_mstore(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        MSTORE8() => {
+            let (top1, mem1, g1) = execute_mstore8(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        MSIZE() => {
+            let (top1, mem1, g1) = execute_msize(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        MCOPY() => {
+            let (top1, mem1, g1) = execute_mcopy(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        /* ---- storage: gas/decision in EVM, effect in kernel ---- */
+        SLOAD() => {
+            let (top1, g1) = execute_sload(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SSTORE() => {
+            let (top1, g1) = execute_sstore(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        TLOAD() => {
+            let (top1, g1) = execute_tload(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        TSTORE() => {
+            let (top1, g1) = execute_tstore(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        /* ---- flow (pure over own code) ---- */
+        JUMP() => {
+            let (pc1, top1, g1) = execute_jump(pc_in, top, g);
+            (pc1, top1, mem, g1)
+        },
+        JUMPI() => {
+            let (pc1, top1, g1) = execute_jumpi(pc_in, top, g);
+            (pc1, top1, mem, g1)
+        },
+        PC() => {
+            let (top1, g1) = execute_pc(pc_in, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        GAS() => {
+            let (top1, g1) = execute_gas(top, g);
+            (pc_in, top1, mem, g1)
+        },
+        JUMPDEST() => (pc_in, top, mem, execute_jumpdest(g)),
+        /* ---- push / dup / swap (pure) ---- */
+        PUSH(n, v) => {
+            let (top1, g1) = execute_push(n, v, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        DUP(n) => {
+            let (top1, g1) = execute_dup(n, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SWAP(n) => {
+            let (top1, g1) = execute_swap(n, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        DUPN(immediate) => {
+            let (top1, g1) = execute_dupn(immediate, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        SWAPN(immediate) => {
+            let (top1, g1) = execute_swapn(immediate, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        EXCHANGE(immediate) => {
+            let (top1, g1) = execute_exchange(immediate, top, g);
+            (pc_in, top1, mem, g1)
+        },
+        /* ---- log: EVM checks/prices, kernel records ---- */
+        LOG(n) => {
+            let (top1, mem1, g1) = execute_log(n, top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        /* ---- system ---- */
+        opcode_CREATE() => execute_create(pc_in, top, mem, g),
+        CREATE2() => execute_create2(pc_in, top, mem, g),
+        CALL() => execute_call(pc_in, top, mem, g),
+        CALLCODE() => execute_callcode(pc_in, top, mem, g),
+        DELEGATECALL() => execute_delegatecall(pc_in, top, mem, g),
+        STATICCALL() => execute_staticcall(pc_in, top, mem, g),
+        RETURN() => {
+            let (top1, mem1, g1) = execute_return(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        REVERT() => {
+            let (top1, mem1, g1) = execute_revert(top, mem, g);
+            (pc_in, top1, mem1, g1)
+        },
+        INVALID() => (pc_in, top, mem, execute_invalid(g)),
+        SELFDESTRUCT() => {
+            let (top1, g1) = execute_selfdestruct(top, g);
+            (pc_in, top1, mem, g1)
+        },
+    }
 
 /*! The single-step transition function over the standard decoded AST. Stack
     validity is established before gas charging or any instruction side
     effect, as part of the Yellow Paper exceptional-halt predicate. */
-function execute(op : ast) -> unit = {
+function execute(
+    op : ast,
+    pc_in : code_pointer,
+    top : StackTop,
+    mem : EvmMemorySlice,
+    g : gas,
+) -> (
+    (code_pointer, StackTop, EvmMemorySlice, gas)
+) = {
     let (inputs, outputs) = opcode_stack_effect(op);
-    let stack_valid = validate_stack(inputs, outputs);
+    let (stack_valid, g1) = validate_stack(g, top, inputs, outputs);
     if stack_valid then {
-        execute_opcode(op)
+        execute_opcode(op, pc_in, top, mem, g1)
+    } else {
+        (pc_in, top, mem, g1)
     }
 }

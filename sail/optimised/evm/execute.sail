@@ -2,12 +2,22 @@
 
 /* The complete optimized opcode implementations retain their dense account and
    storage handles entirely inside C. The Sail-visible contract remains the
-   same unit-to-unit opcode semantics as the canonical definitions. */
-val execute_sload_host = impure { c: "execute_sload" } : unit -> unit
-val execute_sstore_host = impure { c: "execute_sstore" } : unit -> unit
+   same state-passing opcode semantics as the canonical definitions: the C
+   operations consume their operands relative to the carried stack cursor and
+   return the carried gas, while the thin canonical wrappers apply the net
+   cursor movement (SLOAD replaces its popped slot; SSTORE consumes two). */
+val execute_sload_host = impure { c: "execute_sload" } : (StackTop, gas) -> gas
+val execute_sstore_host = impure { c: "execute_sstore" } : (StackTop, gas) -> gas
 
-function execute_sload() -> unit = execute_sload_host()
-function execute_sstore() -> unit = execute_sstore_host()
+function execute_sload(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let charged = execute_sload_host(top, g);
+    (top, charged)
+}
+
+function execute_sstore(top : StackTop, g : gas) -> (StackTop, gas) = {
+    let charged = execute_sstore_host(top, g);
+    (stack_top_retreat(top, 2), charged)
+}
 
 /* Attribute-only val splices: fuse the generated step-dispatch layers.
  * With the optimized compiler's --c-inline-attr (EVM_INLINE_ATTR=on) the
@@ -16,13 +26,13 @@ function execute_sstore() -> unit = execute_sstore_host()
  * interpreter loop. Without the flag the attribute is inert, and the spec
  * bodies in sail/evm/execute.sail remain the definitions in every build. */
 $[c_inline]
-val execute : ast -> unit
+val execute : (ast, code_pointer, StackTop, EvmMemorySlice, gas) -> (code_pointer, StackTop, EvmMemorySlice, gas)
 
 $[c_inline]
 val opcode_stack_effect : ast -> (operand_stack_height, operand_stack_height)
 
 $[c_inline]
-val execute_opcode : ast -> unit
+val execute_opcode : (ast, code_pointer, StackTop, EvmMemorySlice, gas) -> (code_pointer, StackTop, EvmMemorySlice, gas)
 
 /* Attribute-only val splices for the fused generated interpreter: with
  * --c-inline-attr (EVM_INLINE_ATTR=on) the narrow per-opcode handlers inline
@@ -32,92 +42,92 @@ val execute_opcode : ast -> unit
 $[c_inline]
 val execute_stop : unit -> unit
 $[c_inline]
-val execute_add : unit -> unit
+val execute_add : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_mul : unit -> unit
+val execute_mul : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_sub : unit -> unit
+val execute_sub : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_div : unit -> unit
+val execute_div : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_sdiv : unit -> unit
+val execute_sdiv : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_mod : unit -> unit
+val execute_mod : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_smod : unit -> unit
+val execute_smod : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_addmod : unit -> unit
+val execute_addmod : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_mulmod : unit -> unit
+val execute_mulmod : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_exp : unit -> unit
+val execute_exp : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_signextend : unit -> unit
+val execute_signextend : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_lt : unit -> unit
+val execute_lt : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_gt : unit -> unit
+val execute_gt : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_slt : unit -> unit
+val execute_slt : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_sgt : unit -> unit
+val execute_sgt : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_eq : unit -> unit
+val execute_eq : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_iszero : unit -> unit
+val execute_iszero : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_and : unit -> unit
+val execute_and : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_or : unit -> unit
+val execute_or : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_xor : unit -> unit
+val execute_xor : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_not : unit -> unit
+val execute_not : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_byte : unit -> unit
+val execute_byte : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_shl : unit -> unit
+val execute_shl : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_shr : unit -> unit
+val execute_shr : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_sar : unit -> unit
+val execute_sar : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_clz : unit -> unit
+val execute_clz : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_keccak256 : unit -> unit
+val execute_keccak256 : (StackTop, EvmMemorySlice, gas) -> (StackTop, EvmMemorySlice, gas)
 $[c_inline]
-val execute_address : unit -> unit
+val execute_address : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_caller : unit -> unit
+val execute_caller : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_callvalue : unit -> unit
+val execute_callvalue : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_calldataload : unit -> unit
+val execute_calldataload : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_calldatasize : unit -> unit
+val execute_calldatasize : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_pop : unit -> unit
+val execute_pop : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_mload : unit -> unit
+val execute_mload : (StackTop, EvmMemorySlice, gas) -> (StackTop, EvmMemorySlice, gas)
 $[c_inline]
-val execute_mstore : unit -> unit
+val execute_mstore : (StackTop, EvmMemorySlice, gas) -> (StackTop, EvmMemorySlice, gas)
 $[c_inline]
-val execute_mstore8 : unit -> unit
+val execute_mstore8 : (StackTop, EvmMemorySlice, gas) -> (StackTop, EvmMemorySlice, gas)
 $[c_inline]
-val execute_msize : unit -> unit
+val execute_msize : (StackTop, EvmMemorySlice, gas) -> (StackTop, EvmMemorySlice, gas)
 $[c_inline]
-val execute_jump : unit -> unit
+val execute_jump : (code_pointer, StackTop, gas) -> (code_pointer, StackTop, gas)
 $[c_inline]
-val execute_jumpi : unit -> unit
+val execute_jumpi : (code_pointer, StackTop, gas) -> (code_pointer, StackTop, gas)
 $[c_inline]
-val execute_pc : unit -> unit
+val execute_pc : (code_pointer, StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_gas : unit -> unit
+val execute_gas : (StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_jumpdest : unit -> unit
+val execute_jumpdest : gas -> gas
 $[c_inline]
-val execute_push : (push_width, word) -> unit
+val execute_push : (push_width, word, StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_dup : stack_operation_index -> unit
+val execute_dup : (stack_operation_index, StackTop, gas) -> (StackTop, gas)
 $[c_inline]
-val execute_swap : stack_operation_index -> unit
+val execute_swap : (stack_operation_index, StackTop, gas) -> (StackTop, gas)

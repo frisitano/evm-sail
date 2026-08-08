@@ -3,11 +3,23 @@
 # Machine state
 
 The user-space half of the machine: per-frame registers, operand stack,
-gas counter, and the saved-frame stack for nested calls. It holds the gas
-counter and all per-frame compute state (`pc`, stack, memory, code,
-message, returndata). World state lives in the host kernel and is reached
-only via `k_*` calls; world rollback on revert is a kernel snapshot, not
-saved here.
+gas counter, and the saved-frame stack for nested calls. World state lives
+in the host kernel and is reached only via `k_*` calls; world rollback on
+revert is a kernel snapshot, not saved here.
+
+## The state-passing convention
+
+Hot machine state flows through handler signatures instead of registers,
+mirroring the Yellow Paper's state-passing transition μ′ = Ξ(μ): the
+remaining gas (μ_g), the program counter (μ_pc), the operand-stack cursor
+(μ_s), and the frame-memory extent (μ_i) are carried by value from the
+interpreter loop into each opcode handler and returned updated. No
+handler reads or writes these registers: the canonical loop supplies each
+step's arguments from the registers and assigns the returned state back,
+while frame-boundary code — frame save/suspend ([suspend_frame][]),
+resume ([restore_frame][]), and the transaction wrapper — synchronizes
+them explicitly. The optimized interpreter carries the same values in
+locals and touches the registers only at those frame boundaries.
 
 ## The frame registers
 
@@ -15,10 +27,14 @@ One [Message][type-Message] per active frame (YP "message call"
 `I = (I_a, I_o, I_s, …)`); sub-calls save and restore these registers in
 the interpreter.
 */
-/*! The program counter (YP μ_pc). */
+/*! The program counter (YP μ_pc), authoritative at frame boundaries. */
 register pc : code_pointer = 0
-/*! The frame's remaining gas (YP μ_g) — the one gas counter. */
-register gas_remaining : gas = GAS_ZERO /* THE gas counter (user-space) */
+/*! The frame's remaining gas (YP μ_g), authoritative at frame
+    boundaries. */
+register gas_remaining : gas = GAS_ZERO
+/*! The frame's operand-stack cursor (YP μ_s), authoritative at frame
+    boundaries. */
+register stack_top : StackTop = 0x0000000000000000
 /*! The Amsterdam state-gas reservoir owned by the active frame. */
 register state_gas_remaining : gas = GAS_ZERO
 /*! State gas drawn from execution gas after the reservoir was exhausted. */
@@ -95,15 +111,18 @@ let STACK_LIMIT : operand_stack_height = 1024
 val conserved_gas_add : forall 'left 'right, live_gas_valid('left) & live_gas_valid('right). (int('left), int('right)) -> gas
 function conserved_gas_add(left, right) = left + right
 
-/*! Returns any Amsterdam state-gas spill to the execution-gas pool and
+/*! Returns any Amsterdam state-gas spill to the carried execution gas and
     restores the frame's state-gas reservoir. */
-function refill_frame_state_gas() -> unit = {
+function refill_frame_state_gas(g : gas) -> gas = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     if profile.fork >= Amsterdam then {
-        gas_remaining = conserved_gas_add(gas_remaining, state_gas_spilled);
+        let refilled = conserved_gas_add(g, state_gas_spilled);
         state_gas_remaining = message.state_gas_reservoir;
-        state_gas_spilled = STATE_GAS_SPILL_ZERO
+        state_gas_spilled = STATE_GAS_SPILL_ZERO;
+        refilled
+    } else {
+        g
     }
 }
 
@@ -116,78 +135,75 @@ function frame_state_gas_used() -> frame_state_gas_delta = {
 }
 
 /*! Enters the exceptional halting state (YP §9.4.2), consuming all
-    remaining execution gas after consolidating the frame's state gas. */
-function exc_halt(k : ExceptionKind) -> unit = {
-    refill_frame_state_gas();
-    gas_remaining = GAS_ZERO;
-    frame_status = Exceptional(k)
+    remaining execution gas after consolidating the frame's state gas.
+    Takes the carried gas, performs the state-gas refill against it in the
+    canonical read-then-zero order, and returns the frame's zeroed gas. */
+function exc_halt(g : gas, k : ExceptionKind) -> gas = {
+    let _ = refill_frame_state_gas(g);
+    frame_status = Exceptional(k);
+    GAS_ZERO
 }
 
-/*! The stack height as a Sail integer. */
-function stack_height() -> operand_stack_height = {
-    let height = stack_depth();
-    assert(height <= STACK_LIMIT);
-    height
-}
+/*! The stack height below a carried cursor. */
+function stack_height(top : StackTop) -> operand_stack_height = stack_top_height(top)
 
 /*! Checks the Yellow Paper stack precondition for one instruction before it
     charges gas or performs side effects. `inputs` is the instruction's
     required stack height (delta) and `outputs` is the height it contributes
-    after consuming those inputs (alpha). */
-function validate_stack(inputs : operand_stack_height, outputs : operand_stack_height) -> bool = {
-    let height = stack_height();
+    after consuming those inputs (alpha). This is the single stack-bounds
+    guard: handler bodies consume and produce operands unchecked behind it. */
+function validate_stack(
+    g : gas,
+    top : StackTop,
+    inputs : operand_stack_height,
+    outputs : operand_stack_height,
+) -> (
+    (bool, gas)
+) = {
+    let height = stack_height(top);
     if height < inputs then {
-        exc_halt(StackUnderflow);
-        false
+        (false, exc_halt(g, StackUnderflow))
     } else if STACK_LIMIT < height - inputs + outputs then {
-        exc_halt(StackOverflow);
-        false
+        (false, exc_halt(g, StackOverflow))
     } else {
-        true
+        (true, g)
     }
 }
 
-/*! The `n`-th-from-top operand (`n = 0` is the top); zero out of
-    range. */
-function peek(n : stack_index) -> word = stack_peek_word(n)
+/*! The `n`-th-from-top operand (`n = 0` is the top), below a validated
+    cursor. */
+function peek(top : StackTop, n : stack_index) -> word = stack_slot_read(top, n)
 
-/*! Pushes a word, entering `StackOverflow` at the 1024 limit. */
-function push_word(w : word) -> unit = {
-    let height = stack_height();
-    if STACK_LIMIT <= height then {
-        exc_halt(StackOverflow)
-    } else {
-        stack_push_word(w)
-    }
+/*! Pushes a word below a validated cursor and returns the new cursor. */
+function push_word(top : StackTop, w : word) -> StackTop = {
+    let pushed = stack_top_advance(top, 1);
+    stack_slot_write(pushed, 0, w);
+    pushed
 }
 
 /*! Pushes the mathematical live-gas quantity as an EVM word. Transaction
     validation establishes that every reachable value is below the word
     modulus; the total canonical definition retains modular behavior outside
     that invariant. */
-function push_gas(value : gas) -> unit = {
+function push_gas(top : StackTop, value : gas) -> StackTop = {
     let reduced = tmod_nat(value, sizeof(word_modulus));
     let gas_word = u256(reduced);
-    push_word(gas_word)
+    push_word(top, gas_word)
 }
 
 overload push = {push_word, push_gas}
 
-/*! Pops the top word, entering `StackUnderflow` (and yielding zero) on
-    an empty stack. */
-function pop() -> word = {
-    let height = stack_height();
-    if height == 0 then {
-        exc_halt(StackUnderflow);
-        WORD_ZERO
-    } else {
-        stack_pop_word()
-    }
+/*! Pops the top word below a validated cursor, returning the word and the
+    new cursor. */
+function pop(top : StackTop) -> (word, StackTop) = {
+    let value = stack_slot_read(top, 0);
+    (value, stack_top_retreat(top, 1))
 }
 
-/*! Overwrites the `n`-th-from-top operand (`SWAP`). */
-function stack_set(n : stack_index, w : word) -> unit =
-    stack_set_word(n, w)
+/*! Overwrites the `n`-th-from-top operand (`SWAP`); the cursor is
+    unchanged. */
+function stack_set(top : StackTop, n : stack_index, w : word) -> unit =
+    stack_slot_write(top, n, w)
 
 /*! Whether the frame is still running. */
 function is_running() -> bool = match frame_status {
@@ -246,12 +262,17 @@ function returndata_copy_prefix(dst : memory_pointer, want : memory_length) -> u
 /*md
 ## The frame memory
 
-The EVM's view over frame memory, a region of the host interface. Every
-access is guarded by [is_running][]: an unaffordable expansion sets the halt
-status before [memory_expand_to][] is reached, so a post-out-of-gas write to a
-huge offset (for example, `MSTORE` at 2^32) cannot grow the backing buffer.
-Successful writes raise the high-water mark that `MSIZE` and
-memory-expansion gas read.
+The EVM's view over frame memory, a region of the host interface. The
+active frame's established extent is the carried memory cursor
+[EvmMemorySlice][type-EvmMemorySlice]: its base and byte high-water mark
+flow through the memory-family handlers by value, with the
+[evm_memory][] register authoritative only at frame boundaries. Every
+access is guarded
+by gas charging against the carried cursor: an unaffordable expansion sets
+the halt status before [memory_expand_to][] is reached, so a
+post-out-of-gas write to a huge offset (for example, `MSTORE` at 2^32)
+cannot grow the backing buffer. Successful expansions return the raised
+high-water mark that `MSIZE` and memory-expansion gas read.
 */
 /*! Validates word-sized returndata bounds and copies the requested range. */
 val returndata_remaining : forall 'available 'offset,
@@ -263,29 +284,33 @@ function returndata_remaining(available, offset) = available - offset
 
 val validated_returndata_copy : forall 'source_offset 'length,
                                   0 <= 'source_offset & 'source_offset < 2 ^ 256 & 0 <= 'length & 'length < 2 ^ 256. (
+        gas,
         memory_pointer,
         int('source_offset),
         int('length),
-    ) -> unit
-/*! Copies a returndata range after validating its word-sized offset and length. */
-function validated_returndata_copy(dst, source_offset, length) = {
+    ) -> gas
+/*! Copies a returndata range after validating its word-sized offset and
+    length, entering an exceptional halt on the carried gas when the source
+    range is out of bounds. */
+function validated_returndata_copy(g, dst, source_offset, length) = {
     let (available as 'available) = returndata_size();
     if source_offset <= available then {
         let remaining = returndata_remaining(available, source_offset);
         let bounded_source_offset : source_pointer = source_offset;
         if length <= remaining then {
             let bounded_length : memory_length = length;
-            returndata_copy(dst, bounded_source_offset, bounded_length)
+            returndata_copy(dst, bounded_source_offset, bounded_length);
+            g
         } else {
-            exc_halt(InvalidOpcode)
+            exc_halt(g, InvalidOpcode)
         }
     } else {
-        exc_halt(InvalidOpcode)
+        exc_halt(g, InvalidOpcode)
     }
 }
 
-function returndata_copy_words(dst : memory_pointer, source_offset : word, length : word) -> unit =
-    validated_returndata_copy(dst, source_offset, length)
+function returndata_copy_words(g : gas, dst : memory_pointer, source_offset : word, length : word) -> gas =
+    validated_returndata_copy(g, dst, source_offset, length)
 
 /* ----------------------- frame memory (EVM view) ------------------------ */
 /* Each frame owns one absolute slice of the shared host arena. Relative EVM
@@ -293,12 +318,13 @@ function returndata_copy_words(dst : memory_pointer, source_offset : word, lengt
  * from a suspended parent and an immediate memory read have the same source
  * representation. The slice length is the exact highest accessed byte; gas
  * and `MSIZE` round that watermark to EVM words when required. */
-/*! The active frame's established memory range in the shared memory arena. */
+/*! The active frame's established memory range, authoritative at frame
+    boundaries; in-loop the carried cursor is the only truth. */
 register evm_memory : EvmMemorySlice = EMPTY_EVM_MEMORY_SLICE
 
-/*! Returns the active frame's exact byte high-water mark. */
-function evm_memory_high_water() -> memory_length = {
-    let memory = evm_memory;
+/*! Returns a carried cursor's exact byte high-water mark. */
+function memory_high_water(mem : EvmMemorySlice) -> memory_length = {
+    let memory = mem;
     let length = memory.len;
     length
 }
@@ -309,47 +335,55 @@ function memory_reset() -> unit = {
     evm_memory = EMPTY_EVM_MEMORY_SLICE
 }
 
-/*! Expands the active frame memory to an already-charged size and returns the
-    resulting high-water-mark witness. */
-val memory_expand_to : forall 'required, source_valid_range(0, 'required). int('required) -> EvmMemorySliceLength(
-        'required,
+/*! Expands the carried frame memory to an already-charged size, returning
+    the resulting high-water-mark witness and the updated cursor. */
+val memory_expand_to : forall 'required, source_valid_range(0, 'required). (EvmMemorySlice, int('required)) -> (
+        EvmMemorySliceLength('required),
+        EvmMemorySlice,
     )
 
-function memory_expand_to(new_size) = {
-    let memory = evm_memory;
+function memory_expand_to(mem, new_size) = {
+    let memory = mem;
     if memory.len < new_size then {
         let expanded = mem_expand(new_size);
-        evm_memory = expanded;
-        expanded
+        (expanded, expanded)
     } else {
-        sub_slice(memory, 0, new_size)
+        (sub_slice(memory, 0, new_size), mem)
     }
 }
 
-/*! Returns an already-expanded memory range. The successful expansion value
-    retains the high-water containment fact that would be lost by reading the
-    existential [evm_memory][] register again. */
-val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> EvmMemorySlice
+/*! Returns an already-expanded memory range together with the updated
+    cursor. The successful expansion value retains the high-water
+    containment fact that would be lost by repacking the existential
+    cursor. */
+val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (EvmMemorySlice, int('off), int('len)) -> (
+        EvmMemorySlice,
+        EvmMemorySlice,
+    )
 
-function active_memory_slice(off, len) =
+function active_memory_slice(mem, off, len) =
     if len == 0 then {
-        EMPTY_EVM_MEMORY_SLICE
+        (EMPTY_EVM_MEMORY_SLICE, mem)
     } else {
-        let memory = memory_expand_to(off + len);
-        sub_slice(memory, off, len)
+        let (window, expanded) = memory_expand_to(mem, off + len);
+        (sub_slice(window, off, len), expanded)
     }
 
-/*! Returns expanded memory as executable initcode, retaining the cursor
-    headroom established by the successful memory-expansion range. */
-val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (int('off), int('len)) -> CodeSlice
+/*! Returns expanded memory as executable initcode together with the
+    updated cursor, retaining the headroom established by the successful
+    memory-expansion range. */
+val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (EvmMemorySlice, int('off), int('len)) -> (
+        CodeSlice,
+        EvmMemorySlice,
+    )
 
-function memory_code_slice(off, len) =
+function memory_code_slice(mem, off, len) =
     if len == 0 then {
-        EMPTY_CODE_SLICE
+        (EMPTY_CODE_SLICE, mem)
     } else {
-        let memory = memory_expand_to(off + len);
-        let initcode = sub_slice(memory, off, len);
-        code_db_intern_memory(initcode)
+        let (window, expanded) = memory_expand_to(mem, off + len);
+        let initcode = sub_slice(window, off, len);
+        (code_db_intern_memory(initcode), expanded)
     }
 
 /* Entering a child returns the saved parent pointer. Restoring that value is
@@ -369,13 +403,16 @@ function memory_frame_leave(parent : EvmMemorySlice) -> unit = {
 }
 
 /*! Captures parent execution state and enters child stack and memory frames.
-    The host operand-frame cursor mirrors `call_depth`: push the empty child
-    operand stack before installing the child's semantic depth, and pop it
-    before restoring the parent's semantic depth. */
+    The caller has published its carried machine state to the frame
+    registers: this checkpoint reads them at the one authoritative
+    boundary. The host operand-frame cursor mirrors `call_depth`: push the
+    empty child operand stack before installing the child's semantic depth,
+    and pop it before restoring the parent's semantic depth. */
 function suspend_frame() -> FrameCheckpoint = {
     k_journal_checkpoint();
     let saved_pc = pc;
     let saved_gas = gas_remaining;
+    let saved_stack = stack_top;
     let saved_state_gas = state_gas_remaining;
     let saved_state_spill = state_gas_spilled;
     let saved_refund = frame_refund;
@@ -384,11 +421,12 @@ function suspend_frame() -> FrameCheckpoint = {
     let saved_depth = call_depth;
     let saved_code = frame_code;
     let saved_calldata = calldata;
-    operand_stack_push_empty_frame();
+    stack_top = operand_stack_push_empty_frame();
     let saved_memory = memory_frame_enter();
     struct {
         pc = saved_pc,
         gas_remaining = saved_gas,
+        stack_top = saved_stack,
         state_gas_remaining = saved_state_gas,
         state_gas_spilled = saved_state_spill,
         refund = saved_refund,
@@ -407,6 +445,7 @@ function restore_frame(checkpoint : FrameCheckpoint) -> unit = {
     memory_frame_leave(checkpoint.memory);
     pc = checkpoint.pc;
     gas_remaining = checkpoint.gas_remaining;
+    stack_top = checkpoint.stack_top;
     state_gas_remaining = checkpoint.state_gas_remaining;
     state_gas_spilled = checkpoint.state_gas_spilled;
     frame_refund = checkpoint.refund;
@@ -443,9 +482,10 @@ function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_leng
     }
 
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
-    caller reads the addressed bytes and hashes that byte list. */
-function mem_keccak(range : MemoryRange) -> word = {
-    let bytes = active_memory_slice(range.off, range.len);
+    caller reads the addressed bytes and hashes that byte list. Returns
+    the digest word and the updated memory cursor. */
+function mem_keccak(mem : EvmMemorySlice, range : MemoryRange) -> (word, EvmMemorySlice) = {
+    let (bytes, expanded) = active_memory_slice(mem, range.off, range.len);
     let digest = keccak256(bytes);
-    hash_to_word(digest)
+    (hash_to_word(digest), expanded)
 }

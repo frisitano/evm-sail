@@ -597,7 +597,8 @@ function process_amsterdam_auth(
             let account_exists = k_account_exists(authority);
             let account_missing = not_bool(account_exists);
             if account_missing then {
-                let state_gas_affordable = charge_state_gas(G_amsterdam_state_new_account);
+                let (state_gas_affordable, state_gas) = charge_state_gas(gas_remaining, G_amsterdam_state_new_account);
+                gas_remaining = state_gas;
                 let state_gas_out_of_gas = not_bool(state_gas_affordable);
                 if state_gas_out_of_gas then {
                     return false
@@ -605,7 +606,8 @@ function process_amsterdam_auth(
             };
             let requires_account_write = not_bool(already_written);
             if requires_account_write then {
-                let write_affordable = charge(G_amsterdam_account_write);
+                let (write_affordable, write_gas) = charge(gas_remaining, G_amsterdam_account_write);
+                gas_remaining = write_gas;
                 let write_out_of_gas = not_bool(write_affordable);
                 if write_out_of_gas then {
                     return false
@@ -615,7 +617,11 @@ function process_amsterdam_auth(
             let delegation_set = authorization_tracker_delegation_set(authority);
             let delegation_not_set = not_bool(delegation_set);
             if (au.address != ZERO_ADDRESS) & not_delegated_before_tx & delegation_not_set then {
-                let auth_state_gas_affordable = charge_state_gas(G_amsterdam_state_auth_base);
+                let (auth_state_gas_affordable, auth_state_gas) = charge_state_gas(
+                    gas_remaining,
+                    G_amsterdam_state_auth_base,
+                );
+                gas_remaining = auth_state_gas;
                 let auth_state_gas_out_of_gas = not_bool(auth_state_gas_affordable);
                 if auth_state_gas_out_of_gas then {
                     return false
@@ -922,7 +928,7 @@ function enter_transaction_frame(v : TxValidity) -> unit = {
             is_static = false,
             depth = 0,
         };
-    stack_reset();
+    stack_top = stack_reset();
     memory_reset();
     returndata_clear();
     calldata = EMPTY_CALLDATA;
@@ -967,7 +973,8 @@ function prepare_amsterdam_transaction_dispatch(
 
     if tx.is_create then {
         if upfront.create_target_prestate_empty then {
-            let state_gas_affordable = charge_state_gas(G_amsterdam_state_new_account);
+            let (state_gas_affordable, state_gas) = charge_state_gas(gas_remaining, G_amsterdam_state_new_account);
+            gas_remaining = state_gas;
             let state_gas_out_of_gas = not_bool(state_gas_affordable);
             if state_gas_out_of_gas then {
                 return struct { ready = false, delegated = false }
@@ -982,7 +989,8 @@ function prepare_amsterdam_transaction_dispatch(
         let transfers_value = word_nonzero(tx.value);
         let recipient_empty = k_account_is_empty(tx.recipient);
         if transfers_value & recipient_empty then {
-            let state_gas_affordable = charge_state_gas(G_amsterdam_state_new_account);
+            let (state_gas_affordable, state_gas) = charge_state_gas(gas_remaining, G_amsterdam_state_new_account);
+            gas_remaining = state_gas;
             let state_gas_out_of_gas = not_bool(state_gas_affordable);
             if state_gas_out_of_gas then {
                 return struct { ready = false, delegated = false }
@@ -993,7 +1001,8 @@ function prepare_amsterdam_transaction_dispatch(
         if delegated then {
             let warm = k_account_is_warm(delegate);
             let access_cost = account_cost(warm);
-            let access_affordable = charge(access_cost);
+            let (access_affordable, access_gas) = charge(gas_remaining, access_cost);
+            gas_remaining = access_gas;
             let access_out_of_gas = not_bool(access_affordable);
             if access_out_of_gas then {
                 return struct { ready = false, delegated = false }
@@ -1023,7 +1032,7 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
      * (EIP-684/EIP-7610; gas_left = 0). */
     let occupied = k_account_occupied(new_addr);
     if occupied then {
-        exc_halt(AddressCollision)
+        gas_remaining = exc_halt(gas_remaining, AddressCollision)
     } else {
         k_mark_created(new_addr); /* EIP-6780: created this tx */
         k_clear_storage(new_addr);
@@ -1066,7 +1075,8 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                     let execution_deposit = deployment_charge.cost;
                     gas_remaining = gas_sub(gas_remaining, execution_deposit);
                     let state_deposit = code_deployment_state_cost(dep_len);
-                    let _ = charge_deployment_state_gas(state_deposit);
+                    let (_, deployment_gas) = charge_deployment_state_gas(gas_remaining, state_deposit);
+                    gas_remaining = deployment_gas;
                     let deployment_succeeded = frame_succeeded();
                     if deployment_succeeded then {
                         let stored_code = code_db_intern_output(deployed_code);
@@ -1078,10 +1088,10 @@ function run_create_transaction_frame(tx : Transaction, sender : address, nonce_
                     gas_remaining = GAS_ZERO;
                     k_deploy_code(new_addr, EMPTY_CODE_SLICE)
                 } else {
-                    exc_halt(OutOfGas)
+                    gas_remaining = exc_halt(gas_remaining, OutOfGas)
                 }
             } else {
-                exc_halt(OutOfGas)
+                gas_remaining = exc_halt(gas_remaining, OutOfGas)
             } /* failed deploy */
         }
     }
@@ -1121,10 +1131,10 @@ function run_call_transaction_frame(tx : Transaction, sender : address, delegate
                 let halt = HaltReturn(result.output);
                 frame_status = Halted(halt)
             } else {
-                exc_halt(OutOfGas)
+                gas_remaining = exc_halt(gas_remaining, OutOfGas)
             }
         } else {
-            exc_halt(OutOfGas)
+            gas_remaining = exc_halt(gas_remaining, OutOfGas)
         }
     } else {
         if profile.fork < Amsterdam then {

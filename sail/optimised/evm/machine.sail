@@ -24,12 +24,12 @@ function conserved_gas_add(left, right) =
 /* Optimized `gas` is a uint64 range, so reduction modulo 2^256 is the
  * identity. Avoid materializing the 257-bit word modulus solely to widen a
  * live-gas value before pushing it. */
-function push_gas(value : gas) -> unit =
-    push_word(u256(value))
+function push_gas(top : StackTop, value : gas) -> StackTop =
+    push_word(top, u256(value))
 
 /* Attribute-only val splice: with --c-inline-attr (EVM_INLINE_ATTR=on) the
  * stack precondition folds into each fused interpreter arm, where its
  * constant (delta, alpha) arguments reduce it to a bounds compare. Inert in
  * every other build. */
 $[c_inline]
-val validate_stack : (operand_stack_height, operand_stack_height) -> bool
+val validate_stack : (gas, StackTop, operand_stack_height, operand_stack_height) -> (bool, gas)
