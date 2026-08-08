@@ -1299,7 +1299,7 @@ private def inputSpan (state : HostState) (base len : Nat) : List byte :=
 
 def stateless_input (_ : Unit) : SailM StatelessInputSlice := do
   let length := (← get).inputBytes.size
-  pure ⟨0, ⟨length, { bytes := 0, len := length }⟩⟩
+  pure ⟨0, ⟨length, {}⟩⟩
 
 def stateless_input_byte_at
     (s : StatelessInputSlice) (off : stateless_input_length) : SailM byte := do
@@ -1545,7 +1545,7 @@ def mem_expand (required : Nat) :
     SailM (Sigma fun (k_off : Nat) =>
       Sigma fun (k_len : Nat) => EvmMemorySliceFields k_off k_len) := do
   let frame ← establishMemory required
-  pure ⟨frame.base, ⟨required, { bytes := frame.base, len := required }⟩⟩
+  pure ⟨frame.base, ⟨required, {}⟩⟩
 
 def mem_move
     (dst : memory_pointer) (src : memory_pointer) (len : memory_length) :
@@ -1581,7 +1581,7 @@ offset it is given and reports the resulting high-water mark. -/
 private def scratchResult (length : Nat) :
     Sigma fun (k_off : Nat) =>
       Sigma fun (k_len : Nat) => ScratchSliceFields k_off k_len :=
-  ⟨0, ⟨length, { bytes := 0, len := length }⟩⟩
+  ⟨0, ⟨length, {}⟩⟩
 
 private def scratchStore (off : Nat) (values : List byte) :
     SailM (Sigma fun (k_off : Nat) =>
@@ -1910,7 +1910,7 @@ def frame_stack_pop (_ : Unit) : SailM FrameContinuation := do
 private def codeRegion (offset length : Nat) :
     Sigma fun (k_off : Nat) =>
       Sigma fun (k_len : Nat) => CodeRegionSliceFields k_off k_len :=
-  ⟨offset, ⟨length, { bytes := offset, len := length }⟩⟩
+  ⟨offset, ⟨length, {}⟩⟩
 
 private def internCode (bytes : List byte) : SailM CodeRegionSlice := do
   let state ← get
@@ -1935,7 +1935,7 @@ def code_region_from_delegation (target : address) :
 def code_db_lookup (key : hash) : SailM Code := do
   match assocGet (← get).codeDb key with
   | some code => pure code
-  | none => pure ⟨0, ⟨0, { bytes := 0, len := 0, jumpdests := 0 }⟩⟩
+  | none => pure ⟨0, ⟨0, { jumpdests := 0 }⟩⟩
 
 def jumpdest_table_alloc (_ : CodeSlice) : SailM jump_table_index := do
   let state ← get
@@ -2003,8 +2003,8 @@ def nodedb_insert
 def nodedb_lookup (key : hash) : SailM StatelessInputSlice := do
   match assocGet (← get).nodeDb key with
   | some (offset, length) =>
-      pure ⟨offset, ⟨length, { bytes := offset, len := length }⟩⟩
-  | none => pure ⟨0, ⟨0, { bytes := 0, len := 0 }⟩⟩
+      pure ⟨offset, ⟨length, {}⟩⟩
+  | none => pure ⟨0, ⟨0, {}⟩⟩
 
 /-! ### Transient storage -/
 
