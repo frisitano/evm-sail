@@ -1,64 +1,82 @@
-# EVM Sail Specification
+---
+hide:
+  - toc
+---
 
-An executable specification of the Ethereum execution layer, written in
-[Sail](https://github.com/rems-project/sail). It defines the state
-transition function — transaction validity and execution, the EVM, gas,
-precompiled contracts, and the state trie — together with the stateless
-validation of execution payloads. Every rule cites the Yellow Paper
-section or EIP it implements; fork-dependent rules are gated on the
-[Fork][type-Fork] ordering rather than duplicated per fork.
+# EVM Sail
 
-## The state transition
+An executable, machine-checked specification of the Ethereum execution
+layer — and a workbench for asking hard questions about the guests that
+prove it.
 
-- [Transactions](reference/sail/evm/transaction.md) — validity, upfront
-  effects, execution, and settlement (YP §6).
-- [Block execution](reference/sail/executor/block.md) — system calls, the
-  transaction loop, withdrawals, and requests.
-- [Stateless validation](reference/sail/executor/stateless.md) — the
-  commitments an executed block must satisfy.
-- [Exceptions](reference/sail/exceptions.md) — exceptional halts and
-  block-validation failures.
+The specification is written in [Sail](https://github.com/rems-project/sail),
+the language used to give ARM, RISC-V, and CHERI their official semantics.
+One source defines the state transition function; from it we extract a
+reference implementation in C, proof objects for Lean and Coq, an
+executable Python rendering, and a production zkVM guest. Because they all
+come from the same text, a claim proved about the specification is a claim
+about the binary that runs.
 
-## The EVM
+## What this is for
 
-- [Halting](reference/sail/evm/halt.md) — normal stops, exceptional halts,
-  and frame status.
-- [The interpreter](reference/sail/evm/interpreter.md) — fetch/decode, the
-  run loop, and message calls.
-- [Opcode semantics](reference/sail/evm/execute.md) — the single-step
-  transition function.
-- [The instruction set](reference/sail/evm/instructions.md).
-- [The gas schedule](reference/sail/evm/gas.md).
-- [Precompiled contracts](reference/sail/evm/precompiles.md).
-- [Machine state](reference/sail/evm/machine.md) — the per-message-call
-  registers, stack, and memory.
+**Specifying precisely.** Every rule cites the Yellow Paper section or the
+EIP it implements, and fork-dependent behaviour is gated on an explicit
+fork ordering rather than duplicated per release. The specification is
+gated byte-exact against
+[`ethereum/execution-specs`](https://github.com/ethereum/execution-specs)
+across the full stateless test corpus, so "precise" means tested, not
+merely stated.
 
-## State and data structures
+**Verifying.** The impure boundary is deliberately small and enumerable —
+the hashing core, the input oracle, guest output, the world-state and
+block-environment stores, host buffers, and the trie node database. Proof
+targets receive those as named axioms and everything else as ordinary
+definitions. Optimizations never become axioms: a refinement that makes
+the production guest faster is a *lowering* of a body the proofs still
+see in full.
 
-- [Accounts](reference/sail/primitives/account.md),
-  [Transactions](reference/sail/primitives/tx.md),
-  [Blocks](reference/sail/primitives/block.md) — the protocol data types.
-- [The Merkle-Patricia trie](reference/sail/lib/mpt/trie.md) and the
-  [state trie](reference/sail/lib/state_trie.md).
-- [RLP](reference/sail/lib/rlp/index.md) and
-  [SSZ](reference/sail/lib/ssz/ssz.md) serialization;
-  [hash_tree_root](reference/sail/lib/htr.md).
-- [Cryptographic primitives](reference/sail/primitives/crypto.md).
+**Measuring, and understanding the trade-offs.** A zkEVM guest is priced
+in retired instructions, which inverts much of the usual performance
+intuition — memory traffic is pure cost, code size is free, and a
+constant address beats a cached pointer. We instrument this guest and its
+peers with the same semantic phases and compare them on identical inputs,
+so the question "where does the cost actually live?" has an answer with
+numbers attached rather than folklore. The
+[benchmarks](performance.md) publish those numbers; the
+[engineering notes](engineering.md) record what we learned producing them,
+including the experiments that failed.
 
-## Architecture
+The wider ambition is that specification, verification, and performance
+analysis should not be three separate artifacts that drift apart. Here
+they are three views of one document.
 
-The model is split into a **user-space machine** (the per-message-call
-compute state: program counter, stack, memory, gas) and a **state kernel**
-(the world-state semantics for accounts, storage, logs, and transactional
-overlays). Every world effect crosses that split as an explicit `k_*`
-kernel call, and world rollback is a kernel snapshot/revert. The kernel is
-part of the normative Sail specification under `kernel/`.
+## Where to start
 
-Beneath both sits the **host interface**, with two facets: **regions** —
-the stateless input, frame memory, code, log data, output, and scratch stores,
-each addressed by its own nominal `{off, len}` slice type without runtime
-source dispatch — and the **accelerator interface**, the cryptographic
-functions the implementation computes (hashing, secp256k1, the precompile
-accelerators). Pages under `host/` document that interface and are
-**non-normative**: they specify the model's internal contracts, not
-protocol rules.
+- **[Spec](introduction.md)** — the specification itself: the state
+  transition, the EVM, gas, the tries, and stateless validation.
+- **[Spec extractions](extractions.md)** — how the same source becomes C
+  backends, Lean and Coq developments, and a Python rendering, with links
+  to the generated sources.
+- **[Performance engineering](engineering.md)** — the cost model,
+  type-driven lowering, register custody, and the measured results behind
+  the guest's design.
+- **[zkEVM benchmarks](performance.md)** — this guest against reth and
+  ethrex on identical fixtures, broken down by execution phase.
+
+## Status
+
+This project is **experimental**. It is a research vehicle for the ideas
+above, not production consensus software, and it should not be relied on
+to validate real chain data. Interfaces, layouts, and internal structure
+change frequently; results published here are reproducible from the
+repository at the commit each page records, and not guaranteed stable
+across commits.
+
+It is also developed **in collaboration with AI**. Substantial parts of
+the specification, the compiler work, the C backends, the tooling, and
+this documentation were written with AI assistance under human direction
+and review. We think that collaboration is a legitimate and interesting
+part of the experiment, and we would rather say so plainly than leave it
+implicit — with the corresponding caveat that every claim on this site
+should be read as something to verify against the corpus gates and the
+published measurements rather than to take on trust.

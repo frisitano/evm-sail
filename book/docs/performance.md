@@ -3,11 +3,11 @@ hide:
   - toc
 ---
 
-# zkVM benchmarks
+# zkEVM benchmarks
 
-This dashboard compares EVM Sail, reth, and ethrex as ZisK guests on the exact
-same stateless fixture input. ZisK supplies the zkVM execution and proving-cost
-model used by every result on this page. Each guest panel shows what its ELF
+This dashboard compares EVM Sail, reth, and ethrex as zkEVM guests on ZisK,
+on the exact same stateless fixture input. ZisK supplies the execution and
+proving-cost model used by every result on this page. Each guest panel shows what its ELF
 was built from — the repository commit for EVM Sail and the pinned release for
 reth and ethrex — as recorded by the benchmark runner; an unrecorded build is
 labelled as unknown rather than guessed.

@@ -25,9 +25,21 @@ optimizations are never proof axioms.
 
 ## Source locations
 
-- C contract implementations: `ffi/spec/` and `ffi/optimized/`
-- Proof-target contract stubs: `extractions/contracts/`
-  (`ExternBoundary.v`, `HostAxioms.lean`, `HostContract.py`)
+Every target's contract layer and generated output lives in the
+repository:
+
+| target | contract layer | generated output |
+| --- | --- | --- |
+| C (reference) | [`ffi/spec/`](https://github.com/frisitano/evm-sail/tree/main/ffi/spec) | built by `make c-spec` |
+| C (optimized) | [`ffi/optimized/`](https://github.com/frisitano/evm-sail/tree/main/ffi/optimized) | built by `make c-optimised` |
+| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/HostAxioms.lean) | [`extractions/lean/evm/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/evm) |
+| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/ExternBoundary.v) | [`extractions/coq/model/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/model) |
+| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/HostContract.py) | [`extractions/python/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python) |
+
+The Sail source these are extracted from is
+[`sail/`](https://github.com/frisitano/evm-sail/tree/main/sail); the
+optimized C refinements applied on top of it are
+[`sail/optimised/`](https://github.com/frisitano/evm-sail/tree/main/sail/optimised).
 
 *This layout is being reorganized: the C backends move to
 `extractions/c/contracts/{spec,optimised}` and each proof target gains its
