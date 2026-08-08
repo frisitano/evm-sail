@@ -350,9 +350,9 @@ publish-c-extraction: extract-c-spec extract-c-optimised
 	mkdir -p extractions/c/spec/src
 	cp $(C_SPEC_MODEL).c $(C_SPEC_MODEL).h extractions/c/spec/src/
 	mkdir -p extractions/c/optimised/src
-	cd $(C_OPT_GENERATED_DIR) && find include src/spec -type f \
-		\( -name '*.c' -o -name '*.h' -o -name 'sources.list' \) \
-		-exec install -D {} $(CURDIR)/extractions/c/optimised/src/{} \\;
+	cp -R $(C_OPT_GENERATED_DIR)/include extractions/c/optimised/src/include
+	mkdir -p extractions/c/optimised/src/src
+	cp -R $(C_OPT_GENERATED_SOURCE_DIR) extractions/c/optimised/src/src/spec
 	@echo "published: $$(find extractions/c/spec/src extractions/c/optimised/src -type f | wc -l | tr -d ' ') generated C files"
 
 

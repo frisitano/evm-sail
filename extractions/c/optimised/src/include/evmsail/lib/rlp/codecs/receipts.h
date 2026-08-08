@@ -1,0 +1,6 @@
+#ifndef EVMSAIL_OPTIMIZED_LIB_RLP_CODECS_RECEIPTS_H
+#define EVMSAIL_OPTIMIZED_LIB_RLP_CODECS_RECEIPTS_H
+
+#include "evmsail/prelude.h"
+
+#endif
