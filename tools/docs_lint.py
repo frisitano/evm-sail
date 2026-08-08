@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce docs/SPEC-STYLE.md over the specification comments.
+"""Enforce the specification comment style (see AGENTS.md).
 
 Checks every sail/**/*.sail file:
 - the first /*md block opens with a `# Title` heading;

@@ -121,8 +121,7 @@ broken down by execution phase, on the
 the reasoning behind the design — cost model, type-driven lowering, register
 custody, and the experiments that failed — is in the
 [research notes](https://frisitano.github.io/evm-sail/engineering.html).
-The optimisation backlog and validation requirements remain in
-[`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md).
+
 
 ## Layout
 
