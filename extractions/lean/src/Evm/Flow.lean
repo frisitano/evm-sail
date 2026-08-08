@@ -20,59 +20,45 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
-/- Type quantifiers: k_ex412958_ : Bool, k_ex412957_ : Bool -/
+/- Type quantifiers: k_ex547267_ : Bool, k_ex547266_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
-
-/-- The activation index of a fork: its declaration position. -/
-def fork_index (f : Fork) : Nat :=
-  match f with
-  | .Frontier => 0
-  | .Homestead => 1
-  | .Byzantium => 2
-  | .Constantinople => 3
-  | .Istanbul => 4
-  | .Berlin => 5
-  | .London => 6
-  | .Paris => 7
-  | .Shanghai => 8
-  | .Cancun => 9
-  | .Prague => 10
-  | .Osaka => 11
-  | .Amsterdam => 12
-
-/-- Fork `a` activates strictly before fork `b`; overloaded onto `<`. -/
-def fork_lt (a : Fork) (b : Fork) : Bool :=
-  ((fork_index a) <b (fork_index b))
-
-/-- Fork `a` activates no earlier than fork `b`. Overloaded onto `>=` so
-fork gates read `k_fork >= Berlin`. -/
-def fork_gteq (a : Fork) (b : Fork) : Bool :=
-  ((fork_index b) ≤b (fork_index a))
 
 /- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=

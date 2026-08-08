@@ -2,11 +2,11 @@ import Evm.Prelude
 import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
 import Evm.Primitives.Code
+import Evm.Kernel.Scratch
+import Evm.Primitives.ChainConfig
 import Evm.Primitives.Tx
-import Evm.Primitives.Block
 import Evm.Primitives.Evm
-import Evm.Host.Kernel.Scratch
-import Evm.Host.Kernel.Environment
+import Evm.Kernel.Environment
 import Evm.Evm.Machine
 import Evm.Main
 
@@ -26,45 +26,54 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
 def sail_model_init (x_0 : Unit) : SailM Unit := do
-  writeReg scratch_arena ⟨_, ⟨_, (byte_slice ScratchSource 0 0)⟩⟩
+  writeReg scratch_arena ⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩
   writeReg k_parent_state_root ZERO_HASH
   writeReg k_n_headers 0
   writeReg k_chain_id 1
-  writeReg k_fork Amsterdam
-  writeReg k_blob_schedule { target := 14,
-                             max := 21,
-                             base_fee_update_fraction := 11684671 }
+  writeReg k_execution_profile (((((((((((((DEFAULT_EXECUTION_PROFILE).2).2).2).2).2).2).2).2).2).2).2).2).2
   writeReg k_header { number := 0,
                       timestamp := 0,
-                      extra_data := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
+                      extra_data := ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩,
                       gas_limit := 0,
                       gas_used := 0,
                       prev_randao := ZERO_WORD,
@@ -73,27 +82,28 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
                       excess_blob_gas := 0,
                       state_root := ZERO_HASH,
                       receipts_root := ZERO_HASH,
-                      logs_bloom := EMPTY_LOGS_BLOOM,
+                      logs_bloom := ⟨_, ⟨_, (stateless_input_slice 0 256)⟩⟩,
                       fee_recipient := ZERO_ADDRESS,
                       parent_hash := ZERO_HASH,
                       parent_beacon_block_root := ZERO_HASH,
                       slot_number := 0 }
-  writeReg k_tx { origin := ZERO_ADDRESS,
-                  gas_price := ZERO_WORD,
-                  blob_hashes := EMPTY_BLOB_HASHES }
-  writeReg k_block_access_index 0
+  writeReg k_tx ⟨_, ({ origin := ZERO_ADDRESS,
+                         gas_price := ZERO_WORD,
+                         blob_hashes := EMPTY_BLOB_HASHES } : (TxEnvFields 0))⟩
+  writeReg k_current_transaction_epoch 0
   writeReg pc 0
   writeReg gas_remaining GAS_ZERO
+  writeReg stack_top 0x0000000000000000#64
   writeReg state_gas_remaining GAS_ZERO
   writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
   writeReg frame_refund GAS_REFUND_ZERO
   writeReg frame_status (Running ())
   writeReg message DEFAULT_MESSAGE
   writeReg call_depth 0
-  writeReg frame_code EMPTY_CODE
-  writeReg calldata ⟨_, ⟨_, EMPTY_SLICE⟩⟩
-  writeReg returndata ⟨_, ⟨_, EMPTY_SLICE⟩⟩
-  writeReg evm_memory ⟨_, ⟨_, (byte_slice EvmMemorySource 0 0)⟩⟩
+  writeReg frame_code ((EMPTY_CODE).2).2
+  writeReg calldata EMPTY_CALLDATA
+  writeReg returndata ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩
+  writeReg evm_memory ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩
   (pure (initialize_registers ()))
 
 end Evm.Functions

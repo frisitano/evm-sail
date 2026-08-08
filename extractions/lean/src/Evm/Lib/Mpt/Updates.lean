@@ -1,11 +1,12 @@
+import Evm.Flow
 import Evm.Prelude
+import Evm.Exceptions
 import Evm.Primitives.Crypto
-import Evm.Host.Kernel.Scratch
-import Evm.Lib.Rlp.Rlp
-import Evm.Host.Kernel.Storage
-import Evm.Host.Kernel.Accounts
+import Evm.Lib.Rlp.Encoding
+import Evm.Kernel.Storage
+import Evm.Kernel.Accounts
 import Evm.Lib.Mpt.Primitives
-import Evm.Lib.Mpt.Nodes
+import Evm.Lib.Mpt.Codec
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -23,235 +24,113 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
-/-! # Trie updates and the canonical builder
+/-! # Trie updates and subtree assembly
 
-Ordered leaf updates, their merge into item streams, and the trie builder
-that recomposes canonical nodes (YP Appendix D). -/
+Ordered leaf updates, their structural items, and the recursive assembly that
+recomposes canonical nodes (YP Appendix D). -/
 
-def cached_account_trie_update_next (_ : Unit) : (Option TrieUpdate) :=
-  none
+/-- The payload sentinel used by exhausted source pulls. -/
+def EMPTY_TRIE_UPDATE : TrieUpdate :=
+  { key := (path_empty ()),
+    change := (TrieDelete ()) }
 
 /-- Encodes an account trie leaf with its recomputed storage root. -/
 def encode_state_account (info : AccountInfo) (storage_root : (Vector (BitVec 8) 32)) : SailM (Sigma
-  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) := do
   let nonce_length := (rlp_uint_word_size info.nonce)
   let balance_length := (rlp_uint_word_size info.balance)
   let storage_root_length := (rlp_word_size ())
   let code_hash_length := (rlp_word_size ())
   let content_len := (((nonce_length + balance_length) + storage_root_length) + code_hash_length)
-  let start ← do (scratch_begin ())
+  let encoded_length ← do (rlp_list_size content_len)
+  let encoder ← do (rlp_encoder_begin encoded_length)
   (rlp_write_list_prefix content_len)
   (rlp_write_uint_word info.nonce)
   (rlp_write_uint_word info.balance)
-  (rlp_write_word (hash_to_word storage_root))
-  (rlp_write_word (hash_to_word info.code_hash))
-  (rlp_finish start)
+  let storage_root_word := (hash_to_word storage_root)
+  (rlp_write_word storage_root_word)
+  let code_hash_word := (hash_to_word info.code_hash)
+  (rlp_write_word code_hash_word)
+  (rlp_encoder_finish encoder)
 
 /-- Converts one account row and its recomputed storage root into a
 state-trie insertion or deletion. -/
-def account_update (entry : AcctEntry) (storage_root : (Vector (BitVec 8) 32)) : SailM TrieUpdate := do
+def account_update (trie_entry : AcctTrieEntry) (storage_root : (Vector (BitVec 8) 32)) : SailM TrieUpdate := do
+  let entry := trie_entry.entry
   let current := entry.value.curr
-  let key ← do (pure (path_from_hash (← (keccak256_address entry.addr))))
-  if (((! current.present) || (account_info_empty current.info)) : Bool)
+  let key := (path_new trie_entry.address_hash 64)
+  let account_absent := (! current.present)
+  let account_empty := (account_info_empty current.info)
+  if ((account_absent || account_empty) : Bool)
   then
     (pure { key := key,
             change := (TrieDelete ()) })
   else
-    (pure { key := key,
-            change := ← (do
-                  let dependentArg0 := (← (encode_state_account current.info storage_root))
-                  pure ((TriePut dependentArg0))) })
+    (do
+      let ⟨_, ⟨_, encoded_account⟩⟩ ← do (encode_state_account current.info storage_root)
+      (pure { key := key,
+              change := (TriePut ⟨_, ⟨_, encoded_account⟩⟩) }))
 
 /-- Whether any persisted account field changed across the block. -/
 def account_value_changed (value : AcctValue) : Bool :=
   ((! (value.curr.info.nonce == value.orig.info.nonce)) || (((! (value.curr.info.balance == value.orig.info.balance)) || ((! (value.curr.info.storage_root == value.orig.info.storage_root)) || ((! (value.curr.info.code_hash == value.orig.info.code_hash)) || ((! (value.curr.present == value.orig.present)) || (! (value.curr.storage_cleared == value.orig.storage_cleared)))))) : Bool))
-
-def storage_value_changed (value : StorageValue) : Bool :=
-  (! (value.curr == value.orig))
-
-/-- Pulls the next changed storage row, skipping materialized read-only rows. -/
-def next_changed_storage_entry (addr : (Vector (BitVec 8) 20)) : SailM (Option StorageEntry) := do
-  let searching : Bool := true
-  let result : (Option StorageEntry) := none
-  let (result, searching) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (result, searching) => (pure searching)) (result, searching)
-      fun (result, searching) => do
-        assert true "loop dummy assert"
-        let (result, searching) ← (( do
-          match (← (storage_block_iter_next addr)) with
-          | .some entry =>
-            (let (result, searching) : ((Option StorageEntry) × Bool) :=
-              if ((storage_value_changed entry.value) : Bool)
-              then
-                (let result : (Option StorageEntry) := (some entry)
-                let searching : Bool := false
-                (result, searching))
-              else (result, searching)
-            (pure (result, searching)))
-          | none =>
-            (let searching : Bool := false
-            (pure (result, searching))) ) : SailM ((Option StorageEntry) × Bool) )
-        (pure (result, searching))
-    (pure loop_vars) ) : SailM ((Option StorageEntry) × Bool) )
-  (pure result)
-
-/-- Computes one already-prepared account update and whether the account or
-any storage row has a net change. The equality decision remains in Sail. -/
-def account_trie_update (entry : AcctEntry) : SailM (TrieUpdate × Bool) := do
-  (storage_block_iter_begin entry.addr)
-  let storage_changed ← (( do
-    match (← (next_changed_storage_entry entry.addr)) with
-    | .some _storage_entry => (pure true)
-    | none => (pure false) ) : SailM Bool )
-  let storage_root ← do (acct_post_storage_root_read entry.addr)
-  (pure ((← (account_update entry storage_root)), ((account_value_changed entry.value) || storage_changed)))
-
-/-- Pulls the next net-changed account update for the protocol state-root path.
-The host excludes read-only candidates; Sail skips reverted/no-op writes. -/
-def next_changed_account_trie_update (_ : Unit) : SailM (Option TrieUpdate) := do
-  let searching : Bool := true
-  let result : (Option TrieUpdate) := none
-  let (result, searching) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (result, searching) => (pure searching)) (result, searching)
-      fun (result, searching) => do
-        assert true "loop dummy assert"
-        let (result, searching) ← (( do
-          match (← (acct_block_iter_next ())) with
-          | .some entry =>
-            (do
-              let (update, changed) ← do (account_trie_update entry)
-              let (result, searching) : ((Option TrieUpdate) × Bool) :=
-                if (changed : Bool)
-                then
-                  (let result : (Option TrieUpdate) := (some update)
-                  let searching : Bool := false
-                  (result, searching))
-                else (result, searching)
-              (pure (result, searching)))
-          | none =>
-            (let searching : Bool := false
-            (pure (result, searching))) ) : SailM ((Option TrieUpdate) × Bool) )
-        (pure (result, searching))
-    (pure loop_vars) ) : SailM ((Option TrieUpdate) × Bool) )
-  (pure result)
-
-/-- Encodes a nonzero storage value as its minimal RLP integer leaf payload. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
-def encode_storage_value (value : Nat) : SailM (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
-  let encoded_len := (rlp_uint_word_size value)
-  let start ← do (scratch_begin ())
-  (rlp_write_uint_word value)
-  (rlp_finish start)
-
-/-- Converts one changed storage row into a secure-trie update. -/
-def storage_update (entry : StorageEntry) : SailM TrieUpdate := do
-  let key ← do (pure (path_from_hash (← (keccak256_word entry.key.slot))))
-  let change ← do
-    if ((word_is_zero entry.value.curr) : Bool)
-    then (pure (TrieDelete ()))
-    else
-      (do
-          let dependentArg0 := (← (encode_storage_value entry.value.curr))
-          pure ((TriePut dependentArg0)))
-  (pure { key := key,
-          change := change })
-
-/-- Converts the next changed storage row to a trie update. -/
-def next_storage_trie_update (addr : (Vector (BitVec 8) 20)) : SailM (Option TrieUpdate) := do
-  match (← (next_changed_storage_entry addr)) with
-  | .some entry => (pure (some (← (storage_update entry))))
-  | none => (pure none)
-
-/-- State-backed implementation of the generic trie's pull-source contract. -/
-def trie_update_source_next (source : TrieUpdateSource) : SailM (Option TrieUpdate) := do
-  match source with
-  | .StorageTrieUpdates addr => (next_storage_trie_update addr)
-  | .ChangedAccountTrieUpdates () => (next_changed_account_trie_update ())
-  | .CachedAccountTrieUpdates () => (pure (cached_account_trie_update_next ()))
-
-/-- Opens a pull cursor by fetching only its first update. -/
-def trie_updates_begin (source : TrieUpdateSource) : SailM TrieUpdateCursor := do
-  (pure { source := source,
-          pending := ← (trie_update_source_next source) })
-
-/-- Whether the pull cursor has reached the end of its source. -/
-def updates_empty (updates : TrieUpdateCursor) : Bool :=
-  match updates.pending with
-  | none => true
-  | .some _ => false
-
-/-- Consumes the pending update and pulls one replacement. -/
-def trie_updates_advance (updates : TrieUpdateCursor) : SailM TrieUpdateCursor := do
-  (pure { source := updates.source,
-          pending := ← (trie_update_source_next updates.source) })
-
-/-- Whether the cursor's next update falls under `evm_prefix`. -/
-def next_update_under (updates : TrieUpdateCursor) (evm_prefix' : TriePath) : SailM Bool := do
-  match updates.pending with
-  | .some update => (path_prefix_of evm_prefix' update.key)
-  | none => (pure false)
-
-/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
-  value_dependentWitness0 ∧ 0 ≤ value_dependentWitness1 -/
-def item_leaf (path : TriePath) (value : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : TrieItem :=
-  let value_dependentWitness0 := (value).1
-  let value_dependentWitness1 := ((value).2).1
-  let value := ((value).2).2
-  { path := path,
-    value := (LeafItem ⟨_, ⟨_, value⟩⟩) }
-
-def item_branch (path : TriePath) (childref : NodeRef) : TrieItem :=
-  { path := path,
-    value := (BranchItem childref) }
-
-def item_subtree (path : TriePath) (childref : NodeRef) : TrieItem :=
-  { path := path,
-    value := (SubtreeItem childref) }
 
 /-- The child reference of a single-item subtree at `depth`: the item's
 remaining path is absorbed into it. This is the one place a delete
 collapse can demand node material: an unknown-type hash reference
 absorbing a nonempty suffix resolves its node from the witness db
 (fail-closed). -/
-/- Type quantifiers: k_ex415925_ : Nat, 0 ≤ k_ex415925_ ∧ k_ex415925_ ≤ 64 -/
-def item_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
+/- Type quantifiers: k_ex553489_ : Nat, 0 ≤ k_ex553489_ ∧ k_ex553489_ ≤ 64 -/
+def trie_child_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
   let suffix ← do (path_drop it.path depth)
+  let suffix_len := (path_len suffix)
   match it.value with
-  | .LeafItem ⟨_, ⟨_, value⟩⟩ => (leaf_child_ref suffix ⟨_, ⟨_, value⟩⟩)
+  | .EmptySubtree () => (pure (EmptyRef ()))
+  | .LeafItem value => (leaf_child_ref suffix value)
   | .BranchItem subref =>
     (do
-      if (((path_len suffix) == 0) : Bool)
+      if ((suffix_len == 0) : Bool)
       then (pure subref)
       else (merge_ext_ref suffix subref))
   | .SubtreeItem subref =>
     (do
-      if (((path_len suffix) == 0) : Bool)
+      if ((suffix_len == 0) : Bool)
       then (pure subref)
       else
         (do
@@ -260,79 +139,342 @@ def item_ref (it : TrieItem) (depth : Nat) : SailM NodeRef := do
             (do
               let ⟨_, ⟨_, node⟩⟩ ← do (node_db_lookup h)
               if ((node.len == 0) : Bool)
-              then sailThrow ((InvalidBlock WitnessDeficient))
+              then (fatal_error WitnessDeficient)
               else (merge_ext_node suffix ⟨_, ⟨_, node⟩⟩))
           | _ => (merge_ext_ref suffix subref)))
 
-/- Type quantifiers: depth : Nat, 0 ≤ depth ∧ depth ≤ 63 -/
-def empty_trie_branch_frame (depth : Nat) : TrieBranchFrame :=
-  { depth := depth,
-    mask := 0x0000#16,
-    children := (vectorInit (EmptyRef ())) }
-
-def trie_builder_empty (_ : Unit) : TrieBuilder :=
-  { frames := [],
-    root := (EmptyRef ()),
-    complete := false }
-
-/-- Opens an empty branch at `depth` on the builder stack. -/
-/- Type quantifiers: k_ex415928_ : Nat, 0 ≤ k_ex415928_ ∧ k_ex415928_ ≤ 63 -/
-def trie_builder_push (builder : TrieBuilder) (depth : Nat) : TrieBuilder :=
-  { frames := ((empty_trie_branch_frame depth) :: builder.frames),
-    root := builder.root,
-    complete := builder.complete }
-
-/-- Attaches one child to the open branch position selected by `path`. -/
-def trie_builder_attach (builder : TrieBuilder) (path : TriePath) (child : NodeRef) : SailM TrieBuilder := do
-  match builder.frames with
-  | [] => sailThrow ((InvalidBlock WitnessDeficient))
-  | (current :: rest) =>
+/-- Converts a recursively assembled top-level item to the committed root. -/
+def trie_subtree_root (subtree : TrieItem) : SailM (Vector (BitVec 8) 32) := do
+  match subtree.value with
+  | .EmptySubtree () => (pure EMPTY_TRIE_ROOT)
+  | _ =>
     (do
-      let frame := current
-      let depth := frame.depth
-      if (((path_len path) ≤b depth) : Bool)
-      then sailThrow ((InvalidBlock WitnessDeficient))
-      else
-        (do
-          let child_index ← do (path_nibble path depth)
-          if ((branch_mask_has frame.mask child_index) : Bool)
-          then sailThrow ((InvalidBlock WitnessDeficient))
-          else
-            (let frame : TrieBranchFrame :=
-              { frame with mask := (branch_mask_set frame.mask child_index) }
-            let frame : TrieBranchFrame :=
-              { frame with children := (vectorUpdate frame.children (BitVec.toNatInt child_index)
-                  child) }
-            (pure { frames := (frame :: rest),
-                    root := builder.root,
-                    complete := builder.complete }))))
+      let root_ref ← do (trie_child_ref subtree 0)
+      (trie_ref_to_root root_ref))
 
-/-- Removes and returns the innermost open branch. -/
-def trie_builder_pop (builder : TrieBuilder) : SailM (TrieBranchFrame × TrieBuilder) := do
-  match builder.frames with
-  | [] => sailThrow ((InvalidBlock WitnessDeficient))
-  | (frame :: rest) =>
-    (pure (frame, { frames := rest,
-                    root := builder.root,
-                    complete := builder.complete }))
+/-- Whether the pull cursor has reached the end of its source. -/
+def updates_empty (updates : TrieUpdateCursor) : Bool :=
+  match updates.relation with
+  | .UpdateSourceExhausted _ => true
+  | _ => false
 
-/-- Inserts an extension between parent and child depths when their paths have
-an unbranched gap. -/
-/- Type quantifiers: k_ex415930_ : Nat, k_ex415929_ : Nat, 0 ≤ k_ex415929_ ∧ k_ex415929_ ≤ 63, 0
-  ≤ k_ex415930_ ∧ k_ex415930_ ≤ 63 -/
-def trie_builder_wrap_branch (anchor : TriePath) (parent_depth : Nat) (child_depth : Nat) (child : NodeRef) : SailM NodeRef := do
-  let child_start : Nat := (parent_depth + 1)
-  if ((child_depth ≤b child_start) : Bool)
-  then (pure child)
+/-- Adds one recursively built child at `index`; an empty subtree
+contributes nothing. -/
+def trie_children_add (children : TrieChildren) (evm_prefix' : TriePath) (index : (BitVec 4)) (child : TrieItem) : SailM TrieChildren := do
+  match child.value with
+  | .EmptySubtree () => (pure children)
+  | _ =>
+    (do
+      let depth := (path_len evm_prefix')
+      let child_count := children.count
+      let child_depth ← (( do
+        if ((depth <b 64) : Bool)
+        then (pure (depth + 1))
+        else (fatal_error WitnessDeficient) ) : SailM Nat )
+      let next_child_count ← (( do
+        if ((child_count <b 16) : Bool)
+        then (pure (child_count + 1))
+        else (fatal_error WitnessDeficient) ) : SailM Nat )
+      let child_segment ← do (path_single index)
+      let child_prefix ← do (path_concat evm_prefix' child_segment)
+      let path_below_child ← do (path_prefix_of child_prefix child.path)
+      let path_outside_child := (! path_below_child)
+      if (path_outside_child : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      let child_already_present := (branch_mask_has children.mask index)
+      if (child_already_present : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      let updated := children
+      let updated : TrieChildren := { updated with mask := (branch_mask_set updated.mask index) }
+      let updated ←
+        (pure { updated with children := ← (pure (vectorUpdate updated.children
+                (BitVec.toNatInt index) (← (trie_child_ref child child_depth)))) })
+      let updated : TrieChildren := { updated with only := child }
+      (pure { updated with count := next_child_count }))
+
+/-- The absent subtree (YP `n(I,i) = ()`). Its path carries no meaning. -/
+def trie_empty_subtree (_ : Unit) : TrieItem :=
+  { path := (path_empty ()),
+    value := (EmptySubtree ()) }
+
+/-- Constructs an empty child accumulator. `only` is meaningful iff exactly
+one child has been added. -/
+def trie_children_empty (_ : Unit) : TrieChildren :=
+  let empty_ref := (EmptyRef ())
+  let children := (vectorInit empty_ref)
+  let empty_subtree := (trie_empty_subtree ())
+  { mask := 0x0000#16,
+    children := children,
+    only := empty_subtree,
+    count := 0 }
+
+def trie_branch (path : TriePath) (childref : NodeRef) : TrieItem :=
+  { path := path,
+    value := (BranchItem childref) }
+
+/-- Finishes a recursive branch: zero children disappear, one child bubbles
+upward structurally, and multiple children form a canonical branch item. -/
+def trie_children_finish (evm_prefix' : TriePath) (children : TrieChildren) : SailM TrieItem := do
+  if ((children.count == 0) : Bool)
+  then
+    (pure { path := evm_prefix',
+            value := (EmptySubtree ()) })
   else
     (do
-      let gap : Nat := (child_depth - child_start)
-      (extension_child_ref (← (path_take (← (path_drop anchor child_start)) gap)) child))
+      if ((children.count == 1) : Bool)
+      then (pure children.only)
+      else
+        (do
+          let branch_ref ← do (branch_child_ref children.mask children.children)
+          (pure (trie_branch evm_prefix' branch_ref))))
 
-/-- Closes every branch deeper than the next key's common evm_prefix. -/
-/- Type quantifiers: _reclimit : Nat, k_ex415931_ : Nat, 0 ≤ k_ex415931_ ∧ k_ex415931_ ≤ 64, 0
+def trie_leaf (path : TriePath) (value : TrieLeafValue) : TrieItem :=
+  { path := path,
+    value := (LeafItem value) }
+
+/-- Constructs a leaf item over freshly encoded scratch bytes. -/
+/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
+  value_dependentWitness0 ∧
+  0 ≤ value_dependentWitness1 ∧
+  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def trie_scratch_leaf (path : TriePath) (value : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) : TrieItem :=
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
+  let value := ((value).2).2
+  let leaf_value := (ScratchTrieLeaf ⟨_, ⟨_, value⟩⟩)
+  (trie_leaf path leaf_value)
+
+/-- Moves an under-evm_prefix active update through one selected child edge. -/
+def trie_updates_descend (updates : TrieUpdateCursor) : SailM TrieUpdateCursor := do
+  match updates.relation with
+  | .UpdateUnderPrefix path_postfix =>
+    (do
+      let postfix_len := (path_len path_postfix)
+      if ((postfix_len == 0) : Bool)
+      then (fatal_error WitnessDeficient)
+      else
+        (do
+          let child_postfix ← do (path_drop path_postfix 1)
+          let descended := updates
+          (pure { descended with relation := (UpdateUnderPrefix child_postfix) })))
+  | .UpdateBeyondPrefix _ => (fatal_error WitnessDeficient)
+  | .UpdateSourceExhausted _ => (fatal_error WitnessDeficient)
+
+/-- Reinterprets an already-loaded successor at an ancestor evm_prefix. No source
+item is fetched and no evm_prefix scan is repeated: the adjacent-key common
+evm_prefix computed by [trie_updates_pop][] decides whether the successor has
+reached the subtree where traversal should resume. -/
+def trie_updates_rebase (updates : TrieUpdateCursor) (evm_prefix' : TriePath) : SailM TrieUpdateCursor := do
+  let prefix_len := (path_len evm_prefix')
+  match updates.relation with
+  | .UpdateSourceExhausted _ => (pure updates)
+  | .UpdateUnderPrefix _ => (pure updates)
+  | .UpdateBeyondPrefix common_prefix_len =>
+    (do
+      if ((prefix_len ≤b common_prefix_len) : Bool)
+      then
+        (do
+          let path_postfix ← do (path_drop updates.current.key prefix_len)
+          (pure { source := updates.source,
+                  current := updates.current,
+                  relation := (UpdateUnderPrefix path_postfix) }))
+      else (pure updates))
+
+/-- The active update's next child nibble. -/
+def update_child_nibble (updates : TrieUpdateCursor) : SailM (BitVec 4) := do
+  match updates.relation with
+  | .UpdateUnderPrefix path_postfix =>
+    (do
+      let postfix_len := (path_len path_postfix)
+      if ((postfix_len == 0) : Bool)
+      then (fatal_error WitnessDeficient)
+      else (path_nibble path_postfix 0))
+  | .UpdateBeyondPrefix _ => (fatal_error WitnessDeficient)
+  | .UpdateSourceExhausted _ => (fatal_error WitnessDeficient)
+
+/-- Whether the active update belongs to the subtree at the cursor's current
+evm_prefix. This inspects only the relation already carried by the cursor; it
+never pulls or compares another source key. -/
+def update_under_current_prefix (updates : TrieUpdateCursor) : Bool :=
+  match updates.relation with
+  | .UpdateUnderPrefix _ => true
+  | .UpdateBeyondPrefix _ => false
+  | .UpdateSourceExhausted _ => false
+
+/-- Remaining sibling-key order after the active update's child nibble.
+Recursive consumption returns only a strictly later sibling range. -/
+def update_child_ranges_remaining (updates : TrieUpdateCursor) : SailM Nat := do
+  let update_pending := (update_under_current_prefix updates)
+  if (update_pending : Bool)
+  then
+    (do
+      let child_nibble ← do (update_child_nibble updates)
+      let child_index := (BitVec.toNatInt child_nibble)
+      (pure (16 - child_index)))
+  else (pure 0)
+
+/-- Remaining event order while one existing path is merged with update child
+ranges. The next event is either that path's nibble or the active update's
+nibble, whichever is earlier. -/
+/- Type quantifiers: k_ex553496_ : Bool -/
+def overlay_child_ranges_remaining (updates : TrieUpdateCursor) (existing_pending : Bool) (existing_nibble : (BitVec 4)) : SailM Nat := do
+  let update_pending := (update_under_current_prefix updates)
+  let update_position ← (( do
+    if (update_pending : Bool)
+    then
+      (do
+        let child_nibble ← do (update_child_nibble updates)
+        (pure (BitVec.toNatInt child_nibble)))
+    else (pure 16) ) : SailM Nat )
+  let existing_position : Nat :=
+    if (existing_pending : Bool)
+    then (BitVec.toNatInt existing_nibble)
+    else 16
+  let next_position :=
+    if ((update_position <b existing_position) : Bool)
+    then update_position
+    else existing_position
+  (pure (17 - next_position))
+
+/-- Constructs a leaf item over immutable input bytes. -/
+/- Type quantifiers: value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0 ≤
+  value_dependentWitness0 ∧
+  0 ≤ value_dependentWitness1 ∧
+  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def trie_input_leaf (path : TriePath) (value : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : TrieItem :=
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
+  let value := ((value).2).2
+  let leaf_value := (InputTrieLeaf ⟨_, ⟨_, value⟩⟩)
+  (trie_leaf path leaf_value)
+
+def trie_subtree (path : TriePath) (childref : NodeRef) : TrieItem :=
+  { path := path,
+    value := (SubtreeItem childref) }
+
+/-- Encodes a nonzero storage value as its minimal RLP integer leaf payload. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
+def encode_storage_value (value : Nat) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))) := do
+  let encoded_len := (rlp_uint_word_size value)
+  let encoder ← do (rlp_encoder_begin encoded_len)
+  (rlp_write_uint_word value)
+  (rlp_encoder_finish encoder)
+
+/-- Converts one changed storage row into a secure-trie update. -/
+def storage_update (trie_entry : StorageTrieEntry) : SailM TrieUpdate := do
+  let entry := trie_entry.entry
+  let key := (path_new trie_entry.slot_hash 64)
+  let value_is_zero := (word_is_zero entry.value.curr)
+  let change ← do
+    if (value_is_zero : Bool)
+    then (pure (TrieDelete ()))
+    else
+      (do
+        let ⟨_, ⟨_, encoded_value⟩⟩ ← do (encode_storage_value entry.value.curr)
+        (pure (TriePut ⟨_, ⟨_, encoded_value⟩⟩)))
+  (pure { key := key,
+          change := change })
+
+def storage_value_changed (value : StorageValue) : Bool :=
+  (! (value.curr == value.orig))
+
+/-- Pulls the next changed storage row and converts it to a trie update,
+skipping materialized read-only rows. -/
+def next_storage_trie_update (addr : (Vector (BitVec 8) 20)) : SailM TrieUpdateFetch := do
+  let searching : Bool := true
+  let result : TrieUpdateFetch :=
+    { available := false,
+      update := EMPTY_TRIE_UPDATE }
+  let (result, searching) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (result, searching) => (pure searching)) (result, searching)
+      fun (result, searching) => do
+        assert true "loop dummy assert"
+        let iterator_item ← do (storage_block_iter_next addr)
+        let (result, searching) ← (( do
+          match iterator_item with
+          | .StorageBlockIterRow trie_entry =>
+            (do
+              let changed := (storage_value_changed trie_entry.entry.value)
+              let (result, searching) ← (( do
+                if (changed : Bool)
+                then
+                  (do
+                    let result ←
+                      (pure { available := true,
+                              update := ← (storage_update trie_entry) })
+                    let searching : Bool := false
+                    (pure (result, searching)))
+                else (pure (result, searching)) ) : SailM (TrieUpdateFetch × Bool) )
+              (pure (result, searching)))
+          | .StorageBlockIterExhausted _ =>
+            (let searching : Bool := false
+            (pure (result, searching))) ) : SailM (TrieUpdateFetch × Bool) )
+        (pure (result, searching))
+    (pure loop_vars) ) : SailM (TrieUpdateFetch × Bool) )
+  (pure result)
+
+
+mutual
+def account_trie_update (trie_entry : AcctTrieEntry) : SailM (TrieUpdate × Bool) := do
+  let entry := trie_entry.entry
+  let current := entry.value.curr
+  (storage_block_iter_begin entry.addr)
+  let storage_source := (StorageTrieUpdates entry.addr)
+  let storage_updates ← do (trie_updates_begin storage_source)
+  let no_storage_changes := (updates_empty storage_updates)
+  let storage_changed := (! no_storage_changes)
+  let base_storage_root :=
+    if (current.storage_cleared : Bool)
+    then EMPTY_TRIE_ROOT
+    else current.info.storage_root
+  let account_empty := (account_info_empty current.info)
+  let account_nonempty := (! account_empty)
+  let storage_root ← do
+    if ((current.present && (account_nonempty && storage_changed)) : Bool)
+    then (pure (← (trie_root_cursor base_storage_root storage_updates)).root)
+    else (pure base_storage_root)
+  let update ← do (account_update trie_entry storage_root)
+  let persisted_account_changed := (account_value_changed entry.value)
+  (pure (update, (persisted_account_changed || storage_changed)))
+def next_changed_account_trie_update (_ : Unit) : SailM TrieUpdateFetch := do
+  let searching : Bool := true
+  let result : TrieUpdateFetch :=
+    { available := false,
+      update := EMPTY_TRIE_UPDATE }
+  let (result, searching) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(2 ^i 64)) (fun (result, searching) => (pure searching)) (result, searching)
+      fun (result, searching) => do
+        assert true "loop dummy assert"
+        let iterator_item ← do (acct_block_iter_next ())
+        let (result, searching) ← (( do
+          match iterator_item with
+          | .AcctBlockIterRow entry =>
+            (do
+              let (update, changed) ← do (account_trie_update entry)
+              let (result, searching) : (TrieUpdateFetch × Bool) :=
+                if (changed : Bool)
+                then
+                  (let result : TrieUpdateFetch :=
+                    { available := true,
+                      update := update }
+                  let searching : Bool := false
+                  (result, searching))
+                else (result, searching)
+              (pure (result, searching)))
+          | .AcctBlockIterExhausted _ =>
+            (let searching : Bool := false
+            (pure (result, searching))) ) : SailM (TrieUpdateFetch × Bool) )
+        (pure (result, searching))
+    (pure loop_vars) ) : SailM (TrieUpdateFetch × Bool) )
+  (pure result)
+/- Type quantifiers: _reclimit : Nat, k_ex553539_ : Nat, 0 ≤ k_ex553539_ ∧ k_ex553539_ ≤ 64, 0
   ≤ _reclimit -/
-def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option Nat)) (fuel : Nat) (_reclimit : Nat) : SailM TrieBuilder := do
+def _rec_overlay_extension_subtree (childref : NodeRef) (child_prefix : TriePath) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
   match _reclimit with
   | 0 =>
     (do
@@ -340,156 +482,529 @@ def _rec_trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_co
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((fuel == 0) : Bool)
-      then sailThrow ((InvalidBlock WitnessDeficient))
-      else
-        (do
-          match builder.frames with
-          | [] => (pure builder)
-          | (top :: _) =>
-            (do
-              let should_close : Bool :=
-                match next_common with
-                | none => true
-                | .some depth => (depth <b top.depth)
-              if ((! should_close) : Bool)
-              then (pure builder)
-              else
-                (do
-                  let (frame, popped) ← do (trie_builder_pop builder)
-                  let child ← do (branch_child_ref frame.mask frame.children)
-                  let with_parent ← (( do
-                    match popped.frames with
-                    | (parent :: _) =>
-                      (do
-                        match next_common with
-                        | .some common =>
-                          (do
-                            if ((parent.depth <b common) : Bool)
-                            then
-                              (do
-                                let intermediate := (trie_builder_push popped common)
-                                (trie_builder_attach intermediate anchor
-                                  (← (trie_builder_wrap_branch anchor common frame.depth child))))
-                            else
-                              (trie_builder_attach popped anchor
-                                (← (trie_builder_wrap_branch anchor parent.depth frame.depth child))))
-                        | none =>
-                          (trie_builder_attach popped anchor
-                            (← (trie_builder_wrap_branch anchor parent.depth frame.depth child))))
-                    | [] =>
-                      (do
-                        match next_common with
-                        | .some common =>
-                          (do
-                            let parent := (trie_builder_push popped common)
-                            (trie_builder_attach parent anchor
-                              (← (trie_builder_wrap_branch anchor common frame.depth child))))
-                        | none =>
-                          (do
-                            let depth := frame.depth
-                            let root ← do
-                              if ((depth == 0) : Bool)
-                              then (pure child)
-                              else (extension_child_ref (← (path_take anchor depth)) child)
-                            (pure { frames := popped.frames,
-                                    root := root,
-                                    complete := true }))) ) : SailM TrieBuilder )
-                  (_rec_trie_builder_close with_parent anchor next_common (fuel - 1) _reclimit_pred)))))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/-- Closes every branch deeper than the next key's common evm_prefix. -/
-/- Type quantifiers: fuel : Nat, 0 ≤ fuel ∧ fuel ≤ 64 -/
-def trie_builder_close (builder : TrieBuilder) (anchor : TriePath) (next_common : (Option Nat)) (fuel : Nat) : SailM TrieBuilder := do
-  let _measure := (fuel : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_trie_builder_close builder anchor next_common fuel (_measure + 1))
-
-/-- Computes the branch depth shared by an item and its ordered successor. -/
-def trie_item_next_common (item : TrieItem) (next_key : (Option TriePath)) : SailM (Option Nat) := do
-  match next_key with
-  | none => (pure none)
-  | .some next =>
-    (do
-      let common ← do (common_prefix_from item.path next 0)
-      if (((! (path_lt item.path next)) || ((((path_len item.path) ≤b common) || (((path_len next) ≤b common) : Bool)) : Bool)) : Bool)
-      then sailThrow ((InvalidBlock WitnessDeficient))
-      else (pure (some (← (to_trie_depth common)))))
-
-/-- Inserts one ordered, evm_prefix-free item using its successor for branch
-lookahead. -/
-def trie_insert_item (builder : TrieBuilder) (item : TrieItem) (next_key : (Option TriePath)) : SailM TrieBuilder := do
-  if (builder.complete : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else
-    (do
-      let next_common ← do (trie_item_next_common item next_key)
-      let open_child : Bool :=
-        match next_common with
-        | none => false
-        | .some common =>
-          (match builder.frames with
-          | [] => true
-          | (top :: _) => (top.depth <b common))
-      if (open_child : Bool)
+      let prefix_len := (path_len evm_prefix')
+      let child_below_prefix ← do (path_prefix_of evm_prefix' child_prefix)
+      if (((prefix_len != cursor) || (! child_below_prefix)) : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      let at_child_prefix := (path_eq evm_prefix' child_prefix)
+      if (at_child_prefix : Bool)
       then
         (do
-          match next_common with
-          | .some common =>
+          let has_update := (update_under_current_prefix updates)
+          if (has_update : Bool)
+          then
             (do
-              let opened := (trie_builder_push builder common)
-              (trie_builder_attach opened item.path (← (item_ref item (common + 1)))))
-          | none => sailThrow ((InvalidBlock WitnessDeficient)))
+              let ⟨_, ⟨_, child⟩⟩ ← do (resolve_witness_ref childref)
+              (_rec_witness_subtree ⟨_, ⟨_, child⟩⟩ child_prefix updates cursor
+                _reclimit_pred))
+          else (pure ((trie_branch child_prefix childref), updates)))
       else
         (do
-          match builder.frames with
-          | [] =>
-            (pure { frames := builder.frames,
-                    root := ← (item_ref item 0),
-                    complete := true })
-          | (top :: _) =>
+          if ((cursor == 64) : Bool)
+          then (fatal_error WitnessDeficient)
+          else
             (do
-              let attached ← do
-                (trie_builder_attach builder item.path (← (item_ref item (top.depth + 1))))
-              (trie_builder_close attached item.path next_common 64))))
-
-def trie_sink_empty (_ : Unit) : TrieItemSink :=
-  { builder := (trie_builder_empty ()),
-    pending := none }
-
-/-- Queues an ordered item and commits the previously pending item. -/
-def trie_sink_emit (sink : TrieItemSink) (item : TrieItem) : SailM TrieItemSink := do
-  match sink.pending with
-  | none =>
-    (pure { builder := sink.builder,
-            pending := (some item) })
-  | .some previous =>
-    (pure { builder := ← (trie_insert_item sink.builder previous (some item.path)),
-            pending := (some item) })
-
-/-- Commits the final pending item with no successor. -/
-def trie_sink_finish (sink : TrieItemSink) : SailM TrieItemSink := do
-  match sink.pending with
-  | none => (pure sink)
-  | .some item =>
-    (pure { builder := ← (trie_insert_item sink.builder item none),
-            pending := none })
-
-/-- Returns the root of a complete builder, or the canonical empty root. -/
-def trie_builder_root (builder : TrieBuilder) : SailM (Vector (BitVec 8) 32) := do
-  match builder.frames with
-  | (_ :: _) => sailThrow ((InvalidBlock WitnessDeficient))
-  | [] =>
+              let next_cursor : Nat := (cursor + 1)
+              let extension_nibble ← do (path_nibble child_prefix cursor)
+              let children := (trie_children_empty ())
+              let remaining := updates
+              let extension_pending : Bool := true
+              let update_pending := (update_under_current_prefix remaining)
+              let (children, extension_pending, remaining, update_pending) ← (( do
+                let loop_vars ← whileFuelM (fuel :=(← (overlay_child_ranges_remaining remaining
+                    extension_pending extension_nibble))) (fun (children, extension_pending, remaining, update_pending) => (pure (extension_pending || update_pending))) (children, extension_pending, remaining, update_pending)
+                  fun (children, extension_pending, remaining, update_pending) => do
+                    assert true "loop dummy assert"
+                    let (children, extension_pending, remaining, update_pending) ← (( do
+                      if (update_pending : Bool)
+                      then
+                        (do
+                          let update_nibble ← do (update_child_nibble remaining)
+                          let extension_index := (BitVec.toNatInt extension_nibble)
+                          let update_index := (BitVec.toNatInt update_nibble)
+                          let (children, extension_pending, remaining, update_pending) ← (( do
+                            if ((extension_pending && (extension_index <b update_index)) : Bool)
+                            then
+                              (do
+                                let extension := (trie_branch child_prefix childref)
+                                let children ←
+                                  (trie_children_add children evm_prefix' extension_nibble extension)
+                                let extension_pending : Bool := false
+                                (pure (children, extension_pending, remaining, update_pending)))
+                            else
+                              (do
+                                let next_path ← do (path_single update_nibble)
+                                let next_prefix ← do (path_concat evm_prefix' next_path)
+                                let descended ← do (trie_updates_descend remaining)
+                                let consumes_extension :=
+                                  (extension_pending && (update_nibble == extension_nibble))
+                                let (child, next) ← do
+                                  if (consumes_extension : Bool)
+                                  then
+                                    (_rec_overlay_extension_subtree childref child_prefix descended
+                                      next_prefix next_cursor _reclimit_pred)
+                                  else
+                                    (_rec_updates_subtree descended next_prefix next_cursor
+                                      _reclimit_pred)
+                                let children ←
+                                  (trie_children_add children evm_prefix' update_nibble child)
+                                let extension_pending : Bool :=
+                                  if (consumes_extension : Bool)
+                                  then
+                                    (let extension_pending : Bool := false
+                                    extension_pending)
+                                  else extension_pending
+                                let rebased ← do (trie_updates_rebase next evm_prefix')
+                                let rebased_update_pending := (update_under_current_prefix rebased)
+                                if (rebased_update_pending : Bool)
+                                then
+                                  (do
+                                    let rebased_nibble ← do (update_child_nibble rebased)
+                                    let rebased_index := (BitVec.toNatInt rebased_nibble)
+                                    if ((rebased_index ≤b update_index) : Bool)
+                                    then (fatal_error WitnessDeficient)
+                                    else (pure ()))
+                                else (pure ())
+                                let remaining : TrieUpdateCursor := rebased
+                                let update_pending : Bool := rebased_update_pending
+                                (pure (children, extension_pending, remaining, update_pending))) ) :
+                            SailM (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+                          (pure (children, extension_pending, remaining, update_pending)))
+                      else
+                        (do
+                          let extension := (trie_branch child_prefix childref)
+                          let children ←
+                            (trie_children_add children evm_prefix' extension_nibble extension)
+                          let extension_pending : Bool := false
+                          (pure (children, extension_pending, remaining, update_pending))) ) : SailM
+                      (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+                    (pure (children, extension_pending, remaining, update_pending))
+                (pure loop_vars) ) : SailM (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+              (pure ((← (trie_children_finish evm_prefix' children)), remaining)))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+/- Type quantifiers: _reclimit : Nat, k_ex553530_ : Nat, value_dependentWitness1 : Nat, value_dependentWitness0
+  : Nat, 0 ≤ value_dependentWitness0 ∧
+  0 ≤ value_dependentWitness1 ∧
+  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex553530_ ∧
+  k_ex553530_ ≤ 64, 0 ≤ _reclimit -/
+def _rec_overlay_leaf_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
+  let value := ((value).2).2
+  match _reclimit with
+  | 0 =>
     (do
-      if (builder.complete : Bool)
-      then (trie_ref_to_root builder.root)
-      else (pure EMPTY_TRIE_ROOT))
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      let prefix_len := (path_len evm_prefix')
+      let key_below_prefix ← do (path_prefix_of evm_prefix' key)
+      if (((prefix_len != cursor) || (! key_below_prefix)) : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      if ((cursor == 64) : Bool)
+      then
+        (do
+          let key_matches_prefix := (path_eq evm_prefix' key)
+          if ((! key_matches_prefix) : Bool)
+          then (fatal_error WitnessDeficient)
+          else (pure ())
+          let has_update := (update_under_current_prefix updates)
+          if (has_update : Bool)
+          then
+            (do
+              match updates.relation with
+              | .UpdateUnderPrefix path_postfix =>
+                (do
+                  let postfix_len := (path_len path_postfix)
+                  if ((postfix_len != 0) : Bool)
+                  then (fatal_error WitnessDeficient)
+                  else (pure ()))
+              | .UpdateBeyondPrefix _ => (fatal_error WitnessDeficient)
+              | .UpdateSourceExhausted _ => (fatal_error WitnessDeficient)
+              let (update, next) ← do (trie_updates_pop updates)
+              let update_matches_key := (path_eq update.key key)
+              if ((! update_matches_key) : Bool)
+              then (fatal_error WitnessDeficient)
+              else (pure ())
+              let subtree : TrieItem :=
+                match update.change with
+                | .TrieDelete () => (trie_empty_subtree ())
+                | .TriePut ⟨_, ⟨_, updated⟩⟩ =>
+                  (trie_scratch_leaf key ⟨_, ⟨_, updated⟩⟩)
+              (pure (subtree, next)))
+          else (pure ((trie_input_leaf key ⟨_, ⟨_, value⟩⟩), updates)))
+      else
+        (do
+          let next_cursor : Nat := (cursor + 1)
+          let leaf_nibble ← do (path_nibble key cursor)
+          let children := (trie_children_empty ())
+          let remaining := updates
+          let leaf_pending : Bool := true
+          let update_pending := (update_under_current_prefix remaining)
+          let (children, leaf_pending, remaining, update_pending) ← (( do
+            let loop_vars ← whileFuelM (fuel :=(← (overlay_child_ranges_remaining remaining
+                leaf_pending leaf_nibble))) (fun (children, leaf_pending, remaining, update_pending) => (pure (leaf_pending || update_pending))) (children, leaf_pending, remaining, update_pending)
+              fun (children, leaf_pending, remaining, update_pending) => do
+                assert true "loop dummy assert"
+                let (children, leaf_pending, remaining, update_pending) ← (( do
+                  if (update_pending : Bool)
+                  then
+                    (do
+                      let update_nibble ← do (update_child_nibble remaining)
+                      let leaf_index := (BitVec.toNatInt leaf_nibble)
+                      let update_index := (BitVec.toNatInt update_nibble)
+                      let (children, leaf_pending, remaining, update_pending) ← (( do
+                        if ((leaf_pending && (leaf_index <b update_index)) : Bool)
+                        then
+                          (do
+                            let leaf := (trie_input_leaf key ⟨_, ⟨_, value⟩⟩)
+                            let children ← (trie_children_add children evm_prefix' leaf_nibble leaf)
+                            let leaf_pending : Bool := false
+                            (pure (children, leaf_pending, remaining, update_pending)))
+                        else
+                          (do
+                            let child_path ← do (path_single update_nibble)
+                            let child_prefix ← do (path_concat evm_prefix' child_path)
+                            let descended ← do (trie_updates_descend remaining)
+                            let consumes_leaf := (leaf_pending && (update_nibble == leaf_nibble))
+                            let (child, next) ← do
+                              if (consumes_leaf : Bool)
+                              then
+                                (_rec_overlay_leaf_subtree descended child_prefix key
+                                  ⟨_, ⟨_, value⟩⟩ next_cursor _reclimit_pred)
+                              else
+                                (_rec_updates_subtree descended child_prefix next_cursor
+                                  _reclimit_pred)
+                            let children ←
+                              (trie_children_add children evm_prefix' update_nibble child)
+                            let leaf_pending : Bool :=
+                              if (consumes_leaf : Bool)
+                              then
+                                (let leaf_pending : Bool := false
+                                leaf_pending)
+                              else leaf_pending
+                            let rebased ← do (trie_updates_rebase next evm_prefix')
+                            let rebased_update_pending := (update_under_current_prefix rebased)
+                            if (rebased_update_pending : Bool)
+                            then
+                              (do
+                                let rebased_nibble ← do (update_child_nibble rebased)
+                                let rebased_index := (BitVec.toNatInt rebased_nibble)
+                                if ((rebased_index ≤b update_index) : Bool)
+                                then (fatal_error WitnessDeficient)
+                                else (pure ()))
+                            else (pure ())
+                            let remaining : TrieUpdateCursor := rebased
+                            let update_pending : Bool := rebased_update_pending
+                            (pure (children, leaf_pending, remaining, update_pending))) ) : SailM
+                        (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+                      (pure (children, leaf_pending, remaining, update_pending)))
+                  else
+                    (do
+                      let leaf := (trie_input_leaf key ⟨_, ⟨_, value⟩⟩)
+                      let children ← (trie_children_add children evm_prefix' leaf_nibble leaf)
+                      let leaf_pending : Bool := false
+                      (pure (children, leaf_pending, remaining, update_pending))) ) : SailM
+                  (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+                (pure (children, leaf_pending, remaining, update_pending))
+            (pure loop_vars) ) : SailM (TrieChildren × Bool × TrieUpdateCursor × Bool) )
+          (pure ((← (trie_children_finish evm_prefix' children)), remaining))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+def trie_root_cursor (base_root : (Vector (BitVec 8) 32)) (updates : TrieUpdateCursor) : SailM TrieRootResult := do
+  let no_updates := (updates_empty updates)
+  if (no_updates : Bool)
+  then
+    (pure { root := base_root,
+            changed := false })
+  else
+    (do
+      let empty_prefix := (path_empty ())
+      let (subtree, remaining) ← do
+        if ((base_root == EMPTY_TRIE_ROOT) : Bool)
+        then (updates_subtree updates empty_prefix 0)
+        else
+          (do
+            let ⟨_, ⟨_, node⟩⟩ ← do (node_db_lookup base_root)
+            if ((node.len == 0) : Bool)
+            then (fatal_error WitnessDeficient)
+            else (witness_subtree ⟨_, ⟨_, node⟩⟩ empty_prefix updates 0))
+      let all_updates_consumed := (updates_empty remaining)
+      if (all_updates_consumed : Bool)
+      then
+        (pure { root := ← (trie_subtree_root subtree),
+                changed := true })
+      else (fatal_error WitnessDeficient))
+def trie_update_source_next (source : TrieUpdateSource) : SailM TrieUpdateFetch := do
+  match source with
+  | .StorageTrieUpdates addr => (next_storage_trie_update addr)
+  | .ChangedAccountTrieUpdates () => (next_changed_account_trie_update ())
+def trie_updates_begin (source : TrieUpdateSource) : SailM TrieUpdateCursor := do
+  let first ← do (trie_update_source_next source)
+  let relation : TrieUpdateRelation :=
+    if (first.available : Bool)
+    then (UpdateUnderPrefix first.update.key)
+    else (UpdateSourceExhausted ())
+  (pure { source := source,
+          current := first.update,
+          relation := relation })
+def trie_updates_pop (updates : TrieUpdateCursor) : SailM (TrieUpdate × TrieUpdateCursor) := do
+  match updates.relation with
+  | .UpdateSourceExhausted _ => (fatal_error WitnessDeficient)
+  | _ =>
+    (do
+      let current := updates.current
+      let successor ← do (trie_update_source_next updates.source)
+      let next ← (( do
+        if (successor.available : Bool)
+        then
+          (do
+            let common_prefix_len ← do (common_prefix_length current.key successor.update.key)
+            (pure { source := updates.source,
+                    current := successor.update,
+                    relation := (UpdateBeyondPrefix common_prefix_len) }))
+        else
+          (pure { source := updates.source,
+                  current := EMPTY_TRIE_UPDATE,
+                  relation := (UpdateSourceExhausted ()) }) ) : SailM TrieUpdateCursor )
+      (pure (current, next)))
+/- Type quantifiers: _reclimit : Nat, k_ex553521_ : Nat, 0 ≤ k_ex553521_ ∧ k_ex553521_ ≤ 64, 0
+  ≤ _reclimit -/
+def _rec_updates_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      let prefix_len := (path_len evm_prefix')
+      if ((prefix_len != cursor) : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      let has_update := (update_under_current_prefix updates)
+      if ((! has_update) : Bool)
+      then (pure ((trie_empty_subtree ()), updates))
+      else
+        (do
+          if ((cursor == 64) : Bool)
+          then
+            (do
+              match updates.relation with
+              | .UpdateUnderPrefix path_postfix =>
+                (do
+                  let postfix_len := (path_len path_postfix)
+                  if ((postfix_len != 0) : Bool)
+                  then (fatal_error WitnessDeficient)
+                  else (pure ()))
+              | .UpdateBeyondPrefix _ => (fatal_error WitnessDeficient)
+              | .UpdateSourceExhausted _ => (fatal_error WitnessDeficient)
+              let (update, next) ← do (trie_updates_pop updates)
+              let update_matches_prefix := (path_eq update.key evm_prefix')
+              if ((! update_matches_prefix) : Bool)
+              then (fatal_error WitnessDeficient)
+              else (pure ())
+              let subtree : TrieItem :=
+                match update.change with
+                | .TrieDelete () => (trie_empty_subtree ())
+                | .TriePut ⟨_, ⟨_, value⟩⟩ =>
+                  (trie_scratch_leaf update.key ⟨_, ⟨_, value⟩⟩)
+              (pure (subtree, next)))
+          else
+            (do
+              let next_cursor : Nat := (cursor + 1)
+              let children := (trie_children_empty ())
+              let remaining := updates
+              let update_pending := (update_under_current_prefix remaining)
+              let (children, remaining, update_pending) ← (( do
+                let loop_vars ← whileFuelM (fuel :=(← (update_child_ranges_remaining remaining))) (fun (children, remaining, update_pending) => (pure update_pending)) (children, remaining, update_pending)
+                  fun (children, remaining, update_pending) => do
+                    assert true "loop dummy assert"
+                    let nib ← do (update_child_nibble remaining)
+                    let child_path ← do (path_single nib)
+                    let child_prefix ← do (path_concat evm_prefix' child_path)
+                    let descended ← do (trie_updates_descend remaining)
+                    let (child, next) ← do
+                      (_rec_updates_subtree descended child_prefix next_cursor _reclimit_pred)
+                    let children ← (trie_children_add children evm_prefix' nib child)
+                    let rebased ← do (trie_updates_rebase next evm_prefix')
+                    let rebased_update_pending := (update_under_current_prefix rebased)
+                    if (rebased_update_pending : Bool)
+                    then
+                      (do
+                        let rebased_nibble ← do (update_child_nibble rebased)
+                        let rebased_index := (BitVec.toNatInt rebased_nibble)
+                        let previous_index := (BitVec.toNatInt nib)
+                        if ((rebased_index ≤b previous_index) : Bool)
+                        then (fatal_error WitnessDeficient)
+                        else (pure ()))
+                    else (pure ())
+                    let remaining : TrieUpdateCursor := rebased
+                    let update_pending : Bool := rebased_update_pending
+                    (pure (children, remaining, update_pending))
+                (pure loop_vars) ) : SailM (TrieChildren × TrieUpdateCursor × Bool) )
+              (pure ((← (trie_children_finish evm_prefix' children)), remaining)))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+/- Type quantifiers: _reclimit : Nat, cursor : Nat, node_dependentWitness1 : Nat, node_dependentWitness0
+  : Nat, 0 ≤ node_dependentWitness0 ∧
+  0 ≤ node_dependentWitness1 ∧
+  (node_dependentWitness0 + node_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ cursor ∧ cursor ≤ 64, 0
+  ≤ _reclimit -/
+def _rec_witness_subtree (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (cursor : Nat) (_reclimit : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
+  let node := ((node).2).2
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      let prefix_len := (path_len evm_prefix')
+      if ((prefix_len != cursor) : Bool)
+      then (fatal_error WitnessDeficient)
+      else (pure ())
+      if ((node.len == 0) : Bool)
+      then (_rec_updates_subtree updates evm_prefix' cursor _reclimit_pred)
+      else
+        (do
+          let decoded ← do (decode_input_trie_node ⟨_, ⟨_, node⟩⟩)
+          match decoded with
+          | .InputLeafNode (path, value) =>
+            (do
+              let key ← do (path_concat evm_prefix' path)
+              (_rec_overlay_leaf_subtree updates evm_prefix' key value cursor _reclimit_pred))
+          | .InputExtensionNode (path, childref) =>
+            (do
+              let extension_len := (path_len path)
+              let next_cursor := (cursor + extension_len)
+              if (((extension_len == 0) || (64 <b next_cursor)) : Bool)
+              then (fatal_error WitnessDeficient)
+              else
+                (do
+                  let child_prefix ← do (path_concat evm_prefix' path)
+                  (_rec_overlay_extension_subtree childref child_prefix updates evm_prefix' cursor
+                    _reclimit_pred)))
+          | .InputBranchNode (children, value) =>
+            (do
+              if (((((value).2).2.len != 0) || (64 ≤b cursor)) : Bool)
+              then (fatal_error WitnessDeficient)
+              else
+                (do
+                  let next_cursor := (cursor + 1)
+                  let built := (trie_children_empty ())
+                  let remaining := updates
+                  let nib : (BitVec 4) := 0x0#4
+                  let (built, nib, remaining) ← (( do
+                    let loop_i_lower := 0
+                    let loop_i_upper := 15
+                    let mut loop_vars := (built, nib, remaining)
+                    for i in [loop_i_lower:loop_i_upper:1]i do
+                      let (built, nib, remaining) := loop_vars
+                      loop_vars ← do
+                        let child_path ← do (path_single nib)
+                        let child_prefix ← do (path_concat evm_prefix' child_path)
+                        let childref := (GetElem?.getElem! children i)
+                        let present : Bool :=
+                          match childref with
+                          | .EmptyRef () => false
+                          | _ => true
+                        let update_pending := (update_under_current_prefix remaining)
+                        let update_here ← do
+                          if (update_pending : Bool)
+                          then
+                            (do
+                              let update_nibble ← do (update_child_nibble remaining)
+                              let update_index := (BitVec.toNatInt update_nibble)
+                              let child_index := (BitVec.toNatInt nib)
+                              if ((update_index <b child_index) : Bool)
+                              then (fatal_error WitnessDeficient)
+                              else (pure ())
+                              (pure (update_nibble == nib)))
+                          else (pure false)
+                        let (child, next_updates) ← do
+                          if (update_here : Bool)
+                          then
+                            (do
+                              let descended ← do (trie_updates_descend remaining)
+                              if (present : Bool)
+                              then
+                                (do
+                                  let ⟨_, ⟨_, child⟩⟩ ← do (resolve_witness_ref childref)
+                                  (_rec_witness_subtree ⟨_, ⟨_, child⟩⟩ child_prefix
+                                    descended next_cursor _reclimit_pred))
+                              else
+                                (_rec_updates_subtree descended child_prefix next_cursor
+                                  _reclimit_pred))
+                          else
+                            (if (present : Bool)
+                            then (pure ((trie_subtree child_prefix childref), remaining))
+                            else (pure ((trie_empty_subtree ()), remaining)))
+                        let built ← (trie_children_add built evm_prefix' nib child)
+                        let remaining ←
+                          if (update_here : Bool)
+                          then (trie_updates_rebase next_updates evm_prefix')
+                          else (pure next_updates)
+                        let nib : (BitVec 4) := (nib + 0x1#4)
+                        (pure (built, nib, remaining))
+                    (pure loop_vars) ) : SailM (TrieChildren × (BitVec 4) × TrieUpdateCursor) )
+                  let update_pending := (update_under_current_prefix remaining)
+                  if (update_pending : Bool)
+                  then (fatal_error WitnessDeficient)
+                  else (pure ())
+                  (pure ((← (trie_children_finish evm_prefix' built)), remaining))))))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+end
 
-/-- Returns the completed root after all sink lookahead has been consumed. -/
-def trie_sink_root (sink : TrieItemSink) : SailM (Vector (BitVec 8) 32) := do
-  match sink.pending with
-  | .some _ => sailThrow ((InvalidBlock WitnessDeficient))
-  | none => (trie_builder_root sink.builder)
+/- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
+def overlay_extension_subtree (childref : NodeRef) (child_prefix : TriePath) (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let _measure := ((64 - cursor) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_overlay_extension_subtree childref child_prefix updates evm_prefix' cursor (_measure + 1))
+
+/- Type quantifiers: cursor : Nat, value_dependentWitness1 : Nat, value_dependentWitness0 : Nat, 0
+  ≤ value_dependentWitness0 ∧
+  0 ≤ value_dependentWitness1 ∧
+  (value_dependentWitness0 + value_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ cursor ∧
+  cursor ≤ 64 -/
+def overlay_leaf_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (key : TriePath) (value : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let value_dependentWitness0 := (value).1
+  let value_dependentWitness1 := ((value).2).1
+  let value := ((value).2).2
+  let _measure := ((64 - cursor) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_overlay_leaf_subtree updates evm_prefix' key ⟨_, ⟨_, value⟩⟩ cursor (_measure + 1))
+
+/- Type quantifiers: cursor : Nat, 0 ≤ cursor ∧ cursor ≤ 64 -/
+def updates_subtree (updates : TrieUpdateCursor) (evm_prefix' : TriePath) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let _measure := ((64 - cursor) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_updates_subtree updates evm_prefix' cursor (_measure + 1))
+
+/- Type quantifiers: cursor : Nat, node_dependentWitness1 : Nat, node_dependentWitness0 : Nat, 0 ≤
+  node_dependentWitness0 ∧
+  0 ≤ node_dependentWitness1 ∧
+  (node_dependentWitness0 + node_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ cursor ∧ cursor ≤ 64 -/
+def witness_subtree (node : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (evm_prefix' : TriePath) (updates : TrieUpdateCursor) (cursor : Nat) : SailM (TrieItem × TrieUpdateCursor) := do
+  let node_dependentWitness0 := (node).1
+  let node_dependentWitness1 := ((node).2).1
+  let node := ((node).2).2
+  let _measure := ((64 - cursor) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_witness_subtree ⟨_, ⟨_, node⟩⟩ evm_prefix' updates cursor (_measure + 1))
 

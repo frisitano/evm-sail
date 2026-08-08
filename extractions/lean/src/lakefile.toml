@@ -9,7 +9,7 @@ moreLeancArgs= ["-fbracket-depth=500"]
 
 [[require]]
 name = "Sail"
-path = "/Users/f/dev/ethereum/evm-sail/extractions/lean/src/.lake/packages/Sail"
+path = "/Users/f/dev/ethereum/evm-sail/extractions/lean/evm/.lake/packages/Sail"
 
 
 [[lean_exe]]

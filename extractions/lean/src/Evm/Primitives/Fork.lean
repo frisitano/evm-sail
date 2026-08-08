@@ -20,71 +20,97 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Protocol forks
 
-The protocol forks the model executes, oldest to newest. Declaration order
-is the activation order, and every fork-gated rule in the specification
-compares on it via [fork_gteq][] / [fork_lt][]. Pure data — no registers,
-no externs. -/
+The protocol forks the model executes, oldest to newest. Their singleton
+integer values are the activation order, so ordinary integer comparisons
+express every fork gate without an overloaded comparison or conversion.
+Pure data — no registers, no externs. -/
 
-def undefined_Fork (_ : Unit) : SailM Fork := do
-  (internal_pick
-    [Frontier, Homestead, Byzantium, Constantinople, Istanbul, Berlin, London, Paris, Shanghai, Cancun, Prague, Osaka, Amsterdam])
+/-- Launch protocol. -/
+def Frontier : Nat := 0
 
-/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 12 -/
-def Fork_of_num (arg_ : Nat) : Fork :=
-  match arg_ with
-  | 0 => Frontier
-  | 1 => Homestead
-  | 2 => Byzantium
-  | 3 => Constantinople
-  | 4 => Istanbul
-  | 5 => Berlin
-  | 6 => London
-  | 7 => Paris
-  | 8 => Shanghai
-  | 9 => Cancun
-  | 10 => Prague
-  | 11 => Osaka
-  | _ => Amsterdam
+/-- EIP-2 create rules, EIP-7 DELEGATECALL. -/
+def Homestead : Nat := 1
 
-def num_of_Fork (arg_ : Fork) : Nat :=
-  match arg_ with
-  | .Frontier => 0
-  | .Homestead => 1
-  | .Byzantium => 2
-  | .Constantinople => 3
-  | .Istanbul => 4
-  | .Berlin => 5
-  | .London => 6
-  | .Paris => 7
-  | .Shanghai => 8
-  | .Cancun => 9
-  | .Prague => 10
-  | .Osaka => 11
-  | .Amsterdam => 12
+/-- EIP-140 REVERT, EIP-211 returndata; precompiles 0x05-0x08. -/
+def Byzantium : Nat := 2
+
+/-- EIP-145 shifts, EIP-1014 CREATE2, EIP-1052 EXTCODEHASH. -/
+def Constantinople : Nat := 3
+
+/-- EIP-1344 CHAINID, EIP-2200 SSTORE metering. -/
+def Istanbul : Nat := 4
+
+/-- EIP-2929/2930 access lists and warm/cold access costs. -/
+def Berlin : Nat := 5
+
+/-- EIP-1559 fee market and EIP-3529 refund reduction. -/
+def London : Nat := 6
+
+/-- Difficulty-bomb-only schema fork; execution rules remain London. -/
+def ArrowGlacier : Nat := 7
+
+/-- Difficulty-bomb-only schema fork; execution rules remain London. -/
+def GrayGlacier : Nat := 8
+
+/-- EIP-4399 PREVRANDAO replaces DIFFICULTY. -/
+def Paris : Nat := 9
+
+/-- EIP-3651 warm coinbase, EIP-3855 PUSH0, EIP-3860 initcode. -/
+def Shanghai : Nat := 10
+
+/-- EIP-1153/4844; precompiles 0x01-0x0a. -/
+def Cancun : Nat := 11
+
+/-- EIP-7623 calldata floor; BLS precompiles 0x0b-0x11. -/
+def Prague : Nat := 12
+
+/-- EIP-7883 modexp gas, EIP-7825 cap; precompile 0x100. -/
+def Osaka : Nat := 13
+
+/-- First blob-parameter-only fork; execution rules remain Osaka. -/
+def BPO1 : Nat := 14
+
+/-- Second blob-parameter-only fork; execution rules remain Osaka. -/
+def BPO2 : Nat := 15
+
+/-- EIP-7954 code/initcode size bump (65536/131072). -/
+def Amsterdam : Nat := 16
 

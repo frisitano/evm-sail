@@ -1,7 +1,6 @@
 import Evm.Flow
-import Evm.Vector
 import Evm.Prelude
-import Evm.Primitives.Bytes
+import Evm.Host.RegionAccess
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -19,29 +18,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Block types
 
@@ -62,33 +73,51 @@ def logs_bloom_equal (a : (Vector (BitVec 8) 256)) (b : (Vector (BitVec 8) 256))
     loop_vars := (equal && ((GetElem?.getElem! a i) == (GetElem?.getElem! b i)))
   (pure loop_vars)
 
-/-- The bloom as a most-significant-first byte list, for RLP encoding. -/
-def logs_bloom_bytes (bloom : (Vector (BitVec 8) 256)) : (List (BitVec 8)) := Id.run do
-  let out : (List (BitVec 8)) := []
-  let loop_k_lower := 0
-  let loop_k_upper := 255
+/-- Materializes a referenced wire-order bloom into the decreasing-index
+semantic vector used by the Yellow Paper equations. -/
+/- Type quantifiers: reference_dependentWitness1 : Nat, reference_dependentWitness0 : Nat, 0 ≤
+  reference_dependentWitness0 ∧
+  0 ≤ reference_dependentWitness1 ∧
+  (reference_dependentWitness0 + reference_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  reference_dependentWitness1 = 256 -/
+def logs_bloom_from_ref (reference : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 256) := do
+  let reference_dependentWitness0 := (reference).1
+  let reference_dependentWitness1 := ((reference).2).1
+  let reference := ((reference).2).2
+  let out : (Vector (BitVec 8) 256) := EMPTY_LOGS_BLOOM
+  let loop_i_lower := 0
+  let loop_i_upper := 255
   let mut loop_vars := out
-  for k in [loop_k_lower:loop_k_upper:1]i do
+  for i in [loop_i_lower:loop_i_upper:1]i do
     let out := loop_vars
-    loop_vars := ((GetElem?.getElem! bloom k) :: out)
+    loop_vars ← do
+      (pure (vectorUpdate out (255 - i)
+          (← (stateless_input_slice_byte ⟨_, ⟨_, reference⟩⟩ i))))
   (pure loop_vars)
+
+/-- Compares the computed block bloom with the payload-header commitment. -/
+/- Type quantifiers: reference_dependentWitness1 : Nat, reference_dependentWitness0 : Nat, 0 ≤
+  reference_dependentWitness0 ∧
+  0 ≤ reference_dependentWitness1 ∧
+  (reference_dependentWitness0 + reference_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  reference_dependentWitness1 = 256 -/
+def logs_bloom_matches_ref (computed : (Vector (BitVec 8) 256)) (reference : (Sigma fun
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM Bool := do
+  let reference_dependentWitness0 := (reference).1
+  let reference_dependentWitness1 := ((reference).2).1
+  let reference := ((reference).2).2
+  let expected ← do (logs_bloom_from_ref ⟨_, ⟨_, reference⟩⟩)
+  (pure (logs_bloom_equal computed expected))
 
 /-- `keccak256(rlp([]))` — the ommers hash of every post-merge block
 (EIP-3675 requires an empty ommers list). -/
 def EMPTY_OMMER_HASH : hash :=
-  (B256
-    (to_bytes_le (n := 32) 0x1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347#256))
+  (hash_from_bits 0x1DCC4DE8DEC75D7AAB85B567B6CCD41AD312451B948A7413F0A142FD40D49347#256)
 
 def undefined_Withdrawal (_ : Unit) : SailM Withdrawal := do
   (pure { index := ← (undefined_range 0 ((2 ^i 64) - 1)),
           validator_index := ← (undefined_range 0 ((2 ^i 64) - 1)),
           address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           amount := ← (undefined_range 0 ((2 ^i 64) - 1)) })
-
-def EMPTY_EXECUTION_REQUESTS : ExecutionRequests :=
-  { deposits := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    withdrawals := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    consolidations := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    builder_deposits := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    builder_exits := ⟨_, ⟨_, EMPTY_SLICE⟩⟩ }
 

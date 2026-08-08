@@ -1,7 +1,9 @@
 import Evm.Flow
+import Evm.Exceptions
 import Evm.Primitives.Code
+import Evm.Host.RegionAccess
 import Evm.Primitives.Crypto
-import Evm.Host.EvmByteSlice
+import Evm.Primitives.Fork
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -19,29 +21,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Code storage
 
@@ -51,33 +65,14 @@ Content-addressed code storage and the Sail-side `JUMPDEST` analysis.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules. -/
 
-def undefined_CodeAnalysis (_ : Unit) : SailM CodeAnalysis := do
-  (pure { chunk := ← (undefined_bitvector 256),
-          chunk_index := ← (undefined_nat ()),
-          chunk_offset := ← (undefined_range 0 255) })
-
-/-- Commits a completed nonempty bitmap chunk to its allocated table. -/
-/- Type quantifiers: k_ex414020_ : Nat, 0 ≤ k_ex414020_ -/
-def store_jumpdest_chunk (table : (BitVec 64)) (code_len : Nat) (analysis : CodeAnalysis) : SailM Unit := do
-  if ((analysis.chunk != EMPTY_JUMPDEST_CHUNK) : Bool)
-  then
-    (do
-      let stored ← do
-        (jumpdest_table_store_chunk table code_len analysis.chunk_index analysis.chunk)
-      assert stored "JUMPDEST chunk store")
-  else (pure ())
-
-/-- Returns the one-hot bitmap value for an offset within a 256-byte chunk. -/
-/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 255 -/
-def jumpdest_bit (index : Nat) : (BitVec 256) :=
-  let chunk : (BitVec 256) := EMPTY_JUMPDEST_CHUNK
-  (BitVec.update chunk index 1#1)
-
-/- Type quantifiers: _reclimit : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, pc
-  : Nat, (code_valid_length pc), 0 ≤ code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧
-  0 ≤ code_dependentWitness1, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, table : Nat, fork : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+  : Nat, pc : Nat, (code_valid_length pc), 0 ≤ code_dependentWitness0 ∧
+  0 ≤ code_dependentWitness1 ∧
+  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ fork ∧
+  fork ≤ 16, 0 ≤ table ∧ table ≤ (2 ^ 64 - 1), 0 ≤ _reclimit -/
 def _rec_analyze_code_from (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (fork : Fork) (table : (BitVec 64)) (pc : Nat) (analysis : CodeAnalysis) (_reclimit : Nat) : SailM Unit := do
+  (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) (table : Nat) (pc : Nat) (_reclimit : Nat) : SailM Unit := do
   let code_dependentWitness0 := (code).1
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
@@ -93,71 +88,48 @@ def _rec_analyze_code_from (code : (Sigma fun (k_off : Nat) =>
       if ((position <b code_len) : Bool)
       then
         (do
-          let chunk := analysis.chunk
-          let chunk_index := analysis.chunk_index
-          let chunk_offset : Nat := analysis.chunk_offset
-          let opcode ← do (slice_byte ⟨_, ⟨_, code⟩⟩ position)
-          let chunk : (BitVec 256) :=
-            if ((opcode == 0x5B#8) : Bool)
-            then (chunk ||| (jumpdest_bit chunk_offset))
-            else chunk
+          let opcode ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ position)
+          if ((opcode == 0x5B#8) : Bool)
+          then
+            (do
+              let marked ← do (jumpdest_table_mark table code_len position)
+              assert marked "JUMPDEST mark")
+          else (pure ())
           let opcode_value := (BitVec.toNatInt opcode)
           let step ← (( do
             if (((96 ≤b opcode_value) && (opcode_value ≤b 127)) : Bool)
             then (pure (opcode_value - 94))
             else
               (do
-                if (((fork_gteq fork Amsterdam) && ((opcode_value == 230) || (opcode_value == 231))) : Bool)
+                if ((fork ≥b Amsterdam) : Bool)
                 then
                   (do
-                    if ((deep_stack_immediate_valid
-                         (← (slice_byte ⟨_, ⟨_, code⟩⟩ (position + 1)))) : Bool)
+                    let operation := (deep_stack_operation opcode_value)
+                    let immediate ← do (code_slice_byte ⟨_, ⟨_, code⟩⟩ (position + 1))
+                    let immediate_valid :=
+                      (deep_stack_operation_immediate_valid operation immediate)
+                    if (immediate_valid : Bool)
                     then (pure 2)
                     else (pure 1))
-                else
-                  (do
-                    if (((fork_gteq fork Amsterdam) && (opcode_value == 232)) : Bool)
-                    then
-                      (do
-                        if ((exchange_immediate_valid
-                             (← (slice_byte ⟨_, ⟨_, code⟩⟩ (position + 1)))) : Bool)
-                        then (pure 2)
-                        else (pure 1))
-                    else (pure 1))) ) : SailM Nat )
+                else (pure 1)) ) : SailM Nat )
           if ((step <b (code_len - position)) : Bool)
           then
             (do
               let added := (position + step)
-              let progressed : Nat := (chunk_offset + step)
-              if ((progressed <b 256) : Bool)
-              then
-                (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table added
-                  { chunk := chunk,
-                    chunk_index := chunk_index,
-                    chunk_offset := progressed } _reclimit_pred)
-              else
-                (do
-                  (store_jumpdest_chunk table code.len
-                    { chunk := chunk,
-                      chunk_index := chunk_index,
-                      chunk_offset := chunk_offset })
-                  (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table added
-                    { chunk := EMPTY_JUMPDEST_CHUNK,
-                      chunk_index := (added / 256),
-                      chunk_offset := (progressed - 256) } _reclimit_pred)))
-          else
-            (store_jumpdest_chunk table code.len
-              { chunk := chunk,
-                chunk_index := chunk_index,
-                chunk_offset := chunk_offset }))
-      else (store_jumpdest_chunk table code.len analysis))
+              (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table added _reclimit_pred))
+          else (pure ()))
+      else (pure ()))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, pc : Nat, (code_valid_length pc), 0
-  ≤ code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧ 0 ≤ code_dependentWitness1 -/
+/- Type quantifiers: table : Nat, fork : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 :
+  Nat, pc : Nat, (code_valid_length pc), 0 ≤ code_dependentWitness0 ∧
+  0 ≤ code_dependentWitness1 ∧
+  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ fork ∧
+  fork ≤ 16, 0 ≤ table ∧ table ≤ (2 ^ 64 - 1) -/
 def analyze_code_from (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (fork : Fork) (table : (BitVec 64)) (pc : Nat) (analysis : CodeAnalysis) : SailM Unit := do
+  (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) (table : Nat) (pc : Nat) : SailM Unit := do
   let code_dependentWitness0 := (code).1
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
@@ -167,49 +139,112 @@ def analyze_code_from (code : (Sigma fun (k_off : Nat) =>
     (code_len -i position) : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table pc analysis (_measure + 1))
+  else (_rec_analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table pc (_measure + 1))
 
 /-- The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
 are data even when they contain `0x5b`. The completed bitmap remains a
 first-class Sail value; the host never scans opcodes. -/
-/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0 ≤
-  code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧ 0 ≤ code_dependentWitness1 -/
+/- Type quantifiers: k_ex550302_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+  ≤ code_dependentWitness0 ∧
+  0 ≤ code_dependentWitness1 ∧
+  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550302_
+  ∧ k_ex550302_ ≤ 16 -/
 def analyze_code (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (fork : Fork) : SailM (BitVec 64) := do
+  (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
   if ((code.len == 0) : Bool)
-  then (pure EMPTY_JUMPDEST_REF)
+  then (pure EMPTY_JUMP_TABLE)
   else
     (do
-      let length := code.len
-      let table ← do (jumpdest_table_alloc length)
-      assert (table != EMPTY_JUMPDEST_REF) "JUMPDEST table allocation"
-      (analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table 0
-        { chunk := EMPTY_JUMPDEST_CHUNK,
-          chunk_index := 0,
-          chunk_offset := 0 })
+      let table ← do (jumpdest_table_alloc ⟨_, ⟨_, code⟩⟩)
+      assert (table != EMPTY_JUMP_TABLE) "JUMPDEST table allocation"
+      (analyze_code_from ⟨_, ⟨_, code⟩⟩ fork table 0)
       (pure table))
 
 /-- Analyzes and stores code, returning its content hash. -/
-/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0 ≤
-  code_dependentWitness0 ∧ 0 ≤ code_dependentWitness1 ∧ 0 ≤ code_dependentWitness1 -/
+/- Type quantifiers: k_ex550309_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+  ≤ code_dependentWitness0 ∧
+  0 ≤ code_dependentWitness1 ∧
+  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550309_
+  ∧ k_ex550309_ ≤ 16 -/
 def code_db_insert (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (fork : Fork) : SailM (Vector (BitVec 8) 32) := do
+  (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM (Vector (BitVec 8) 32) := do
   let code_dependentWitness0 := (code).1
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
-  (code_db_store ⟨_, ⟨_, code⟩⟩ (← (analyze_code ⟨_, ⟨_, code⟩⟩ fork)))
+  let jumpdest_table ← do (analyze_code ⟨_, ⟨_, code⟩⟩ fork)
+  let analyzed := (analyzed_code code jumpdest_table)
+  (code_db_store ⟨_, ⟨_, analyzed⟩⟩)
+
+/-- Normalizes stateless-input code into the code arena before analysis. -/
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def code_db_intern_input (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Sigma fun
+  (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (bytes_dependentWitness1 : Nat) =>
+  (CodeRegionSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
+  let bytes := ((bytes).2).2
+  let ⟨_, ⟨_, region⟩⟩ ← do (code_region_from_input ⟨_, ⟨_, bytes⟩⟩)
+  (validated_code_slice ⟨_, ⟨_, region⟩⟩)
+
+/-- Normalizes memory-backed initcode into the code arena before analysis. -/
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def code_db_intern_memory (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : SailM (Sigma fun
+  (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (bytes_dependentWitness1 : Nat) =>
+  (CodeRegionSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
+  let bytes := ((bytes).2).2
+  let ⟨_, ⟨_, region⟩⟩ ← do (code_region_from_memory ⟨_, ⟨_, bytes⟩⟩)
+  (validated_code_slice ⟨_, ⟨_, region⟩⟩)
+
+/-- Normalizes frozen creation output into the code arena before deployment. -/
+/- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0 ≤
+  bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def code_db_intern_output (bytes : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : SailM (Sigma fun
+  (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (bytes_dependentWitness1 : Nat) =>
+  (CodeRegionSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) := do
+  let bytes_dependentWitness0 := (bytes).1
+  let bytes_dependentWitness1 := ((bytes).2).1
+  let bytes := ((bytes).2).2
+  let ⟨_, ⟨_, region⟩⟩ ← do (code_region_from_output ⟨_, ⟨_, bytes⟩⟩)
+  (validated_code_slice ⟨_, ⟨_, region⟩⟩)
 
 /-- The code for a code hash; `KECCAK_EMPTY` resolves to empty code, and
 an unwitnessed hash is a deficient witness. -/
-def code_db_resolve (code_hash : (Vector (BitVec 8) 32)) : SailM Code := do
-  if ((code_hash == KECCAK_EMPTY) : Bool)
-  then (pure EMPTY_CODE)
+def code_db_resolve (code_hash : (Vector (BitVec 8) 32)) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) := do
+  if _sailIf0 : ((code_hash == KECCAK_EMPTY) : Bool) = true
+  then
+    (pure (EMPTY_CODE : (Sigma fun (k_off : Nat) =>
+      (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))))
   else
     (do
-      match (← (code_db_lookup code_hash)) with
-      | .some code => (pure code)
-      | none => sailThrow ((InvalidBlock WitnessDeficient)))
+      let ⟨_, ⟨_, code⟩⟩ ← do (code_db_lookup code_hash)
+      if _sailIf1 : ((code.len == 0) : Bool) = true
+      then
+        (do
+          (fatal_error WitnessDeficient))
+      else
+        (pure ((⟨_, ⟨_, code⟩⟩ : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))))))
 

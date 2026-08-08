@@ -1,6 +1,5 @@
 import Evm.Prelude
-import Evm.Primitives.Bytes
-import Evm.Kernel.Scratch
+import Evm.Lib.Rlp.Encoding
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -54,24 +53,26 @@ open BalIterEntry
 open AcctTxPopResult
 open AcctBlockIterResult
 
-/-! # CREATE2 address derivation
+/-! # CREATE address RLP codec
 
-The fixed-width EIP-1014 preimage does not use RLP and remains separate from
-the CREATE address codec. -/
+The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
-/-- The `CREATE2` address (EIP-1014): the low 20 bytes of
-`keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
-/- Type quantifiers: k_ex551062_ : Nat, 0 ≤ k_ex551062_ ∧ k_ex551062_ ≤ (2 ^ 256 - 1) -/
-def create2_address (sender : (Vector (BitVec 8) 20)) (salt : Nat) (init_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
-  let mark ← do (scratch_reserve 85)
-  (scratch_push_byte 0xFF#8)
-  (scratch_push_address sender)
-  let salt_hash := (word_to_hash salt)
-  (scratch_push_b256 salt_hash WORD_BYTE_LENGTH)
-  (scratch_push_b256 init_hash WORD_BYTE_LENGTH)
-  let ⟨_, ⟨_, preimage⟩⟩ ← do (scratch_finish mark)
-  let digest ← do (scratch_keccak256 ⟨_, ⟨_, preimage⟩⟩)
-  (scratch_rewind mark)
+/-- The `CREATE` address (YP §7): the low 20 bytes of
+`keccak256(rlp([sender, nonce]))`. -/
+/- Type quantifiers: k_ex551061_ : Nat, 0 ≤ k_ex551061_ ∧ k_ex551061_ ≤ (2 ^ 64 - 1) -/
+def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
+  let address_length := (rlp_addr_size ())
+  let nonce_length := (rlp_uint_word_size nonce)
+  let content_len := (address_length + nonce_length)
+  let encoded_len ← do (rlp_list_size content_len)
+  let encoder ← do (rlp_encoder_begin encoded_len)
+  (rlp_write_list_prefix content_len)
+  (rlp_write_addr sender)
+  (rlp_write_uint_word nonce)
+  let ⟨_, ⟨_, encoded⟩⟩ ← do (rlp_encoder_finish encoder)
+  let digest ← do (scratch_keccak256 ⟨_, ⟨_, encoded⟩⟩)
   let digest_word := (hash_to_word digest)
-  (pure (word_to_address digest_word))
+  let address := (word_to_address digest_word)
+  (rlp_encoder_rewind encoder)
+  (pure address)
 

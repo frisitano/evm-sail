@@ -20,29 +20,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Gas quantities
 
@@ -66,9 +78,24 @@ The zero values initialize each gas domain. Protocol limits are checked at the
 transaction or block boundary rather than encoded as a shared implementation
 ceiling. -/
 
+def BLOCK_ACCESS_LIST_ITEM_GAS : Nat := 2000
+
 def GAS_COST_ZERO : gas_cost := 0
 
-def TRANSACTION_EXECUTION_GAS_LIMIT : transaction_gas := (2 ^i 24)
+def undefined_GasCharge (_ : Unit) : SailM GasCharge := do
+  (pure { affordable := ← (undefined_bool ()),
+          cost := ← (undefined_nat ()) })
+
+def GAS_CHARGE_UNAFFORDABLE : GasCharge :=
+  { affordable := false,
+    cost := GAS_COST_ZERO }
+
+/- Type quantifiers: cost : Nat, 0 ≤ cost -/
+def gas_charge (cost : Nat) : GasCharge :=
+  { affordable := true,
+    cost := cost }
+
+def TRANSACTION_EXECUTION_GAS_LIMIT : Nat := (2 ^i 24)
 
 def STATE_GAS_SPILL_ZERO : state_gas_spill := 0
 
@@ -78,7 +105,7 @@ def GAS_ZERO : gas := 0
 
 /-- The execution-gas allowance of each protocol system call (EIP-4788,
 EIP-2935, EIP-7002, EIP-7251, and EIP-8282). -/
-def SYSTEM_CALL_GAS_LIMIT : transaction_gas := 30000000
+def SYSTEM_CALL_GAS_LIMIT : Nat := 30000000
 
 def GAS_CONSTANT_ZERO : gas_constant := 0
 

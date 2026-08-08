@@ -20,37 +20,49 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Exceptions
 
-The failures that interrupt EVM execution or invalidate a block. An
+The failures that interrupt EVM execution or terminate payload validation. An
 [ExceptionKind][type-ExceptionKind] exceptionally halts the current frame,
 consumes its remaining gas, and reverts its state changes. A
-[BlockError][type-BlockError] rejects the entire payload and is carried by
-the model's single `exception` type. -/
+[FatalError][type-FatalError] rejects the entire payload and terminates the
+validator immediately. -/
 
 def undefined_ExceptionKind (_ : Unit) : SailM ExceptionKind := do
   (internal_pick
@@ -87,12 +99,12 @@ def num_of_ExceptionKind (arg_ : ExceptionKind) : Nat :=
   | .NonceOverflow => 10
   | .AddressCollision => 11
 
-def undefined_BlockError (_ : Unit) : SailM BlockError := do
+def undefined_FatalError (_ : Unit) : SailM FatalError := do
   (internal_pick
-    [InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, WitnessDeficient])
+    [InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, WitnessDeficient, NumericOverflow])
 
-/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 19 -/
-def BlockError_of_num (arg_ : Nat) : BlockError :=
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 20 -/
+def FatalError_of_num (arg_ : Nat) : FatalError :=
   match arg_ with
   | 0 => InvalidConfig
   | 1 => HeaderChainBroken
@@ -113,9 +125,10 @@ def BlockError_of_num (arg_ : Nat) : BlockError :=
   | 16 => BlockAccessListTooLarge
   | 17 => InvalidBlockAccessList
   | 18 => InvalidExecutionRequests
-  | _ => WitnessDeficient
+  | 19 => WitnessDeficient
+  | _ => NumericOverflow
 
-def num_of_BlockError (arg_ : BlockError) : Nat :=
+def num_of_FatalError (arg_ : FatalError) : Nat :=
   match arg_ with
   | .InvalidConfig => 0
   | .HeaderChainBroken => 1
@@ -137,4 +150,9 @@ def num_of_BlockError (arg_ : BlockError) : Nat :=
   | .InvalidBlockAccessList => 17
   | .InvalidExecutionRequests => 18
   | .WitnessDeficient => 19
+  | .NumericOverflow => 20
+
+/- Type quantifiers: k_a : Type -/
+def fatal_error (_reason : FatalError) : SailM k_a := do
+  throw Error.Exit
 

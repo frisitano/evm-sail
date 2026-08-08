@@ -1,6 +1,6 @@
 import Evm.Prelude
-import Evm.Host.Kernel.Storage
-import Evm.Host.Kernel.Accounts
+import Evm.Kernel.Storage
+import Evm.Kernel.Accounts
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -18,29 +18,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # State: selfdestruct and creation flags
 
@@ -51,7 +63,8 @@ The per-transaction account lifecycle flags behind `SELFDESTRUCT`
 at transaction end per EIP-6780). -/
 def k_selfdestruct (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
-  if ((! cur.selfdestructed) : Bool)
+  let active := (! cur.selfdestructed)
+  if (active : Bool)
   then (store_account a { cur with selfdestructed := true })
   else (pure ())
 
@@ -73,7 +86,8 @@ def k_was_created (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 self-beneficiary). -/
 def k_zero_balance (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
-  if ((word_is_zero cur.info.balance) : Bool)
+  let balance_is_zero := (word_is_zero cur.info.balance)
+  if (balance_is_zero : Bool)
   then (pure ())
   else (store_account_info a cur { cur.info with balance := ZERO_WORD })
 

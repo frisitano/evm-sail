@@ -1,13 +1,5 @@
 {"version": "1.1.0",
  "packagesDir": ".lake/packages",
- "packages":
- [{"type": "path",
-   "scope": "",
-   "name": "Sail",
-   "manifestFile": "lake-manifest.json",
-   "inherited": false,
-   "dir":
-   "/Users/f/dev/ethereum/evm-sail/extractions/lean/src/.lake/packages/Sail",
-   "configFile": "lakefile.toml"}],
+ "packages": [],
  "name": "evm",
  "lakeDir": ".lake"}

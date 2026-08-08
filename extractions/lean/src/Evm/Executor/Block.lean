@@ -1,17 +1,14 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.CycleScopes
-import Evm.Host.CycleScopesDisabled
 import Evm.Primitives.Quantities
-import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
+import Evm.Exceptions
+import Evm.Primitives.Fork
 import Evm.Primitives.System
-import Evm.Primitives.Block
-import Evm.Host.Kernel.Scratch
-import Evm.Host.Kernel.Environment
-import Evm.Host.Kernel.Accounts
-import Evm.Host.Kernel.Lifecycle
-import Evm.Evm.Machine
+import Evm.Primitives.Tx
+import Evm.Kernel.Environment
+import Evm.Kernel.Accounts
+import Evm.Kernel.Lifecycle
 import Evm.Evm.Gas
 import Evm.Evm.Transaction
 import Evm.Lib.Ssz.StatelessInput
@@ -34,188 +31,424 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # The block driver
 
 Block-start system calls, the transaction loop with block-gas
 accounting, withdrawals, and block-end request collection. -/
 
-def PRE_MERGE_BLOCK_REWARD := (BitVec.toNatInt 0x1BC16D674EC80000#64)
+/- Type quantifiers: _limit : Nat, 0 ≤ _limit ∧ _limit ≤ block_gas_limit_bound -/
+def block_gas_usage_empty (_limit : Nat) : (BlockGasUsageFields _limit 0 0 0) :=
+  { execution := 0,
+    state := 0,
+    receipts := 0 }
 
-/-- Returns a block's remaining gas, rejecting an accumulated value above the
-header limit with the block-validation error required by EIP-7778. -/
-/- Type quantifiers: k_ex416637_ : Nat, k_ex416636_ : Nat, 0 ≤ k_ex416636_ ∧
-  k_ex416636_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex416637_ -/
-def remaining_block_gas (limit : Nat) (used : Nat) : SailM Nat := do
-  if ((used ≤b limit) : Bool)
-  then (pure (limit - used))
-  else sailThrow ((InvalidBlock GasUsedExceedsLimit))
+/- Type quantifiers: k_limit : Nat, k_execution : Nat, k_state : Nat, k_receipts : Nat, add_execution
+  : Nat, add_state : Nat, add_receipt : Nat, (block_gas_usage_relation k_limit k_execution k_state k_receipts)
+  ∧
+  0 ≤ add_execution ∧
+  add_execution ≤ (k_limit - k_execution) ∧
+  0 ≤ add_state ∧
+  add_state ≤ (k_limit - k_state) ∧
+  0 ≤ add_receipt ∧ add_receipt ≤ (add_execution + add_state) -/
+def block_gas_usage_add (usage : (BlockGasUsageFields k_limit k_execution k_state k_receipts)) (add_execution : Nat) (add_state : Nat) (add_receipt : Nat) : (BlockGasUsageFields k_limit (k_execution + add_execution) (k_state + add_state) (k_receipts + add_receipt)) :=
+  { execution := (k_execution + add_execution),
+    state := (k_state + add_state),
+    receipts := (k_receipts + add_receipt) }
+
+def PRE_MERGE_BLOCK_REWARD := (BitVec.toNatInt 0x1BC16D674EC80000#64)
 
 /-- The block-start writes: beacon root (Cancun+, EIP-4788) and parent
 hash history (Prague+, EIP-2935). -/
 def run_block_start_system_calls (_ : Unit) : SailM Unit := do
-  if ((fork_gteq (← readReg k_fork) Cancun) : Bool)
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  if ((profile.fork ≥b Cancun) : Bool)
   then (system_call BEACON_ROOTS_ADDR (← readReg k_header).parent_beacon_block_root)
   else (pure ())
-  if ((fork_gteq (← readReg k_fork) Prague) : Bool)
+  if ((profile.fork ≥b Prague) : Bool)
   then (system_call HISTORY_STORAGE_ADDR (← readReg k_header).parent_hash)
   else (pure ())
 
 /-- Executes the block's transactions in order, enforcing per-tx
 applicability and block gas/blob-gas availability (EIP-7778 block-gas
 accounting), accumulating receipts. -/
-/- Type quantifiers: k_ex416645_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
-  : Nat, 0 ≤ public_keys_dependentWitness0 ∧ 0 ≤ public_keys_dependentWitness1, 0 ≤
-  k_ex416645_ ∧ k_ex416645_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: expected_deposits_dependentWitness1 : Nat, expected_deposits_dependentWitness0
+  : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0 : Nat, 0 ≤
+  public_keys_dependentWitness0 ∧
+  0 ≤ public_keys_dependentWitness1 ∧
+  (public_keys_dependentWitness0 + public_keys_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
+  expected_deposits_dependentWitness0 ∧
+  0 ≤ expected_deposits_dependentWitness1 ∧
+  (expected_deposits_dependentWitness0 + expected_deposits_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (public_keys : (Sigma
-  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (header_gas_limit : Nat) : SailM BlockExecutionResult := do
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (expected_deposits : (Sigma
+  fun (public_keys_dependentWitness0 : Nat) =>
+  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
+  (StatelessInputSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1)))) : SailM BlockExecutionResult := do
   let public_keys_dependentWitness0 := (public_keys).1
   let public_keys_dependentWitness1 := ((public_keys).2).1
   let public_keys := ((public_keys).2).2
+  let expected_deposits_dependentWitness0 := (expected_deposits).1
+  let expected_deposits_dependentWitness1 := ((expected_deposits).2).1
+  let expected_deposits := ((expected_deposits).2).2
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  let gas_limits := execution_profile.gas
   let public_keys_length := public_keys.len
   let public_key_length := PUBLIC_KEY_LENGTH
   let public_key_count_value := (public_keys_length / public_key_length)
   if (((public_key_count_value != transactions.count) || (public_keys_length != (public_key_count_value *i public_key_length))) : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else
-    (do
-      let gas_limit := header_gas_limit
-      let execution_gas_acc : Nat := GAS_ZERO
-      let state_gas_acc : Nat := GAS_ZERO
-      let blob_gas_acc : Nat := 0
-      let tx0_to : (Vector (BitVec 8) 20) := ZERO_ADDRESS
-      let receipts := (receipt_accumulator_empty ())
-      let deposits_start ← do (scratch_begin ())
-      let cursor ← do (ssz_list_cursor transactions)
-      let keys : (Sigma fun (public_keys_dependentWitness0 : Nat) =>
-        (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-        (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))) :=
-        ((⟨_, ⟨_, public_keys⟩⟩ : (Sigma fun (public_keys_dependentWitness0 : Nat) =>
-        (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-        (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1)))) : (Sigma
-        fun (public_keys_dependentWitness0 : Nat) =>
-        (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-        (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))))
-      let (blob_gas_acc, cursor, execution_gas_acc, keys, receipts, state_gas_acc, tx0_to) ← (( do
-        let loop_vars ← whileFuelM (fuel :=(cursor.items.count -i cursor.index)) (fun (blob_gas_acc, cursor, execution_gas_acc, keys, receipts, state_gas_acc, tx0_to) => (pure (! (ssz_list_cursor_empty
-              cursor)))) (blob_gas_acc, cursor, execution_gas_acc, keys, receipts, state_gas_acc, tx0_to)
-          fun (blob_gas_acc, cursor, execution_gas_acc, keys, receipts, state_gas_acc, tx0_to) => do
-            assert true "loop dummy assert"
-            let i := cursor.index
-            let (transaction, next) ← do (ssz_list_pop cursor)
-            let cursor : (BoundedSszListCursor (2 ^ 20)) := next
-            let ⟨_, ⟨_, keys_fields⟩⟩ := keys
-            let keys_length := keys_fields.len
-            if _sailIf0 : ((keys_length <b public_key_length) : Bool) = true
-            then
-              (do
-                sailThrow ((InvalidBlock WitnessDeficient)))
-            else
-              (do
-                let public_key := (sub_slice keys_fields 0 PUBLIC_KEY_LENGTH)
-                let keys : (Sigma fun (public_keys_dependentWitness0 : Nat) =>
-                  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-                  (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))) :=
-                  ((⟨_, ⟨_, (slice_suffix keys_fields public_key_length)⟩⟩ : (Sigma fun
-                  (public_keys_dependentWitness0 : Nat) =>
-                  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-                  (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1)))) : (Sigma
-                  fun (public_keys_dependentWitness0 : Nat) =>
-                  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-                  (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))))
-                let _ : Unit := (cycle_scope_start SCOPE_TX_DECODE)
-                let tx ← do (decode_transaction ((transaction).2).2 public_key)
-                let _ : Unit := (cycle_scope_end SCOPE_TX_DECODE)
-                writeReg k_block_access_index (i + 1)
-                let tx0_to : (Vector (BitVec 8) 20) :=
-                  if ((i == 0) : Bool)
-                  then tx.recipient
-                  else tx0_to
-                let available_execution_gas ← do (remaining_block_gas gas_limit execution_gas_acc)
-                let available_state_gas ← do (remaining_block_gas gas_limit state_gas_acc)
-                let transaction_execution_limit : Nat :=
-                  if ((AMSTERDAM_TX_MAX_GAS <b tx.gas_limit) : Bool)
-                  then AMSTERDAM_TX_MAX_GAS
-                  else tx.gas_limit
-                let transaction_fits ← (( do
-                  if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
-                  then
-                    (pure ((transaction_execution_limit ≤b available_execution_gas) && ((tx.gas_limit ≤b available_state_gas) : Bool)))
-                  else (pure (tx.gas_limit ≤b available_execution_gas)) ) : SailM Bool )
-                let (blob_gas_acc, execution_gas_acc, receipts, state_gas_acc) ← (( do
-                  if ((! transaction_fits) : Bool)
-                  then sailThrow ((InvalidBlock GasUsedExceedsLimit))
-                  else
-                    (do
-                      let tx_blob_gas ← do (transaction_blob_gas_for_count tx.blob_hashes.count)
-                      let next_blob_gas ← (( do
-                        if ((fork_lt (← readReg k_fork) Cancun) : Bool)
-                        then (pure blob_gas_acc)
-                        else (checked_block_blob_gas_add blob_gas_acc tx_blob_gas) ) : SailM Nat )
-                      let receipt ← do (process_transaction tx)
-                      let execution_gas_acc : Nat :=
-                        (conserved_gas_add execution_gas_acc receipt.execution_gas)
-                      let state_gas_acc : Nat := (conserved_gas_add state_gas_acc receipt.state_gas)
-                      if (((gas_limit <b execution_gas_acc) || ((gas_limit <b state_gas_acc) : Bool)) : Bool)
-                      then sailThrow ((InvalidBlock GasUsedExceedsLimit))
-                      else
+  then (fatal_error WitnessDeficient)
+  else (pure ())
+  let gas_limit := gas_limits.block_limit
+  let gas_usage : (Sigma fun (k_execution : Nat) =>
+    (Sigma fun (k_state : Nat) =>
+    (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) :=
+    ((⟨_, ⟨_, ⟨_, (block_gas_usage_empty gas_limit)⟩⟩⟩ : (Sigma fun (k_execution : Nat)
+    =>
+    (Sigma fun (k_state : Nat) =>
+    (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))) : (Sigma
+    fun (k_execution : Nat) =>
+    (Sigma fun (k_state : Nat) =>
+    (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))))
+  let blob_gas_acc : Nat := 0
+  let tx0_to : (Vector (BitVec 8) 20) := ZERO_ADDRESS
+  let records_start ← do (receipt_store_begin ())
+  let transaction_logs_start ← do (logs_tx_start ())
+  let transaction_logs_count ← do (logs_tx_count ())
+  let logs_start ← do (log_store_index_add transaction_logs_start transaction_logs_count)
+  let remaining_deposits : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
+    ((⟨_, ⟨_, expected_deposits⟩⟩ : (Sigma fun (expected_deposits_dependentWitness0 : Nat)
+    =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
+    fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+  let cursor ← do (ssz_list_cursor transactions)
+  let keys : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
+    ((⟨_, ⟨_, public_keys⟩⟩ : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
+    fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+  let initial_cursor_empty := (ssz_list_cursor_empty cursor)
+  let cursor_has_item : Bool := (! initial_cursor_empty)
+  let (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(cursor.items.count -i cursor.index)) (fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) => (pure cursor_has_item)) (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to)
+      fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) => do
+        assert true "loop dummy assert"
+        let i := cursor.index
+        let (transaction, next) ← do (ssz_list_pop cursor)
+        let cursor : (BoundedSszListCursor (2 ^ 20)) := next
+        let ⟨_, ⟨_, keys_fields⟩⟩ := keys
+        let ⟨_, ⟨_, keys_fields⟩⟩ ← (( do
+          if _sailIf0 : ((public_key_length ≤b keys_fields.len) : Bool) = true
+          then
+            (pure ((⟨_, ⟨_, keys_fields⟩⟩ : (Sigma fun
+              (expected_deposits_dependentWitness0 : Nat) =>
+              (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+              (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
+              fun (expected_deposits_dependentWitness0 : Nat) =>
+              (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+              (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))
+          else
+            (do
+              (fatal_error WitnessDeficient)) ) : SailM
+          (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))
+          )
+        let public_key := (stateless_input_sub_slice keys_fields 0 PUBLIC_KEY_LENGTH)
+        let keys : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
+          ((⟨_, ⟨_, (stateless_input_slice_suffix keys_fields public_key_length)⟩⟩ : (Sigma
+          fun (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
+          fun (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+        let ⟨_, tx⟩ ← do (decode_transaction ((transaction).2).2 public_key)
+        writeReg k_current_transaction_epoch (i + 1)
+        let tx0_to : (Vector (BitVec 8) 20) :=
+          if ((i == 0) : Bool)
+          then tx.recipient
+          else tx0_to
+        let ⟨_, ⟨_, ⟨_, usage⟩⟩⟩ := gas_usage
+        let available_execution_gas := (gas_limit - usage.execution)
+        let available_state_gas := (gas_limit - usage.state)
+        let ⟨_, ⟨_, allowance⟩⟩ ← do
+          (transaction_gas_allowance tx.gas_limit gas_limits.transaction_total_limit
+            gas_limits.transaction_regular_limit)
+        let (blob_gas_acc, gas_usage, remaining_deposits) ← (( do
+          if _sailIf0 : ((profile.fork ≥b Amsterdam) : Bool) = true
+          then
+            (do
+              let (blob_gas_acc, gas_usage, remaining_deposits) ← (( do
+                if _sailIf1 : (((available_execution_gas <b allowance.regular) || (available_state_gas <b allowance.total)) : Bool) = true
+                then
+                  (do
+                    (fatal_error GasUsedExceedsLimit)
+                    (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
+                      (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                else
+                  (do
+                    let tx_blob_gas : Nat := ((2 ^i 17) *i tx.blob_hashes.count)
+                    let next_blob_gas ← (( do
+                      (block_blob_gas_add profile.blob_schedule.max blob_gas_acc tx_blob_gas) ) :
+                      SailM Nat )
+                    let ⟨_, ⟨_, ⟨_, receipt⟩⟩⟩ ← do
+                      (process_transaction ⟨_, tx⟩ allowance)
+                    let next_usage :=
+                      (block_gas_usage_add usage receipt.execution_gas receipt.state_gas
+                        receipt.gas_used)
+                    let gas_usage : (Sigma fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) :=
+                      ((⟨_, ⟨_, ⟨_, next_usage⟩⟩⟩ : (Sigma fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))) : (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))))
+                    (receipt_store_append ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, receipt⟩⟩⟩⟩⟩
+                      next_usage.receipts i)
+                    let ⟨_, ⟨_, remaining_deposits⟩⟩ ←
+                      (authenticate_deposit_logs receipt.logs remaining_deposits)
+                    let blob_gas_acc : Nat := next_blob_gas
+                    (pure ((((fun (dependentValue0, dependentValue1, dependentValue2) => (dependentValue0, ⟨_, ⟨_, ⟨_, dependentValue1⟩⟩⟩, ⟨_, ⟨_, dependentValue2⟩⟩)) ((blob_gas_acc, gas_usage, remaining_deposits))) : (Nat × (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))) : (Nat × (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                ) : SailM
+                (Nat × (Sigma fun (k_execution : Nat) =>
+                (Sigma fun (k_state : Nat) =>
+                (Sigma fun (k_receipts : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+                (expected_deposits_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+                )
+              (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
+                (k_execution : Nat) =>
+                (Sigma fun (k_state : Nat) =>
+                (Sigma fun (k_receipts : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+                (expected_deposits_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+          else
+            (do
+              let (blob_gas_acc, gas_usage, remaining_deposits) ← (( do
+                if _sailIf1 : ((available_execution_gas <b allowance.total) : Bool) = true
+                then
+                  (do
+                    (fatal_error GasUsedExceedsLimit)
+                    (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
+                      (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                else
+                  (do
+                    let tx_blob_gas : Nat := ((2 ^i 17) *i tx.blob_hashes.count)
+                    let next_blob_gas ← (( do
+                      if ((profile.fork <b Cancun) : Bool)
+                      then (pure blob_gas_acc)
+                      else (block_blob_gas_add profile.blob_schedule.max blob_gas_acc tx_blob_gas) )
+                      : SailM Nat )
+                    let ⟨_, ⟨_, ⟨_, receipt⟩⟩⟩ ← do
+                      (process_transaction ⟨_, tx⟩ allowance)
+                    let next_usage :=
+                      (block_gas_usage_add usage receipt.gas_used 0 receipt.gas_used)
+                    let gas_usage : (Sigma fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) :=
+                      ((⟨_, ⟨_, ⟨_, next_usage⟩⟩⟩ : (Sigma fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))) : (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))))
+                    (receipt_store_append ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, receipt⟩⟩⟩⟩⟩
+                      next_usage.receipts i)
+                    let ⟨_, ⟨_, remaining_deposits⟩⟩ ← (( do
+                      if _sailIf2 : ((profile.fork ≥b Prague) : Bool) = true
+                      then
                         (do
-                          let receipts ← (receipt_accumulator_push receipts receipt next.index)
-                          (append_deposit_logs receipt.logs)
-                          let blob_gas_acc : Nat := next_blob_gas
-                          (pure (blob_gas_acc, execution_gas_acc, receipts, state_gas_acc)))) ) :
-                  SailM (Nat × Nat × ReceiptAccumulator × Nat) )
-                (pure ((blob_gas_acc, cursor, execution_gas_acc, keys, receipts, state_gas_acc, tx0_to) : (Nat × (BoundedSszListCursor (2 ^ 20)) × Nat × (Sigma
-                  fun (public_keys_dependentWitness0 : Nat) =>
-                  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-                  (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))) × ReceiptAccumulator × Nat × (Vector (BitVec 8) 20)))))
-        (pure loop_vars) ) : SailM
-        (Nat × (BoundedSszListCursor (2 ^ 20)) × Nat × (Sigma fun
-        (public_keys_dependentWitness0 : Nat) =>
-        (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-        (EvmByteSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1))) × ReceiptAccumulator × Nat × (Vector (BitVec 8) 20))
-        )
-      let header_gas_used ← do
-        if (((fork_gteq (← readReg k_fork) Amsterdam) && ((execution_gas_acc <b state_gas_acc) : Bool)) : Bool)
-        then (pure state_gas_acc)
-        else (pure execution_gas_acc)
-      let _ : Unit := (cycle_scope_start SCOPE_RECEIPTS_ROOT)
-      let receipts_root ← do (receipt_accumulator_root receipts)
-      let _ : Unit := (cycle_scope_end SCOPE_RECEIPTS_ROOT)
-      (pure { header_gas_used := header_gas_used,
-              execution_gas_used := execution_gas_acc,
-              state_gas_used := state_gas_acc,
-              blob_gas_used := blob_gas_acc,
-              first_tx_recipient := tx0_to,
-              receipts_root := receipts_root,
-              logs_bloom := receipts.bloom,
-              deposits := ← do
-                  let publicField ← (scratch_finish deposits_start)
-                  pure (publicField),
-              requests := EMPTY_EXECUTION_REQUESTS }))
+                          (authenticate_deposit_logs receipt.logs remaining_deposits))
+                      else
+                        (pure (remaining_deposits : (Sigma fun
+                          (expected_deposits_dependentWitness0 : Nat) =>
+                          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))
+                      ) : SailM
+                      (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))
+                      )
+                    let blob_gas_acc : Nat := next_blob_gas
+                    (pure ((((fun (dependentValue0, dependentValue1, dependentValue2) => (dependentValue0, ⟨_, ⟨_, ⟨_, dependentValue1⟩⟩⟩, ⟨_, ⟨_, dependentValue2⟩⟩)) ((blob_gas_acc, gas_usage, remaining_deposits))) : (Nat × (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))) : (Nat × (Sigma
+                      fun (k_execution : Nat) =>
+                      (Sigma fun (k_state : Nat) =>
+                      (Sigma fun (k_receipts : Nat) =>
+                      (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+                      fun (expected_deposits_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                ) : SailM
+                (Nat × (Sigma fun (k_execution : Nat) =>
+                (Sigma fun (k_state : Nat) =>
+                (Sigma fun (k_receipts : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+                (expected_deposits_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+                )
+              (pure ((blob_gas_acc, gas_usage, remaining_deposits) : (Nat × (Sigma fun
+                (k_execution : Nat) =>
+                (Sigma fun (k_state : Nat) =>
+                (Sigma fun (k_receipts : Nat) =>
+                (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+                (expected_deposits_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+          ) : SailM
+          (Nat × (Sigma fun (k_execution : Nat) =>
+          (Sigma fun (k_state : Nat) =>
+          (Sigma fun (k_receipts : Nat) =>
+          (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+          (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+          )
+        let cursor_empty := (ssz_list_cursor_empty cursor)
+        let cursor_has_item : Bool := (! cursor_empty)
+        (pure ((blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) : (Nat × (BoundedSszListCursor (2 ^ 20)) × Bool × (Sigma
+          fun (k_execution : Nat) =>
+          (Sigma fun (k_state : Nat) =>
+          (Sigma fun (k_receipts : Nat) =>
+          (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
+          (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Sigma
+          fun (expected_deposits_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Vector (BitVec 8) 20))))
+    (pure loop_vars) ) : SailM
+    (Nat × (BoundedSszListCursor (2 ^ 20)) × Bool × (Sigma fun (k_execution : Nat) =>
+    (Sigma fun (k_state : Nat) =>
+    (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
+    fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Sigma
+    fun (expected_deposits_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Vector (BitVec 8) 20))
+    )
+  let remaining_deposits_length := (stateless_input_slice_length remaining_deposits)
+  if (((profile.fork ≥b Prague) && (remaining_deposits_length != 0)) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  let ⟨_, ⟨_, ⟨_, final_usage⟩⟩⟩ := gas_usage
+  let header_gas_used :=
+    if (((profile.fork ≥b Amsterdam) && (final_usage.execution <b final_usage.state)) : Bool)
+    then final_usage.state
+    else final_usage.execution
+  let receipts_root ← do (receipt_store_root records_start transactions.count)
+  let retained_logs_start ← do (logs_tx_start ())
+  let retained_logs_count ← do (logs_tx_count ())
+  let retained ← do (log_store_index_add retained_logs_start retained_logs_count)
+  let logs_count : Nat :=
+    if ((logs_start ≤b retained) : Bool)
+    then (retained - logs_start)
+    else 0
+  (pure { header_gas_used := header_gas_used,
+          execution_gas_used := final_usage.execution,
+          state_gas_used := final_usage.state,
+          blob_gas_used := blob_gas_acc,
+          first_tx_recipient := tx0_to,
+          receipts_root := receipts_root,
+          logs := { start := logs_start,
+                    count := logs_count } })
 
 /-- Credits every withdrawal's recipient with its amount in gwei
 (EIP-4895); withdrawals cannot fail and charge no gas. -/
@@ -228,8 +461,9 @@ def apply_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 4))) : SailM Unit :
         let (withdrawal_ref, tail) ← do (ssz_fixed_list_pop rest WD_SIZE)
         let rest : (BoundedSszListRef (2 ^ 4)) := tail
         let withdrawal ← do (decode_withdrawal withdrawal_ref)
-        (k_add_balance withdrawal.address
-          (alu_mul (word_of_withdrawal_amount withdrawal.amount) 1000000000))
+        let amount := (word_of_withdrawal_amount withdrawal.amount)
+        let amount_in_wei := (alu_mul amount 1000000000)
+        (k_add_balance withdrawal.address amount_in_wei)
         (pure rest)
     (pure loop_vars) ) : SailM (BoundedSszListRef (2 ^ 4)) )
   (pure ())
@@ -238,45 +472,40 @@ def apply_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 4))) : SailM Unit :
 pre-merge static block reward before Paris, and the final merge into
 the block layer. -/
 def apply_block_end_state (body : BlockBody) : SailM Unit := do
-  if ((fork_gteq (← readReg k_fork) Shanghai) : Bool)
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  if ((profile.fork ≥b Shanghai) : Bool)
   then (apply_withdrawals body.withdrawals)
   else (pure ())
-  if ((fork_lt (← readReg k_fork) Paris) : Bool)
-  then (k_add_balance (← (k_coinbase ())) PRE_MERGE_BLOCK_REWARD)
+  if ((profile.fork <b Paris) : Bool)
+  then
+    (do
+      let coinbase ← do (k_coinbase ())
+      (k_add_balance coinbase PRE_MERGE_BLOCK_REWARD))
   else (pure ())
   (k_tx_merge ())
 
 /-- Executes a block body end to end: block-start system calls, the
-transaction loop, block-end state effects, and request collection;
+transaction loop, block-end state effects, and request validation;
 invalid execution throws immediately, while successful execution returns
 the accumulated [BlockExecutionResult][type-BlockExecutionResult]. -/
-/- Type quantifiers: k_ex416653_ : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0
-  : Nat, 0 ≤ public_keys_dependentWitness0 ∧ 0 ≤ public_keys_dependentWitness1, 0 ≤
-  k_ex416653_ ∧ k_ex416653_ ≤ (2 ^ 64 - 1) -/
-def execute_block_body (body : BlockBody) (public_keys : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (header_gas_limit : Nat) : SailM BlockExecutionResult := do
-  let public_keys_dependentWitness0 := (public_keys).1
-  let public_keys_dependentWitness1 := ((public_keys).2).1
-  let public_keys := ((public_keys).2).2
+def execute_block_body (body : BlockBody) (input_ref : StatelessInputRef) : SailM BlockExecutionResult := do
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
   (bal_reset ())
-  writeReg k_block_access_index 0
-  let _ : Unit := (cycle_scope_start SCOPE_BLOCK_START)
+  writeReg k_current_transaction_epoch 0
+  (warm_reset (← readReg k_current_transaction_epoch))
   (run_block_start_system_calls ())
-  let _ : Unit := (cycle_scope_end SCOPE_BLOCK_START)
-  let _ : Unit := (cycle_scope_start SCOPE_BLOCK_TRANSACTIONS)
   let result ← do
-    (execute_block_transactions body.transactions ⟨_, ⟨_, public_keys⟩⟩ header_gas_limit)
-  let _ : Unit := (cycle_scope_end SCOPE_BLOCK_TRANSACTIONS)
+    (execute_block_transactions body.transactions input_ref.public_keys input_ref.deposits)
   let post_tx_index := (body.transactions.count + 1)
-  writeReg k_block_access_index post_tx_index
-  let _ : Unit := (cycle_scope_start SCOPE_BLOCK_END_STATE)
+  writeReg k_current_transaction_epoch post_tx_index
+  (warm_reset (← readReg k_current_transaction_epoch))
   (apply_block_end_state body)
-  let _ : Unit := (cycle_scope_end SCOPE_BLOCK_END_STATE)
-  let _ : Unit := (cycle_scope_start SCOPE_BLOCK_END_REQUESTS)
-  let requests ← do
-    if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-    then (collect_execution_requests result.deposits)
-    else (pure EMPTY_EXECUTION_REQUESTS)
-  let _ : Unit := (cycle_scope_end SCOPE_BLOCK_END_REQUESTS)
-  (pure { result with requests := requests })
+  if ((profile.fork ≥b Prague) : Bool)
+  then (validate_execution_requests input_ref)
+  else (pure ())
+  (pure result)
 

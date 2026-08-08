@@ -1,16 +1,17 @@
 import Evm.Flow
 import Evm.Prelude
 import Evm.Primitives.Bytes
-import Evm.Primitives.Code
-import Evm.Primitives.Crypto
+import Evm.Exceptions
+import Evm.Host.RegionAccess
+import Evm.Kernel.Scratch
+import Evm.Primitives.Fork
 import Evm.Primitives.ChainConfig
-import Evm.Host.EvmByteSlice
 import Evm.Host.Code
 import Evm.Lib.Ssz.Ssz
-import Evm.Lib.Rlp.Rlp
-import Evm.Lib.Rlp.Tx
-import Evm.Host.Kernel.Environment
-import Evm.Host.Kernel.Lifecycle
+import Evm.Lib.Rlp.Decoding
+import Evm.Lib.Rlp.Codecs.Transactions
+import Evm.Kernel.Environment
+import Evm.Kernel.Lifecycle
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -28,29 +29,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # The stateless input decoder
 
@@ -206,7 +219,10 @@ def ssz_list_cursor (items : (BoundedSszListRef k_maximum)) : SailM (BoundedSszL
   let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
   let current ← do
     if ((items.count != 0) : Bool)
-    then (pure (ssz_offset_to_source_pointer (← (ssz_u32 ⟨_, ⟨_, bytes⟩⟩ 0))))
+    then
+      (do
+        let first_offset ← do (ssz_u32 ⟨_, ⟨_, bytes⟩⟩ 0)
+        (pure (ssz_offset_to_source_pointer first_offset)))
     else (pure bytes.len)
   (pure { items := items,
           index := 0,
@@ -220,158 +236,131 @@ def ssz_list_cursor_empty (cursor : (BoundedSszListCursor k_maximum)) : Bool :=
 /-- The next element's span, and the advanced cursor. -/
 /- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) ∧ k_maximum ≤ (2 ^ 30 - 1) -/
 def ssz_list_pop (cursor : (BoundedSszListCursor k_maximum)) : SailM ((Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum)) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum)) := do
   let count := cursor.items.count
   let index := cursor.index
-  if _sailIf0 : ((count ≤b index) : Bool) = true
+  let next_index ← (( do
+    if ((index <b count) : Bool)
+    then (pure (index + 1))
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  let items := cursor.items
+  let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
+  let nat := bytes.len
+  let next ← do
+    if ((next_index <b items.count) : Bool)
+    then
+      (do
+        let table_position := (ssz_offset_table_position next_index)
+        let next_offset ← do (ssz_u32_in_slice ⟨_, ⟨_, bytes⟩⟩ table_position)
+        (pure (ssz_offset_to_source_pointer next_offset)))
+    else (pure nat)
+  let current_value := cursor.current
+  let next_value := next
+  if _sailIf0 : (((current_value ≤b next_value) && (next_value ≤b nat)) : Bool) = true
   then
     (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+      let item_length := (next_value - current_value)
+      if (((items.max_item_length != 0) && ((items.max_item_length <b item_length) : Bool)) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ())
+      let item := (stateless_input_sub_slice bytes current_value item_length)
+      (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, { items := items,
+                                                                                                                          index := next_index,
+                                                                                                                          current := next }))) : ((Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum))) : ((Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum)))))
   else
     (do
-      let next_index : Nat := (index + 1)
-      let items := cursor.items
-      let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
-      let nat := bytes.len
-      let next ← do
-        if ((next_index <b items.count) : Bool)
-        then
-          (pure (ssz_offset_to_source_pointer
-              (← (ssz_u32 ⟨_, ⟨_, bytes⟩⟩ (ssz_offset_table_position next_index)))))
-        else (pure nat)
-      let current_value := cursor.current
-      let next_value := next
-      if _sailIf1 : ((current_value ≤b next_value) : Bool) = true
-      then
-        (do
-          if _sailIf2 : ((next_value ≤b nat) : Bool) = true
-          then
-            (do
-              let item_length := (next_value - current_value)
-              if _sailIf3 : (((items.max_item_length != 0) && ((items.max_item_length <b item_length) : Bool)) : Bool) = true
-              then
-                (do
-                  sailThrow ((InvalidBlock InvalidConfig)))
-              else
-                (let item := (sub_slice bytes current_value item_length)
-                (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, { items := items,
-                                                                                                                                    index := next_index,
-                                                                                                                                    current := next }))) : ((Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum))) : ((Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListCursor k_maximum))))))
-          else
-            (do
-              sailThrow ((InvalidBlock InvalidConfig))))
-      else
-        (do
-          sailThrow ((InvalidBlock InvalidConfig))))
+      (fatal_error InvalidConfig))
 
 /-- Returns a variable-width list item by resolving its adjacent offsets. -/
 /- Type quantifiers: k_maximum : Nat, index : Nat, (source_valid_length k_maximum) ∧
   k_maximum ≤ (2 ^ 30 - 1) ∧ 0 ≤ index -/
 def ssz_list_at (items : (BoundedSszListRef k_maximum)) (index : Nat) : SailM (Sigma fun
-  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) := do
   let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
   let count := items.count
-  if _sailIf0 : ((count ≤b index) : Bool) = true
+  let item_index ← (( do
+    if ((index <b count) : Bool)
+    then (pure index)
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  let next_index : Nat := (item_index + 1)
+  let start_position := (ssz_offset_table_position item_index)
+  let start_offset ← do (ssz_u32_in_slice ⟨_, ⟨_, bytes⟩⟩ start_position)
+  let start := (ssz_offset_to_source_pointer start_offset)
+  let stop ← (( do
+    if ((next_index <b items.count) : Bool)
+    then
+      (do
+        let stop_position := (ssz_offset_table_position next_index)
+        let stop_offset ← do (ssz_u32_in_slice ⟨_, ⟨_, bytes⟩⟩ stop_position)
+        (pure (ssz_offset_to_source_pointer stop_offset)))
+    else (pure bytes.len) ) : SailM Nat )
+  let start_value := start
+  let stop_value := stop
+  let items_length := bytes.len
+  if _sailIf0 : (((start_value ≤b stop_value) && (stop_value ≤b items_length)) : Bool) = true
   then
     (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+      let item_length := (stop_value - start_value)
+      if (((items.max_item_length != 0) && ((items.max_item_length <b item_length) : Bool)) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ())
+      (pure ((⟨_, ⟨_, (stateless_input_sub_slice bytes start item_length)⟩⟩ : (Sigma fun
+        (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))))))
   else
     (do
-      let next_index : Nat := (index + 1)
-      let start ← do
-        (pure (ssz_offset_to_source_pointer
-            (← (ssz_u32_at ⟨_, ⟨_, bytes⟩⟩ (ssz_offset_table_position index)))))
-      let stop ← (( do
-        if ((next_index <b items.count) : Bool)
-        then
-          (pure (ssz_offset_to_source_pointer
-              (← (ssz_u32_at ⟨_, ⟨_, bytes⟩⟩ (ssz_offset_table_position next_index)))))
-        else (pure bytes.len) ) : SailM Nat )
-      let start_value := start
-      let stop_value := stop
-      let items_length := bytes.len
-      if _sailIf1 : ((start_value ≤b stop_value) : Bool) = true
-      then
-        (do
-          if _sailIf2 : ((stop_value ≤b items_length) : Bool) = true
-          then
-            (do
-              let item_length := (stop_value - start_value)
-              if _sailIf3 : (((items.max_item_length != 0) && ((items.max_item_length <b item_length) : Bool)) : Bool) = true
-              then
-                (do
-                  sailThrow ((InvalidBlock InvalidConfig)))
-              else
-                (pure ((⟨_, ⟨_, (sub_slice bytes start item_length)⟩⟩ : (Sigma fun
-                  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma
-                  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
-          else
-            (do
-              sailThrow ((InvalidBlock InvalidConfig))))
-      else
-        (do
-          sailThrow ((InvalidBlock InvalidConfig))))
+      (fatal_error InvalidConfig))
 
 /- Type quantifiers: k_maximum : Nat, item_size : Nat, index : Nat, (source_valid_length k_maximum)
   ∧ (source_valid_length item_size) ∧ 0 ≤ index -/
 def ssz_fixed_list_at (items : (BoundedSszListRef k_maximum)) (index : Nat) (item_size : Nat) : SailM (Sigma
-  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) := do
   let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
-  if _sailIf0 : ((items.count ≤b index) : Bool) = true
+  let width_value := item_size
+  let offset_value := (index *i width_value)
+  let items_length := bytes.len
+  if _sailIf0 : (((index <b items.count) && ((offset_value + width_value) ≤b items_length)) : Bool) = true
   then
-    (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+    (pure ((⟨_, ⟨_, (stateless_input_sub_slice bytes offset_value width_value)⟩⟩ : (Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))))
   else
     (do
-      let width_value := item_size
-      let offset_value := (index *i width_value)
-      let items_length := bytes.len
-      if _sailIf1 : (((offset_value + width_value) ≤b items_length) : Bool) = true
-      then
-        (pure ((⟨_, ⟨_, (sub_slice bytes offset_value width_value)⟩⟩ : (Sigma fun
-          (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun
-          (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))))
-      else
-        (do
-          sailThrow ((InvalidBlock InvalidConfig))))
+      (fatal_error InvalidConfig))
 
 /- Type quantifiers: k_maximum : Nat, item_size : Nat, (source_valid_length k_maximum) ∧
   (source_valid_length item_size) -/
 def ssz_fixed_list_pop (items : (BoundedSszListRef k_maximum)) (item_size : Nat) : SailM ((Sigma fun
-  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListRef k_maximum)) := do
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListRef k_maximum)) := do
   let ⟨_, ⟨_, bytes⟩⟩ := items.bytes
   let items_length := bytes.len
   let width := item_size
   let count := items.count
-  if _sailIf0 : ((count == 0) : Bool) = true
+  if _sailIf0 : (((0 <b count) && (width ≤b items_length)) : Bool) = true
   then
-    (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+    (let item := (stateless_input_sub_slice bytes 0 item_size)
+    let rest : (BoundedSszListRef k_maximum) :=
+      { bytes := ⟨_, ⟨_, (stateless_input_slice_suffix bytes width)⟩⟩,
+        count := (count - 1),
+        max_item_length := items.max_item_length }
+    (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, rest))) : ((Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListRef k_maximum))) : ((Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × (BoundedSszListRef k_maximum)))))
   else
     (do
-      if _sailIf1 : ((items_length <b width) : Bool) = true
-      then
-        (do
-          sailThrow ((InvalidBlock InvalidConfig)))
-      else
-        (let item := (sub_slice bytes 0 item_size)
-        let rest : (BoundedSszListRef k_maximum) :=
-          { bytes := ⟨_, ⟨_, (slice_suffix bytes width)⟩⟩,
-            count := (count - 1),
-            max_item_length := items.max_item_length }
-        (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((item, rest))) : ((Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListRef k_maximum))) : ((Sigma
-          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × (BoundedSszListRef k_maximum))))))
+      (fatal_error InvalidConfig))
 
 /- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, minimum : Nat, 0
-  ≤ minimum, 0 ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+  ≤ minimum, 0 ≤ bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def ssz_container_bytes (bytes : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (minimum : Nat) : SailM (Sigma fun
-  (bytes_dependentWitness0 : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (minimum : Nat) : SailM (Sigma
+  fun (bytes_dependentWitness0 : Nat) =>
   (Sigma fun (bytes_dependentWitness1 : Nat) =>
-  (EvmByteSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) := do
+  (StatelessInputSliceFields bytes_dependentWitness0 bytes_dependentWitness1))) := do
   let bytes_dependentWitness0 := (bytes).1
   let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
@@ -380,19 +369,21 @@ def ssz_container_bytes (bytes : (Sigma fun (k_off : Nat) =>
   then
     (pure ((⟨_, ⟨_, fields⟩⟩ : (Sigma fun (bytes_dependentWitness0 : Nat) =>
       (Sigma fun (bytes_dependentWitness1 : Nat) =>
-      (EvmByteSliceFields bytes_dependentWitness0 bytes_dependentWitness1)))) : (Sigma fun
+      (StatelessInputSliceFields bytes_dependentWitness0 bytes_dependentWitness1)))) : (Sigma fun
       (bytes_dependentWitness0 : Nat) =>
       (Sigma fun (bytes_dependentWitness1 : Nat) =>
-      (EvmByteSliceFields bytes_dependentWitness0 bytes_dependentWitness1)))))
+      (StatelessInputSliceFields bytes_dependentWitness0 bytes_dependentWitness1)))))
   else
     (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+      (fatal_error InvalidConfig))
 
 /- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, fixed_length :
-  Nat, 0 ≤ fixed_length, 0 ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 ∧
+  Nat, 0 ≤ fixed_length, 0 ≤ bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ fixed_length ∧ fixed_length ≤ bytes_dependentWitness1 -/
 def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (fixed_length : Nat) : SszContainerCursor :=
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fixed_length : Nat) : SszContainerCursor :=
   let bytes_dependentWitness0 := (bytes).1
   let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
@@ -401,9 +392,9 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex416113_ : Nat, 0 ≤ k_ex416113_ ∧ k_ex416113_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex553928_ : Nat, 0 ≤ k_ex553928_ ∧ k_ex553928_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × SszContainerCursor) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
   let ⟨_, ⟨_, bytes⟩⟩ := cursor.bytes
   let container_length := bytes.len
@@ -411,31 +402,31 @@ def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_o
   then
     (let stop_pointer : Nat := stop
     let span_length := (stop - current_value)
-    let span := (sub_slice bytes current_value span_length)
+    let span := (stateless_input_sub_slice bytes current_value span_length)
     (pure ((((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((span, { bytes := ⟨_, ⟨_, bytes⟩⟩,
                                                                                                                         current := stop_pointer }))) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × SszContainerCursor)) : ((Sigma
-      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) × SszContainerCursor))))
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor)) : ((Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor))))
   else
     (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+      (fatal_error InvalidConfig))
 
 /-- Takes the remainder of a container after its last offset-delimited
 field. -/
 def ssz_finish (cursor : SszContainerCursor) : SailM (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) := do
   let current_value := cursor.current
   let ⟨_, ⟨_, bytes⟩⟩ := cursor.bytes
   let container_length := bytes.len
   if _sailIf0 : ((current_value ≤b container_length) : Bool) = true
   then
     (let remaining := (container_length - current_value)
-    (pure ((⟨_, ⟨_, (sub_slice bytes current_value remaining)⟩⟩ : (Sigma fun (k_off : Nat)
-      => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
-      (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len))))))
+    (pure ((⟨_, ⟨_, (stateless_input_sub_slice bytes current_value remaining)⟩⟩ : (Sigma fun
+      (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma
+      fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))))))
   else
     (do
-      sailThrow ((InvalidBlock InvalidConfig)))
+      (fatal_error InvalidConfig))
 
 /-- Constructs a variable-item list with its SSZ count and per-item byte
 limits attached. Item lengths are checked lazily when reached, before a
@@ -443,9 +434,10 @@ consumer can construct any narrower optimized value. -/
 /- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, maximum_count :
   Nat, maximum_item_length : Nat, (source_valid_length maximum_count) ∧
   (source_valid_length maximum_item_length), 0 ≤ bytes_dependentWitness0 ∧
-  0 ≤ bytes_dependentWitness1 -/
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def ssz_bounded_variable_list_ref (bytes : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (maximum_count : Nat) (maximum_item_length : Nat) : SailM (BoundedSszListRef maximum_count) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (maximum_count : Nat) (maximum_item_length : Nat) : SailM (BoundedSszListRef maximum_count) := do
   let bytes_dependentWitness0 := (bytes).1
   let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
@@ -456,288 +448,331 @@ def ssz_bounded_variable_list_ref (bytes : (Sigma fun (k_off : Nat) =>
     else
       (do
         if ((span <b SSZ_OFF_BYTES) : Bool)
-        then sailThrow ((InvalidBlock InvalidConfig))
-        else
-          (do
-            let first_offset ← do (ssz_u32 ⟨_, ⟨_, bytes⟩⟩ 0)
-            let count : Nat := (Nat.div first_offset 4)
-            if ((((Nat.mod first_offset 4) != 0) || ((count == 0) || (first_offset >b span))) : Bool)
-            then sailThrow ((InvalidBlock InvalidConfig))
-            else (pure count))) ) : SailM Nat )
-  if ((maximum_count <b raw_count) : Bool)
-  then sailThrow ((InvalidBlock InvalidConfig))
-  else
-    (let count : Nat := raw_count
-    (pure { bytes := ⟨_, ⟨_, bytes⟩⟩,
-            count := count,
-            max_item_length := maximum_item_length }))
+        then (fatal_error InvalidConfig)
+        else (pure ())
+        let first_offset ← do (ssz_u32 ⟨_, ⟨_, bytes⟩⟩ 0)
+        let count : Nat := (Nat.div first_offset 4)
+        let offset_remainder := (Nat.mod first_offset 4)
+        if (((offset_remainder != 0) || ((count == 0) || (first_offset >b span))) : Bool)
+        then (fatal_error InvalidConfig)
+        else (pure ())
+        (pure count)) ) : SailM Nat )
+  let count ← (( do
+    if ((raw_count ≤b maximum_count) : Bool)
+    then (pure raw_count)
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  (pure { bytes := ⟨_, ⟨_, bytes⟩⟩,
+          count := count,
+          max_item_length := maximum_item_length })
 
 /-- Constructs a schema-bounded fixed-item SSZ list reference. -/
 /- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, maximum_count :
   Nat, item_size : Nat, (source_valid_length maximum_count) ∧ (source_valid_length item_size), 0
-  ≤ bytes_dependentWitness0 ∧ 0 ≤ bytes_dependentWitness1 -/
+  ≤ bytes_dependentWitness0 ∧
+  0 ≤ bytes_dependentWitness1 ∧
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def ssz_bounded_fixed_list_ref (bytes : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (item_size : Nat) (maximum_count : Nat) : SailM (BoundedSszListRef maximum_count) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (item_size : Nat) (maximum_count : Nat) : SailM (BoundedSszListRef maximum_count) := do
   let bytes_dependentWitness0 := (bytes).1
   let bytes_dependentWitness1 := ((bytes).2).1
   let bytes := ((bytes).2).2
-  let width := item_size
-  if ((width == 0) : Bool)
-  then sailThrow ((InvalidBlock InvalidConfig))
-  else
-    (do
-      let span := bytes.len
-      let raw_count := (span / width)
-      if ((span != (raw_count *i width)) : Bool)
-      then sailThrow ((InvalidBlock InvalidConfig))
-      else
-        (do
-          if ((maximum_count <b raw_count) : Bool)
-          then sailThrow ((InvalidBlock InvalidConfig))
-          else
-            (let count : Nat := raw_count
-            (pure { bytes := ⟨_, ⟨_, bytes⟩⟩,
-                    count := count,
-                    max_item_length := item_size }))))
+  let width ← (( do
+    if ((0 <b item_size) : Bool)
+    then (pure item_size)
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  let span := bytes.len
+  let raw_count := (span / width)
+  if ((span != (raw_count *i width)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let count ← (( do
+    if ((raw_count ≤b maximum_count) : Bool)
+    then (pure raw_count)
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  (pure { bytes := ⟨_, ⟨_, bytes⟩⟩,
+          count := count,
+          max_item_length := item_size })
 
 /-- Resolves the input's offset tables into a
 [StatelessInputRef][type-StatelessInputRef], validating the schema id
 and every region bound; a malformed frame is `InvalidConfig`. -/
 /- Type quantifiers: input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0 ≤
-  input_dependentWitness0 ∧ 0 ≤ input_dependentWitness1 -/
+  input_dependentWitness0 ∧
+  0 ≤ input_dependentWitness1 ∧
+  (input_dependentWitness0 + input_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM StatelessInputRef := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM StatelessInputRef := do
   let input_dependentWitness0 := (input).1
   let input_dependentWitness1 := ((input).2).1
   let input := ((input).2).2
-  let input_fields := input
-  let input_length := input_fields.len
   let fixed_length := STATELESS_INPUT_FIXED_LENGTH
   let body_offset_value := SSZ_BODY
-  if ((input_length <b fixed_length) : Bool)
-  then sailThrow ((InvalidBlock InvalidConfig))
-  else
-    (do
-      if (((← (slice_byte ⟨_, ⟨_, input_fields⟩⟩ 1)) != 0x01#8) : Bool)
-      then sailThrow ((InvalidBlock InvalidConfig))
-      else
-        (do
-          let protocol ← do (protocol_profile (← (slice_byte ⟨_, ⟨_, input_fields⟩⟩ 0)))
-          let body_bytes := (slice_suffix input_fields body_offset_value)
-          let ⟨_, ⟨_, body⟩⟩ ← do
-            (ssz_container_bytes ⟨_, ⟨_, body_bytes⟩⟩ STATELESS_INPUT_BODY_FIXED_LENGTH)
-          let container_start : Nat := 0
-          let new_payload_request_offset ← do
-            (ssz_u32 ⟨_, ⟨_, body⟩⟩ (ssz_field_offset container_start IN_NPR_OFF))
-          let witness_offset ← do
-            (ssz_u32 ⟨_, ⟨_, body⟩⟩ (ssz_field_offset container_start IN_WITNESS_OFF))
-          let chain_config_offset ← do
-            (ssz_u32 ⟨_, ⟨_, body⟩⟩ (ssz_field_offset container_start IN_CHAIN_CONFIG_OFF))
-          let public_keys_offset ← do
-            (ssz_u32 ⟨_, ⟨_, body⟩⟩ (ssz_field_offset container_start IN_PUBLIC_KEYS_OFF))
-          let body_fixed_length := STATELESS_INPUT_BODY_FIXED_LENGTH
-          if ((new_payload_request_offset != body_fixed_length) : Bool)
-          then sailThrow ((InvalidBlock InvalidConfig))
-          else
-            (do
-              let body_cursor :=
-                (ssz_container_cursor ⟨_, ⟨_, body⟩⟩ STATELESS_INPUT_BODY_FIXED_LENGTH)
-              let (new_payload_request_bytes, body_after_payload_request) ← do
-                (ssz_take body_cursor witness_offset)
-              let ⟨_, ⟨_, new_payload_request⟩⟩ ← do
-                (ssz_container_bytes new_payload_request_bytes NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
-              let (execution_witness_bytes, body_after_witness) ← do
-                (ssz_take body_after_payload_request chain_config_offset)
-              let ⟨_, ⟨_, execution_witness⟩⟩ ← do
-                (ssz_container_bytes execution_witness_bytes EXECUTION_WITNESS_FIXED_LENGTH)
-              let (chain_config, body_after_chain_config) ← do
-                (ssz_take body_after_witness public_keys_offset)
-              let ⟨_, ⟨_, public_keys⟩⟩ ← do (ssz_finish body_after_chain_config)
-              let npr_start : Nat := 0
-              let payload_offset ← do
-                (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩
-                  (ssz_field_offset npr_start NPR_PAYLOAD_OFF))
-              let versioned_hashes_offset ← do
-                (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩
-                  (ssz_field_offset npr_start NPR_VHASHES_OFF))
-              let requests_offset ← do
-                (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩
-                  (ssz_field_offset npr_start NPR_REQUESTS_OFF))
-              let npr_fixed_length := NEW_PAYLOAD_REQUEST_FIXED_LENGTH
-              if ((payload_offset != npr_fixed_length) : Bool)
-              then sailThrow ((InvalidBlock InvalidConfig))
-              else
-                (do
-                  let npr_cursor :=
-                    (ssz_container_cursor ⟨_, ⟨_, new_payload_request⟩⟩
-                      NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
-                  let (execution_payload_bytes, npr_after_payload) ← do
-                    (ssz_take npr_cursor versioned_hashes_offset)
-                  let (versioned_hashes, npr_after_versioned_hashes) ← do
-                    (ssz_take npr_after_payload requests_offset)
-                  let ⟨_, ⟨_, execution_requests_bytes⟩⟩ ← do
-                    (ssz_finish npr_after_versioned_hashes)
-                  let ⟨_, ⟨_, execution_requests⟩⟩ ← do
-                    (ssz_container_bytes ⟨_, ⟨_, execution_requests_bytes⟩⟩
-                      EXECUTION_REQUESTS_FIXED_LENGTH)
-                  let ⟨_, ⟨_, execution_payload⟩⟩ ← do
-                    (ssz_container_bytes execution_payload_bytes EXECUTION_PAYLOAD_FIXED_LENGTH)
-                  let payload_start : Nat := 0
-                  let extra_data_offset ← do
-                    (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩
-                      (ssz_field_offset payload_start PL_EXTRA_OFF))
-                  let transactions_offset ← do
-                    (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩
-                      (ssz_field_offset payload_start PL_TXS_OFF))
-                  let withdrawals_offset ← do
-                    (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩
-                      (ssz_field_offset payload_start PL_WDS_OFF))
-                  let block_access_list_offset ← do
-                    (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩
-                      (ssz_field_offset payload_start PL_BAL_OFF))
-                  let payload_fixed_length := EXECUTION_PAYLOAD_FIXED_LENGTH
-                  if ((extra_data_offset != payload_fixed_length) : Bool)
-                  then sailThrow ((InvalidBlock InvalidConfig))
-                  else
-                    (do
-                      let payload_cursor :=
-                        (ssz_container_cursor ⟨_, ⟨_, execution_payload⟩⟩
-                          EXECUTION_PAYLOAD_FIXED_LENGTH)
-                      let (extra_data, payload_after_extra_data) ← do
-                        (ssz_take payload_cursor transactions_offset)
-                      let (transaction_bytes, payload_after_transactions) ← do
-                        (ssz_take payload_after_extra_data withdrawals_offset)
-                      let transactions ← do
-                        (ssz_bounded_variable_list_ref transaction_bytes
-                          MAX_TRANSACTIONS_PER_PAYLOAD MAX_TRANSACTION_LENGTH)
-                      let (withdrawal_bytes, payload_after_withdrawals) ← do
-                        (ssz_take payload_after_transactions block_access_list_offset)
-                      let withdrawals ← do
-                        (ssz_bounded_fixed_list_ref withdrawal_bytes WD_SIZE
-                          MAX_WITHDRAWALS_PER_PAYLOAD)
-                      let ⟨_, ⟨_, block_access_list⟩⟩ ← do
-                        (ssz_finish payload_after_withdrawals)
-                      if ((MAX_EXTRA_DATA_LENGTH <b ((extra_data).2).2.len) : Bool)
-                      then sailThrow ((InvalidBlock InvalidConfig))
-                      else
-                        (do
-                          if ((MAX_BLOCK_ACCESS_LIST_LENGTH <b block_access_list.len) : Bool)
-                          then sailThrow ((InvalidBlock InvalidConfig))
-                          else
-                            (do
-                              let requests_start : Nat := 0
-                              let deposits_offset ← do
-                                (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩
-                                  (ssz_field_offset requests_start REQ_DEPOSITS_OFF))
-                              let withdrawal_requests_offset ← do
-                                (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩
-                                  (ssz_field_offset requests_start REQ_WITHDRAWALS_OFF))
-                              let consolidation_requests_offset ← do
-                                (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩
-                                  (ssz_field_offset requests_start REQ_CONSOLIDATIONS_OFF))
-                              let builder_deposit_requests_offset ← do
-                                (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩
-                                  (ssz_field_offset requests_start REQ_BUILDER_DEPOSITS_OFF))
-                              let builder_exit_requests_offset ← do
-                                (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩
-                                  (ssz_field_offset requests_start REQ_BUILDER_EXITS_OFF))
-                              let requests_fixed_length := EXECUTION_REQUESTS_FIXED_LENGTH
-                              if ((deposits_offset != requests_fixed_length) : Bool)
-                              then sailThrow ((InvalidBlock InvalidConfig))
-                              else
-                                (do
-                                  let requests_cursor :=
-                                    (ssz_container_cursor ⟨_, ⟨_, execution_requests⟩⟩
-                                      EXECUTION_REQUESTS_FIXED_LENGTH)
-                                  let (deposits, requests_after_deposits) ← do
-                                    (ssz_take requests_cursor withdrawal_requests_offset)
-                                  let (withdrawal_requests, requests_after_withdrawals) ← do
-                                    (ssz_take requests_after_deposits consolidation_requests_offset)
-                                  let (consolidation_requests, requests_after_consolidations) ← do
-                                    (ssz_take requests_after_withdrawals
-                                      builder_deposit_requests_offset)
-                                  let (builder_deposit_requests, requests_after_builder_deposits) ← do
-                                    (ssz_take requests_after_consolidations
-                                      builder_exit_requests_offset)
-                                  let ⟨_, ⟨_, builder_exit_requests⟩⟩ ← do
-                                    (ssz_finish requests_after_builder_deposits)
-                                  let witness_start : Nat := 0
-                                  let witness_state_offset ← do
-                                    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩
-                                      (ssz_field_offset witness_start WIT_STATE_OFF))
-                                  let witness_codes_offset ← do
-                                    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩
-                                      (ssz_field_offset witness_start WIT_CODES_OFF))
-                                  let witness_headers_offset ← do
-                                    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩
-                                      (ssz_field_offset witness_start WIT_HEADERS_OFF))
-                                  let witness_fixed_length := EXECUTION_WITNESS_FIXED_LENGTH
-                                  if ((witness_state_offset != witness_fixed_length) : Bool)
-                                  then sailThrow ((InvalidBlock InvalidConfig))
-                                  else
-                                    (do
-                                      let witness_cursor :=
-                                        (ssz_container_cursor ⟨_, ⟨_, execution_witness⟩⟩
-                                          EXECUTION_WITNESS_FIXED_LENGTH)
-                                      let (witness_state_bytes, witness_after_state) ← do
-                                        (ssz_take witness_cursor witness_codes_offset)
-                                      let witness_state ← do
-                                        (ssz_bounded_variable_list_ref witness_state_bytes
-                                          MAX_WITNESS_NODES MAX_WITNESS_NODE_LENGTH)
-                                      let (witness_code_bytes, witness_after_codes) ← do
-                                        (ssz_take witness_after_state witness_headers_offset)
-                                      let witness_codes ← do
-                                        (ssz_bounded_variable_list_ref witness_code_bytes
-                                          MAX_WITNESS_CODES MAX_WITNESS_CODE_LENGTH)
-                                      let witness_headers ← do
-                                        (do
-                                            let dependentArg0 := (← (ssz_finish
-                                                witness_after_codes))
-                                            (ssz_bounded_variable_list_ref dependentArg0
-                                            MAX_WITNESS_HEADERS MAX_WITNESS_HEADER_LENGTH))
-                                      let public_key_bytes := public_keys.len
-                                      let public_key_length := PUBLIC_KEY_LENGTH
-                                      let public_key_count := (public_key_bytes / public_key_length)
-                                      if ((public_key_bytes != (public_key_count *i public_key_length)) : Bool)
-                                      then sailThrow ((InvalidBlock InvalidConfig))
-                                      else
-                                        (do
-                                          if ((MAX_PUBLIC_KEYS <b public_key_count) : Bool)
-                                          then sailThrow ((InvalidBlock InvalidConfig))
-                                          else
-                                            (do
-                                              let _ ← do
-                                                (ssz_bounded_fixed_list_ref versioned_hashes
-                                                  WORD_BYTE_LENGTH MAX_BLOB_COMMITMENTS_PER_BLOCK)
-                                              (pure { protocol := protocol,
-                                                      new_payload_request := ⟨_, ⟨_, new_payload_request⟩⟩,
-                                                      execution_payload := ⟨_, ⟨_, execution_payload⟩⟩,
-                                                      versioned_hashes := versioned_hashes,
-                                                      deposits := deposits,
-                                                      withdrawal_requests := withdrawal_requests,
-                                                      consolidation_requests := consolidation_requests,
-                                                      builder_deposit_requests := builder_deposit_requests,
-                                                      builder_exit_requests := ⟨_, ⟨_, builder_exit_requests⟩⟩,
-                                                      extra_data := extra_data,
-                                                      transactions := transactions,
-                                                      withdrawals := withdrawals,
-                                                      block_access_list := ⟨_, ⟨_, block_access_list⟩⟩,
-                                                      witness_state := witness_state,
-                                                      witness_codes := witness_codes,
-                                                      witness_headers := witness_headers,
-                                                      chain_config := chain_config,
-                                                      public_keys := ⟨_, ⟨_, public_keys⟩⟩ }))))))))))))
+  let ⟨_, ⟨_, input_fields⟩⟩ ← (( do
+    if _sailIf0 : ((fixed_length ≤b input.len) : Bool) = true
+    then
+      (pure ((⟨_, ⟨_, input⟩⟩ : (Sigma fun (input_dependentWitness0 : Nat) =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))) : (Sigma fun
+        (input_dependentWitness0 : Nat) =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))))
+    else
+      (do
+        (fatal_error InvalidConfig)) ) : SailM
+    (Sigma fun (input_dependentWitness0 : Nat) =>
+    (Sigma fun (input_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1))) )
+  let schema_version ← do (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 1)
+  if ((schema_version != 0x01#8) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let schema_fork ← do (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 0)
+  let schema_matches := (schema_protocol_profile_forwards_matches schema_fork)
+  let schema_mismatch := (! schema_matches)
+  if (schema_mismatch : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
+    fun (k_fork : Nat) =>
+    (Sigma fun (k_target : Nat) =>
+    (Sigma fun (k_maximum : Nat) =>
+    (Sigma fun (k_denominator : Nat) =>
+    (Sigma fun (k_code_limit : Nat) =>
+    (Sigma fun (k_initcode_limit : Nat) =>
+    (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_blob_limit : Nat) =>
+    (Sigma fun (k_refund_divisor : Nat) =>
+    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))))))))))) :=
+    ((schema_protocol_profile schema_fork) : (Sigma fun (k_fork : Nat) =>
+    (Sigma fun (k_target : Nat) =>
+    (Sigma fun (k_maximum : Nat) =>
+    (Sigma fun (k_denominator : Nat) =>
+    (Sigma fun (k_code_limit : Nat) =>
+    (Sigma fun (k_initcode_limit : Nat) =>
+    (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_blob_limit : Nat) =>
+    (Sigma fun (k_refund_divisor : Nat) =>
+    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))))))))))))
+  let body_bytes := (stateless_input_slice_suffix input_fields body_offset_value)
+  let ⟨_, ⟨_, body⟩⟩ ← do
+    (ssz_container_bytes ⟨_, ⟨_, body_bytes⟩⟩ STATELESS_INPUT_BODY_FIXED_LENGTH)
+  let container_start : Nat := 0
+  let new_payload_request_position := (ssz_field_offset container_start IN_NPR_OFF)
+  let new_payload_request_offset ← do
+    (ssz_u32 ⟨_, ⟨_, body⟩⟩ new_payload_request_position)
+  let witness_position := (ssz_field_offset container_start IN_WITNESS_OFF)
+  let witness_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ witness_position)
+  let chain_config_position := (ssz_field_offset container_start IN_CHAIN_CONFIG_OFF)
+  let chain_config_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ chain_config_position)
+  let public_keys_position := (ssz_field_offset container_start IN_PUBLIC_KEYS_OFF)
+  let public_keys_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ public_keys_position)
+  let body_fixed_length := STATELESS_INPUT_BODY_FIXED_LENGTH
+  if ((new_payload_request_offset != body_fixed_length) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let body_cursor := (ssz_container_cursor ⟨_, ⟨_, body⟩⟩ STATELESS_INPUT_BODY_FIXED_LENGTH)
+  let (new_payload_request_bytes, body_after_payload_request) ← do
+    (ssz_take body_cursor witness_offset)
+  let ⟨_, ⟨_, new_payload_request⟩⟩ ← do
+    (ssz_container_bytes new_payload_request_bytes NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
+  let (execution_witness_bytes, body_after_witness) ← do
+    (ssz_take body_after_payload_request chain_config_offset)
+  let ⟨_, ⟨_, execution_witness⟩⟩ ← do
+    (ssz_container_bytes execution_witness_bytes EXECUTION_WITNESS_FIXED_LENGTH)
+  let (chain_config, body_after_chain_config) ← do
+    (ssz_take body_after_witness public_keys_offset)
+  let ⟨_, ⟨_, public_keys⟩⟩ ← do (ssz_finish body_after_chain_config)
+  let npr_start : Nat := 0
+  let payload_position := (ssz_field_offset npr_start NPR_PAYLOAD_OFF)
+  let payload_offset ← do (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩ payload_position)
+  let versioned_hashes_position := (ssz_field_offset npr_start NPR_VHASHES_OFF)
+  let versioned_hashes_offset ← do
+    (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩ versioned_hashes_position)
+  let requests_position := (ssz_field_offset npr_start NPR_REQUESTS_OFF)
+  let requests_offset ← do (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩ requests_position)
+  let npr_fixed_length := NEW_PAYLOAD_REQUEST_FIXED_LENGTH
+  if ((payload_offset != npr_fixed_length) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let npr_cursor :=
+    (ssz_container_cursor ⟨_, ⟨_, new_payload_request⟩⟩ NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
+  let (execution_payload_bytes, npr_after_payload) ← do
+    (ssz_take npr_cursor versioned_hashes_offset)
+  let (versioned_hashes, npr_after_versioned_hashes) ← do
+    (ssz_take npr_after_payload requests_offset)
+  let ⟨_, ⟨_, execution_requests_bytes⟩⟩ ← do (ssz_finish npr_after_versioned_hashes)
+  let ⟨_, ⟨_, execution_requests⟩⟩ ← do
+    (ssz_container_bytes ⟨_, ⟨_, execution_requests_bytes⟩⟩ EXECUTION_REQUESTS_FIXED_LENGTH)
+  let ⟨_, ⟨_, execution_payload⟩⟩ ← do
+    (ssz_container_bytes execution_payload_bytes EXECUTION_PAYLOAD_FIXED_LENGTH)
+  let payload_start : Nat := 0
+  let extra_data_position := (ssz_field_offset payload_start PL_EXTRA_OFF)
+  let extra_data_offset ← do (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩ extra_data_position)
+  let transactions_position := (ssz_field_offset payload_start PL_TXS_OFF)
+  let transactions_offset ← do (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩ transactions_position)
+  let withdrawals_position := (ssz_field_offset payload_start PL_WDS_OFF)
+  let withdrawals_offset ← do (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩ withdrawals_position)
+  let block_access_list_position := (ssz_field_offset payload_start PL_BAL_OFF)
+  let block_access_list_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_payload⟩⟩ block_access_list_position)
+  let payload_fixed_length := EXECUTION_PAYLOAD_FIXED_LENGTH
+  if ((extra_data_offset != payload_fixed_length) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let payload_cursor :=
+    (ssz_container_cursor ⟨_, ⟨_, execution_payload⟩⟩ EXECUTION_PAYLOAD_FIXED_LENGTH)
+  let (extra_data_bytes, payload_after_extra_data) ← do
+    (ssz_take payload_cursor transactions_offset)
+  let (transaction_bytes, payload_after_transactions) ← do
+    (ssz_take payload_after_extra_data withdrawals_offset)
+  let transactions ← do
+    (ssz_bounded_variable_list_ref transaction_bytes MAX_TRANSACTIONS_PER_PAYLOAD
+      MAX_TRANSACTION_LENGTH)
+  let (withdrawal_bytes, payload_after_withdrawals) ← do
+    (ssz_take payload_after_transactions block_access_list_offset)
+  let withdrawals ← do
+    (ssz_bounded_fixed_list_ref withdrawal_bytes WD_SIZE MAX_WITHDRAWALS_PER_PAYLOAD)
+  let ⟨_, ⟨_, block_access_list_bytes⟩⟩ ← do (ssz_finish payload_after_withdrawals)
+  let ⟨_, ⟨_, extra_data⟩⟩ ← (( do
+    if _sailIf0 : ((((extra_data_bytes).2).2.len ≤b MAX_EXTRA_DATA_LENGTH) : Bool) = true
+    then
+      (pure ((⟨_, ⟨_, ((extra_data_bytes).2).2⟩⟩ : (Sigma fun
+        (input_dependentWitness0 : Nat) =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))) : (Sigma fun
+        (input_dependentWitness0 : Nat) =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))))
+    else
+      (do
+        (fatal_error InvalidConfig)) ) : SailM
+    (Sigma fun (input_dependentWitness0 : Nat) =>
+    (Sigma fun (input_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1))) )
+  let ⟨_, ⟨_, block_access_list⟩⟩ ← (( do
+    if _sailIf0 : ((block_access_list_bytes.len ≤b MAX_BLOCK_ACCESS_LIST_LENGTH) : Bool) = true
+    then
+      (pure ((⟨_, ⟨_, block_access_list_bytes⟩⟩ : (Sigma fun (input_dependentWitness0 : Nat)
+        =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))) : (Sigma fun
+        (input_dependentWitness0 : Nat) =>
+        (Sigma fun (input_dependentWitness1 : Nat) =>
+        (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1)))))
+    else
+      (do
+        (fatal_error InvalidConfig)) ) : SailM
+    (Sigma fun (input_dependentWitness0 : Nat) =>
+    (Sigma fun (input_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1))) )
+  let requests_start : Nat := 0
+  let deposits_position := (ssz_field_offset requests_start REQ_DEPOSITS_OFF)
+  let deposits_offset ← do (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩ deposits_position)
+  let withdrawal_requests_position := (ssz_field_offset requests_start REQ_WITHDRAWALS_OFF)
+  let withdrawal_requests_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩ withdrawal_requests_position)
+  let consolidation_requests_position := (ssz_field_offset requests_start REQ_CONSOLIDATIONS_OFF)
+  let consolidation_requests_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩ consolidation_requests_position)
+  let builder_deposit_requests_position :=
+    (ssz_field_offset requests_start REQ_BUILDER_DEPOSITS_OFF)
+  let builder_deposit_requests_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩ builder_deposit_requests_position)
+  let builder_exit_requests_position := (ssz_field_offset requests_start REQ_BUILDER_EXITS_OFF)
+  let builder_exit_requests_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_requests⟩⟩ builder_exit_requests_position)
+  let requests_fixed_length := EXECUTION_REQUESTS_FIXED_LENGTH
+  if ((deposits_offset != requests_fixed_length) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let requests_cursor :=
+    (ssz_container_cursor ⟨_, ⟨_, execution_requests⟩⟩ EXECUTION_REQUESTS_FIXED_LENGTH)
+  let (deposits, requests_after_deposits) ← do
+    (ssz_take requests_cursor withdrawal_requests_offset)
+  let (withdrawal_requests, requests_after_withdrawals) ← do
+    (ssz_take requests_after_deposits consolidation_requests_offset)
+  let (consolidation_requests, requests_after_consolidations) ← do
+    (ssz_take requests_after_withdrawals builder_deposit_requests_offset)
+  let (builder_deposit_requests, requests_after_builder_deposits) ← do
+    (ssz_take requests_after_consolidations builder_exit_requests_offset)
+  let ⟨_, ⟨_, builder_exit_requests⟩⟩ ← do (ssz_finish requests_after_builder_deposits)
+  let witness_start : Nat := 0
+  let witness_state_position := (ssz_field_offset witness_start WIT_STATE_OFF)
+  let witness_state_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩ witness_state_position)
+  let witness_codes_position := (ssz_field_offset witness_start WIT_CODES_OFF)
+  let witness_codes_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩ witness_codes_position)
+  let witness_headers_position := (ssz_field_offset witness_start WIT_HEADERS_OFF)
+  let witness_headers_offset ← do
+    (ssz_u32 ⟨_, ⟨_, execution_witness⟩⟩ witness_headers_position)
+  let witness_fixed_length := EXECUTION_WITNESS_FIXED_LENGTH
+  if ((witness_state_offset != witness_fixed_length) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let witness_cursor :=
+    (ssz_container_cursor ⟨_, ⟨_, execution_witness⟩⟩ EXECUTION_WITNESS_FIXED_LENGTH)
+  let (witness_state_bytes, witness_after_state) ← do
+    (ssz_take witness_cursor witness_codes_offset)
+  let witness_state ← do
+    (ssz_bounded_variable_list_ref witness_state_bytes MAX_WITNESS_NODES MAX_WITNESS_NODE_LENGTH)
+  let (witness_code_bytes, witness_after_codes) ← do
+    (ssz_take witness_after_state witness_headers_offset)
+  let witness_codes ← do
+    (ssz_bounded_variable_list_ref witness_code_bytes MAX_WITNESS_CODES MAX_WITNESS_CODE_LENGTH)
+  let ⟨_, ⟨_, witness_header_bytes⟩⟩ ← do (ssz_finish witness_after_codes)
+  let witness_headers ← do
+    (ssz_bounded_variable_list_ref ⟨_, ⟨_, witness_header_bytes⟩⟩ MAX_WITNESS_HEADERS
+      MAX_WITNESS_HEADER_LENGTH)
+  let public_key_bytes := public_keys.len
+  let public_key_length := PUBLIC_KEY_LENGTH
+  let public_key_count := (public_key_bytes / public_key_length)
+  if ((public_key_bytes != (public_key_count *i public_key_length)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if ((MAX_PUBLIC_KEYS <b public_key_count) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let _ ← do
+    (ssz_bounded_fixed_list_ref versioned_hashes WORD_BYTE_LENGTH MAX_BLOB_COMMITMENTS_PER_BLOCK)
+  (pure { protocol := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩,
+          new_payload_request := ⟨_, ⟨_, new_payload_request⟩⟩,
+          execution_payload := ⟨_, ⟨_, execution_payload⟩⟩,
+          versioned_hashes := versioned_hashes,
+          deposits := deposits,
+          withdrawal_requests := withdrawal_requests,
+          consolidation_requests := consolidation_requests,
+          builder_deposit_requests := builder_deposit_requests,
+          builder_exit_requests := ⟨_, ⟨_, builder_exit_requests⟩⟩,
+          extra_data := ⟨_, ⟨_, extra_data⟩⟩,
+          transactions := transactions,
+          withdrawals := withdrawals,
+          block_access_list := ⟨_, ⟨_, block_access_list⟩⟩,
+          witness_state := witness_state,
+          witness_codes := witness_codes,
+          witness_headers := witness_headers,
+          chain_config := chain_config,
+          public_keys := ⟨_, ⟨_, public_keys⟩⟩ })
 
 /-- The EIP-7685 per-type request digest:
 `sha256(request_type ‖ request_data)`. -/
 /- Type quantifiers: s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0
-  ∧ 0 ≤ s_dependentWitness1 -/
+  ∧ 0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def sha256_request_digest (request_type : (BitVec 8)) (s : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
   let s_dependentWitness0 := (s).1
   let s_dependentWitness1 := ((s).2).1
   let s := ((s).2).2
-  (sha256_segments [(bytes_list [request_type] 1), (BytesSlice ⟨_, ⟨_, s⟩⟩)])
+  let digest_length ← do (scratch_length_add 1 s.len)
+  let mark ← do (scratch_reserve digest_length)
+  (scratch_push_byte request_type)
+  (stateless_input_scratch_push_slice ⟨_, ⟨_, s⟩⟩)
+  let ⟨_, ⟨_, preimage⟩⟩ ← do (scratch_finish mark)
+  let digest ← do (scratch_sha256 ⟨_, ⟨_, preimage⟩⟩)
+  (scratch_rewind mark)
+  (pure digest)
 
 /-- Hashes and indexes every remaining witness trie node from its source
 slice. -/
@@ -750,12 +785,14 @@ def _rec_index_witness_nodes_cursor (cursor : (BoundedSszListCursor (2 ^ 22))) (
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((ssz_list_cursor_empty cursor) : Bool)
+      let cursor_empty := (ssz_list_cursor_empty cursor)
+      if (cursor_empty : Bool)
       then (pure ())
       else
         (do
           let (node, next) ← do (ssz_list_pop cursor)
-          (nodedb_insert (← (keccak256_slice node)) ((node).2).2.off ((node).2).2.len)
+          let node_hash ← do (stateless_input_keccak256 node)
+          (nodedb_insert node_hash ((node).2).2.bytes ((node).2).2.len)
           (_rec_index_witness_nodes_cursor next _reclimit_pred)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
@@ -771,7 +808,8 @@ def index_witness_nodes_cursor (cursor : (BoundedSszListCursor (2 ^ 22))) : Sail
 /-- Indexes every witness trie node into the node-db, keyed by its
 KECCAK-256 digest, directly from the SSZ list reference. -/
 def index_witness_nodes (nodes : (BoundedSszListRef (2 ^ 22))) : SailM Unit := do
-  (index_witness_nodes_cursor (← (ssz_list_cursor nodes)))
+  let cursor ← do (ssz_list_cursor nodes)
+  (index_witness_nodes_cursor cursor)
 
 /-- Analyzes and indexes every remaining witness code body from its source
 slice. -/
@@ -784,19 +822,22 @@ def _rec_index_witness_codes_cursor (cursor : (BoundedSszListCursor (2 ^ 18))) (
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((ssz_list_cursor_empty cursor) : Bool)
+      let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+        readReg k_execution_profile
+      let profile := execution_profile.protocol
+      let cursor_empty := (ssz_list_cursor_empty cursor)
+      if (cursor_empty : Bool)
       then (pure ())
       else
         (do
           let (code, next) ← do (ssz_list_pop cursor)
           let code_length := ((code).2).2.len
           if ((MAX_WITNESS_CODE_LENGTH <b code_length) : Bool)
-          then sailThrow ((InvalidBlock InvalidConfig))
-          else
-            (do
-              let ⟨_, ⟨_, executable⟩⟩ := (code_slice ((code).2).2)
-              let _ ← do (code_db_insert ⟨_, ⟨_, executable⟩⟩ (← readReg k_fork))
-              (_rec_index_witness_codes_cursor next _reclimit_pred))))
+          then (fatal_error InvalidConfig)
+          else (pure ())
+          let ⟨_, ⟨_, executable⟩⟩ ← do (code_db_intern_input code)
+          let _ ← do (code_db_insert ⟨_, ⟨_, executable⟩⟩ profile.fork)
+          (_rec_index_witness_codes_cursor next _reclimit_pred)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
@@ -811,19 +852,8 @@ def index_witness_codes_cursor (cursor : (BoundedSszListCursor (2 ^ 18))) : Sail
 /-- Indexes every witness code blob into the content-addressed code
 store. -/
 def index_witness_codes (codes : (BoundedSszListRef (2 ^ 18))) : SailM Unit := do
-  (index_witness_codes_cursor (← (ssz_list_cursor codes)))
-
-def undefined_ParentHeaderFields (_ : Unit) : SailM ParentHeaderFields := do
-  (pure { parent_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))),
-          state_root := ← (undefined_vector 32 (← (undefined_bitvector 8))),
-          base_fee := ← (undefined_range 0 ((2 ^i 256) - 1)),
-          blob_gas_used := ← (undefined_range 0 (21 *i (2 ^i 17))),
-          excess_blob_gas := ← (undefined_range 0 ((2 ^i 64) - 1)),
-          have_parent := ← (undefined_bool ()),
-          have_state := ← (undefined_bool ()),
-          have_base_fee := ← (undefined_bool ()),
-          have_blob_gas := ← (undefined_bool ()),
-          have_excess_blob_gas := ← (undefined_bool ()) })
+  let cursor ← do (ssz_list_cursor codes)
+  (index_witness_codes_cursor cursor)
 
 def EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields :=
   { parent_hash := ZERO_HASH,
@@ -846,9 +876,9 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex416184_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex416184_ ∧ k_ex416184_ ≤ 19, 0 ≤ _reclimit -/
-def _rec_decode_parent_header_fields (cursor : (EvmByteSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
+/- Type quantifiers: _reclimit : Nat, k_ex553999_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex553999_ ∧ k_ex553999_ ≤ 19, 0 ≤ _reclimit -/
+def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
     (do
@@ -860,25 +890,25 @@ def _rec_decode_parent_header_fields (cursor : (EvmByteSliceFields k_source_off 
       then (pure fields)
       else
         (do
-          let ⟨field_content_len, ⟨field_full_len, (field, next)⟩⟩ ← do
-            (rlp_cursor_pop cursor)
+          let ⟨_, ⟨_, field⟩⟩ ← do (rlp_decode_item cursor)
+          let next := (rlp_cursor_advance cursor field.source.len)
           let decoded := fields
           let decoded ← (( do
             if ((field_index == 0) : Bool)
             then
               (do
-                let decoded ←
-                  (pure { decoded with parent_hash := ← (pure (word_to_hash
-                          (← (rlp_ref_word field)))) })
+                let parent_hash_word ← do (rlp_decode_word field)
+                let decoded : ParentHeaderFields :=
+                  { decoded with parent_hash := (word_to_hash parent_hash_word) }
                 (pure { decoded with have_parent := true }))
             else
               (do
                 if ((field_index == 3) : Bool)
                 then
                   (do
-                    let decoded ←
-                      (pure { decoded with state_root := ← (pure (word_to_hash
-                              (← (rlp_ref_word field)))) })
+                    let state_root_word ← do (rlp_decode_word field)
+                    let decoded : ParentHeaderFields :=
+                      { decoded with state_root := (word_to_hash state_root_word) }
                     (pure { decoded with have_state := true }))
                 else
                   (do
@@ -886,38 +916,56 @@ def _rec_decode_parent_header_fields (cursor : (EvmByteSliceFields k_source_off 
                     then
                       (do
                         let decoded ←
-                          (pure { decoded with base_fee := ← (rlp_ref_uint_word field) })
+                          (pure { decoded with base_fee := ← (rlp_decode_u256 field) })
                         (pure { decoded with have_base_fee := true }))
                     else
                       (do
                         if ((field_index == 17) : Bool)
                         then
                           (do
-                            let value ← do (rlp_ref_uint64 field)
-                            if ((value ≤b (21 *i (2 ^i 17))) : Bool)
+                            let value ← do (rlp_decode_uint64 field)
+                            let count := (value / (2 ^i 17))
+                            let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+                              readReg k_execution_profile
+                            let profile := execution_profile.protocol
+                            if (((count ≤b profile.blob_schedule.max) && (value == ((2 ^i 17) *i count))) : Bool)
                             then
                               (let decoded : ParentHeaderFields :=
-                                { decoded with blob_gas_used := value }
+                                { decoded with blob_gas_used := ((2 ^i 17) *i count) }
                               (pure { decoded with have_blob_gas := true }))
-                            else sailThrow ((InvalidBlock RlpDecode)))
+                            else
+                              (do
+                                (fatal_error RlpDecode)
+                                (pure decoded)))
                         else
                           (do
                             if ((field_index == 18) : Bool)
                             then
                               (do
-                                let decoded ←
-                                  (pure { decoded with excess_blob_gas := ← (rlp_ref_uint64 field) })
-                                (pure { decoded with have_excess_blob_gas := true }))
+                                let value ← do (rlp_decode_uint64 field)
+                                let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+                                  readReg k_execution_profile
+                                let profile := execution_profile.protocol
+                                let limit := profile.excess_blob_gas_limit
+                                if ((value ≤b limit) : Bool)
+                                then
+                                  (let decoded : ParentHeaderFields :=
+                                    { decoded with excess_blob_gas := value }
+                                  (pure { decoded with have_excess_blob_gas := true }))
+                                else
+                                  (do
+                                    (fatal_error RlpDecode)
+                                    (pure decoded)))
                             else (pure decoded))))) ) : SailM ParentHeaderFields )
-          (_rec_decode_parent_header_fields next (next_parent_header_field field_index) decoded
-            _reclimit_pred)))
+          let next_field := (next_parent_header_field field_index)
+          (_rec_decode_parent_header_fields next next_field decoded _reclimit_pred)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
 /- Type quantifiers: field_index : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
   ≤ field_index ∧ field_index ≤ 19 -/
-def decode_parent_header_fields (cursor : (EvmByteSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) : SailM ParentHeaderFields := do
+def decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) : SailM ParentHeaderFields := do
   let _measure := (k_source_len : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
@@ -933,7 +981,11 @@ def _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : N
       throw Error.Exit)
   | _reclimit_pred + 1 =>
     (do
-      if ((ssz_list_cursor_empty state.cursor) : Bool)
+      let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+        readReg k_execution_profile
+      let profile := execution_profile.protocol
+      let cursor_empty := (ssz_list_cursor_empty state.cursor)
+      if (cursor_empty : Bool)
       then (pure state)
       else
         (do
@@ -948,41 +1000,33 @@ def _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : N
               (do
                 let ⟨_, ⟨_, fields⟩⟩ ← do (rlp_node_cursor header)
                 let decoded ← do (decode_parent_header_fields fields 0 EMPTY_PARENT_HEADER_FIELDS)
+                let parent_missing := (! decoded.have_parent)
                 let result : WitnessHeaderIndex :=
-                  if (((index != 0) && ((! decoded.have_parent) || (bne decoded.parent_hash
+                  if (((index != 0) && (parent_missing || (bne decoded.parent_hash
                            state.previous_hash))) : Bool)
                   then { result with valid := false }
                   else result
                 if (is_last : Bool)
                 then
-                  (do
-                    let result : WitnessHeaderIndex :=
-                      { result with parent_state_root := decoded.state_root }
-                    let result : WitnessHeaderIndex :=
-                      { result with parent_base_fee_per_gas := decoded.base_fee }
-                    let result : WitnessHeaderIndex :=
-                      { result with parent_blob_gas_used := decoded.blob_gas_used }
-                    let result : WitnessHeaderIndex :=
-                      { result with parent_excess_blob_gas := decoded.excess_blob_gas }
-                    (pure { result with parent_fields_valid := ← if (decoded.have_state : Bool)
-                        then
-                          (do
-                            if (((fork_lt (← readReg k_fork) Cancun) || decoded.have_base_fee) : Bool)
-                            then
-                              (do
-                                (pure ((fork_lt (← readReg k_fork) Cancun) || (decoded.have_blob_gas == decoded.have_excess_blob_gas))))
-                            else (pure false))
-                        else (pure false) }))
+                  (let result : WitnessHeaderIndex :=
+                    { result with parent_state_root := decoded.state_root }
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_base_fee_per_gas := decoded.base_fee }
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_blob_gas_used := decoded.blob_gas_used }
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_excess_blob_gas := decoded.excess_blob_gas }
+                  (pure { result with parent_fields_valid := (decoded.have_state && (((profile.fork <b Cancun) || decoded.have_base_fee) && ((profile.fork <b Cancun) || (decoded.have_blob_gas == decoded.have_excess_blob_gas)))) }))
                 else (pure result))
             else (pure result) ) : SailM WitnessHeaderIndex )
-          let current_hash ← do (keccak256_slice header)
+          let current_hash ← do (stateless_input_keccak256 header)
           let result : WitnessHeaderIndex := { result with previous_hash := current_hash }
           let header_count := state.cursor.items.count
           let next_index := next.index
           let distance ← (( do
             if ((next_index ≤b header_count) : Bool)
             then (pure (header_count - next_index))
-            else sailThrow ((InvalidBlock WitnessDeficient)) ) : SailM Nat )
+            else (fatal_error WitnessDeficient) ) : SailM Nat )
           if ((distance <b 256) : Bool)
           then
             (do
@@ -1006,43 +1050,279 @@ parent hashes are checked (a break is `HeaderChainBroken`), and the
 newest header's execution context — parent state root, base fee, blob
 gas — is decoded while its fields are consumed head-to-tail. -/
 def index_witness_headers (headers : (BoundedSszListRef (2 ^ 8))) : SailM WitnessContext := do
-  let indexed ← do
-    (index_witness_header_cursor
-      { cursor := ← (ssz_list_cursor headers),
-        previous_hash := ZERO_HASH,
-        valid := (headers.count != 0),
-        parent_state_root := ZERO_HASH,
-        parent_base_fee_per_gas := ZERO_WORD,
-        parent_blob_gas_used := 0,
-        parent_excess_blob_gas := 0,
-        parent_fields_valid := false })
+  let cursor ← do (ssz_list_cursor headers)
+  let initial : WitnessHeaderIndex :=
+    { cursor := cursor,
+      previous_hash := ZERO_HASH,
+      valid := (headers.count != 0),
+      parent_state_root := ZERO_HASH,
+      parent_base_fee_per_gas := ZERO_WORD,
+      parent_blob_gas_used := 0,
+      parent_excess_blob_gas := 0,
+      parent_fields_valid := false }
+  let indexed ← do (index_witness_header_cursor initial)
   writeReg k_n_headers headers.count
-  if ((! indexed.valid) : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else
-    (do
-      if ((! indexed.parent_fields_valid) : Bool)
-      then sailThrow ((InvalidBlock RlpDecode))
-      else
-        (pure { parent_hash := indexed.previous_hash,
-                parent_state_root := indexed.parent_state_root,
-                parent_base_fee_per_gas := indexed.parent_base_fee_per_gas,
-                parent_blob_gas_used := indexed.parent_blob_gas_used,
-                parent_excess_blob_gas := indexed.parent_excess_blob_gas }))
+  let invalid := (! indexed.valid)
+  if (invalid : Bool)
+  then (fatal_error WitnessDeficient)
+  else (pure ())
+  let parent_fields_invalid := (! indexed.parent_fields_valid)
+  if (parent_fields_invalid : Bool)
+  then (fatal_error RlpDecode)
+  else (pure ())
+  (pure { parent_hash := indexed.previous_hash,
+          parent_state_root := indexed.parent_state_root,
+          parent_base_fee_per_gas := indexed.parent_base_fee_per_gas,
+          parent_blob_gas_used := indexed.parent_blob_gas_used,
+          parent_excess_blob_gas := indexed.parent_excess_blob_gas })
 
 /-- Decodes the execution-payload header fields from their fixed SSZ
 offsets. -/
-/- Type quantifiers: payload_dependentWitness1 : Nat, payload_dependentWitness0 : Nat, 0 ≤
-  payload_dependentWitness0 ∧ 0 ≤ payload_dependentWitness1 -/
+/- Type quantifiers: profile_dependentWitness9 : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7
+  : Nat, profile_dependentWitness6 : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4
+  : Nat, profile_dependentWitness3 : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1
+  : Nat, profile_dependentWitness0 : Nat, payload_dependentWitness1 : Nat, payload_dependentWitness0
+  : Nat, 0 ≤ payload_dependentWitness0 ∧
+  0 ≤ payload_dependentWitness1 ∧
+  (payload_dependentWitness0 + payload_dependentWitness1) ≤ (2 ^ 32 - 1), profile_dependentWitness0
+  = 5 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 0 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 2 ∨
+  6 ≤ profile_dependentWitness0 ∧ profile_dependentWitness0 ≤ 9 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 0 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 10 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 11 ∧
+  profile_dependentWitness1 = 3 ∧
+  profile_dependentWitness2 = 6 ∧
+  profile_dependentWitness3 = 3338477 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 12 ∧
+  profile_dependentWitness1 = 6 ∧
+  profile_dependentWitness2 = 9 ∧
+  profile_dependentWitness3 = 5007716 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 9 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 13 ∧
+  profile_dependentWitness1 = 6 ∧
+  profile_dependentWitness2 = 9 ∧
+  profile_dependentWitness3 = 5007716 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 14 ∧
+  profile_dependentWitness1 = 10 ∧
+  profile_dependentWitness2 = 15 ∧
+  profile_dependentWitness3 = 8346193 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 15 ∧
+  profile_dependentWitness1 = 14 ∧
+  profile_dependentWitness2 = 21 ∧
+  profile_dependentWitness3 = 11684671 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 16 ∧
+  profile_dependentWitness1 = 14 ∧
+  profile_dependentWitness2 = 21 ∧
+  profile_dependentWitness3 = 11684671 ∧
+  profile_dependentWitness4 = 65536 ∧
+  profile_dependentWitness5 = 131072 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 -/
 def decode_payload_blob_gas_used (payload : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Nat := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (profile : (Sigma fun
+  (k_fork : Nat) =>
+  (Sigma fun (k_target : Nat) =>
+  (Sigma fun (k_maximum : Nat) =>
+  (Sigma fun (k_denominator : Nat) =>
+  (Sigma fun (k_code_limit : Nat) =>
+  (Sigma fun (k_initcode_limit : Nat) =>
+  (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_blob_limit : Nat) =>
+  (Sigma fun (k_refund_divisor : Nat) =>
+  (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))) : SailM Nat := do
   let payload_dependentWitness0 := (payload).1
   let payload_dependentWitness1 := ((payload).2).1
   let payload := ((payload).2).2
+  let profile_dependentWitness0 := (profile).1
+  let profile_dependentWitness1 := ((profile).2).1
+  let profile_dependentWitness2 := (((profile).2).2).1
+  let profile_dependentWitness3 := ((((profile).2).2).2).1
+  let profile_dependentWitness4 := (((((profile).2).2).2).2).1
+  let profile_dependentWitness5 := ((((((profile).2).2).2).2).2).1
+  let profile_dependentWitness6 := (((((((profile).2).2).2).2).2).2).1
+  let profile_dependentWitness7 := ((((((((profile).2).2).2).2).2).2).2).1
+  let profile_dependentWitness8 := (((((((((profile).2).2).2).2).2).2).2).2).1
+  let profile_dependentWitness9 := ((((((((((profile).2).2).2).2).2).2).2).2).2).1
+  let profile := ((((((((((profile).2).2).2).2).2).2).2).2).2).2
   let value ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOB_GAS_USED)
-  if ((value ≤b (21 *i (2 ^i 17))) : Bool)
+  let count := (value / (2 ^i 17))
+  if (((count ≤b profile.blob_schedule.max) && (value == ((2 ^i 17) *i count))) : Bool)
+  then (pure ((2 ^i 17) *i count))
+  else (fatal_error InvalidBlobGasUsed)
+
+/-- Narrows the SSZ `uint64` excess field to the supported-fork
+reachable-chain invariant. The wider wire value remains explicit in
+`excess_blob_gas_wire_bound`; this check relies on an authenticated,
+previously valid parent chain, not on SSZ alone. -/
+/- Type quantifiers: profile_dependentWitness9 : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7
+  : Nat, profile_dependentWitness6 : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4
+  : Nat, profile_dependentWitness3 : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1
+  : Nat, profile_dependentWitness0 : Nat, payload_dependentWitness1 : Nat, payload_dependentWitness0
+  : Nat, 0 ≤ payload_dependentWitness0 ∧
+  0 ≤ payload_dependentWitness1 ∧
+  (payload_dependentWitness0 + payload_dependentWitness1) ≤ (2 ^ 32 - 1), profile_dependentWitness0
+  = 5 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 0 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 2 ∨
+  6 ≤ profile_dependentWitness0 ∧ profile_dependentWitness0 ≤ 9 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 0 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 10 ∧
+  profile_dependentWitness1 = 0 ∧
+  profile_dependentWitness2 = 0 ∧
+  profile_dependentWitness3 = 1 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 0 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 11 ∧
+  profile_dependentWitness1 = 3 ∧
+  profile_dependentWitness2 = 6 ∧
+  profile_dependentWitness3 = 3338477 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 12 ∧
+  profile_dependentWitness1 = 6 ∧
+  profile_dependentWitness2 = 9 ∧
+  profile_dependentWitness3 = 5007716 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness8 = 9 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 13 ∧
+  profile_dependentWitness1 = 6 ∧
+  profile_dependentWitness2 = 9 ∧
+  profile_dependentWitness3 = 5007716 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 14 ∧
+  profile_dependentWitness1 = 10 ∧
+  profile_dependentWitness2 = 15 ∧
+  profile_dependentWitness3 = 8346193 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 15 ∧
+  profile_dependentWitness1 = 14 ∧
+  profile_dependentWitness2 = 21 ∧
+  profile_dependentWitness3 = 11684671 ∧
+  profile_dependentWitness4 = 24576 ∧
+  profile_dependentWitness5 = 49152 ∧
+  profile_dependentWitness6 = (2 ^ 24) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 ∨
+  profile_dependentWitness0 = 16 ∧
+  profile_dependentWitness1 = 14 ∧
+  profile_dependentWitness2 = 21 ∧
+  profile_dependentWitness3 = 11684671 ∧
+  profile_dependentWitness4 = 65536 ∧
+  profile_dependentWitness5 = 131072 ∧
+  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness7 = (2 ^ 24) ∧
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 -/
+def decode_payload_excess_blob_gas (payload : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (profile : (Sigma fun
+  (k_fork : Nat) =>
+  (Sigma fun (k_target : Nat) =>
+  (Sigma fun (k_maximum : Nat) =>
+  (Sigma fun (k_denominator : Nat) =>
+  (Sigma fun (k_code_limit : Nat) =>
+  (Sigma fun (k_initcode_limit : Nat) =>
+  (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_blob_limit : Nat) =>
+  (Sigma fun (k_refund_divisor : Nat) =>
+  (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))) : SailM Nat := do
+  let payload_dependentWitness0 := (payload).1
+  let payload_dependentWitness1 := ((payload).2).1
+  let payload := ((payload).2).2
+  let profile_dependentWitness0 := (profile).1
+  let profile_dependentWitness1 := ((profile).2).1
+  let profile_dependentWitness2 := (((profile).2).2).1
+  let profile_dependentWitness3 := ((((profile).2).2).2).1
+  let profile_dependentWitness4 := (((((profile).2).2).2).2).1
+  let profile_dependentWitness5 := ((((((profile).2).2).2).2).2).1
+  let profile_dependentWitness6 := (((((((profile).2).2).2).2).2).2).1
+  let profile_dependentWitness7 := ((((((((profile).2).2).2).2).2).2).2).1
+  let profile_dependentWitness8 := (((((((((profile).2).2).2).2).2).2).2).2).1
+  let profile_dependentWitness9 := ((((((((((profile).2).2).2).2).2).2).2).2).2).1
+  let profile := ((((((((((profile).2).2).2).2).2).2).2).2).2).2
+  let value ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS)
+  let limit := profile.excess_blob_gas_limit
+  if ((value ≤b limit) : Bool)
   then (pure value)
-  else sailThrow ((InvalidBlock InvalidBlobGasUsed))
+  else (fatal_error InvalidExcessBlobGas)
 
 /-- Decodes the execution-payload header fields from their fixed SSZ
 offsets. -/
@@ -1050,18 +1330,21 @@ def decode_block_header_ssz (input_ref : StatelessInputRef) : SailM BlockHeader 
   let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
   let gas_limit_value ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_LIMIT)
   let gas_used_value ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED)
+  let prev_randao_hash ← do (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO)
+  let prev_randao := (hash_to_word prev_randao_hash)
   (pure { number := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER),
           timestamp := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP),
           gas_limit := gas_limit_value,
           gas_used := gas_used_value,
-          prev_randao := ← (pure (hash_to_word
-                (← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO)))),
+          prev_randao := prev_randao,
           base_fee := ← (ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE),
-          blob_gas_used := ← (decode_payload_blob_gas_used ⟨_, ⟨_, payload⟩⟩),
-          excess_blob_gas := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS),
+          blob_gas_used := ← (decode_payload_blob_gas_used ⟨_, ⟨_, payload⟩⟩
+              input_ref.protocol),
+          excess_blob_gas := ← (decode_payload_excess_blob_gas ⟨_, ⟨_, payload⟩⟩
+              input_ref.protocol),
           state_root := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_STATE_ROOT),
           receipts_root := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT),
-          logs_bloom := ← (ssz_logs_bloom ⟨_, ⟨_, payload⟩⟩ PL_LOGS_BLOOM),
+          logs_bloom := ⟨_, ⟨_, (stateless_input_sub_slice payload PL_LOGS_BLOOM 256)⟩⟩,
           fee_recipient := ← (ssz_addr ⟨_, ⟨_, payload⟩⟩ PL_FEE_RECIPIENT),
           parent_hash := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ 0),
           parent_beacon_block_root := ← (ssz_bytes32 input_ref.new_payload_request NPR_BEACON_ROOT),
@@ -1070,9 +1353,11 @@ def decode_block_header_ssz (input_ref : StatelessInputRef) : SailM BlockHeader 
 
 /-- Decodes one fixed-layout SSZ withdrawal element. -/
 /- Type quantifiers: withdrawal_dependentWitness1 : Nat, withdrawal_dependentWitness0 : Nat, 0 ≤
-  withdrawal_dependentWitness0 ∧ 0 ≤ withdrawal_dependentWitness1 -/
+  withdrawal_dependentWitness0 ∧
+  0 ≤ withdrawal_dependentWitness1 ∧
+  (withdrawal_dependentWitness0 + withdrawal_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def decode_withdrawal (withdrawal : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : SailM Withdrawal := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM Withdrawal := do
   let withdrawal_dependentWitness0 := (withdrawal).1
   let withdrawal_dependentWitness1 := ((withdrawal).2).1
   let withdrawal := ((withdrawal).2).2
@@ -1086,11 +1371,13 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex416226_ : Nat, k_ex416225_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
-  : Nat, 0 ≤ cc_dependentWitness0 ∧ 0 ≤ cc_dependentWitness1, 0 ≤ k_ex416225_, 0 ≤
-  k_ex416226_ -/
+/- Type quantifiers: k_ex554107_ : Nat, k_ex554106_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
+  : Nat, 0 ≤ cc_dependentWitness0 ∧
+  0 ≤ cc_dependentWitness1 ∧ (cc_dependentWitness0 + cc_dependentWitness1) ≤ (2 ^ 32 - 1), 0
+  ≤ k_ex554106_ ∧ k_ex554106_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex554107_ ∧
+  k_ex554107_ ≤ (2 ^ 64 - 1) -/
 def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
   let cc_dependentWitness0 := (cc).1
   let cc_dependentWitness1 := ((cc).2).1
   let cc := ((cc).2).2
@@ -1098,74 +1385,69 @@ def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
   let header_length := CHAIN_CONFIG_HEADER_LENGTH
   let minimum_length := CHAIN_CONFIG_MIN_LENGTH
   if ((cc_length <b header_length) : Bool)
-  then sailThrow ((InvalidBlock InvalidConfig))
-  else
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let f_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ CC_ACTIVE_FORK_OFF)
+  if (((f_offset != 12) || (cc_length <b minimum_length)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let f : Nat := 12
+  let activation_position := (ssz_field_offset f FC_ACTIVATION_OFF)
+  let activation_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ activation_position)
+  if ((activation_offset != 4) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let activation_start : Nat := 16
+  let activation_fixed_end : Nat := 24
+  let a : Nat := 16
+  let block_number_position := (ssz_field_offset a FA_BLOCK_NUMBER_OFF)
+  let block_number_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ block_number_position)
+  let timestamp_position := (ssz_field_offset a FA_TIMESTAMP_OFF)
+  let timestamp_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ timestamp_position)
+  let block_number_start ← (( do
+    if ((block_number_offset ≤b (cc_length -i activation_start)) : Bool)
+    then (pure (activation_start + block_number_offset))
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  let timestamp_start ← (( do
+    if ((timestamp_offset ≤b (cc_length -i activation_start)) : Bool)
+    then (pure (activation_start + timestamp_offset))
+    else (fatal_error InvalidConfig) ) : SailM Nat )
+  if ((activation_fixed_end != block_number_start) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if ((timestamp_start <b block_number_start) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if ((cc_length <b timestamp_start) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  let bn_length := (timestamp_start -i block_number_start)
+  let ts_length := (cc_length -i timestamp_start)
+  if ((((bn_length != 0) && (bn_length != SSZ_UINT_BYTES)) || ((ts_length != 0) && (ts_length != SSZ_UINT_BYTES))) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if (((bn_length == 0) && (ts_length == 0)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if ((bn_length == SSZ_UINT_BYTES) : Bool)
+  then
     (do
-      let f_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ CC_ACTIVE_FORK_OFF)
-      if (((f_offset != 12) || (cc_length <b minimum_length)) : Bool)
-      then sailThrow ((InvalidBlock InvalidConfig))
-      else
-        (do
-          let f : Nat := 12
-          let activation_offset ← do
-            (ssz_u32 ⟨_, ⟨_, cc⟩⟩ (ssz_field_offset f FC_ACTIVATION_OFF))
-          if ((activation_offset != 4) : Bool)
-          then sailThrow ((InvalidBlock InvalidConfig))
-          else
-            (do
-              let activation_start : Nat := 16
-              let activation_fixed_end : Nat := 24
-              let a : Nat := 16
-              let block_number_start ← do
-                (pure (activation_start + (← (ssz_u32 ⟨_, ⟨_, cc⟩⟩
-                        (ssz_field_offset a FA_BLOCK_NUMBER_OFF)))))
-              let timestamp_start ← do
-                (pure (activation_start + (← (ssz_u32 ⟨_, ⟨_, cc⟩⟩
-                        (ssz_field_offset a FA_TIMESTAMP_OFF)))))
-              if ((activation_fixed_end != block_number_start) : Bool)
-              then sailThrow ((InvalidBlock InvalidConfig))
-              else
-                (do
-                  if ((timestamp_start <b block_number_start) : Bool)
-                  then sailThrow ((InvalidBlock InvalidConfig))
-                  else
-                    (do
-                      if ((cc_length <b timestamp_start) : Bool)
-                      then sailThrow ((InvalidBlock InvalidConfig))
-                      else
-                        (do
-                          let bn_length := (timestamp_start - block_number_start)
-                          let ts_length := (cc_length - timestamp_start)
-                          if ((((bn_length != 0) && (bn_length != SSZ_UINT_BYTES)) || ((ts_length != 0) && (ts_length != SSZ_UINT_BYTES))) : Bool)
-                          then sailThrow ((InvalidBlock InvalidConfig))
-                          else
-                            (do
-                              if (((bn_length == 0) && (ts_length == 0)) : Bool)
-                              then sailThrow ((InvalidBlock InvalidConfig))
-                              else
-                                (do
-                                  if ((bn_length == SSZ_UINT_BYTES) : Bool)
-                                  then
-                                    (do
-                                      let activation_block ← (( do
-                                        (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ block_number_start) )
-                                        : SailM Nat )
-                                      if ((number <b activation_block) : Bool)
-                                      then sailThrow ((InvalidBlock InvalidConfig))
-                                      else (pure ()))
-                                  else (pure ())
-                                  if ((ts_length == SSZ_UINT_BYTES) : Bool)
-                                  then
-                                    (do
-                                      let activation_timestamp ← (( do
-                                        (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ timestamp_start) ) :
-                                        SailM Nat )
-                                      if ((timestamp <b activation_timestamp) : Bool)
-                                      then sailThrow ((InvalidBlock InvalidConfig))
-                                      else (pure ()))
-                                  else (pure ())
-                                  (pure { chain_id := ← (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩
-                                              CC_CHAIN_ID) })))))))))
+      let activation_block ← (( do (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ block_number_start) ) :
+        SailM Nat )
+      if ((number <b activation_block) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ()))
+  else (pure ())
+  if ((ts_length == SSZ_UINT_BYTES) : Bool)
+  then
+    (do
+      let activation_timestamp ← (( do (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ timestamp_start) ) :
+        SailM Nat )
+      if ((timestamp <b activation_timestamp) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ()))
+  else (pure ())
+  (pure { chain_id := ← (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ CC_CHAIN_ID) })
 
 /-- Decodes the semantic payload structure — header, chain config, body
 references — without touching an encoded transaction or withdrawal
@@ -1177,7 +1459,22 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
     (decode_chain_config input_ref.chain_config header.number header.timestamp)
   (k_set_header header)
   writeReg k_chain_id chain_config.chain_id
-  writeReg k_blob_schedule input_ref.protocol.blob_schedule
+  writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
+    ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
+    fun (k_ex612208_ : Nat) =>
+    (Sigma fun (k_ex612209_ : Nat) =>
+    (Sigma fun (k_ex612210_ : Nat) =>
+    (Sigma fun (k_ex612211_ : Nat) =>
+    (Sigma fun (k_ex612212_ : Nat) =>
+    (Sigma fun (k_ex612213_ : Nat) =>
+    (Sigma fun (k_ex612214_ : Nat) =>
+    (Sigma fun (k_ex612215_ : Nat) =>
+    (Sigma fun (k_ex612216_ : Nat) =>
+    (Sigma fun (k_ex612217_ : Nat) =>
+    (Sigma fun (k_ex612218_ : Nat) =>
+    (ExecutionProfileFields k_ex612208_ k_ex612209_ k_ex612210_ k_ex612211_ k_ex612212_ k_ex612213_ k_ex612214_ k_ex612215_ k_ex612216_ k_ex612217_ k_ex612218_ (if ( k_ex612218_
+    < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_) (if ( (if ( k_ex612218_ < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_)
+    < k_ex612215_  : Bool) then (if ( k_ex612218_ < k_ex612214_  : Bool) then k_ex612218_ else k_ex612214_) else k_ex612215_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,
@@ -1199,8 +1496,16 @@ def index_execution_witness (input_ref : StatelessInputRef) : SailM WitnessConte
 
 /- Type quantifiers: k_transaction_off : Nat, k_transaction_len : Nat, k_public_key_off : Nat, (source_valid_range k_transaction_off k_transaction_len)
   ∧ (source_valid_range k_public_key_off 65) -/
-def decode_transaction (transaction : (EvmByteSliceFields k_transaction_off k_transaction_len)) (public_key : (EvmByteSliceFields k_public_key_off 65)) : SailM Transaction := do
-  if ((k_transaction_len ≤b (2 ^i 30)) : Bool)
-  then (rlp_decode_tx transaction public_key (← readReg k_fork))
-  else sailThrow ((InvalidBlock InvalidConfig))
+def decode_transaction (transaction : (StatelessInputSliceFields k_transaction_off k_transaction_len)) (public_key : (StatelessInputSliceFields k_public_key_off 65)) : SailM (Sigma
+  fun (k_blob_limit : Nat) => (TransactionFields k_blob_limit)) := do
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  if _sailIf0 : ((k_transaction_len ≤b (2 ^i 30)) : Bool) = true
+  then
+    (do
+      (rlp_decode_tx transaction public_key profile.transaction_blob_limit))
+  else
+    (do
+      (fatal_error InvalidConfig))
 

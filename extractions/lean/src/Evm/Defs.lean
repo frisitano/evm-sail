@@ -33,13 +33,6 @@ instance {α : Type} {β : α → Type} [Repr α] [∀ a, Repr (β a)] :
 
 abbrev bit := (BitVec 1)
 
-/-- The supported protocol forks, in activation order. Blob-parameter-only
-schema forks collapse to their base execution fork in
-[protocol_profile][]. -/
-inductive Fork where | Frontier | Homestead | Byzantium | Constantinople | Istanbul | Berlin | London | Paris | Shanghai | Cancun | Prague | Osaka | Amsterdam
-  deriving BEq, Inhabited, Repr
-  open Fork
-
 abbrev bits (k_n : Int) := (BitVec k_n)
 
 /- Type quantifiers: k_a : Type -/
@@ -57,10 +50,10 @@ mathematical subtype relation visible: narrower non-negative ranges can
 be passed as words without a model-level conversion. -/
 abbrev word := Nat
 
-/-- A 20-byte account address (YP §4.1). -/
+/-- A 20-byte account address (YP §4.1), in canonical protocol byte order. -/
 abbrev address := (Vector byte 20)
 
-/-- A KECCAK-256 / storage-key sized digest. -/
+/-- A KECCAK-256 / storage-key sized digest, in canonical protocol byte order. -/
 abbrev b256 := (Vector byte 32)
 
 /-- The common digest type used by trie, code, and block hashes. -/
@@ -84,61 +77,209 @@ abbrev account_nonce_bound : Int := (2 ^ 64 - 1)
 /-- An account transaction-count nonce (EIP-2681). -/
 abbrev account_nonce := Nat
 
-/-- An execution block number. The Yellow Paper header scalar and EIP-1559
-arithmetic impose no fixed-width semantic bound; the stateless-input SSZ
-transport performs its own `uint64` decoding. -/
+/-- Largest value represented by an SSZ `uint64`. This is a wire-schema
+constraint, sourced from the consensus `ExecutionPayload` container and
+the Amsterdam `SszExecutionPayload`, rather than an implementation word
+size. -/
+abbrev ssz_uint_bound : Int := (2 ^ 64 - 1)
+
+/-- An execution block number. Provenance: the execution-payload SSZ schema
+declares `block_number: uint64`. The execution rules do not impose a
+tighter supported-fork bound. -/
 abbrev block_number := Nat
 
-/-- An execution block timestamp in seconds. As with the Yellow Paper header
-scalar, the canonical semantic value is a natural; SSZ width is checked at
-the input boundary rather than becoming the protocol type. -/
+/-- An execution block timestamp in seconds. Provenance: the
+execution-payload SSZ schema declares `timestamp: uint64`; no tighter
+supported-fork protocol bound is applied. -/
 abbrev block_timestamp := Nat
-
-/-- Largest per-block blob count among the supported schedules: BPO2's
-`MAX_BLOBS_PER_BLOCK = 21` (EIP-8135). -/
-abbrev blob_count_bound : Int := 21
-
-/-- Largest per-transaction blob count among supported forks: Prague's
-`MAX_BLOB_GAS_PER_BLOCK / GAS_PER_BLOB = 9` (EIP-7691). -/
-abbrev transaction_blob_count_bound : Int := 9
-
-/-- Largest target blob count among supported schedules: BPO2's target of 14
-blobs (EIP-8135). -/
-abbrev blob_target_count_bound : Int := 14
 
 /-- Blob gas charged per blob, `2^17` (EIP-4844). -/
 abbrev gas_per_blob_value : Int := (2 ^ 17)
 
-/-- A blob count in any block schedule supported by this model. -/
-abbrev blob_count := Nat
+/-- Named blob-schedule constants retained by the profile domains below. -/
+abbrev blob_schedule_inactive_count : Int := 0
 
-/-- A target blob count in a supported block schedule. -/
-abbrev blob_target_count := Nat
+/-- Cancun's per-block blob target of 3 (EIP-4844). -/
+abbrev cancun_blob_target_count : Int := 3
 
-/-- A blob count carried by one EIP-4844 transaction. -/
-abbrev transaction_blob_count := Nat
+/-- Prague's per-block blob target of 6 (EIP-7691). -/
+abbrev prague_blob_target_count : Int := 6
 
-/-- Blob gas used by one supported block. EIP-4844 requires this to be a
-multiple of `GAS_PER_BLOB`; the fork-specific maximum is checked against
-the active schedule. -/
-abbrev blob_gas_used := Nat
+/-- The BPO1 per-block blob target of 10. -/
+abbrev bpo1_blob_target_count : Int := 10
 
-/-- Blob gas contributed by one transaction. -/
-abbrev transaction_blob_gas := Nat
+/-- The BPO2 per-block blob target of 14. -/
+abbrev bpo2_blob_target_count : Int := 14
 
-/-- The accumulating EIP-4844 `excess_blob_gas` header field, encoded as
-`uint64` and not bounded by a single block's blob count. -/
-abbrev excess_blob_gas_bound : Int := (2 ^ 64 - 1)
+/-- Cancun's per-block blob maximum of 6 (EIP-4844). -/
+abbrev cancun_blob_max_count : Int := 6
 
-/-- An accumulated excess-blob-gas value carried by a block header. -/
-abbrev excess_blob_gas := Nat
+/-- Prague's per-block blob maximum of 9 (EIP-7691). -/
+abbrev prague_blob_max_count : Int := 9
+
+/-- The BPO1 per-block blob maximum of 15. -/
+abbrev bpo1_blob_max_count : Int := 15
+
+/-- The BPO2 per-block blob maximum of 21. -/
+abbrev bpo2_blob_max_count : Int := 21
 
 /-- Largest fee-update fraction in the supported blob schedules: BPO2's
 `BLOB_BASE_FEE_UPDATE_FRACTION = 11684671` (EIP-8135). -/
 abbrev blob_fee_update_fraction_bound : Int := 11684671
 
+/-- A conservative exponent at which an EIP-4844 blob base fee can no longer
+fit in the EVM's 256-bit word domain: `e^256 > 2^256`. -/
+abbrev blob_fee_word_exponent_limit : Int := 256
+
+/-- Whether a value is the inactive zero or one of the supported schedules'
+per-block blob targets. -/
+def blob_schedule_target_value (k_value : Int) : Prop :=
+  k_value = blob_schedule_inactive_count ∨
+  k_value = cancun_blob_target_count ∨
+  k_value = prague_blob_target_count ∨
+  k_value = bpo1_blob_target_count ∨ k_value = bpo2_blob_target_count
+
+/-- Whether a value is the inactive zero or one of the supported schedules'
+per-block blob maxima. -/
+def blob_schedule_max_value (k_value : Int) : Prop :=
+  k_value = blob_schedule_inactive_count ∨
+  k_value = cancun_blob_max_count ∨
+  k_value = prague_blob_max_count ∨
+  k_value = bpo1_blob_max_count ∨ k_value = bpo2_blob_max_count
+
+/-- A target selected by one of the blob schedules supported by the schema.
+This is distinct from an observed blob count, which may be any value in
+its contiguous range. -/
+abbrev blob_schedule_target_count := Nat
+
+/-- A maximum selected by one of the blob schedules supported by the schema. -/
+abbrev blob_schedule_max_count := Nat
+
+/-- The fork-selected maximum number of blobs carried by one transaction.
+Zero denotes a profile before blob transactions activate. -/
+def transaction_blob_limit_value (k_value : Int) : Prop :=
+  k_value = blob_schedule_inactive_count ∨
+  k_value = cancun_blob_max_count ∨ k_value = prague_blob_max_count
+
+/-- A fork-selected per-transaction blob limit drawn from the supported
+schedules; zero for profiles before blob transactions activate. -/
+abbrev transaction_blob_limit := Nat
+
+/-- A transaction blob count under one fork-selected transaction limit.
+The limit is a finite-set profile parameter; the observed count occupies
+the complete contiguous range beneath that selected limit. -/
+abbrev transaction_blob_count (k_limit : Int) := Nat
+
+/-- Blob gas used by one supported block. The existential count retains that
+every value is exactly a multiple of `GAS_PER_BLOB`; profile-indexed
+decoding applies the selected schedule's tighter range before values enter
+this heterogeneous header domain. -/
+abbrev blob_gas_used := Nat
+
+/-- Blob gas contributed by one transaction. Profile-indexed blob-hash
+decoding establishes the selected limit before this derived quantity is
+widened to the common transaction-cost domain. -/
+abbrev transaction_blob_gas := Nat
+
+/-- Wire ceiling for the EIP-4844 `excess_blob_gas` header field.
+Provenance: both the Deneb consensus `ExecutionPayload` and Amsterdam's
+stateless SSZ payload encode the field as `uint64`. -/
+abbrev excess_blob_gas_wire_bound : Int := (2 ^ 64 - 1)
+
+/-- Union ceiling of the fork-indexed inductive equations retained by
+`ProtocolProfile`. The expression deliberately uses the largest admitted
+denominator and block growth rather than embedding a precomputed result. -/
+abbrev excess_blob_gas_reachable_bound : Int := (256 * 11684671 + 21 * 2 ^ 17)
+
+/-- The supported-fork reachable accumulated excess-blob-gas value. -/
+abbrev excess_blob_gas_bound : Int := (256 * 11684671 + 21 * 2 ^ 17)
+
+/-- The accumulated excess blob gas carried between headers (EIP-4844). -/
+abbrev excess_blob_gas := Nat
+
 /-- The positive denominator governing excess-blob-gas fee adjustment. -/
 abbrev blob_fee_update_fraction := Nat
+
+/-- Named EIP-4844/BPO fee-update fractions. -/
+abbrev inactive_blob_fee_update_fraction : Int := 1
+
+/-- Cancun's `BLOB_BASE_FEE_UPDATE_FRACTION` (EIP-4844). -/
+abbrev cancun_blob_fee_update_fraction : Int := 3338477
+
+/-- Prague's `BLOB_BASE_FEE_UPDATE_FRACTION` (EIP-7691). -/
+abbrev prague_blob_fee_update_fraction : Int := 5007716
+
+/-- The BPO1 blob-fee update fraction. -/
+abbrev bpo1_blob_fee_update_fraction : Int := 8346193
+
+/-- The BPO2 blob-fee update fraction (EIP-8135). -/
+abbrev bpo2_blob_fee_update_fraction : Int := 11684671
+
+/-- Whether a value is the inactive unit denominator or one of the supported
+schedules' fee-update fractions. -/
+def blob_schedule_fee_update_fraction_value (k_value : Int) : Prop :=
+  k_value = inactive_blob_fee_update_fraction ∨
+  k_value = cancun_blob_fee_update_fraction ∨
+  k_value = prague_blob_fee_update_fraction ∨
+  k_value = bpo1_blob_fee_update_fraction ∨ k_value = bpo2_blob_fee_update_fraction
+
+/-- A fee-update denominator selected by one of the supported blob schedules.
+Observed arithmetic still uses the broader positive denominator domain;
+configuration itself can only choose these protocol constants. -/
+abbrev blob_schedule_fee_update_fraction := Nat
+
+/-- Fork-selected limits retained in the validated protocol profile. A fork
+without a stricter transaction-gas cap admits the complete SSZ `uint64`
+block-gas domain; the concrete header limit is applied separately. -/
+abbrev pre_amsterdam_deployed_code_size_limit : Int := 24576
+
+/-- Amsterdam's raised deployed-code size limit of 65,536 bytes. -/
+abbrev amsterdam_deployed_code_size_limit : Int := 65536
+
+/-- The zero initcode limit for profiles before EIP-3860 activates. -/
+abbrev inactive_initcode_size_limit : Int := 0
+
+/-- The EIP-3860 initcode size limit of 49,152 bytes. -/
+abbrev pre_amsterdam_initcode_size_limit : Int := 49152
+
+/-- Amsterdam's raised initcode size limit of 131,072 bytes. -/
+abbrev amsterdam_initcode_size_limit : Int := 131072
+
+/-- The EIP-7825 per-transaction gas cap of `2^24`. -/
+abbrev eip7825_transaction_gas_limit : Int := (2 ^ 24)
+
+/-- Whether a value is one of the supported deployed-code size limits. -/
+def protocol_deployed_code_size_limit_value (k_value : Int) : Prop :=
+  k_value = pre_amsterdam_deployed_code_size_limit ∨ k_value = amsterdam_deployed_code_size_limit
+
+/-- The fork-selected deployed-code size limit. -/
+abbrev protocol_deployed_code_size_limit := Nat
+
+/-- Whether a value is the inactive zero or one of the supported initcode
+size limits. -/
+def protocol_initcode_size_limit_value (k_value : Int) : Prop :=
+  k_value = inactive_initcode_size_limit ∨
+  k_value = pre_amsterdam_initcode_size_limit ∨ k_value = amsterdam_initcode_size_limit
+
+/-- The fork-selected initcode size limit. Zero denotes a profile before
+EIP-3860 activates. -/
+abbrev protocol_initcode_size_limit := Nat
+
+/-- Whether a value is a supported per-transaction total-gas ceiling: the
+EIP-7825 cap or the unrestricted SSZ block-gas domain. -/
+def protocol_transaction_total_gas_limit_value (k_value : Int) : Prop :=
+  k_value = eip7825_transaction_gas_limit ∨ k_value = ssz_uint_bound
+
+/-- The fork-selected per-transaction total-gas ceiling. -/
+abbrev protocol_transaction_total_gas_limit := Nat
+
+/-- Whether a value is a supported per-transaction regular-gas ceiling: the
+EIP-7825 cap or the unrestricted SSZ block-gas domain. -/
+def protocol_transaction_regular_gas_limit_value (k_value : Int) : Prop :=
+  k_value = eip7825_transaction_gas_limit ∨ k_value = ssz_uint_bound
+
+/-- The fork-selected per-transaction regular-gas ceiling. -/
+abbrev protocol_transaction_regular_gas_limit := Nat
 
 /-- Largest chain identifier admitted by the typed-transaction wire decoder. -/
 abbrev chain_identifier_bound : Int := (2 ^ 64 - 1)
@@ -147,11 +288,8 @@ abbrev chain_identifier_bound : Int := (2 ^ 64 - 1)
 chain configuration are decoded as unsigned 64-bit integers. -/
 abbrev chain_identifier := Nat
 
-/-- The ordinal of a fork in this model's thirteen-member [Fork][type-Fork]
-enumeration. This is a model structural bound, not a wire constraint. -/
-abbrev protocol_fork_index := Nat
-
-/-- A beacon-chain slot number, explicitly a `uint64` in EIP-7843. -/
+/-- A beacon-chain slot number. Provenance: EIP-7843 and Amsterdam's
+stateless SSZ payload declare this field as `uint64`. -/
 abbrev slot_number := Nat
 
 /-- An EIP-4895 withdrawal index, encoded as SSZ `uint64`. -/
@@ -174,14 +312,8 @@ abbrev ssz_offset := Nat
 /-- An index into a table of four-byte SSZ offsets. -/
 abbrev ssz_offset_index := Nat
 
-/-- The number of entries in a host-backed collection without a tighter
-schema-specific bound. Host tables are addressed by 64-bit ordinals in
-every executable build; protocol and structural counts use their own
-tighter singleton/range types instead. -/
-abbrev item_count := Nat
-
-/-- An index into a host-backed collection without a tighter schema bound. -/
-abbrev item_index := Nat
+/-- The EVM call-frame depth ceiling (Yellow Paper `I_e`). -/
+abbrev call_depth_limit : Int := 1024
 
 /-- The nesting depth of an execution frame. -/
 abbrev frame_depth := Nat
@@ -194,6 +326,17 @@ abbrev operand_stack_height := Nat
 
 /-- A zero-based index from the top of the operand stack. -/
 abbrev stack_index := Nat
+
+/-- The abstract operand-stack cursor for the active frame, threaded by
+value through the interpreter in the state-passing convention and held
+in the `stack_top` frame register at frame boundaries. Opaque to Sail:
+the spec backend represents it as the frame height, the optimized
+backend as a raw row pointer; both fit one 64-bit value. -/
+abbrev StackTop := (BitVec 64)
+
+/-- The number of slots an operand-stack cursor moves in one advance or
+retreat. -/
+abbrev stack_slot_count := Nat
 
 /-- A nonzero operand-stack position used by DUP and SWAP. -/
 abbrev stack_operation_index := Nat
@@ -213,14 +356,16 @@ abbrev merkle_depth := Nat
 /-- An EVM instruction byte. -/
 abbrev opcode := Nat
 
-/-- The largest one-based precompile identifier admitted by the model. -/
-abbrev precompile_id_bound : Int := 256
+/-- The closed first-order selector for the precompile catalog. Availability,
+gas pricing, and execution are separate interpreters of this identifier so
+their protocol equations remain explicit without function-valued records. -/
+inductive PrecompileId where | NotPrecompile | Ecrecover | Sha256 | Ripemd160 | Identity | Modexp | Bn254Add | Bn254Mul | Bn254Pairing | Blake2f | KzgPointEvaluation | BlsG1Add | BlsG1Msm | BlsG2Add | BlsG2Msm | BlsPairing | BlsMapFpToG1 | BlsMapFp2ToG2 | P256Verify
+  deriving BEq, Inhabited, Repr
+  open PrecompileId
 
-/-- The one-based identifier of a precompiled contract. -/
-abbrev precompile_id := Nat
-
-/-- An active precompile identifier, or zero for an ordinary address. -/
-abbrev precompile_selector := Nat
+/-- The quantity alias carried by the precompile interpreters for the closed
+selector above. -/
+abbrev precompile_id := PrecompileId
 
 /-- The round count supplied to the BLAKE2 compression precompile. -/
 abbrev blake2_rounds := Nat
@@ -237,33 +382,84 @@ abbrev bloom_u64_index := Nat
 /-- A bit position within a log-bloom u64. -/
 abbrev bloom_u64_bit := Nat
 
+/-- The number of authenticated ancestor hashes available to `BLOCKHASH`. -/
+abbrev ancestor_hash_count := Nat
+
 /-- An index into the 256 most recent ancestor block hashes. -/
 abbrev ancestor_index := Nat
 
-/-- A small positive divisor used for exact protocol arithmetic. -/
-abbrev protocol_divisor := Nat
+/-- Default capacity of an implementation-owned byte arena. -/
+abbrev default_host_region_bound : Int := (2 ^ 32 - 1)
 
-/-- Whether an offset/length pair is representable by the host. This is
-vacuous for the canonical natural-number model; optimized builds strengthen
-it with their concrete address-space bound. -/
-def host_valid_range (k_off : Int) (k_len : Int) : Prop := 0 ≤ k_off ∧ 0 ≤ k_len
+/-- Immutable stateless-input envelope capacity. -/
+abbrev stateless_input_region_bound : Int := (2 ^ 32 - 1)
 
-/-- Whether a source-backed byte range is representable by the selected
-model. This is a semantic representation invariant, not an FFI type. -/
-def source_valid_range (k_off : Int) (k_len : Int) : Prop := 0 ≤ k_off ∧ 0 ≤ k_len
+/-- Executor scratch-arena capacity. -/
+abbrev scratch_region_bound : Int := (2 ^ 32 - 1)
+
+/-- Shared per-frame EVM-memory arena capacity. -/
+abbrev memory_region_bound : Int := (2 ^ 32 - 1)
+
+/-- Content-addressed executable-code arena capacity. -/
+abbrev code_region_bound : Int := (2 ^ 32 - 1)
+
+/-- Retained transaction-log data arena capacity. -/
+abbrev log_data_region_bound : Int := (2 ^ 32 - 1)
+
+/-- Guest output-buffer capacity. -/
+abbrev output_region_bound : Int := (2 ^ 32 - 1)
+
+/-- Whether an offset/length pair is representable by a generic host
+interface. Region-bearing values use the more specific predicates below. -/
+def host_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ default_host_region_bound
+
+/-- Common bound for relative source coordinates used by generic cursor
+operations. Nominal slices retain their region-specific invariant. -/
+def source_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ default_host_region_bound
+
+/-- Whether an offset/length pair is contained by the immutable
+stateless-input envelope. -/
+def stateless_input_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ stateless_input_region_bound
+
+/-- Whether an offset/length pair is contained by the executor scratch
+arena. -/
+def scratch_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ scratch_region_bound
+
+/-- Whether an offset/length pair is contained by the shared EVM-memory
+arena. -/
+def memory_region_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ memory_region_bound
+
+/-- Whether an offset/length pair is contained by the executable-code
+arena. -/
+def code_region_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ code_region_bound
+
+/-- Whether an offset/length pair is contained by retained log-data
+storage. -/
+def log_data_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ log_data_region_bound
+
+/-- Whether an offset/length pair is contained by the guest output
+region. -/
+def output_region_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ output_region_bound
 
 /-- Whether one host byte quantity is representable. Unlike
 `host_valid_range`, this does not assert that two quantities can be added
 without overflow. -/
-def host_valid_access (k_value : Int) : Prop := 0 ≤ k_value
+def host_valid_access (k_value : Int) : Prop :=
+  0 ≤ k_value ∧ k_value ≤ default_host_region_bound
 
-/-- Whether a semantic source length is representable by the selected model.
-The canonical specification is unbounded; optimized builds strengthen
-this representation invariant independently of protocol limits. -/
-def source_valid_length (k_value : Int) : Prop := 0 ≤ k_value
+/-- Whether one relative source coordinate is representable. -/
+def source_valid_length (k_value : Int) : Prop :=
+  0 ≤ k_value ∧ k_value ≤ default_host_region_bound
 
-/-- A position representable by the host byte-store interface. The canonical
-model is unbounded; production builds refine this representation. -/
+/-- A position representable by a generic host byte-store interface. -/
 abbrev host_access := Nat
 
 /-- An absolute byte position in a named source region. -/
@@ -272,19 +468,101 @@ abbrev source_pointer := Nat
 /-- A byte length or regular-layout count derived from a source region. -/
 abbrev source_length := Nat
 
-/-- An opaque ordinal issued by the host rollback journal. The model may store
-and return this complete transaction-state snapshot cursor, but cannot
-inspect subsystem journals or replay the host's rollback mechanism. -/
-abbrev journal_checkpoint := Nat
+/-- A coordinate in the immutable stateless-input envelope. -/
+abbrev stateless_input_pointer := Nat
 
-/-- An absolute byte position in the current EVM memory frame. -/
+/-- A length in the immutable stateless-input envelope. -/
+abbrev stateless_input_length := Nat
+
+/-- A coordinate in the executor scratch arena. -/
+abbrev scratch_pointer := Nat
+
+/-- A length in the executor scratch arena. -/
+abbrev scratch_length := Nat
+
+/-- A coordinate in retained log-data storage. -/
+abbrev log_data_pointer := Nat
+
+/-- A length in retained log-data storage. -/
+abbrev log_data_length := Nat
+
+/-- A coordinate in the guest output region. -/
+abbrev output_pointer := Nat
+
+/-- A length in the guest output region. -/
+abbrev output_length := Nat
+
+/-- A relative coordinate in calldata. Calldata may borrow either immutable
+stateless input or the active EVM-memory frame, so this is the semantic
+boundary for that explicit sum type rather than a generic host quantity. -/
+abbrev calldata_pointer := Nat
+
+/-- A byte length in calldata, independent of which calldata variant owns the
+bytes. -/
+abbrev calldata_length := Nat
+
+/-- The number of bytes loaded into one EVM word. -/
+abbrev word_byte_count := Nat
+
+/-- A cursor into a transaction-local journal-owned worklist. -/
+abbrev journal_cursor := Nat
+
+/-- The monotonically increasing storage incarnation owned by an account.
+Generation zero is reserved for the absence of a generation. -/
+abbrev storage_generation := Nat
+
+/-- An absolute byte position in the shared EVM-memory arena. -/
 abbrev memory_pointer := Nat
 
-/-- A length or allocated size in EVM memory. -/
+/-- A materialized length or allocation size in the EVM-memory arena. -/
 abbrev memory_length := Nat
 
+/-- Largest possible initial/live gas value from the SSZ-backed block-gas
+domain. Fork and header limits may make this ceiling smaller; this union
+ceiling is sufficient to prove one representation valid for every
+supported profile. Runtime affordability continues to use remaining gas. -/
+abbrev memory_expansion_proof_gas_ceiling : Int := (2 ^ 64 - 1)
+
+/-- First memory word count whose quadratic Yellow Paper charge alone exceeds
+`memory_expansion_proof_gas_ceiling`:
+`(2^37)^2 / 512 = 2^65 > 2^64 - 1`. This is a derived proof threshold,
+not a runtime memory or host-allocation limit. -/
+abbrev memory_unaffordable_word_threshold : Int := (2 ^ 37)
+
+/-- Largest whole-word endpoint which can precede that threshold. -/
+abbrev memory_affordable_word_bound : Int := (2 ^ 37 - 1)
+
+/-- Largest byte endpoint retained by optimized expansion planning after the
+maximum-gas proof. Each attempted expansion is still checked against its
+exact live `gas_remaining`. -/
+abbrev memory_affordable_byte_bound : Int := (32 * (2 ^ 37 - 1))
+
+/-- Largest word count representable by the current EVM-memory region. -/
+abbrev memory_region_word_bound : Int := (2 ^ 27)
+
+/-- Whether a word count may be presented to the cumulative memory-cost
+equation. This follows from the independently configured host-region
+boundary; the exact live-gas check remains the protocol affordability
+rule. -/
+def memory_cost_input (k_words : Int) : Prop := 0 ≤ k_words
+
 /-- The invariant carried by every canonical EVM memory range. -/
-def memory_valid_range (k_off : Int) (k_len : Int) : Prop := 0 ≤ k_off ∧ 0 ≤ k_len
+def memory_valid_range (k_off : Int) (k_len : Int) : Prop :=
+  0 ≤ k_off ∧ 0 ≤ k_len ∧ (k_off + k_len) ≤ memory_region_bound
+
+/-- A memory endpoint which may be presented to the expansion-cost equation.
+The canonical specification admits every mathematical byte position;
+executable splices may strengthen this representation boundary after
+proving that every excluded endpoint is unaffordable. -/
+def memory_expansion_endpoint (k_required : Int) : Prop := 0 ≤ k_required
+
+/-- Relates a canonical memory operand to its exclusive endpoint. A zero-size
+operand accesses no memory, so both its retained range and endpoint are
+canonicalized to zero. -/
+def memory_access_relation (k_off : Int) (k_len : Int) (k_required : Int) : Prop :=
+  (memory_valid_range k_off k_len) ∧
+  (memory_expansion_endpoint k_required) ∧
+  k_len = 0 ∧ k_off = 0 ∧ k_required = 0 ∨ 0 < k_len ∧ k_required = (k_off + k_len)
 
 /-- The indexed fields of an EVM memory range. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (memory_valid_range k_off k_len) -/
@@ -297,23 +575,37 @@ structure MemoryRangeFields (k_off : Nat) (k_len : Nat) where
 abbrev MemoryRange :=
   (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len)))
 
+/-- One logical EVM memory operand together with the exact endpoint which
+contributes to the shared expansion plan. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, k_required : Nat, (memory_access_relation k_off k_len k_required) -/
+structure MemoryAccessFields (k_off : Nat) (k_len : Nat) (k_required : Nat) where
+  range : (MemoryRangeFields k_off k_len)
+  required_size : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A memory operand retaining its range/endpoint relationship existentially. -/
+abbrev MemoryAccess :=
+  (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) =>
+  (Sigma fun (k_required : Nat) => (MemoryAccessFields k_off k_len k_required))))
+
 /-- An absolute byte position in the code arena. -/
 abbrev code_pointer := Nat
 
 /-- A contract-code length. -/
 abbrev code_length := Nat
 
-/-- The representation invariant required of executable code. The canonical
-model is mathematically unbounded; optimized builds strengthen this with
+/-- The representation invariant required of executable code, including
 enough cursor headroom for a complete PUSH32 immediate. -/
-def code_valid_length (k_len : Int) : Prop := 0 ≤ k_len
-
-/-- An index into the 256-byte chunks of a JUMPDEST bitmap. -/
-abbrev code_chunk_index := Nat
+def code_valid_length (k_len : Int) : Prop := 0 ≤ k_len ∧ (k_len + 32) ≤ code_region_bound
 
 /-- The maximum block gas limit admitted by the execution-payload SSZ
-`uint64` field. -/
+`uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
+Amsterdam `SszExecutionPayload.gas_limit`. -/
 abbrev block_gas_limit_bound : Int := (2 ^ 64 - 1)
+
+/-- EIP-7928 charges one BAL item against each 2,000 units of block gas. -/
+abbrev block_access_list_item_gas : Int := 2000
 
 /-- Available gas in a running EVM frame. -/
 abbrev gas := Nat
@@ -323,13 +615,33 @@ counter.  The canonical model requires only non-negativity; production
 splices may strengthen it from the admitted input and counter lifecycle. -/
 def live_gas_valid (k_value : Int) : Prop := 0 ≤ k_value
 
-/-- Gas supplied by a transaction before fork-specific validation. -/
+/-- Gas supplied by a transaction before fork-specific validation. Any value
+above the execution payload's SSZ `uint64` block-gas-limit domain cannot be
+admitted, so the RLP boundary rejects it before constructing a
+transaction. -/
 abbrev transaction_gas := Nat
 
 /-- A transient computed charge. Canonically this is an exact natural;
 optimized builds use a native representation only after the computation's
 semantic bound has been established. -/
 abbrev gas_cost := Nat
+
+/-- Exact exclusive byte endpoint used by the canonical memory-expansion
+equation. The optimized C splice may replace endpoints beyond its
+materializable arena with one proven-unaffordable sentinel. -/
+abbrev memory_required_endpoint := Nat
+
+/-- Exact incremental memory charge. Optimized C retains one additional
+sentinel value above every representable live-gas value so `charge`
+remains the sole out-of-gas decision. -/
+abbrev memory_expansion_charge := Nat
+
+/-- One affordability decision together with its bounded cost. The payload is
+meaningful only when `affordable` is true. -/
+structure GasCharge where
+  affordable : Bool
+  cost : gas_cost
+  deriving BEq, Inhabited, Repr
 
 /-- Intermediate MODEXP affordability factors.  The canonical model keeps
 their exact natural values; production splices bound them from the live
@@ -364,6 +676,10 @@ abbrev linear_gas_product := Nat
 regular-gas pool. -/
 abbrev transaction_execution_gas_limit_value : Int := (2 ^ 24)
 
+/-- Gas admitted to Amsterdam's regular execution pool after applying the
+EIP-7825 per-transaction cap. -/
+abbrev transaction_execution_gas := Nat
+
 /-- Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
 draws spill only from the regular-gas pool, which is capped by EIP-7825. -/
 abbrev state_gas_spill := Nat
@@ -373,9 +689,20 @@ abbrev state_gas_spill := Nat
 value onto the stack (Yellow Paper equation 147). -/
 abbrev block_gas_limit := Nat
 
-/-- Gas consumed by a block. It remains an exact natural during execution and
-is subsequently checked against the word-bounded header gas limit. -/
+/-- Gas consumed by a block header. Provenance: the execution-payload SSZ
+schema declares `gas_used: uint64`. The separate payload-validity rule
+`gas_used <= gas_limit` is checked when the header is admitted. -/
 abbrev block_gas := Nat
+
+/-- Gas accumulated in execution-order receipts. Before Amsterdam this is
+bounded by the block gas limit. Amsterdam receipts account for regular and
+state gas together, so the execution profile supplies the tighter
+header-dependent bound. -/
+abbrev receipt_cumulative_gas := Nat
+
+/-- Whether a value lies in the receipt cumulative-gas domain. -/
+def receipt_cumulative_gas_value_valid (k_value : Int) : Prop :=
+  0 ≤ k_value ∧ k_value ≤ (2 * block_gas_limit_bound)
 
 /-- A fixed gas-schedule value used as an opcode or transaction base cost. -/
 abbrev gas_constant := Nat
@@ -400,76 +727,147 @@ abbrev state_gas_delta := Int
 block-level non-negative/u64 checks. -/
 abbrev transaction_state_gas_delta := Int
 
-/-- A small positive divisor used by the gas schedule. -/
-abbrev gas_divisor := Nat
+/-- A non-negative transaction state-gas total after settlement has rejected
+a negative signed delta. -/
+abbrev transaction_state_gas_used := Nat
 
-/-- The regions of the host interface a [EvmByteSlice][type-EvmByteSlice] may
-reference. `StatelessInputSource` is the SSZ stateless-input envelope;
-`EvmMemorySource` is the current frame's memory; `CodeSource` is stored
-contract code; `LogDataSource` retains log payloads for receipts;
-`OutputSource` is frame output frozen at halt; and `ScratchSource` is
-the executor's scratch arena. -/
-inductive ByteSource where | StatelessInputSource | EvmMemorySource | CodeSource | LogDataSource | OutputSource | ScratchSource
-  deriving BEq, Inhabited, Repr
-  open ByteSource
+/-- The pre-London refund divisor: refunds are capped at `gas_used / 2`. -/
+abbrev pre_london_refund_divisor : Int := 2
 
-/-- The witness-carrying fields of an unmaterialized byte range. -/
-/- Type quantifiers: k_off : Nat, k_len : Nat, (source_valid_range k_off k_len) -/
-structure EvmByteSliceFields (k_off : Nat) (k_len : Nat) where
-  source : ByteSource
-  off : Nat
+/-- The London refund divisor: EIP-3529 caps refunds at `gas_used / 5`. -/
+abbrev post_london_refund_divisor : Int := 5
+
+/-- Whether a value is one of the two protocol refund divisors. -/
+def transaction_refund_divisor_value (k_value : Int) : Prop :=
+  k_value = pre_london_refund_divisor ∨ k_value = post_london_refund_divisor
+
+/-- The fork-selected transaction-refund divisor: 2 before London, 5 after. -/
+abbrev transaction_refund_divisor := Nat
+
+/-- A range in the immutable stateless-input envelope. Its source is carried
+by the nominal type rather than a runtime field. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (stateless_input_valid_range k_off k_len) -/
+structure StatelessInputSliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
   len : Nat
   deriving BEq, Inhabited, Repr
 
-/-- An unmaterialized byte range: a region, an offset, and a length. A
-slice denotes the byte sequence it references; reads resolve in O(1)
-without copying. -/
-abbrev EvmByteSlice :=
-  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
+/-- A stateless-input range with its coordinate and length packed
+existentially. -/
+abbrev StatelessInputSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))
 
-/-- A source-backed byte range whose length is known statically. -/
-abbrev EvmByteSliceLength (k_required : Int) :=
-  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
+/-- A stateless-input range of exactly `'required` bytes. -/
+abbrev StatelessInputSliceLength (k_required : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))
 
-/-- A source-backed byte range whose validated length is at least `minimum`. -/
-abbrev EvmByteSliceAtLeast (k_minimum : Int) :=
-  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
+/-- A stateless-input range of at least `'minimum` bytes. -/
+abbrev StatelessInputSliceAtLeast (k_minimum : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))
 
-/-- The result of making a requested evm_prefix of a byte region available.
-Success carries a slice of exactly the requested length. This shared type
-deliberately imposes no global region maximum: each region-specific
-producer may refine the admissible length independently. -/
-/- Type quantifiers: k_required : Nat, 0 ≤ k_required -/
-inductive ByteRegionResult (k_required : Nat) where
-  | ByteRegionReady (_ : (EvmByteSliceLength k_required))
-  | ByteRegionFailed (_ : Unit)
-  deriving Inhabited, BEq, Repr
-  open ByteRegionResult
+/-- A stateless-input range of at most `'maximum` bytes. -/
+abbrev StatelessInputSliceAtMost (k_maximum : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))
 
-/-- A finite list of bytes paired with its construction-time length. -/
-structure MaterializedBytes where
-  data : (List byte)
-  len : source_length
-  deriving BEq, Inhabited, Repr
-
-/-- A evm_prefix of a fixed 32-byte vector, in wire order. -/
-structure FixedBytes32 where
-  data : b256
+/-- A range in the executor's reusable scratch arena. Its source is carried by
+the nominal type rather than a runtime field. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (scratch_valid_range k_off k_len) -/
+structure ScratchSliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
   len : Nat
   deriving BEq, Inhabited, Repr
 
-/-- A byte-sequence segment: materialized bytes or a region-backed span.
-A `list(Bytes)` denotes the concatenation of its segments.
+/-- A scratch-arena range with its coordinate and length packed
+existentially. -/
+abbrev ScratchSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))
 
-!!! note "Implementation"
-    A segment list crosses the host interface whole
-    (`ffi/hash_glue.c`); no per-byte crossings occur. -/
-inductive Bytes where
-  | BytesList (_ : MaterializedBytes)
-  | BytesSlice (_ : EvmByteSlice)
-  | BytesFixed32 (_ : FixedBytes32)
+/-- A scratch-arena range of exactly `'required` bytes. -/
+abbrev ScratchSliceLength (k_required : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))
+
+/-- A scratch-arena range of at least `'minimum` bytes. -/
+abbrev ScratchSliceAtLeast (k_minimum : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))
+
+/-- A range in the shared EVM-memory arena. Its coordinate is absolute within
+the arena (an offset in the standard ABI and a stable pointer in the
+optimized ABI), so a suspended parent's range remains valid while a child
+frame is active. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (memory_region_valid_range k_off k_len) -/
+structure EvmMemorySliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
+  len : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- An EVM-memory range with its coordinate and length packed
+existentially. -/
+abbrev EvmMemorySlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))
+
+/-- An EVM-memory range of exactly `'required` bytes. -/
+abbrev EvmMemorySliceLength (k_required : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))
+
+/-- An EVM-memory range of at least `'minimum` bytes. -/
+abbrev EvmMemorySliceAtLeast (k_minimum : Int) :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))
+
+/-- A range in the content-addressed executable-code arena. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len) -/
+structure CodeRegionSliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
+  len : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A code-region range with its coordinate and length packed
+existentially. -/
+abbrev CodeRegionSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))
+
+/-- A range in the transaction-log data arena. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (log_data_valid_range k_off k_len) -/
+structure LogDataSliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
+  len : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A log-data range with its coordinate and length packed existentially. -/
+abbrev LogDataSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (LogDataSliceFields k_off k_len)))
+
+/-- A log-data range of exactly `'required` bytes. -/
+abbrev LogDataSliceLength (k_required : Int) :=
+  (Sigma fun (k_off : Nat) => (LogDataSliceFields k_off k_required))
+
+/-- A range in the frame-output buffer. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (output_region_valid_range k_off k_len) -/
+structure OutputSliceFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
+  len : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A frame-output range with its coordinate and length packed
+existentially. -/
+abbrev OutputSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))
+
+/-- Calldata is either the immutable top-level transaction input or a frozen
+range of the suspended caller's memory. The variants state the only two
+protocol-valid provenances instead of exposing the host's region enum. -/
+inductive CalldataSlice where
+  | InputCalldata (_ : StatelessInputSlice)
+  | MemoryCalldata (_ : EvmMemorySlice)
   deriving Inhabited, BEq, Repr
-  open Bytes
+  open CalldataSlice
+
+/-- A log payload retained by the host: either an existing byte slice or the
+canonical big-endian bytes of one EVM word used by system logs. -/
+inductive LogData where
+  | LogDataMemory (_ : EvmMemorySlice)
+  | LogDataWord (_ : word)
+  deriving Inhabited, BEq, Repr
+  open LogData
 
 /-- Exceptional halts (YP §9.4.2): each consumes all remaining gas and
 reverts the frame's state changes. -/
@@ -479,25 +877,19 @@ inductive ExceptionKind where | StackUnderflow | StackOverflow | OutOfGas | Inva
 
 /-- The reason a block fails validation; one variant per violated
 block-validity rule. -/
-inductive BlockError where | InvalidConfig | HeaderChainBroken | RlpDecode | InvalidSignature | InvalidGasLimit | GasUsedExceedsLimit | BlobGasLimitExceeded | ExecutionInvalid | InvalidGasUsed | InvalidBlobGasUsed | InvalidExcessBlobGas | InvalidStateRoot | InvalidReceiptsRoot | InvalidLogsBloom | InvalidBlockHash | InvalidParentHash | BlockAccessListTooLarge | InvalidBlockAccessList | InvalidExecutionRequests | WitnessDeficient
+inductive FatalError where | InvalidConfig | HeaderChainBroken | RlpDecode | InvalidSignature | InvalidGasLimit | GasUsedExceedsLimit | BlobGasLimitExceeded | ExecutionInvalid | InvalidGasUsed | InvalidBlobGasUsed | InvalidExcessBlobGas | InvalidStateRoot | InvalidReceiptsRoot | InvalidLogsBloom | InvalidBlockHash | InvalidParentHash | BlockAccessListTooLarge | InvalidBlockAccessList | InvalidExecutionRequests | WitnessDeficient | NumericOverflow
   deriving BEq, Inhabited, Repr
-  open BlockError
+  open FatalError
 
-/-- The single Sail exception type. Block validation throws
-`InvalidBlock(reason)` at the failure point, and `main` catches it
-once — any failure yields an unsuccessful validation. Sail's C backend
-unwinds via `have_exception` return-checks (no `longjmp`), so it is
-zkVM-guest safe. -/
-inductive exception where
-  | InvalidBlock (_ : BlockError)
-  deriving Inhabited, BEq, Repr
-  open exception
+/-- Stable identifier for the validation stage that raised a block error.
+This diagnostic metadata is a bounded integer, not a protocol bitvector. -/
+abbrev validation_stage := Nat
 
 /-- Ordinary frame stops. Only `RETURN` and `REVERT` produce output bytes. -/
 inductive HaltKind where
   | HaltStop (_ : Unit)
-  | HaltReturn (_ : EvmByteSlice)
-  | HaltRevert (_ : EvmByteSlice)
+  | HaltReturn (_ : OutputSlice)
+  | HaltRevert (_ : OutputSlice)
   | HaltSelfDestruct (_ : Unit)
   deriving Inhabited, BEq, Repr
   open HaltKind
@@ -511,10 +903,14 @@ inductive FrameStatus where
   deriving Inhabited, BEq, Repr
   open FrameStatus
 
-/-- Maximum transactions in the execution-payload SSZ list. -/
+/-- Maximum transactions in the execution-payload SSZ list. Provenance:
+Bellatrix `MAX_TRANSACTIONS_PER_PAYLOAD` and Amsterdam
+`SszExecutionPayload.transactions`. -/
 abbrev transaction_count_bound : Int := (2 ^ 20)
 
-/-- Maximum withdrawals in the execution-payload SSZ list. -/
+/-- Maximum withdrawals in the execution-payload SSZ list. Provenance:
+Capella `MAX_WITHDRAWALS_PER_PAYLOAD` and Amsterdam
+`SszExecutionPayload.withdrawals`. -/
 abbrev withdrawal_count_bound : Int := (2 ^ 4)
 
 /-- Maximum blob commitments in the stateless-input SSZ list. -/
@@ -547,13 +943,19 @@ abbrev builder_deposit_request_count_bound : Int := (2 ^ 6)
 /-- Maximum builder exit requests in their stateless-input SSZ list. -/
 abbrev builder_exit_request_count_bound : Int := (2 ^ 4)
 
-/-- Maximum byte length of execution-payload extra data. -/
+/-- Maximum byte length of execution-payload extra data. Provenance:
+consensus `MAX_EXTRA_DATA_BYTES` and Amsterdam
+`SszExecutionPayload.extra_data`. -/
 abbrev extra_data_length_bound : Int := (2 ^ 5)
 
-/-- Maximum byte length of one encoded transaction envelope. -/
+/-- Maximum byte length of one encoded transaction envelope. Provenance:
+Amsterdam `MAX_BYTES_PER_TRANSACTION` in
+`SszExecutionPayload.transactions`. -/
 abbrev transaction_length_bound : Int := (2 ^ 30)
 
-/-- Maximum byte length of the block access list. -/
+/-- Maximum byte length of the block access list. Provenance: Amsterdam
+`SszExecutionPayload.block_access_list` uses
+`ByteList[MAX_BYTES_PER_TRANSACTION]`. -/
 abbrev block_access_list_length_bound : Int := (2 ^ 30)
 
 /-- Maximum byte length of one witnessed trie node. -/
@@ -580,7 +982,7 @@ abbrev block_access_index := Nat
 count. -/
 /- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) -/
 structure BoundedSszListRef (k_maximum : Nat) where
-  bytes : EvmByteSlice
+  bytes : StatelessInputSlice
   count : Nat
   max_item_length : source_length
   deriving BEq, Inhabited, Repr
@@ -623,26 +1025,44 @@ abbrev WitnessHeaderListRef := (BoundedSszListRef (2 ^ 8))
 /-- A sequential cursor over witnessed parent headers. -/
 abbrev WitnessHeaderListCursor := (BoundedSszListCursor (2 ^ 8))
 
-/-- A 256-byte segment of a PUSH-aware `JUMPDEST` bitmap. -/
-abbrev JumpdestChunk := (BitVec 256)
-
 /-- A reference to a code's completed `JUMPDEST` analysis; zero denotes
 the empty bitmap. -/
-abbrev JumpdestRef := (BitVec 64)
+abbrev jump_table_index := Nat
 
 /-- A source-backed executable byte span. Its length carries the separate
 representation invariant needed by program-counter arithmetic; this is
 not a protocol deployment-size limit. -/
 abbrev CodeSlice :=
-  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))
 
-/-- Executable code: its byte span and resolved `JUMPDEST` table. The
-interpreter saves and restores both together; the code hash remains
-the stable code-DB key. -/
-structure Code where
-  bytes : CodeSlice
-  jumpdests : JumpdestRef
+/-- The closed family of Amsterdam opcodes whose instruction encoding carries
+one validity-sensitive immediate byte. Keeping this classification in the
+specification lets instruction fetch and PUSH-aware code analysis share
+one dispatch without introducing a function-valued decoder. -/
+inductive DeepStackOperation where | DeepStackDuplicate | DeepStackSwap | DeepStackExchange | NotDeepStackOperation
   deriving BEq, Inhabited, Repr
+  open DeepStackOperation
+
+/-- Executable code: its byte address, length, and resolved `JUMPDEST` table.
+The flat dependent record keeps the byte address and length relationship
+explicit while allowing optimized C to represent both addresses directly
+as pointers. The interpreter saves and restores all three together; the
+code hash remains the stable code-DB key. -/
+/- Type quantifiers: k_off : Nat, k_len : Nat, (code_region_valid_range k_off k_len) ∧
+  (code_valid_length k_len) -/
+structure CodeFields (k_off : Nat) (k_len : Nat) where
+  bytes : Nat
+  len : Nat
+  jumpdests : jump_table_index
+  deriving BEq, Inhabited, Repr
+
+/-- Existential executable-code value whose concrete byte address and length
+remain correlated inside `CodeFields`. -/
+abbrev Code := (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))
+
+/-- Encoded pairing-check status: values `0`/`1` are malformed input and
+values `2`/`3` are valid input with a false/true pairing result. -/
+abbrev pairing_check_result := Nat
 
 /-- The complete containment invariant for an RLP field reference. `source`
 is normalized to the complete encoded item. RLP content is its suffix, so
@@ -651,43 +1071,412 @@ def rlp_field_ref_valid (k_source_off : Int) (k_source_len : Int) (k_content_len
   (source_valid_range k_source_off k_source_len) ∧
   0 ≤ k_content_len ∧ k_content_len ≤ k_source_len
 
-/-- The result of popping one complete field from a cursor. In addition to
-the field's own validity, the complete encoding is non-empty and contained
-by the cursor being consumed. -/
-def rlp_cursor_pop_valid
+/-- The result of decoding one complete field at the head of a cursor. In
+addition to the field's own validity, the complete encoding is non-empty
+and contained by the cursor. The field's `source.len` is therefore a
+witness for the amount a caller may subsequently advance. -/
+def rlp_decoded_item_valid
   (k_source_off : Int) (k_source_len : Int) (k_full_len : Int) (k_content_len : Int) : Prop :=
   (rlp_field_ref_valid k_source_off k_full_len k_content_len) ∧
   0 < k_full_len ∧ k_full_len ≤ k_source_len
+
+/-- A positive amount proven to be contained by the cursor it consumes. -/
+def rlp_cursor_advance_valid (k_source_len : Int) (k_consumed : Int) : Prop :=
+  0 < k_consumed ∧ k_consumed ≤ k_source_len
 
 /-- The witness-carrying fields of a decoded RLP reference. Both the complete
 encoding and its content are statically contained by the source slice. -/
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
 structure RlpFieldRef (k_source_off : Nat) (k_source_len : Nat) (k_content_len : Nat) where
-  source : (EvmByteSliceFields k_source_off k_source_len)
+  source : (StatelessInputSliceFields k_source_off k_source_len)
   is_list : Bool
   content_len : Nat
   deriving BEq, Inhabited, Repr
 
-/-- A one-pass RLP cursor is the unconsumed suffix of its source. Popping an
-item advances both its offset and its decreasing remaining length without
-carrying a second position field. -/
+/-- A one-pass RLP cursor is the unconsumed suffix of its source. Decoding
+yields a field whose length witnesses a valid advance; the caller owns the
+corresponding cursor transition. -/
 abbrev RlpCursor (k_source_off : Nat) (k_source_len : Nat) :=
-  (EvmByteSliceFields k_source_off k_source_len)
+  (StatelessInputSliceFields k_source_off k_source_len)
 
-/-- A fork's blob parameters (EIP-4844/EIP-7691): target and maximum blob
-counts per block, and the base-fee update fraction. -/
-structure BlobSchedule where
-  target : blob_target_count
-  max : blob_count
-  base_fee_update_fraction : blob_fee_update_fraction
+/-- The same RLP framing invariants over a node encoding held in the scratch
+arena. Keeping this nominally separate prevents decoded input fields from
+acquiring a runtime byte-source tag. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+structure ScratchRlpFieldRef (k_source_off : Nat) (k_source_len : Nat) (k_content_len : Nat) where
+  source : (ScratchSliceFields k_source_off k_source_len)
+  is_list : Bool
+  content_len : Nat
   deriving BEq, Inhabited, Repr
 
-/-- Execution rules and protocol constants selected by the stable fork byte
-in the stateless-input schema identifier. -/
-structure ProtocolProfile where
-  fork : Fork
-  blob_schedule : BlobSchedule
+/-- A one-pass RLP cursor over a scratch-arena node encoding, nominally
+distinct from the stateless-input cursor. -/
+abbrev ScratchRlpCursor (k_source_off : Nat) (k_source_len : Nat) :=
+  (ScratchSliceFields k_source_off k_source_len)
+
+/-- The result of applying an RLP field's protocol-level value constraint.
+Structurally invalid or non-canonical RLP remains an `InvalidBlock`
+exception; this result distinguishes a well-formed value outside the
+requested field domain. -/
+/- Type quantifiers: k_value : Type -/
+inductive RlpResult (k_value : Type) where
+  | RlpOk (_ : k_value)
+  | RlpInvalidValue (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open RlpResult
+
+/-- Every supported protocol and schema fork, in activation order. This is the
+sole fork identity in the model: the decoded schema byte selects a
+`ProtocolProfile`, which stores one of these values. The bounded semantic
+type prevents values outside the supported fork sequence, while each named
+constant retains its precise singleton type for dependent profile typing. -/
+abbrev Fork := Nat
+
+/-- Singleton indices for the supported fork sequence. Keeping the numeric
+identities named lets dependent profile constraints refer to protocol
+forks without repeating their wire-order integers. -/
+abbrev frontier_fork_value : Int := 0
+
+/-- `Homestead`'s position in the activation order. -/
+abbrev homestead_fork_value : Int := 1
+
+/-- `Byzantium`'s position in the activation order. -/
+abbrev byzantium_fork_value : Int := 2
+
+/-- `Constantinople`'s position in the activation order. -/
+abbrev constantinople_fork_value : Int := 3
+
+/-- `Istanbul`'s position in the activation order. -/
+abbrev istanbul_fork_value : Int := 4
+
+/-- `Berlin`'s position in the activation order. -/
+abbrev berlin_fork_value : Int := 5
+
+/-- `London`'s position in the activation order. -/
+abbrev london_fork_value : Int := 6
+
+/-- `ArrowGlacier`'s position in the activation order. -/
+abbrev arrow_glacier_fork_value : Int := 7
+
+/-- `GrayGlacier`'s position in the activation order. -/
+abbrev gray_glacier_fork_value : Int := 8
+
+/-- `Paris`'s position in the activation order. -/
+abbrev paris_fork_value : Int := 9
+
+/-- `Shanghai`'s position in the activation order. -/
+abbrev shanghai_fork_value : Int := 10
+
+/-- First fork at which blob gas is active. Kept as a type-level singleton so
+profile equations and the runtime `Cancun` value share one boundary. -/
+abbrev first_blob_fork_value : Int := 11
+
+/-- `Prague`'s position in the activation order. -/
+abbrev prague_fork_value : Int := 12
+
+/-- `Osaka`'s position in the activation order. -/
+abbrev osaka_fork_value : Int := 13
+
+/-- `BPO1`'s position in the activation order. -/
+abbrev bpo1_fork_value : Int := 14
+
+/-- `BPO2`'s position in the activation order. -/
+abbrev bpo2_fork_value : Int := 15
+
+/-- `Amsterdam`'s position in the activation order. -/
+abbrev amsterdam_fork_value : Int := 16
+
+/-- The base-fee update fractions used by some supported blob schedule. -/
+def blob_fee_update_fraction_parameter (k_denominator : Int) : Prop :=
+  k_denominator = inactive_blob_fee_update_fraction ∨
+  k_denominator = cancun_blob_fee_update_fraction ∨
+  k_denominator = prague_blob_fee_update_fraction ∨
+  k_denominator = bpo1_blob_fee_update_fraction ∨ k_denominator = bpo2_blob_fee_update_fraction
+
+/-- The five protocol-defined blob schedules. Keeping the fields related
+excludes cross-products of individually valid constants which are not a
+schedule used by any fork. -/
+def blob_schedule_parameters (k_target : Int) (k_maximum : Int) (k_denominator : Int) : Prop :=
+  (blob_fee_update_fraction_parameter k_denominator) ∧
+  k_target = blob_schedule_inactive_count ∧
+  k_maximum = blob_schedule_inactive_count ∧ k_denominator = inactive_blob_fee_update_fraction ∨
+  k_target = cancun_blob_target_count ∧
+  k_maximum = cancun_blob_max_count ∧ k_denominator = cancun_blob_fee_update_fraction ∨
+  k_target = prague_blob_target_count ∧
+  k_maximum = prague_blob_max_count ∧ k_denominator = prague_blob_fee_update_fraction ∨
+  k_target = bpo1_blob_target_count ∧
+  k_maximum = bpo1_blob_max_count ∧ k_denominator = bpo1_blob_fee_update_fraction ∨
+  k_target = bpo2_blob_target_count ∧
+  k_maximum = bpo2_blob_max_count ∧ k_denominator = bpo2_blob_fee_update_fraction
+
+/-- A fork's associated blob parameters (EIP-4844/EIP-7691): target and
+maximum blob counts per block, and the base-fee update fraction. The
+existential indices retain the selected schedule's equations wherever the
+value is consumed. -/
+/- Type quantifiers: k_target : Nat, k_maximum : Nat, k_denominator : Nat, (blob_schedule_parameters k_target k_maximum k_denominator) -/
+structure BlobScheduleFields (k_target : Nat) (k_maximum : Nat) (k_denominator : Nat) where
+  target : Nat
+  max : Nat
+  base_fee_update_fraction : Nat
   deriving BEq, Inhabited, Repr
+
+/-- An admitted blob schedule with its three parameters packed
+existentially. -/
+abbrev BlobSchedule :=
+  (Sigma fun (k_target : Nat) =>
+  (Sigma fun (k_maximum : Nat) =>
+  (Sigma fun (k_denominator : Nat) => (BlobScheduleFields k_target k_maximum k_denominator))))
+
+/-- Exact active-fork schedule types. These aliases make a profile refinement
+visible at call sites without reconstructing or copying its schedule. -/
+abbrev cancun_blob_schedule := (BlobScheduleFields 3 6 3338477)
+
+/-- The exact schedule type of the Prague fork (EIP-7691). -/
+abbrev prague_blob_schedule := (BlobScheduleFields 6 9 5007716)
+
+/-- The exact schedule type of the Osaka fork, which retains Prague's blob
+parameters. -/
+abbrev osaka_blob_schedule := (BlobScheduleFields 6 9 5007716)
+
+/-- The exact schedule type of the first blob-parameter-only fork. -/
+abbrev bpo1_blob_schedule := (BlobScheduleFields 10 15 8346193)
+
+/-- The exact schedule type of the second blob-parameter-only fork. -/
+abbrev bpo2_blob_schedule := (BlobScheduleFields 14 21 11684671)
+
+/-- The exact schedule type of the Amsterdam fork, which retains BPO2's blob
+parameters. -/
+abbrev amsterdam_blob_schedule := (BlobScheduleFields 14 21 11684671)
+
+/-- The protocol parameter tuples admitted by supported forks. Keeping the
+fields under one constraint preserves their relationships: consumers know
+that they received one real protocol profile rather than an arbitrary
+cross-product of individually valid constants. -/
+def protocol_profile_parameters
+  (k_fork : Int) (k_target : Int) (k_maximum : Int) (k_denominator : Int) (k_code_limit : Int) (k_initcode_limit
+  : Int) (k_transaction_total_gas_limit : Int) (k_transaction_regular_gas_limit : Int) (k_transaction_blob_limit
+  : Int) (k_refund_divisor : Int) : Prop :=
+  k_fork = berlin_fork_value ∧
+  k_target = blob_schedule_inactive_count ∧
+  k_maximum = blob_schedule_inactive_count ∧
+  k_denominator = inactive_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = inactive_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = ssz_uint_bound ∧
+  k_transaction_blob_limit = blob_schedule_inactive_count ∧
+  k_refund_divisor = pre_london_refund_divisor ∨
+  london_fork_value ≤ k_fork ∧ k_fork ≤ paris_fork_value ∧
+  k_target = blob_schedule_inactive_count ∧
+  k_maximum = blob_schedule_inactive_count ∧
+  k_denominator = inactive_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = inactive_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = ssz_uint_bound ∧
+  k_transaction_blob_limit = blob_schedule_inactive_count ∧
+  k_refund_divisor = post_london_refund_divisor ∨
+  k_fork = shanghai_fork_value ∧
+  k_target = blob_schedule_inactive_count ∧
+  k_maximum = blob_schedule_inactive_count ∧
+  k_denominator = inactive_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = ssz_uint_bound ∧
+  k_transaction_blob_limit = blob_schedule_inactive_count ∧
+  k_refund_divisor = post_london_refund_divisor ∨
+  k_fork = first_blob_fork_value ∧
+  k_target = cancun_blob_target_count ∧
+  k_maximum = cancun_blob_max_count ∧
+  k_denominator = cancun_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = ssz_uint_bound ∧
+  k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+  ∨
+  k_fork = prague_fork_value ∧
+  k_target = prague_blob_target_count ∧
+  k_maximum = prague_blob_max_count ∧
+  k_denominator = prague_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = ssz_uint_bound ∧
+  k_transaction_blob_limit = prague_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+  ∨
+  k_fork = osaka_fork_value ∧
+  k_target = prague_blob_target_count ∧
+  k_maximum = prague_blob_max_count ∧
+  k_denominator = prague_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+  ∨
+  k_fork = bpo1_fork_value ∧
+  k_target = bpo1_blob_target_count ∧
+  k_maximum = bpo1_blob_max_count ∧
+  k_denominator = bpo1_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+  ∨
+  k_fork = bpo2_fork_value ∧
+  k_target = bpo2_blob_target_count ∧
+  k_maximum = bpo2_blob_max_count ∧
+  k_denominator = bpo2_blob_fee_update_fraction ∧
+  k_code_limit = pre_amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = pre_amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+  ∨
+  k_fork = amsterdam_fork_value ∧
+  k_target = bpo2_blob_target_count ∧
+  k_maximum = bpo2_blob_max_count ∧
+  k_denominator = bpo2_blob_fee_update_fraction ∧
+  k_code_limit = amsterdam_deployed_code_size_limit ∧
+  k_initcode_limit = amsterdam_initcode_size_limit ∧
+  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
+  k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
+
+/-- The reachable excess-blob-gas ceiling derived from a correlated profile.
+The type-level equation is also the field's singleton type, so the stored
+value cannot disagree with its fork or schedule. -/
+abbrev profile_excess_blob_gas_limit
+  (k_fork : Int) (k_target : Int) (k_maximum : Int) (k_denominator : Int) := Int
+
+/-- Execution rules and computation bounds selected together by one schema
+fork. The singleton indices retain the exact selected parameter tuple. -/
+/- Type quantifiers: k_fork : Nat, k_target : Nat, k_maximum : Nat, k_denominator : Nat, k_code_limit
+  : Nat, k_initcode_limit : Nat, k_transaction_total_gas_limit : Nat, k_transaction_regular_gas_limit
+  : Nat, k_transaction_blob_limit : Nat, k_refund_divisor : Nat, (protocol_profile_parameters k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor) -/
+structure ProtocolProfileFields
+  (k_fork : Nat) (k_target : Nat) (k_maximum : Nat) (k_denominator : Nat) (k_code_limit : Nat) (k_initcode_limit
+  : Nat) (k_transaction_total_gas_limit : Nat) (k_transaction_regular_gas_limit : Nat) (k_transaction_blob_limit
+  : Nat) (k_refund_divisor : Nat) where
+  fork : Nat
+  blob_schedule : (BlobScheduleFields k_target k_maximum k_denominator)
+  excess_blob_gas_limit : (profile_excess_blob_gas_limit k_fork k_target k_maximum k_denominator)
+  deployed_code_size_limit : Nat
+  initcode_size_limit : Nat
+  transaction_total_gas_limit : Nat
+  transaction_regular_gas_limit : Nat
+  transaction_blob_limit : Nat
+  refund_divisor : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A protocol profile with its parameter tuple packed existentially;
+unpacking recovers the admitted combination's equations. -/
+abbrev ProtocolProfile :=
+  (Sigma fun (k_fork : Nat) =>
+  (Sigma fun (k_target : Nat) =>
+  (Sigma fun (k_maximum : Nat) =>
+  (Sigma fun (k_denominator : Nat) =>
+  (Sigma fun (k_code_limit : Nat) =>
+  (Sigma fun (k_initcode_limit : Nat) =>
+  (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+  (Sigma fun (k_transaction_blob_limit : Nat) =>
+  (Sigma fun (k_refund_divisor : Nat) =>
+  (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))
+
+/-- The gas limits which become concrete once a correlated protocol profile
+is paired with the executing block header. `transaction_total_limit`
+bounds the transaction's complete reservoir; `transaction_regular_limit`
+bounds the regular-execution part of that reservoir. Receipt accumulation
+is indexed directly by the two block reservoirs and therefore needs no
+duplicate scalar limit here. -/
+def gas_limits_parameters
+  (k_block_limit : Int) (k_profile_total_limit : Int) (k_profile_regular_limit : Int) (k_transaction_total_limit
+  : Int) (k_transaction_regular_limit : Int) : Prop :=
+  0 ≤ k_block_limit ∧
+  k_block_limit ≤ block_gas_limit_bound ∧
+  (protocol_transaction_total_gas_limit_value k_profile_total_limit) ∧
+  (protocol_transaction_regular_gas_limit_value k_profile_regular_limit) ∧
+  k_transaction_total_limit =
+  (if ( k_block_limit < k_profile_total_limit  : Bool) then k_block_limit else k_profile_total_limit)
+  ∧
+  k_transaction_regular_limit =
+  (if ( k_transaction_total_limit < k_profile_regular_limit  : Bool) then k_transaction_total_limit else k_profile_regular_limit)
+
+/-- The concrete gas ceilings for the executing block: the header's block
+limit, the derived per-transaction total and regular limits, and the
+fixed system-call limits. -/
+/- Type quantifiers: k_block_limit : Nat, k_profile_total_limit : Nat, k_profile_regular_limit : Nat, k_transaction_total_limit
+  : Nat, k_transaction_regular_limit : Nat, (gas_limits_parameters k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit) -/
+structure GasLimitsFields
+  (k_block_limit : Nat) (k_profile_total_limit : Nat) (k_profile_regular_limit : Nat) (k_transaction_total_limit
+  : Nat) (k_transaction_regular_limit : Nat) where
+  block_limit : Nat
+  transaction_total_limit : Nat
+  transaction_regular_limit : Nat
+  system_regular_limit : Nat
+  system_state_limit : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- Gas limits with their five indices packed existentially. -/
+abbrev GasLimits :=
+  (Sigma fun (k_block_limit : Nat) =>
+  (Sigma fun (k_profile_total_limit : Nat) =>
+  (Sigma fun (k_profile_regular_limit : Nat) =>
+  (Sigma fun (k_transaction_total_limit : Nat) =>
+  (Sigma fun (k_transaction_regular_limit : Nat) =>
+  (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit))))))
+
+/-- A static protocol profile and the concrete limits derived from the current
+header, indexed together. Sharing the profile indices with `GasLimits`
+prevents independently valid but mutually inconsistent values from being
+paired. -/
+def execution_profile_parameters
+  (k_fork : Int) (k_target : Int) (k_maximum : Int) (k_denominator : Int) (k_code_limit : Int) (k_initcode_limit
+  : Int) (k_profile_total_limit : Int) (k_profile_regular_limit : Int) (k_transaction_blob_limit :
+  Int) (k_refund_divisor : Int) (k_block_limit : Int) (k_transaction_total_limit : Int) (k_transaction_regular_limit
+  : Int) : Prop :=
+  (protocol_profile_parameters k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_profile_total_limit k_profile_regular_limit k_transaction_blob_limit k_refund_divisor)
+  ∧
+  (gas_limits_parameters k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit)
+
+/-- The static protocol profile paired with the gas limits derived from it
+for the executing block, sharing the profile indices so the pair cannot
+disagree. -/
+/- Type quantifiers: k_fork : Nat, k_target : Nat, k_maximum : Nat, k_denominator : Nat, k_code_limit
+  : Nat, k_initcode_limit : Nat, k_profile_total_limit : Nat, k_profile_regular_limit : Nat, k_transaction_blob_limit
+  : Nat, k_refund_divisor : Nat, k_block_limit : Nat, k_transaction_total_limit : Nat, k_transaction_regular_limit
+  : Nat, (execution_profile_parameters k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_profile_total_limit k_profile_regular_limit k_transaction_blob_limit k_refund_divisor k_block_limit k_transaction_total_limit k_transaction_regular_limit) -/
+structure ExecutionProfileFields
+  (k_fork : Nat) (k_target : Nat) (k_maximum : Nat) (k_denominator : Nat) (k_code_limit : Nat) (k_initcode_limit
+  : Nat) (k_profile_total_limit : Nat) (k_profile_regular_limit : Nat) (k_transaction_blob_limit :
+  Nat) (k_refund_divisor : Nat) (k_block_limit : Nat) (k_transaction_total_limit : Nat) (k_transaction_regular_limit
+  : Nat) where
+  protocol :
+  (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_profile_total_limit k_profile_regular_limit k_transaction_blob_limit k_refund_divisor)
+  gas :
+  (GasLimitsFields k_block_limit k_profile_total_limit k_profile_regular_limit k_transaction_total_limit k_transaction_regular_limit)
+  deriving BEq, Inhabited, Repr
+
+/-- An execution profile with its thirteen indices packed existentially. -/
+abbrev ExecutionProfile :=
+  (Sigma fun (k_fork : Nat) =>
+  (Sigma fun (k_target : Nat) =>
+  (Sigma fun (k_maximum : Nat) =>
+  (Sigma fun (k_denominator : Nat) =>
+  (Sigma fun (k_code_limit : Nat) =>
+  (Sigma fun (k_initcode_limit : Nat) =>
+  (Sigma fun (k_profile_total_limit : Nat) =>
+  (Sigma fun (k_profile_regular_limit : Nat) =>
+  (Sigma fun (k_transaction_blob_limit : Nat) =>
+  (Sigma fun (k_refund_divisor : Nat) =>
+  (Sigma fun (k_block_limit : Nat) =>
+  (Sigma fun (k_transaction_total_limit : Nat) =>
+  (Sigma fun (k_transaction_regular_limit : Nat) =>
+  (ExecutionProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_profile_total_limit k_profile_regular_limit k_transaction_blob_limit k_refund_divisor k_block_limit k_transaction_total_limit k_transaction_regular_limit))))))))))))))
 
 /-- The decoded chain configuration for the executing payload. -/
 structure ChainConfig where
@@ -727,6 +1516,16 @@ structure StorageValue where
   orig : word
   deriving BEq, Inhabited, Repr
 
+/-- Result of consulting the transaction storage layer. A clear generation is
+not a slot-row hit: it resolves the value to zero, but the caller must
+still record the first EIP-7928 read of that slot. -/
+inductive StorageTxLookup where
+  | StorageTxHit (_ : StorageValue)
+  | StorageTxCleared (_ : Unit)
+  | StorageTxMiss (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open StorageTxLookup
+
 /-- A fully qualified storage key: account address and 256-bit slot. -/
 structure StorageKey where
   addr : address
@@ -739,6 +1538,21 @@ structure StorageEntry where
   key : StorageKey
   value : StorageValue
   deriving BEq, Inhabited, Repr
+
+/-- A block-layer storage lookup. `value` is meaningful exactly when `found`
+is true; the explicit bit keeps a real all-zero row distinct from a miss. -/
+structure StorageBlockRow where
+  found : Bool
+  value : StorageValue
+  deriving BEq, Inhabited, Repr
+
+/-- One transaction-layer storage row, or exhaustion of the destructive
+transaction-end drain. -/
+inductive StorageTxPopResult where
+  | StorageTxPopRow (_ : StorageEntry)
+  | StorageTxPopExhausted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open StorageTxPopResult
 
 /-- An account's current and original (transaction-start) states. -/
 structure AcctValue where
@@ -753,12 +1567,73 @@ structure AcctEntry where
   value : AcctValue
   deriving BEq, Inhabited, Repr
 
-/-- The EIP-2718 envelope type: the single transaction discriminant
-The type-derived predicates at the end of this module read it — no
-boolean flags are stored. -/
+/-- An account-layer lookup. `account` is meaningful exactly when `found` is
+true; [EMPTY_ACCOUNT][] is the payload sentinel for a miss. -/
+structure AccountRow where
+  found : Bool
+  account : Account
+  deriving BEq, Inhabited, Repr
+
+/-- One transaction-layer account row, or exhaustion of the destructive
+transaction-end drain. -/
+inductive AcctTxPopResult where
+  | AcctTxPopRow (_ : AcctEntry)
+  | AcctTxPopExhausted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open AcctTxPopResult
+
+/-- A host storage row prepared for secure-trie traversal. The semantic row
+remains [StorageEntry][type-StorageEntry]; these cached digests are derived
+traversal metadata computed when the witness value is first materialized. -/
+structure StorageTrieEntry where
+  entry : StorageEntry
+  address_hash : hash
+  slot_hash : hash
+  deriving BEq, Inhabited, Repr
+
+/-- One block-layer storage iterator row, or iterator exhaustion. -/
+inductive StorageBlockIterResult where
+  | StorageBlockIterRow (_ : StorageTrieEntry)
+  | StorageBlockIterExhausted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open StorageBlockIterResult
+
+/-- A host account row prepared for secure-trie traversal. -/
+structure AcctTrieEntry where
+  entry : AcctEntry
+  address_hash : hash
+  deriving BEq, Inhabited, Repr
+
+/-- One block-layer account iterator row, or iterator exhaustion. -/
+inductive AcctBlockIterResult where
+  | AcctBlockIterRow (_ : AcctTrieEntry)
+  | AcctBlockIterExhausted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open AcctBlockIterResult
+
+/-- The EIP-2718 envelope type: the single transaction discriminant. Its
+closed semantic descriptor below derives fork and feature requirements;
+transactions do not store redundant boolean flags. -/
 inductive TxType where | LegacyTx | AccessListTx | FeeMarketTx | BlobTx | SetCodeTx
   deriving BEq, Inhabited, Repr
   open TxType
+
+/-- The two transaction-signature encodings. Legacy transactions use the
+original/EIP-155 `v` domain; every EIP-2718 typed envelope carries an
+explicit zero-or-one parity. -/
+inductive TxSignatureScheme where | LegacySignature | TypedSignature
+  deriving BEq, Inhabited, Repr
+  open TxSignatureScheme
+
+/-- Protocol requirements determined solely by an EIP-2718 envelope type.
+Computing this descriptor once prevents validation from repeatedly
+dispatching on the same closed transaction-type algebra. -/
+structure TxTypeSemantics where
+  minimum_fork : Fork
+  signature : TxSignatureScheme
+  blob : Bool
+  set_code : Bool
+  deriving BEq, Inhabited, Repr
 
 /-- An EIP-7702 set-code authorization tuple. RLP decoding recovers the
 authority and validates the signature (`s <= n/2`, `y_parity`, `r`);
@@ -772,19 +1647,62 @@ structure Authorization where
   chain_id : word
   deriving BEq, Inhabited, Repr
 
-/-- The source-backed EIP-4844 versioned blob hashes of a transaction. -/
-structure BlobHashes where
-  bytes : EvmByteSlice
-  count : transaction_blob_count
+/-- The source-backed EIP-4844 versioned blob hashes of a transaction. The
+limit index records which fork-selected transaction range admitted the
+observed count. It is carried by the enclosing transaction rather than
+hidden in a nested existential, so consumers retain `count <= limit`. -/
+/- Type quantifiers: k_limit : Nat, (transaction_blob_limit_value k_limit) -/
+structure BlobHashesFields (k_limit : Nat) where
+  bytes : StatelessInputSlice
+  count : (transaction_blob_count k_limit)
   deriving BEq, Inhabited, Repr
 
 /-- A byte span contained by one SSZ transaction envelope. This structural
 bound is independent of fork-specific calldata and initcode limits. -/
-abbrev TransactionEvmByteSlice :=
-  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))
+abbrev TransactionInputSlice :=
+  (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))
 
 /-- A collection count whose entries are encoded inside one transaction. -/
 abbrev transaction_item_count := Nat
+
+/-- EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
+Amsterdam's least expensive authorization costs 7,816 execution gas.
+Successful transaction validity therefore proves that no executable
+authorization list can contain more entries than this bound. -/
+abbrev prepared_authorization_count_bound : Int := (eip7825_transaction_gas_limit / 7816)
+
+/-- The number of authorization tuples admitted by one valid transaction. -/
+abbrev prepared_authorization_count := Nat
+
+/-- Authorizations decoded and signature-recovered after transaction validity
+but before any world-state mutation. The semantic model retains an
+immutable list. Optimized C represents the same ordered collection as a
+cursor into a fixed-capacity transaction workspace. -/
+structure PreparedAuthorizationList where
+  entries : (List Authorization)
+  count : prepared_authorization_count
+  deriving BEq, Inhabited, Repr
+
+/-- A validated EIP-2930 access-list content span. Entries remain in their
+canonical RLP encoding and are consumed with a cursor when prewarming. -/
+structure AccessListRef where
+  encoded : StatelessInputSlice
+  address_count : transaction_item_count
+  slot_count : transaction_item_count
+  deriving BEq, Inhabited, Repr
+
+/-- A validated EIP-7702 authorization-list content span. Its dependent count
+remains visible to execution, so recursive authorization processing can
+derive refund bounds from the number of admitted tuples. -/
+/- Type quantifiers: k_count : Nat, 0 ≤ k_count ∧ k_count ≤ transaction_length_bound -/
+structure AuthorizationListRefFields (k_count : Nat) where
+  encoded : StatelessInputSlice
+  count : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- An authorization-list reference packing its admitted tuple count
+existentially. -/
+abbrev AuthorizationListRef := (Sigma fun (k_count : Nat) => (AuthorizationListRefFields k_count))
 
 /-- A byte length contained by one SSZ transaction envelope. -/
 abbrev transaction_byte_length := Nat
@@ -802,7 +1720,8 @@ abbrev transaction_initcode_cost := Nat
 legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
 (blob), and EIP-7702 (set code); the type-specific fields are
 validity-relevant per their EIP. -/
-structure Transaction where
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+structure TransactionFields (k_blob_limit : Nat) where
   tx_type : TxType
   sender : address
   nonce : word
@@ -811,31 +1730,51 @@ structure Transaction where
   is_create : Bool
   recipient : address
   value : word
-  raw : EvmByteSlice
-  input_src : TransactionEvmByteSlice
-  access_list_addresses : (List address)
-  access_list_address_count : transaction_item_count
-  access_list_slots : (List StorageKey)
-  access_list_slot_count : transaction_item_count
+  raw : StatelessInputSlice
+  input_src : TransactionInputSlice
+  access_list : AccessListRef
   max_fee : word
   max_blob_fee : word
   max_priority_fee : word
-  authorizations : (List Authorization)
-  authorization_count : transaction_item_count
-  blob_hashes : BlobHashes
-  pubkey : EvmByteSlice
+  authorizations : AuthorizationListRef
+  blob_hashes : (BlobHashesFields k_blob_limit)
+  pubkey : StatelessInputSlice
   signing_hash : hash
   sig_v : word
   sig_r : word
   sig_s : word
   deriving BEq, Inhabited, Repr
 
-/-- A log record (YP §4.4.1, the log series): emitting address, 0–4
-topics (`LOG0`–`LOG4`), and the data bytes. -/
-structure LogEntry where
-  address : address
-  topics : (List word)
-  data : EvmByteSlice
+/-- A decoded transaction retains the fork-selected blob-count limit that was
+applied while decoding its envelope. Non-blob transactions carry the
+inactive zero limit. -/
+abbrev Transaction := (Sigma fun (k_blob_limit : Nat) => (TransactionFields k_blob_limit))
+
+/-- The bounded topic operands of one `LOG0`–`LOG4` instruction. Keeping the
+arity in the constructor avoids allocating a Sail list for at most four
+stack words. -/
+inductive LogTopics where
+  | LogTopics0 (_ : Unit)
+  | LogTopics1 (_ : word)
+  | LogTopics2 (_ : (word × word))
+  | LogTopics3 (_ : (word × word × word))
+  | LogTopics4 (_ : (word × word × word × word))
+  deriving Inhabited, BEq, Repr
+  open LogTopics
+
+/-- A host log-store cursor. It is an opaque bounded collection position,
+not an EVM quantity; the host rejects positions outside the current
+block's retained log series. -/
+abbrev log_store_index_bound : Int := (2 ^ 64 - 1)
+
+/-- A position in the block-lifetime host log store. -/
+abbrev log_store_index := Nat
+
+/-- A consecutive transaction-local view into the block-lifetime host log
+store. Reverted frame records are removed before this view is captured. -/
+structure LogSeriesRef where
+  start : log_store_index
+  count : log_store_index
   deriving BEq, Inhabited, Repr
 
 /-- A transaction receipt. `success` means the top-level frame
@@ -849,21 +1788,68 @@ block accounting *without* the EIP-3529 refund
 (`max(execution_gas_before_refund, calldata_floor)`); it
 differs from `gas_used` (the receipt's refunded gas) precisely by the
 refund and excludes `state_gas`. -/
-structure Receipt where
+def receipt_gas_relation
+  (k_limit : Int) (k_regular_limit : Int) (k_gas_used : Int) (k_execution_gas : Int) (k_state_gas :
+  Int) : Prop :=
+  0 ≤ k_limit ∧
+  k_limit ≤ block_gas_limit_bound ∧
+  0 ≤ k_regular_limit ∧
+  k_regular_limit ≤ k_limit ∧
+  0 ≤ k_gas_used ∧
+  k_gas_used ≤ k_limit ∧
+  0 ≤ k_execution_gas ∧
+  k_execution_gas ≤ k_regular_limit ∧
+  0 ≤ k_state_gas ∧ k_state_gas ≤ k_limit ∧ k_gas_used ≤ (k_execution_gas + k_state_gas)
+
+/-- The concrete receipt record indexed by its admitted and consumed gas
+quantities. -/
+/- Type quantifiers: k_limit : Nat, k_regular_limit : Nat, k_gas_used : Nat, k_execution_gas : Nat, k_state_gas
+  : Nat, (receipt_gas_relation k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas) -/
+structure ReceiptFields
+  (k_limit : Nat) (k_regular_limit : Nat) (k_gas_used : Nat) (k_execution_gas : Nat) (k_state_gas :
+  Nat) where
   tx_type : TxType
   success : Bool
-  gas_used : gas
-  execution_gas : gas
-  state_gas : gas
-  logs : (List LogEntry)
+  gas_used : Nat
+  execution_gas : Nat
+  state_gas : Nat
+  logs : LogSeriesRef
   deriving BEq, Inhabited, Repr
+
+/-- A receipt retaining the transaction limits that bounded each gas
+contribution. -/
+abbrev ReceiptWithin (k_limit : Int) (k_regular_limit : Int) :=
+  (Sigma fun (k_state_gas : Nat) =>
+  (Sigma fun (k_execution_gas : Nat) =>
+  (Sigma fun (k_gas_used : Nat) =>
+  (ReceiptFields k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas))))
+
+/-- A receipt whose originating transaction limit is not needed. -/
+abbrev Receipt :=
+  (Sigma fun (k_state_gas : Nat) =>
+  (Sigma fun (k_execution_gas : Nat) =>
+  (Sigma fun (k_gas_used : Nat) =>
+  (Sigma fun (k_regular_limit : Nat) =>
+  (Sigma fun (k_limit : Nat) =>
+  (ReceiptFields k_limit k_regular_limit k_gas_used k_execution_gas k_state_gas))))))
 
 /-- The 2048-bit logs bloom filter (YP §4.4.1), as 256 bytes. -/
 abbrev LogsBloom := (Vector byte 256)
 
+/-- The payload header's 2048-bit logs bloom in canonical SSZ wire order.
+Keeping the authenticated input range by reference lets consumers that
+already operate on bytes avoid an eager 256-byte materialization. -/
+abbrev LogsBloomRef := (StatelessInputSliceLength 256)
+
 /-- The execution-payload header fields the model reads and validates
-(YP §4.4). `extra_data` stays a reference into the payload — it is
-RLP-encoded whole for the header hash and never inspected. -/
+(YP §4.4). Scalar wire bounds come from the consensus/Amsterdam SSZ
+`ExecutionPayload` schema. `gas_used <= gas_limit` and the active
+blob-schedule rules are execution-protocol constraints checked when the
+payload is admitted. `extra_data` retains the schema's
+`ByteList[MAX_EXTRA_DATA_BYTES]` bound while staying source-backed; it is
+RLP-encoded whole for the header hash and never inspected. The fixed
+`logs_bloom` commitment likewise stays source-backed until a semantic
+consumer explicitly decodes it. -/
 structure BlockHeader where
   number : block_number
   timestamp : block_timestamp
@@ -875,12 +1861,12 @@ structure BlockHeader where
   excess_blob_gas : excess_blob_gas
   state_root : hash
   receipts_root : hash
-  logs_bloom : LogsBloom
+  logs_bloom : LogsBloomRef
   fee_recipient : address
   parent_hash : hash
   parent_beacon_block_root : hash
   slot_number : slot_number
-  extra_data : EvmByteSlice
+  extra_data : (StatelessInputSliceAtMost (2 ^ 5))
   deriving BEq, Inhabited, Repr
 
 /-- An EIP-4895 beacon-chain withdrawal: index, validator, recipient,
@@ -898,7 +1884,7 @@ are needed. -/
 structure BlockBody where
   transactions : TransactionListRef
   withdrawals : WithdrawalListRef
-  block_access_list : EvmByteSlice
+  block_access_list : (StatelessInputSliceAtMost (2 ^ 30))
   deriving BEq, Inhabited, Repr
 
 /-- A block: header plus body. -/
@@ -914,50 +1900,206 @@ structure ExecutionPayload where
   block' : Block
   deriving BEq, Inhabited, Repr
 
-/-- Raw EIP-7685 request bodies. The request-type bytes are added only
-while computing the header commitment; the SSZ input carries one field
-per type. -/
-structure ExecutionRequests where
-  deposits : EvmByteSlice
-  withdrawals : EvmByteSlice
-  consolidations : EvmByteSlice
-  builder_deposits : EvmByteSlice
-  builder_exits : EvmByteSlice
-  deriving BEq, Inhabited, Repr
-
 /-- The per-transaction environment: `ORIGIN`/`GASPRICE` (YP I_o, I_p)
 plus the EIP-4844 blob versioned hashes the `BLOBHASH` opcode reads. -/
-structure TxEnv where
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+structure TxEnvFields (k_blob_limit : Nat) where
   origin : address
   gas_price : word
-  blob_hashes : BlobHashes
+  blob_hashes : (BlobHashesFields k_blob_limit)
   deriving BEq, Inhabited, Repr
+
+/-- A transaction environment packing its fork-selected blob-count limit
+existentially. -/
+abbrev TxEnv := (Sigma fun (k_blob_limit : Nat) => (TxEnvFields k_blob_limit))
+
+/-- The header/profile-bounded gas allowance attached to one decoded
+transaction before stateful validation. The total allowance funds both
+gas dimensions; the regular allowance is the portion available to
+ordinary EVM execution. -/
+/- Type quantifiers: k_total : Nat, k_regular : Nat, 0 ≤ k_regular ∧
+  k_regular ≤ k_total ∧ k_total ≤ block_gas_limit_bound -/
+structure TransactionGasAllowanceFields (k_total : Nat) (k_regular : Nat) where
+  total : Nat
+  regular : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A transaction gas allowance with existentially hidden total and regular
+budgets. -/
+abbrev TransactionGasAllowance :=
+  (Sigma fun (k_total : Nat) =>
+  (Sigma fun (k_regular : Nat) => (TransactionGasAllowanceFields k_total k_regular)))
+
+/-- The post-intrinsic gas state admitted for a transaction. Keeping the
+admitted limit, the regular-gas ceiling, both intrinsic charges, and the
+two live reservoirs in one dependent value preserves the conservation
+equation established by transaction validation. -/
+def transaction_initial_gas_relation
+  (k_total : Int) (k_regular : Int) (k_intrinsic_execution : Int) (k_intrinsic_state : Int) (k_calldata_floor
+  : Int) (k_execution : Int) (k_state : Int) : Prop :=
+  0 ≤ k_intrinsic_execution ∧
+  0 ≤ k_intrinsic_state ∧
+  0 ≤ k_calldata_floor ∧
+  k_intrinsic_execution ≤ k_regular ∧
+  k_calldata_floor ≤ k_regular ∧
+  k_regular ≤ k_total ∧
+  k_total ≤ block_gas_limit_bound ∧
+  0 ≤ k_execution ∧
+  0 ≤ k_state ∧
+  (k_execution + k_state + k_intrinsic_execution + k_intrinsic_state) = k_total ∧
+  k_execution ≤ (k_regular - k_intrinsic_execution)
+
+/-- The concrete post-intrinsic gas record whose indices retain the
+transaction conservation relation. -/
+/- Type quantifiers: k_total : Nat, k_regular : Nat, k_intrinsic_execution : Nat, k_intrinsic_state
+  : Nat, k_calldata_floor : Nat, k_execution : Nat, k_state : Nat, (transaction_initial_gas_relation k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state) -/
+structure TransactionInitialGasFields
+  (k_total : Nat) (k_regular : Nat) (k_intrinsic_execution : Nat) (k_intrinsic_state : Nat) (k_calldata_floor
+  : Nat) (k_execution : Nat) (k_state : Nat) where
+  admitted_limit : Nat
+  regular_limit : Nat
+  intrinsic_execution : Nat
+  intrinsic_state : Nat
+  calldata_floor : Nat
+  execution_remaining : Nat
+  state_remaining : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- The initial gas state with every conserved quantity hidden
+existentially. -/
+abbrev TransactionInitialGas :=
+  (Sigma fun (k_total : Nat) =>
+  (Sigma fun (k_regular : Nat) =>
+  (Sigma fun (k_intrinsic_execution : Nat) =>
+  (Sigma fun (k_intrinsic_state : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))
+
+/-- The initial gas state for one concrete admitted transaction limit. This
+view hides the internal split while retaining the limit that the block
+transaction loop has already checked against its remaining budgets. -/
+abbrev TransactionInitialGasFor (k_total : Int) :=
+  (Sigma fun (k_regular : Nat) =>
+  (Sigma fun (k_intrinsic_execution : Nat) =>
+  (Sigma fun (k_intrinsic_state : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state)))))))
+
+/-- The initial gas state retaining both the complete and regular execution
+allowances checked by the block loop. -/
+abbrev TransactionInitialGasForLimits (k_total : Int) (k_regular : Int) :=
+  (Sigma fun (k_intrinsic_execution : Nat) =>
+  (Sigma fun (k_intrinsic_state : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (TransactionInitialGasFields k_total k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))
 
 /-- The values established by successful up-front transaction validation
 (YP §6.2): sender, pre-state nonce, intrinsic gas, blob fee, and the
-EIP-1559 effective gas and priority prices. Invalid transactions throw
+EIP-1559 effective gas and priority prices. Invalid transactions terminate
 before this value is constructed. -/
-structure TxValidity where
+/- Type quantifiers: k_limit : Nat, k_regular : Nat, k_intrinsic_execution : Nat, k_intrinsic_state
+  : Nat, k_calldata_floor : Nat, k_execution : Nat, k_state : Nat, (transaction_initial_gas_relation k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state) -/
+structure TxValidityFields
+  (k_limit : Nat) (k_regular : Nat) (k_intrinsic_execution : Nat) (k_intrinsic_state : Nat) (k_calldata_floor
+  : Nat) (k_execution : Nat) (k_state : Nat) where
   sender : address
   nonce_before : account_nonce
-  gas_limit : block_gas_limit
-  intrinsic_execution_gas : gas_cost
-  intrinsic_state_gas : gas_cost
-  calldata_floor : gas_cost
+  gas :
+  (TransactionInitialGasFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state)
   blob_fee : word
   gas_price : word
   priority_fee : word
   deriving BEq, Inhabited, Repr
 
-/-- The result of a transaction's top-level frame: success and remaining
-gas. -/
-structure TxFrameResult where
+/-- A validity result retaining the transaction's admitted total and regular
+gas limits while hiding the internal initial split. -/
+abbrev TxValidityForLimits (k_limit : Int) (k_regular : Int) :=
+  (Sigma fun (k_intrinsic_execution : Nat) =>
+  (Sigma fun (k_intrinsic_state : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))
+
+/-- A validity result whose limit is not needed by the consumer. -/
+abbrev TxValidity :=
+  (Sigma fun (k_limit : Nat) =>
+  (Sigma fun (k_regular : Nat) =>
+  (Sigma fun (k_intrinsic_execution : Nat) =>
+  (Sigma fun (k_intrinsic_state : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))
+
+/-- The transaction gas conserved at the top-level frame boundary. The
+snapshot retains both admitted budgets and the exact split consumed by
+ordinary execution and state access. Settlement can therefore apply
+refunds and the calldata floor without reconstructing or revalidating
+either contribution. -/
+def tx_frame_gas_snapshot_relation
+  (k_limit : Int) (k_regular : Int) (k_calldata_floor : Int) (k_remaining : Int) (k_state_used : Int)
+  : Prop :=
+  0 ≤ k_regular ∧
+  k_regular ≤ k_limit ∧
+  k_limit ≤ block_gas_limit_bound ∧
+  0 ≤ k_calldata_floor ∧
+  k_calldata_floor ≤ k_regular ∧
+  0 ≤ k_remaining ∧
+  0 ≤ k_state_used ∧
+  k_state_used ≤ k_limit ∧
+  (k_remaining + k_state_used) ≤ k_limit ∧ (k_limit - k_remaining - k_state_used) ≤ k_regular
+
+/-- The concrete top-level frame gas snapshot whose indices retain the
+transaction admission and conservation proof. -/
+/- Type quantifiers: k_limit : Nat, k_regular : Nat, k_calldata_floor : Nat, k_remaining : Nat, k_state_used
+  : Nat, (tx_frame_gas_snapshot_relation k_limit k_regular k_calldata_floor k_remaining k_state_used) -/
+structure TxFrameGasSnapshotFields
+  (k_limit : Nat) (k_regular : Nat) (k_calldata_floor : Nat) (k_remaining : Nat) (k_state_used : Nat)
+  where
+  admitted_limit : Nat
+  regular_limit : Nat
+  calldata_floor : Nat
+  remaining : Nat
+  state_used : Nat
+  deriving BEq, Inhabited, Repr
+
+/-- A top-level frame gas snapshot with existentially hidden gas totals. -/
+abbrev TxFrameGasSnapshot :=
+  (Sigma fun (k_limit : Nat) =>
+  (Sigma fun (k_regular : Nat) =>
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_remaining : Nat) =>
+  (Sigma fun (k_state_used : Nat) =>
+  (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used))))))
+
+/-- A completed top-level frame tied to both admitted transaction limits. -/
+abbrev TxFrameGasSnapshotForLimits (k_limit : Int) (k_regular : Int) :=
+  (Sigma fun (k_calldata_floor : Nat) =>
+  (Sigma fun (k_remaining : Nat) =>
+  (Sigma fun (k_state_used : Nat) =>
+  (TxFrameGasSnapshotFields k_limit k_regular k_calldata_floor k_remaining k_state_used))))
+
+/-- The result of a transaction's top-level frame: success, the bounded gas
+snapshot consumed by settlement, and refunds. -/
+/- Type quantifiers: k_limit : Nat, k_regular : Nat, 0 ≤ k_regular ∧
+  k_regular ≤ k_limit ∧ k_limit ≤ block_gas_limit_bound -/
+structure TxFrameResultFields (k_limit : Nat) (k_regular : Nat) where
   success : Bool
-  execution_gas_remaining : gas
-  state_gas_remaining : gas
-  state_gas_used : state_gas_delta
+  gas : (TxFrameGasSnapshotForLimits k_limit k_regular)
   refund : gas_refund
   deriving BEq, Inhabited, Repr
+
+/-- A completed top-level frame with existentially hidden admitted limits. -/
+abbrev TxFrameResult :=
+  (Sigma fun (k_limit : Nat) =>
+  (Sigma fun (k_regular : Nat) => (TxFrameResultFields k_limit k_regular)))
 
 /-- The four CALL-family execution modes. `Call` is an ordinary call;
 `CallCode` combines the caller's storage with the target's code;
@@ -966,6 +2108,14 @@ structure TxFrameResult where
 inductive CallKind where | Call | CallCode | DelegateCall | StaticCall
   deriving BEq, Inhabited, Repr
   open CallKind
+
+/-- The two contract-creation address schemes. `CreateByNonce` is ordinary
+`CREATE`; `CreateBySalt` is EIP-1014 `CREATE2`. Keeping this as a closed
+semantic tag prevents callers from encoding an execution mode in an
+otherwise unexplained boolean. -/
+inductive CreateKind where | CreateByNonce | CreateBySalt
+  deriving BEq, Inhabited, Repr
+  open CreateKind
 
 /-- The per-frame call message (YP §8, the I tuple): caller, executing
 address, code owner, value, calldata length, static flag, and call
@@ -982,9 +2132,9 @@ structure Message where
 
 /-- The suspended parent-frame state restored after nested execution. -/
 structure FrameCheckpoint where
-  state : journal_checkpoint
   pc : code_pointer
   gas_remaining : gas
+  stack_top : StackTop
   state_gas_remaining : gas
   state_gas_spilled : state_gas_spill
   refund : gas_refund
@@ -992,8 +2142,8 @@ structure FrameCheckpoint where
   message : Message
   call_depth : frame_depth
   code : Code
-  calldata : EvmByteSlice
-  memory : EvmByteSlice
+  calldata : CalldataSlice
+  memory : EvmMemorySlice
   deriving BEq, Inhabited, Repr
 
 /-- The suspended parent information needed after a message call returns. -/
@@ -1036,16 +2186,9 @@ structure WitnessContext where
   parent_excess_blob_gas : excess_blob_gas
   deriving BEq, Inhabited, Repr
 
-/-- The partial JUMPDEST bitmap and its location while code is scanned. -/
-structure CodeAnalysis where
-  chunk : JumpdestChunk
-  chunk_index : code_chunk_index
-  chunk_offset : Nat
-  deriving BEq, Inhabited, Repr
-
 /-- An RLP byte count that can be materialized in the scratch arena. The
-canonical model is unbounded; optimized builds refine this representation
-and validate recursive collection totals at this boundary. -/
+host scratch-region limit is enforced while recursive collection totals
+are accumulated. -/
 abbrev rlp_scratch_length := Nat
 
 /-- Values accepted by the generic natural-number RLP helpers. Canonical RLP
@@ -1058,22 +2201,114 @@ def rlp_natural_increment_valid (k_value : Int) : Prop := 0 ≤ k_value
 /-- Encoded width returned by the generic natural-number RLP helper. -/
 abbrev rlp_natural_size := Nat
 
+/-- One exact-size RLP construction in the shared scratch arena. -/
+structure RlpEncoder where
+  start : source_pointer
+  expected_len : source_length
+  deriving BEq, Inhabited, Repr
+
 /-- A decoded access list and the counts needed for intrinsic gas. -/
 /- Type quantifiers: k_address_bound : Nat, k_slot_bound : Nat, (source_valid_length k_address_bound)
   ∧ (source_valid_length k_slot_bound) -/
 structure AccessListDecode (k_address_bound : Nat) (k_slot_bound : Nat) where
-  addresses : (List address)
-  storage_slots : (List StorageKey)
   address_count : Nat
   slot_count : Nat
   deriving BEq, Inhabited, Repr
 
-/-- A decoded EIP-7702 authorization sequence and its item count. -/
-/- Type quantifiers: k_bound : Nat, (source_valid_length k_bound) -/
-structure AuthorizationDecode (k_bound : Nat) where
-  authorizations : (List Authorization)
-  count : Nat
+/-- A prior transient-storage value restored by frame rollback. -/
+structure JournalTransientChange where
+  address : address
+  slot : word
+  prior : word
   deriving BEq, Inhabited, Repr
+
+/-- The prior warm epoch of an account. -/
+structure JournalWarmAccountChange where
+  address : address
+  prior_epoch : block_access_index
+  deriving BEq, Inhabited, Repr
+
+/-- The prior warm epoch of a storage location. -/
+structure JournalWarmStorageChange where
+  key : StorageKey
+  prior_epoch : block_access_index
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible account balance. -/
+structure JournalAccountBalanceChange where
+  address : address
+  prior : word
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible account nonce. -/
+structure JournalAccountNonceChange where
+  address : address
+  prior : account_nonce
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible account code hash. -/
+structure JournalAccountCodeHashChange where
+  address : address
+  prior : hash
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible account-existence flag. -/
+structure JournalAccountExistsChange where
+  address : address
+  prior : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The prior same-transaction account-creation flag. -/
+structure JournalAccountCreatedChange where
+  address : address
+  prior : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible selfdestruction flag. -/
+structure JournalAccountSelfdestructedChange where
+  address : address
+  prior : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The prior transaction-visible storage value. -/
+structure JournalStorageValueChange where
+  key : StorageKey
+  prior : word
+  deriving BEq, Inhabited, Repr
+
+/-- The prior incarnation attached to one transaction-visible storage row. -/
+structure JournalStorageRowGenerationChange where
+  key : StorageKey
+  prior : storage_generation
+  deriving BEq, Inhabited, Repr
+
+/-- The prior account-wide storage incarnation. -/
+structure JournalAccountStorageGenerationChange where
+  address : address
+  prior : storage_generation
+  deriving BEq, Inhabited, Repr
+
+/-- One append-only state-journal record. -/
+inductive StateJournalEntry where
+  | JournalTransientChanged (_ : JournalTransientChange)
+  | JournalWarmAccountChanged (_ : JournalWarmAccountChange)
+  | JournalWarmStorageChanged (_ : JournalWarmStorageChange)
+  | JournalAccountBalanceChanged (_ : JournalAccountBalanceChange)
+  | JournalAccountNonceChanged (_ : JournalAccountNonceChange)
+  | JournalAccountCodeHashChanged (_ : JournalAccountCodeHashChange)
+  | JournalAccountExistsChanged (_ : JournalAccountExistsChange)
+  | JournalAccountCreatedChanged (_ : JournalAccountCreatedChange)
+  | JournalAccountSelfdestructedChanged (_ : JournalAccountSelfdestructedChange)
+  | JournalTransactionAccountListed (_ : Unit)
+  | JournalTransactionStorageListed (_ : address)
+  | JournalLogAppended (_ : Unit)
+  | JournalStorageValueChanged (_ : JournalStorageValueChange)
+  | JournalStorageRowGenerationChanged (_ : JournalStorageRowGenerationChange)
+  | JournalAccountStorageGenerationChanged (_ : JournalAccountStorageGenerationChange)
+  | JournalFrameCheckpointed (_ : Unit)
+  | JournalFrameCommitted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open StateJournalEntry
 
 /-- One recorded storage change in canonical host traversal order. -/
 structure BalStorageChangeEntry where
@@ -1113,7 +2348,9 @@ inductive BalIterEntry where
   deriving Inhabited, BEq, Repr
   open BalIterEntry
 
-/-- The environment fields opcodes read through [k_env][]. -/
+/-- The closed environment-projection algebra interpreted by [k_env][]. Each
+opcode supplies one constant member, so the shared projection remains
+explicit and first-order for executable and proof backends. -/
 inductive EnvField where | F_Number | F_Timestamp | F_Coinbase | F_BaseFee | F_ChainId | F_GasLimit | F_PrevRandao | F_Origin | F_GasPrice | F_SlotNumber
   deriving BEq, Inhabited, Repr
   open EnvField
@@ -1139,7 +2376,8 @@ structure InlineNode where
 or by KECCAK-256 hash (YP Appendix D, Eq. 207). -/
 inductive NodeRef where
   | EmptyRef (_ : Unit)
-  | InlineRef (_ : InlineNode)
+  | InputInlineRef (_ : (StatelessInputSliceAtMost 31))
+  | ScratchInlineRef (_ : InlineNode)
   | HashRef (_ : hash)
   deriving Inhabited, BEq, Repr
   open NodeRef
@@ -1150,14 +2388,14 @@ abbrev BranchRefs := (Vector NodeRef 16)
 /-- A four-bit path element (YP Appendix D). -/
 abbrev nibble := (BitVec 4)
 
-/-- A decoded trie node. Malformed node bytes throw
-`InvalidBlock(RlpDecode)`. -/
-inductive TrieNode where
-  | LeafNode (_ : (TriePath × EvmByteSlice))
-  | ExtensionNode (_ : (TriePath × NodeRef))
-  | BranchNode (_ : (BranchRefs × EvmByteSlice))
+/-- A decoded authenticated node. Every borrowed field remains a stateless
+input slice, including fields reached through an input-inline child. -/
+inductive InputTrieNode where
+  | InputLeafNode (_ : (TriePath × StatelessInputSlice))
+  | InputExtensionNode (_ : (TriePath × NodeRef))
+  | InputBranchNode (_ : (BranchRefs × StatelessInputSlice))
   deriving Inhabited, BEq, Repr
-  open TrieNode
+  open InputTrieNode
 
 /-- A byte position in a 32-byte secure key. -/
 abbrev b256_index := Nat
@@ -1165,41 +2403,29 @@ abbrev b256_index := Nat
 /-- A cursor at or immediately after a position in a trie path. -/
 abbrev trie_path_cursor := Nat
 
-/-- A strictly positive Taylor-series index in the fake-exponential equation. -/
-abbrev fake_exponential_index := Nat
-
-/-- The fractional numerator of a denominator-scaled blob-fee value. -/
-abbrev blob_fee_remainder := Nat
-
-/-- An exact denominator-scaled blob-fee value split into whole and remainder. -/
-structure ScaledBlobValue where
-  whole : word
-  remainder : blob_fee_remainder
+/-- The two correlated lifecycle choices selected once from the active fork.
+Passing this descriptor into the merge keeps both the Sail implementation
+and optimized host implementation from independently re-dispatching on the
+fork or observing impossible feature combinations. -/
+structure TransactionMergeSemantics where
+  delete_only_created : Bool
+  preserve_selfdestruct_balance : Bool
   deriving BEq, Inhabited, Repr
 
-/-- An exact quotient and remainder in the EVM-word domain. -/
-structure BlobProductDivMod where
-  quotient : word
-  remainder : word
-  deriving BEq, Inhabited, Repr
+/-- Returns the number of 32-byte words covering a byte length. Besides the
+exact ceiling division, the result exposes its enclosing byte interval so
+affordability proofs can establish host-range bounds without a second
+runtime size check. -/
+def memory_word_count_relation (k_byte_len : Int) (k_words : Int) : Prop :=
+  0 ≤ k_byte_len ∧
+  k_words = ((k_byte_len + 31) / 32) ∧
+  k_byte_len ≤ (32 * k_words) ∧ (32 * k_words) ≤ (k_byte_len + 31)
 
-/-- A single memory operand coupled to the high-water mark and gas cost that
-make the range materializable. -/
-/- Type quantifiers: k_available : Nat, (live_gas_valid k_available) -/
-structure MemoryExpansion (k_available : Nat) where
-  range : MemoryRange
-  required_size : memory_length
-  cost : Nat
-  deriving BEq, Inhabited, Repr
-
-/-- Two memory operands sharing one expansion high-water mark and gas cost. -/
-/- Type quantifiers: k_available : Nat, (live_gas_valid k_available) -/
-structure MemoryPairExpansion (k_available : Nat) where
-  left : MemoryRange
-  right : MemoryRange
-  required_size : memory_length
-  cost : Nat
-  deriving BEq, Inhabited, Repr
+/-- `C_mem` (YP §9.4.1): the cumulative memory cost of `words` words. Its
+singleton result makes the gas-derived memory bound available to the type
+checker without introducing a separate memory-size constant. -/
+def memory_cost_relation (k_words : Int) (k_cost : Int) : Prop :=
+  0 ≤ k_words ∧ k_cost = (3 * k_words + (k_words * k_words) / 512)
 
 /-- The independent effects of one `SSTORE`: execution gas, the signed
 transaction refund, state gas charged, and state gas returned. -/
@@ -1214,7 +2440,7 @@ structure SstoreCosts where
 Failure consumes the frame's gas like any exceptional call. -/
 structure PrecompileResult where
   success : Bool
-  output : EvmByteSlice
+  output : OutputSlice
   deriving BEq, Inhabited, Repr
 
 /-- One constructor per opcode. Immediates are carried inline: `PUSH`
@@ -1302,7 +2528,7 @@ inductive ast where
   | DUPN (_ : byte)
   | SWAPN (_ : byte)
   | EXCHANGE (_ : byte)
-  | CREATE (_ : Unit)
+  | opcode_CREATE (_ : Unit)
   | CALL (_ : Unit)
   | CALLCODE (_ : Unit)
   | RETURN (_ : Unit)
@@ -1314,6 +2540,36 @@ inductive ast where
   | SELFDESTRUCT (_ : Unit)
   deriving Inhabited, BEq, Repr
   open ast
+
+/-- The behavior selected by one member of the closed CREATE-family algebra.
+Interpreting `CreateKind` once keeps operand decoding, hashing charges, and
+address derivation coupled rather than passing an unexplained boolean
+through the shared creation path. -/
+structure CreateSemantics where
+  uses_salt : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The behavior selected by one member of the closed CALL-family algebra.
+Interpreting `CallKind` once keeps operand decoding, value transfer, child
+identity, and static-context construction coupled instead of re-matching
+the tag independently at every use site. -/
+structure CallSemantics where
+  takes_value : Bool
+  transfers_value : Bool
+  uses_target_address : Bool
+  inherits_caller_and_value : Bool
+  enters_static_context : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The refund available when one EIP-7702 authorization targets an existing
+account. -/
+abbrev authorization_refund_per_item : Int := 12500
+
+/-- The bounded refund contributed by one EIP-7702 authorization. -/
+abbrev authorization_item_refund := Nat
+
+/-- The aggregate EIP-7702 refund admitted by one transaction. -/
+abbrev authorization_refund := Nat
 
 /-- Intrinsic transaction charges split into Amsterdam execution gas, state
 gas, and the calldata floor. -/
@@ -1335,20 +2591,20 @@ structure TransactionCosts where
 
 /-- Values established before entering the top-level transaction frame. -/
 structure TxUpfrontResult where
-  authorization_refund : gas_refund
+  authorization_refund : authorization_refund
   create_target_prestate_empty : Bool
-  deriving BEq, Inhabited, Repr
-
-/-- Transaction-local bookkeeping for Amsterdam EIP-7702 authorization
-charges. The lists contain only successfully validated authorities. -/
-structure AmsterdamAuthorizationState where
-  seen_valid_authorities : (List address)
-  originally_delegated : (List address)
-  delegation_set_for : (List address)
   deriving BEq, Inhabited, Repr
 
 /-- The maximum Amsterdam recipient-side intrinsic execution charge. -/
 abbrev amsterdam_recipient_cost := Nat
+
+/-- The outcome of top-level dispatch preparation: whether the frame is
+ready to run, and whether a call recipient delegated, which disables
+direct precompile dispatch. -/
+structure TransactionPreparation where
+  ready : Bool
+  delegated : Bool
+  deriving BEq, Inhabited, Repr
 
 /-- The depth of a branch node in a fixed 64-nibble secure key. -/
 abbrev trie_depth := Nat
@@ -1356,14 +2612,34 @@ abbrev trie_depth := Nat
 /-- A cursor through the at-most-65 positions used by hex-evm_prefix decoding. -/
 abbrev hex_prefix_cursor := Nat
 
+/-- A leaf value retained by trie assembly. Authenticated witness and
+transaction leaves borrow immutable input bytes; newly encoded state,
+receipt, and withdrawal leaves borrow the scratch arena. -/
+inductive TrieLeafValue where
+  | InputTrieLeaf (_ : StatelessInputSlice)
+  | ScratchTrieLeaf (_ : ScratchSlice)
+  deriving Inhabited, BEq, Repr
+  open TrieLeafValue
+
 /-- The RLP payload of a branch contains sixteen child references of at most
 33 bytes and one empty value byte. -/
 abbrev branch_content_length := Nat
 
+/-- A compact presence bitset for the sixteen children of a branch. -/
+abbrev branch_mask := (BitVec 16)
+
+/-- A decoded node freshly encoded in scratch during canonical rebuilding. -/
+inductive ScratchTrieNode where
+  | ScratchLeafNode (_ : (TriePath × ScratchSlice))
+  | ScratchExtensionNode (_ : (TriePath × NodeRef))
+  | ScratchBranchNode (_ : (BranchRefs × ScratchSlice))
+  deriving Inhabited, BEq, Repr
+  open ScratchTrieNode
+
 /-- A pending change at a trie key: a put of new leaf bytes, or a
 delete. -/
 inductive TrieChange where
-  | TriePut (_ : EvmByteSlice)
+  | TriePut (_ : ScratchSlice)
   | TrieDelete (_ : Unit)
   deriving Inhabited, BEq, Repr
   open TrieChange
@@ -1375,26 +2651,52 @@ structure TrieUpdate where
   change : TrieChange
   deriving BEq, Inhabited, Repr
 
-/-- A pull source for ordered trie updates. Each variant owns an independently
-opened host iterator. -/
+/-- The closed pull-source algebra for ordered trie updates. Each variant owns
+an independently opened host iterator and [trie_update_source_next][] is
+its sole interpreter, allowing one cursor and rebuild algorithm without
+function-valued callbacks. -/
 inductive TrieUpdateSource where
   | StorageTrieUpdates (_ : address)
   | ChangedAccountTrieUpdates (_ : Unit)
-  | CachedAccountTrieUpdates (_ : Unit)
   deriving Inhabited, BEq, Repr
   open TrieUpdateSource
 
-/-- One-item lookahead over an ordered update source. -/
-structure TrieUpdateCursor where
-  source : TrieUpdateSource
-  pending : (Option TrieUpdate)
+/-- One pull from an ordered update source. `update` is meaningful exactly
+when `available` is true. -/
+structure TrieUpdateFetch where
+  available : Bool
+  update : TrieUpdate
   deriving BEq, Inhabited, Repr
 
-/-- An item's payload: a live leaf, a known-branch reference (extension
-children are always branches), or a subtree reference of unknown kind.
-The distinction permits untouched hashes to stay opaque. -/
+/-- The active update's position relative to the subtree currently consuming
+it. An under-evm_prefix state carries only the unconsumed key suffix. A
+beyond-evm_prefix state carries the absolute common-evm_prefix depth of the update
+just consumed and its already loaded successor, allowing recursive callers
+to unwind directly to their divergence point. -/
+inductive TrieUpdateRelation where
+  | UpdateUnderPrefix (_ : TriePath)
+  | UpdateBeyondPrefix (_ : trie_path_len)
+  | UpdateSourceExhausted (_ : Unit)
+  deriving Inhabited, BEq, Repr
+  open TrieUpdateRelation
+
+/-- A consuming cursor over an ordered update source. `current` is the active
+item, not a lookahead: it remains owned by the cursor until
+[trie_updates_pop][] consumes it and loads its successor exactly once. -/
+structure TrieUpdateCursor where
+  source : TrieUpdateSource
+  current : TrieUpdate
+  relation : TrieUpdateRelation
+  deriving BEq, Inhabited, Repr
+
+/-- An item's payload: no subtree at all, a live leaf, a known-branch
+reference (extension children are always branches), or a subtree
+reference of unknown kind. The empty member realizes YP Eq. 207's
+`n(I,i) = () if I = {}` directly, so recursive assembly is total; the
+reference distinction permits untouched hashes to stay opaque. -/
 inductive TrieItemValue where
-  | LeafItem (_ : EvmByteSlice)
+  | EmptySubtree (_ : Unit)
+  | LeafItem (_ : TrieLeafValue)
   | BranchItem (_ : NodeRef)
   | SubtreeItem (_ : NodeRef)
   deriving Inhabited, BEq, Repr
@@ -1406,55 +2708,22 @@ structure TrieItem where
   value : TrieItemValue
   deriving BEq, Inhabited, Repr
 
-/-- One open branch in the incremental canonical trie builder. -/
-structure TrieBranchFrame where
-  depth : trie_depth
-  mask : (BitVec 16)
+/-- Child references accumulated while one recursive branch is assembled.
+`only` retains the structural item when exactly one child survives, so
+canonical leaf/extension collapse does not need to reopen an encoded
+hash. -/
+structure TrieChildren where
+  mask : branch_mask
   children : BranchRefs
-  deriving BEq, Inhabited, Repr
-
-/-- The open branch stack and completed root of a streaming trie build. -/
-structure TrieBuilder where
-  frames : (List TrieBranchFrame)
-  root : NodeRef
-  complete : Bool
-  deriving BEq, Inhabited, Repr
-
-/-- A one-item lookahead buffer feeding the incremental trie builder. -/
-structure TrieItemSink where
-  builder : TrieBuilder
-  pending : (Option TrieItem)
-  deriving BEq, Inhabited, Repr
-
-/-- A supported indexed-trie collection maximum. Transaction lists provide the
-largest schema bound among transactions, receipts, and withdrawals. -/
-def rlp_index_valid_maximum (k_maximum : Int) : Prop :=
-  0 < k_maximum ∧ k_maximum ≤ transaction_count_bound
-
-/-- The item count and next canonical-key position of a schema-bounded indexed
-trie. Both retain the enclosing collection's semantic maximum. -/
-/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
-structure RlpIndexCursor (k_maximum : Nat) where
+  only : TrieItem
   count : Nat
-  position : Nat
   deriving BEq, Inhabited, Repr
-
-/-- One numeric index, its trie key, and the following key when present. -/
-/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
-structure RlpIndexItem (k_maximum : Nat) where
-  index : Nat
-  key : TriePath
-  next_key : (Option TriePath)
-  deriving BEq, Inhabited, Repr
-
-/-- The minimal nonzero byte width of a supported RLP list index. -/
-abbrev rlp_index_byte_width := Nat
 
 /-- The root of the trie anchored at `base_root` after applying the
 ordered update stream. This is the only public root computation:
 witness-native and fail-closed — the walker resolves every touched
-hash reference in the witness node-db and any missing node throws
-`InvalidBlock(WitnessDeficient)`; otherwise the builder recomposes the
+hash reference in the witness node-db and any missing node calls
+`fatal_error(WitnessDeficient)`; otherwise the builder recomposes the
 emitted stream canonically.
 
 Theorem-shaped remark: restricted to an empty base
@@ -1469,35 +2738,65 @@ structure TrieRootResult where
   changed : Bool
   deriving BEq, Inhabited, Repr
 
+/-- A supported indexed-trie collection maximum. Transaction lists provide the
+largest schema bound among transactions, receipts, and withdrawals. -/
+def rlp_index_valid_maximum (k_maximum : Int) : Prop :=
+  0 < k_maximum ∧ k_maximum ≤ transaction_count_bound
+
+/-- One numeric index and its canonical trie key. The numeric index addresses
+the source collection directly; the key places that item in the trie. -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
+structure RlpIndexItem (k_maximum : Nat) where
+  index : Nat
+  key : TriePath
+  deriving BEq, Inhabited, Repr
+
+/-- The item count, next canonical-key position, and its cached lookup
+descriptor. Each `rlp(index)` key is therefore constructed exactly once.
+`current` is meaningful iff `position < count`; the pair already carries
+the exhaustion state, so no separate presence wrapper exists. -/
+/- Type quantifiers: k_maximum : Nat, (rlp_index_valid_maximum k_maximum) -/
+structure RlpIndexCursor (k_maximum : Nat) where
+  count : Nat
+  position : Nat
+  current : (RlpIndexItem k_maximum)
+  deriving BEq, Inhabited, Repr
+
+/-- The minimal nonzero byte width of a supported RLP list index. -/
+abbrev rlp_index_byte_width := Nat
+
+/-- A numeric index admitted by an execution-payload indexed trie. -/
+abbrev rlp_index := Nat
+
 /-- Every variable region of the input, resolved once before decoding.
 Consumers receive explicit source spans instead of re-reading nested
 SSZ offset tables. -/
 structure StatelessInputRef where
   protocol : ProtocolProfile
-  new_payload_request : EvmByteSlice
-  execution_payload : (EvmByteSliceAtLeast 540)
-  versioned_hashes : EvmByteSlice
-  deposits : EvmByteSlice
-  withdrawal_requests : EvmByteSlice
-  consolidation_requests : EvmByteSlice
-  builder_deposit_requests : EvmByteSlice
-  builder_exit_requests : EvmByteSlice
-  extra_data : EvmByteSlice
+  new_payload_request : StatelessInputSlice
+  execution_payload : (StatelessInputSliceAtLeast 540)
+  versioned_hashes : StatelessInputSlice
+  deposits : StatelessInputSlice
+  withdrawal_requests : StatelessInputSlice
+  consolidation_requests : StatelessInputSlice
+  builder_deposit_requests : StatelessInputSlice
+  builder_exit_requests : StatelessInputSlice
+  extra_data : (StatelessInputSliceAtMost (2 ^ 5))
   transactions : TransactionListRef
   withdrawals : WithdrawalListRef
-  block_access_list : EvmByteSlice
+  block_access_list : (StatelessInputSliceAtMost (2 ^ 30))
   witness_state : WitnessNodeListRef
   witness_codes : WitnessCodeListRef
   witness_headers : WitnessHeaderListRef
-  chain_config : EvmByteSlice
-  public_keys : EvmByteSlice
+  chain_config : StatelessInputSlice
+  public_keys : StatelessInputSlice
   deriving BEq, Inhabited, Repr
 
 /-- A sequential position within one SSZ container's variable region. The
 container slice carries the region base and limit, so offsets cannot be
 mixed with those of an enclosing container. -/
 structure SszContainerCursor where
-  bytes : EvmByteSlice
+  bytes : StatelessInputSlice
   current : source_pointer
   deriving BEq, Inhabited, Repr
 
@@ -1531,58 +2830,78 @@ structure WitnessHeaderIndex where
   parent_fields_valid : Bool
   deriving BEq, Inhabited, Repr
 
-/-- A receipt retained until its lexicographic trie successor is known. -/
-structure PendingReceipt where
-  index : transaction_count
-  cumulative_gas_used : block_gas
-  receipt : Receipt
+/-- One execution-ordered sequence of length-prefixed encoded receipts in the
+scratch arena. The records contain no Sail list or aggregate receipt
+values: each push writes an eight-byte little-endian length followed by
+the canonical trie value. -/
+structure ReceiptRecordsRef where
+  bytes : ScratchSlice
+  count : transaction_count
   deriving BEq, Inhabited, Repr
 
-/-- The streaming receipts-trie builder and block-wide receipt aggregates. -/
-structure ReceiptAccumulator where
-  builder : TrieBuilder
-  first : (Option PendingReceipt)
-  pending : (Option PendingReceipt)
-  count : transaction_count
-  cumulative_gas_used : block_gas
-  bloom : LogsBloom
+/-- The closed source algebra for Ethereum's three index-keyed payload tries.
+[indexed_trie_begin][] and [indexed_trie_pop][] interpret it as count and
+value operations, allowing one recursive trie builder without storing
+function values or duplicating the traversal. -/
+inductive IndexedTrieSource where
+  | IndexedTransactions (_ : TransactionListRef)
+  | IndexedWithdrawals (_ : WithdrawalListRef)
+  | IndexedReceipts (_ : ReceiptRecordsRef)
+  deriving Inhabited, BEq, Repr
+  open IndexedTrieSource
+
+/-- Canonical key traversal plus the receipt-only record state. `receipt_zero`
+bridges the sole difference between numeric receipt storage order and
+lexical `rlp(index)` order; `receipt_remaining` otherwise advances once. -/
+structure IndexedTrieCursor where
+  keys : (RlpIndexCursor (2 ^ 20))
+  receipt_zero : ScratchSlice
+  receipt_remaining : ScratchSlice
   deriving BEq, Inhabited, Repr
 
 /-- Everything block validation needs from a successfully executed body: gas
-and blob-gas totals, receipts, and the collected EIP-7685 requests. -/
+and blob-gas totals, the post-execution receipts root, and the block's
+retained receipt-log range. EIP-7685 requests are validated where they
+are collected rather than carried in the result. -/
 structure BlockExecutionResult where
-  header_gas_used : gas
-  execution_gas_used : gas
-  state_gas_used : gas
+  header_gas_used : block_gas
+  execution_gas_used : block_gas
+  state_gas_used : block_gas
   blob_gas_used : blob_gas_used
   first_tx_recipient : address
   receipts_root : hash
-  logs_bloom : LogsBloom
-  deposits : EvmByteSlice
-  requests : ExecutionRequests
+  logs : LogSeriesRef
   deriving BEq, Inhabited, Repr
 
-/-- A validation failure: the pipeline stage it occurred in and the
-violated rule. -/
-structure StatelessValidationFailure where
-  scope : (BitVec 8)
-  reason : BlockError
+/-- The two independent block gas dimensions introduced by Amsterdam. Earlier
+forks use only `execution`; `state` remains zero. Indexing the accumulator
+by the concrete header limit makes an over-limit intermediate
+unrepresentable after transaction admission. -/
+def block_gas_usage_relation (k_limit : Int) (k_execution : Int) (k_state : Int) (k_receipts : Int)
+  : Prop :=
+  0 ≤ k_limit ∧
+  k_limit ≤ block_gas_limit_bound ∧
+  0 ≤ k_execution ∧
+  k_execution ≤ k_limit ∧
+  0 ≤ k_state ∧
+  k_state ≤ k_limit ∧ 0 ≤ k_receipts ∧ k_receipts ≤ (k_execution + k_state)
+
+/-- The exact execution, state, and receipt gas accumulated under one block
+header gas limit. -/
+/- Type quantifiers: k_limit : Nat, k_execution : Nat, k_state : Nat, k_receipts : Nat, (block_gas_usage_relation k_limit k_execution k_state k_receipts) -/
+structure BlockGasUsageFields (k_limit : Nat) (k_execution : Nat) (k_state : Nat) (k_receipts : Nat)
+  where
+  execution : Nat
+  state : Nat
+  receipts : Nat
   deriving BEq, Inhabited, Repr
 
-/-- The verdict of stateless payload verification. -/
-inductive StatelessValidationResult where
-  | StatelessPayloadValid (_ : Unit)
-  | StatelessPayloadInvalid (_ : StatelessValidationFailure)
-  deriving Inhabited, BEq, Repr
-  open StatelessValidationResult
-
-/-- One level of the Merkle frontier: empty, or holding the pending left
-subtree hash for that level. -/
-inductive MerkleSlot where
-  | EmptyMerkleSlot (_ : Unit)
-  | OccupiedMerkleSlot (_ : hash)
-  deriving Inhabited, BEq, Repr
-  open MerkleSlot
+/-- A block gas accumulator existentially hiding its current totals while
+retaining their relationship to the concrete header limit. -/
+abbrev BlockGasUsageFor (k_limit : Int) :=
+  (Sigma fun (k_execution : Nat) =>
+  (Sigma fun (k_state : Nat) =>
+  (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields k_limit k_execution k_state k_receipts))))
 
 /-- The largest Merkle depth required by the supported execution-layer SSZ
 schemas. ByteList[2^30] is the widest one, with 2^25 chunks. -/
@@ -1591,19 +2910,12 @@ abbrev htr_depth := Nat
 /-- A leaf count in any supported execution-layer SSZ Merkle tree. -/
 abbrev htr_leaf_count := Nat
 
-/-- A streaming Merkle frontier together with the number of leaves already
-incorporated. -/
-structure MerkleAccumulator where
-  frontier : (List MerkleSlot)
-  count : htr_leaf_count
-  depth : htr_depth
+/-- The closed fixed-width leaf-operation algebra carried through the generic
+request-list recursion. [htr_request_leaf][] interprets it at depth zero,
+replacing a higher-order leaf function without duplicating merkleization. -/
+inductive HtrRequestKind where | HtrDeposit | HtrWithdrawalRequest | HtrConsolidationRequest | HtrBuilderDepositRequest | HtrBuilderExitRequest
   deriving BEq, Inhabited, Repr
-
-/-- A decoded input paired with its validation verdict. -/
-structure GuestValidation where
-  input_ref : StatelessInputRef
-  valid : Bool
-  deriving BEq, Inhabited, Repr
+  open HtrRequestKind
 
 inductive Register : Type where
   | evm_memory
@@ -1616,13 +2928,13 @@ inductive Register : Type where
   | frame_refund
   | state_gas_spilled
   | state_gas_remaining
+  | stack_top
   | gas_remaining
   | pc
-  | k_block_access_index
+  | k_current_transaction_epoch
   | k_tx
   | k_header
-  | k_blob_schedule
-  | k_fork
+  | k_execution_profile
   | k_chain_id
   | k_n_headers
   | k_parent_state_root
@@ -1631,9 +2943,9 @@ inductive Register : Type where
 open Register
 
 abbrev RegisterType : Register → Type
-  | .evm_memory => EvmByteSlice
-  | .returndata => EvmByteSlice
-  | .calldata => EvmByteSlice
+  | .evm_memory => EvmMemorySlice
+  | .returndata => OutputSlice
+  | .calldata => CalldataSlice
   | .frame_code => Code
   | .call_depth => frame_depth
   | .message => Message
@@ -1641,36 +2953,44 @@ abbrev RegisterType : Register → Type
   | .frame_refund => gas_refund
   | .state_gas_spilled => state_gas_spill
   | .state_gas_remaining => gas
+  | .stack_top => StackTop
   | .gas_remaining => gas
   | .pc => code_pointer
-  | .k_block_access_index => block_access_index
+  | .k_current_transaction_epoch => block_access_index
   | .k_tx => TxEnv
   | .k_header => BlockHeader
-  | .k_blob_schedule => BlobSchedule
-  | .k_fork => Fork
+  | .k_execution_profile => ExecutionProfile
   | .k_chain_id => chain_identifier
-  | .k_n_headers => item_count
+  | .k_n_headers => ancestor_hash_count
   | .k_parent_state_root => hash
-  | .scratch_arena => EvmByteSlice
+  | .scratch_arena => ScratchSlice
 
-instance : Inhabited (RegisterRef RegisterType BlobSchedule) where
-  default := .Reg k_blob_schedule
 instance : Inhabited (RegisterRef RegisterType BlockHeader) where
   default := .Reg k_header
-instance : Inhabited (RegisterRef RegisterType EvmByteSlice) where
-  default := .Reg scratch_arena
+instance : Inhabited (RegisterRef RegisterType CalldataSlice) where
+  default := .Reg calldata
 instance : Inhabited (RegisterRef RegisterType Code) where
   default := .Reg frame_code
-instance : Inhabited (RegisterRef RegisterType Fork) where
-  default := .Reg k_fork
+instance : Inhabited (RegisterRef RegisterType EvmMemorySlice) where
+  default := .Reg evm_memory
+instance : Inhabited (RegisterRef RegisterType ExecutionProfile) where
+  default := .Reg k_execution_profile
 instance : Inhabited (RegisterRef RegisterType FrameStatus) where
   default := .Reg frame_status
 instance : Inhabited (RegisterRef RegisterType Message) where
   default := .Reg message
+instance : Inhabited (RegisterRef RegisterType OutputSlice) where
+  default := .Reg returndata
+instance : Inhabited (RegisterRef RegisterType ScratchSlice) where
+  default := .Reg scratch_arena
+instance : Inhabited (RegisterRef RegisterType StackTop) where
+  default := .Reg stack_top
 instance : Inhabited (RegisterRef RegisterType TxEnv) where
   default := .Reg k_tx
+instance : Inhabited (RegisterRef RegisterType ancestor_hash_count) where
+  default := .Reg k_n_headers
 instance : Inhabited (RegisterRef RegisterType block_access_index) where
-  default := .Reg k_block_access_index
+  default := .Reg k_current_transaction_epoch
 instance : Inhabited (RegisterRef RegisterType chain_identifier) where
   default := .Reg k_chain_id
 instance : Inhabited (RegisterRef RegisterType code_pointer) where
@@ -1683,10 +3003,10 @@ instance : Inhabited (RegisterRef RegisterType gas_refund) where
   default := .Reg frame_refund
 instance : Inhabited (RegisterRef RegisterType hash) where
   default := .Reg k_parent_state_root
-instance : Inhabited (RegisterRef RegisterType item_count) where
-  default := .Reg k_n_headers
 instance : Inhabited (RegisterRef RegisterType state_gas_spill) where
   default := .Reg state_gas_spilled
+abbrev exception := Unit
+
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 

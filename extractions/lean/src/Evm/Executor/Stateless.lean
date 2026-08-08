@@ -1,12 +1,12 @@
 import Evm.Flow
-import Evm.Primitives.CycleScopes
-import Evm.Host.CycleScopesDisabled
 import Evm.Exceptions
-import Evm.Primitives.Block
-import Evm.Host.Kernel.Scratch
-import Evm.Host.Kernel.Environment
+import Evm.Kernel.Scratch
+import Evm.Primitives.Fork
+import Evm.Kernel.Environment
 import Evm.Lib.StateTrie
+import Evm.Host.DebugDisabled
 import Evm.Lib.Ssz.StatelessInput
+import Evm.Executor.Receipts
 import Evm.Executor.BlockAccessList
 import Evm.Executor.Block
 import Evm.Executor.Payload
@@ -27,29 +27,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Stateless block validation
 
@@ -60,113 +72,59 @@ list. -/
 
 /-- Checks every executed-block commitment against the header and payload,
 throwing the specific `InvalidBlock` reason on the first failure:
-gas/blob-gas totals, post-state root, receipts root, logs bloom,
-execution-request bytes (Prague+), and block-access-list bytes and
-size (Amsterdam+). -/
-def validate_executed_block (block' : Block) (input_ref : StatelessInputRef) (result : BlockExecutionResult) : SailM Unit := do
+gas/blob-gas totals, post-state root, receipts root, logs bloom, and
+block-access-list bytes and size (Amsterdam+). Execution-request bytes
+(Prague+) are validated where they are collected. -/
+def validate_executed_block (block' : Block) (result : BlockExecutionResult) : SailM Unit := do
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
   let header := block'.header
-  if ((fork_gteq (← readReg k_fork) Prague) : Bool)
-  then
-    (do
-      if ((← if ((! (← (bytes_segments_equal_slice [(BytesSlice result.requests.deposits)]
-                    input_ref.deposits))) : Bool)
-           then (pure true)
-           else
-             (do
-               if ((! (← (bytes_segments_equal_slice [(BytesSlice result.requests.withdrawals)]
-                        input_ref.withdrawal_requests))) : Bool)
-               then (pure true)
-               else
-                 (do
-                   if ((! (← (bytes_segments_equal_slice
-                            [(BytesSlice result.requests.consolidations)]
-                            input_ref.consolidation_requests))) : Bool)
-                   then (pure true)
-                   else
-                     (do
-                       if ((! (← (bytes_segments_equal_slice
-                                [(BytesSlice result.requests.builder_deposits)]
-                                input_ref.builder_deposit_requests))) : Bool)
-                       then (pure true)
-                       else
-                         (do
-                           (pure (! (← (bytes_segments_equal_slice
-                                   [(BytesSlice result.requests.builder_exits)]
-                                   input_ref.builder_exit_requests))))))))) : Bool)
-      then sailThrow ((InvalidBlock InvalidExecutionRequests))
-      else (pure ()))
-  else (pure ())
+  let _ : Unit :=
+    (validation_debug_capture_block_gas result.header_gas_used header.gas_used
+      result.execution_gas_used result.state_gas_used)
   if ((result.header_gas_used != header.gas_used) : Bool)
-  then sailThrow ((InvalidBlock InvalidGasUsed))
-  else
-    (do
-      if (((fork_gteq (← readReg k_fork) Cancun) && ((result.blob_gas_used != header.blob_gas_used) : Bool)) : Bool)
-      then sailThrow ((InvalidBlock InvalidBlobGasUsed))
-      else
-        (do
-          let _ : Unit := (cycle_scope_start SCOPE_STATE_ROOT)
-          let poststate ← do (compute_state_root ())
-          let _ : Unit := (cycle_scope_end SCOPE_STATE_ROOT)
-          if ((bne poststate header.state_root) : Bool)
-          then sailThrow ((InvalidBlock InvalidStateRoot))
-          else
-            (do
-              if ((bne result.receipts_root header.receipts_root) : Bool)
-              then sailThrow ((InvalidBlock InvalidReceiptsRoot))
-              else
-                (do
-                  if ((! (logs_bloom_equal result.logs_bloom header.logs_bloom)) : Bool)
-                  then sailThrow ((InvalidBlock InvalidLogsBloom))
-                  else
-                    (do
-                      if ((fork_gteq (← readReg k_fork) Amsterdam) : Bool)
-                      then
-                        (do
-                          let _ : Unit := (cycle_scope_start SCOPE_BLOCK_ACCESS_LIST)
-                          let maximum_items : Nat := (header.gas_limit / 2000)
-                          (validate_block_access_list block'.body.block_access_list maximum_items)
-                          (pure (cycle_scope_end SCOPE_BLOCK_ACCESS_LIST)))
-                      else (pure ()))))))
+  then (fatal_error InvalidGasUsed)
+  else (pure ())
+  if (((profile.fork ≥b Cancun) && ((result.blob_gas_used != header.blob_gas_used) : Bool)) : Bool)
+  then (fatal_error InvalidBlobGasUsed)
+  else (pure ())
+  let poststate ← do (compute_state_root ())
+  if ((bne poststate header.state_root) : Bool)
+  then (fatal_error InvalidStateRoot)
+  else (pure ())
+  if ((bne result.receipts_root header.receipts_root) : Bool)
+  then (fatal_error InvalidReceiptsRoot)
+  else (pure ())
+  let logs_bloom_matches ← do (block_logs_bloom_matches result.logs header.logs_bloom)
+  let logs_bloom_mismatch := (! logs_bloom_matches)
+  if (logs_bloom_mismatch : Bool)
+  then (fatal_error InvalidLogsBloom)
+  else (pure ())
+  if ((profile.fork ≥b Amsterdam) : Bool)
+  then (validate_block_access_list block'.body.block_access_list execution_profile.gas.block_limit)
+  else (pure ())
 
-def undefined_StatelessValidationFailure (_ : Unit) : SailM StatelessValidationFailure := do
-  (pure { scope := ← (undefined_bitvector 8),
-          reason := ← (undefined_BlockError ()) })
+def VALIDATION_STAGE_DECODE_INPUT : validation_stage := 1
+
+def VALIDATION_STAGE_INDEX_WITNESS : validation_stage := 2
+
+def VALIDATION_STAGE_VALIDATE_PAYLOAD : validation_stage := 3
+
+def VALIDATION_STAGE_EXECUTE_BLOCK : validation_stage := 4
+
+def VALIDATION_STAGE_VALIDATE_RESULT : validation_stage := 5
 
 /-- The stateless verification pipeline: decode the semantic envelope,
 index the witness, validate the payload commitments, execute the
-block body one transaction at a time, and validate the execution
-results; the first violated rule becomes the failure verdict. -/
-def verify_stateless_payload (input_ref : StatelessInputRef) : SailM StatelessValidationResult := do
-  let active_scope := SCOPE_DECODE_INPUT
-  sailTryCatch ((do
-      let _ : Unit := (cycle_scope_start active_scope)
-      (scratch_reset ())
-      let input ← do (decode_stateless_input input_ref)
-      writeReg k_fork input_ref.protocol.fork
-      let _ : Unit := (cycle_scope_end active_scope)
-      let active_scope : (BitVec 8) := SCOPE_INDEX_WITNESS
-      let _ : Unit := (cycle_scope_start active_scope)
-      let witness ← do (index_execution_witness input_ref)
-      let _ : Unit := (cycle_scope_end active_scope)
-      let active_scope : (BitVec 8) := SCOPE_VALIDATE_PAYLOAD
-      let _ : Unit := (cycle_scope_start active_scope)
-      (validate_execution_payload input input_ref witness)
-      let _ : Unit := (cycle_scope_end active_scope)
-      let active_scope : (BitVec 8) := SCOPE_EXECUTE_BLOCK
-      let _ : Unit := (cycle_scope_start active_scope)
-      let block' := input.payload.block'
-      let result ← do
-        (execute_block_body block'.body input_ref.public_keys block'.header.gas_limit)
-      let _ : Unit := (cycle_scope_end active_scope)
-      let active_scope : (BitVec 8) := SCOPE_VALIDATE_RESULT
-      let _ : Unit := (cycle_scope_start active_scope)
-      (validate_executed_block block' input_ref result)
-      let _ : Unit := (cycle_scope_end active_scope)
-      (pure (StatelessPayloadValid ())))) (fun the_exception => 
-    match the_exception with
-      | .InvalidBlock reason =>
-        (let _ : Unit := (cycle_scope_end active_scope)
-        (pure (StatelessPayloadInvalid
-            { scope := active_scope,
-              reason := reason }))))
+block body one transaction at a time, and validate the execution results.
+Any failure terminates through `fatal_error`; normal return means valid. -/
+def verify_stateless_payload (input_ref : StatelessInputRef) : SailM Unit := do
+  (scratch_reset ())
+  let input ← do (decode_stateless_input input_ref)
+  let witness ← do (index_execution_witness input_ref)
+  (validate_execution_payload input input_ref witness)
+  let block' := input.payload.block'
+  let result ← do (execute_block_body block'.body input_ref)
+  (validate_executed_block block' result)
 

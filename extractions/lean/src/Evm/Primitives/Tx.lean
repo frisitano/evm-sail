@@ -1,5 +1,5 @@
-import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
+import Evm.Primitives.Fork
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -17,29 +17,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Transactions, logs, and receipts
 
@@ -66,9 +78,65 @@ def num_of_TxType (arg_ : TxType) : Nat :=
   | .BlobTx => 3
   | .SetCodeTx => 4
 
-def OSAKA_TRANSACTION_GAS_LIMIT_VALUE : transaction_gas := TRANSACTION_EXECUTION_GAS_LIMIT
+/-- The canonical EIP-2718 wire discriminant. Encoding is total over the
+closed transaction-type algebra; decoding handles the remaining byte
+values explicitly at its validation boundary. -/
+def tx_envelope_type (t : TxType) : (BitVec 8) :=
+  match t with
+  | .LegacyTx => 0x00#8
+  | .AccessListTx => 0x01#8
+  | .FeeMarketTx => 0x02#8
+  | .BlobTx => 0x03#8
+  | .SetCodeTx => 0x04#8
 
-def OSAKA_TRANSACTION_GAS_LIMIT : transaction_gas := TRANSACTION_EXECUTION_GAS_LIMIT
+def undefined_TxSignatureScheme (_ : Unit) : SailM TxSignatureScheme := do
+  (internal_pick [LegacySignature, TypedSignature])
+
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 1 -/
+def TxSignatureScheme_of_num (arg_ : Nat) : TxSignatureScheme :=
+  match arg_ with
+  | 0 => LegacySignature
+  | _ => TypedSignature
+
+def num_of_TxSignatureScheme (arg_ : TxSignatureScheme) : Nat :=
+  match arg_ with
+  | .LegacySignature => 0
+  | .TypedSignature => 1
+
+def undefined_TxTypeSemantics (_ : Unit) : SailM TxTypeSemantics := do
+  (pure { minimum_fork := ← (undefined_range 0 16),
+          signature := ← (undefined_TxSignatureScheme ()),
+          blob := ← (undefined_bool ()),
+          set_code := ← (undefined_bool ()) })
+
+/-- Derives the protocol requirements of one transaction envelope. -/
+def tx_type_semantics (t : TxType) : TxTypeSemantics :=
+  match t with
+  | .LegacyTx =>
+    { minimum_fork := Frontier,
+      signature := LegacySignature,
+      blob := false,
+      set_code := false }
+  | .AccessListTx =>
+    { minimum_fork := Berlin,
+      signature := TypedSignature,
+      blob := false,
+      set_code := false }
+  | .FeeMarketTx =>
+    { minimum_fork := London,
+      signature := TypedSignature,
+      blob := false,
+      set_code := false }
+  | .BlobTx =>
+    { minimum_fork := Cancun,
+      signature := TypedSignature,
+      blob := true,
+      set_code := false }
+  | .SetCodeTx =>
+    { minimum_fork := Prague,
+      signature := TypedSignature,
+      blob := false,
+      set_code := true }
 
 def undefined_Authorization (_ : Unit) : SailM Authorization := do
   (pure { valid_sig := ← (undefined_bool ()),
@@ -77,43 +145,87 @@ def undefined_Authorization (_ : Unit) : SailM Authorization := do
           nonce := ← (undefined_range 0 ((2 ^i 64) - 1)),
           chain_id := ← (undefined_range 0 ((2 ^i 256) - 1)) })
 
-def EMPTY_BLOB_HASHES : BlobHashes :=
-  { bytes := ⟨_, ⟨_, EMPTY_SLICE⟩⟩,
-    count := 0 }
+def EMPTY_BLOB_HASHES : (BlobHashesFields blob_schedule_inactive_count) :=
+  ({ bytes := ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩,
+     count := 0 } : (BlobHashesFields 0))
 
-/-- The envelope type byte, as it appears in tx and receipt encodings. -/
-def tx_type_byte (t : TxType) : (BitVec 8) :=
-  match t with
-  | .LegacyTx => 0x00#8
-  | .AccessListTx => 0x01#8
-  | .FeeMarketTx => 0x02#8
-  | .BlobTx => 0x03#8
-  | .SetCodeTx => 0x04#8
+def EMPTY_ACCESS_LIST_REF : AccessListRef :=
+  { encoded := ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩,
+    address_count := 0,
+    slot_count := 0 }
 
-/-- Whether the type carries an EIP-2930 access list envelope (type 1). -/
-def tx_is_access_list (t : TxType) : Bool :=
-  match t with
-  | .AccessListTx => true
-  | _ => false
+/- Type quantifiers: encoded_dependentWitness1 : Nat, encoded_dependentWitness0 : Nat, count : Nat, 0
+  ≤ count ∧ count ≤ transaction_length_bound, 0 ≤ encoded_dependentWitness0 ∧
+  0 ≤ encoded_dependentWitness1 ∧
+  (encoded_dependentWitness0 + encoded_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def authorization_list_ref (encoded : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (count : Nat) : (AuthorizationListRefFields count) :=
+  let encoded_dependentWitness0 := (encoded).1
+  let encoded_dependentWitness1 := ((encoded).2).1
+  let encoded := ((encoded).2).2
+  { encoded := ⟨_, ⟨_, encoded⟩⟩,
+    count := count }
 
-/-- Whether the type is an EIP-1559-style fee-market envelope (types
-2/3/4). -/
-def tx_is_dynamic_fee (t : TxType) : Bool :=
-  match t with
-  | .FeeMarketTx => true
-  | .BlobTx => true
-  | .SetCodeTx => true
-  | _ => false
+def EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef :=
+  ⟨_, (authorization_list_ref ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩ 0)⟩
 
-/-- Whether the type is an EIP-4844 blob transaction (type 3). -/
-def tx_is_blob (t : TxType) : Bool :=
-  match t with
-  | .BlobTx => true
-  | _ => false
+/-- Packs a transaction whose concrete blob limit is still in scope into the
+existential transaction surface used by envelope dispatch. -/
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+def pack_transaction (tx : (TransactionFields k_blob_limit)) : (Sigma fun (k_syn_blob_limit : Nat)
+  => (TransactionFields k_syn_blob_limit)) :=
+  ((⟨_, tx⟩ : (Sigma fun (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit))) : (Sigma
+  fun (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit)))
 
-/-- Whether the type is an EIP-7702 set-code transaction (type 4). -/
-def tx_is_set_code (t : TxType) : Bool :=
-  match t with
-  | .SetCodeTx => true
-  | _ => false
+/-- Advances a valid log cursor without fixed-width wrapping. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def log_store_index_increment (value : Nat) : SailM Nat := do
+  if ((value <b ((2 ^i 64) - 1)) : Bool)
+  then (pure (value + 1))
+  else
+    (do
+      assert false "log store index overflow"
+      throw Error.Exit)
+
+/-- Adds a relative log offset to its series start without wrapping. -/
+/- Type quantifiers: k_ex549654_ : Nat, k_ex549653_ : Nat, 0 ≤ k_ex549653_ ∧
+  k_ex549653_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549654_ ∧ k_ex549654_ ≤ (2 ^ 64 - 1) -/
+def log_store_index_add (left : Nat) (right : Nat) : SailM Nat := do
+  if ((right ≤b (((2 ^i 64) - 1) - left)) : Bool)
+  then (pure (left + right))
+  else
+    (do
+      assert false "log store index overflow"
+      throw Error.Exit)
+
+def undefined_LogSeriesRef (_ : Unit) : SailM LogSeriesRef := do
+  (pure { start := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          count := ← (undefined_range 0 ((2 ^i 64) - 1)) })
+
+/- Type quantifiers: k_ex549710_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
+  : Nat, state_gas : Nat, (receipt_gas_relation _limit _regular_limit gas_used execution_gas state_gas) -/
+def receipt_fields (_limit : Nat) (_regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (ReceiptFields _limit _regular_limit gas_used execution_gas state_gas) :=
+  { tx_type := tx_type,
+    success := success,
+    gas_used := gas_used,
+    execution_gas := execution_gas,
+    state_gas := state_gas,
+    logs := logs }
+
+/- Type quantifiers: k_ex549756_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
+  : Nat, state_gas : Nat, (receipt_gas_relation limit regular_limit gas_used execution_gas state_gas) -/
+def receipt_within (limit : Nat) (regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (Sigma
+  fun (k_syn_state_gas : Nat) =>
+  (Sigma fun (k_syn_execution_gas : Nat) =>
+  (Sigma fun (k_syn_gas_used : Nat) =>
+  (ReceiptFields limit regular_limit k_syn_gas_used k_syn_execution_gas k_syn_state_gas)))) :=
+  ((⟨_, ⟨_, ⟨_, (receipt_fields limit regular_limit tx_type success gas_used execution_gas
+    state_gas logs)⟩⟩⟩ : (Sigma fun (k_syn_state_gas : Nat) =>
+  (Sigma fun (k_syn_execution_gas : Nat) =>
+  (Sigma fun (k_syn_gas_used : Nat) =>
+  (ReceiptFields limit regular_limit k_syn_gas_used k_syn_execution_gas k_syn_state_gas))))) : (Sigma
+  fun (k_syn_state_gas : Nat) =>
+  (Sigma fun (k_syn_execution_gas : Nat) =>
+  (Sigma fun (k_syn_gas_used : Nat) =>
+  (ReceiptFields limit regular_limit k_syn_gas_used k_syn_execution_gas k_syn_state_gas)))))
 

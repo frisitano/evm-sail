@@ -1,9 +1,9 @@
 import Evm.Prelude
 import Evm.Primitives.Quantities
 import Evm.Primitives.Bytes
-import Evm.Primitives.Fork
-import Evm.Primitives.ChainConfig
-import Evm.Host.EvmByteSlice
+import Evm.Exceptions
+import Evm.Host.RegionAccess
+import Evm.Lib.Rlp.Codecs.Address
 import Evm.Lib.Address
 
 set_option maxHeartbeats 1_000_000_000
@@ -22,29 +22,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # The execution environment
 
@@ -84,17 +96,30 @@ def num_of_EnvField (arg_ : EnvField) : Nat :=
 
 /-- An environment field as the word its opcode pushes. -/
 def k_env (f : EnvField) : SailM Nat := do
+  let ⟨_, active_tx⟩ ← do readReg k_tx
   match f with
-  | .F_Number => (pure (U256 (← (word_of_block_number (← readReg k_header).number))))
-  | .F_Timestamp => (pure (U256 (← (word_of_block_timestamp (← readReg k_header).timestamp))))
+  | .F_Number =>
+    (do
+      let number ← do (pure (word_of_block_number (← readReg k_header).number))
+      (pure (u256 number)))
+  | .F_Timestamp =>
+    (do
+      let timestamp ← do (pure (word_of_block_timestamp (← readReg k_header).timestamp))
+      (pure (u256 timestamp)))
   | .F_Coinbase => (pure (address_to_word (← readReg k_header).fee_recipient))
   | .F_BaseFee => (pure (← readReg k_header).base_fee)
-  | .F_ChainId => (pure (U256 (word_of_chain_identifier (← readReg k_chain_id))))
-  | .F_GasLimit => (pure (U256 (← readReg k_header).gas_limit))
+  | .F_ChainId =>
+    (do
+      let chain_id ← do (pure (word_of_chain_identifier (← readReg k_chain_id)))
+      (pure (u256 chain_id)))
+  | .F_GasLimit => (pure (u256 (← readReg k_header).gas_limit))
   | .F_PrevRandao => (pure (← readReg k_header).prev_randao)
-  | .F_Origin => (pure (address_to_word (← readReg k_tx).origin))
-  | .F_GasPrice => (pure (← readReg k_tx).gas_price)
-  | .F_SlotNumber => (pure (U256 (word_of_slot_number (← readReg k_header).slot_number)))
+  | .F_Origin => (pure (address_to_word active_tx.origin))
+  | .F_GasPrice => (pure active_tx.gas_price)
+  | .F_SlotNumber =>
+    (do
+      let slot_number ← do (pure (word_of_slot_number (← readReg k_header).slot_number))
+      (pure (u256 slot_number)))
 
 /-- The block's fee recipient (`COINBASE`). -/
 def k_coinbase (_ : Unit) : SailM (Vector (BitVec 8) 20) := do
@@ -111,7 +136,8 @@ witness. -/
 /- Type quantifiers: number_word : Nat, 0 ≤ number_word ∧ number_word ≤ (2 ^ 256 - 1) -/
 def k_blockhash (number_word : Nat) : SailM (Vector (BitVec 8) 32) := do
   let current ← do (pure (← readReg k_header).number)
-  let current_word ← (( do (pure (U256 (← (word_of_block_number current)))) ) : SailM Nat )
+  let current_number := (word_of_block_number current)
+  let current_word : Nat := (u256 current_number)
   if ((number_word <b current_word) : Bool)
   then
     (do
@@ -121,7 +147,7 @@ def k_blockhash (number_word : Nat) : SailM (Vector (BitVec 8) 32) := do
         (do
           let distance : Nat := distance_word
           if (((← readReg k_n_headers) <b distance) : Bool)
-          then sailThrow ((InvalidBlock WitnessDeficient))
+          then (fatal_error WitnessDeficient)
           else
             (do
               let index : Nat := (distance - 1)
@@ -133,24 +159,23 @@ def k_blockhash (number_word : Nat) : SailM (Vector (BitVec 8) 32) := do
 range. -/
 /- Type quantifiers: index_word : Nat, 0 ≤ index_word ∧ index_word ≤ (2 ^ 256 - 1) -/
 def k_blobhash (index_word : Nat) : SailM Nat := do
-  let count ← do (pure (← readReg k_tx).blob_hashes.count)
+  let ⟨_, active_tx⟩ ← do readReg k_tx
+  let count := active_tx.blob_hashes.count
   if ((index_word <b count) : Bool)
   then
     (do
-      let index : Nat := index_word
+      let index := index_word
       let offset : Nat := ((33 *i index) + 1)
-      (do
-          let dependentArg0 := (← readReg k_tx).blob_hashes.bytes
-          (slice_load_n dependentArg0 offset WORD_BYTE_LENGTH)))
+      (stateless_input_slice_load_n active_tx.blob_hashes.bytes offset WORD_BYTE_LENGTH))
   else (pure ZERO_WORD)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex415071_ : Nat, 0 ≤ k_ex415071_ ∧ k_ex415071_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex551746_ : Nat, 0 ≤ k_ex551746_ ∧ k_ex551746_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   (create_address a nonce)
 
 /-- The `CREATE2` address rule, in kernel form. -/
-/- Type quantifiers: k_ex415072_ : Nat, 0 ≤ k_ex415072_ ∧ k_ex415072_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551747_ : Nat, 0 ≤ k_ex551747_ ∧ k_ex551747_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : (Vector (BitVec 8) 20)) (salt : Nat) (inithash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (create2_address a salt inithash)
 

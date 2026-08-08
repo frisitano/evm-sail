@@ -16,29 +16,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # The instruction set
 
@@ -51,19 +63,21 @@ EIP-4844/EIP-7516, and `DUPN`/`SWAPN`/`EXCHANGE` EIP-8024). -/
 /-- Decodes the immediate shared by EIP-8024 `DUPN` and `SWAPN` into
 their one-based deep-stack index (17–235). -/
 def decode_single_stack_index (immediate : (BitVec 8)) : SailM Nat := do
-  assert (deep_stack_immediate_valid immediate) "sail/evm/instructions.sail:72.48-72.49"
+  let valid := (deep_stack_immediate_valid immediate)
+  assert valid "sail/evm/instructions.sail:73.16-73.17"
   let value : Nat := (BitVec.toNatInt immediate)
   if ((value ≤b 90) : Bool)
   then (pure (value + 145))
   else
     (do
-      assert (128 ≤b value) "sail/evm/instructions.sail:77.27-77.28"
+      assert (128 ≤b value) "sail/evm/instructions.sail:78.27-78.28"
       (pure (value - 111)))
 
 /-- Decodes the EIP-8024 `EXCHANGE` immediate into the two zero-based
 stack depths that it exchanges. -/
 def decode_exchange_stack_indices (immediate : (BitVec 8)) : SailM (Nat × Nat) := do
-  assert (exchange_immediate_valid immediate) "sail/evm/instructions.sail:85.46-85.47"
+  let valid := (exchange_immediate_valid immediate)
+  assert valid "sail/evm/instructions.sail:87.16-87.17"
   let shifted : (BitVec 8) := (immediate ^^^ 0x8F#8)
   let quotient : Nat := (BitVec.toNatInt (Sail.BitVec.extractLsb shifted 7 4))
   let remainder : Nat := (BitVec.toNatInt (Sail.BitVec.extractLsb shifted 3 0))

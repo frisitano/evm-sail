@@ -1,4 +1,3 @@
-import Evm.Flow
 import Evm.Prelude
 
 set_option maxHeartbeats 1_000_000_000
@@ -17,29 +16,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Protocol quantities
 
@@ -54,12 +65,54 @@ The aliases below name the semantic role of protocol and structural
 quantities while preserving their mathematical values. Where the protocol or
 data structure supplies a bound, the alias records it explicitly. -/
 
-/-- Converts a word to an account nonce when it fits the protocol field. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 256 - 1) -/
-def word_to_account_nonce (value : Nat) : (Option Nat) :=
-  if ((value ≤b ((2 ^i 64) - 1)) : Bool)
-  then (some value)
-  else none
+def undefined_PrecompileId (_ : Unit) : SailM PrecompileId := do
+  (internal_pick
+    [NotPrecompile, Ecrecover, Sha256, Ripemd160, Identity, Modexp, Bn254Add, Bn254Mul, Bn254Pairing, Blake2f, KzgPointEvaluation, BlsG1Add, BlsG1Msm, BlsG2Add, BlsG2Msm, BlsPairing, BlsMapFpToG1, BlsMapFp2ToG2, P256Verify])
+
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 18 -/
+def PrecompileId_of_num (arg_ : Nat) : PrecompileId :=
+  match arg_ with
+  | 0 => NotPrecompile
+  | 1 => Ecrecover
+  | 2 => Sha256
+  | 3 => Ripemd160
+  | 4 => Identity
+  | 5 => Modexp
+  | 6 => Bn254Add
+  | 7 => Bn254Mul
+  | 8 => Bn254Pairing
+  | 9 => Blake2f
+  | 10 => KzgPointEvaluation
+  | 11 => BlsG1Add
+  | 12 => BlsG1Msm
+  | 13 => BlsG2Add
+  | 14 => BlsG2Msm
+  | 15 => BlsPairing
+  | 16 => BlsMapFpToG1
+  | 17 => BlsMapFp2ToG2
+  | _ => P256Verify
+
+def num_of_PrecompileId (arg_ : PrecompileId) : Nat :=
+  match arg_ with
+  | .NotPrecompile => 0
+  | .Ecrecover => 1
+  | .Sha256 => 2
+  | .Ripemd160 => 3
+  | .Identity => 4
+  | .Modexp => 5
+  | .Bn254Add => 6
+  | .Bn254Mul => 7
+  | .Bn254Pairing => 8
+  | .Blake2f => 9
+  | .KzgPointEvaluation => 10
+  | .BlsG1Add => 11
+  | .BlsG1Msm => 12
+  | .BlsG2Add => 13
+  | .BlsG2Msm => 14
+  | .BlsPairing => 15
+  | .BlsMapFpToG1 => 16
+  | .BlsMapFp2ToG2 => 17
+  | .P256Verify => 18
 
 /-- Embeds an EIP-2681 account nonce in the EVM word domain. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
@@ -76,72 +129,22 @@ def word_of_withdrawal_amount (value : Nat) : Nat :=
 def word_of_slot_number (value : Nat) : Nat :=
   value
 
-/- Type quantifiers: value : Nat, 0 ≤ value -/
-def word_of_block_number (value : Nat) : SailM Nat := do
-  if ((value <b (2 ^i 256)) : Bool)
-  then (pure value)
-  else
-    (do
-      assert false "sail/primitives/quantities.sail:193.20-193.21"
-      throw Error.Exit)
+/-- Embeds the SSZ-bounded block number in the EVM word domain. The uint64
+schema proof makes a runtime 256-bit range check unnecessary. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def word_of_block_number (value : Nat) : Nat :=
+  value
 
-/- Type quantifiers: value : Nat, 0 ≤ value -/
-def word_of_block_timestamp (value : Nat) : SailM Nat := do
-  if ((value <b (2 ^i 256)) : Bool)
-  then (pure value)
-  else
-    (do
-      assert false "sail/primitives/quantities.sail:210.20-210.21"
-      throw Error.Exit)
+/-- Embeds the SSZ-bounded block timestamp in the EVM word domain. The uint64
+schema proof makes a runtime 256-bit range check unnecessary. -/
+/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
+def word_of_block_timestamp (value : Nat) : Nat :=
+  value
 
 /-- Converts a chain identifier to the value exposed by CHAINID. -/
 /- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
 def word_of_chain_identifier (value : Nat) : Nat :=
   value
-
-/-- Encodes a precompiled-contract identifier directly as its 20-byte
-address.  Identifiers currently occupy only the two least-significant
-bytes, including Osaka's `0x0100` P256VERIFY address. -/
-/- Type quantifiers: value : Nat, 1 ≤ value ∧ value ≤ 256 -/
-def precompile_id_to_address (value : Nat) : (Vector (BitVec 8) 20) :=
-  let result : (Vector (BitVec 8) 20) := ZERO_ADDRESS
-  let result : (Vector (BitVec 8) 20) := (vectorUpdate result 0 (get_slice_int 8 value 0))
-  (vectorUpdate result 1 (get_slice_int 8 value 8))
-
-/-- Increments an account nonce after establishing that it is not maximal. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ (2 ^ 64 - 1) -/
-def account_nonce_increment (value : Nat) : SailM Nat := do
-  assert (value <b ((2 ^i 64) - 1)) "sail/primitives/quantities.sail:229.46-229.47"
-  (pure (value + 1))
-
-/-- Advances the call depth and rejects an attempt to exceed its bound. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 1024 -/
-def frame_depth_increment (value : Nat) : SailM Nat := do
-  if ((value <b 1024) : Bool)
-  then (pure (value + 1))
-  else
-    (do
-      assert false "sail/primitives/quantities.sail:238.20-238.21"
-      throw Error.Exit)
-
-/-- Consumes one validated EIP-4844 transaction blob hash. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 9 -/
-def transaction_blob_count_decrement (value : Nat) : Nat :=
-  if ((value != 0) : Bool)
-  then (value - 1)
-  else 0
-
-/-- Descends by one level in a bounded Merkle tree. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def merkle_depth_increment (value : Nat) : SailM Nat := do
-  assert (value <b 64) "sail/primitives/quantities.sail:252.21-252.22"
-  (pure (value + 1))
-
-/-- Ascends by one level in a bounded Merkle tree. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def merkle_depth_decrement (value : Nat) : SailM Nat := do
-  assert (0 <b value) "sail/primitives/quantities.sail:258.20-258.21"
-  (pure (value - 1))
 
 /- Type quantifiers: off : Nat, len : Nat, (memory_valid_range off len) -/
 def memory_range (off : Nat) (len : Nat) : (MemoryRangeFields off len) :=
@@ -151,13 +154,18 @@ def memory_range (off : Nat) (len : Nat) : (MemoryRangeFields off len) :=
 /-- The canonical inactive range used for a zero-sized operand or halt. -/
 def EMPTY_MEMORY_RANGE : (MemoryRangeFields 0 0) := (memory_range 0 0)
 
+/-- The canonical inactive memory operand. -/
+def EMPTY_MEMORY_ACCESS : (MemoryAccessFields 0 0 0) :=
+  { range := EMPTY_MEMORY_RANGE,
+    required_size := 0 }
+
 /- Type quantifiers: value : Nat, 0 ≤ value -/
 def word_of_nat_byte_count (value : Nat) : SailM Nat := do
   if ((value <b (2 ^i 256)) : Bool)
-  then (pure (U256 value))
+  then (pure (u256 value))
   else
     (do
-      assert false "sail/primitives/quantities.sail:351.20-351.21"
+      assert false "sail/primitives/quantities.sail:603.20-603.21"
       throw Error.Exit)
 
 /- Type quantifiers: value : Nat, (source_valid_length value) -/

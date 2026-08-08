@@ -1,10 +1,10 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.Quantities
+import Evm.Exceptions
 import Evm.Primitives.Crypto
 import Evm.Primitives.Account
-import Evm.Host.Kernel.Storage
-import Evm.Host.Kernel.Logs
+import Evm.Kernel.Storage
+import Evm.Kernel.Logs
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -22,29 +22,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # State: accounts
 
@@ -70,7 +82,8 @@ def account_changed (c : Account) (o : Account) : Bool :=
 /-- Installs a new tuple, collapsing to the non-existent form when it is
 EIP-161-empty. -/
 def account_set_info (acc : Account) (info : AccountInfo) : Account :=
-  if ((account_info_empty info) : Bool)
+  let empty := (account_info_empty info)
+  if (empty : Bool)
   then
     { acc with info := { EMPTY_ACCOUNT_INFO with storage_root := acc.info.storage_root }, present := false, storage_cleared := true }
   else { acc with info := info, present := true }
@@ -88,8 +101,8 @@ def account_delete (acc : Account) : Account :=
 Amsterdam applies this form to an account created and selfdestructed in
 the same transaction (EIP-8246). -/
 def account_clear_preserving_balance (acc : Account) : Account :=
-  (account_set_info (account_clear_storage acc)
-    { acc.info with nonce := 0, code_hash := KECCAK_EMPTY })
+  let cleared_storage := (account_clear_storage acc)
+  (account_set_info cleared_storage { acc.info with nonce := 0, code_hash := KECCAK_EMPTY })
 
 /-- Writes a whole-account row to the transaction overlay. -/
 def store_account (a : (Vector (BitVec 8) 20)) (v : Account) : SailM Unit := do
@@ -99,7 +112,8 @@ def store_account (a : (Vector (BitVec 8) 20)) (v : Account) : SailM Unit := do
 fast paths when existence/storage state is unchanged, and a storage
 clear when the tuple collapses to empty. -/
 def store_account_info (a : (Vector (BitVec 8) 20)) (acc : Account) (info : AccountInfo) : SailM Unit := do
-  if ((account_info_empty info) : Bool)
+  let empty := (account_info_empty info)
+  if (empty : Bool)
   then (storage_tx_clear a)
   else (pure ())
   let next := (account_set_info acc info)
@@ -133,7 +147,8 @@ def k_account_exists (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 /-- The EIP-161 "empty" test on the live account: zero nonce, zero
 balance, no code. -/
 def k_account_is_empty (a : (Vector (BitVec 8) 20)) : SailM Bool := do
-  (pure (account_info_empty (← (k_aload a)).info))
+  let account ← do (k_aload a)
+  (pure (account_info_empty account.info))
 
 /-- The `CREATE`/`CREATE2`/create-transaction address-collision test
 (EIP-684/EIP-7610): the target is occupied if it has code, a nonzero
@@ -149,44 +164,59 @@ def k_account_occupied (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
-/- Type quantifiers: k_ex415199_ : Nat, 0 ≤ k_ex415199_ ∧ k_ex415199_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551878_ : Nat, 0 ≤ k_ex551878_ ∧ k_ex551878_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
-  if (((word_is_zero v) || (src == dst)) : Bool)
+  let value_is_zero := (word_is_zero v)
+  if ((value_is_zero || (src == dst)) : Bool)
   then (pure ())
   else
     (do
-      (store_account_info src src_acc
-        { src_acc.info with balance := (alu_sub src_acc.info.balance v) })
-      (store_account_info dst dst_acc
-        { dst_acc.info with balance := (alu_add dst_acc.info.balance v) })
+      let source_balance := (alu_sub src_acc.info.balance v)
+      (store_account_info src src_acc { src_acc.info with balance := source_balance })
+      let destination_balance := (alu_add dst_acc.info.balance v)
+      (store_account_info dst dst_acc { dst_acc.info with balance := destination_balance })
       (k_emit_transfer_log src dst v))
 
 /-- Increments the account nonce. The `u64` increment cannot wrap:
 EIP-2681 guards every path that reaches a bump. -/
 def k_bump_nonce (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
-  (store_account_info a cur { cur.info with nonce := ← (account_nonce_increment cur.info.nonce) })
+  let nonce := cur.info.nonce
+  if ((nonce <b ((2 ^i 64) - 1)) : Bool)
+  then (store_account_info a cur { cur.info with nonce := (nonce + 1) })
+  else (fatal_error ExecutionInvalid)
 
 /- Type quantifiers: v : Nat, 0 ≤ v ∧ v < (2 ^ 256) -/
 def k_add_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
-  if ((! (word_is_zero v)) : Bool)
-  then (store_account_info a cur { cur.info with balance := (alu_add cur.info.balance v) })
+  let value_is_zero := (word_is_zero v)
+  let value_is_nonzero := (! value_is_zero)
+  if (value_is_nonzero : Bool)
+  then
+    (do
+      let balance := (alu_add cur.info.balance v)
+      (store_account_info a cur { cur.info with balance := balance }))
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
-/- Type quantifiers: k_ex415200_ : Nat, 0 ≤ k_ex415200_ ∧ k_ex415200_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551879_ : Nat, 0 ≤ k_ex551879_ ∧ k_ex551879_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
-  if ((! (word_is_zero v)) : Bool)
-  then (store_account_info a cur { cur.info with balance := (alu_sub cur.info.balance v) })
+  let value_is_zero := (word_is_zero v)
+  let value_is_nonzero := (! value_is_zero)
+  if (value_is_nonzero : Bool)
+  then
+    (do
+      let balance := (alu_sub cur.info.balance v)
+      (store_account_info a cur { cur.info with balance := balance }))
   else (pure ())
 
 /-- Clears the account's storage (create-time collision cleanup). -/
 def k_clear_storage (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   let cur ← do (k_aload a)
   (storage_tx_clear a)
-  (store_account a (account_clear_storage cur))
+  let cleared := (account_clear_storage cur)
+  (store_account a cleared)
 

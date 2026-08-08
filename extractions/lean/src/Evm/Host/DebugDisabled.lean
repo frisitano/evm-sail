@@ -16,29 +16,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Validation debug (optional)
 
@@ -53,14 +65,22 @@ records.
 def validation_debug_reset (_ : Unit) : Unit :=
   ()
 
+/- Type quantifiers: _actual : Nat, _expected : Nat, _execution : Nat, _state : Nat, 0 ≤ _actual
+  ∧
+  _actual ≤ block_gas_limit_bound ∧
+  0 ≤ _expected ∧
+  _expected ≤ block_gas_limit_bound ∧
+  0 ≤ _execution ∧
+  _execution ≤ block_gas_limit_bound ∧ 0 ≤ _state ∧ _state ≤ block_gas_limit_bound -/
+def validation_debug_capture_block_gas (_actual : Nat) (_expected : Nat) (_execution : Nat) (_state : Nat) : Unit :=
+  ()
+
 /-- Records the failing validation stage and reason for host
 inspection; a later record overwrites an earlier one. -/
-def validation_debug_record (_scope : (BitVec 8)) (_reason : BlockError) : Unit :=
+/- Type quantifiers: k_ex553824_ : Nat, 0 ≤ k_ex553824_ ∧ k_ex553824_ ≤ 255 -/
+def validation_debug_record (_stage : Nat) (_reason : FatalError) : Unit :=
   ()
 
 def debug_account_storage_root (_a : (Vector (BitVec 8) 20)) : (Vector (BitVec 8) 32) :=
-  EMPTY_TRIE_ROOT
-
-def debug_rebuild_state_root (_ : Unit) : (Vector (BitVec 8) 32) :=
   EMPTY_TRIE_ROOT
 

@@ -17,29 +17,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Accounts and storage
 
@@ -73,6 +85,10 @@ def undefined_StorageEntry (_ : Unit) : SailM StorageEntry := do
   (pure { key := ← (undefined_StorageKey ()),
           value := ← (undefined_StorageValue ()) })
 
+def undefined_StorageBlockRow (_ : Unit) : SailM StorageBlockRow := do
+  (pure { found := ← (undefined_bool ()),
+          value := ← (undefined_StorageValue ()) })
+
 def undefined_AcctValue (_ : Unit) : SailM AcctValue := do
   (pure { curr := ← (undefined_Account ()),
           orig := ← (undefined_Account ()) })
@@ -80,6 +96,19 @@ def undefined_AcctValue (_ : Unit) : SailM AcctValue := do
 def undefined_AcctEntry (_ : Unit) : SailM AcctEntry := do
   (pure { addr := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           value := ← (undefined_AcctValue ()) })
+
+def undefined_AccountRow (_ : Unit) : SailM AccountRow := do
+  (pure { found := ← (undefined_bool ()),
+          account := ← (undefined_Account ()) })
+
+def undefined_StorageTrieEntry (_ : Unit) : SailM StorageTrieEntry := do
+  (pure { entry := ← (undefined_StorageEntry ()),
+          address_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))),
+          slot_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))) })
+
+def undefined_AcctTrieEntry (_ : Unit) : SailM AcctTrieEntry := do
+  (pure { entry := ← (undefined_AcctEntry ()),
+          address_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))) })
 
 /-- The empty account tuple: zero nonce and balance, `KECCAK_EMPTY` code
 hash, empty-trie storage root (YP §4.1). -/

@@ -20,39 +20,49 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # State store axioms
 
 The host-side mutable state stores, as bodyless axioms: transient storage
 (EIP-1153), the two-layer account and storage overlays (transaction over
 block), the EIP-7928 block-access-list recorder, the EIP-2929 warm sets,
-and the log store. A single semantic checkpoint atomically captures every
-frame-revertible component. Its implementation may use cursors, snapshots,
-or an undo journal, but those representation choices are unobservable to the
-model.
+and the log store. Frame rollback is specified separately by the closed
+[state-journal operation algebra](journal.md).
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts

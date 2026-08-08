@@ -1,6 +1,9 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Host.Kernel.Storage
+import Evm.Primitives.Bytes
+import Evm.Exceptions
+import Evm.Host.RegionAccess
+import Evm.Kernel.Storage
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -18,29 +21,41 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # Trie paths and hex-evm_prefix encoding
 
@@ -51,38 +66,35 @@ def undefined_TriePath (_ : Unit) : SailM TriePath := do
   (pure { data := ← (undefined_vector 32 (← (undefined_bitvector 8))),
           len := ← (undefined_range 0 64) })
 
-/-- Narrows a nonterminal path position to a branch depth. -/
-/- Type quantifiers: value : Nat, 0 ≤ value ∧ value ≤ 64 -/
-def to_trie_depth (value : Nat) : SailM Nat := do
-  if ((64 ≤b value) : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else (pure value)
-
 /-- Appends one nibble to a path, rejecting paths already at the key bound. -/
 def path_append_nibble (path : TriePath) (value : (BitVec 4)) : SailM TriePath := do
   let length := (path_len path)
-  if ((64 ≤b length) : Bool)
-  then sailThrow ((InvalidBlock WitnessDeficient))
-  else
+  if ((length <b 64) : Bool)
+  then
     (do
       let original := path.data
       let bytes := original
       let byte_index ← do (path_byte_index length)
+      let parity := (Nat.mod length 2)
       let bytes : (Vector (BitVec 8) 32) :=
-        if (((Nat.mod length 2) == 0) : Bool)
+        if ((parity == 0) : Bool)
         then (vectorUpdate bytes byte_index (value +++ 0x0#4))
         else
           (vectorUpdate bytes byte_index
             ((Sail.BitVec.extractLsb (GetElem?.getElem! bytes byte_index) 7 4) +++ value))
-      (pure (path_new (B256 bytes) (← (trie_path_len_increment length)))))
+      let path_data := (B256 bytes)
+      (pure (path_new path_data (length + 1))))
+  else (fatal_error WitnessDeficient)
 
+/-- Appends both nibbles of a byte to a path, high nibble first. -/
 def path_append_byte (path : TriePath) (value : (BitVec 8)) : SailM TriePath := do
-  (path_append_nibble (← (path_append_nibble path (Sail.BitVec.extractLsb value 7 4)))
-    (Sail.BitVec.extractLsb value 3 0))
+  let high_nibble ← do (path_append_nibble path (Sail.BitVec.extractLsb value 7 4))
+  (path_append_nibble high_nibble (Sail.BitVec.extractLsb value 3 0))
 
 /-- A one-nibble path. -/
 def path_single (n : (BitVec 4)) : SailM TriePath := do
-  (path_append_nibble (path_empty ()) n)
+  let empty_path := (path_empty ())
+  (path_append_nibble empty_path n)
 
 /-- Path concatenation; over 64 nibbles is a witness fault. -/
 def path_concat (a : TriePath) (b : TriePath) : SailM TriePath := do
@@ -95,59 +107,23 @@ def path_concat (a : TriePath) (b : TriePath) : SailM TriePath := do
       let result := a
       let index : Nat := 0
       let (index, result) ← (( do
-        let loop__step_lower := 0
-        let loop__step_upper := 63
-        let mut loop_vars := (index, result)
-        for _step in [loop__step_lower:loop__step_upper:1]i do
-          let (index, result) := loop_vars
-          loop_vars ← do
-            let (index, result) ← (( do
-              if ((index <b blen) : Bool)
-              then
-                (do
-                  let result ← (path_append_nibble result (← (path_nibble b index)))
-                  let index ← (trie_path_len_increment index)
-                  (pure (index, result)))
-              else (pure (index, result)) ) : SailM (Nat × TriePath) )
+        let loop_vars ← whileFuelM (fuel :=(blen -i index)) (fun (index, result) => (pure (index <b blen))) (index, result)
+          fun (index, result) => do
+            assert true "loop dummy assert"
+            let nibble ← do (path_nibble b index)
+            let result ← (path_append_nibble result nibble)
+            let current_index := index
+            let index ←
+              if ((current_index <b 64) : Bool)
+              then (pure (current_index + 1))
+              else (fatal_error WitnessDeficient)
             (pure (index, result))
         (pure loop_vars) ) : SailM (Nat × TriePath) )
       (pure result))
-  else sailThrow ((InvalidBlock WitnessDeficient))
-
-/-- The first `n` nibbles. -/
-/- Type quantifiers: k_ex415872_ : Nat, 0 ≤ k_ex415872_ ∧ k_ex415872_ ≤ 64 -/
-def path_take (path : TriePath) (n : Nat) : SailM TriePath := do
-  if ((n == 0) : Bool)
-  then (pure (path_empty ()))
-  else
-    (do
-      if (((path_len path) ≤b n) : Bool)
-      then (pure path)
-      else
-        (do
-          let result := (path_empty ())
-          let index : Nat := 0
-          let (index, result) ← (( do
-            let loop__step_lower := 0
-            let loop__step_upper := 63
-            let mut loop_vars := (index, result)
-            for _step in [loop__step_lower:loop__step_upper:1]i do
-              let (index, result) := loop_vars
-              loop_vars ← do
-                let (index, result) ← (( do
-                  if ((index <b n) : Bool)
-                  then
-                    (do
-                      let result ← (path_append_nibble result (← (path_nibble path index)))
-                      let index ← (trie_path_len_increment index)
-                      (pure (index, result)))
-                  else (pure (index, result)) ) : SailM (Nat × TriePath) )
-                (pure (index, result))
-            (pure loop_vars) ) : SailM (Nat × TriePath) )
-          (pure result)))
+  else (fatal_error WitnessDeficient)
 
 /-- The path with its first `n` nibbles removed. -/
-/- Type quantifiers: k_ex415873_ : Nat, 0 ≤ k_ex415873_ ∧ k_ex415873_ ≤ 64 -/
+/- Type quantifiers: k_ex553347_ : Nat, 0 ≤ k_ex553347_ ∧ k_ex553347_ ≤ 64 -/
 def path_drop (path : TriePath) (n : Nat) : SailM TriePath := do
   let length := (path_len path)
   if ((length ≤b n) : Bool)
@@ -162,29 +138,24 @@ def path_drop (path : TriePath) (n : Nat) : SailM TriePath := do
           let result := (path_empty ())
           let offset : Nat := 0
           let (offset, result) ← (( do
-            let loop__step_lower := 0
-            let loop__step_upper := 63
-            let mut loop_vars := (offset, result)
-            for _step in [loop__step_lower:loop__step_upper:1]i do
-              let (offset, result) := loop_vars
-              loop_vars ← do
-                let (offset, result) ← (( do
-                  if ((offset <b remain) : Bool)
-                  then
+            let loop_vars ← whileFuelM (fuel :=(remain -i offset)) (fun (offset, result) => (pure (offset <b remain))) (offset, result)
+              fun (offset, result) => do
+                assert true "loop dummy assert"
+                let candidate := (n + offset)
+                let source_index ← (( do
+                  if (((0 ≤b candidate) && (candidate ≤b 64)) : Bool)
+                  then (pure candidate)
+                  else
                     (do
-                      let candidate := (n + offset)
-                      let source_index ← (( do
-                        if (((0 ≤b candidate) && (candidate ≤b 64)) : Bool)
-                        then (pure candidate)
-                        else
-                          (do
-                            assert false "sail/lib/mpt/primitives.sail:166.40-166.41"
-                            throw Error.Exit) ) : SailM Nat )
-                      let result ←
-                        (path_append_nibble result (← (path_nibble path source_index)))
-                      let offset ← (trie_path_len_increment offset)
-                      (pure (offset, result)))
-                  else (pure (offset, result)) ) : SailM (Nat × TriePath) )
+                      assert false "sail/lib/mpt/primitives.sail:141.32-141.33"
+                      throw Error.Exit) ) : SailM Nat )
+                let nibble ← do (path_nibble path source_index)
+                let result ← (path_append_nibble result nibble)
+                let current_offset := offset
+                let offset ←
+                  if ((current_offset <b 64) : Bool)
+                  then (pure (current_offset + 1))
+                  else (fatal_error WitnessDeficient)
                 (pure (offset, result))
             (pure loop_vars) ) : SailM (Nat × TriePath) )
           (pure result)))
@@ -193,106 +164,108 @@ def path_drop (path : TriePath) (n : Nat) : SailM TriePath := do
 def path_eq (a : TriePath) (b : TriePath) : Bool :=
   ((a.len == b.len) && (a.data == b.data))
 
-/-- Lexicographic path order (data, then length). -/
-def path_lt (a : TriePath) (b : TriePath) : Bool :=
-  if ((a.data == b.data) : Bool)
-  then ((path_len a) <b (path_len b))
-  else (hash_lt a.data b.data)
-
 /-- Whether `evm_prefix` is a evm_prefix of `path`. -/
 def path_prefix_of (evm_prefix' : TriePath) (path : TriePath) : SailM Bool := do
-  if (((path_len path) <b (path_len evm_prefix')) : Bool)
-  then (pure false)
-  else (pure (path_eq evm_prefix' (← (path_take path (path_len evm_prefix')))))
+  (path_matches path 0 evm_prefix')
 
-/-- The length of the common evm_prefix of `a` and `b` starting at nibble
-`start`. -/
-/- Type quantifiers: k_ex415874_ : Nat, 0 ≤ k_ex415874_ ∧ k_ex415874_ ≤ 64 -/
-def common_prefix_from (a : TriePath) (b : TriePath) (start : Nat) : SailM Nat := do
+/-- The common-evm_prefix length of two canonical nibble paths. -/
+def common_prefix_length (a : TriePath) (b : TriePath) : SailM Nat := do
   let alen := (path_len a)
   let blen := (path_len b)
   let stop :=
     if ((alen <b blen) : Bool)
     then alen
     else blen
-  let index : Nat := start
-  let count : Nat := 0
+  let length : Nat := 0
   let matching : Bool := true
-  let (count, index, matching) ← (( do
-    let loop__step_lower := 0
-    let loop__step_upper := 63
-    let mut loop_vars := (count, index, matching)
-    for _step in [loop__step_lower:loop__step_upper:1]i do
-      let (count, index, matching) := loop_vars
-      loop_vars ← do
-        let (count, index, matching) ← (( do
-          if ((matching && ((index <b stop) : Bool)) : Bool)
+  let (length, matching) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(stop -i length)) (fun (length, matching) => (pure (matching && ((length <b stop) : Bool)))) (length, matching)
+      fun (length, matching) => do
+        assert true "loop dummy assert"
+        let a_nibble ← do (path_nibble a length)
+        let b_nibble ← do (path_nibble b length)
+        let (length, matching) ← (( do
+          if ((a_nibble == b_nibble) : Bool)
           then
             (do
-              let (count, index, matching) ← (( do
-                if (((← (path_nibble a index)) == (← (path_nibble b index))) : Bool)
-                then
-                  (do
-                    let count ← (trie_path_len_increment count)
-                    let index ← (trie_path_len_increment index)
-                    (pure (count, index, matching)))
-                else
-                  (let matching : Bool := false
-                  (pure (count, index, matching))) ) : SailM (Nat × Nat × Bool) )
-              (pure (count, index, matching)))
-          else (pure (count, index, matching)) ) : SailM (Nat × Nat × Bool) )
-        (pure (count, index, matching))
-    (pure loop_vars) ) : SailM (Nat × Nat × Bool) )
-  (pure count)
+              let current_length := length
+              let length ←
+                if ((current_length <b 64) : Bool)
+                then (pure (current_length + 1))
+                else (fatal_error WitnessDeficient)
+              (pure (length, matching)))
+          else
+            (let matching : Bool := false
+            (pure (length, matching))) ) : SailM (Nat × Bool) )
+        (pure (length, matching))
+    (pure loop_vars) ) : SailM (Nat × Bool) )
+  (pure length)
 
-/-- Encodes the remaining nibble pairs of a compact trie path in wire order. -/
-/- Type quantifiers: _reclimit : Nat, k_ex415875_ : Nat, 0 ≤ k_ex415875_ ∧ k_ex415875_ ≤ 65, 0
-  ≤ _reclimit -/
-def _rec_hex_prefix_pairs (path : TriePath) (index : Nat) (_reclimit : Nat) : SailM (List (BitVec 8)) := do
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if (((path_len path) ≤b index) : Bool)
-      then (pure [])
-      else
-        (do
-          let next := (index + 1)
-          (pure (((← (path_nibble path index)) +++ (← (path_nibble path next))) :: (← (_rec_hex_prefix_pairs
-                path (next + 1) _reclimit_pred))))))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/-- Encodes the remaining nibble pairs of a compact trie path in wire order. -/
-/- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ 65 -/
-def hex_prefix_pairs (path : TriePath) (index : Nat) : SailM (List (BitVec 8)) := do
-  let _measure := (((path_len path) -i index) : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_hex_prefix_pairs path index (_measure + 1))
-
-/-- The hex-evm_prefix (compact) encoding of a nibble path with its
-leaf/extension flag (YP Appendix C.1, the HP function). -/
-/- Type quantifiers: k_ex415879_ : Bool -/
-def hex_prefix_compact (path : TriePath) (is_leaf : Bool) : SailM ((List (BitVec 8)) × Nat) := do
+/-- The encoded byte length of the hex-evm_prefix form of a trie path. -/
+def hex_prefix_encoded_length (path : TriePath) : Nat :=
   let length : Nat := (path_len path)
   let packed_pair_count : Nat := (Nat.div length 2)
+  (1 + packed_pair_count)
+
+/-- The flag byte beginning the hex-evm_prefix form of a trie path. -/
+/- Type quantifiers: k_ex553348_ : Bool -/
+def hex_prefix_first_byte (path : TriePath) (is_leaf : Bool) : SailM (BitVec 8) := do
+  let length : Nat := (path_len path)
   let odd := ((Nat.mod length 2) != 0)
   let flag : (BitVec 4) :=
     if (is_leaf : Bool)
     then 0x2#4
     else 0x0#4
-  let first ← do
-    if (odd : Bool)
-    then (pure ((flag ||| 0x1#4) +++ (← (path_nibble path 0))))
-    else (pure (flag +++ 0x0#4))
-  let first_path_index : Nat :=
-    if (odd : Bool)
-    then 1
-    else 0
-  let encoded_len : Nat := (1 + packed_pair_count)
-  (pure ((first :: (← (hex_prefix_pairs path first_path_index))), encoded_len))
+  if (odd : Bool)
+  then
+    (do
+      let first_nibble ← do (path_nibble path 0)
+      (pure ((flag ||| 0x1#4) +++ first_nibble)))
+  else (pure (flag +++ 0x0#4))
+
+/-- Scratch-backed counterpart used only when canonicalization reopens an
+embedded node that it just encoded. -/
+/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
+def scratch_hex_prefix_decode_ref (f : (ScratchRlpFieldRef k_source_off k_source_len k_content_len)) : SailM (Bool × TriePath) := do
+  if (f.is_list : Bool)
+  then (fatal_error RlpDecode)
+  else (pure ())
+  let n := k_content_len
+  if ((n == 0) : Bool)
+  then (pure (false, (path_empty ())))
+  else
+    (do
+      let maximum_length := HEX_PREFIX_MAX_LENGTH
+      if ((maximum_length <b n) : Bool)
+      then (fatal_error RlpDecode)
+      else
+        (do
+          let content := (scratch_sub_slice f.source (k_source_len - n) n)
+          let fb ← do (scratch_byte ⟨_, ⟨_, content⟩⟩ 0)
+          let flag : (BitVec 4) := (Sail.BitVec.extractLsb fb 7 4)
+          let is_leaf : Bool := ((BitVec.access flag 1) == 1#1)
+          let odd : Bool := ((BitVec.access flag 0) == 1#1)
+          let tail_length : Nat := (n - 1)
+          let tail := (scratch_slice_suffix content 1)
+          let packed ← do (scratch_slice_load ⟨_, ⟨_, tail⟩⟩ 0)
+          let paired_nibbles : Nat := (tail_length *i 2)
+          if (odd : Bool)
+          then
+            (do
+              if ((paired_nibbles <b 64) : Bool)
+              then
+                (let shifted := (word_shift_right packed 4)
+                let bytes := (word_to_hash shifted)
+                let bytes : (Vector (BitVec 8) 32) :=
+                  (vectorUpdate bytes 0
+                    ((Sail.BitVec.extractLsb fb 3 0) +++ (Sail.BitVec.extractLsb
+                        (GetElem?.getElem! bytes 0) 3 0)))
+                let path_data := (B256 bytes)
+                let path := (path_new path_data (paired_nibbles + 1))
+                (pure (is_leaf, path)))
+              else (fatal_error WitnessDeficient))
+          else
+            (let path_data := (word_to_hash packed)
+            let path := (path_new path_data paired_nibbles)
+            (pure (is_leaf, path)))))
 

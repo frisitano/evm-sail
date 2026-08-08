@@ -1,5 +1,4 @@
-import Evm.Primitives.CycleScopes
-import Evm.Host.CycleScopesDisabled
+import Evm.Kernel.Scratch
 import Evm.Host.DebugDisabled
 import Evm.Lib.Ssz.StatelessInput
 import Evm.Executor.Stateless
@@ -21,66 +20,58 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
 /-! # The guest entry point
 
 The zkVM guest's `main`: decode the stateless input, verify the payload,
-and emit the public validation result. Any thrown `InvalidBlock` — even
-during input decoding — resolves to an invalid verdict rather than a
-crash: validation of an undecodable input is simply unsuccessful. -/
+and emit the public validation result. Fatal failures publish the invalid
+result and terminate inside `fatal_error`; only success returns here. -/
 
-/-- Decodes, verifies, and reports: `write_validation_result` on a
-decodable input (valid or not), `write_invalid_result` when decoding
-itself fails. -/
+def fatal_error_set_input (_input_ref : StatelessInputRef) : SailM Unit := do
+  (pure ())
+
+/-- Decodes, verifies, and reports the successful validation result. -/
 def sail_main (_ : Unit) : SailM Unit := do
+  (scratch_reset ())
   let _ : Unit := (validation_debug_reset ())
-  let _ : Unit := (cycle_scope_start SCOPE_STATELESS_VALIDATION)
-  let result ← (( do
-    sailTryCatch ((do
-        let input_ref ← do
-          (do
-              let dependentArg0 := (← (stateless_input ()))
-              (decode_stateless_input_ref dependentArg0))
-        let validation ← (( do (verify_stateless_payload input_ref) ) : SailM
-          StatelessValidationResult )
-        let valid : Bool :=
-          match validation with
-          | .StatelessPayloadValid () => true
-          | .StatelessPayloadInvalid failure =>
-            (let _ : Unit := (validation_debug_record failure.scope failure.reason)
-            false)
-        (pure (some
-            { input_ref := input_ref,
-              valid := valid })))) (fun the_exception => 
-      match the_exception with
-        | .InvalidBlock reason =>
-          (let _ : Unit := (validation_debug_record SCOPE_DECODE_INPUT reason)
-          (pure none))) ) : SailM (Option GuestValidation) )
-  let _ : Unit := (cycle_scope_end SCOPE_STATELESS_VALIDATION)
-  match result with
-  | .some result => (write_validation_result result.input_ref result.valid)
-  | none => (write_invalid_result ())
+  let ⟨_, ⟨_, input_bytes⟩⟩ ← do (stateless_input ())
+  let input_ref ← do (decode_stateless_input_ref ⟨_, ⟨_, input_bytes⟩⟩)
+  (fatal_error_set_input input_ref)
+  (verify_stateless_payload input_ref)
+  (write_validation_result input_ref true)
 

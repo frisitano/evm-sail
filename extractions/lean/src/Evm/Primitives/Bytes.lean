@@ -20,72 +20,70 @@ open Defs
 namespace Functions
 
 open option
-open exception
 open ast
 open TxType
+open TxSignatureScheme
 open TrieUpdateSource
-open TrieNode
+open TrieUpdateRelation
+open TrieLeafValue
 open TrieItemValue
 open TrieChange
-open StatelessValidationResult
+open StorageTxPopResult
+open StorageTxLookup
+open StorageBlockIterResult
+open StateJournalEntry
+open ScratchTrieNode
+open RlpResult
 open Register
+open PrecompileId
 open NodeRef
-open MerkleSlot
+open LogTopics
+open LogData
+open InputTrieNode
+open IndexedTrieSource
+open HtrRequestKind
 open HaltKind
 open FrameStatus
 open FrameContinuation
-open Fork
+open FatalError
 open ExceptionKind
 open EnvField
+open DeepStackOperation
+open CreateKind
+open CalldataSlice
 open CallKind
-open Bytes
-open ByteSource
-open ByteRegionResult
-open BlockError
 open BalIterEntry
+open AcctTxPopResult
+open AcctBlockIterResult
 
-/-! # Regions and byte slices
+/-! # Typed byte regions
 
-Unmaterialized byte sequences. The specification's bulk data lives in
-named **regions** of the host interface — the stateless input, frame
-memory, code, log data, output, and scratch stores enumerated by
-[ByteSource][type-ByteSource]. A [EvmByteSlice][type-EvmByteSlice] denotes a
-byte range inside one region without copying it into Sail; a slice's
-meaning is the byte sequence it references.
+Unmaterialized byte sequences. The specification's bulk data lives in named
+host regions. A slice's nominal type identifies its region; the semantic value
+contains only a source coordinate and a length. There is deliberately no
+generic slice and no runtime source discriminant.
+
+The standard C ABI lowers the coordinate to an offset in the named region. The
+fixed-capacity optimized C ABI lowers the same coordinate to a validated
+absolute pointer, after allocating every mutable region before Sail execution.
+This representation choice is not part of the protocol semantics: subslicing
+is coordinate addition in both builds, and the nominal type retains provenance.
 
 ## Constants
 
-The fixed lengths identify addresses, words, limbs, and double words;
-`EMPTY_SLICE` is the canonical zero-length range. -/
+The fixed lengths identify addresses, words, limbs, and double words. -/
 
-def undefined_ByteSource (_ : Unit) : SailM ByteSource := do
-  (internal_pick
-    [StatelessInputSource, EvmMemorySource, CodeSource, LogDataSource, OutputSource, ScratchSource])
+/-- The byte length of a calldata slice, independent of its provenance. -/
+def calldata_slice_length (s : CalldataSlice) : Nat :=
+  match s with
+  | .InputCalldata ⟨_, ⟨_, bytes⟩⟩ => bytes.len
+  | .MemoryCalldata ⟨_, ⟨_, bytes⟩⟩ => bytes.len
 
-/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 5 -/
-def ByteSource_of_num (arg_ : Nat) : ByteSource :=
-  match arg_ with
-  | 0 => StatelessInputSource
-  | 1 => EvmMemorySource
-  | 2 => CodeSource
-  | 3 => LogDataSource
-  | 4 => OutputSource
-  | _ => ScratchSource
-
-def num_of_ByteSource (arg_ : ByteSource) : Nat :=
-  match arg_ with
-  | .StatelessInputSource => 0
-  | .EvmMemorySource => 1
-  | .CodeSource => 2
-  | .LogDataSource => 3
-  | .OutputSource => 4
-  | .ScratchSource => 5
-
-/-- Returns the length carried by an existential byte slice. -/
+/-- The byte length of a stateless-input slice. -/
 /- Type quantifiers: s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0
-  ∧ 0 ≤ s_dependentWitness1 -/
-def byte_slice_length (s : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmByteSliceFields k_off k_len)))) : Nat :=
+  ∧ 0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def stateless_input_slice_length (s : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : Nat :=
   let s_dependentWitness0 := (s).1
   let s_dependentWitness1 := ((s).2).1
   let s := ((s).2).2
@@ -99,42 +97,107 @@ def EIGHT_BYTE_LENGTH : Nat := 8
 
 def DOUBLE_WORD_BYTE_LENGTH : Nat := 64
 
-/- Type quantifiers: off : Nat, len : Nat, (source_valid_range off len) -/
-def byte_slice (src : ByteSource) (off : Nat) (len : Nat) : (EvmByteSliceFields off len) :=
-  { source := src,
-    off := off,
+/- Type quantifiers: off : Nat, len : Nat, (stateless_input_valid_range off len) -/
+def stateless_input_slice (off : Nat) (len : Nat) : (StatelessInputSliceFields off len) :=
+  { bytes := off,
     len := len }
 
-/-- The zero-length placeholder slice, for unused value roles (subtree
-references, deletes). -/
-def EMPTY_SLICE : (EvmByteSliceFields 0 0) := (byte_slice StatelessInputSource 0 0)
+/- Type quantifiers: off : Nat, len : Nat, (scratch_valid_range off len) -/
+def scratch_slice (off : Nat) (len : Nat) : (ScratchSliceFields off len) :=
+  { bytes := off,
+    len := len }
 
-/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (source_valid_range k_base k_source_len)
+/- Type quantifiers: off : Nat, len : Nat, (memory_region_valid_range off len) -/
+def evm_memory_slice (off : Nat) (len : Nat) : (EvmMemorySliceFields off len) :=
+  { bytes := off,
+    len := len }
+
+/- Type quantifiers: off : Nat, len : Nat, (code_region_valid_range off len) -/
+def code_region_slice (off : Nat) (len : Nat) : (CodeRegionSliceFields off len) :=
+  { bytes := off,
+    len := len }
+
+/- Type quantifiers: off : Nat, len : Nat, (log_data_valid_range off len) -/
+def log_data_slice (off : Nat) (len : Nat) : (LogDataSliceFields off len) :=
+  { bytes := off,
+    len := len }
+
+/- Type quantifiers: off : Nat, len : Nat, (output_region_valid_range off len) -/
+def output_slice (off : Nat) (len : Nat) : (OutputSliceFields off len) :=
+  { bytes := off,
+    len := len }
+
+def EMPTY_STATELESS_INPUT_SLICE : (StatelessInputSliceFields 0 0) := (stateless_input_slice 0 0)
+
+def EMPTY_SCRATCH_SLICE : (ScratchSliceFields 0 0) := (scratch_slice 0 0)
+
+def EMPTY_EVM_MEMORY_SLICE : (EvmMemorySliceFields 0 0) := (evm_memory_slice 0 0)
+
+def EMPTY_CODE_REGION_SLICE : (CodeRegionSliceFields 0 0) := (code_region_slice 0 0)
+
+def EMPTY_LOG_DATA_SLICE : (LogDataSliceFields 0 0) := (log_data_slice 0 0)
+
+def EMPTY_OUTPUT_SLICE : (OutputSliceFields 0 0) := (output_slice 0 0)
+
+def EMPTY_CALLDATA : CalldataSlice := (InputCalldata ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩)
+
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (stateless_input_valid_range k_base k_source_len)
   ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
-def sub_slice (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (EvmByteSliceFields (k_base + off) len) :=
-  (byte_slice s.source (k_base + off) len)
-
-/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, (source_valid_range k_base k_source_len)
-  ∧ 0 ≤ off ∧ off ≤ k_source_len -/
-def slice_suffix (s : (EvmByteSliceFields k_base k_source_len)) (off : Nat) : (EvmByteSliceFields (k_base + off) (k_source_len - off)) :=
-  (byte_slice s.source (k_base + off) (k_source_len - off))
-
-/- Type quantifiers: len : Nat, (source_valid_length len) -/
-def materialized_bytes (data : (List (BitVec 8))) (len : Nat) : MaterializedBytes :=
-  { data := data,
+def stateless_input_sub_slice (s : (StatelessInputSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (StatelessInputSliceFields (k_base + off) len) :=
+  { bytes := (k_base + off),
     len := len }
 
-def undefined_FixedBytes32 (_ : Unit) : SailM FixedBytes32 := do
-  (pure { data := ← (undefined_vector 32 (← (undefined_bitvector 8))),
-          len := ← (undefined_range 0 32) })
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (scratch_valid_range k_base k_source_len)
+  ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
+def scratch_sub_slice (s : (ScratchSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (ScratchSliceFields (k_base + off) len) :=
+  { bytes := (k_base + off),
+    len := len }
 
-/- Type quantifiers: len : Nat, (source_valid_length len) -/
-def bytes_list (data : (List (BitVec 8))) (len : Nat) : Bytes :=
-  (BytesList (materialized_bytes data len))
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (memory_region_valid_range k_base k_source_len)
+  ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
+def memory_sub_slice (s : (EvmMemorySliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (EvmMemorySliceFields (k_base + off) len) :=
+  { bytes := (k_base + off),
+    len := len }
 
-/- Type quantifiers: k_ex413434_ : Nat, 0 ≤ k_ex413434_ ∧ k_ex413434_ ≤ 32 -/
-def bytes_fixed32 (data : (Vector (BitVec 8) 32)) (len : Nat) : Bytes :=
-  (BytesFixed32
-    { data := data,
-      len := len })
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, len : Nat, (log_data_valid_range k_base k_source_len)
+  ∧ 0 ≤ off ∧ 0 ≤ len ∧ (off + len) ≤ k_source_len -/
+def log_data_sub_slice (s : (LogDataSliceFields k_base k_source_len)) (off : Nat) (len : Nat) : (LogDataSliceFields (k_base + off) len) :=
+  { bytes := (k_base + off),
+    len := len }
+
+/- Type quantifiers: off : Nat, len : Nat, (source_valid_length off) ∧ (source_valid_length len) -/
+def calldata_sub_slice (s : CalldataSlice) (off : Nat) (len : Nat) : SailM CalldataSlice := do
+  match s with
+  | .InputCalldata ⟨_, ⟨_, bytes⟩⟩ =>
+    (do
+      if (((off + len) ≤b bytes.len) : Bool)
+      then
+        (let subslice := (stateless_input_sub_slice bytes off len)
+        (pure (InputCalldata ⟨_, ⟨_, subslice⟩⟩)))
+      else
+        (do
+          assert false "calldata sub-slice bounds"
+          throw Error.Exit))
+  | .MemoryCalldata ⟨_, ⟨_, bytes⟩⟩ =>
+    (do
+      if (((off + len) ≤b bytes.len) : Bool)
+      then
+        (let subslice := (memory_sub_slice bytes off len)
+        (pure (MemoryCalldata ⟨_, ⟨_, subslice⟩⟩)))
+      else
+        (do
+          assert false "calldata sub-slice bounds"
+          throw Error.Exit))
+
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, (stateless_input_valid_range k_base k_source_len)
+  ∧ 0 ≤ off ∧ off ≤ k_source_len -/
+def stateless_input_slice_suffix (s : (StatelessInputSliceFields k_base k_source_len)) (off : Nat) : (StatelessInputSliceFields (k_base + off) (k_source_len - off)) :=
+  { bytes := (k_base + off),
+    len := (k_source_len - off) }
+
+/- Type quantifiers: k_base : Nat, k_source_len : Nat, off : Nat, (scratch_valid_range k_base k_source_len)
+  ∧ 0 ≤ off ∧ off ≤ k_source_len -/
+def scratch_slice_suffix (s : (ScratchSliceFields k_base k_source_len)) (off : Nat) : (ScratchSliceFields (k_base + off) (k_source_len - off)) :=
+  { bytes := (k_base + off),
+    len := (k_source_len - off) }
 
