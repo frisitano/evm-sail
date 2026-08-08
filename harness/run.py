@@ -303,7 +303,7 @@ class PythonGuest:
     """Run the generated, typed Python extraction against the guest ABI."""
 
     def __init__(self):
-        extraction_root = os.path.join(ELDIR, "extractions", "python")
+        extraction_root = os.path.join(ELDIR, "extractions", "python", "src")
         if extraction_root not in sys.path:
             sys.path.insert(0, extraction_root)
         try:

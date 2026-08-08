@@ -84,7 +84,8 @@ LEAN_DIR            := extractions/lean
 LEAN_MODEL_DIR      := $(LEAN_DIR)/src
 LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
 PYTHON_DIR          := extractions/python
-PYTHON_PACKAGE      := $(PYTHON_DIR)/src
+PYTHON_SRC_ROOT     := $(PYTHON_DIR)/src
+PYTHON_PACKAGE      := $(PYTHON_SRC_ROOT)/evm
 PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
 PYTHON_HOST_CONTRACT := extractions/python/contract/HostContract.py
 PYTHON_CACHE_DIR    := $(abspath .agent-tmp/python-cache)
@@ -475,7 +476,7 @@ extract-python:
 build-python: extract-python
 	mkdir -p $(PYTHON_CACHE_DIR)
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m compileall -q $(PYTHON_PACKAGE)
-	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
+	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
 	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON_EVM) $(PYTHON_DIR)/smoke.py
 
