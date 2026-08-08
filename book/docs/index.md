@@ -46,9 +46,30 @@ numbers attached rather than folklore. The
 [engineering notes](engineering.md) record what we learned producing them,
 including the experiments that failed.
 
+**Verifying the binary, not just the model.** Extraction closes most of
+the gap between a specification and the thing that runs, but not all of
+it: a compiler still stands between them. The end goal is to close that
+last step with **binary analysis** — verifying the RISC-V guest itself
+against authoritative ISA semantics, in the style of
+[Islaris](https://doi.org/10.1145/3519939.3523434), so the proof obligation
+lands on the executed machine code rather than on the source it was
+generated from. Sail is the natural substrate for this, because the same
+language already provides the authoritative RISC-V semantics such a proof
+must be stated against.
+
+That also shapes how the stack is built. Nothing about binary-level
+verification of a stateless validator is specific to *this* guest: the
+witness format, the phase structure, and the properties worth proving are
+shared with every other zkEVM guest. So the tooling here — the semantic
+scopes, the fixture harness, the contract boundaries, the comparison
+infrastructure — is deliberately built to generalize, with the ambition of
+extending it to verify production guests such as reth's and ethrex's
+rather than only our own.
+
 The wider ambition is that specification, verification, and performance
 analysis should not be three separate artifacts that drift apart. Here
-they are three views of one document.
+they are three views of one document — and the intended end state is that
+the third view checks the first against the binary itself.
 
 ## Where to start
 
