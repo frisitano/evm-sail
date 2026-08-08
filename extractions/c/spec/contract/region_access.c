@@ -383,24 +383,25 @@ bool evmsail_logs_bloom_matches_ref(
   return true;
 }
 
-static void scratch_result_value(struct zScratchSliceFields *result,
-                                 uint64_t end) {
-  scratch_slice_value(result, 0, end);
+static struct zScratchSliceFields scratch_result_value(uint64_t end) {
+  struct zScratchSliceFields result;
+  scratch_slice_value(&result, 0, end);
+  return result;
 }
 
-void scratch_store_byte(struct zScratchSliceFields *result, uint64_t off,
-                        uint64_t data) {
+struct zScratchSliceFields scratch_store_byte(uint64_t off, uint64_t data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 1);
   if (!out) abort();
   out[0] = (uint8_t)data;
   if (!scratch_commit(dst, 1)) abort();
-  scratch_result_value(result, dst + 1);
+  return scratch_result_value(dst + 1);
 }
 
-static void scratch_store_region(struct zScratchSliceFields *result,
-                                 uint64_t dst, span_resolver resolve,
-                                 uint64_t off, uint64_t len) {
+static struct zScratchSliceFields scratch_store_region(uint64_t dst,
+                                                       span_resolver resolve,
+                                                       uint64_t off,
+                                                       uint64_t len) {
   if (len > UINT64_MAX - dst) abort();
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && !out) abort();
@@ -408,14 +409,13 @@ static void scratch_store_region(struct zScratchSliceFields *result,
   if (!source) abort();
   if (len != 0) memmove(out, source, (size_t)len);
   if (!scratch_commit(dst, len)) abort();
-  scratch_result_value(result, dst + len);
+  return scratch_result_value(dst + len);
 }
 
 #define DEFINE_SCRATCH_STORE(name, type, resolver)                            \
-  void name(struct zScratchSliceFields *result,                               \
-            uint64_t off, struct type slice) {                                \
-    scratch_store_region(result, off, resolver,                               \
-                         SLICE_OFF(slice), SLICE_LEN(slice));                  \
+  struct zScratchSliceFields name(uint64_t off, struct type slice) {          \
+    return scratch_store_region(off, resolver,                                \
+                                SLICE_OFF(slice), SLICE_LEN(slice));          \
   }
 
 DEFINE_SCRATCH_STORE(scratch_store_stateless_input,
@@ -429,52 +429,49 @@ DEFINE_SCRATCH_STORE(scratch_store_output, zOutputSliceFields,
 
 #undef DEFINE_SCRATCH_STORE
 
-void scratch_store_address(struct zScratchSliceFields *result,
-                           uint64_t off, fixed_bytes_20 data) {
+struct zScratchSliceFields scratch_store_address(uint64_t off,
+                                                 fixed_bytes_20 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 20);
   if (!out) abort();
   memcpy(out, data.bytes, 20);
   if (!scratch_commit(dst, 20)) abort();
-  scratch_result_value(result, dst + 20);
+  return scratch_result_value(dst + 20);
 }
 
-void scratch_store_b256(struct zScratchSliceFields *result,
-                        uint64_t off, fixed_bytes_32 data,
-                        uint64_t len) {
+struct zScratchSliceFields scratch_store_b256(uint64_t off, fixed_bytes_32 data,
+                                              uint64_t len) {
   const uint64_t dst = off;
   if (len > 32) abort();
   uint8_t *out = scratch_prepare(dst, len);
   if (len != 0 && !out) abort();
   if (len != 0) memcpy(out, data.bytes, (size_t)len);
   if (!scratch_commit(dst, len)) abort();
-  scratch_result_value(result, dst + len);
+  return scratch_result_value(dst + len);
 }
 
-void scratch_store_fixed_bytes_256(struct zScratchSliceFields *result,
-                                   uint64_t off,
-                                   fixed_bytes_256 data) {
+struct zScratchSliceFields scratch_store_fixed_bytes_256(
+    uint64_t off, fixed_bytes_256 data) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out) abort();
   for (size_t i = 0; i < 256; ++i) out[i] = data.bytes[255 - i];
   if (!scratch_commit(dst, 256)) abort();
-  scratch_result_value(result, dst + 256);
+  return scratch_result_value(dst + 256);
 }
 
-void scratch_store_receipt_logs_bloom(
-    struct zScratchSliceFields *result,
-    uint64_t off, uint64_t start, uint64_t count) {
+struct zScratchSliceFields scratch_store_receipt_logs_bloom(uint64_t off,
+                                                            uint64_t start,
+                                                            uint64_t count) {
   const uint64_t dst = off;
   uint8_t *out = scratch_prepare(dst, 256);
   if (!out || !evmsail_receipt_logs_bloom_write(start, count, out)) abort();
   if (!scratch_commit(dst, 256)) abort();
-  scratch_result_value(result, dst + 256);
+  return scratch_result_value(dst + 256);
 }
 
-void scratch_store_word(struct zScratchSliceFields *result,
-                        uint64_t off,
-                        const u256 data, uint64_t len) {
+struct zScratchSliceFields scratch_store_word(uint64_t off, const u256 data,
+                                              uint64_t len) {
   const uint64_t dst = off;
   if (len > 32) abort();
   uint8_t *out = scratch_prepare(dst, len);
@@ -485,7 +482,7 @@ void scratch_store_word(struct zScratchSliceFields *result,
                        (8 * (byte_from_low % 8)));
   }
   if (!scratch_commit(dst, len)) abort();
-  scratch_result_value(result, dst + len);
+  return scratch_result_value(dst + len);
 }
 
 bool public_output_write(struct zScratchSliceFields output) {

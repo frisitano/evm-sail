@@ -102,35 +102,26 @@ EVMSAIL_DECLARE_SLICE_COPY(output_slice, zOutputSliceFields);
 #undef EVMSAIL_DECLARE_SLICE_LOAD_N
 #undef EVMSAIL_DECLARE_SLICE_COPY
 
-void scratch_store_byte(struct zScratchSliceFields *result,
-                        uint64_t off, uint64_t data);
-void scratch_store_stateless_input(
-    struct zScratchSliceFields *result, uint64_t off,
-    struct zStatelessInputSliceFields slice);
-void scratch_store_scratch(struct zScratchSliceFields *result,
-                           uint64_t off,
-                           struct zScratchSliceFields slice);
-void scratch_store_log_data(struct zScratchSliceFields *result,
-                            uint64_t off,
-                            struct zLogDataSliceFields slice);
-void scratch_store_output(struct zScratchSliceFields *result,
-                          uint64_t off,
-                          struct zOutputSliceFields slice);
-void scratch_store_address(struct zScratchSliceFields *result,
-                           uint64_t off,
-                           fixed_bytes_20 data);
-void scratch_store_b256(struct zScratchSliceFields *result,
-                        uint64_t off, fixed_bytes_32 data,
-                        uint64_t len);
-void scratch_store_fixed_bytes_256(struct zScratchSliceFields *result,
-                                   uint64_t off,
-                                   fixed_bytes_256 data);
-void scratch_store_receipt_logs_bloom(
-    struct zScratchSliceFields *result, uint64_t off, uint64_t start,
-    uint64_t count);
-void scratch_store_word(struct zScratchSliceFields *result,
-                        uint64_t off,
-                        const u256 data, uint64_t len);
+struct zScratchSliceFields scratch_store_byte(uint64_t off, uint64_t data);
+struct zScratchSliceFields scratch_store_stateless_input(
+    uint64_t off, struct zStatelessInputSliceFields slice);
+struct zScratchSliceFields scratch_store_scratch(
+    uint64_t off, struct zScratchSliceFields slice);
+struct zScratchSliceFields scratch_store_log_data(
+    uint64_t off, struct zLogDataSliceFields slice);
+struct zScratchSliceFields scratch_store_output(
+    uint64_t off, struct zOutputSliceFields slice);
+struct zScratchSliceFields scratch_store_address(uint64_t off,
+                                                 fixed_bytes_20 data);
+struct zScratchSliceFields scratch_store_b256(uint64_t off, fixed_bytes_32 data,
+                                              uint64_t len);
+struct zScratchSliceFields scratch_store_fixed_bytes_256(
+    uint64_t off, fixed_bytes_256 data);
+struct zScratchSliceFields scratch_store_receipt_logs_bloom(uint64_t off,
+                                                            uint64_t start,
+                                                            uint64_t count);
+struct zScratchSliceFields scratch_store_word(uint64_t off, const u256 data,
+                                              uint64_t len);
 
 bool public_output_write(struct zScratchSliceFields output);
 bool output_buffer_store_memory(struct zEvmMemorySliceFields slice);
