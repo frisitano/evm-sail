@@ -280,19 +280,19 @@ from evm.evm import execute as evm_execute
 def read_push(code: CodeSlice, offset: code_length, n: word_byte_count) -> word:
     return word(code_slice_load_n(code, offset, n))
 
-def decode_simple(opcode: ancestor_index) -> ast:
+def decode_simple(opcode_: ancestor_index) -> ast:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    if (((128 <= int(opcode))) & ((int(opcode) <= 143))):
-        return DUP((int(opcode) - 127))
+    if (((128 <= int(opcode_))) & ((int(opcode_) <= 143))):
+        return DUP((int(opcode_) - 127))
     else:
-        if (((144 <= int(opcode))) & ((int(opcode) <= 159))):
-            return SWAP((int(opcode) - 143))
+        if (((144 <= int(opcode_))) & ((int(opcode_) <= 159))):
+            return SWAP((int(opcode_) - 143))
         else:
-            if (((160 <= int(opcode))) & ((int(opcode) <= 164))):
-                return LOG((int(opcode) - 160))
+            if (((160 <= int(opcode_))) & ((int(opcode_) <= 164))):
+                return LOG((int(opcode_) - 160))
             else:
-                match opcode:
+                match opcode_:
                     case 0:
                         return STOP(None)
                     case 1:
@@ -485,28 +485,28 @@ def fetch(current: code_length) -> tuple[code_length, ast]:
     profile = execution_profile.protocol
     analyzed = machine.frame_code
     code = code_bytes(analyzed)
-    code_length = code.len
-    past_end = (not ((int(current) < int(code_length))))
+    code_length_ = code.len
+    past_end = (not ((int(current) < int(code_length_))))
     if past_end:
         return (current, STOP(None))
     else:
         opcode_byte = code_slice_byte(code, current)
-        opcode = int(opcode_byte)
+        opcode_ = int(opcode_byte)
         immediate_offset = (int(current) + 1)
-        if ((((opcode) == (95))) & ((int(profile.fork) < int(Shanghai)))):
+        if ((((opcode_) == (95))) & ((int(profile.fork) < int(Shanghai)))):
             decoded = (immediate_offset, INVALID(None))
         else:
-            if (((95 <= int(opcode))) & ((int(opcode) <= 127))):
-                size = (int(opcode) - 95)
+            if (((95 <= int(opcode_))) & ((int(opcode_) <= 127))):
+                size = (int(opcode_) - 95)
                 value = read_push(code, immediate_offset, size)
                 after_immediate = (int((int(current) + 1)) + int(size))
                 decoded = (after_immediate, PUSH((size, value)))
             else:
                 if (int(profile.fork) >= int(Amsterdam)):
-                    deep_operation = deep_stack_operation(opcode)
+                    deep_operation = deep_stack_operation(opcode_)
                     match deep_operation:
                         case DeepStackOperation.NotDeepStackOperation:
-                            decoded = (immediate_offset, decode_simple(opcode))
+                            decoded = (immediate_offset, decode_simple(opcode_))
                         case operation:
                             immediate = code_slice_byte(code, immediate_offset)
                             immediate_valid = deep_stack_operation_immediate_valid(operation, immediate)
@@ -522,12 +522,12 @@ def fetch(current: code_length) -> tuple[code_length, ast]:
                                 case DeepStackOperation.DeepStackExchange:
                                     instruction = EXCHANGE(immediate)
                                 case DeepStackOperation.NotDeepStackOperation:
-                                    instruction = decode_simple(opcode)
+                                    instruction = decode_simple(opcode_)
                                 case _:
                                     raise SailMatchFailure("no Sail match clause applied")
                             decoded = (after_instruction, instruction)
                 else:
-                    decoded = (immediate_offset, decode_simple(opcode))
+                    decoded = (immediate_offset, decode_simple(opcode_))
         return decoded
 
 def frame_output() -> OutputSlice:

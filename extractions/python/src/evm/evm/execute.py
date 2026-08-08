@@ -304,8 +304,8 @@ def guard_static(g: transaction_state_gas_used) -> tuple[bool, transaction_state
         return (False, g)
 
 def do_jump(pc_in: code_length, g: transaction_state_gas_used, destination_value: word) -> tuple[code_length, transaction_state_gas_used]:
-    code_length = frame_code_len()
-    if (int(destination_value) < int(code_length)):
+    code_length_ = frame_code_len()
+    if (int(destination_value) < int(code_length_)):
         destination = destination_value
         valid_destination = frame_jumpdest_valid(destination)
         if valid_destination:
@@ -454,8 +454,8 @@ def execute_exp(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_use
     try:
         (a, top1) = pop(top)
         (e, top2) = pop(top1)
-        gas_cost = exp_gas(e)
-        (gas_charged, g1) = charge(g, gas_cost)
+        gas_cost_ = exp_gas(e)
+        (gas_charged, g1) = charge(g, gas_cost_)
         if (not (gas_charged)):
             raise SailReturn((top2, g1))
         result = alu_exp(a, e)
@@ -676,8 +676,8 @@ def execute_address(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas
         (gas_charged, g1) = charge(g, G_base)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        address = self_addr()
-        address_word = address_to_word(address)
+        address_ = self_addr()
+        address_word = address_to_word(address_)
         return (push_word(top, address_word), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -773,8 +773,8 @@ def execute_codesize(top: Annotated[Bits, BitWidth(64)], g: transaction_state_ga
         (gas_charged, g1) = charge(g, G_base)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        code_length = frame_code_len()
-        length_word = word_of_source_byte_count(code_length)
+        code_length_ = frame_code_len()
+        length_word = word_of_source_byte_count(code_length_)
         return (push_word(top, length_word), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -810,8 +810,8 @@ def execute_balance(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas
         (address_word, top1) = pop(top)
         a = word_to_address(address_word)
         warm = k_account_is_warm(a)
-        gas_cost = account_cost(warm)
-        (gas_charged, g1) = charge(g, gas_cost)
+        gas_cost_ = account_cost(warm)
+        (gas_charged, g1) = charge(g, gas_cost_)
         if (not (gas_charged)):
             raise SailReturn((top1, g1))
         k_account_mark_warm(a)
@@ -825,8 +825,8 @@ def execute_selfbalance(top: Annotated[Bits, BitWidth(64)], g: transaction_state
         (gas_charged, g1) = charge(g, G_low)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        address = self_addr()
-        balance = k_get_balance(address)
+        address_ = self_addr()
+        balance = k_get_balance(address_)
         return (push_word(top, balance), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -883,8 +883,8 @@ def execute_extcodehash(top: Annotated[Bits, BitWidth(64)], g: transaction_state
         (address_word, top1) = pop(top)
         a = word_to_address(address_word)
         warm = k_account_is_warm(a)
-        gas_cost = account_cost(warm)
-        (gas_charged, g1) = charge(g, gas_cost)
+        gas_cost_ = account_cost(warm)
+        (gas_charged, g1) = charge(g, gas_cost_)
         if (not (gas_charged)):
             raise SailReturn((top1, g1))
         k_account_mark_warm(a)
@@ -934,8 +934,8 @@ def execute_blockhash(top: Annotated[Bits, BitWidth(64)], g: transaction_state_g
         (gas_charged, g1) = charge(g, 20)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        (block_number, top1) = pop(top)
-        block_hash = k_blockhash(block_number)
+        (block_number_, top1) = pop(top)
+        block_hash = k_blockhash(block_number_)
         hash_word = hash_to_word(block_hash)
         return (push_word(top1, hash_word), g1)
     except SailReturn as _sail_return:
@@ -966,8 +966,8 @@ def execute_number(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_
         (gas_charged, g1) = charge(g, G_base)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        block_number = k_env(EnvField.F_Number)
-        return (push_word(top, block_number), g1)
+        block_number_ = k_env(EnvField.F_Number)
+        return (push_word(top, block_number_), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -976,8 +976,8 @@ def execute_slotnum(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas
         (gas_charged, g1) = charge(g, G_base)
         if (not (gas_charged)):
             raise SailReturn((top, g1))
-        slot_number = k_env(EnvField.F_SlotNumber)
-        return (push_word(top, slot_number), g1)
+        slot_number_ = k_env(EnvField.F_SlotNumber)
+        return (push_word(top, slot_number_), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -1159,14 +1159,14 @@ def execute_mcopy(top: Annotated[Bits, BitWidth(64)], mem: EvmMemorySlice, g: tr
 def execute_sload(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_used) -> tuple[Annotated[Bits, BitWidth(64)], transaction_state_gas_used]:
     try:
         (s, top1) = pop(top)
-        address = self_addr()
-        warm = k_slot_is_warm(address, s)
-        gas_cost = sload_cost(warm)
-        (gas_charged, g1) = charge(g, gas_cost)
+        address_ = self_addr()
+        warm = k_slot_is_warm(address_, s)
+        gas_cost_ = sload_cost(warm)
+        (gas_charged, g1) = charge(g, gas_cost_)
         if (not (gas_charged)):
             raise SailReturn((top1, g1))
-        k_slot_mark_warm(address, s)
-        entry = k_sload(address, s)
+        k_slot_mark_warm(address_, s)
+        entry = k_sload(address_, s)
         return (push_word(top1, entry.curr), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -1182,16 +1182,16 @@ def execute_sstore(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_
             raise SailReturn((top, exc_halt(g0, ExceptionKind.OutOfGas)))
         (s, top1) = pop(top)
         (v, top2) = pop(top1)
-        address = self_addr()
-        warm = k_slot_is_warm(address, s)
+        address_ = self_addr()
+        warm = k_slot_is_warm(address_, s)
         cold = (not (warm))
         if (int(profile.fork) >= int(Amsterdam)):
             sentry_cost = sstore_sentry_cost(cold)
             (sentry_affordable, sentry_gas) = check_execution_gas(g0, sentry_cost)
             if (not (sentry_affordable)):
                 raise SailReturn((top2, sentry_gas))
-        k_slot_mark_warm(address, s)
-        entry = k_sload(address, s)
+        k_slot_mark_warm(address_, s)
+        entry = k_sload(address_, s)
         costs = sstore_costs(entry.orig, entry.curr, v, cold)
         if ((costs.state_credit) != (0)):
             g1 = credit_state_gas_refund(g0, costs.state_credit)
@@ -1206,7 +1206,7 @@ def execute_sstore(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_
         if (not (((costs.refund) == (GAS_REFUND_ZERO)))):
             record_refund(costs.refund)
         if ((entry.curr) != (v)):
-            k_sstore(address, s, StorageValue(curr=word(v), orig=word(entry.orig)))
+            k_sstore(address_, s, StorageValue(curr=word(v), orig=word(entry.orig)))
         return (top2, g3)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -1217,8 +1217,8 @@ def execute_tload(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_u
         if (not (gas_charged)):
             raise SailReturn((top, g1))
         (s, top1) = pop(top)
-        address = self_addr()
-        value = k_tload(address, s)
+        address_ = self_addr()
+        value = k_tload(address_, s)
         return (push_word(top1, value), g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -1233,8 +1233,8 @@ def execute_tstore(top: Annotated[Bits, BitWidth(64)], g: transaction_state_gas_
             raise SailReturn((top, g1))
         (s, top1) = pop(top)
         (v, top2) = pop(top1)
-        address = self_addr()
-        k_tstore(address, s, v)
+        address_ = self_addr()
+        k_tstore(address_, s, v)
         return (top2, g1)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -1397,10 +1397,10 @@ def execute_log(n: log_topic_count, top: Annotated[Bits, BitWidth(64)], mem: Evm
         mem1 = expand_memory(mem, access.required_size)
         sail_range_ = access.range
         (data, mem2) = active_memory_slice(mem1, sail_range_.off, sail_range_.len)
-        address = self_addr()
+        address_ = self_addr()
         memory_slice = evm_memory_slice(data.bytes, data.len)
         log_data = LogDataMemory(memory_slice)
-        k_log(address, topics, log_data)
+        k_log(address_, topics, log_data)
         return (top3, mem2, g2)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -1464,7 +1464,7 @@ def execute_selfdestruct(top: Annotated[Bits, BitWidth(64)], g: transaction_stat
             raise SailReturn((top, g0))
         (beneficiary_word, top1) = pop(top)
         beneficiary = word_to_address(beneficiary_word)
-        address = self_addr()
+        address_ = self_addr()
         if (int(profile.fork) >= int(Amsterdam)):
             warm = k_account_is_warm(beneficiary)
             access_cost = (int((0 + int(G_selfdestruct))) + int((G_zero if warm else G_amsterdam_cold_account_access)))
@@ -1472,7 +1472,7 @@ def execute_selfdestruct(top: Annotated[Bits, BitWidth(64)], g: transaction_stat
             if (not (execution_affordable)):
                 raise SailReturn((top1, sentry_gas))
             k_account_mark_warm(beneficiary)
-            bal = k_get_balance(address)
+            bal = k_get_balance(address_)
             nonzero_balance = word_nonzero(bal)
             beneficiary_empty = k_account_is_empty(beneficiary)
             creates_account = ((nonzero_balance) & (beneficiary_empty))
@@ -1489,15 +1489,15 @@ def execute_selfdestruct(top: Annotated[Bits, BitWidth(64)], g: transaction_stat
                 g2 = state_gas
                 if (not (state_gas_charged)):
                     raise SailReturn((top1, state_gas))
-            k_transfer(address, beneficiary, bal)
-            created = k_was_created(address)
+            k_transfer(address_, beneficiary, bal)
+            created = k_was_created(address_)
             if created:
-                k_selfdestruct(address)
+                k_selfdestruct(address_)
             reason = HaltSelfDestruct(None)
             machine.frame_status = Halted(reason)
             return (top1, g2)
         else:
-            bal = k_get_balance(address)
+            bal = k_get_balance(address_)
             warm = k_account_is_warm(beneficiary)
             (selfdestruct_gas_charged, g1) = charge(g0, G_selfdestruct)
             if (not (selfdestruct_gas_charged)):
@@ -1517,19 +1517,19 @@ def execute_selfdestruct(top: Annotated[Bits, BitWidth(64)], g: transaction_stat
                 g3 = new_account_gas
                 if (not (new_account_gas_charged)):
                     raise SailReturn((top1, new_account_gas))
-            is_selfdestructed = k_is_selfdestructed(address)
+            is_selfdestructed = k_is_selfdestructed(address_)
             first_selfdestruct = (not (is_selfdestructed))
             if (((int(profile.fork) < int(London))) & (first_selfdestruct)):
                 record_refund(R_selfdestruct_pre_london)
-            k_transfer(address, beneficiary, bal)
+            k_transfer(address_, beneficiary, bal)
             if (int(profile.fork) < int(Cancun)):
-                k_zero_balance(address)
-                k_selfdestruct(address)
+                k_zero_balance(address_)
+                k_selfdestruct(address_)
             else:
-                created = k_was_created(address)
+                created = k_was_created(address_)
                 if created:
-                    k_zero_balance(address)
-                    k_selfdestruct(address)
+                    k_zero_balance(address_)
+                    k_selfdestruct(address_)
             reason = HaltSelfDestruct(None)
             machine.frame_status = Halted(reason)
             return (top1, g3)

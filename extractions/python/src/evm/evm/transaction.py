@@ -337,13 +337,13 @@ def transaction_blob_fee(blob_price: int, blob_gas: int) -> int:
 def transaction_upfront_cost(max_fee: int, gas_limit: int, value: int, max_blob_fee: int, blob_gas: int) -> int:
     return (int((int((int(max_fee) * int(gas_limit))) + int(value))) + int((int(max_blob_fee) * int(blob_gas))))
 
-def transaction_costs(profile: ProtocolProfile, tx: Transaction, gas_limit: block_gas, excess_blob_gas: excess_blob_gas) -> TransactionCosts:
+def transaction_costs(profile: ProtocolProfile, tx: Transaction, gas_limit: block_gas, excess_blob_gas_: excess_blob_gas) -> TransactionCosts:
     intrinsic = intrinsic_gas(tx)
     blob_gas = (int((1 << 17)) * int(tx.blob_hashes.count))
     if ((blob_gas) == (0)):
         blob_fee_value = 0
     else:
-        blob_price = blob_base_fee(profile, excess_blob_gas)
+        blob_price = blob_base_fee(profile, excess_blob_gas_)
         if (int(blob_price) <= int(tx.max_blob_fee)):
             blob_fee_value = transaction_blob_fee(blob_price, blob_gas)
         else:
@@ -675,10 +675,10 @@ def apply_transaction_upfront_effects(tx: Transaction, v: TxValidity, authorizat
     k_bump_nonce(v.sender)
     prewarm(tx)
     if (int(profile.fork) < int(Amsterdam)):
-        authorization_refund = process_auth_list(authorizations)
+        authorization_refund_ = process_auth_list(authorizations)
     else:
-        authorization_refund = 0
-    return TxUpfrontResult(authorization_refund=authorization_refund(authorization_refund), create_target_prestate_empty=create_target_prestate_empty)
+        authorization_refund_ = 0
+    return TxUpfrontResult(authorization_refund=authorization_refund(authorization_refund_), create_target_prestate_empty=create_target_prestate_empty)
 
 def enter_transaction_frame(v: TxValidity) -> None:
     initial_gas = v.gas
@@ -928,7 +928,7 @@ def remaining_gas_after_refund(_limit: int, total: int, remaining: int, cap: int
             refund = cap
     return (int(remaining) + int(refund))
 
-def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refund: authorization_refund, fr: TxFrameResultFields) -> ReceiptFields:
+def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refund_: authorization_refund, fr: TxFrameResultFields) -> ReceiptFields:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     gas_snapshot = fr.gas
@@ -937,7 +937,7 @@ def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refun
     gas_used0 = (int(gas_limit) - int(gas_left))
     refund_quotient = profile.refund_divisor
     refund_cap = sail_ediv_int(gas_used0, refund_quotient)
-    total_refund = (int(authorization_refund) + int(fr.refund))
+    total_refund = (int(authorization_refund_) + int(fr.refund))
     gas_left = remaining_gas_after_refund(gas_limit, total_refund, gas_left, refund_cap)
     gas_used1 = (int(gas_limit) - int(gas_left))
     if (int(profile.fork) >= int(Prague)):

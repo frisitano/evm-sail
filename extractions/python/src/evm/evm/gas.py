@@ -133,10 +133,10 @@ def fake_exponential_word(schedule: BlobScheduleFields, numerator: int) -> word:
     else:
         return word(fatal_error(FatalError.NumericOverflow))
 
-def blob_base_fee(profile: ProtocolProfile, excess_blob_gas: excess_blob_gas) -> word:
+def blob_base_fee(profile: ProtocolProfile, excess_blob_gas_: excess_blob_gas) -> word:
     limit = profile.excess_blob_gas_limit
-    if (((int(profile.fork) >= int(Cancun))) & ((int(excess_blob_gas) <= int(limit)))):
-        return word(fake_exponential_word(profile.blob_schedule, excess_blob_gas))
+    if (((int(profile.fork) >= int(Cancun))) & ((int(excess_blob_gas_) <= int(limit)))):
+        return word(fake_exponential_word(profile.blob_schedule, excess_blob_gas_))
     else:
         return word(fatal_error(FatalError.InvalidConfig))
 

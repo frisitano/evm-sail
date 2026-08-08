@@ -48,12 +48,12 @@ def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: 
     position = pc
     code_len = code.len
     if (int(position) < int(code_len)):
-        opcode = code_slice_byte(code, position)
-        if ((opcode) == (Bits(8, 0b01011011))):
+        opcode_ = code_slice_byte(code, position)
+        if ((opcode_) == (Bits(8, 0b01011011))):
             marked = _host_jumpdest_table_mark(table, code_len, position)
             if not (marked):
                 raise SailError("JUMPDEST mark")
-        opcode_value = int(opcode)
+        opcode_value = int(opcode_)
         if (((96 <= int(opcode_value))) & ((int(opcode_value) <= 127))):
             step = (int(opcode_value) - 94)
         else:

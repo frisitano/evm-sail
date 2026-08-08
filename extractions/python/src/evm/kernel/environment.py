@@ -102,8 +102,8 @@ def k_env(f: EnvField) -> word:
         case EnvField.F_GasPrice:
             return word(active_tx.gas_price)
         case EnvField.F_SlotNumber:
-            slot_number = word_of_slot_number(k_header.slot_number)
-            return word(u256(slot_number))
+            slot_number_ = word_of_slot_number(k_header.slot_number)
+            return word(u256(slot_number_))
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 

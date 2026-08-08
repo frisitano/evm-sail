@@ -152,8 +152,8 @@ def rlp_uint_word_size(w: int) -> BoundedUint[1, 33]:
 
 def rlp_uint_nat_size(n: int) -> rlp_natural_size:
     if (int(n) < int((1 << 256))):
-        word = u256(n)
-        return Uint(rlp_uint_word_size(word))
+        word_ = u256(n)
+        return Uint(rlp_uint_word_size(word_))
     else:
         sail_len = rlp_minimal_uint_len(n)
         if (int(sail_len) <= int(RLP_SHORT_LENGTH_LIMIT)):
@@ -277,19 +277,19 @@ def rlp_write_uint_word(w: int) -> None:
     else:
         first = Bits(8, 0b00000000)
     rlp_write_string_prefix(sail_len, first)
-    word = u256(w)
-    return scratch_push_word_be(word, sail_len)
+    word_ = u256(w)
+    return scratch_push_word_be(word_, sail_len)
 
 def rlp_write_uint_nat(n: int) -> None:
     if (int(n) < int((1 << 256))):
-        word = u256(n)
-        return rlp_write_uint_word(word)
+        word_ = u256(n)
+        return rlp_write_uint_word(word_)
     else:
         return fatal_error(FatalError.InvalidConfig)
 
 def rlp_write_uint_u64(n: int) -> None:
-    word = u256(n)
-    return rlp_write_uint_word(word)
+    word_ = u256(n)
+    return rlp_write_uint_word(word_)
 
 def rlp_write_word(w: word) -> None:
     rlp_write_string_prefix(WORD_BYTE_LENGTH, Bits(8, 0b00000000))

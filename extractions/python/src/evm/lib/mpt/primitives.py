@@ -158,8 +158,8 @@ def path_concat(a: TriePath, b: TriePath) -> TriePath:
         while True:
             if not ((int(index) < int(blen))):
                 break
-            nibble = path_nibble(b, index)
-            result = path_append_nibble(result, nibble)
+            nibble_ = path_nibble(b, index)
+            result = path_append_nibble(result, nibble_)
             current_index = index
             if (int(current_index) < 64):
                 _sail_assigned_value_0 = (int(current_index) + 1)
@@ -191,8 +191,8 @@ def path_drop(path: TriePath, n: trie_path_cursor) -> TriePath:
                     if not (False):
                         raise SailError("sail/lib/mpt/primitives.sail:141.32-141.33")
                     raise SailExit(None)
-                nibble = path_nibble(path, source_index)
-                result = path_append_nibble(result, nibble)
+                nibble_ = path_nibble(path, source_index)
+                result = path_append_nibble(result, nibble_)
                 current_offset = offset
                 if (int(current_offset) < 64):
                     _sail_assigned_value_1 = (int(current_offset) + 1)

@@ -43,8 +43,8 @@ def result_prefix(root: hash, success: bool) -> None:
 
 def commit_validation_result(root: hash, success: bool, chain_config: StatelessInputSlice) -> None:
     fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
-    output_length = scratch_length_add(fixed_length, chain_config.len)
-    start = scratch_reserve(output_length)
+    output_length_ = scratch_length_add(fixed_length, chain_config.len)
+    start = scratch_reserve(output_length_)
     result_prefix(root, success)
     stateless_input_scratch_push_slice(chain_config)
     output = scratch_finish(start)
@@ -67,8 +67,8 @@ def write_invalid_result() -> None:
     scratch_push_b256(default_chain_config, 24)
     chain_config = scratch_finish(start)
     fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
-    output_length = scratch_length_add(fixed_length, chain_config.len)
-    output_start = scratch_reserve(output_length)
+    output_length_ = scratch_length_add(fixed_length, chain_config.len)
+    output_start = scratch_reserve(output_length_)
     result_prefix(ZERO_HASH, False)
     scratch_scratch_push_slice(chain_config)
     output = scratch_finish(output_start)

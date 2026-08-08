@@ -483,8 +483,8 @@ def index_witness_codes_cursor(cursor: WitnessCodeListCursor) -> None:
         if cursor_empty:
             raise SailReturn(None)
         (code, next) = ssz_list_pop(cursor)
-        code_length = code.len
-        if (int(MAX_WITNESS_CODE_LENGTH) < int(code_length)):
+        code_length_ = code.len
+        if (int(MAX_WITNESS_CODE_LENGTH) < int(code_length_)):
             fatal_error(FatalError.InvalidConfig)
         executable = code_db_intern_input(code)
         code_db_insert(executable, profile.fork)

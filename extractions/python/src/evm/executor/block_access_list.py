@@ -254,7 +254,7 @@ def bal_validate_accounts(cursor: RlpCursor) -> Uint:
                 fatal_error(FatalError.InvalidBlockAccessList)
         return Uint((int((int((1 + int(storage_changes))) + int(storage_reads))) + int(bal_validate_accounts(next))))
 
-def validate_block_access_list(bytes: StatelessInputSliceFields, block_gas_limit: block_gas) -> None:
+def validate_block_access_list(bytes: StatelessInputSliceFields, block_gas_limit_: block_gas) -> None:
     _host_bal_prepare_iter()
     root = rlp_single_ref(bytes)
     accounts_cursor = bal_ref_cursor(root)
@@ -265,7 +265,7 @@ def validate_block_access_list(bytes: StatelessInputSliceFields, block_gas_limit
             pass
         case _:
             fatal_error(FatalError.InvalidBlockAccessList)
-    if (int((int(BLOCK_ACCESS_LIST_ITEM_GAS) * int(bal_items))) > int(block_gas_limit)):
+    if (int((int(BLOCK_ACCESS_LIST_ITEM_GAS) * int(bal_items))) > int(block_gas_limit_)):
         return fatal_error(FatalError.BlockAccessListTooLarge)
     else:
         return None

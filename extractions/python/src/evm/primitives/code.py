@@ -43,8 +43,8 @@ class DeepStackOperation(UintEnum):
     DeepStackExchange = Uint(2)
     NotDeepStackOperation = Uint(3)
 
-def deep_stack_operation(opcode: ancestor_index) -> DeepStackOperation:
-    match opcode:
+def deep_stack_operation(opcode_: ancestor_index) -> DeepStackOperation:
+    match opcode_:
         case 230:
             return DeepStackOperation.DeepStackDuplicate
         case 231:

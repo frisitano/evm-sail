@@ -122,8 +122,8 @@ def rlp_write_topics(index: log_store_index) -> None:
 def rlp_write_log_entry(index: log_store_index) -> None:
     content_size = log_entry_rlp_content_size(index)
     rlp_write_list_prefix(content_size)
-    address = _host_log_address(index)
-    rlp_write_addr(address)
+    address_ = _host_log_address(index)
+    rlp_write_addr(address_)
     rlp_write_topics(index)
     data = read_log_data(index)
     return rlp_write_log_data_slice(data)

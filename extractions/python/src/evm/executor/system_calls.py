@@ -175,8 +175,8 @@ def system_call_checked(tgt: address) -> ScratchSlice:
             return fatal_error(FatalError.ExecutionInvalid)
 
 def deposit_log_matches(index: log_store_index) -> bool:
-    address = _host_log_address(index)
-    if ((address) != (DEPOSIT_CONTRACT_ADDR)):
+    address_ = _host_log_address(index)
+    if ((address_) != (DEPOSIT_CONTRACT_ADDR)):
         return False
     else:
         topic_count = _host_log_topics_count(index)

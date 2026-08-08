@@ -38,6 +38,6 @@ def create_address(sender: address, nonce: account_nonce) -> address:
     encoded = rlp_encoder_finish(encoder)
     digest = _host_scratch_keccak256(encoded)
     digest_word = hash_to_word(digest)
-    address = word_to_address(digest_word)
+    address_ = word_to_address(digest_word)
     rlp_encoder_rewind(encoder)
-    return Bytes20(address)
+    return Bytes20(address_)

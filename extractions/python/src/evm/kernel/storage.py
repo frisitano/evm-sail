@@ -42,16 +42,16 @@ def storage_key(a: address, s: word) -> StorageKey:
     return StorageKey(addr=address(a), slot=word(s))
 
 def k_account_is_warm(a: address) -> bool:
-    precompile_id = precompile_id_for_address(a)
-    if ((precompile_id) != (PrecompileId.NotPrecompile)):
+    precompile_id_ = precompile_id_for_address(a)
+    if ((precompile_id_) != (PrecompileId.NotPrecompile)):
         return True
     else:
         return _host_account_is_warm(a)
 
 def k_account_mark_warm(a: address) -> None:
     try:
-        precompile_id = precompile_id_for_address(a)
-        if ((precompile_id) != (PrecompileId.NotPrecompile)):
+        precompile_id_ = precompile_id_for_address(a)
+        if ((precompile_id_) != (PrecompileId.NotPrecompile)):
             raise SailReturn(None)
         return _host_account_mark_warm(a)
     except SailReturn as _sail_return:

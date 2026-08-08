@@ -159,8 +159,8 @@ def bloom_add_entry_hash(bloom: LogsBloom, h: hash) -> LogsBloom:
     return out
 
 def bloom_add_log_at(bloom: LogsBloom, index: log_store_index) -> LogsBloom:
-    address = _host_log_address(index)
-    address_hash = _host_keccak256_address(address)
+    address_ = _host_log_address(index)
+    address_hash = _host_keccak256_address(address_)
     out = bloom_add_entry_hash(bloom, address_hash)
     topic = 0
     topic_count = _host_log_topics_count(index)
@@ -215,8 +215,8 @@ def k_emit_burn_log(a: address, v: word) -> None:
         value_is_zero = word_is_zero(v)
         if (((int(profile.fork) < int(Amsterdam))) | (value_is_zero)):
             raise SailReturn(None)
-        address = address_to_word(a)
-        topics = LogTopics2((EIP7708_BURN_TOPIC, address))
+        address_ = address_to_word(a)
+        topics = LogTopics2((EIP7708_BURN_TOPIC, address_))
         data = LogDataWord(v)
         return k_log(EIP7708_SYSTEM_ADDRESS, topics, data)
     except SailReturn as _sail_return:

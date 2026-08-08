@@ -262,7 +262,7 @@ def rlp_ref_framing_canonical(f: RlpFieldRef) -> bool:
     full_offset = 0
     content_offset = (int(full_length) - int(payload_length))
     source = f.source
-    source_length = source.len
+    source_length_ = source.len
     if ((full_length) == (0)):
         return False
     else:
@@ -274,7 +274,7 @@ def rlp_ref_framing_canonical(f: RlpFieldRef) -> bool:
                 length_word = rlp_length_word(n)
                 length_width = rlp_minimal_word_len(length_word)
                 length_byte = rlp_nat_length_byte(length_width)
-                return ((((full_length) == ((int((1 + int(length_width))) + int(payload_length))))) & (((((stateless_input_slice_byte(f.source, 0)) == (((Bits(8, 0b11110111)) + (length_byte))))) & ((((stateless_input_slice_load_n(f.source, (int(full_offset) + 1), length_width)) == (length_word)) if (int(full_offset) < int(source_length)) else False)))))
+                return ((((full_length) == ((int((1 + int(length_width))) + int(payload_length))))) & (((((stateless_input_slice_byte(f.source, 0)) == (((Bits(8, 0b11110111)) + (length_byte))))) & ((((stateless_input_slice_load_n(f.source, (int(full_offset) + 1), length_width)) == (length_word)) if (int(full_offset) < int(source_length_)) else False)))))
         else:
             if ((payload_length) == (0)):
                 return ((((full_length) == (1))) & (((stateless_input_slice_byte(f.source, 0)) == (Bits(8, 0b10000000)))))
@@ -290,7 +290,7 @@ def rlp_ref_framing_canonical(f: RlpFieldRef) -> bool:
                         length_word = rlp_length_word(n)
                         length_width = rlp_minimal_word_len(length_word)
                         length_byte = rlp_nat_length_byte(length_width)
-                        return ((((full_length) == ((int((1 + int(length_width))) + int(payload_length))))) & (((((stateless_input_slice_byte(f.source, 0)) == (((Bits(8, 0b10110111)) + (length_byte))))) & ((((stateless_input_slice_load_n(f.source, (int(full_offset) + 1), length_width)) == (length_word)) if (int(full_offset) < int(source_length)) else False)))))
+                        return ((((full_length) == ((int((1 + int(length_width))) + int(payload_length))))) & (((((stateless_input_slice_byte(f.source, 0)) == (((Bits(8, 0b10110111)) + (length_byte))))) & ((((stateless_input_slice_load_n(f.source, (int(full_offset) + 1), length_width)) == (length_word)) if (int(full_offset) < int(source_length_)) else False)))))
 
 def rlp_ref_bytes_canonical(f: RlpFieldRef) -> bool:
     return (((not (f.is_list))) & (rlp_ref_framing_canonical(f)))

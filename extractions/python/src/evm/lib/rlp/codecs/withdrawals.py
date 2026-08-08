@@ -35,12 +35,12 @@ from evm.lib.ssz.stateless_input import (
 
 def withdrawal_rlp(withdrawal: StatelessInputSliceFields) -> ScratchSlice:
     index = decode_ssz_uint(withdrawal, WD_INDEX)
-    validator_index = decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)
-    address = stateless_input_sub_slice(withdrawal, WD_ADDRESS, ADDRESS_BYTE_LENGTH)
+    validator_index_ = decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)
+    address_ = stateless_input_sub_slice(withdrawal, WD_ADDRESS, ADDRESS_BYTE_LENGTH)
     amount = decode_ssz_uint(withdrawal, WD_AMOUNT)
     index_length = rlp_uint_word_size(index)
-    validator_index_length = rlp_uint_word_size(validator_index)
-    address_length = rlp_input_slice_size(address)
+    validator_index_length = rlp_uint_word_size(validator_index_)
+    address_length = rlp_input_slice_size(address_)
     amount_length = rlp_uint_word_size(amount)
     content_length = (int((int((int(index_length) + int(validator_index_length))) + int(address_length))) + int(amount_length))
     if (48 < int(content_length)):
@@ -51,7 +51,7 @@ def withdrawal_rlp(withdrawal: StatelessInputSliceFields) -> ScratchSlice:
     encoder = rlp_encoder_begin(encoded_length)
     rlp_write_list_prefix(content_len)
     rlp_write_uint_word(index)
-    rlp_write_uint_word(validator_index)
-    rlp_write_input_slice(address)
+    rlp_write_uint_word(validator_index_)
+    rlp_write_input_slice(address_)
     rlp_write_uint_word(amount)
     return rlp_encoder_finish(encoder)

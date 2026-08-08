@@ -377,9 +377,9 @@ def input_field_to_ref(f: RlpFieldRef) -> NodeRef:
             return fatal_error(FatalError.RlpDecode)
     else:
         if ((f.content_len) == (MPT_HASH_LENGTH)):
-            word = rlp_decode_word(f)
-            hash = word_to_hash(word)
-            return HashRef(hash)
+            word_ = rlp_decode_word(f)
+            hash_ = word_to_hash(word_)
+            return HashRef(hash_)
         else:
             return EmptyRef(None)
 
@@ -389,9 +389,9 @@ def scratch_field_to_ref(f: ScratchRlpFieldRef) -> NodeRef:
         return ScratchInlineRef(inline_node)
     else:
         if ((f.content_len) == (MPT_HASH_LENGTH)):
-            word = scratch_rlp_decode_word(f)
-            hash = word_to_hash(word)
-            return HashRef(hash)
+            word_ = scratch_rlp_decode_word(f)
+            hash_ = word_to_hash(word_)
+            return HashRef(hash_)
         else:
             return EmptyRef(None)
 

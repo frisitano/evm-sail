@@ -168,8 +168,8 @@ class TxValidityFields:
     gas_price: word
     priority_fee: word
 
-def tx_validity_fields(sender: address, nonce_before: account_nonce, gas: TransactionInitialGasFields, blob_fee: word, gas_price: word, priority_fee: word) -> TxValidityFields:
-    return TxValidityFields(validity=TxValidityFieldsValidity(limit=gas.validity.total, regular=gas.validity.regular, intrinsic_execution=gas.validity.intrinsic_execution, intrinsic_state=gas.validity.intrinsic_state, calldata_floor=gas.validity.calldata_floor, execution=gas.validity.execution, state=gas.validity.state), sender=address(sender), nonce_before=account_nonce(nonce_before), gas=gas, blob_fee=word(blob_fee), gas_price=word(gas_price), priority_fee=word(priority_fee))
+def tx_validity_fields(sender: address, nonce_before: account_nonce, gas_: TransactionInitialGasFields, blob_fee: word, gas_price: word, priority_fee: word) -> TxValidityFields:
+    return TxValidityFields(validity=TxValidityFieldsValidity(limit=gas_.validity.total, regular=gas_.validity.regular, intrinsic_execution=gas_.validity.intrinsic_execution, intrinsic_state=gas_.validity.intrinsic_state, calldata_floor=gas_.validity.calldata_floor, execution=gas_.validity.execution, state=gas_.validity.state), sender=address(sender), nonce_before=account_nonce(nonce_before), gas=gas_, blob_fee=word(blob_fee), gas_price=word(gas_price), priority_fee=word(priority_fee))
 
 TxValidityForLimits: TypeAlias = TxValidityFields
 
