@@ -65,4 +65,7 @@
 - Host interface
     - [Host interface](reference/sail/host/index.md)
     - reference/sail/host/*.md
-- [zkVM benchmarks](performance.md)
+- Engineering
+    - [Performance engineering](engineering.md)
+    - [Extractions](extractions.md)
+    - [zkVM benchmarks](performance.md)
