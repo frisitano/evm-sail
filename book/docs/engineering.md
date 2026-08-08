@@ -76,6 +76,13 @@ interval and bound analysis over them:
   arguments rather than read ambiently, so the finite profile combinations
   specialize through arguments, results, and body intermediates.
 
+This is the same bargain [Ho, Fromherz, and Protzenko](https://doi.org/10.1145/3607844)
+describe for verified systems code: abstractions that a verifier reasons
+about at full generality, and that specialization erases before code
+generation, so modularity in the specification costs nothing in the
+binary. Our version is driven by the semantic types rather than by
+explicit staging annotations.
+
 Two-representation types extend this to structures: canonical 20-byte
 addresses and 32-byte digests keep byte-index semantics in Sail and in
 proof extraction, while optimized C represents them as `u64` lanes
@@ -158,12 +165,15 @@ constant-like within its scope; anything else is paying rent it cannot
 cover.
 
 In register-allocation terms, the carried convention manufactures clean
-**def-use webs**: each carried value is a short, call-free chain the
-allocator colors trivially (Chaitin 1982; Briggs et al. 1994), where
-memory-resident state fragments every web at each potential clobber.
-SSA-based reasoning (Cytron et al. 1991) sees the carried loop exactly as
-written — which is also why the same signatures extract to pure functions
-for the proof targets.
+**webs** — the flow-directed connected components of definitions and uses
+that [Quiring, Van Horn, Reppy, and Shivers](https://doi.org/10.1145/3729280)
+formalize as a well-typedness-preserving transformation domain. Each
+carried value is a short, call-free web the allocator colors trivially
+(Chaitin 1982; Briggs et al. 1994), whereas memory-resident state
+fragments every web at each potential clobber, which is precisely why the
+alias-analysis route kept plateauing. SSA-based reasoning (Cytron et al.
+1991) sees the carried loop exactly as written — which is also why the
+same signatures extract to pure functions for the proof targets.
 
 ## Code shape is an optimizer input
 
@@ -202,6 +212,15 @@ eventually guaranteed-tail-call (`musttail`) per-opcode handlers over the
 uniform carried-state signatures — aims to retire the hand-written loop by
 deriving the same shape from the specification.
 
+Closed families elsewhere in the model — trie update sources, cursor and
+reducer machinery, call and create modes — are **defunctionalized** the
+same way: a tagged union plus a single first-order dispatch, never a
+function pointer, so control flow stays visible to both the compiler and
+the proof targets. [Brandon et al.](https://doi.org/10.1145/3591260) give
+the general account of why specializing such families beats indirect
+calls; the optimized-FFI audit enforces the discipline mechanically by
+rejecting indirect C calls outright.
+
 ## Methodology
 
 Rules that this campaign's failures made non-negotiable:
@@ -239,24 +258,68 @@ Rules that this campaign's failures made non-negotiable:
 
 ## References
 
+**On specification and verification of machine-level semantics**
+
+- A. Armstrong et al., *ISA Semantics for ARMv8-A, RISC-V, and
+  CHERI-MIPS* (POPL 2019) — the Sail language this specification is
+  written in.
+- M. Sammler, A. Hammond, R. Lepigre, B. Campbell, et al.,
+  [*Islaris: Verification of Machine Code Against Authoritative ISA
+  Semantics*](https://doi.org/10.1145/3519939.3523434) (PLDI 2022) —
+  verifying machine code against the same authoritative semantics the
+  hardware vendors publish; the closest analogue to what we are trying to
+  do for a zkEVM guest.
+- M. Sammler, R. Lepigre, R. Krebbers, K. Memarian, et al.,
+  [*RefinedC: Automating the Foundational Verification of C Code with
+  Refined Ownership Types*](https://doi.org/10.1145/3453483.3454036)
+  (PLDI 2021) — foundational verification of exactly the kind of C our
+  backends contain.
+- S. Keuchel, S. Huyghebaert, G. Lukyanov, D. Devriese,
+  [*Verified Symbolic Execution with Kripke Specification
+  Monads*](https://doi.org/10.1145/3547628) (ICFP 2022) — symbolic
+  execution for Sail-style specifications without meta-programming.
 - G. Wood, *Ethereum: A Secure Decentralised Generalised Transaction
   Ledger* (the Yellow Paper) — the machine state μ and the state-passing
-  formulation the carried convention restores.
-- A. Armstrong et al., *ISA Semantics for ARMv8-A, RISC-V, and
-  CHERI-MIPS* (POPL 2019) — the Sail language.
-- J. Bell, *Threaded Code* (CACM 1973).
-- M. A. Ertl and D. Gregg, *The Structure and Performance of Efficient
-  Interpreters* (JILP 2003) — dispatch cost analysis; read against the
-  step-count model.
+  formulation that the carried-value convention restores.
+- [`ethereum/execution-specs`](https://github.com/ethereum/execution-specs)
+  — the executable Python reference this model is gated byte-exact
+  against.
+
+**On specialization, defunctionalization, and transformation**
+
+- S. Ho, A. Fromherz, J. Protzenko, [*Modularity, Code Specialization,
+  and Zero-Cost Abstractions for Program
+  Verification*](https://doi.org/10.1145/3607844) (ICFP 2023) — the
+  argument that verification-time abstraction and compile-time erasure
+  can coexist; the philosophy behind our type-driven lowering.
+- B. Quiring, D. Van Horn, J. Reppy, O. Shivers, [*Webs and
+  Flow-Directed Well-Typedness Preserving Program
+  Transformations*](https://doi.org/10.1145/3729280) — webs as the
+  natural unit for flow-directed transformation, and why preserving
+  well-typedness through them matters.
+- W. Brandon, B. Driscoll, F. Dai, W. Berkow, M. Milano, [*Better
+  Defunctionalization through Lambda Set
+  Specialization*](https://doi.org/10.1145/3591260) (PLDI 2023) — closed
+  families specialized rather than dispatched indirectly.
 - G. Chaitin, *Register Allocation and Spilling via Graph Coloring*
-  (SIGPLAN 1982); P. Briggs, K. Cooper, L. Torczon, *Improvements to Graph
-  Coloring Register Allocation* (TOPLAS 1994) — webs and coloring.
-- R. Cytron et al., *Efficiently Computing Static Single Assignment Form*
-  (TOPLAS 1991).
-- The ZisK zkVM documentation — the step cost model, precompile syscalls,
-  and fcall hints.
-- `ethereum/execution-specs` — the executable Python reference this model
-  is byte-exact-gated against.
-- evmone and revm — contemporary interpreter designs whose measured
-  behavior on the same fixtures anchors the comparisons on the
-  [benchmarks page](performance.md).
+  (SIGPLAN 1982); P. Briggs, K. Cooper, L. Torczon, *Improvements to
+  Graph Coloring Register Allocation* (TOPLAS 1994).
+- R. Cytron et al., *Efficiently Computing Static Single Assignment Form
+  and the Control Dependence Graph* (TOPLAS 1991).
+
+**On interpreters**
+
+- J. Bell, *Threaded Code* (CACM 1973).
+- M. A. Ertl, D. Gregg, *The Structure and Performance of Efficient
+  Interpreters* (JILP 2003) — dispatch cost analysis; read against the
+  step-count model, since its branch-prediction argument does not apply.
+- [evmone](https://github.com/ethereum/evmone) and
+  [revm](https://github.com/bluealloy/revm) — contemporary interpreter
+  designs whose measured behaviour on the same fixtures anchors the
+  comparisons on the [benchmarks page](performance.md).
+
+**On the target**
+
+- The [ZisK](https://github.com/0xPolygonHermez/zisk) zkVM — the step
+  cost model, the proving-cost model, precompile syscalls, and fcall
+  hints.
