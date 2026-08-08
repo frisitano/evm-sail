@@ -96,6 +96,84 @@ same pattern applied to custody: an opaque 64-bit token that the spec-C
 backend implements as a frame height and the optimized backend as a raw
 row pointer — both passed by value, neither visible to the specification.
 
+## Refinement obligations fall out of the lowering
+
+Specialization does not guess at representations. When it lowers a
+`range`-typed value to a `uint16_t`, or elides a narrowing check, it
+states the corresponding side condition and **discharges it with Z3**
+during compilation — the build log's `C semantic proof: primitive=… 
+intervals=[0..1024,1..1] … proofs=3` lines are those obligations being
+proved, not annotations being trusted. A condition that will not
+discharge is a compile error, not a silent widening. Solver queries are
+memoized in a repo-local cache, so the proofs are re-checked on every
+build rather than recorded once and assumed thereafter.
+
+That leaves one question worth asking: why believe the compiler's own
+solver run? So the same obligations can be **exported for independent
+re-checking**. `--c-specialization-plan` writes a versioned,
+backend-neutral record of every lowering decision — source identity,
+semantic and represented signatures, inferred bounds, conversions, call
+edges, obligations — and
+`--c-specialization-obligations-lean` / `-coq` emit those obligations as
+proof-assistant input, so a proof assistant can re-derive the same facts
+without relying on the compiler having done so correctly.
+
+The identities in that plan are domain-separated digests of *semantic*
+content — the Sail name, signature, source span, represented signature,
+normalized bounds — deliberately excluding generated JIB names, C name
+mangling, and display order. The plan therefore does not change under
+`--c-no-mangle`, and no obligation can be read as a reference to a
+compiler-internal symbol. The human-readable report exists as well and is
+explicitly non-normative; the JSON schema is the contract.
+
+The one place where trust rather than proof is possible is narrowing
+policy. `--c-narrowing=proven` elides a check only where the bound was
+discharged and checks everything else; `checked` validates every
+narrowing at runtime; `all` projects unconditionally. Conversions taken
+under `all` are recorded in the plan as explicit `unchecked_narrowing`
+assumptions — so even the untrusted case is enumerated rather than
+invisible.
+
+## Tooling around the extraction
+
+The compiler is not only a code generator; the surrounding tooling exists
+so that generated C can be read, reviewed, and held to the same standard
+as hand-written code.
+
+**No arbitrary-precision integers may survive.** `--c-require-bounded-int`
+makes an unbounded mathematical integer reaching the C backend an error
+rather than a silent GMP allocation. This is what forces bounds to be
+*stated* — a proof-only counter or an unbounded accumulator has to be
+expressed as a real invariant or restructured, and the guest is
+consequently GMP-free by construction rather than by inspection.
+
+**Readable extraction.** Generated C keeps the specification's names,
+module structure, and comment provenance instead of collapsing into
+numbered temporaries, so a reviewer can put the Sail function and its
+emitted C side by side. That is also what makes the semantic-proof log
+(`--c-specialize-log`) useful: the inferred bounds and representation
+decisions are legible against the source they came from.
+
+**The generated C is linted like source.** `check_optimised_c_format.py`
+and `lint_optimised_c.py` hold compiler output to clang-format and
+clang-tidy-inspired policies, and the optimized-FFI audit enforces the
+production rules — no indirect calls, no capacity-owning static arrays,
+manifest-complete sources. Compiler output that regresses in style or
+violates a production policy fails a gate, not a code review.
+
+**Sail itself is linted and formatted.** `--lint-readability` gives a
+backend-neutral cleanup inventory: parser and typed-Sail rules are
+source-actionable and enforced by `make lint`, while post-Jib diagnostics
+describe compiler-created structure and stay advisory. `sail --fmt`
+provides canonical formatting, and a documentation linter enforces the
+specification's own style guide — every type, val, and substantial
+function carries prose, and module overviews stay in step with the tree.
+
+**Semantic tooling for readers.** A language server and `sail-lsp-index`
+supply the cross-references behind this book: definitions in the rendered
+specification link and hover because the index is built from the same
+typed AST the compiler uses, not from text matching.
+
 ## Limbs, lanes, and when hardware wins
 
 The EVM word is four little-endian `u64` limbs (`c_repr` fixed layout),
@@ -253,84 +331,6 @@ the proof targets. [Brandon et al.](https://doi.org/10.1145/3591260) give
 the general account of why specializing such families beats indirect
 calls; the optimized-FFI audit enforces the discipline mechanically by
 rejecting indirect C calls outright.
-
-## Refinement obligations fall out of the lowering
-
-Specialization does not guess at representations. When it lowers a
-`range`-typed value to a `uint16_t`, or elides a narrowing check, it
-states the corresponding side condition and **discharges it with Z3**
-during compilation — the build log's `C semantic proof: primitive=… 
-intervals=[0..1024,1..1] … proofs=3` lines are those obligations being
-proved, not annotations being trusted. A condition that will not
-discharge is a compile error, not a silent widening. Solver queries are
-memoized in a repo-local cache, so the proofs are re-checked on every
-build rather than recorded once and assumed thereafter.
-
-That leaves one question worth asking: why believe the compiler's own
-solver run? So the same obligations can be **exported for independent
-re-checking**. `--c-specialization-plan` writes a versioned,
-backend-neutral record of every lowering decision — source identity,
-semantic and represented signatures, inferred bounds, conversions, call
-edges, obligations — and
-`--c-specialization-obligations-lean` / `-coq` emit those obligations as
-proof-assistant input, so a proof assistant can re-derive the same facts
-without relying on the compiler having done so correctly.
-
-The identities in that plan are domain-separated digests of *semantic*
-content — the Sail name, signature, source span, represented signature,
-normalized bounds — deliberately excluding generated JIB names, C name
-mangling, and display order. The plan therefore does not change under
-`--c-no-mangle`, and no obligation can be read as a reference to a
-compiler-internal symbol. The human-readable report exists as well and is
-explicitly non-normative; the JSON schema is the contract.
-
-The one place where trust rather than proof is possible is narrowing
-policy. `--c-narrowing=proven` elides a check only where the bound was
-discharged and checks everything else; `checked` validates every
-narrowing at runtime; `all` projects unconditionally. Conversions taken
-under `all` are recorded in the plan as explicit `unchecked_narrowing`
-assumptions — so even the untrusted case is enumerated rather than
-invisible.
-
-## Tooling around the extraction
-
-The compiler is not only a code generator; the surrounding tooling exists
-so that generated C can be read, reviewed, and held to the same standard
-as hand-written code.
-
-**No arbitrary-precision integers may survive.** `--c-require-bounded-int`
-makes an unbounded mathematical integer reaching the C backend an error
-rather than a silent GMP allocation. This is what forces bounds to be
-*stated* — a proof-only counter or an unbounded accumulator has to be
-expressed as a real invariant or restructured, and the guest is
-consequently GMP-free by construction rather than by inspection.
-
-**Readable extraction.** Generated C keeps the specification's names,
-module structure, and comment provenance instead of collapsing into
-numbered temporaries, so a reviewer can put the Sail function and its
-emitted C side by side. That is also what makes the semantic-proof log
-(`--c-specialize-log`) useful: the inferred bounds and representation
-decisions are legible against the source they came from.
-
-**The generated C is linted like source.** `check_optimised_c_format.py`
-and `lint_optimised_c.py` hold compiler output to clang-format and
-clang-tidy-inspired policies, and the optimized-FFI audit enforces the
-production rules — no indirect calls, no capacity-owning static arrays,
-manifest-complete sources. Compiler output that regresses in style or
-violates a production policy fails a gate, not a code review.
-
-**Sail itself is linted and formatted.** `--lint-readability` gives a
-backend-neutral cleanup inventory: parser and typed-Sail rules are
-source-actionable and enforced by `make lint`, while post-Jib diagnostics
-describe compiler-created structure and stay advisory. `sail --fmt`
-provides canonical formatting, and a documentation linter enforces the
-specification's own style guide — every type, val, and substantial
-function carries prose, and module overviews stay in step with the tree.
-
-**Semantic tooling for readers.** A language server and `sail-lsp-index`
-supply the cross-references behind this book: definitions in the rendered
-specification link and hover because the index is built from the same
-typed AST the compiler uses, not from text matching.
 
 ## Methodology
 
