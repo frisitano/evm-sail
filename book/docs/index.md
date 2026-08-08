@@ -21,11 +21,29 @@ specification is a claim about the binary that runs.
 
 **Specifying precisely.** Every rule cites the Yellow Paper section or the
 EIP it implements, and fork-dependent behaviour is gated on an explicit
-fork ordering rather than duplicated per release. The specification is
-gated byte-exact against
+fork ordering rather than duplicated per release.
+
+Precision here also means that the protocol's quantities carry their real
+limits in their types. A stack height is not an integer that happens to
+stay under 1024; it is a value whose type says so. Gas, memory offsets,
+call depth, immediate widths, and the fork-dependent constants behave the
+same way. Those bounds are not annotations for the reader — the
+typechecker holds them, and every operation that consumes or produces such
+a value must establish that its result still lies within range. A bound
+proved at one point in the specification travels with the value through
+everything downstream, so whole families of arithmetic mistake become
+unrepresentable rather than merely untested.
+
+The same discipline is what makes the guest fast: because the bounds are
+proved rather than assumed, the compiler can choose machine
+representations that fit them exactly, and can discharge — rather than
+check at runtime — the conversions between them. Correctness and
+performance draw on the same facts.
+
+Finally, the specification is gated byte-exact against
 [`ethereum/execution-specs`](https://github.com/ethereum/execution-specs)
-across the full stateless test corpus, so "precise" means tested, not
-merely stated.
+across the full stateless test corpus, so "precise" means tested as well
+as stated.
 
 **Verifying.** The impure boundary is deliberately small and enumerable —
 the hashing core, the input oracle, guest output, the world-state and
