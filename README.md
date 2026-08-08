@@ -13,6 +13,14 @@ specification compiles to native code, riscv, runs real Ethereum blocks, and pas
 **~100% of the execution-spec-tests state suites for the modern forks** (Berlin onwards).
 This formal specification is inspired by and intended as a complement to [`evm-asm`](https://github.com/Verified-zkEVM/evm-asm).
 
+📖 **[Documentation and benchmarks](https://frisitano.github.io/evm-sail/)** —
+the rendered specification, the extraction map, engineering notes, and the
+zkEVM benchmark dashboard.
+🛠 **[Custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)** —
+the fork this repository builds with, carrying bound-driven C specialization,
+the splice mechanism, and proof-aware narrowing policies. Upstream Sail is not
+a supported substitute; `zkvm/resolve_optimized_sail.sh` resolves it.
+
 Objectives:
 
 - **Complete & objective.** The specification is complete — it defines the EVM,
@@ -102,8 +110,18 @@ model-wide maximum intermediate; proven 64-bit ranges can still lower to
 native scalars. Operations trap rather than truncate if that audited bound is
 violated.
 
-The evidence-backed zkVM optimisation backlog, current measurements, and
-validation requirements are tracked in
+Machine state is carried through handler signatures rather than read from
+registers: the program counter, gas, the operand-stack cursor, and the memory
+cursor flow as values, so the compiler keeps them in machine registers and the
+model registers are touched only at frame boundaries.
+
+Measured against reth and ethrex as ZisK guests on identical devnet fixtures,
+broken down by execution phase, on the
+[benchmarks dashboard](https://frisitano.github.io/evm-sail/performance.html);
+the reasoning behind the design — cost model, type-driven lowering, register
+custody, and the experiments that failed — is in the
+[engineering notes](https://frisitano.github.io/evm-sail/engineering.html).
+The optimisation backlog and validation requirements remain in
 [`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md).
 
 ## Layout
@@ -162,7 +180,12 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
-extractions/ maintained C, Coq, and Lean model generation plus extern contracts
+extractions/ one directory per target, each with contract/ (the axiom or ABI
+             layer) and src/ (the committed generated output):
+               c/spec/       GMP-backed reference model
+               c/optimised/  specialized fixed-layout model (the zkEVM guest)
+               lean/, coq/   proof-assistant developments
+               python/       executable Python rendering
 zkvm/        RISC-V zkVM guest targets (Spike and the optimised ZisK stateless
              block validation)
   runtime/sail256     shared GMP-free runtime for bounded integers
