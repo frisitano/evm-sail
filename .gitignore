@@ -46,7 +46,12 @@ zkvm/native-runner/.build*/
 /book/docs/reference/**/*.md
 !/book/docs/reference/**/index.md
 /book/docs/extraction/
-/book/docs/assets/generated/
+# Vendored dashboard/highlighter assets are copied in from the tracked
+# mkdocstrings-sail package at build time; the benchmark dataset below is
+# committed so the published book renders without a benchmark run
+# (regenerate: tools/benchmark_zisk.py --regenerate-dashboard <results.json>).
+/book/docs/assets/generated/*
+!/book/docs/assets/generated/performance/
 
 # local editor, agent, and worktree state
 .DS_Store
