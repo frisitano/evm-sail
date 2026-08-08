@@ -52,6 +52,7 @@ from .primitives.quantities import (
     chain_identifier as chain_identifier,
     code_length as code_length,
     code_pointer as code_pointer,
+    code_scan_position as code_scan_position,
     deep_stack_index as deep_stack_index,
     excess_blob_gas as excess_blob_gas,
     frame_depth as frame_depth,

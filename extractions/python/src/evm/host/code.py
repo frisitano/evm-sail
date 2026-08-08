@@ -45,12 +45,16 @@ from evm.primitives.fork import (
 )
 
 def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: int) -> None:
-    position = pc
     code_len = code.len
-    if (int(position) < int(code_len)):
-        opcode_ = code_slice_byte(code, position)
+    scanning = True
+    position = pc
+    while True:
+        if not (((scanning) & ((int(position) < int(code_len))))):
+            break
+        current = position
+        opcode_ = code_slice_byte(code, current)
         if ((opcode_) == (Bits(8, 0b01011011))):
-            marked = _host_jumpdest_table_mark(table, code_len, position)
+            marked = _host_jumpdest_table_mark(table, code_len, current)
             if not (marked):
                 raise SailError("JUMPDEST mark")
         opcode_value = int(opcode_)
@@ -59,7 +63,7 @@ def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: 
         else:
             if (int(fork) >= int(Amsterdam)):
                 operation = deep_stack_operation(opcode_value)
-                immediate = code_slice_byte(code, (int(position) + 1))
+                immediate = code_slice_byte(code, (int(current) + 1))
                 immediate_valid = deep_stack_operation_immediate_valid(operation, immediate)
                 if immediate_valid:
                     step = 2
@@ -67,13 +71,11 @@ def analyze_code_from(code: CodeSlice, fork: Fork, table: jump_table_index, pc: 
                     step = 1
             else:
                 step = 1
-        if (int(step) < int((int(code_len) - int(position)))):
-            added = (int(position) + int(step))
-            return analyze_code_from(code, fork, table, added)
+        if (int(step) < int((int(code_len) - int(current)))):
+            position = (int(current) + int(step))
         else:
-            return None
-    else:
-        return None
+            scanning = False
+    return None
 
 def analyze_code(code: CodeSlice, fork: Fork) -> jump_table_index:
     if ((code.len) == (0)):

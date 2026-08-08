@@ -38,15 +38,20 @@ val code_db_read_delegation = impure { c: "code_db_read_delegation" } : hash -> 
 
 /* The unexamined code suffix strictly decreases; PUSH data is skipped in one step. */
 /*! Scans the remaining code, records opcode-aligned JUMPDEST positions, and
-    skips immediate bytes belonging to PUSH instructions. */
+    skips immediate bytes belonging to PUSH instructions. The scan is a loop
+    rather than a self-call: one step per instruction over a whole contract is
+    far beyond the call-stack depth an extraction target can be expected to
+    provide. */
 val analyze_code_from : forall 'pc, code_valid_length('pc). (CodeSlice, Fork, jump_table_index, int('pc)) -> unit
 function analyze_code_from(code, fork, table, pc) = {
-    let position = pc;
     let code_len = code.len;
-    if position < code_len then {
-        let opcode = slice_byte(code, position);
+    var scanning : bool = true;
+    var position : code_scan_position = pc;
+    while scanning & position < code_len termination_measure(code_len - position) do {
+        let current = position;
+        let opcode = slice_byte(code, current);
         if opcode == 0x5b then {
-            let marked = jumpdest_table_mark(table, code_len, position);
+            let marked = jumpdest_table_mark(table, code_len, current);
             assert(marked, "JUMPDEST mark")
         };
         let opcode_value = unsigned(opcode);
@@ -55,7 +60,7 @@ function analyze_code_from(code, fork, table, pc) = {
             then opcode_value - 94
             else if fork >= Amsterdam then {
                 let operation = deep_stack_operation(opcode_value);
-                let immediate = slice_byte(code, position + 1);
+                let immediate = slice_byte(code, current + 1);
                 let immediate_valid = deep_stack_operation_immediate_valid(operation, immediate);
                 if immediate_valid then {
                     2
@@ -66,16 +71,13 @@ function analyze_code_from(code, fork, table, pc) = {
                 1
             };
 
-        if step < code_len - position then {
-            let added = position + step;
-            analyze_code_from(code, fork, table, added)
+        if step < code_len - current then {
+            position = current + step
+        } else {
+            scanning = false
         }
     }
 }
-termination_measure analyze_code_from(code, fork, table, pc) =
-    let code_len = code.len in
-    let position = pc in
-    code_len - position
 
 /*! The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
     are data even when they contain `0x5b`. The completed bitmap remains a

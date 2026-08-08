@@ -593,6 +593,10 @@ type code_length = range(0, code_region_bound)
     enough cursor headroom for a complete PUSH32 immediate. */
 type code_valid_length('len : Int) -> Bool =
     0 <= 'len & 'len + 32 <= code_region_bound
+/*! An opcode-aligned scan cursor: a code position that still carries the
+    PUSH32 immediate headroom, so reading past the current opcode stays in
+    the code region. */
+type code_scan_position = range(0, code_region_bound - 32)
 /*! Embeds an arbitrary mathematical byte count in an EVM word after checking
     the EVM-word boundary. */
 val word_of_nat_byte_count : forall 'value, 0 <= 'value. int('value) -> word

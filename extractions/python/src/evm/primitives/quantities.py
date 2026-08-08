@@ -337,12 +337,19 @@ code_pointer: TypeAlias = Uint
 
 code_length: TypeAlias = Uint
 
+class code_scan_position(Unsigned):
+    LOWER = 0
+    UPPER = 4294967263
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
 def word_of_nat_byte_count(value: int) -> word:
     if (int(value) < int((1 << 256))):
         return word(u256(value))
     else:
         if not (False):
-            raise SailError("sail/primitives/quantities.sail:603.20-603.21")
+            raise SailError("sail/primitives/quantities.sail:607.20-607.21")
         raise SailExit(None)
 
 def word_of_source_byte_count(value: int) -> word:
