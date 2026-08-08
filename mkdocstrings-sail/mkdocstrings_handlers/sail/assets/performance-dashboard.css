@@ -187,9 +187,6 @@
 }
 
 .evmsail-perf-rankings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.2rem;
   margin-top: 1rem;
 }
 
@@ -231,7 +228,22 @@
 }
 
 .evmsail-perf-rank-row__label {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.evmsail-perf-rank-row__name {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evmsail-perf-rank-row__meta {
+  overflow: hidden;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -254,10 +266,6 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-}
-
-.evmsail-perf-rank-row__fill--gas {
-  background: var(--md-default-fg-color--light);
 }
 
 .evmsail-perf-rank-row__value {
@@ -472,12 +480,6 @@
   color: var(--md-default-fg-color--lighter);
   font-size: 0.62rem;
   font-weight: 400;
-}
-
-@media screen and (max-width: 60rem) {
-  .evmsail-perf-rankings {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media screen and (max-width: 35rem) {

@@ -20,12 +20,12 @@ fixture ranking, the guest comparison table and its bar scale, the per-phase
 segments, the semantic-scope table, and all axis labels, column headers, and
 tooltips.
 
-The fixture is the only selector. Two always-present rankings order the
-fixtures from high to low: one by the largest guest total in the selected
-measure and one by block gas used. Selecting a ranking row (or an entry in the
-fixture list) loads that fixture's full comparison: guests ranked from most to
-fewest in the selected measure on a shared scale, with the other measure
-alongside.
+The fixture is the only selector. One always-present ranking orders the
+fixtures from high to low by the largest guest total in the selected measure,
+and annotates each row with that fixture's block gas used. Selecting a ranking
+row (or an entry in the fixture list) loads that fixture's full comparison:
+guests ranked from most to fewest in the selected measure on a shared scale,
+with the other measure alongside.
 
 When a guest's benchmark measurements carry per-phase attributions
 (input decode, witness indexing, execution, state root, and

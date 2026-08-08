@@ -422,6 +422,22 @@
     return `${category}${fixture.fixture}`;
   }
 
+  function fixtureGas(fixture) {
+    if (Number.isFinite(fixture.total_gas_used)) {
+      return { value: fixture.total_gas_used, exact: true };
+    }
+    if (Number.isFinite(fixture.max_gas_used)) {
+      return { value: fixture.max_gas_used, exact: false };
+    }
+    return null;
+  }
+
+  function gasLabel(gas, formatter) {
+    return gas.exact
+      ? `${formatter.format(gas.value)} gas`
+      : `max ${formatter.format(gas.value)} gas`;
+  }
+
   function renderRankings(view, catalog, guests, measure, selectedId, onSelect) {
     const fixtures = catalog.fixtures;
 
@@ -436,6 +452,7 @@
         return {
           fixture,
           totals,
+          gas: fixtureGas(fixture),
           maxValue: finite.length ? Math.max(...finite) : null,
         };
       })
@@ -463,7 +480,8 @@
               : `${guest.name}: ${number.format(entry.totals[index])} ` +
                 `${measure.noun}`,
           )
-          .join("\n");
+          .join("\n") +
+        (entry.gas ? `\n${gasLabel(entry.gas, number)}` : "");
       row.addEventListener("click", () => onSelect(entry.fixture.id));
       const bars = element("span", "evmsail-perf-rank-row__bars");
       entry.totals.forEach((value, index) => {
@@ -478,12 +496,25 @@
         }
         bars.append(track);
       });
-      row.append(
+      const label = element("span", "evmsail-perf-rank-row__label");
+      label.append(
         element(
           "span",
-          "evmsail-perf-rank-row__label",
+          "evmsail-perf-rank-row__name",
           fixtureRankLabel(entry.fixture),
         ),
+      );
+      if (entry.gas) {
+        label.append(
+          element(
+            "span",
+            "evmsail-perf-rank-row__meta",
+            gasLabel(entry.gas, compact),
+          ),
+        );
+      }
+      row.append(
+        label,
         bars,
         element(
           "span",
@@ -499,59 +530,6 @@
         `fixtures, ranked by the largest guest ${measure.lower} total. The ` +
         "row value is that largest total."
       : `No fixture reports ${measure.lower} for every embedded case.`;
-
-    const gasRanked = fixtures
-      .map((fixture) => ({
-        fixture,
-        gas: Number.isFinite(fixture.total_gas_used)
-          ? fixture.total_gas_used
-          : Number.isFinite(fixture.max_gas_used)
-            ? fixture.max_gas_used
-            : null,
-      }))
-      .filter((entry) => entry.gas !== null)
-      .sort((left, right) => right.gas - left.gas);
-    const gasShown = gasRanked.slice(0, RANKING_LIMIT);
-    const gasScale = Math.max(1, ...gasShown.map((entry) => entry.gas));
-
-    const gasFragment = document.createDocumentFragment();
-    gasShown.forEach((entry) => {
-      const row = element("button", "evmsail-perf-rank-row");
-      row.type = "button";
-      if (entry.fixture.id === selectedId) {
-        row.classList.add("evmsail-perf-rank-row--selected");
-      }
-      row.title = `${entry.fixture.path}\n${number.format(entry.gas)} gas used`;
-      row.addEventListener("click", () => onSelect(entry.fixture.id));
-      const bars = element("span", "evmsail-perf-rank-row__bars");
-      const track = element("span", "evmsail-perf-rank-row__track");
-      const fill = element(
-        "span",
-        "evmsail-perf-rank-row__fill evmsail-perf-rank-row__fill--gas",
-      );
-      fill.style.width = `${(entry.gas / gasScale) * 100}%`;
-      track.append(fill);
-      bars.append(track);
-      row.append(
-        element(
-          "span",
-          "evmsail-perf-rank-row__label",
-          fixtureRankLabel(entry.fixture),
-        ),
-        bars,
-        element(
-          "span",
-          "evmsail-perf-rank-row__value",
-          compact.format(entry.gas),
-        ),
-      );
-      gasFragment.append(row);
-    });
-    view.gasRanking.replaceChildren(gasFragment);
-    view.gasRankingNote.textContent = gasRanked.length
-      ? `Top ${gasShown.length} of ${number.format(gasRanked.length)} ` +
-        "fixtures, ranked by block gas used."
-      : "No fixture reports gas used.";
   }
 
   function renderSummary(view, aggregate, measure) {
@@ -1066,23 +1044,15 @@
       measureRankingNote,
       measureRanking,
     );
-    const gasRankingPanel = element("div", "evmsail-perf-ranking");
-    const gasRankingNote = element("p", "evmsail-perf-help");
-    const gasRanking = element("div", "evmsail-perf-ranking__rows");
-    gasRankingPanel.append(
-      element("h3", null, "By gas used"),
-      gasRankingNote,
-      gasRanking,
-    );
-    rankingGrid.append(measureRankingPanel, gasRankingPanel);
+    rankingGrid.append(measureRankingPanel);
     rankingSection.append(
-      element("h2", null, "Fixture rankings"),
+      element("h2", null, "Fixture ranking"),
       element(
         "p",
         "evmsail-perf-help",
-        "Both rankings are sorted from high to low. The left ranking follows " +
-          "the selected measure. Select any row to load that fixture's full " +
-          "comparison below.",
+        "The ranking follows the selected measure and is sorted from high to " +
+          "low. Each row also shows that fixture's block gas used. Select any " +
+          "row to load that fixture's full comparison below.",
       ),
       rankingGrid,
     );
@@ -1260,8 +1230,6 @@
       measureRanking,
       measureRankingTitle,
       measureRankingNote,
-      gasRanking,
-      gasRankingNote,
       summary,
       summaryHelp,
       summaryPrimaryHeader,
@@ -1331,34 +1299,22 @@
 
     function fixtureLabel(fixture) {
       const category = fixture.category ? `${fixture.category}/` : "";
-      const gas = Number.isFinite(fixture.total_gas_used)
-        ? ` · ${number.format(fixture.total_gas_used)} gas`
-        : Number.isFinite(fixture.max_gas_used)
-          ? ` · max ${number.format(fixture.max_gas_used)} gas`
-          : "";
+      const gas = fixtureGas(fixture);
       return (
         `${category}${fixture.fixture} (${number.format(fixture.case_count)})` +
-        gas
+        (gas ? ` · ${gasLabel(gas, number)}` : "")
       );
     }
 
     function orderedByGas(items) {
       return [...items].sort((left, right) => {
-        const leftGas = Number.isFinite(left.total_gas_used)
-          ? left.total_gas_used
-          : Number.isFinite(left.max_gas_used)
-            ? left.max_gas_used
-            : null;
-        const rightGas = Number.isFinite(right.total_gas_used)
-          ? right.total_gas_used
-          : Number.isFinite(right.max_gas_used)
-            ? right.max_gas_used
-            : null;
+        const leftGas = fixtureGas(left);
+        const rightGas = fixtureGas(right);
         if (leftGas === null && rightGas === null) return 0;
         if (leftGas === null) return 1;
         if (rightGas === null) return -1;
         return (
-          rightGas - leftGas ||
+          rightGas.value - leftGas.value ||
           fixtureLabel(left).localeCompare(fixtureLabel(right))
         );
       });
