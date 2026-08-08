@@ -156,6 +156,21 @@ duplicating instructions elsewhere.
   suspended frames, ancestor hashes, logs, and receipts follow the same
   one-time workspace-binding rule rather than owning capacity-sized static
   arrays.
+  The hand-written raw-byte interpreter (`ffi/optimized/src/evm/interpreter.c`)
+  is the SINGLE optimized interpreter: a computed-goto loop (one 256-entry
+  label table, labels-as-values) with pc, gas, and the code slice held in
+  loop LOCALS. In-TU fast-path arms (ALU, PUSH/POP/DUP/SWAP, EXP, JUMPDEST)
+  charge and validate against the local gas, never touch the model registers
+  on success, and dispatch the next opcode from their own tail; every in-TU
+  failure branches to the single `interp_exc` tail, which publishes the local
+  gas and performs the canonical `exc_halt` exactly once (exc_halt reads and
+  then zeroes the gas register, so the publish-before-halt order is a
+  consensus requirement). Arms whose handler is a generated Sail body
+  publish the locals to the model registers first and reload after; frame
+  entry additionally reloads the code locals. There is no switch-dispatch
+  variant and no `EVM_INTERP` knob. Labels-as-values is a sanctioned,
+  interpreter-only exception to the indirect-control-flow rule: it is an
+  indirect BRANCH within one function over a closed static table.
   The optimized FFI audit enforces both the source manifest and this production
   policy. Closed families of optimized-host behavior use explicit tags and
   first-order dispatch rather than function pointers or callbacks; this keeps
