@@ -19,8 +19,9 @@ that lowers the specification's semantic types to machine representations.
 
 **Precision.** Protocol quantities carry their real limits in their types:
 a stack height is not an integer that happens to stay under 1024, it is a
-value whose type says so. The typechecker holds those bounds, and every
-operation must show its result still lies within them.
+value whose type says so. Every operation must show its result still lies
+within those bounds, and the compiler proves it — each type and range
+obligation is discharged by an SMT solver at compile time.
 
 **Verification.** The impure boundary is small and enumerable — hashing,
 input, output, the state stores — and proof targets receive exactly those

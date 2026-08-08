@@ -58,10 +58,15 @@ interval and bound analysis over them:
 
 - A `range`-typed value whose bounds fit a machine word lowers to `uint16_t`
   / `uint32_t` / `uint64_t` rather than a GMP integer. Arithmetic on it
-  lowers to native operations accompanied by *semantic proofs* — the
-  compiler discharges, per operation, that the result interval fits the
-  chosen representation (visible in build logs as
-  `__sail_proven_native_add … intervals=[0..1024,1..1]`).
+  lowers to native operations accompanied by *semantic proofs*: for each
+  operation the compiler states the side condition that its result
+  interval fits the chosen representation and **discharges it with the Z3
+  SMT solver during compilation** (visible in build logs as
+  `__sail_proven_native_add … intervals=[0..1024,1..1] … proofs=3`).
+  Nothing here is heuristic — every type and range fact the lowering
+  depends on is proved, a condition that will not discharge is a compile
+  error rather than a silent widening, and the queries are memoized in a
+  repository-local cache so they are re-checked on every build.
 - Representation demands propagate **transitively through the call graph**:
   when a caller's narrowed type reaches a callee, the callee is cloned at
   the narrowed representation, including its locals and intermediate
