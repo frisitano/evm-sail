@@ -7,7 +7,7 @@
 
 .evmsail-perf-controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.8rem;
   margin: 1rem 0;
   padding: 1rem;
@@ -107,6 +107,165 @@
 
 .evmsail-perf-guest-2 {
   background: #ea580c;
+}
+
+.evmsail-perf-build {
+  color: var(--md-default-fg-color--lighter);
+  font-family: var(--md-code-font-family);
+  font-size: 0.62rem;
+  font-weight: 400;
+}
+
+.evmsail-perf-guest-cell {
+  display: grid;
+  gap: 0.1rem;
+  font-weight: 600;
+}
+
+.evmsail-perf-guest-cell__name {
+  font-size: 0.72rem;
+}
+
+.evmsail-perf-partial {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.62rem;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.evmsail-perf-rankings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-top: 1rem;
+}
+
+.evmsail-perf-ranking h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+}
+
+.evmsail-perf-ranking__rows {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.evmsail-perf-rank-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.45fr) 1fr minmax(3rem, auto);
+  gap: 0.55rem;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: none;
+  color: var(--md-default-fg-color);
+  font: inherit;
+  font-size: 0.66rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.evmsail-perf-rank-row:hover {
+  background: var(--md-code-bg-color);
+}
+
+.evmsail-perf-rank-row--selected {
+  border-color: var(--md-default-fg-color--lighter);
+  background: var(--md-code-bg-color);
+}
+
+.evmsail-perf-rank-row__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evmsail-perf-rank-row__bars {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.evmsail-perf-rank-row__track {
+  display: block;
+  height: 0.3rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.evmsail-perf-rank-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.evmsail-perf-rank-row__fill--gas {
+  background: var(--md-default-fg-color--light);
+}
+
+.evmsail-perf-rank-row__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.evmsail-perf-phases {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.evmsail-perf-phase-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.2fr) 1fr minmax(6rem, auto);
+  gap: 0.55rem;
+  align-items: center;
+  font-size: 0.68rem;
+}
+
+.evmsail-perf-phase-row__track {
+  display: flex;
+  height: 0.7rem;
+  overflow: hidden;
+  border-radius: 0.2rem;
+  background: none;
+}
+
+.evmsail-perf-phase-row__segment {
+  display: block;
+  height: 100%;
+}
+
+.evmsail-perf-phase-0 {
+  background: #2563eb;
+}
+
+.evmsail-perf-phase-1 {
+  background: #16a34a;
+}
+
+.evmsail-perf-phase-2 {
+  background: #d97706;
+}
+
+.evmsail-perf-phase-3 {
+  background: #db2777;
+}
+
+.evmsail-perf-phase-4 {
+  background: #0d9488;
+}
+
+.evmsail-perf-phase-5 {
+  background: #9333ea;
+}
+
+.evmsail-perf-phase-rest {
+  background: var(--md-default-fg-color--lightest);
 }
 
 .evmsail-perf-input {
@@ -229,7 +388,7 @@
 
 .evmsail-perf-function-controls {
   display: grid;
-  grid-template-columns: minmax(10rem, 0.5fr) minmax(14rem, 1fr);
+  grid-template-columns: minmax(14rem, 0.6fr);
   gap: 0.8rem;
   align-items: end;
   margin: 0.8rem 0;
@@ -239,21 +398,22 @@
   background: var(--md-code-bg-color);
 }
 
-.evmsail-perf-function-controls .evmsail-perf-limit-note {
-  grid-column: 1 / -1;
+.evmsail-perf-function-block {
+  margin-top: 1.2rem;
+}
+
+.evmsail-perf-function-block__title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
 }
 
 @media screen and (max-width: 60rem) {
-  .evmsail-perf-controls {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .evmsail-perf-rankings {
+    grid-template-columns: 1fr;
   }
 }
 
 @media screen and (max-width: 35rem) {
-  .evmsail-perf-controls {
-    grid-template-columns: 1fr;
-  }
-
   .evmsail-perf-field--wide {
     grid-column: auto;
   }
@@ -262,15 +422,15 @@
     grid-template-columns: 1fr;
   }
 
-  .evmsail-perf-function-controls .evmsail-perf-limit-note {
-    grid-column: auto;
-  }
-
   .evmsail-perf-scope {
     margin-left: calc(var(--scope-depth) * 0.35rem);
   }
 
   .evmsail-perf-scope__guest {
     grid-template-columns: 4.5rem 5.5rem 1fr;
+  }
+
+  .evmsail-perf-rank-row {
+    grid-template-columns: minmax(4rem, 0.5fr) 1fr minmax(2.5rem, auto);
   }
 }

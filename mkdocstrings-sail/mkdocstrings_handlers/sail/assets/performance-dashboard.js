@@ -2,6 +2,7 @@
   "use strict";
 
   const OPTION_LIMIT = 200;
+  const RANKING_LIMIT = 50;
   const PIPELINE = [
     ["Guest execution", null, 0],
     ["Stateless validation", "stateless_validation", 1],
@@ -38,26 +39,24 @@
     [/^request_/, "Execution requests"],
     [/^index_witness_/, "Witness indexing"],
   ];
+  const PHASE_ORDER = [
+    "input-decode",
+    "execution",
+    "state-root",
+    "receipts-commitments",
+  ];
+  const PHASE_LABELS = {
+    "input-decode": "Input decode",
+    execution: "Execution",
+    "state-root": "State root",
+    "receipts-commitments": "Receipts & commitments",
+  };
+  const PHASE_CLASS_COUNT = 6;
   const number = new Intl.NumberFormat("en-US");
-  const METRICS = {
-    cost: {
-      label: "Proving cost",
-      total: "total_cost",
-      scopes: "scope_costs",
-      inclusive: "Inclusive cost",
-    },
-    steps: {
-      label: "Instruction steps",
-      total: "total_steps",
-      scopes: "scope_steps",
-      inclusive: "Inclusive steps",
-    },
-  };
-  const ORDERINGS = {
-    "gas-desc": "Gas used: high to low",
-    "gas-asc": "Gas used: low to high",
-    name: "Name: A to Z",
-  };
+  const compact = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  });
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -73,15 +72,13 @@
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+  function phaseLabel(name) {
+    return PHASE_LABELS[name] || pretty(name.replaceAll("-", "_"));
+  }
+
   function scopeFamily(name) {
     const match = SCOPE_FAMILIES.find(([pattern]) => pattern.test(name));
     return match ? match[1] : "Other";
-  }
-
-  function uniqueSorted(items, key) {
-    return [...new Set(items.map(key))].sort((left, right) =>
-      left.localeCompare(right, undefined, { numeric: true }),
-    );
   }
 
   function replaceOptions(select, values, selected, label, format = pretty) {
@@ -119,6 +116,40 @@
     return response.json();
   }
 
+  function buildLabel(guest) {
+    const build = guest.build;
+    if (!build) return "build unknown";
+    if (build.version) return build.version;
+    if (build.commit) {
+      const dirty = build.commit.endsWith("-dirty");
+      const short = build.commit.replace(/-dirty$/, "").slice(0, 12);
+      return dirty ? `${short} (dirty)` : short;
+    }
+    return "build unknown";
+  }
+
+  function buildTitle(guest) {
+    const lines = [`Guest: ${guest.name}`];
+    const build = guest.build;
+    if (build?.commit) lines.push(`Built from commit ${build.commit}`);
+    if (build?.version) lines.push(`Built from ${build.version}`);
+    if (!build?.commit && !build?.version) {
+      lines.push("Build provenance was not recorded for this run.");
+    }
+    if (guest.elf_sha256) lines.push(`ELF sha256 ${guest.elf_sha256}`);
+    return lines.join("\n");
+  }
+
+  function guestNameCell(tag, guest) {
+    const cell = element(tag, "evmsail-perf-guest-cell");
+    cell.append(
+      element("span", "evmsail-perf-guest-cell__name", guest.name),
+      element("span", "evmsail-perf-build", buildLabel(guest)),
+    );
+    cell.title = buildTitle(guest);
+    return cell;
+  }
+
   function normalizeCase(profile, guests) {
     if (profile.guests) return profile;
     const guestName = guests[0]?.name;
@@ -148,28 +179,147 @@
     };
   }
 
-  function profileMetric(profile, guests, metricName) {
-    const metric = METRICS[metricName];
-    const guestValues = guests.map((guest, index) => {
-      const guestProfile = profile.guests?.[guest.name] || {};
-      const unavailable = guestProfile.unavailable || null;
-      return {
-        ...guest,
-        index,
-        profile: guestProfile,
-        unavailable,
-        totalValue: unavailable ? null : (guestProfile[metric.total] ?? null),
-        scopeValues: guestProfile[metric.scopes] || {},
-      };
+  function sumInto(target, source) {
+    Object.entries(source || {}).forEach(([key, value]) => {
+      if (Number.isFinite(value)) {
+        target[key] = (target[key] || 0) + value;
+      }
     });
+  }
+
+  function aggregateGuest(shard, guest) {
+    const entries = shard.cases.map(
+      (profile) => profile.guests?.[guest.name] || {},
+    );
+    const measured = entries.filter((entry) =>
+      Number.isFinite(entry.total_steps),
+    );
+    const unavailable = entries.find((entry) => entry.unavailable)?.unavailable;
+    const caseCount = shard.cases.length;
+    const result = {
+      ...guest,
+      caseCount,
+      measuredCases: measured.length,
+      available: measured.length > 0,
+      partial: measured.length > 0 && measured.length < caseCount,
+      unavailableMessage: unavailable?.message || "Unavailable",
+      totalSteps: null,
+      totalCost: null,
+      scopeSteps: {},
+      scopeCosts: {},
+      phases: null,
+      opcodeCosts: [],
+      executedFunctions: [],
+      functionProfileStatus: "unknown",
+    };
+    if (!measured.length) return result;
+
+    result.totalSteps = measured.reduce(
+      (total, entry) => total + entry.total_steps,
+      0,
+    );
+    result.totalCost = measured.every((entry) =>
+      Number.isFinite(entry.total_cost),
+    )
+      ? measured.reduce((total, entry) => total + entry.total_cost, 0)
+      : null;
+    measured.forEach((entry) => {
+      sumInto(result.scopeSteps, entry.scope_steps);
+      sumInto(result.scopeCosts, entry.scope_costs);
+    });
+    result.functionProfileStatus = measured.some(
+      (entry) => entry.function_profile_status === "stack_mismatch",
+    )
+      ? "stack_mismatch"
+      : measured[0].function_profile_status || "unknown";
+
+    if (measured.every((entry) => Array.isArray(entry.phases))) {
+      const totals = new Map();
+      measured.forEach((entry) => {
+        entry.phases.forEach((phase) => {
+          totals.set(phase.name, (totals.get(phase.name) || 0) + phase.steps);
+        });
+      });
+      const names = [
+        ...PHASE_ORDER.filter((name) => totals.has(name)),
+        ...[...totals.keys()].filter((name) => !PHASE_ORDER.includes(name)),
+      ];
+      result.phases = names.map((name) => ({
+        name,
+        steps: totals.get(name),
+      }));
+    }
+
+    const operations = new Map();
+    measured.forEach((entry) => {
+      (entry.opcode_costs || []).forEach((operation) => {
+        const merged = operations.get(operation.name) || {
+          name: operation.name,
+          cost: 0,
+          op_count: 0,
+          frop_count: 0,
+        };
+        merged.cost += operation.cost || 0;
+        merged.op_count += operation.op_count || 0;
+        merged.frop_count += operation.frop_count || 0;
+        operations.set(operation.name, merged);
+      });
+    });
+    result.opcodeCosts = [...operations.values()]
+      .map((operation) => ({
+        ...operation,
+        share_percent: result.totalCost
+          ? (100 * operation.cost) / result.totalCost
+          : 0,
+      }))
+      .sort((left, right) => right.cost - left.cost);
+
+    const functions = new Map();
+    measured.forEach((entry) => {
+      (entry.executed_functions || []).forEach((fn) => {
+        functions.set(
+          fn.name,
+          (functions.get(fn.name) || 0) + (fn.exclusive_steps || 0),
+        );
+      });
+    });
+    result.executedFunctions = [...functions.entries()]
+      .map(([name, steps]) => ({
+        name,
+        exclusive_steps: steps,
+        share_percent: result.totalSteps
+          ? (100 * steps) / result.totalSteps
+          : 0,
+      }))
+      .sort(
+        (left, right) =>
+          right.exclusive_steps - left.exclusive_steps ||
+          left.name.localeCompare(right.name),
+      );
+    return result;
+  }
+
+  function aggregateShard(shard, guests) {
+    const guestAggregates = guests.map((guest, index) =>
+      Object.assign(aggregateGuest(shard, guest), { index }),
+    );
+    const gasValues = shard.cases
+      .map((profile) => profile.gas_used)
+      .filter((value) => Number.isFinite(value));
     return {
-      ...metric,
-      name: metricName,
-      guestValues,
-      maxTotal: Math.max(
+      caseCount: shard.cases.length,
+      gasUsed: gasValues.length
+        ? gasValues.reduce((total, value) => total + value, 0)
+        : null,
+      inputBytes: shard.cases.reduce(
+        (total, profile) => total + (profile.input_bytes || 0),
+        0,
+      ),
+      guests: guestAggregates,
+      maxTotalSteps: Math.max(
         1,
-        ...guestValues
-          .map((guest) => guest.totalValue)
+        ...guestAggregates
+          .map((guest) => guest.totalSteps)
           .filter((value) => Number.isFinite(value)),
       ),
     };
@@ -213,72 +363,344 @@
     view.legend.replaceChildren(
       ...guests.map((guest, index) => {
         const item = element("span", "evmsail-perf-legend__item");
+        item.title = buildTitle(guest);
         item.append(
           element(
             "span",
             `evmsail-perf-legend__swatch evmsail-perf-guest-${index}`,
           ),
           element("span", null, guest.name),
+          element("span", "evmsail-perf-build", buildLabel(guest)),
         );
         return item;
       }),
     );
   }
 
-  function renderSummary(view, profile, metric) {
-    const totals = metric.guestValues.map((guest) => guest.totalValue);
-    const best = Math.min(
-      ...totals.filter((value) => Number.isFinite(value) && value > 0),
+  function fixtureRankLabel(fixture) {
+    const category = fixture.category ? `${fixture.category}/` : "";
+    return `${category}${fixture.fixture}`;
+  }
+
+  function renderRankings(view, catalog, guests, selectedId, onSelect) {
+    const fixtures = catalog.fixtures;
+
+    const stepsRanked = fixtures
+      .map((fixture) => {
+        const totals = guests.map(
+          (guest) => fixture.guest_total_steps?.[guest.name] ?? null,
+        );
+        const finite = totals.filter((value) => Number.isFinite(value));
+        return {
+          fixture,
+          totals,
+          maxSteps: finite.length ? Math.max(...finite) : null,
+        };
+      })
+      .filter((entry) => entry.maxSteps !== null)
+      .sort((left, right) => right.maxSteps - left.maxSteps);
+    const stepsShown = stepsRanked.slice(0, RANKING_LIMIT);
+    const stepsScale = Math.max(
+      1,
+      ...stepsShown.map((entry) => entry.maxSteps),
     );
-    const body = document.createDocumentFragment();
-    metric.guestValues.forEach((guest) => {
-      const row = document.createElement("tr");
-      const available = Number.isFinite(guest.totalValue);
-      const relative = available && best ? guest.totalValue / best : 0;
+
+    const stepsFragment = document.createDocumentFragment();
+    stepsShown.forEach((entry) => {
+      const row = element("button", "evmsail-perf-rank-row");
+      row.type = "button";
+      if (entry.fixture.id === selectedId) {
+        row.classList.add("evmsail-perf-rank-row--selected");
+      }
+      row.title =
+        `${entry.fixture.path}\n` +
+        guests
+          .map((guest, index) =>
+            entry.totals[index] === null
+              ? `${guest.name}: unavailable`
+              : `${guest.name}: ${number.format(entry.totals[index])} steps`,
+          )
+          .join("\n");
+      row.addEventListener("click", () => onSelect(entry.fixture.id));
+      const bars = element("span", "evmsail-perf-rank-row__bars");
+      entry.totals.forEach((value, index) => {
+        const track = element("span", "evmsail-perf-rank-row__track");
+        if (value !== null) {
+          const fill = element(
+            "span",
+            `evmsail-perf-rank-row__fill evmsail-perf-guest-${index}`,
+          );
+          fill.style.width = `${(value / stepsScale) * 100}%`;
+          track.append(fill);
+        }
+        bars.append(track);
+      });
       row.append(
-        element("td", null, guest.name),
+        element(
+          "span",
+          "evmsail-perf-rank-row__label",
+          fixtureRankLabel(entry.fixture),
+        ),
+        bars,
+        element(
+          "span",
+          "evmsail-perf-rank-row__value",
+          compact.format(entry.maxSteps),
+        ),
+      );
+      stepsFragment.append(row);
+    });
+    view.stepsRanking.replaceChildren(stepsFragment);
+    view.stepsRankingNote.textContent = stepsRanked.length
+      ? `Top ${stepsShown.length} of ${number.format(stepsRanked.length)} ` +
+        "fixtures, ranked by the largest guest step count. The row value is " +
+        "that largest count."
+      : "No fixture has complete step measurements for every embedded case.";
+
+    const gasRanked = fixtures
+      .map((fixture) => ({
+        fixture,
+        gas: Number.isFinite(fixture.total_gas_used)
+          ? fixture.total_gas_used
+          : Number.isFinite(fixture.max_gas_used)
+            ? fixture.max_gas_used
+            : null,
+      }))
+      .filter((entry) => entry.gas !== null)
+      .sort((left, right) => right.gas - left.gas);
+    const gasShown = gasRanked.slice(0, RANKING_LIMIT);
+    const gasScale = Math.max(1, ...gasShown.map((entry) => entry.gas));
+
+    const gasFragment = document.createDocumentFragment();
+    gasShown.forEach((entry) => {
+      const row = element("button", "evmsail-perf-rank-row");
+      row.type = "button";
+      if (entry.fixture.id === selectedId) {
+        row.classList.add("evmsail-perf-rank-row--selected");
+      }
+      row.title = `${entry.fixture.path}\n${number.format(entry.gas)} gas used`;
+      row.addEventListener("click", () => onSelect(entry.fixture.id));
+      const bars = element("span", "evmsail-perf-rank-row__bars");
+      const track = element("span", "evmsail-perf-rank-row__track");
+      const fill = element(
+        "span",
+        "evmsail-perf-rank-row__fill evmsail-perf-rank-row__fill--gas",
+      );
+      fill.style.width = `${(entry.gas / gasScale) * 100}%`;
+      track.append(fill);
+      bars.append(track);
+      row.append(
+        element(
+          "span",
+          "evmsail-perf-rank-row__label",
+          fixtureRankLabel(entry.fixture),
+        ),
+        bars,
+        element(
+          "span",
+          "evmsail-perf-rank-row__value",
+          compact.format(entry.gas),
+        ),
+      );
+      gasFragment.append(row);
+    });
+    view.gasRanking.replaceChildren(gasFragment);
+    view.gasRankingNote.textContent = gasRanked.length
+      ? `Top ${gasShown.length} of ${number.format(gasRanked.length)} ` +
+        "fixtures, ranked by block gas used."
+      : "No fixture reports gas used.";
+  }
+
+  function renderSummary(view, aggregate) {
+    const totals = aggregate.guests
+      .filter((guest) => guest.available && !guest.partial)
+      .map((guest) => guest.totalSteps);
+    const best = totals.length ? Math.min(...totals) : null;
+    const rankedGuests = [...aggregate.guests].sort((left, right) => {
+      if (left.totalSteps === null && right.totalSteps === null) return 0;
+      if (left.totalSteps === null) return 1;
+      if (right.totalSteps === null) return -1;
+      return right.totalSteps - left.totalSteps;
+    });
+    const body = document.createDocumentFragment();
+    rankedGuests.forEach((guest) => {
+      const row = document.createElement("tr");
+      const nameCell = guestNameCell("td", guest);
+      if (guest.partial) {
+        nameCell.append(
+          element(
+            "span",
+            "evmsail-perf-partial",
+            `${guest.measuredCases}/${guest.caseCount} cases measured`,
+          ),
+        );
+      }
+      const comparable = guest.available && !guest.partial && best;
+      row.append(
+        nameCell,
         comparisonCell(
-          guest.totalValue,
-          metric.maxTotal,
+          guest.totalSteps,
+          aggregate.maxTotalSteps,
           guest.index,
           "",
-          guest.unavailable?.message || "Unavailable",
+          guest.unavailableMessage,
         ),
         element(
           "td",
           "evmsail-perf-number",
-          relative ? `${relative.toFixed(2)}×` : "—",
+          guest.totalCost === null ? "—" : number.format(guest.totalCost),
         ),
         element(
           "td",
           "evmsail-perf-number",
-          available && best
-            ? `+${number.format(guest.totalValue - best)}`
-            : "—",
+          comparable ? `${(guest.totalSteps / best).toFixed(2)}×` : "—",
+        ),
+        element(
+          "td",
+          "evmsail-perf-number",
+          comparable ? `+${number.format(guest.totalSteps - best)}` : "—",
         ),
       );
       body.append(row);
     });
     view.summary.replaceChildren(body);
-    view.summaryMetricHeader.textContent = metric.label;
     view.summaryHelp.textContent =
-      `All bars use the largest guest ${metric.label.toLocaleLowerCase()} ` +
-      "as a shared scale. Relative and delta columns compare against the " +
-      "least expensive guest for this exact input.";
-    const gasUsed = Number.isFinite(profile.gas_used)
-      ? ` · ${number.format(profile.gas_used)} gas used`
+      "Guests are ranked from most to fewest instruction steps for this " +
+      "fixture. All bars use the largest guest step count as a shared " +
+      "scale; relative and delta columns compare against the least " +
+      "expensive fully measured guest.";
+    const gasUsed = Number.isFinite(aggregate.gasUsed)
+      ? ` · ${number.format(aggregate.gasUsed)} gas used`
       : "";
+    const cases =
+      aggregate.caseCount > 1
+        ? ` · totals over ${aggregate.caseCount} embedded cases`
+        : "";
     view.inputBytes.textContent =
-      `${number.format(profile.input_bytes)} input bytes${gasUsed}`;
+      `${number.format(aggregate.inputBytes)} input bytes${gasUsed}${cases}`;
   }
 
-  function renderProvenance(view, catalog, fixture, profile, guests) {
+  function renderPhases(view, aggregate) {
+    const anyPhases = aggregate.guests.some((guest) => guest.phases);
+    view.phasesSection.hidden = !anyPhases;
+    if (!anyPhases) {
+      view.phases.replaceChildren();
+      view.phasesLegend.replaceChildren();
+      return;
+    }
+    const phaseNames = [];
+    aggregate.guests.forEach((guest) => {
+      (guest.phases || []).forEach((phase) => {
+        if (!phaseNames.includes(phase.name)) phaseNames.push(phase.name);
+      });
+    });
+    const phaseClass = (name) => {
+      const index = phaseNames.indexOf(name) % PHASE_CLASS_COUNT;
+      return `evmsail-perf-phase-${index}`;
+    };
+    view.phasesLegend.replaceChildren(
+      ...phaseNames.map((name) => {
+        const item = element("span", "evmsail-perf-legend__item");
+        item.append(
+          element(
+            "span",
+            `evmsail-perf-legend__swatch ${phaseClass(name)}`,
+          ),
+          element("span", null, phaseLabel(name)),
+        );
+        return item;
+      }),
+      (() => {
+        const item = element("span", "evmsail-perf-legend__item");
+        item.append(
+          element(
+            "span",
+            "evmsail-perf-legend__swatch evmsail-perf-phase-rest",
+          ),
+          element("span", null, "Unattributed"),
+        );
+        return item;
+      })(),
+    );
+
+    const rankedGuests = [...aggregate.guests].sort((left, right) => {
+      if (left.totalSteps === null && right.totalSteps === null) return 0;
+      if (left.totalSteps === null) return 1;
+      if (right.totalSteps === null) return -1;
+      return right.totalSteps - left.totalSteps;
+    });
+    const fragment = document.createDocumentFragment();
+    rankedGuests.forEach((guest) => {
+      const row = element("div", "evmsail-perf-phase-row");
+      const label = guestNameCell("span", guest);
+      row.append(label);
+      if (!guest.available) {
+        row.append(
+          element("span", "evmsail-perf-unavailable", guest.unavailableMessage),
+        );
+        fragment.append(row);
+        return;
+      }
+      if (!guest.phases) {
+        row.append(
+          element(
+            "span",
+            "evmsail-perf-unavailable",
+            "No phase data reported for this guest.",
+          ),
+        );
+        fragment.append(row);
+        return;
+      }
+      const track = element("span", "evmsail-perf-phase-row__track");
+      let attributed = 0;
+      guest.phases.forEach((phase) => {
+        attributed += phase.steps;
+        const segment = element(
+          "span",
+          `evmsail-perf-phase-row__segment ${phaseClass(phase.name)}`,
+        );
+        segment.style.width =
+          `${(phase.steps / aggregate.maxTotalSteps) * 100}%`;
+        segment.title =
+          `${phaseLabel(phase.name)} — ${number.format(phase.steps)} steps` +
+          ` (${((100 * phase.steps) / guest.totalSteps).toFixed(1)}%)`;
+        track.append(segment);
+      });
+      const rest = guest.totalSteps - attributed;
+      if (rest > 0) {
+        const segment = element(
+          "span",
+          "evmsail-perf-phase-row__segment evmsail-perf-phase-rest",
+        );
+        segment.style.width = `${(rest / aggregate.maxTotalSteps) * 100}%`;
+        segment.title =
+          `Unattributed — ${number.format(rest)} steps` +
+          ` (${((100 * rest) / guest.totalSteps).toFixed(1)}%)`;
+        track.append(segment);
+      }
+      row.append(
+        track,
+        element(
+          "span",
+          "evmsail-perf-number",
+          number.format(guest.totalSteps),
+        ),
+      );
+      fragment.append(row);
+    });
+    view.phases.replaceChildren(fragment);
+  }
+
+  function renderProvenance(view, catalog, fixture, guests) {
     const generated = new Date(
       Number(catalog.generated_at_unix_ns) / 1_000_000,
     );
     const description =
-      `${guests.map((guest) => guest.name).join(" · ")} · ${fixture.path} · ` +
-      `${profile.name} / block ${profile.block_index} · generated ` +
+      guests
+        .map((guest) => `${guest.name} (${buildLabel(guest)})`)
+        .join(" · ") +
+      ` · ${fixture.path} · generated ` +
       generated.toISOString().slice(0, 10);
     view.provenance.replaceChildren(document.createTextNode(description));
     const sourceUrl = catalog.metadata?.source_url;
@@ -290,17 +712,17 @@
     }
   }
 
-  function renderPipeline(view, metric) {
+  function renderPipeline(view, aggregate) {
     const fragment = document.createDocumentFragment();
     PIPELINE.forEach(([label, scope, depth]) => {
-      const values = metric.guestValues.map((guest) =>
-        guest.unavailable
+      const values = aggregate.guests.map((guest) =>
+        !guest.available
           ? null
           : scope
-          ? Object.hasOwn(guest.scopeValues, scope)
-            ? guest.scopeValues[scope]
-            : null
-          : guest.totalValue,
+            ? Object.hasOwn(guest.scopeSteps, scope)
+              ? guest.scopeSteps[scope]
+              : null
+            : guest.totalSteps,
       );
       if (scope && values.every((value) => value === null)) return;
       const row = element("div", "evmsail-perf-scope");
@@ -308,7 +730,7 @@
       row.append(element("div", "evmsail-perf-scope__name", label));
       const comparisons = element("div", "evmsail-perf-scope__comparisons");
       values.forEach((value, index) => {
-        const guest = metric.guestValues[index];
+        const guest = aggregate.guests[index];
         const item = element("div", "evmsail-perf-scope__guest");
         item.append(
           element("span", "evmsail-perf-scope__guest-name", guest.name),
@@ -318,12 +740,14 @@
               ? "evmsail-perf-unavailable"
               : "evmsail-perf-number",
             value === null
-              ? guest.unavailable?.message || "Not instrumented"
+              ? guest.available
+                ? "Not instrumented"
+                : guest.unavailableMessage
               : number.format(value),
           ),
         );
         if (value !== null) {
-          item.append(bar((value / metric.maxTotal) * 100, guest.index));
+          item.append(bar((value / aggregate.maxTotalSteps) * 100, index));
         }
         comparisons.append(item);
       });
@@ -333,21 +757,21 @@
     view.pipeline.replaceChildren(fragment);
     view.pipelineHelp.textContent =
       "Indentation shows logical containment. Every guest bar uses the same " +
-      `absolute ${metric.label.toLocaleLowerCase()} scale. Scope totals are ` +
-      "inclusive; missing tags are shown as not instrumented, never as zero.";
+      "absolute instruction-step scale. Scope totals are inclusive; missing " +
+      "tags are shown as not instrumented, never as zero.";
   }
 
-  function renderDetails(view, metric) {
+  function renderDetails(view, aggregate) {
     const scopeNames = new Set();
-    metric.guestValues.forEach((guest) => {
-      Object.keys(guest.scopeValues).forEach((name) => scopeNames.add(name));
+    aggregate.guests.forEach((guest) => {
+      Object.keys(guest.scopeSteps).forEach((name) => scopeNames.add(name));
     });
     const rows = [...scopeNames]
       .map((name) => ({
         name,
-        values: metric.guestValues.map((guest) =>
-          Object.hasOwn(guest.scopeValues, name)
-            ? guest.scopeValues[name]
+        values: aggregate.guests.map((guest) =>
+          Object.hasOwn(guest.scopeSteps, name)
+            ? guest.scopeSteps[name]
             : null,
         ),
       }))
@@ -363,14 +787,14 @@
       row.append(element("td", null, pretty(name)));
       row.append(element("td", null, scopeFamily(name)));
       values.forEach((value, index) => {
-        const unavailable = metric.guestValues[index].unavailable;
+        const guest = aggregate.guests[index];
         row.append(
           comparisonCell(
             value,
             maximum,
             index,
             "",
-            unavailable?.message || "Not instrumented",
+            guest.available ? "Not instrumented" : guest.unavailableMessage,
           ),
         );
       });
@@ -381,77 +805,19 @@
     view.detailsHeader.replaceChildren(
       element("th", null, "Scope"),
       element("th", null, "Family"),
-      ...metric.guestValues.map((guest) =>
-        element("th", null, guest.name),
-      ),
+      ...aggregate.guests.map((guest) => element("th", null, guest.name)),
     );
   }
 
-  function renderFunctions(view, profile, guests) {
-    const guestIndex = Math.max(
-      0,
-      guests.findIndex((guest) => guest.name === view.functionGuestSelect.value),
-    );
-    const guest = guests[guestIndex];
-    const guestProfile = profile.guests?.[guest?.name] || {};
-    const unavailable = guestProfile.unavailable;
-    const allFunctions = guestProfile.executed_functions || [];
-    const needle = view.functionSearch.value.trim().toLocaleLowerCase();
-    const rows = needle
-      ? allFunctions.filter((entry) =>
-          entry.name.toLocaleLowerCase().includes(needle),
-        )
-      : allFunctions;
-    const maximum = Math.max(
-      1,
-      ...allFunctions.map((entry) => entry.exclusive_steps || 0),
-    );
-    const body = document.createDocumentFragment();
-    rows.forEach((entry) => {
-      const row = document.createElement("tr");
-      const nameCell = element("td", "evmsail-perf-function", entry.name);
-      nameCell.title = entry.name;
-      row.append(
-        nameCell,
-        comparisonCell(entry.exclusive_steps, maximum, guestIndex),
-        element(
-          "td",
-          "evmsail-perf-number",
-          `${entry.share_percent.toFixed(2)}%`,
-        ),
-      );
-      body.append(row);
-    });
-    view.functions.replaceChildren(body);
-    view.functionsEmpty.hidden = rows.length !== 0;
-    view.functionsEmpty.textContent = unavailable
-      ? unavailable.message
-      : allFunctions.length
-      ? "No executed function symbols match this filter."
-      : `No executed function inventory was reported for ${guest?.name || "this guest"}.`;
-    updateLimitNote(view.functionNote, rows.length, rows.length);
-    const stackMismatch =
-      guestProfile.function_profile_status === "stack_mismatch";
-    view.functionsStatus.hidden = !stackMismatch;
-    view.functionsStatus.textContent = stackMismatch
-      ? "ZisK could not maintain an inclusive call stack for this guest. " +
-        "The table remains complete because it assigns each executed " +
-        "instruction to its containing ELF symbol instead."
-      : "";
-    view.functionsHeader.replaceChildren(
-      element("th", null, "Exact ELF symbol"),
-      element("th", null, "Exclusive executed steps"),
-      element("th", null, "Share of guest steps"),
-    );
-  }
-
-  function renderOperations(view, profile, guests) {
+  function renderOperations(view, aggregate) {
     const byName = new Map();
-    guests.forEach((guest, guestIndex) => {
-      const operations = profile.guests?.[guest.name]?.opcode_costs || [];
-      operations.forEach((entry) => {
+    aggregate.guests.forEach((guest, guestIndex) => {
+      guest.opcodeCosts.forEach((entry) => {
         if (!byName.has(entry.name)) {
-          byName.set(entry.name, Array(guests.length).fill(null));
+          byName.set(
+            entry.name,
+            Array(aggregate.guests.length).fill(null),
+          );
         }
         byName.get(entry.name)[guestIndex] = entry;
       });
@@ -468,14 +834,14 @@
       row.append(element("td", "evmsail-perf-function", name));
       entries.forEach((entry, index) => {
         if (!entry) {
-          const unavailable = profile.guests?.[guests[index].name]?.unavailable;
+          const guest = aggregate.guests[index];
           row.append(
             comparisonCell(
               null,
               maximum,
               index,
               "",
-              unavailable?.message || "Not used",
+              guest.available ? "Not used" : guest.unavailableMessage,
             ),
           );
           return;
@@ -506,49 +872,105 @@
     view.operationsEmpty.hidden = rows.length !== 0;
     view.operationsHeader.replaceChildren(
       element("th", null, "ZisK operation"),
-      ...guests.map((guest) => element("th", null, guest.name)),
+      ...aggregate.guests.map((guest) => element("th", null, guest.name)),
     );
+  }
+
+  function renderFunctions(view, aggregate) {
+    const needle = view.functionSearch.value.trim().toLocaleLowerCase();
+    const fragment = document.createDocumentFragment();
+    aggregate.guests.forEach((guest) => {
+      const block = element("div", "evmsail-perf-function-block");
+      const heading = guestNameCell("h3", guest);
+      heading.classList.add("evmsail-perf-function-block__title");
+      block.append(heading);
+      if (!guest.available) {
+        block.append(
+          element("p", "evmsail-perf-empty", guest.unavailableMessage),
+        );
+        fragment.append(block);
+        return;
+      }
+      if (guest.functionProfileStatus === "stack_mismatch") {
+        block.append(
+          element(
+            "p",
+            "evmsail-perf-status evmsail-perf-status--warning",
+            "ZisK could not maintain an inclusive call stack for this " +
+              "guest. The table remains complete because it assigns each " +
+              "executed instruction to its containing ELF symbol instead.",
+          ),
+        );
+      }
+      const allFunctions = guest.executedFunctions;
+      const rows = needle
+        ? allFunctions.filter((entry) =>
+            entry.name.toLocaleLowerCase().includes(needle),
+          )
+        : allFunctions;
+      const visible = rows.slice(0, OPTION_LIMIT);
+      const maximum = Math.max(
+        1,
+        ...allFunctions.map((entry) => entry.exclusive_steps || 0),
+      );
+      if (!allFunctions.length) {
+        block.append(
+          element(
+            "p",
+            "evmsail-perf-empty",
+            `No executed function inventory was reported for ${guest.name}.`,
+          ),
+        );
+        fragment.append(block);
+        return;
+      }
+      const wrap = element("div", "evmsail-perf-table-wrap");
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      headerRow.append(
+        element("th", null, "Exact ELF symbol"),
+        element("th", null, "Exclusive executed steps"),
+        element("th", null, "Share of guest steps"),
+      );
+      head.append(headerRow);
+      const body = document.createElement("tbody");
+      visible.forEach((entry) => {
+        const row = document.createElement("tr");
+        const nameCell = element("td", "evmsail-perf-function", entry.name);
+        nameCell.title = entry.name;
+        row.append(
+          nameCell,
+          comparisonCell(entry.exclusive_steps, maximum, guest.index),
+          element(
+            "td",
+            "evmsail-perf-number",
+            `${entry.share_percent.toFixed(2)}%`,
+          ),
+        );
+        body.append(row);
+      });
+      table.append(head, body);
+      wrap.append(table);
+      const note = element("small", "evmsail-perf-limit-note");
+      updateLimitNote(note, rows.length, visible.length);
+      block.append(note, wrap);
+      if (!rows.length) {
+        block.append(
+          element(
+            "p",
+            "evmsail-perf-empty",
+            "No executed function symbols match this filter.",
+          ),
+        );
+      }
+      fragment.append(block);
+    });
+    view.functions.replaceChildren(fragment);
   }
 
   function createView(root) {
     const controls = element("div", "evmsail-perf-controls");
-    const selectors = {};
-    [
-      ["suite", "Corpus type"],
-      ["target", "Fork target"],
-      ["fork", "Source fork"],
-      ["feature", "Feature / EIP"],
-    ].forEach(([key, label]) => {
-      const field = element("label", "evmsail-perf-field");
-      field.append(element("span", null, label));
-      selectors[key] = document.createElement("select");
-      field.append(selectors[key]);
-      controls.append(field);
-    });
-
-    const metricField = element("label", "evmsail-perf-field");
-    metricField.append(element("span", null, "Measure"));
-    const metricSelect = document.createElement("select");
-    Object.entries(METRICS).forEach(([value, metric]) => {
-      const option = element("option", null, metric.label);
-      option.value = value;
-      metricSelect.append(option);
-    });
-    metricSelect.value = "steps";
-    metricField.append(metricSelect);
-    controls.append(metricField);
-
-    const orderField = element("label", "evmsail-perf-field");
-    orderField.append(element("span", null, "Order"));
-    const orderSelect = document.createElement("select");
-    Object.entries(ORDERINGS).forEach(([value, label]) => {
-      const option = element("option", null, label);
-      option.value = value;
-      orderSelect.append(option);
-    });
-    orderSelect.value = "gas-desc";
-    orderField.append(orderSelect);
-    controls.append(orderField);
 
     const fixtureSearch = document.createElement("input");
     fixtureSearch.type = "search";
@@ -567,23 +989,6 @@
     );
     controls.append(fixtureField);
 
-    const caseSearch = document.createElement("input");
-    caseSearch.type = "search";
-    caseSearch.placeholder = "Filter test name or block";
-    const caseSelect = document.createElement("select");
-    const caseNote = element("small", "evmsail-perf-limit-note");
-    const caseField = element(
-      "label",
-      "evmsail-perf-field evmsail-perf-field--wide",
-    );
-    caseField.append(
-      element("span", null, "Embedded case / block"),
-      caseSearch,
-      caseSelect,
-      caseNote,
-    );
-    controls.append(caseField);
-
     const status = element(
       "div",
       "evmsail-perf-status",
@@ -594,16 +999,46 @@
     const legend = element("div", "evmsail-perf-legend");
     const inputBytes = element("span", "evmsail-perf-input");
 
+    const rankingSection = element("section", "evmsail-perf-section");
+    const rankingGrid = element("div", "evmsail-perf-rankings");
+    const stepsRankingPanel = element("div", "evmsail-perf-ranking");
+    const stepsRankingNote = element("p", "evmsail-perf-help");
+    const stepsRanking = element("div", "evmsail-perf-ranking__rows");
+    stepsRankingPanel.append(
+      element("h3", null, "By instruction steps"),
+      stepsRankingNote,
+      stepsRanking,
+    );
+    const gasRankingPanel = element("div", "evmsail-perf-ranking");
+    const gasRankingNote = element("p", "evmsail-perf-help");
+    const gasRanking = element("div", "evmsail-perf-ranking__rows");
+    gasRankingPanel.append(
+      element("h3", null, "By gas used"),
+      gasRankingNote,
+      gasRanking,
+    );
+    rankingGrid.append(stepsRankingPanel, gasRankingPanel);
+    rankingSection.append(
+      element("h2", null, "Fixture rankings"),
+      element(
+        "p",
+        "evmsail-perf-help",
+        "Both rankings are sorted from high to low. Select any row to load " +
+          "that fixture's full comparison below.",
+      ),
+      rankingGrid,
+    );
+
     const summarySection = element("section", "evmsail-perf-section");
     const summaryHelp = element("p", "evmsail-perf-help");
     const summaryWrap = element("div", "evmsail-perf-table-wrap");
     const summaryTable = document.createElement("table");
     const summaryHead = document.createElement("thead");
     const summaryHeader = document.createElement("tr");
-    const summaryMetricHeader = element("th", null, "Instruction steps");
     summaryHeader.append(
       element("th", null, "Guest"),
-      summaryMetricHeader,
+      element("th", null, "Instruction steps"),
+      element("th", null, "Proving cost"),
       element("th", null, "Relative to best"),
       element("th", null, "Delta from best"),
     );
@@ -616,6 +1051,26 @@
       summaryHelp,
       inputBytes,
       summaryWrap,
+    );
+
+    const phasesSection = element("section", "evmsail-perf-section");
+    phasesSection.hidden = true;
+    const phasesLegend = element("div", "evmsail-perf-legend");
+    const phases = element("div", "evmsail-perf-phases");
+    phasesSection.append(
+      element("h2", null, "Per-phase step breakdown"),
+      element(
+        "p",
+        "evmsail-perf-help",
+        "Each guest bar is split into the coarse validation phases " +
+          "reported by its instrumentation: input decode, execution, state " +
+          "root, and receipts/commitments. Segment widths share the same " +
+          "absolute step scale as the comparison above; the muted tail is " +
+          "unattributed guest overhead. Guests without phase data are " +
+          "labelled, never shown as zero.",
+      ),
+      phasesLegend,
+      phases,
     );
 
     const pipelineSection = element("section", "evmsail-perf-section");
@@ -682,51 +1137,23 @@
       "div",
       "evmsail-perf-function-controls",
     );
-    const functionGuestField = element("label", "evmsail-perf-field");
-    functionGuestField.append(element("span", null, "Guest"));
-    const functionGuestSelect = document.createElement("select");
-    functionGuestField.append(functionGuestSelect);
     const functionSearchField = element("label", "evmsail-perf-field");
     functionSearchField.append(element("span", null, "Filter symbols"));
     const functionSearch = document.createElement("input");
     functionSearch.type = "search";
     functionSearch.placeholder = "Function or symbol name";
     functionSearchField.append(functionSearch);
-    const functionNote = element("small", "evmsail-perf-limit-note");
-    functionControls.append(
-      functionGuestField,
-      functionSearchField,
-      functionNote,
-    );
-    const functionWrap = element("div", "evmsail-perf-table-wrap");
-    const functionTable = document.createElement("table");
-    const functionHead = document.createElement("thead");
-    const functionsHeader = document.createElement("tr");
-    functionHead.append(functionsHeader);
-    const functions = document.createElement("tbody");
-    functionTable.append(functionHead, functions);
-    functionWrap.append(functionTable);
-    const functionsEmpty = element(
-      "p",
-      "evmsail-perf-empty",
-      "No executed function symbols were reported for this guest.",
-    );
-    const functionsStatus = element(
-      "p",
-      "evmsail-perf-status evmsail-perf-status--warning",
-    );
-    functionsStatus.hidden = true;
+    functionControls.append(functionSearchField);
+    const functions = element("div");
     functionSection.append(
       element("h2", null, "Executed functions"),
       element(
         "p",
         "evmsail-perf-help",
-        "Choose one guest to inspect every ELF symbol that executed at least one ZisK instruction. Steps are exclusive to each symbol's address range, so the rows partition the guest's total instruction steps.",
+        "Every guest lists the ELF symbols that executed at least one ZisK instruction. Steps are exclusive to each symbol's address range, so the rows partition that guest's total instruction steps.",
       ),
       functionControls,
-      functionsStatus,
-      functionWrap,
-      functionsEmpty,
+      functions,
     );
 
     root.replaceChildren(
@@ -734,29 +1161,31 @@
       status,
       provenance,
       legend,
+      rankingSection,
       summarySection,
+      phasesSection,
       operationSection,
       pipelineSection,
       detailSection,
       functionSection,
     );
     return {
-      selectors,
-      metricSelect,
-      orderSelect,
       fixtureSearch,
       fixtureSelect,
       fixtureNote,
-      caseSearch,
-      caseSelect,
-      caseNote,
       status,
       provenance,
       legend,
       inputBytes,
+      stepsRanking,
+      stepsRankingNote,
+      gasRanking,
+      gasRankingNote,
       summary,
       summaryHelp,
-      summaryMetricHeader,
+      phasesSection,
+      phasesLegend,
+      phases,
       pipeline,
       pipelineHelp,
       details,
@@ -765,13 +1194,8 @@
       operations,
       operationsEmpty,
       operationsHeader,
-      functionGuestSelect,
       functionSearch,
-      functionNote,
       functions,
-      functionsEmpty,
-      functionsStatus,
-      functionsHeader,
     };
   }
 
@@ -793,86 +1217,56 @@
 
     const guests = catalog.guests || (catalog.guest ? [catalog.guest] : []);
     const fixtures = catalog.fixtures;
-    const selected = {};
     let fixtureMatches = [];
     let shard = null;
-    let caseMatches = [];
+    let pendingFixtureId = null;
     renderLegend(view, guests);
-    replaceOptions(
-      view.functionGuestSelect,
-      guests.map((guest) => guest.name),
-      guests[0]?.name,
-      "Function guest",
-      (name) => name,
-    );
-
-    function rebuildGroups(changed) {
-      const keys = ["suite", "target", "fork", "feature"];
-      const changedIndex = Math.max(0, keys.indexOf(changed));
-      for (let index = changedIndex; index < keys.length; index += 1) {
-        const key = keys[index];
-        const eligible = fixtures.filter((fixture) =>
-          keys
-            .slice(0, index)
-            .every((parent) => fixture[parent] === selected[parent]),
-        );
-        const values = uniqueSorted(eligible, (fixture) => fixture[key]);
-        const current = view.selectors[key].value || selected[key];
-        selected[key] = values.includes(current) ? current : values[0];
-        replaceOptions(view.selectors[key], values, selected[key], key);
-      }
-      rebuildFixtures();
-    }
 
     function fixtureLabel(fixture) {
       const category = fixture.category ? `${fixture.category}/` : "";
-      const gas = Number.isFinite(fixture.max_gas_used)
-        ? ` · max ${number.format(fixture.max_gas_used)} gas`
-        : "";
+      const gas = Number.isFinite(fixture.total_gas_used)
+        ? ` · ${number.format(fixture.total_gas_used)} gas`
+        : Number.isFinite(fixture.max_gas_used)
+          ? ` · max ${number.format(fixture.max_gas_used)} gas`
+          : "";
       return (
         `${category}${fixture.fixture} (${number.format(fixture.case_count)})` +
         gas
       );
     }
 
-    function ordered(items, gasField, label) {
-      const result = [...items];
-      if (view.orderSelect.value === "name") {
-        return result.sort((left, right) =>
-          label(left).localeCompare(label(right), undefined, { numeric: true }),
-        );
-      }
-      const direction = view.orderSelect.value === "gas-asc" ? 1 : -1;
-      return result.sort((left, right) => {
-        const leftGas = Number.isFinite(left[gasField]) ? left[gasField] : null;
-        const rightGas = Number.isFinite(right[gasField]) ? right[gasField] : null;
+    function orderedByGas(items) {
+      return [...items].sort((left, right) => {
+        const leftGas = Number.isFinite(left.total_gas_used)
+          ? left.total_gas_used
+          : Number.isFinite(left.max_gas_used)
+            ? left.max_gas_used
+            : null;
+        const rightGas = Number.isFinite(right.total_gas_used)
+          ? right.total_gas_used
+          : Number.isFinite(right.max_gas_used)
+            ? right.max_gas_used
+            : null;
         if (leftGas === null && rightGas === null) return 0;
         if (leftGas === null) return 1;
         if (rightGas === null) return -1;
-        const gasOrder = direction * (leftGas - rightGas);
-        return gasOrder || label(left).localeCompare(label(right));
+        return (
+          rightGas - leftGas ||
+          fixtureLabel(left).localeCompare(fixtureLabel(right))
+        );
       });
     }
 
     function rebuildFixtures() {
-      const grouped = ordered(
-        fixtures.filter(
-          (fixture) =>
-            fixture.suite === selected.suite &&
-            fixture.target === selected.target &&
-            fixture.fork === selected.fork &&
-            fixture.feature === selected.feature,
-        ),
-        "max_gas_used",
-        fixtureLabel,
-      );
+      const grouped = orderedByGas(fixtures);
       const result = filteredOptions(
         grouped,
         view.fixtureSearch.value,
         fixtureLabel,
       );
       fixtureMatches = result.matches;
-      const previous = view.fixtureSelect.value;
+      const previous = pendingFixtureId || view.fixtureSelect.value;
+      pendingFixtureId = null;
       replaceOptions(
         view.fixtureSelect,
         result.visible.map((fixture) => fixture.id),
@@ -890,13 +1284,19 @@
       loadFixture();
     }
 
+    function selectFixture(id) {
+      pendingFixtureId = id;
+      view.fixtureSearch.value = "";
+      rebuildFixtures();
+    }
+
     async function loadFixture() {
       const fixture = fixtureMatches.find(
         (candidate) => candidate.id === view.fixtureSelect.value,
       );
+      renderRankings(view, catalog, guests, fixture?.id, selectFixture);
       if (!fixture) {
-        view.caseSelect.replaceChildren();
-        view.status.textContent = "No fixture matches the current filters.";
+        view.status.textContent = "No fixture matches the current filter.";
         return;
       }
       view.status.textContent = `Loading ${fixture.path}…`;
@@ -913,88 +1313,40 @@
         return;
       }
       view.status.classList.remove("evmsail-perf-status--error");
-      rebuildCases();
+      renderSelectedFixture(fixture);
     }
 
-    function caseLabel(profile) {
-      const gas = Number.isFinite(profile.gas_used)
-        ? ` · ${number.format(profile.gas_used)} gas used`
-        : "";
-      return (
-        `${profile.name} · block ${profile.block_index} · ` +
-        `${number.format(profile.input_bytes)} input bytes${gas}`
-      );
-    }
-
-    function rebuildCases() {
-      const result = filteredOptions(
-        ordered(shard.cases, "gas_used", caseLabel),
-        view.caseSearch.value,
-        caseLabel,
-      );
-      caseMatches = result.matches;
-      const previous = view.caseSelect.value;
-      replaceOptions(
-        view.caseSelect,
-        result.visible.map((profile) => profile.id),
-        result.visible.some((profile) => profile.id === previous)
-          ? previous
-          : result.visible[0]?.id,
-        "Embedded case and block",
-        (id) => caseLabel(shard.cases.find((profile) => profile.id === id)),
-      );
-      updateLimitNote(view.caseNote, result.matches.length, result.visible.length);
-      renderSelectedCase();
-    }
-
-    function renderSelectedCase() {
-      const profile = caseMatches.find(
-        (candidate) => candidate.id === view.caseSelect.value,
-      );
-      const fixture = fixtures.find(
-        (candidate) => candidate.id === view.fixtureSelect.value,
-      );
-      if (!profile || !fixture) {
-        view.status.textContent = "No embedded case matches the current filter.";
-        return;
-      }
+    function renderSelectedFixture(fixture) {
+      const aggregate = aggregateShard(shard, guests);
+      const unavailable = aggregate.guests.filter(
+        (guest) => !guest.available,
+      ).length;
       view.status.textContent =
         `${number.format(catalog.fixture_count)} fixture files · ` +
         `${number.format(catalog.case_count)} profiled cases · ` +
         `${guests.length} guests` +
-        (() => {
-          const unavailable = guests.filter(
-            (guest) => profile.guests?.[guest.name]?.unavailable,
-          ).length;
-          return unavailable
-            ? ` · ${unavailable} unavailable measurement${unavailable === 1 ? "" : "s"}`
-            : "";
-        })();
-      const metric = profileMetric(profile, guests, view.metricSelect.value);
-      renderProvenance(view, catalog, fixture, profile, guests);
-      renderSummary(view, profile, metric);
-      renderPipeline(view, metric);
-      renderDetails(view, metric);
-      renderOperations(view, profile, guests);
-      renderFunctions(view, profile, guests);
+        (unavailable
+          ? ` · ${unavailable} unavailable measurement${unavailable === 1 ? "" : "s"}`
+          : "");
+      renderProvenance(view, catalog, fixture, guests);
+      renderSummary(view, aggregate);
+      renderPhases(view, aggregate);
+      renderPipeline(view, aggregate);
+      renderDetails(view, aggregate);
+      renderOperations(view, aggregate);
+      renderFunctions(view, aggregate);
     }
 
-    ["suite", "target", "fork", "feature"].forEach((key) => {
-      view.selectors[key].addEventListener("change", () => {
-        selected[key] = view.selectors[key].value;
-        rebuildGroups(key);
-      });
-    });
     view.fixtureSearch.addEventListener("input", rebuildFixtures);
     view.fixtureSelect.addEventListener("change", loadFixture);
-    view.caseSearch.addEventListener("input", rebuildCases);
-    view.caseSelect.addEventListener("change", renderSelectedCase);
-    view.metricSelect.addEventListener("change", renderSelectedCase);
-    view.orderSelect.addEventListener("change", rebuildFixtures);
-    view.functionGuestSelect.addEventListener("change", renderSelectedCase);
-    view.functionSearch.addEventListener("input", renderSelectedCase);
+    view.functionSearch.addEventListener("input", () => {
+      const fixture = fixtureMatches.find(
+        (candidate) => candidate.id === view.fixtureSelect.value,
+      );
+      if (fixture && shard) renderSelectedFixture(fixture);
+    });
 
-    rebuildGroups("suite");
+    rebuildFixtures();
   }
 
   function initialize() {

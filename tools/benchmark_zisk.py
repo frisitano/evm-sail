@@ -5,6 +5,29 @@ Guest invocations are deliberately sequential, while each emulator process is
 free to use its normal Rayon parallelism. ZisK steps provide a deterministic
 execution-size comparison; SDK profiles additionally report proving cost.
 Wall time includes process startup and is only a secondary host-side measure.
+
+results.json schema notes (format_version 2):
+
+- ``guests.{name}.build`` records what each guest ELF was built from, resolved
+  at benchmark time: ``{"commit": str | null, "version": str | null,
+  "source": "cli" | "sidecar" | "repository"}``. Resolution order is a
+  ``--guest-build NAME=VERSION`` argument, then an optional
+  ``<elf>.build.json`` sidecar next to the ELF (with ``commit`` and/or
+  ``version`` keys, written when the guest is staged), then — for the
+  ``evm-sail`` guest only — the repository HEAD commit (suffixed ``-dirty``
+  when the worktree has local changes). ``null`` means the provenance is
+  unknown; the dashboard renders it as such rather than guessing.
+- ``guests.{name}.cases[].measurements[].phases`` is an OPTIONAL ordered list
+  of coarse per-phase step attributions:
+  ``[{"name": str, "steps": int}, ...]``. The canonical phase names are
+  ``input-decode``, ``execution``, ``state-root``, and
+  ``receipts-commitments`` (see ``PHASE_NAMES``). Phase steps are exclusive
+  and sum to at most the measurement's total ``steps``; any remainder is
+  unattributed guest overhead. Guests without phase instrumentation omit the
+  key entirely — absence means "not instrumented", never zero.
+
+``--regenerate-dashboard results.json`` re-exports the dashboard dataset from
+an existing benchmark result without running any emulator.
 """
 
 from __future__ import annotations
@@ -86,6 +109,18 @@ DISASSEMBLY_INSTRUCTION_ROW = re.compile(
     r"^\s+[0-9a-f]+:\s+([0-9][0-9,]*)\s+"
 )
 FIXTURE_SUITES = frozenset(("blockchain_tests", "blockchain_tests_engine"))
+PHASE_NAMES = (
+    "input-decode",
+    "execution",
+    "state-root",
+    "receipts-commitments",
+)
+DASHBOARD_FORMAT_VERSION = 6
+
+
+def case_identity(name: str, block_index: int, input_sha256: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-")
+    return f"{safe_name[-96:]}-block-{block_index}-{input_sha256[:12]}"
 
 
 @dataclass(frozen=True)
@@ -99,10 +134,33 @@ class FixtureCase:
     gas_used: int | None = None
 
     @property
+    def input_bytes(self) -> int:
+        return len(self.payload)
+
+    @property
+    def input_sha256(self) -> str:
+        return hashlib.sha256(self.payload).hexdigest()
+
+    @property
     def identity(self) -> str:
-        digest = hashlib.sha256(self.payload).hexdigest()[:12]
-        safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", self.name).strip("-")
-        return f"{safe_name[-96:]}-block-{self.block_index}-{digest}"
+        return case_identity(self.name, self.block_index, self.input_sha256)
+
+
+@dataclass(frozen=True)
+class RecordedCase:
+    """A fixture case reconstructed from an existing results.json record."""
+
+    fixture: Path
+    fixture_sha256: str
+    name: str
+    block_index: int
+    input_sha256: str
+    input_bytes: int
+    gas_used: int | None
+
+    @property
+    def identity(self) -> str:
+        return case_identity(self.name, self.block_index, self.input_sha256)
 
 
 @dataclass(frozen=True)
@@ -216,6 +274,58 @@ def default_guests() -> list[Guest]:
             + "\nstage them with tools/stage_zisk_guests.sh or pass --guest"
         )
     return guests
+
+
+def repo_head_commit() -> str | None:
+    """Return the repository HEAD commit, suffixed -dirty for local changes."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return f"{head}-dirty" if status else head
+
+
+def guest_build_provenance(
+    guest: Guest, override: str | None
+) -> dict[str, str | None] | None:
+    """Resolve what a guest ELF was built from, at benchmark time.
+
+    Resolution order: an explicit --guest-build value, an `<elf>.build.json`
+    sidecar next to the ELF, then the repository HEAD commit for the evm-sail
+    guest. Returns None when nothing credible is known.
+    """
+    if override:
+        return {"commit": None, "version": override, "source": "cli"}
+    sidecar = guest.elf.with_name(f"{guest.elf.name}.build.json")
+    if sidecar.is_file():
+        recorded = json.loads(sidecar.read_text())
+        if not isinstance(recorded, dict):
+            raise ValueError(f"build sidecar is not an object: {sidecar}")
+        commit = recorded.get("commit")
+        version = recorded.get("version")
+        if commit is None and version is None:
+            raise ValueError(
+                f"build sidecar has neither commit nor version: {sidecar}"
+            )
+        return {"commit": commit, "version": version, "source": "sidecar"}
+    if guest.name == "evm-sail":
+        commit = repo_head_commit()
+        if commit:
+            return {"commit": commit, "version": None, "source": "repository"}
+    return None
 
 
 def frame_input(payload: bytes) -> bytes:
@@ -712,9 +822,34 @@ def fixture_taxonomy(path: Path) -> dict[str, str]:
     }
 
 
+def measurement_phases(
+    measurements: list, guest: Guest, identity: str
+) -> list[dict[str, object]] | None:
+    """Validate and return a measurement's optional per-phase step list."""
+    phases = measurements[0].get("phases") if measurements else None
+    if phases is None:
+        return None
+    if not isinstance(phases, list) or not phases:
+        raise ValueError(
+            f"invalid phase breakdown for {guest.name} {identity}"
+        )
+    for phase in phases:
+        if (
+            not isinstance(phase, dict)
+            or not isinstance(phase.get("name"), str)
+            or not isinstance(phase.get("steps"), int)
+        ):
+            raise ValueError(
+                f"invalid phase entry for {guest.name} {identity}: {phase}"
+            )
+    return [
+        {"name": phase["name"], "steps": phase["steps"]} for phase in phases
+    ]
+
+
 def export_dashboard_data(
     dashboard_dir: Path,
-    cases: list[FixtureCase],
+    cases: list[FixtureCase | RecordedCase],
     guests: list[Guest],
     guest_results: dict[str, object],
     benchmark_result: dict[str, object],
@@ -844,24 +979,38 @@ def export_dashboard_data(
                     "executed_functions": executed_functions,
                     "function_inventory_status": function_inventory_status,
                 }
+                phases = measurement_phases(
+                    measurements, guest, case.identity
+                )
+                if phases is not None:
+                    case_guests[guest.name]["phases"] = phases
             shard_cases.append(
                 {
                     "id": case.identity,
                     "name": case.name,
                     "block_index": case.block_index,
-                    "input_bytes": len(case.payload),
+                    "input_bytes": case.input_bytes,
                     "gas_used": case.gas_used,
                     "guests": case_guests,
                 }
             )
         shard = {
-            "format_version": 5,
+            "format_version": DASHBOARD_FORMAT_VERSION,
             "fixture": {**taxonomy, "id": fixture_id},
             "cases": shard_cases,
         }
         (dashboard_dir / shard_name).write_text(
             json.dumps(shard, separators=(",", ":")) + "\n"
         )
+        guest_total_steps: dict[str, int | None] = {}
+        for guest in guests:
+            totals = [
+                shard_case["guests"].get(guest.name, {}).get("total_steps")
+                for shard_case in shard_cases
+            ]
+            guest_total_steps[guest.name] = (
+                sum(totals) if all(total is not None for total in totals) else None
+            )
         catalog.append(
             {
                 **taxonomy,
@@ -876,6 +1025,14 @@ def export_dashboard_data(
                     ),
                     default=None,
                 ),
+                "total_gas_used": sum(
+                    case.gas_used
+                    for _, case in fixture_cases
+                    if case.gas_used is not None
+                )
+                if any(case.gas_used is not None for _, case in fixture_cases)
+                else None,
+                "guest_total_steps": guest_total_steps,
             }
         )
 
@@ -889,6 +1046,7 @@ def export_dashboard_data(
                 "name": guest.name,
                 "elf_sha256": elf["sha256"],
                 "elf_size_bytes": elf["size_bytes"],
+                "build": guest_result.get("build"),
             }
         )
     catalog.sort(
@@ -902,7 +1060,7 @@ def export_dashboard_data(
         )
     )
     payload = {
-        "format_version": 5,
+        "format_version": DASHBOARD_FORMAT_VERSION,
         "generated_at_unix_ns": str(benchmark_result["generated_at_unix_ns"]),
         "guests": guest_catalog,
         "ziskemu": benchmark_result["ziskemu"],
@@ -914,6 +1072,47 @@ def export_dashboard_data(
     (dashboard_dir / "catalog.json").write_text(
         json.dumps(payload, separators=(",", ":")) + "\n"
     )
+
+
+def regenerate_dashboard(
+    results_path: Path,
+    dashboard_dir: Path,
+    guest_builds: dict[str, str],
+) -> None:
+    """Re-export the dashboard dataset from an existing results.json."""
+    result = json.loads(results_path.read_text())
+    fixtures = result.get("fixtures")
+    guest_results = result.get("guests")
+    if not isinstance(fixtures, list) or not isinstance(guest_results, dict):
+        raise ValueError(f"not a benchmark results file: {results_path}")
+    cases = [
+        RecordedCase(
+            fixture=Path(record["path"]),
+            fixture_sha256=record["sha256"],
+            name=record["case"],
+            block_index=record["block_index"],
+            input_sha256=record["input_sha256"],
+            input_bytes=record["input_bytes"],
+            gas_used=record.get("gas_used"),
+        )
+        for record in fixtures
+    ]
+    guests = []
+    for name, guest_result in guest_results.items():
+        guests.append(Guest(name=name, elf=Path(guest_result["elf"]["path"])))
+        if guest_result.get("build") is None:
+            override = guest_builds.get(name)
+            guest_result["build"] = (
+                {"commit": None, "version": override, "source": "cli"}
+                if override
+                else None
+            )
+    unknown_builds = set(guest_builds) - set(guest_results)
+    if unknown_builds:
+        raise ValueError(
+            f"unknown --guest-build guests: {', '.join(sorted(unknown_builds))}"
+        )
+    export_dashboard_data(dashboard_dir, cases, guests, guest_results, result)
 
 
 def percentile(values: list[int], probability: float) -> int:
@@ -1003,7 +1202,7 @@ def markdown_report(result: dict[str, object], baseline: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("fixtures", nargs="+", type=Path)
+    parser.add_argument("fixtures", nargs="*", type=Path)
     parser.add_argument(
         "--guest",
         action="append",
@@ -1011,6 +1210,25 @@ def parse_args() -> argparse.Namespace:
         help=(
             "named guest ELF as NAME=PATH (repeatable); defaults to the three "
             "ELFs under tools/zisk-guests"
+        ),
+    )
+    parser.add_argument(
+        "--guest-build",
+        action="append",
+        default=[],
+        help=(
+            "record what a guest ELF was built from, as NAME=VERSION "
+            "(repeatable); overrides the <elf>.build.json sidecar and the "
+            "evm-sail repository-commit detection"
+        ),
+    )
+    parser.add_argument(
+        "--regenerate-dashboard",
+        type=Path,
+        metavar="RESULTS_JSON",
+        help=(
+            "re-export the dashboard dataset from an existing results.json "
+            "into --dashboard-dir without running any emulator"
         ),
     )
     parser.add_argument("--baseline", help="guest name used for step ratios")
@@ -1068,6 +1286,27 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    guest_builds = dict(
+        parse_assignment(value, "guest build") for value in args.guest_build
+    )
+    if args.regenerate_dashboard:
+        if not args.dashboard_dir:
+            raise ValueError("--regenerate-dashboard requires --dashboard-dir")
+        if args.fixtures:
+            raise ValueError(
+                "--regenerate-dashboard reads fixtures from the recorded "
+                "results; do not pass fixture paths"
+            )
+        dashboard_dir = args.dashboard_dir.expanduser().resolve()
+        regenerate_dashboard(
+            args.regenerate_dashboard.expanduser().resolve(),
+            dashboard_dir,
+            guest_builds,
+        )
+        print(f"dashboard: {dashboard_dir / 'catalog.json'}")
+        return 0
+    if not args.fixtures:
+        raise ValueError("at least one fixture path is required")
     if args.warmups < 0 or args.repetitions < 1:
         raise ValueError("warmups must be non-negative and repetitions positive")
     guests: list[Guest] = args.guest or default_guests()
@@ -1081,6 +1320,12 @@ def main() -> int:
     if unknown_profile_guests:
         raise ValueError(
             f"unknown profile guests: {', '.join(sorted(unknown_profile_guests))}"
+        )
+    unknown_build_guests = set(guest_builds) - set(guest_names)
+    if unknown_build_guests:
+        raise ValueError(
+            f"unknown --guest-build guests: "
+            f"{', '.join(sorted(unknown_build_guests))}"
         )
     dashboard_guest_names = args.profile_guest or guest_names
     if args.dashboard_dir and (
@@ -1120,7 +1365,7 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     metadata = dict(parse_assignment(value, "metadata") for value in args.metadata)
     result: dict[str, object] = {
-        "format_version": 1,
+        "format_version": 2,
         "generated_at_unix_ns": time.time_ns(),
         "host": {
             "platform": platform.platform(),
@@ -1216,21 +1461,20 @@ def main() -> int:
                         }
                     )
                     continue
+                measurement = {
+                    "steps": artifacts["steps"],
+                    "elapsed_ns": artifacts["elapsed_ns"],
+                    "actual_output_bytes": artifacts["actual_output_bytes"],
+                    "output_matched": True,
+                }
+                if "phases" in artifacts:
+                    measurement["phases"] = artifacts["phases"]
                 measured_cases.append(
                     {
                         "identity": case.identity,
                         "name": case.name,
                         "block_index": case.block_index,
-                        "measurements": [
-                            {
-                                "steps": artifacts["steps"],
-                                "elapsed_ns": artifacts["elapsed_ns"],
-                                "actual_output_bytes": artifacts[
-                                    "actual_output_bytes"
-                                ],
-                                "output_matched": True,
-                            }
-                        ],
+                        "measurements": [measurement],
                     }
                 )
         else:
@@ -1262,6 +1506,7 @@ def main() -> int:
                 "size_bytes": guest.elf.stat().st_size,
                 "sha256": sha256_file(guest.elf),
             },
+            "build": guest_build_provenance(guest, guest_builds.get(guest.name)),
             "cases": measured_cases,
             "summary": summarize_guest(measured_cases),
         }

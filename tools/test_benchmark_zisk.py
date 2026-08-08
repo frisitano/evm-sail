@@ -9,9 +9,11 @@ from pathlib import Path
 from tools.benchmark_zisk import (
     FixtureCase,
     Guest,
+    RecordedCase,
     export_dashboard_data,
     frame_guest_input,
     fixture_taxonomy,
+    guest_build_provenance,
     parse_comprehensive_opcode_costs,
     parse_cost,
     parse_executed_functions,
@@ -20,6 +22,7 @@ from tools.benchmark_zisk import (
     parse_profile_scope_steps,
     parse_steps,
     parse_top_cost_functions,
+    regenerate_dashboard,
 )
 
 
@@ -281,19 +284,34 @@ class DashboardExportTests(unittest.TestCase):
                     }
                     continue
                 instrumented = guest.name == "evm-sail"
+                measurement = {"steps": 1000, "elapsed_ns": 1}
+                if instrumented:
+                    measurement["phases"] = [
+                        {"name": "input-decode", "steps": 100},
+                        {"name": "execution", "steps": 700},
+                        {"name": "state-root", "steps": 150},
+                        {"name": "receipts-commitments", "steps": 50},
+                    ]
                 guest_results[guest.name] = {
                     "elf": {
                         "path": str(elf),
                         "size_bytes": 3,
                         "sha256": "cd" * 32,
                     },
-                    "cases": [
+                    "build": (
                         {
-                            "measurements": [
-                                {"steps": 1000, "elapsed_ns": 1}
-                            ]
+                            "commit": "1234abcd" * 5,
+                            "version": None,
+                            "source": "repository",
                         }
-                    ],
+                        if instrumented
+                        else {
+                            "commit": None,
+                            "version": "reth v1.11.0",
+                            "source": "sidecar",
+                        }
+                    ),
+                    "cases": [{"measurements": [measurement]}],
                     "profiles": [
                         {
                             "artifacts": {
@@ -380,11 +398,38 @@ class DashboardExportTests(unittest.TestCase):
             self.assertEqual(catalog["generated_at_unix_ns"], "123")
             fixture_entry = catalog["fixtures"][0]
             shard = json.loads((output / fixture_entry["shard"]).read_text())
-            self.assertEqual(catalog["format_version"], 5)
-            self.assertEqual(shard["format_version"], 5)
+            self.assertEqual(catalog["format_version"], 6)
+            self.assertEqual(shard["format_version"], 6)
+            self.assertEqual(
+                catalog["guests"][0]["build"],
+                {
+                    "commit": "1234abcd" * 5,
+                    "version": None,
+                    "source": "repository",
+                },
+            )
+            self.assertEqual(
+                catalog["guests"][1]["build"]["version"], "reth v1.11.0"
+            )
+            self.assertIsNone(catalog["guests"][2]["build"])
             self.assertEqual(fixture_entry["max_gas_used"], 30_000_000)
+            self.assertEqual(fixture_entry["total_gas_used"], 30_000_000)
+            self.assertEqual(
+                fixture_entry["guest_total_steps"],
+                {"evm-sail": 1004, "reth": 800, "ethrex": None},
+            )
             self.assertEqual(shard["cases"][0]["gas_used"], 30_000_000)
             case_guests = shard["cases"][0]["guests"]
+            self.assertEqual(
+                case_guests["evm-sail"]["phases"],
+                [
+                    {"name": "input-decode", "steps": 100},
+                    {"name": "execution", "steps": 700},
+                    {"name": "state-root", "steps": 150},
+                    {"name": "receipts-commitments", "steps": 50},
+                ],
+            )
+            self.assertNotIn("phases", case_guests["reth"])
             self.assertEqual(case_guests["evm-sail"]["total_steps"], 1004)
             self.assertEqual(case_guests["evm-sail"]["total_cost"], 4000)
             self.assertEqual(
@@ -417,6 +462,138 @@ class DashboardExportTests(unittest.TestCase):
             self.assertEqual(
                 case_guests["ethrex"]["unavailable"]["code"],
                 "guest_heap_oom",
+            )
+
+    def test_recorded_case_identity_matches_fixture_case(self) -> None:
+        case = FixtureCase(
+            fixture=Path("/work/fixture.json"),
+            fixture_sha256="ab" * 32,
+            name="push0 works",
+            block_index=2,
+            payload=b"input",
+            expected=b"output",
+            gas_used=1,
+        )
+        recorded = RecordedCase(
+            fixture=case.fixture,
+            fixture_sha256=case.fixture_sha256,
+            name=case.name,
+            block_index=case.block_index,
+            input_sha256=case.input_sha256,
+            input_bytes=case.input_bytes,
+            gas_used=case.gas_used,
+        )
+        self.assertEqual(recorded.identity, case.identity)
+        self.assertEqual(recorded.input_bytes, len(b"input"))
+
+    def test_guest_build_provenance_prefers_cli_then_sidecar(self) -> None:
+        TMP_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_tmp:
+            tmp = Path(raw_tmp)
+            elf = tmp / "guest.elf"
+            elf.write_bytes(b"elf")
+            guest = Guest("reth", elf)
+            self.assertEqual(
+                guest_build_provenance(guest, "reth v1.11.0"),
+                {"commit": None, "version": "reth v1.11.0", "source": "cli"},
+            )
+            self.assertIsNone(guest_build_provenance(guest, None))
+            sidecar = tmp / "guest.elf.build.json"
+            sidecar.write_text(
+                json.dumps({"commit": "fe" * 20, "version": "v1.12.0"})
+            )
+            self.assertEqual(
+                guest_build_provenance(guest, None),
+                {
+                    "commit": "fe" * 20,
+                    "version": "v1.12.0",
+                    "source": "sidecar",
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "neither commit"):
+                sidecar.write_text("{}")
+                guest_build_provenance(guest, None)
+
+    def test_evm_sail_guest_falls_back_to_repository_commit(self) -> None:
+        TMP_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_tmp:
+            elf = Path(raw_tmp) / "guest.elf"
+            elf.write_bytes(b"elf")
+            build = guest_build_provenance(Guest("evm-sail", elf), None)
+            if build is not None:
+                self.assertEqual(build["source"], "repository")
+                self.assertRegex(build["commit"], r"^[0-9a-f]{40}(-dirty)?$")
+
+    def test_regenerates_dashboard_from_recorded_results(self) -> None:
+        TMP_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as raw_tmp:
+            tmp = Path(raw_tmp)
+            artifacts = {
+                "steps": 900,
+                "cost": 3600,
+                "scope_steps": {},
+                "scope_costs": {},
+                "top_cost_functions": [],
+                "function_profile_status": "stack_mismatch",
+                "opcode_costs": [],
+                "opcode_profile_completeness": "all_used_operations",
+                "executed_functions": [],
+                "function_inventory_status": "ok",
+            }
+            results = {
+                "format_version": 1,
+                "generated_at_unix_ns": 123,
+                "ziskemu": {"version": "ziskemu 0.15.0"},
+                "metadata": {},
+                "fixtures": [
+                    {
+                        "path": str(tmp / "corpus" / "block.json"),
+                        "sha256": "ab" * 32,
+                        "case": "block 42",
+                        "block_index": 0,
+                        "input_sha256": "cd" * 32,
+                        "input_bytes": 5,
+                        "gas_used": 21_000,
+                        "expected_output_bytes": 6,
+                    }
+                ],
+                "guests": {
+                    "reth": {
+                        "elf": {
+                            "path": str(tmp / "reth.elf"),
+                            "size_bytes": 3,
+                            "sha256": "ef" * 32,
+                        },
+                        "cases": [
+                            {"measurements": [{"steps": 900, "elapsed_ns": 1}]}
+                        ],
+                        "profiles": [{"artifacts": artifacts}],
+                    }
+                },
+            }
+            results_path = tmp / "results.json"
+            results_path.write_text(json.dumps(results))
+            output = tmp / "dashboard"
+
+            regenerate_dashboard(
+                results_path, output, {"reth": "reth v1.11.0"}
+            )
+
+            catalog = json.loads((output / "catalog.json").read_text())
+            self.assertEqual(catalog["case_count"], 1)
+            self.assertEqual(
+                catalog["guests"][0]["build"]["version"], "reth v1.11.0"
+            )
+            fixture_entry = catalog["fixtures"][0]
+            self.assertEqual(
+                fixture_entry["guest_total_steps"], {"reth": 900}
+            )
+            shard = json.loads((output / fixture_entry["shard"]).read_text())
+            self.assertEqual(
+                shard["cases"][0]["id"], f"block-42-block-0-{'cd' * 6}"
+            )
+            self.assertEqual(
+                shard["cases"][0]["guests"]["reth"]["total_steps"], 900
             )
 
 
