@@ -7,7 +7,6 @@ theme:
     - content.code.copy
     - content.tooltips
     - navigation.indexes
-    - navigation.tabs
     - navigation.top
     - search.highlight
 plugins:
