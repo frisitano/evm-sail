@@ -22,6 +22,12 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     if poststate != header.state_root then {
         fatal_error(InvalidStateRoot)
     };
+    /* Receipts/commitments phase: the receipts-root comparison, the logs
+       bloom check, and block-access-list validation accumulate into the same
+       `receipts_root` tag as the receipts-trie reduction performed in
+       `verify_stateless_payload`, mirroring the aligned reth/ethrex guests.
+       The finer `block_access_list` tag stays nested inside. */
+    cycle_scope_start(16);
     if result.receipts_root != header.receipts_root then {
         fatal_error(InvalidReceiptsRoot)
     };
@@ -32,7 +38,8 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
         cycle_scope_start(20);
         validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit);
         cycle_scope_end(20)
-    }
+    };
+    cycle_scope_end(16)
 }
 
 function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
@@ -63,9 +70,20 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
             block.body.transactions.count,
         )
     };
-    let result = execute_block_body(block.body, input_ref);
+    let executed = execute_block_body(block.body, input_ref);
 
     cycle_scope_end(active_stage);
+    /* Receipts-trie reduction under the `receipts_root` phase tag, as a
+       sibling of the `execute_block` phase.  The optimized receipt store
+       reads its own C arena and ignores the start pointer, and block-end
+       processing never touches retained receipts, so the root is identical
+       to the one the non-profile build computes inside the transaction
+       loop. */
+    cycle_scope_start(16);
+    let receipts_root = receipt_store_root(0, block.body.transactions.count);
+    cycle_scope_end(16);
+    let result = { executed with receipts_root = receipts_root };
+
     active_stage = VALIDATION_STAGE_VALIDATE_RESULT;
     cycle_scope_start(active_stage);
     validate_executed_block(block, result);

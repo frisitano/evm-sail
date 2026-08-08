@@ -21,7 +21,11 @@ function execute_block_transactions(
     var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
-    let records_start = receipt_store_begin();
+    /* The optimized receipt store resets its own C arena here and ignores the
+       returned start pointer at root time.  The profile overlay computes the
+       receipts root in `verify_stateless_payload`, outside the `execute_block`
+       phase, so only the reset side effect is needed. */
+    let _ = receipt_store_begin();
     let logs_start = log_store_index_add(logs_tx_start(), logs_tx_count());
     var remaining_deposits : StatelessInputSlice = expected_deposits;
     var cursor = ssz_list_cursor(transactions);
@@ -95,19 +99,20 @@ function execute_block_transactions(
         if (profile.fork >= Amsterdam) & (final_usage.execution < final_usage.state)
         then final_usage.state
         else final_usage.execution;
-    cycle_scope_start(16);
-    let receipts_root = receipt_store_root(records_start, transactions.count);
-    cycle_scope_end(16);
     let retained = log_store_index_add(logs_tx_start(), logs_tx_count());
     let logs_count : log_store_index =
         if logs_start <= retained then retained - logs_start else 0;
+    /* Placeholder: the profile overlay defers the receipts-trie reduction to
+       `verify_stateless_payload`, where it runs under the `receipts_root`
+       phase scope as a sibling of `execute_block` (matching the aligned
+       reth/ethrex guest instrumentation). */
     struct {
         header_gas_used = header_gas_used,
         execution_gas_used = final_usage.execution,
         state_gas_used = final_usage.state,
         blob_gas_used = blob_gas_acc,
         first_tx_recipient = tx0_to,
-        receipts_root = receipts_root,
+        receipts_root = ZERO_HASH,
         logs = struct { start = logs_start, count = logs_count },
     }
 }

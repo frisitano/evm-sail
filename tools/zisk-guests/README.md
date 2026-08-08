@@ -100,9 +100,19 @@ same tag means the same work in all three guests:
   covers applying account updates to the trie, the work reth performs inside
   `calculate_state_root`).
 - `receipts_root` — receipts/commitments validation: receipts root, logs
-  bloom, requests hash, and block-access-list hash. evm-sail's own
-  `receipts_root` tag is narrower (its BAL check reports under
-  `block_access_list`).
+  bloom, requests hash, and block-access-list hash. evm-sail's
+  `receipts_root` tag covers the receipts-trie reduction plus the
+  receipts-root, logs-bloom, and block-access-list checks (the finer
+  `block_access_list` tag nests inside it); its EIP-7685 request
+  authentication is system-call driven and therefore reports under
+  `execute_block`.
+
+In all three guests the five tags are emitted as mutually non-overlapping
+phases, so their inclusive step totals can be compared directly and sum to at
+most the run's total steps. evm-sail additionally emits its finer-grained
+tags (and the coarser `validate_payload`/`validate_result` stage tags) around
+and inside these phases; the five phase names above are the cross-guest
+comparison surface.
 
 They are built from `.agent-tmp/ere-guests-scoped/`, a copy of the local
 `~/dev/ethereum/ere-guests` checkout whose zisk bin workspaces `[patch]` the
