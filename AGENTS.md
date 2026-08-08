@@ -156,21 +156,41 @@ duplicating instructions elsewhere.
   suspended frames, ancestor hashes, logs, and receipts follow the same
   one-time workspace-binding rule rather than owning capacity-sized static
   arrays.
+  The machine follows a STATE-PASSING convention (YP μ′ = Ξ(μ)): every
+  opcode handler in `sail/evm/execute.sail` takes the hot machine state it
+  uses — the carried gas, the operand-stack cursor (`StackTop`), the memory
+  cursor (`EvmMemorySlice`) for the memory family, and the program counter
+  for the flow family — by value and returns it updated. `charge` is
+  `(gas, cost) -> (bool, gas)`, `exc_halt` is `(gas, kind) -> gas` (it
+  performs the state-gas refill against the carried value in the canonical
+  read-then-zero order and returns the zeroed gas), and `validate_stack`
+  guards every instruction's stack effect against the carried cursor before
+  its handler runs, so handler bodies consume operands unchecked. The
+  `pc`/`gas_remaining`/`stack_top`/`evm_memory` registers are authoritative
+  ONLY at frame boundaries: the canonical loop supplies each step's
+  arguments from them and assigns the returned tuple back, `run_call`/
+  `run_create` publish the carried parent state immediately before
+  `suspend_frame`, and `FrameCheckpoint` saves/restores all four. `StackTop`
+  is an abstract 64-bit cursor token (spec backend: frame height; optimized
+  backend: raw row pointer); the stack module owns only word storage, and
+  the cursor moves through the `stack_slot_read/write` and
+  `stack_top_advance/retreat` host axioms.
   The hand-written raw-byte interpreter (`ffi/optimized/src/evm/interpreter.c`)
   is the SINGLE optimized interpreter: a computed-goto loop (one 256-entry
-  label table, labels-as-values) with pc, gas, and the code slice held in
-  loop LOCALS. In-TU fast-path arms (ALU, PUSH/POP/DUP/SWAP, EXP, JUMPDEST)
-  charge and validate against the local gas, never touch the model registers
-  on success, and dispatch the next opcode from their own tail; every in-TU
-  failure branches to the single `interp_exc` tail, which publishes the local
-  gas and performs the canonical `exc_halt` exactly once (exc_halt reads and
-  then zeroes the gas register, so the publish-before-halt order is a
-  consensus requirement). Arms whose handler is a generated Sail body
-  publish the locals to the model registers first and reload after; frame
-  entry additionally reloads the code locals. There is no switch-dispatch
-  variant and no `EVM_INTERP` knob. Labels-as-values is a sanctioned,
-  interpreter-only exception to the indirect-control-flow rule: it is an
-  indirect BRANCH within one function over a closed static table.
+  label table, labels-as-values) carrying pc, gas, the stack cursor, the
+  memory cursor, and the code slice in loop LOCALS. In-TU fast-path arms
+  (ALU, PUSH/POP/DUP/SWAP/deep-stack, EXP, PC, GAS, JUMPDEST) validate and
+  charge against the carried locals and dispatch the next opcode from their
+  own tail; every in-TU failure branches to the single `interp_exc` tail,
+  which performs the carried-gas `exc_halt` exactly once. Arms whose
+  handler is a generated Sail body pass the locals as arguments and unpack
+  the returned tuple — there is no register synchronization around
+  handlers; the registers are published when a frame stops and reloaded
+  after resume or child entry (frame entry additionally reloads the code
+  and stack-base locals). There is no switch-dispatch variant and no
+  `EVM_INTERP` knob. Labels-as-values is a sanctioned, interpreter-only
+  exception to the indirect-control-flow rule: it is an indirect BRANCH
+  within one function over a closed static table.
   The optimized FFI audit enforces both the source manifest and this production
   policy. Closed families of optimized-host behavior use explicit tags and
   first-order dispatch rather than function pointers or callbacks; this keeps
