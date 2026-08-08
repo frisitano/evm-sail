@@ -4,28 +4,28 @@ The generated C model links exactly one complete host backend:
 
 - `spec/` implements the readable specification build against Sail's generated
   GMP-backed C ABI.
-- `optimized/` implements the production fixed-layout ABI and owns all
+- `optimised/` implements the production fixed-layout ABI and owns all
   optimized-only whole-operation replacements and pointer-based storage.
 
 The optimized backend uses the conventional split while mirroring the Sail
 source tree:
 
-- `optimized/include/evmsail/` contains public declarations injected into the
+- `optimised/include/evmsail/` contains public declarations injected into the
   generated model.
-- `optimized/src/` contains implementations and private headers.
-- `optimized/src/host/state.c` implements the generated aggregate boundary;
-  `optimized/src/host/state/` is split by semantic ownership:
+- `optimised/src/` contains implementations and private headers.
+- `optimised/src/host/state.c` implements the generated aggregate boundary;
+  `optimised/src/host/state/` is split by semantic ownership:
   `account.c` owns account schema, values, logs, and authentication metadata;
   `storage.c` owns the corresponding persistent-storage state;
   `block_access_list.c` owns BAL history and iteration; and `store.c` contains
   only the lifecycle ordering that coordinates those independent modules.
-- `optimized/src/host/state/logs.c` owns emitted log records and the cumulative
-  block bloom. `optimized/src/executor/receipts.c` owns retained encoded
+- `optimised/src/host/state/logs.c` owns emitted log records and the cumulative
+  block bloom. `optimised/src/executor/receipts.c` owns retained encoded
   receipts; the generic MPT implementation consumes their spans but does not
   own receipt storage.
 
 Large optimized-backend storage is owned by one pre-provisioned workspace.
-`optimized/src/workspace.c` binds a typed pointer for each module exactly once
+`optimised/src/workspace.c` binds a typed pointer for each module exactly once
 before generated-model initialization; modules then use ordinary direct
 indexing such as `entries[id]`. A module must not define its own capacity-sized
 backing array or allocate, resize, or free storage. Native tests provide one

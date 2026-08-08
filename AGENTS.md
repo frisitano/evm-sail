@@ -71,11 +71,11 @@ duplicating instructions elsewhere.
   `host/output.sail` guest output, `host/state.sail` / `host/environment.sail` /
   `host/memory.sail` world state, block environment, and buffers,
   `host/nodes.sail` trie node DB; see
-  `extractions/contracts/ExternBoundary.v`). These `c:`-bound vals are the TRUE
+  `extractions/coq/contract/ExternBoundary.v`). These `c:`-bound vals are the TRUE
   axioms (crypto core, I/O oracle, mutable host stores) -- extraction targets
   see them as bodyless parameters; executables link their C definitions from
-  `ffi/`. The C backends are split completely: `ffi/spec/` owns the generated
-  GMP-backed ABI, while `ffi/optimized/` owns the fixed-layout ABI,
+  `extractions/c/`. The C backends are split completely: `extractions/c/spec/contract/` owns the generated
+  GMP-backed ABI, while `extractions/c/optimised/contract/` owns the fixed-layout ABI,
   pointer-based stores and whole-operation replacements
   selected by the custom compiler. A build compiles exactly one directory;
   neither backend includes private headers or implementation from the other.
@@ -85,9 +85,9 @@ duplicating instructions elsewhere.
   headers include `evmsail/model.h`, the single generated-header selection
   shim required because Sail emits `--c-include` headers before its own model
   header; it declares no wrapper types or runtime interface.
-  `ffi/spec/state.c` and
-  `ffi/spec/code.c` construct the generated account/storage and `option(Code)`
-  values; `ffi/spec/frame_stack.c` applies generated ownership operations only
+  `extractions/c/spec/contract/state.c` and
+  `extractions/c/spec/contract/code.c` construct the generated account/storage and `option(Code)`
+  values; `extractions/c/spec/contract/frame_stack.c` applies generated ownership operations only
   to continuation slots actually reached. Their optimized counterparts use
   direct fixed-layout assignment. Each backend's crypto implementation handles
   the hash axioms and segmented byte equality for its own ABI. Optimized log
@@ -111,10 +111,10 @@ duplicating instructions elsewhere.
   explicit Sail bodies and throws. SSZ decoding reads only from
   `StatelessInputSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer
   exists.
-  `ffi/spec/hash.c`, `ffi/optimized/src/primitives/crypto.c`, and each backend's
+  `extractions/c/spec/contract/hash.c`, `extractions/c/optimised/contract/src/primitives/crypto.c`, and each backend's
   accelerator module call the root `zkvm_accelerators.h` contract directly; the
   former `host_crypto.c` forwarding layer has been removed.
-  `ffi/optimized/src/lib/htr.c` is a narrower optimized-C refinement: the
+  `extractions/c/optimised/contract/src/lib/htr.c` is a narrower optimized-C refinement: the
   `sail/optimised/lib/htr.sail` override replaces the complete
   `htr_new_payload_request` operation with one pure C call that consumes the
   validated `StatelessInputRef` slices directly. Spec C and Lean/Coq
@@ -125,22 +125,22 @@ duplicating instructions elsewhere.
   rejected in favour of the validated-reference boundary;
   `zkvm_accelerators.h` remains unchanged.
   Optimized C also injects the header-only
-  `ffi/optimized/include/evmsail/primitives/word.h`
+  `extractions/c/optimised/contract/include/evmsail/primitives/word.h`
   refinements for fixed hash/address ↔ native-word conversions. Spec C
   and proof extraction retain the direct canonical-byte concatenation and
   fixed-slice endian equations in `sail/prelude.sail`; neither standard nor
   optimized builds use temporary reversal vectors.
   The old `sail/c/*.sail` extern-binding menu and the
   `EVM_BACKEND=spec|build` project variable were deleted (this change).
-- `ffi/spec/` and `ffi/optimized/` each contain a complete native C backend for
+- `extractions/c/spec/contract/` and `extractions/c/optimised/contract/` each contain a complete native C backend for
   memory/nominal region access/output storage, the Sail-cursor-owned executor
   scratch arena, account and persistent-storage state, the EIP-7928 recorder,
   transient storage, code/JUMPDEST storage, node DB, operand stack, and the
   suspended-frame stack. The optimized backend may additionally replace
   high-level Sail operations without imposing those representations on the
   spec build. Its source hierarchy follows Sail at established module
-  boundaries. `ffi/optimized/include/evmsail/` contains the Sail-facing public
-  declarations; `ffi/optimized/src/` contains implementations and private
+  boundaries. `extractions/c/optimised/contract/include/evmsail/` contains the Sail-facing public
+  declarations; `extractions/c/optimised/contract/src/` contains implementations and private
   headers. In particular, `src/host/state.c` adapts generated aggregate values
   while `src/host/state/` owns the dense semantic state, transaction logs, BAL
   metadata, and state-root iterators. Large optimized storage is pointer-backed
@@ -175,7 +175,7 @@ duplicating instructions elsewhere.
   backend: raw row pointer); the stack module owns only word storage, and
   the cursor moves through the `stack_slot_read/write` and
   `stack_top_advance/retreat` host axioms.
-  The hand-written raw-byte interpreter (`ffi/optimized/src/evm/interpreter.c`)
+  The hand-written raw-byte interpreter (`extractions/c/optimised/contract/src/evm/interpreter.c`)
   is the SINGLE optimized interpreter: a computed-goto loop (one 256-entry
   label table, labels-as-values) carrying pc, gas, the stack cursor, the
   memory cursor, and the code slice in loop LOCALS. In-TU fast-path arms
@@ -201,8 +201,8 @@ duplicating instructions elsewhere.
   `(address, block_access_index)`. It sorts the dense rows once and exposes one
   account-delimited event stream; canonical RLP cursors, not the host stream,
   drive validation and enforce the address-plus-storage-key item limit.
-  At the `ffi/` root, only the standardized `zkvm_accelerators.h` and
-  `zkvm_io.h` platform contracts are shared. See `ffi/README.md`; common
+  At the `extractions/c/` root, only the standardized `zkvm_accelerators.h` and
+  `zkvm_io.h` platform contracts are shared. See `extractions/c/README.md`; common
   protocol behavior belongs in Sail rather than in a shared C compatibility
   layer.
 - `harness/run.py` is the SINGLE fixture harness for the single executable
@@ -216,7 +216,7 @@ duplicating instructions elsewhere.
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is
-  supplied at runtime through the standard `ffi/zkvm_io.h` `read_input` ABI.
+  supplied at runtime through the standard `extractions/c/zkvm_io.h` `read_input` ABI.
   `--zisk` similarly builds the production input-agnostic ZisK ELF and drives
   it with `ziskemu`. The harness requires the emulator version to equal the
   `ziskos` version in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` to select a
@@ -378,6 +378,6 @@ rtk env ZISKEMU=/path/to/matching/ziskemu python3 harness/run.py --zisk --limit 
 ```
 
 The ELF is built once without fixture input; each embedded
-`statelessInputBytes` value is supplied at runtime through `ffi/zkvm_io.h`.
+`statelessInputBytes` value is supplied at runtime through `extractions/c/zkvm_io.h`.
 Use `--rebuild` after generated C or FFI changes. A complete v0.6.2 result has
 not yet been recorded here; do not reuse pass counts from deleted corpora.

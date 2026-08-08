@@ -75,17 +75,17 @@ def package(generated: Path, ffi_root: Path) -> None:
     ffi_root = ffi_root.resolve()
     generated_manifest = generated / "src/spec/sources.list"
     generated_entries = manifest_entries(generated_manifest)
-    ffi_entries = manifest_entries(ffi_root / "optimized/sources.list")
+    ffi_entries = manifest_entries(ffi_root / "optimised/sources.list")
 
     for entry in generated_entries:
         if not (generated / "src/spec" / entry).is_file():
             raise ValueError(f"generated manifest source does not exist: {entry}")
     for entry in ffi_entries:
-        if not (ffi_root / "optimized/src" / entry).is_file():
+        if not (ffi_root / "optimised/src" / entry).is_file():
             raise ValueError(f"optimized FFI manifest source does not exist: {entry}")
 
     include_root = generated / "include"
-    copy_header_tree(ffi_root / "optimized/include", include_root)
+    copy_header_tree(ffi_root / "optimised/include", include_root)
     for contract in ("zkvm_accelerators.h", "zkvm_bigint.h", "zkvm_io.h"):
         shutil.copy2(ffi_root / contract, include_root / contract)
 
@@ -114,8 +114,8 @@ def package(generated: Path, ffi_root: Path) -> None:
     # established that `generated` is an optimized-C build directory.
     if staged_ffi.exists():
         shutil.rmtree(staged_ffi)
-    shutil.copytree(ffi_root / "optimized/src", staged_ffi)
-    shutil.copy2(ffi_root / "optimized/sources.list", staged_ffi / "sources.list")
+    shutil.copytree(ffi_root / "optimised/src", staged_ffi)
+    shutil.copy2(ffi_root / "optimised/sources.list", staged_ffi / "sources.list")
 
     combined = generated / "src/sources.list"
     combined.write_text(
@@ -143,7 +143,7 @@ def package(generated: Path, ffi_root: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("generated", nargs="?", type=Path, default=DEFAULT_GENERATED)
-    parser.add_argument("--ffi-root", type=Path, default=ROOT / "ffi")
+    parser.add_argument("--ffi-root", type=Path, default=ROOT / "extractions/c")
     args = parser.parse_args()
     try:
         package(args.generated, args.ffi_root)

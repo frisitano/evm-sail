@@ -110,7 +110,7 @@ fi
 # loop instead of the hand-written C override. The evm/interpreter.sail splice
 # (which rebinds interpret to the C loop) is swapped for
 # evm/interpreter_generated.sail ($[c_inline] annotations only), and the
-# hand-written ffi/optimized/src/evm/interpreter.c is dropped from the staged
+# hand-written extractions/c/optimised/contract/src/evm/interpreter.c is dropped from the staged
 # source manifest so the generated interpret() is the one linked.
 EVM_GENERATED_INTERP="${EVM_GENERATED_INTERP:-off}"
 case "$EVM_GENERATED_INTERP" in
@@ -141,9 +141,9 @@ if [ "$PLATFORM" = zisk ]; then
 else
   ARCH=(-march=rv64im_zicclsm -mabi=lp64 -mcmodel=medany)
 fi
-FFI_ROOT="$ROOT/ffi"
+FFI_ROOT="$ROOT/extractions/c"
 if [ -z "${GUEST:-}" ]; then
-  MODEL_FFI="$FFI_ROOT/optimized"
+  MODEL_FFI="$FFI_ROOT/optimised"
   MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
   MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$OPTIMIZED_STAGED_FFI")
 else
@@ -414,18 +414,18 @@ cmd_guest() {
   build_runtime
   compile_common
   # Spike implements the standard accelerator surface through its MMIO device.
-  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -I"$ROOT/zkvm" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/extractions/c" -I"$ROOT/zkvm" -Wall -Wextra \
       -c "$RT/accel_guest.c" -o "$BUILD/accel_guest.o"
   # Spike has no arithmetic precompile: the portable software provider owns
   # the zkvm_bigint.h contract here. The ZisK library build links
   # zkvm/zisk/bigint.c instead; the two providers must never co-link.
-  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/extractions/c" -Wall -Wextra \
       -c "$RT/bigint_portable.c" -o "$BUILD/bigint_portable.o"
   ACCEL="$ROOT/zkvm/accel-host"; ACCEL_LIB="$ACCEL/target/release"
   if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
     ( cd "$ACCEL" && cargo build --release --target-dir target )
   fi
-  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/ffi" -I"$ROOT/zkvm" -undefined dynamic_lookup \
+  "$HOSTCXX" -std=c++17 -fPIC -shared -I"$SPIKE_INC" -I"$ROOT/extractions/c" -I"$ROOT/zkvm" -undefined dynamic_lookup \
       -o "$SPIKE_DEVICES_SO" \
       "$ROOT/zkvm/accel-device/accel_device.cc" "$ROOT/zkvm/io-device/io_device.cc" \
       -L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB"
@@ -462,7 +462,7 @@ cmd_zisk_lib() {
   # ZisK provider for the zkvm_bigint.h contract: forwards to the ziskos
   # zisklib arith256 exports, resolved by the final guest link (Rust crate
   # graph or libziskos.a). The Spike-only portable provider must not co-link.
-  "$GCC" "${CFLAGS[@]}" -I"$ROOT/ffi" -Wall -Wextra \
+  "$GCC" "${CFLAGS[@]}" -I"$ROOT/extractions/c" -Wall -Wextra \
       -c "$HERE/zisk/bigint.c" -o "$BUILD/zisk_bigint.o"
   compile_profile_scope
   # `ar crs` updates an existing archive without removing members that are no

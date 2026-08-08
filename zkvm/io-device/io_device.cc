@@ -1,4 +1,4 @@
-/* Spike validation device for ffi/zkvm_io.h. Private input remains on the host
+/* Spike validation device for extractions/c/zkvm_io.h. Private input remains on the host
  * until read_input requests it; complete write_output spans are copied back as
  * the public result. Neither direction is embedded in the guest ELF. */
 #include "riscv/abstract_device.h"

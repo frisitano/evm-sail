@@ -10,7 +10,7 @@ before `lib/mpt/primitives.sail` loads.
 
 The `c:`-bound `val`s in this module form the accelerator interface:
 hash/signature primitives with no pure Sail body (the `hash.c` and
-`precompiles.c` implementations in `ffi/spec/` and `ffi/optimized/` call the
+`precompiles.c` implementations in `extractions/c/spec/contract/` and `extractions/c/optimised/contract/` call the
 eth-act zkvm-standards surface directly). Proof targets see them as bodyless
 axioms.
 

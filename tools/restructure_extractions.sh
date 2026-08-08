@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Restructure the extraction backends into a per-target layout:
 #
-#   ffi/                                -> extractions/c/contracts/
-#   ffi/optimized/                      -> extractions/c/contracts/optimised/   (z -> s, per Tau's
-#   ffi/spec/                           -> extractions/c/contracts/spec/         repo-wide spelling:
+#   ffi/                                -> extractions/c/
+#   ffi/optimized/                      -> extractions/c/optimised/contract/   (z -> s, per Tau's
+#   ffi/spec/                           -> extractions/c/spec/contract/         repo-wide spelling:
 #                                                                                sail/optimised,
 #                                                                                make c-optimised)
 #   extractions/contracts/ExternBoundary.v   -> extractions/coq/contract/
@@ -13,7 +13,7 @@
 #   extractions/contracts/HostContract.py    -> extractions/python/contract/
 #
 # The root platform contracts zkvm_accelerators.h / zkvm_io.h / zkvm_bigint.h
-# move with the ffi root to extractions/c/contracts/.
+# move with the ffi root to extractions/c/.
 #
 # After the git mv steps the script rewrites every known path reference. The
 # rewrite inventory below was generated with `rg -l 'ffi/'` (and
@@ -62,8 +62,8 @@ fi
 echo "== moving directories and contract files =="
 
 mkdir -p extractions/c
-git mv ffi extractions/c/contracts
-git mv extractions/c/contracts/optimized extractions/c/contracts/optimised
+git mv ffi extractions/c
+git mv extractions/c/optimized extractions/c/optimised/contract
 
 mkdir -p extractions/coq/contract extractions/lean/contract extractions/python/contract
 git mv extractions/contracts/ExternBoundary.v extractions/coq/contract/ExternBoundary.v
@@ -109,9 +109,9 @@ REWRITE_FILES=(
     sail/optimised/prelude.sail
     sail/primitives/crypto.sail
     # moved-tree self references (new paths)
-    extractions/c/contracts/spec/trie_node_db.h
-    extractions/c/contracts/optimised/src/prelude.c
-    extractions/c/contracts/zkvm_bigint.h
+    extractions/c/spec/contract/trie_node_db.h
+    extractions/c/optimised/contract/src/prelude.c
+    extractions/c/zkvm_bigint.h
 )
 
 echo "== rewriting path references (${#REWRITE_FILES[@]} files) =="
@@ -120,17 +120,17 @@ for f in "${REWRITE_FILES[@]}"; do
     [ -f "$f" ] || die "rewrite target missing: $f"
     perl -pi -e '
         # ordered: most specific first
-        s{ffi/optimized}{extractions/c/contracts/optimised}g;         # dir + inner rename
-        s{ffi/spec}{extractions/c/contracts/spec}g;
-        s{\.\./ffi/}{../extractions/c/contracts/}g;                    # zkvm/README.md relative links
-        s{-Iffi\b}{-Iextractions/c/contracts}g;                        # Makefile c-spec include path
-        s{ROOT/ffi"}{ROOT/extractions/c/contracts"}g;                  # FFI_ROOT= / FFI= in zkvm scripts
-        s{ROOT / "ffi"}{ROOT / "extractions/c/contracts"}g;            # package_optimised_c.py default
-        s{ROOT / \x27ffi\x27}{ROOT / \x27extractions/c/contracts\x27}g; # lint_optimised_c.py -I root
+        s{ffi/optimized}{extractions/c/optimised/contract}g;         # dir + inner rename
+        s{ffi/spec}{extractions/c/spec/contract}g;
+        s{\.\./ffi/}{../extractions/c/}g;                    # zkvm/README.md relative links
+        s{-Iffi\b}{-Iextractions/c}g;                        # Makefile c-spec include path
+        s{ROOT/ffi"}{ROOT/extractions/c"}g;                  # FFI_ROOT= / FFI= in zkvm scripts
+        s{ROOT / "ffi"}{ROOT / "extractions/c"}g;            # package_optimised_c.py default
+        s{ROOT / \x27ffi\x27}{ROOT / \x27extractions/c\x27}g; # lint_optimised_c.py -I root
         s{FFI_ROOT/optimized}{FFI_ROOT/optimised}g;                    # MODEL_FFI selection
         # generic prose/doc references: `ffi/` not preceded by a path or word
         # character. Preserves the generated staging name src/ffi.
-        s{(^|[^/A-Za-z0-9_.])ffi/}{$1extractions/c/contracts/}g;
+        s{(^|[^/A-Za-z0-9_.])ffi/}{$1extractions/c/}g;
     ' "$f"
 done
 
@@ -151,7 +151,7 @@ perl -ni -e 'print unless /^CONTRACTS_DIR\s+:= extractions\/contracts$/' Makefil
 # entries prefixed f"ffi/{entry}", -Isrc/ffi in the emitted Makefile) is a
 # self-consistent internal naming scheme and stays as-is.
 perl -pi -e '
-    s{ROOT / "ffi"}{ROOT / "extractions/c/contracts"}g;
+    s{ROOT / "ffi"}{ROOT / "extractions/c"}g;
     s{"optimized/sources\.list"}{"optimised/sources.list"}g;
     s{"optimized/src"}{"optimised/src"}g;
     s{"optimized/include"}{"optimised/include"}g;
@@ -169,8 +169,8 @@ perl -pi -e '
 
 # Moved-tree docs that name the optimized/ subdir relative to the ffi root.
 perl -pi -e 's{optimized/}{optimised/}g' \
-    extractions/c/contracts/README.md \
-    extractions/c/contracts/spec/state_db.h
+    extractions/c/README.md \
+    extractions/c/spec/contract/state_db.h
 
 # --- verification ----------------------------------------------------------
 
@@ -200,10 +200,10 @@ fi
 grep -q 'src/ffi' tools/package_optimised_c.py \
     || { echo "package staging name src/ffi unexpectedly rewritten" >&2; fail=1; }
 [ ! -e ffi ] || { echo "ffi/ still exists" >&2; fail=1; }
-[ -f extractions/c/contracts/zkvm_accelerators.h ] || { echo "root contract header missing after move" >&2; fail=1; }
-[ -f extractions/c/contracts/zkvm_io.h ] || { echo "root contract header missing after move" >&2; fail=1; }
-[ -f extractions/c/contracts/zkvm_bigint.h ] || { echo "root contract header missing after move" >&2; fail=1; }
-[ -f extractions/c/contracts/optimised/sources.list ] || { echo "optimised manifest missing after move" >&2; fail=1; }
+[ -f extractions/c/zkvm_accelerators.h ] || { echo "root contract header missing after move" >&2; fail=1; }
+[ -f extractions/c/zkvm_io.h ] || { echo "root contract header missing after move" >&2; fail=1; }
+[ -f extractions/c/zkvm_bigint.h ] || { echo "root contract header missing after move" >&2; fail=1; }
+[ -f extractions/c/optimised/contract/sources.list ] || { echo "optimised manifest missing after move" >&2; fail=1; }
 [ "$fail" -eq 0 ] || die "verification failed; inspect the findings above before committing"
 
 # --- summary ---------------------------------------------------------------
@@ -211,10 +211,10 @@ grep -q 'src/ffi' tools/package_optimised_c.py \
 echo
 echo "== summary =="
 echo "moved:"
-echo "  ffi/                                 -> extractions/c/contracts/"
-echo "  ffi/optimized/                       -> extractions/c/contracts/optimised/"
-echo "  ffi/spec/                            -> extractions/c/contracts/spec/"
-echo "  ffi/zkvm_{accelerators,io,bigint}.h  -> extractions/c/contracts/"
+echo "  ffi/                                 -> extractions/c/"
+echo "  ffi/optimized/                       -> extractions/c/optimised/contract/"
+echo "  ffi/spec/                            -> extractions/c/spec/contract/"
+echo "  ffi/zkvm_{accelerators,io,bigint}.h  -> extractions/c/"
 echo "  extractions/contracts/ExternBoundary.v    -> extractions/coq/contract/"
 echo "  extractions/contracts/HostAxioms.lean     -> extractions/lean/contract/"
 echo "  extractions/contracts/Specialization.lean -> extractions/lean/contract/"

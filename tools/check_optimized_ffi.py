@@ -9,12 +9,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FFI_ROOT = ROOT / "ffi/optimized"
-SOURCE_ROOT = ROOT / "ffi/optimized/src"
-INCLUDE_ROOT = ROOT / "ffi/optimized/include"
+FFI_ROOT = ROOT / "extractions/c/optimised/contract"
+SOURCE_ROOT = ROOT / "extractions/c/optimised/contract/src"
+INCLUDE_ROOT = ROOT / "extractions/c/optimised/contract/include"
 PRELUDE = INCLUDE_ROOT / "evmsail/prelude.h"
 SAIL_ROOT = ROOT / "sail/optimised"
-MANIFEST = ROOT / "ffi/optimized/sources.list"
+MANIFEST = ROOT / "extractions/c/optimised/contract/sources.list"
 
 FORBIDDEN_CALLS = re.compile(
     r"\b(?:malloc|calloc|realloc|free|qsort|"

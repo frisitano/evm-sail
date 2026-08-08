@@ -77,7 +77,7 @@ misaligned load/store support, which spike provides via `--misaligned`. So the r
 
 ### IO interface (`io-interface` standard)
 
-`../ffi/zkvm_io.h` (the standard header) is implemented for the Spike validation
+`../extractions/c/zkvm_io.h` (the standard header) is implemented for the Spike validation
 target in `io-device/guest.c`:
 
 * `read_input(&buf, &size)` — loads the host-provided private input into guest
@@ -155,7 +155,7 @@ termination mapping).
 zkvm/
   build.sh              driver: guest | run | clean (VEC is runtime-only)
   zkvm_accel_mmio.h     spike MMIO wire protocol (accel_guest.c <-> accel_device.cc)
-  zkvm_io_mmio.h        spike-private transport behind ffi/zkvm_io.h
+  zkvm_io_mmio.h        spike-private transport behind extractions/c/zkvm_io.h
   accel-host/           Rust crypto cdylib (the ONE accelerator implementation)
   accel-device/         spike MMIO device dispatching 1:1 into accel-host
   io-device/            spike runtime-input device (host file -> guest buffer)
@@ -201,16 +201,16 @@ VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
   arbitrary-access witness reads.
 * **All crypto goes through the `c-interface-accelerators` standard.** keccak256, sha256,
   ripemd160, secp256k1, and the EVM precompiles share one boundary: the vendored standard
-  header `../ffi/zkvm_accelerators.h` (verbatim from eth-act/zkvm-standards). There is a
+  header `../extractions/c/zkvm_accelerators.h` (verbatim from eth-act/zkvm-standards). There is a
   SINGLE implementation — the Rust `accel-host` (`k256`/`sha3`/`p256`/…) — served as proven
   precompiles. Native links it directly; the spike guest offloads every op to the host
   accelerator device (`accel-device/accel_device.cc`, linked against the Rust lib), so no
   crypto runs as guest instructions. (The portable-C reference `zkvm_accelerators.c` has
   been removed.) Sail calls focused C adapters directly against that interface:
-  `../ffi/optimized/src/primitives/crypto.c` for segmented hash axioms,
-  `../ffi/optimized/src/lib/htr.c` for the optimized whole-request HTR refinement,
-  `../ffi/optimized/src/host/accelerators.c` for EVM precompile execution, and
-  `../ffi/optimized/src/host/output.c` for output ownership.
+  `../extractions/c/optimised/contract/src/primitives/crypto.c` for segmented hash axioms,
+  `../extractions/c/optimised/contract/src/lib/htr.c` for the optimized whole-request HTR refinement,
+  `../extractions/c/optimised/contract/src/host/accelerators.c` for EVM precompile execution, and
+  `../extractions/c/optimised/contract/src/host/output.c` for output ownership.
 * `start.S`/trap-vector use Zicsr (machine-mode CSRs) — these are **platform/crt0 glue**
   (a vendor responsibility under the memory-layout standard), not the proven STF, which
   stays pure `rv64im_zicclsm`.

@@ -1,4 +1,4 @@
-/* Spike validation transport behind the standard ffi/zkvm_io.h interface.
+/* Spike validation transport behind the standard extractions/c/zkvm_io.h interface.
  * Production zkVMs provide read_input/write_output directly. */
 #ifndef EVMSAIL_IO_MMIO_H
 #define EVMSAIL_IO_MMIO_H

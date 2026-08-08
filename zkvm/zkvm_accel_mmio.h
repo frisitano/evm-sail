@@ -4,7 +4,7 @@
  * arguments into a contiguous staging buffer and issuing one call to the
  * accel device (spike --extlib accel_device.so); the device unmarshals and
  * dispatches 1:1 into the SAME native zkvm_* implementations (the Rust
- * accel-host) that native builds link directly. ffi/ code therefore calls
+ * accel-host) that native builds link directly. extractions/c/ code therefore calls
  * the zkvm_accelerators.h API unconditionally -- the MMIO plumbing lives
  * entirely behind it (zkvm/runtime/accel_guest.c on the guest side).
  *

@@ -1,4 +1,4 @@
-/* ZisK provider for the ffi/zkvm_bigint.h 256-bit arithmetic contract.
+/* ZisK provider for the extractions/c/zkvm_bigint.h 256-bit arithmetic contract.
  *
  * The ziskos zisklib uint256 module (pinned v1.0.0-alpha) exports these
  * C-ABI wrappers over the arith256/arith256_mod syscalls; they link from the

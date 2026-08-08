@@ -4,7 +4,7 @@
  * zkvm/zkvm_accel_mmio.h and issues one MMIO call to the accel device, which
  * dispatches into the native Rust accel-host implementation. The crypto
  * itself never executes as guest instructions -- this file is pure argument
- * marshalling, so ffi/ code can call the accelerator API unconditionally on
+ * marshalling, so extractions/c/ code can call the accelerator API unconditionally on
  * both native and guest builds. */
 #include "zkvm_accelerators.h"
 #include "zkvm_accel_mmio.h"

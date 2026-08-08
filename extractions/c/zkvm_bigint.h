@@ -8,7 +8,7 @@
  * platforms provide a portable software implementation behind the unchanged
  * header.
  *
- * NOTE: this contract awaits AGENTS.md contract-list ratification. The ffi/
+ * NOTE: this contract awaits AGENTS.md contract-list ratification. The extractions/c/
  * root is documented as holding only the standardized zkvm_accelerators.h and
  * zkvm_io.h platform contracts; adding this header extends that list and
  * needs maintainer sign-off.

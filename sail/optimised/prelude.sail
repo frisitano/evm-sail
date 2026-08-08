@@ -51,7 +51,7 @@ function alu_exp(base : word, exponent : word) -> word =
 /*
  * Nonzero-divisor 256-bit division and modular arithmetic are closed
  * word-level operations executed by the platform bigint provider
- * (ffi/zkvm_bigint.h); on ZisK each costs an arith256 precompile call
+ * (extractions/c/zkvm_bigint.h); on ZisK each costs an arith256 precompile call
  * instead of a limb-level software routine. The EVM's zero-divisor rules
  * (DIV/MOD/SDIV/SMOD/ADDMOD/MULMOD yield 0) stay here in Sail, so the
  * provider's nonzero precondition always holds at the boundary.

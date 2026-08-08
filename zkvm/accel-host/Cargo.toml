@@ -1,5 +1,5 @@
 # Host-side implementation of the eth-act zkvm-standards crypto accelerators
-# (ffi/zkvm_accelerators.h), using the SAME industry crates execution clients
+# (extractions/c/zkvm_accelerators.h), using the SAME industry crates execution clients
 # (revm/reth) use. Compiled to a staticlib and linked on the native/host path
 # (the EEST runner, and a real zkVM host); the freestanding spike guest keeps the
 # C reference impl. Standalone workspace so the parent evm-asm workspace is

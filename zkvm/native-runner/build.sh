@@ -124,14 +124,14 @@ fi
 # sail256: GMP-free fixed-width Sail runtime, host-optimized (SF_RUNTIME overrides).
 SF="${SF_RUNTIME:-$ROOT/zkvm/runtime/sail256}"
 RT="$ROOT/zkvm/runtime"
-FFI_ROOT="$ROOT/ffi"
+FFI_ROOT="$ROOT/extractions/c"
 if [ "$EVM_BUILD_MODE" = standard ]; then
   MODEL_FFI="$FFI_ROOT/spec"
   MODEL_C_INCLUDE_FLAGS=(-I"$MODEL_FFI")
   MODEL_SOURCE="$BUILD/zkvm_block.c"
   MODEL_HEADER="zkvm_block.h"
 else
-  MODEL_FFI="$FFI_ROOT/optimized"
+  MODEL_FFI="$FFI_ROOT/optimised"
   MODEL_HEADER="$OPTIMIZED_PACKAGE/spec.h"
   MODEL_C_INCLUDE_FLAGS=(-I"$OPTIMIZED_GENERATED/include" -I"$OPTIMIZED_STAGED_FFI")
 fi

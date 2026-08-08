@@ -71,8 +71,8 @@ symbolic engines (the world is an explicit, finite interface).
 ### Native execution: C FFI backends
 
 To *run* the model, generated C links exactly one complete host backend.
-`ffi/spec/` implements the generated GMP-backed specification ABI;
-`ffi/optimized/` implements the production fixed-layout ABI and owns
+`extractions/c/spec/contract/` implements the generated GMP-backed specification ABI;
+`extractions/c/optimised/contract/` implements the production fixed-layout ABI and owns
 optimized-only high-level replacements. They independently provide EVM memory,
 nominal byte regions, output and scratch arenas, hashing and precompiles, the
 operand stack, account/storage state, and the content-addressed code arena plus
@@ -86,10 +86,10 @@ boundary (the account's cached codeHash), and the commitment boundary (state
 root, witness authentication).
 
 No private C implementation is shared between these models. Only the
-standardized `ffi/zkvm_accelerators.h` and `ffi/zkvm_io.h` platform contracts
-remain at the `ffi/` root. Shared protocol behavior belongs in Sail; the
+standardized `extractions/c/zkvm_accelerators.h` and `extractions/c/zkvm_io.h` platform contracts
+remain at the `extractions/c/` root. Shared protocol behavior belongs in Sail; the
 backend representations and useful optimization boundaries may diverge. See
-[`ffi/README.md`](ffi/README.md).
+[`extractions/c/README.md`](extractions/c/README.md).
 
 ## Performance
 
@@ -149,7 +149,7 @@ sail/        the specification (evm.sail_project defines the single build)
       codec.sail       hex-prefix/RLP node encoding and decoding
       updates.sail     ordered updates + canonical trie rebuilding
       trie.sail        witness overlay, roots + fail-closed lookup
-ffi/         C backends: memory.c (memory/nominal region access), scratch.c
+extractions/c/         C backends: memory.c (memory/nominal region access), scratch.c
              (Sail-cursor-owned executor scratch arena), transient_storage.c
              (transient storage), state_db.c (account and persistent storage
              cache/update maps plus distinct keyed EIP-7928 read/change tables
@@ -210,7 +210,7 @@ make extract                                # run maintained proof extractions
 `make c-optimised` uses Sail's optimized package/source-tree layout under
 `build/c-optimised/generated/`. Both are compile-checked against their matching
 complete backend. The optimized model is emitted without Sail name mangling,
-keeps generated headers and sources separate from `ffi/optimized/`, and maps
+keeps generated headers and sources separate from `extractions/c/optimised/contract/`, and maps
 the host slice records to the handwritten `evmsail/host/types.h` contract.
 Generated translation units mirror their paths below `sail/` and are compiled
 in the order recorded by the compiler in `src/spec/sources.list`; the single

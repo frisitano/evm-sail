@@ -61,7 +61,6 @@ PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
 EEST_CORPUS         ?= zkvm/.fixtures/current-v062-full
 EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-CONTRACTS_DIR       := extractions/contracts
 C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
 C_SPEC_SPECIALIZATION_LIMIT ?= 256
@@ -88,7 +87,7 @@ LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
 PYTHON_DIR          := extractions/python
 PYTHON_PACKAGE      := $(PYTHON_DIR)/evm
 PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
-PYTHON_HOST_CONTRACT := $(CONTRACTS_DIR)/HostContract.py
+PYTHON_HOST_CONTRACT := extractions/python/contract/HostContract.py
 PYTHON_CACHE_DIR    := $(abspath .agent-tmp/python-cache)
 SAIL_READABILITY_DIR := build/lint/sail-readability
 SAIL_READABILITY_SOURCE_LOG := $(SAIL_READABILITY_DIR)/source.log
@@ -103,15 +102,15 @@ SAIL_READABILITY_JSON_REPORT := $(SAIL_READABILITY_DIR)/report.json
 # which account for E741 and F841 respectively.
 PYTHON_RUFF_RULES   := E4,E7,E9,F
 PYTHON_RUFF_IGNORES := E741,F841
-LEAN_HOST_AXIOMS    := $(CONTRACTS_DIR)/HostAxioms.lean
-LEAN_SPECIALIZATION := $(CONTRACTS_DIR)/Specialization.lean
+LEAN_HOST_AXIOMS    := extractions/lean/contract/HostAxioms.lean
+LEAN_SPECIALIZATION := extractions/lean/contract/Specialization.lean
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
 C_SPEC_HEADERS      := sail_failure.h exceptions.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
-C_OPTIMIZED_INCLUDE_DIR := ffi/optimized/include
-C_OPTIMIZED_SOURCE_DIR  := ffi/optimized/src
+C_OPTIMIZED_INCLUDE_DIR := extractions/c/optimised/contract/include
+C_OPTIMIZED_SOURCE_DIR  := extractions/c/optimised/contract/src
 C_OPTIMIZED_EXTERNAL_TYPES_HEADER := evmsail/host/types.h
 C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
                               ScratchSliceFields \
@@ -148,7 +147,7 @@ C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve compute_state_root \
                         --c-preserve decode_stateless_input_ref
 SAIL_CONTRACTS      :=
-EXTERN_CONTRACT     := $(CONTRACTS_DIR)/ExternBoundary.v
+EXTERN_CONTRACT     := extractions/coq/contract/ExternBoundary.v
 # Installed Sail Python plugins are discovered automatically. Set this to the
 # in-tree sail_plugin_python.cmxs path when validating an uninstalled build.
 SAIL_PYTHON_PLUGIN  ?=
@@ -167,9 +166,9 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
                        --python-ethereum-fixed-bytes hash=Bytes32
 # Every Sail source owned by this repository, discovered rather than listed by
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
-SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
+SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -312,7 +311,7 @@ extract-coq: check-contracts
 
 # Both targets keep generated output in ignored build directories and
 # compile-check it against the matching complete backend. The optimized model
-# uses Sail's package/module layout; handwritten FFI remains under ffi/.
+# uses Sail's package/module layout; handwritten FFI remains under extractions/c/.
 # The Sail model, not generated C, is the readable source of truth.
 c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
@@ -326,9 +325,24 @@ c-spec:
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
 		$(CC) -O2 -w -Wno-error=implicit-function-declaration \
 			-DEVMSAIL_MODEL_H=\"evm.h\" \
-			$(GMP_CFLAGS) -I$(C_SPEC_BUILD_DIR) -I"$$sail_lib" -Iffi/spec -Iffi \
+			$(GMP_CFLAGS) -I$(C_SPEC_BUILD_DIR) -I"$$sail_lib" -Iextractions/c/spec/contract -Iextractions/c \
 			-c $(C_SPEC_MODEL).c -o $(C_SPEC_BUILD_DIR)/evm.o
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
+
+# Publish the generated C sources into each backend's src/ tree so the
+# extracted code is visible in the repository alongside its contract
+# implementation, matching the lean/coq/python target layout. Sources only:
+# object files, archives, and staging manifests stay in build/.
+publish-c-extraction: c-spec c-optimised
+	rm -rf extractions/c/spec/src extractions/c/optimised/src
+	mkdir -p extractions/c/spec/src
+	cp $(C_SPEC_MODEL).c $(C_SPEC_MODEL).h extractions/c/spec/src/
+	mkdir -p extractions/c/optimised/src
+	cd $(C_OPT_GENERATED_DIR) && find include src/spec -type f \
+		\( -name '*.c' -o -name '*.h' -o -name 'sources.list' \) \
+		-exec install -D {} $(CURDIR)/extractions/c/optimised/src/{} \\;
+	@echo "published: $$(find extractions/c/spec/src extractions/c/optimised/src -type f | wc -l | tr -d ' ') generated C files"
+
 
 c-optimised: check-optimized-ffi
 	rm -rf $(C_OPT_GENERATED_DIR)

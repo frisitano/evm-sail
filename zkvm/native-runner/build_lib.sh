@@ -26,7 +26,7 @@ BUILD="${NATIVE_BUILD:-$HERE/.build}"
 "$HERE/build.sh"
 
 CC="${CC:-cc}"
-ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/ffi"
+ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/extractions/c"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
 EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
 EVM_LTO="${EVM_LTO:-off}"

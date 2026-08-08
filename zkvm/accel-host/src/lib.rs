@@ -1,5 +1,5 @@
 //! Host-side reference implementation of the eth-act zkvm-standards crypto
-//! accelerators (`ffi/zkvm_accelerators.h`), backed by the same industry crates
+//! accelerators (`extractions/c/zkvm_accelerators.h`), backed by the same industry crates
 //! revm/reth use. Exposes the standard C ABI; a real zkVM host swaps in these (or
 //! its native precompiles) behind the unchanged header. Returns ZKVM_EOK(0) /
 //! ZKVM_EFAIL(-1). Pointers are caller-allocated and assumed valid (NULL panics
@@ -598,7 +598,7 @@ pub unsafe extern "C" fn zkvm_secp256k1_verify(
 
 /* ========================= 256-bit arithmetic ========================= */
 
-/// Host-side provider for the `ffi/zkvm_bigint.h` 256-bit arithmetic
+/// Host-side provider for the `extractions/c/zkvm_bigint.h` 256-bit arithmetic
 /// contract: unsigned divrem plus full-width (512-bit product / 257-bit sum)
 /// modular reduction. Operands are `[u64; 4]` limbs, least significant
 /// first. The zero-divisor EVM rules live in the Sail model, so a zero

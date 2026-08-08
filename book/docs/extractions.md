@@ -30,23 +30,17 @@ repository:
 
 | target | contract layer | generated output |
 | --- | --- | --- |
-| C (reference) | [`ffi/spec/`](https://github.com/frisitano/evm-sail/tree/main/ffi/spec) | built by `make c-spec` |
-| C (optimized) | [`ffi/optimized/`](https://github.com/frisitano/evm-sail/tree/main/ffi/optimized) | built by `make c-optimised` |
-| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/HostAxioms.lean) | [`extractions/lean/evm/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/evm) |
-| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/ExternBoundary.v) | [`extractions/coq/model/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/model) |
-| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/contracts/HostContract.py) | [`extractions/python/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python) |
+| C (reference) | [`extractions/c/spec/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/contract) | built by `make c-spec` |
+| C (optimized) | [`extractions/c/optimised/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/contract) | built by `make c-optimised` |
+| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/lean/contract/HostAxioms.lean) | [`extractions/lean/evm/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/evm) |
+| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) | [`extractions/coq/model/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/model) |
+| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) | [`extractions/python/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python) |
 
 The Sail source these are extracted from is
 [`sail/`](https://github.com/frisitano/evm-sail/tree/main/sail); the
 optimized C refinements applied on top of it are
 [`sail/optimised/`](https://github.com/frisitano/evm-sail/tree/main/sail/optimised).
 
-*This layout is being reorganized: the C backends move to
-`extractions/c/contracts/{spec,optimised}` and each proof target gains its
-own `contract/` and committed `src/` directories
-(`extractions/{lean,coq,python}/…`), making every target — C included —
-the same shape: an axiom interface plus generated output. This page's
-links will follow the move.*
 
 ## What the axioms are
 

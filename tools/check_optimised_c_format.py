@@ -60,8 +60,8 @@ def optimized_files(generated: Path, scope: str) -> list[tuple[Path, str]]:
         )
 
     if scope in ("all", "ffi"):
-        ffi_source = ROOT / "ffi/optimized/src"
-        ffi_manifest = ROOT / "ffi/optimized/sources.list"
+        ffi_source = ROOT / "extractions/c/optimised/contract/src"
+        ffi_manifest = ROOT / "extractions/c/optimised/contract/sources.list"
         files.extend(
             (path, "optimized FFI")
             for path in manifest_paths(ffi_manifest, ffi_source)
@@ -72,7 +72,7 @@ def optimized_files(generated: Path, scope: str) -> list[tuple[Path, str]]:
         )
         files.extend(
             (path, "optimized FFI")
-            for path in sorted((ROOT / "ffi/optimized/include").rglob("*.h"))
+            for path in sorted((ROOT / "extractions/c/optimised/contract/include").rglob("*.h"))
         )
 
     deduplicated: dict[Path, str] = {}

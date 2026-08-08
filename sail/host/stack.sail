@@ -4,7 +4,7 @@
 
 The per-frame EVM operand stack (YP §9.1, μ_s): up to 1024 words, LIFO.
 The words live behind the host interface (the corresponding `stack.c` in
-`ffi/spec/` or `ffi/optimized/`) as per-frame flat arrays for O(1) access;
+`extractions/c/spec/contract/` or `extractions/c/optimised/contract/`) as per-frame flat arrays for O(1) access;
 proof targets see the `val`s as bodyless axioms over an abstract per-frame
 list-of-words model.
 

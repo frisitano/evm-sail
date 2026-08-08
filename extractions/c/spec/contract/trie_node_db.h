@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* C-backed witness node-db (ffi/trie_node_db.c): keccak(node) -> (offset, len)
+/* C-backed witness node-db (extractions/c/trie_node_db.c): keccak(node) -> (offset, len)
  * span into the SSZ witness buffer (ssz_src). Replaces the Sail assoc-list +
  * linear node_db_lookup, which made re-rooting / lookups O(N^2) (a linear scan
  * per child reference, plus the whole list deep-copied through every recursive

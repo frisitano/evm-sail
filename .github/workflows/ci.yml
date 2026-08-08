@@ -2,8 +2,8 @@
 # model checks, C boundary audits and clang policies, the Coq/Lean/Python
 # extraction targets, and the handwritten Python tooling.
 #
-# All steps are make-target-based so the planned ffi/ ->
-# extractions/c/contracts restructure does not touch this workflow.
+# All steps are make-target-based so the extractions layout can move
+# extractions/c restructure does not touch this workflow.
 #
 # Toolchain gating: jobs marked with `vars.EVM_SAIL_TOOLCHAIN_READY` need the
 # repository's CUSTOM Sail compiler (zkvm/resolve_optimized_sail.sh; upstream

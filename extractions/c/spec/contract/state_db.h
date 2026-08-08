@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 /* Generated account/storage adapters implemented by spec/state.c or
- * optimized/state.c. The Sail
+ * optimised/state.c. The Sail
  * operations already live in host/state.sail; these declarations only fix the
  * generated C calling convention for aggregate arguments and results. */
 struct zStorageTxLookup;

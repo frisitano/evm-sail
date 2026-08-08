@@ -60,7 +60,7 @@ u256 address_to_word(bytes20 bytes)
 }
 
 /* Nonzero-divisor division and modular arithmetic cross to the platform
- * bigint provider (ffi/zkvm_bigint.h). u256 limbs and the contract's limb
+ * bigint provider (extractions/c/zkvm_bigint.h). u256 limbs and the contract's limb
  * arrays are both least-significant first, so operands pass through
  * directly. Sail has already rejected zero divisors/moduli. */
 u256 word_div_nonzero(u256 a, u256 b)

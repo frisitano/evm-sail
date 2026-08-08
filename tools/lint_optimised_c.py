@@ -155,7 +155,7 @@ def finding_owner(finding: Finding) -> str:
         return "optimized FFI"
     if finding.path.startswith("build/c-optimised/generated/"):
         return "generated compiler output"
-    if finding.path.startswith("ffi/optimized/"):
+    if finding.path.startswith("extractions/c/optimised/contract/"):
         return "optimized FFI"
     return "included runtime/support code"
 
@@ -266,8 +266,8 @@ def main() -> int:
         ffi_manifest = packaged_ffi_manifest
         packaged = True
     else:
-        ffi_source = ROOT / "ffi/optimized/src"
-        ffi_manifest = ROOT / "ffi/optimized/sources.list"
+        ffi_source = ROOT / "extractions/c/optimised/contract/src"
+        ffi_manifest = ROOT / "extractions/c/optimised/contract/sources.list"
         packaged = False
     if not generated_manifest.is_file():
         print(f"optimized C lint: missing generated manifest: {generated_manifest}")
@@ -314,8 +314,8 @@ def main() -> int:
                 f"-I{ROOT / 'zkvm/runtime/sail256'}",
                 f"-I{ROOT / 'zkvm/runtime'}",
                 f"-I{sail_lib}",
-                f"-I{ROOT / 'ffi/optimized/include'}",
-                f"-I{ROOT / 'ffi'}",
+                f"-I{ROOT / 'extractions/c/optimised/contract/include'}",
+                f"-I{ROOT / 'extractions/c'}",
             ]
         )
     focused_warnings = [

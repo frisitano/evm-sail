@@ -1,4 +1,4 @@
-/* Portable software provider for the ffi/zkvm_bigint.h 256-bit arithmetic
+/* Portable software provider for the extractions/c/zkvm_bigint.h 256-bit arithmetic
  * contract: Knuth Algorithm D division over 64-bit limbs plus full-width
  * (512-bit product / 257-bit sum) modular reduction.
  *
