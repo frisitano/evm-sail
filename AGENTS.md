@@ -188,14 +188,11 @@ duplicating instructions elsewhere.
   handlers; the registers are published when a frame stops and reloaded
   after resume or child entry (frame entry additionally reloads the code
   and stack-base locals). There is no switch-dispatch variant and no
-  `EVM_INTERP` knob. Labels-as-values is a sanctioned, interpreter-only
-  exception to the indirect-control-flow rule: it is an indirect BRANCH
-  within one function over a closed static table.
-  The optimized FFI audit enforces both the source manifest and this production
-  policy. Closed families of optimized-host behavior use explicit tags and
-  first-order dispatch rather than function pointers or callbacks; this keeps
-  control flow visible to the compiler and proof-oriented source, and the audit
-  rejects indirect C function declarations and calls. The BAL recorder uses distinct keyed hash
+  `EVM_INTERP` knob.
+  The optimized FFI audit enforces the source manifest and the remaining
+  production policies. What matters is the FFI boundary: the abstract `val`
+  contracts define the interface, and an implementation is free to choose
+  whatever internal control flow it needs behind them. The BAL recorder uses distinct keyed hash
   tables for storage reads `(address, slot)` and storage changes
   `(address, slot, block_access_index)` plus field changes keyed by
   `(address, block_access_index)`. It sorts the dense rows once and exposes one

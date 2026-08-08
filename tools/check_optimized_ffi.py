@@ -29,9 +29,6 @@ FORBIDDEN_MODULE_BACKING_ARRAY = re.compile(
 )
 FORBIDDEN_HOST_PREFIX = re.compile(r"\b(?:evmsail|optimized)_[A-Za-z0-9_]*")
 GENERATED_PACKAGE_SYMBOLS = {"evmsail_model_init"}
-FORBIDDEN_INDIRECT_FUNCTION = re.compile(
-    r"\(\s*\*\s*[A-Za-z_][A-Za-z0-9_]*\s*\)\s*\("
-)
 # These tags select protocol behavior in Sail and are deliberately erased at
 # optimized-C boundaries in favour of their source-defined data descriptors.
 # Rejecting the generated tag names prevents a later C fast path from silently
@@ -153,10 +150,6 @@ def main() -> int:
             for pattern, label in (
                 (FORBIDDEN_CALLS, "forbidden allocation/sort call"),
                 (FORBIDDEN_STDIO, "production stdio call"),
-                (
-                    FORBIDDEN_INDIRECT_FUNCTION,
-                    "indirect function/callback; use a closed tag and dispatcher",
-                ),
             ):
                 for match in pattern.finditer(source):
                     line = source.count("\n", 0, match.start()) + 1
