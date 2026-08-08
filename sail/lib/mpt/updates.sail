@@ -4,6 +4,16 @@
 
 Ordered leaf updates, their structural items, and the recursive assembly that
 recomposes canonical nodes (YP Appendix D).
+
+An account update carries its account's post-state storage root, so pulling
+one account update runs this same builder one trie level down and the cursor,
+the source pull, and the builder form a single recursive group. Every member
+of that group declares the same constant termination measure, 1024, which
+bounds the nested call depth of a complete state-root computation: at most two
+trie levels, each at most 65 nibble depths deep, each depth reached through at
+most four nested builder calls, plus the constant pull chain that opens the
+nested level. The measure is a proof-obligation budget only; it is erased from
+the executable backends.
 */
 /*! A pending change at a trie key: a put of new leaf bytes, or a
     delete. */
@@ -69,6 +79,7 @@ function trie_updates_begin(source : TrieUpdateSource) -> TrieUpdateCursor = {
         if first.available then UpdateUnderPrefix(first.update.key) else UpdateSourceExhausted();
     struct { source = source, current = first.update, relation = relation }
 }
+termination_measure trie_updates_begin(source) = 1024
 
 /*! Whether the pull cursor has reached the end of its source. */
 function updates_empty(updates : TrieUpdateCursor) -> bool =
@@ -102,6 +113,7 @@ function trie_updates_pop(updates : TrieUpdateCursor) -> (TrieUpdate, TrieUpdate
             (current, next)
         },
     }
+termination_measure trie_updates_pop(updates) = 1024
 
 /*! Reinterprets an already-loaded successor at an ancestor prefix. No source
     item is fetched and no prefix scan is repeated: the adjacent-key common

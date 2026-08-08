@@ -478,6 +478,7 @@ function trie_root_cursor(base_root : hash, updates : TrieUpdateCursor) -> TrieR
         }
     }
 }
+termination_measure trie_root_cursor(base_root, updates) = 1024
 
 /*! The root of the trie after pulling and applying the source's ordered
     updates. The source's host iterator must be opened by its owner first. */

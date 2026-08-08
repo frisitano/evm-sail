@@ -121,6 +121,7 @@ function account_trie_update(trie_entry : AcctTrieEntry) -> (TrieUpdate, bool) =
     let persisted_account_changed = account_value_changed(entry.value);
     (update, persisted_account_changed | storage_changed)
 }
+termination_measure account_trie_update(trie_entry) = 1024
 
 /*! Pulls the next net-changed account update for the protocol state-root path.
     The host excludes read-only candidates; Sail skips reverted/no-op writes. */
@@ -142,6 +143,7 @@ function next_changed_account_trie_update() -> TrieUpdateFetch = {
     };
     result
 }
+termination_measure next_changed_account_trie_update() = 1024
 
 /*! State-backed implementation of the generic trie's pull-source contract. */
 function trie_update_source_next(source : TrieUpdateSource) -> TrieUpdateFetch =
@@ -149,6 +151,7 @@ function trie_update_source_next(source : TrieUpdateSource) -> TrieUpdateFetch =
         StorageTrieUpdates(addr) => next_storage_trie_update(addr),
         ChangedAccountTrieUpdates() => next_changed_account_trie_update(),
     }
+termination_measure trie_update_source_next(source) = 1024
 
 /*! The post-state root: traverses every changed account in the kernel's
     block-level overlay, recomputes each touched account's storage root
