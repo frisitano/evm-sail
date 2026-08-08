@@ -174,11 +174,6 @@ if [ "$PLATFORM" = zisk ]; then
     CFLAGS+=(-DEVMSAIL_DEBUG)
   fi
 fi
-# EVM_INTERP=threaded selects the computed-goto interpreter dispatch
-# experiment in the optimized backend; default keeps the switch dispatch.
-if [ "${EVM_INTERP:-switch}" = threaded ]; then
-  CFLAGS+=(-DEVMSAIL_INTERP_THREADED)
-fi
 # EVM_LTO=on compiles every C object as LTO bitcode; cmd_zisk_lib then runs
 # the link-time optimization in a gcc partial link so the final Rust link
 # consumes one ordinary machine-code object (rust-lld cannot read GIMPLE).
@@ -483,7 +478,10 @@ cmd_zisk_lib() {
     if [ "$EVM_DEBUG" = on ]; then
       lto_roots+=(-Wl,-u,zisk_report_debug)
     fi
-    "$GCC" "${CFLAGS[@]}" -r -nostdlib "${lto_roots[@]}" \
+    # -O3 at the LTO partial link raises the inline budget so the host stack
+    # and word primitives fold into the interpreter's dispatch arms; code
+    # size is not a guest cost.
+    "$GCC" "${CFLAGS[@]}" -O3 -r -nostdlib "${lto_roots[@]}" \
         "$BUILD/runtime.o" "$BUILD/harness.o" "$BUILD/zisk_platform.o" \
         "$BUILD/zisk_bigint.o" "$BUILD/sail.o" \
         "${MODEL_BACKEND_OBJS[@]}" \

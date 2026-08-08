@@ -6,9 +6,13 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 BUILD="${ZKVM_BUILD:-$ROOT/zkvm/build-zisk}"
 COMMAND="${1:-guest}"
 TARGET="riscv64ima-zisk-zkvm-elf"
-PACKAGE="stateless-validator-evm-sail-zisk"
 TOOLCHAIN="${ZISK_TOOLCHAIN:-zisk}"
 
+# The ZisK guest is linked directly by the C toolchain: gcc links the C entry
+# (main.c), the evmsail archive, and the prebuilt ziskos static library
+# through link_main.ld. There is no Rust-driven final link. Cargo.toml and
+# Cargo.lock remain solely as the pinned ziskos version source; the harness
+# checks the ziskemu version against that lock.
 build_guest() {
     mkdir -p "$BUILD"
     BUILD="$(cd "$BUILD" && pwd)"
@@ -16,43 +20,8 @@ build_guest() {
     ZKVM_PLATFORM=zisk ZKVM_BUILD="$BUILD" \
         bash "$ROOT/zkvm/build.sh" zisk-lib
 
-    local sysroot rustc rustflags
-    sysroot="$(RUSTUP_TOOLCHAIN="$TOOLCHAIN" rustc --print sysroot)"
-    rustc="$sysroot/bin/rustc"
-    rustflags="${RUSTFLAGS:-}"
-    if [ -n "$rustflags" ]; then
-        rustflags="$rustflags "
-    fi
-    # LLD's RISC-V relaxation rewrites some canonical .rodata/.bss inputs into
-    # orphan .srodata/.sbss output sections. ZisK rejects the resulting
-    # overlapping load ranges, so keep the final Rust link unrelaxed just as
-    # the C compilation already is.
-    rustflags="${rustflags}-C link-arg=--no-relax"
-
-    EVMSAIL_ZISK_LIB_DIR="$BUILD" \
-    EVMSAIL_ZISK_DEBUG="${EVM_DEBUG:-off}" \
-    CARGO_TARGET_DIR="$BUILD/cargo-target" \
-    RUSTC="$rustc" \
-    RUSTFLAGS="$rustflags" \
-        cargo build \
-            --manifest-path "$HERE/Cargo.toml" \
-            --target "$TARGET" \
-            --release
-
-    cp "$BUILD/cargo-target/$TARGET/release/$PACKAGE" \
-        "$BUILD/stateless-validator-evm-sail-zisk.elf"
-    echo "built $BUILD/stateless-validator-evm-sail-zisk.elf"
-}
-
-build_guest_c() {
-    mkdir -p "$BUILD"
-    BUILD="$(cd "$BUILD" && pwd)"
-
-    ZKVM_PLATFORM=zisk ZKVM_BUILD="$BUILD" \
-        bash "$ROOT/zkvm/build.sh" zisk-lib
-
     # ziskos as a plain static library: entry point, io, DMA memory ops, and
-    # the accelerator crypto, linkable without the Rust bin crate. Built once
+    # the accelerator crypto, linkable without any Rust bin crate. Built once
     # from the pinned checkout and cached beside the other build artifacts.
     local ziskos_lib="$BUILD/libziskos.a"
     if [ ! -f "$ziskos_lib" ]; then
@@ -90,7 +59,6 @@ build_guest_c() {
 
 case "$COMMAND" in
     guest) build_guest ;;
-    guest-c) build_guest_c ;;
     clean) rm -rf "$BUILD" ;;
-    *) echo "usage: $0 {guest|guest-c|clean}" >&2; exit 2 ;;
+    *) echo "usage: $0 {guest|clean}" >&2; exit 2 ;;
 esac

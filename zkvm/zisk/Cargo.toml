@@ -4,7 +4,6 @@
 name = "stateless-validator-evm-sail-zisk"
 version = "0.1.0"
 edition = "2024"
-build = "build.rs"
 
 [dependencies]
 ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.13.0", default-features = false, features = [
