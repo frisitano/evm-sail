@@ -251,29 +251,41 @@ rejecting indirect C calls outright.
 
 ## Refinement obligations fall out of the lowering
 
-Specialization makes representation choices — this `range` becomes a
-`uint16_t`, this conversion is safe because of that bound — and those
-choices are exactly the things a sceptic should not have to take on
-trust. So the compiler can emit them as **machine-checkable obligations**
-rather than leaving them implicit in generated C.
+Specialization does not guess at representations. When it lowers a
+`range`-typed value to a `uint16_t`, or elides a narrowing check, it
+states the corresponding side condition and **discharges it with Z3**
+during compilation — the build log's `C semantic proof: primitive=… 
+intervals=[0..1024,1..1] … proofs=3` lines are those obligations being
+proved, not annotations being trusted. A condition that will not
+discharge is a compile error, not a silent widening. Solver queries are
+memoized in a repo-local cache, so the proofs are re-checked on every
+build rather than recorded once and assumed thereafter.
 
-`--c-specialization-plan` writes a versioned, backend-neutral record of
-every lowering decision: the source identity, the semantic and represented
-signatures, the inferred bounds, each conversion, each call edge, and each
-obligation. Identities are domain-separated digests of *semantic* content —
-the Sail name, signature, source span, represented signature, normalized
-bounds — deliberately excluding generated JIB names, C mangling, and
-display order, so the plan is stable under things like `--c-no-mangle` and
-can never be read as a reference to a compiler-internal symbol.
+That leaves one question worth asking: why believe the compiler's own
+solver run? So the same obligations can be **exported for independent
+re-checking**. `--c-specialization-plan` writes a versioned,
+backend-neutral record of every lowering decision — source identity,
+semantic and represented signatures, inferred bounds, conversions, call
+edges, obligations — and
+`--c-specialization-obligations-lean` / `-coq` emit those obligations as
+proof-assistant input, so a proof assistant can re-derive the same facts
+without relying on the compiler having done so correctly.
 
-`--c-specialization-obligations-lean` and `-coq` then emit those
-obligations directly as proof-assistant input, so an independent checker
-can reconstruct what the compiler assumed **without trusting the compiler**.
-Paired with `--c-narrowing`, which records whether each narrowing was
-proved or taken on trust, the result is an auditable list: here is every
-place the machine representation depends on a bound, and here is which
-ones carry a proof. The human-readable report exists too, and is
-explicitly non-normative — the JSON schema is the contract.
+The identities in that plan are domain-separated digests of *semantic*
+content — the Sail name, signature, source span, represented signature,
+normalized bounds — deliberately excluding generated JIB names, C name
+mangling, and display order. The plan therefore does not change under
+`--c-no-mangle`, and no obligation can be read as a reference to a
+compiler-internal symbol. The human-readable report exists as well and is
+explicitly non-normative; the JSON schema is the contract.
+
+The one place where trust rather than proof is possible is narrowing
+policy. `--c-narrowing=proven` elides a check only where the bound was
+discharged and checks everything else; `checked` validates every
+narrowing at runtime; `all` projects unconditionally. Conversions taken
+under `all` are recorded in the plan as explicit `unchecked_narrowing`
+assumptions — so even the untrusted case is enumerated rather than
+invisible.
 
 ## Tooling around the extraction
 
