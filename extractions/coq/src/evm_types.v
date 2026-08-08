@@ -842,6 +842,41 @@ Instance dummy_stack_index : Inhabited (stack_index) := {
 Definition stack_index_valid (x : stack_index) : Prop :=
 0 <= x.(stack_index_value) /\ x.(stack_index_value) <= 1023.
 
+Definition StackTop : Type := bits 64.
+
+Record stack_slot_count := { stack_slot_count_value : Z; }.
+Arguments stack_slot_count : clear implicits.
+#[export]
+Instance Decidable_eq_stack_slot_count : EqDecision stack_slot_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_stack_slot_count : Countable stack_slot_count.
+refine {|
+  encode x := encode (stack_slot_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_stack_slot_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'stack_slot_count_value' := e ]}" :=
+  {| stack_slot_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_stack_slot_count : Inhabited (stack_slot_count) := {
+  inhabitant := {| stack_slot_count_value := inhabitant
+|} }.
+
+
+Definition stack_slot_count_valid (x : stack_slot_count) : Prop :=
+0 <= x.(stack_slot_count_value) /\ x.(stack_slot_count_value) <= 1024.
+
 Record stack_operation_index := { stack_operation_index_value : Z; }.
 Arguments stack_operation_index : clear implicits.
 #[export]
@@ -5342,6 +5377,82 @@ Instance dummy_transaction_item_count : Inhabited (transaction_item_count) := {
 Definition transaction_item_count_valid (x : transaction_item_count) : Prop :=
 0 <= x.(transaction_item_count_value) /\ x.(transaction_item_count_value) <= (2 ^ 30).
 
+Definition prepared_authorization_count_bound : Z := (e_div eip7825_transaction_gas_limit 7816).
+#[export] Hint Unfold prepared_authorization_count_bound : sail.
+
+Record prepared_authorization_count := { prepared_authorization_count_value : Z; }.
+Arguments prepared_authorization_count : clear implicits.
+#[export]
+Instance Decidable_eq_prepared_authorization_count : EqDecision prepared_authorization_count.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_prepared_authorization_count : Countable prepared_authorization_count.
+refine {|
+  encode x := encode (prepared_authorization_count_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_prepared_authorization_count x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'prepared_authorization_count_value' := e ]}" :=
+  {| prepared_authorization_count_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_prepared_authorization_count : Inhabited (prepared_authorization_count) := {
+  inhabitant := {| prepared_authorization_count_value := inhabitant
+|} }.
+
+
+Definition prepared_authorization_count_valid (x : prepared_authorization_count) : Prop :=
+0 <= x.(prepared_authorization_count_value) /\ x.(prepared_authorization_count_value) <= (e_div (2 ^ 24) 7816).
+
+Record PreparedAuthorizationList := {
+  PreparedAuthorizationList_entries : list Authorization;
+  PreparedAuthorizationList_count : prepared_authorization_count;
+}.
+Arguments PreparedAuthorizationList : clear implicits.
+#[export]
+Instance Decidable_eq_PreparedAuthorizationList : EqDecision PreparedAuthorizationList.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_PreparedAuthorizationList : Countable PreparedAuthorizationList.
+refine {|
+  encode x := encode (PreparedAuthorizationList_entries x, PreparedAuthorizationList_count x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_PreparedAuthorizationList x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'PreparedAuthorizationList_entries' := e ]}" :=
+  match r with Build_PreparedAuthorizationList _ (_ as f1) =>
+    Build_PreparedAuthorizationList e f1 end (at level 1).
+Notation "{[ r 'with' 'PreparedAuthorizationList_count' := e ]}" :=
+  match r with Build_PreparedAuthorizationList (_ as f0) _ =>
+    Build_PreparedAuthorizationList f0 e end (at level 1).
+#[export]
+Instance dummy_PreparedAuthorizationList : Inhabited (PreparedAuthorizationList) := {
+  inhabitant := {|
+    PreparedAuthorizationList_entries := inhabitant;
+    PreparedAuthorizationList_count := inhabitant
+|} }.
+
+
 Record AccessListRef := {
   AccessListRef_encoded : StatelessInputSlice;
   AccessListRef_address_count : transaction_item_count;
@@ -6866,6 +6977,7 @@ Instance dummy_Message : Inhabited (Message) := {
 Record FrameCheckpoint := {
   FrameCheckpoint_pc : code_pointer;
   FrameCheckpoint_gas_remaining : gas_typ;
+  FrameCheckpoint_stack_top : StackTop;
   FrameCheckpoint_state_gas_remaining : gas_typ;
   FrameCheckpoint_state_gas_spilled : state_gas_spill;
   FrameCheckpoint_refund : gas_refund;
@@ -6879,8 +6991,8 @@ Record FrameCheckpoint := {
 Arguments FrameCheckpoint : clear implicits.
 #[export]
 Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10].
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -6892,59 +7004,64 @@ Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
   cmp_record_field x8 y8.
   cmp_record_field x9 y9.
   cmp_record_field x10 y10.
+  cmp_record_field x11 y11.
 left; subst; reflexivity.
 Defined.
 #[export]
 Instance Countable_FrameCheckpoint : Countable FrameCheckpoint.
 refine {|
-  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_call_depth x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) ← decode x;
-              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10)
+  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_stack_top x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_call_depth x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11) ← decode x;
+              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10];
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
 Notation "{[ r 'with' 'FrameCheckpoint_pc' := e ]}" :=
-  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+Notation "{[ r 'with' 'FrameCheckpoint_stack_top' := e ]}" :=
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_spilled' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_refund' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_status' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_message' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_call_depth' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_code' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_calldata' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_memory' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e end (at level 1).
 #[export]
 Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
   inhabitant := {|
     FrameCheckpoint_pc := inhabitant;
     FrameCheckpoint_gas_remaining := inhabitant;
+    FrameCheckpoint_stack_top := inhabitant;
     FrameCheckpoint_state_gas_remaining := inhabitant;
     FrameCheckpoint_state_gas_spilled := inhabitant;
     FrameCheckpoint_refund := inhabitant;
@@ -11219,6 +11336,61 @@ Instance Countable_register_ScratchSlice : Countable register_ScratchSlice. refi
   reflexivity.
 Defined.
 
+Variant register_StackTop :=
+  | stack_top
+.
+
+Definition num_of_register_StackTop (r : register_StackTop) : Z :=
+  match r with
+  | stack_top => 0
+  end.
+Definition register_StackTop_of_num (i : Z) : register_StackTop :=
+  match i with
+  | 0 => stack_top
+  | _ => stack_top
+  end.
+Lemma register_StackTop_num_of_roundtrip (x : register_StackTop) : register_StackTop_of_num (num_of_register_StackTop x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_register_StackTop_injective (x y : register_StackTop) : num_of_register_StackTop x = num_of_register_StackTop y -> x = y.
+  intro.
+  rewrite <- (register_StackTop_num_of_roundtrip x).
+  rewrite <- (register_StackTop_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition register_StackTop_eq_dec (x y : register_StackTop) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_register_StackTop x) (num_of_register_StackTop y) with
+  | left e => left (num_of_register_StackTop_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition register_StackTop_beq (x y : register_StackTop) : bool :=
+  Z.eqb (num_of_register_StackTop x) (num_of_register_StackTop y).
+Lemma register_StackTop_beq_iff x y : register_StackTop_beq x y = true <-> x = y.
+  unfold register_StackTop_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_register_StackTop_injective | congruence].
+Qed.
+Lemma register_StackTop_beq_refl x : register_StackTop_beq x x = true.
+apply register_StackTop_beq_iff; reflexivity.
+Qed.
+Hint Rewrite register_StackTop_beq_iff : register_beq_iffs.
+Hint Rewrite register_StackTop_beq_refl : register_beq_refls.
+Definition register_StackTop_list : list (string * register_StackTop) := [
+  ("stack_top", stack_top)
+].
+
+Instance Decidable_eq_register_StackTop : EqDecision register_StackTop := register_StackTop_eq_dec.
+Instance Countable_register_StackTop : Countable register_StackTop. refine {|
+  encode x := encode (num_of_register_StackTop x);
+  decode x := register_StackTop_of_num <$> decode x
+|}.
+  intro s; rewrite decode_encode; simpl.
+  rewrite register_StackTop_num_of_roundtrip.
+  reflexivity.
+Defined.
+
 Variant register_TxEnv :=
   | k_tx
 .
@@ -11784,6 +11956,7 @@ Variant register : Type :=
   | R_Message :> register_Message -> register
   | R_OutputSlice :> register_OutputSlice -> register
   | R_ScratchSlice :> register_ScratchSlice -> register
+  | R_StackTop :> register_StackTop -> register
   | R_TxEnv :> register_TxEnv -> register
   | R_ancestor_hash_count :> register_ancestor_hash_count -> register
   | R_block_access_index :> register_block_access_index -> register
@@ -11807,6 +11980,7 @@ Definition type_of_register (r : register) : Type :=
   | R_Message _ => Message
   | R_OutputSlice _ => OutputSlice
   | R_ScratchSlice _ => ScratchSlice
+  | R_StackTop _ => StackTop
   | R_TxEnv _ => TxEnv
   | R_ancestor_hash_count _ => ancestor_hash_count
   | R_block_access_index _ => block_access_index
@@ -11830,16 +12004,17 @@ Definition type_of_register (r : register) : Type :=
     | R_Message r => encode (6, encode r)
     | R_OutputSlice r => encode (7, encode r)
     | R_ScratchSlice r => encode (8, encode r)
-    | R_TxEnv r => encode (9, encode r)
-    | R_ancestor_hash_count r => encode (10, encode r)
-    | R_block_access_index r => encode (11, encode r)
-    | R_chain_identifier r => encode (12, encode r)
-    | R_code_pointer r => encode (13, encode r)
-    | R_frame_depth r => encode (14, encode r)
-    | R_gas r => encode (15, encode r)
-    | R_gas_refund r => encode (16, encode r)
-    | R_hash r => encode (17, encode r)
-    | R_state_gas_spill r => encode (18, encode r)
+    | R_StackTop r => encode (9, encode r)
+    | R_TxEnv r => encode (10, encode r)
+    | R_ancestor_hash_count r => encode (11, encode r)
+    | R_block_access_index r => encode (12, encode r)
+    | R_chain_identifier r => encode (13, encode r)
+    | R_code_pointer r => encode (14, encode r)
+    | R_frame_depth r => encode (15, encode r)
+    | R_gas r => encode (16, encode r)
+    | R_gas_refund r => encode (17, encode r)
+    | R_hash r => encode (18, encode r)
+    | R_state_gas_spill r => encode (19, encode r)
     end.
   Definition register_decode (x : positive) : option register :=
     match decode x with
@@ -11852,16 +12027,17 @@ Definition type_of_register (r : register) : Type :=
     | Some (6, y) => r ← decode y; mret (R_Message r)
     | Some (7, y) => r ← decode y; mret (R_OutputSlice r)
     | Some (8, y) => r ← decode y; mret (R_ScratchSlice r)
-    | Some (9, y) => r ← decode y; mret (R_TxEnv r)
-    | Some (10, y) => r ← decode y; mret (R_ancestor_hash_count r)
-    | Some (11, y) => r ← decode y; mret (R_block_access_index r)
-    | Some (12, y) => r ← decode y; mret (R_chain_identifier r)
-    | Some (13, y) => r ← decode y; mret (R_code_pointer r)
-    | Some (14, y) => r ← decode y; mret (R_frame_depth r)
-    | Some (15, y) => r ← decode y; mret (R_gas r)
-    | Some (16, y) => r ← decode y; mret (R_gas_refund r)
-    | Some (17, y) => r ← decode y; mret (R_hash r)
-    | Some (18, y) => r ← decode y; mret (R_state_gas_spill r)
+    | Some (9, y) => r ← decode y; mret (R_StackTop r)
+    | Some (10, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (11, y) => r ← decode y; mret (R_ancestor_hash_count r)
+    | Some (12, y) => r ← decode y; mret (R_block_access_index r)
+    | Some (13, y) => r ← decode y; mret (R_chain_identifier r)
+    | Some (14, y) => r ← decode y; mret (R_code_pointer r)
+    | Some (15, y) => r ← decode y; mret (R_frame_depth r)
+    | Some (16, y) => r ← decode y; mret (R_gas r)
+    | Some (17, y) => r ← decode y; mret (R_gas_refund r)
+    | Some (18, y) => r ← decode y; mret (R_hash r)
+    | Some (19, y) => r ← decode y; mret (R_state_gas_spill r)
     | _ => None
     end.
   Lemma register_decode_encode r : register_decode (register_encode r) = Some r.
@@ -11904,6 +12080,7 @@ refine (
   | R_Message r, R_Message r' => fun _ x => x
   | R_OutputSlice r, R_OutputSlice r' => fun _ x => x
   | R_ScratchSlice r, R_ScratchSlice r' => fun _ x => x
+  | R_StackTop r, R_StackTop r' => fun _ x => x
   | R_TxEnv r, R_TxEnv r' => fun _ x => x
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun _ x => x
   | R_block_access_index r, R_block_access_index r' => fun _ x => x
@@ -11940,6 +12117,7 @@ Definition register_beq (r r' : register) : bool :=
   | R_Message r, R_Message r' => register_Message_beq r r'
   | R_OutputSlice r, R_OutputSlice r' => register_OutputSlice_beq r r'
   | R_ScratchSlice r, R_ScratchSlice r' => register_ScratchSlice_beq r r'
+  | R_StackTop r, R_StackTop r' => register_StackTop_beq r r'
   | R_TxEnv r, R_TxEnv r' => register_TxEnv_beq r r'
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => register_ancestor_hash_count_beq r r'
   | R_block_access_index r, R_block_access_index r' => register_block_access_index_beq r r'
@@ -11968,6 +12146,7 @@ Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_re
   | R_Message r, R_Message r' => fun p => if register_Message_beq r r' then Some p else None
   | R_OutputSlice r, R_OutputSlice r' => fun p => if register_OutputSlice_beq r r' then Some p else None
   | R_ScratchSlice r, R_ScratchSlice r' => fun p => if register_ScratchSlice_beq r r' then Some p else None
+  | R_StackTop r, R_StackTop r' => fun p => if register_StackTop_beq r r' then Some p else None
   | R_TxEnv r, R_TxEnv r' => fun p => if register_TxEnv_beq r r' then Some p else None
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun p => if register_ancestor_hash_count_beq r r' then Some p else None
   | R_block_access_index r, R_block_access_index r' => fun p => if register_block_access_index_beq r r' then Some p else None
@@ -11991,6 +12170,7 @@ Definition register_list : list (string * register) := List.concat [
   List.map (fun '(s, r) => (s, R_Message r)) register_Message_list;
   List.map (fun '(s, r) => (s, R_OutputSlice r)) register_OutputSlice_list;
   List.map (fun '(s, r) => (s, R_ScratchSlice r)) register_ScratchSlice_list;
+  List.map (fun '(s, r) => (s, R_StackTop r)) register_StackTop_list;
   List.map (fun '(s, r) => (s, R_TxEnv r)) register_TxEnv_list;
   List.map (fun '(s, r) => (s, R_ancestor_hash_count r)) register_ancestor_hash_count_list;
   List.map (fun '(s, r) => (s, R_block_access_index r)) register_block_access_index_list;
@@ -12044,6 +12224,7 @@ match r with
   | R_Message _ => _
   | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
+  | R_StackTop _ => _
   | R_TxEnv _ => _
   | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
@@ -12066,6 +12247,7 @@ end.
   | R_Message _ => _
   | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
+  | R_StackTop _ => _
   | R_TxEnv _ => _
   | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
@@ -12089,6 +12271,7 @@ refine {|
   | R_Message _ => encode
   | R_OutputSlice _ => encode
   | R_ScratchSlice _ => encode
+  | R_StackTop _ => encode
   | R_TxEnv _ => encode
   | R_ancestor_hash_count _ => encode
   | R_block_access_index _ => encode
@@ -12110,6 +12293,7 @@ refine {|
   | R_Message _ => decode
   | R_OutputSlice _ => decode
   | R_ScratchSlice _ => decode
+  | R_StackTop _ => decode
   | R_TxEnv _ => decode
   | R_ancestor_hash_count _ => decode
   | R_block_access_index _ => decode
@@ -12160,6 +12344,10 @@ Instance dummy_register_OutputSlice : Inhabited (register_ref _) := populate ret
 Definition scratch_arena_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "scratch_arena" scratch_arena (fun x => x) (fun x => x).
 Instance dummy_register_ScratchSlice : Inhabited (register_ref _) := populate scratch_arena_ref.
+
+Definition stack_top_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "stack_top" stack_top (fun x => x) (fun x => x).
+Instance dummy_register_StackTop : Inhabited (register_ref _) := populate stack_top_ref.
 
 Definition k_tx_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_tx" k_tx (fun x => x) (fun x => x).
@@ -12215,6 +12403,7 @@ Record regstate := {
   Message_s : register_Message -> Message;
   OutputSlice_s : register_OutputSlice -> OutputSlice;
   ScratchSlice_s : register_ScratchSlice -> ScratchSlice;
+  StackTop_s : register_StackTop -> StackTop;
   TxEnv_s : register_TxEnv -> TxEnv;
   ancestor_hash_count_s : register_ancestor_hash_count -> ancestor_hash_count;
   block_access_index_s : register_block_access_index -> block_access_index;
@@ -12227,74 +12416,88 @@ Record regstate := {
   state_gas_spill_s : register_state_gas_spill -> state_gas_spill;
 }.
 Notation "{[ r 'with' 'BlockHeader_s' := e ]}" :=
-  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'CalldataSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'Code_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'EvmMemorySlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'ExecutionProfile_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'Message_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'OutputSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'ScratchSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
+      end (at level 1).
+Notation "{[ r 'with' 'StackTop_s' := e ]}" :=
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 f19
       end (at level 1).
 Notation "{[ r 'with' 'ancestor_hash_count_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'block_access_index_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'chain_identifier_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'code_pointer_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'frame_depth_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'gas_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'gas_refund_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 f19
+      end (at level 1).
 Notation "{[ r 'with' 'hash_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ (_ as f19) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e f19
+      end (at level 1).
 Notation "{[ r 'with' 'state_gas_spill_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) _ =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 e
+      end (at level 1).
 
 Definition init_regstate : regstate := Build_regstate
+  inhabitant
   inhabitant
   inhabitant
   inhabitant
@@ -12327,6 +12530,7 @@ Definition register_lookup (reg : register) (rs : regstate) : type_of_register r
   | R_Message r => rs.(Message_s) r
   | R_OutputSlice r => rs.(OutputSlice_s) r
   | R_ScratchSlice r => rs.(ScratchSlice_s) r
+  | R_StackTop r => rs.(StackTop_s) r
   | R_TxEnv r => rs.(TxEnv_s) r
   | R_ancestor_hash_count r => rs.(ancestor_hash_count_s) r
   | R_block_access_index r => rs.(block_access_index_s) r
@@ -12350,6 +12554,7 @@ Definition register_set (reg : register) : type_of_register reg -> regstate -> r
   | R_Message r => fun v rs => {[ rs with Message_s := fun r' => if register_Message_beq r' r then v else rs.(Message_s) r' ]}
   | R_OutputSlice r => fun v rs => {[ rs with OutputSlice_s := fun r' => if register_OutputSlice_beq r' r then v else rs.(OutputSlice_s) r' ]}
   | R_ScratchSlice r => fun v rs => {[ rs with ScratchSlice_s := fun r' => if register_ScratchSlice_beq r' r then v else rs.(ScratchSlice_s) r' ]}
+  | R_StackTop r => fun v rs => {[ rs with StackTop_s := fun r' => if register_StackTop_beq r' r then v else rs.(StackTop_s) r' ]}
   | R_TxEnv r => fun v rs => {[ rs with TxEnv_s := fun r' => if register_TxEnv_beq r' r then v else rs.(TxEnv_s) r' ]}
   | R_ancestor_hash_count r => fun v rs => {[ rs with ancestor_hash_count_s := fun r' => if register_ancestor_hash_count_beq r' r then v else rs.(ancestor_hash_count_s) r' ]}
   | R_block_access_index r => fun v rs => {[ rs with block_access_index_s := fun r' => if register_block_access_index_beq r' r then v else rs.(block_access_index_s) r' ]}
