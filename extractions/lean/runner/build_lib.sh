@@ -5,7 +5,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-MODEL="$ROOT/extractions/lean/evm"
+MODEL="$ROOT/extractions/lean/src"
 FFI="$ROOT/extractions/lean/ffi"
 BUILD="$HERE/.lake/build"
 LIB="$BUILD/lib"

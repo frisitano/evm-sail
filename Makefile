@@ -78,14 +78,13 @@ C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
 C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
 COQ_DIR             := extractions/coq
-COQ_CONTRACTS_DIR   := $(COQ_DIR)/contracts
-COQ_MODEL_DIR       := $(COQ_DIR)/model
+COQ_MODEL_DIR       := $(COQ_DIR)/src
 COQ_PROOFS_DIR      := $(COQ_DIR)/proofs
 LEAN_DIR            := extractions/lean
-LEAN_MODEL_DIR      := $(LEAN_DIR)/evm
+LEAN_MODEL_DIR      := $(LEAN_DIR)/src
 LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
 PYTHON_DIR          := extractions/python
-PYTHON_PACKAGE      := $(PYTHON_DIR)/evm
+PYTHON_PACKAGE      := $(PYTHON_DIR)/src
 PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
 PYTHON_HOST_CONTRACT := extractions/python/contract/HostContract.py
 PYTHON_CACHE_DIR    := $(abspath .agent-tmp/python-cache)
@@ -168,7 +167,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -292,8 +291,7 @@ check-contracts:
 	grep -q "^def state_journal_revert(" $(PYTHON_HOST_CONTRACT)
 
 extract-coq: check-contracts
-	mkdir -p $(COQ_CONTRACTS_DIR) $(COQ_MODEL_DIR)
-	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
+	mkdir -p $(COQ_MODEL_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
 	test -s $(COQ_MODEL_DIR)/evm.v
 	test -s $(COQ_MODEL_DIR)/evm_types.v
@@ -305,6 +303,9 @@ extract-coq: check-contracts
 	grep -q "Axiom frame_stack_reset " $(COQ_MODEL_DIR)/evm.v
 	grep -q "Axiom frame_stack_push " $(COQ_MODEL_DIR)/evm.v
 	grep -q "Axiom frame_stack_pop " $(COQ_MODEL_DIR)/evm.v
+
+build-coq: extract-coq
+	$(COQC) -q -noglob -o $(abspath $(COQ_DIR)/contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
 	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
 	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
 	cd $(COQ_MODEL_DIR) && $(COQC) $(abspath $(COQ_PROOFS_DIR))/RlpCursor.v
@@ -313,7 +314,13 @@ extract-coq: check-contracts
 # compile-check it against the matching complete backend. The optimized model
 # uses Sail's package/module layout; handwritten FFI remains under extractions/c/.
 # The Sail model, not generated C, is the readable source of truth.
-c-spec:
+# Aggregates: extraction is Sail -> target language; build is target language
+# -> compiled artifact. Splitting them means a generated tree stays available
+# for inspection and publication even when its backend cannot compile it yet.
+extract: extract-c-spec extract-c-optimised extract-coq extract-lean extract-python
+build-extractions: build-c-spec build-c-optimised build-coq build-lean build-python
+
+extract-c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --c-no-main --c-no-rts \
 		$(C_SPEC_PRESERVE_FLAGS) $(C_SPEC_INCLUDES) --c-specialize \
@@ -321,6 +328,8 @@ c-spec:
 		$(MODEL) --variable EVM_DEBUG=off -o $(C_SPEC_MODEL)
 	test -s $(C_SPEC_MODEL).c
 	test -s $(C_SPEC_MODEL).h
+
+build-c-spec: extract-c-spec
 	@sail_lib="$$($(SAIL) --dir)/lib"; \
 		test -f "$$sail_lib/sail.h" || { echo "missing Sail C runtime headers under $$sail_lib"; exit 1; }; \
 		$(CC) -O2 -w -Wno-error=implicit-function-declaration \
@@ -329,11 +338,14 @@ c-spec:
 			-c $(C_SPEC_MODEL).c -o $(C_SPEC_BUILD_DIR)/evm.o
 	test -s $(C_SPEC_BUILD_DIR)/evm.o
 
+# Backwards-compatible alias: extract then build.
+c-spec: build-c-spec
+
 # Publish the generated C sources into each backend's src/ tree so the
 # extracted code is visible in the repository alongside its contract
 # implementation, matching the lean/coq/python target layout. Sources only:
 # object files, archives, and staging manifests stay in build/.
-publish-c-extraction: c-spec c-optimised
+publish-c-extraction: extract-c-spec extract-c-optimised
 	rm -rf extractions/c/spec/src extractions/c/optimised/src
 	mkdir -p extractions/c/spec/src
 	cp $(C_SPEC_MODEL).c $(C_SPEC_MODEL).h extractions/c/spec/src/
@@ -344,7 +356,7 @@ publish-c-extraction: c-spec c-optimised
 	@echo "published: $$(find extractions/c/spec/src extractions/c/optimised/src -type f | wc -l | tr -d ' ') generated C files"
 
 
-c-optimised: check-optimized-ffi
+extract-c-optimised: check-optimized-ffi
 	rm -rf $(C_OPT_GENERATED_DIR)
 	mkdir -p $(C_OPT_GENERATED_DIR)
 	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
@@ -362,8 +374,13 @@ c-optimised: check-optimized-ffi
 	test -s $(C_OPT_GENERATED_MANIFEST)
 	test -s $(C_OPT_PACKAGE_MANIFEST)
 	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
+
+build-c-optimised: extract-c-optimised
 	$(MAKE) --no-print-directory -C $(C_OPT_GENERATED_DIR) CC="$(CC)"
 	test -s $(C_OPT_GENERATED_DIR)/libevmsail.a
+
+# Backwards-compatible alias: extract then build.
+c-optimised: build-c-optimised
 
 c-optimised-conformance: c-optimised
 	$(PYTHON) tools/check_optimised_c.py $(C_OPT_GENERATED_DIR)
@@ -434,6 +451,8 @@ extract-lean:
 	grep -q "^def referenceWorldStateContract" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	grep -q "^def worldStateBoundary" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
 	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
+
+build-lean: extract-lean
 	cd $(LEAN_MODEL_DIR) && $(LAKE) update Sail
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
@@ -447,6 +466,9 @@ extract-python:
 	! grep -R -q "call_extern" $(PYTHON_PACKAGE)
 	! grep -R -q "register_extern" $(PYTHON_PACKAGE)
 	! grep -R -q "_sail_extern\\." $(PYTHON_PACKAGE)
+
+build-python: extract-python
+	mkdir -p $(PYTHON_CACHE_DIR)
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m compileall -q $(PYTHON_PACKAGE)
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
 	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
@@ -483,10 +505,8 @@ ffi-clang-format-check:
 # Type-check the hand-maintained Coq extern contract without regenerating the
 # model (no custom Sail needed; requires the Rocq prover from opam).
 coq-contracts-check:
-	mkdir -p $(COQ_CONTRACTS_DIR)
-	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
-
-extract: extract-coq extract-lean extract-python
+	mkdir -p $(COQ_DIR)/contract
+	$(COQC) -q -noglob -o $(abspath $(COQ_DIR)/contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
 
 all: check lint fmt-check
 

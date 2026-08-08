@@ -14,7 +14,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "/Users/f/dev/ethereum/evm-sail/extractions/lean/evm/.lake/packages/Sail",
+   "/Users/f/dev/ethereum/evm-sail/extractions/lean/src/.lake/packages/Sail",
    "configFile": "lakefile.toml"}],
  "name": "«evm-lean-runner»",
  "lakeDir": ".lake"}

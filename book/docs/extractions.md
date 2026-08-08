@@ -26,15 +26,16 @@ optimizations are never proof axioms.
 ## Source locations
 
 Every target's contract layer and generated output lives in the
-repository:
+repository — every target has the same shape, an axiom or contract layer
+plus the generated sources extracted from the Sail model:
 
 | target | contract layer | generated output |
 | --- | --- | --- |
-| C (reference) | [`extractions/c/spec/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/contract) | built by `make c-spec` |
-| C (optimized) | [`extractions/c/optimised/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/contract) | built by `make c-optimised` |
-| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/lean/contract/HostAxioms.lean) | [`extractions/lean/evm/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/evm) |
-| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) | [`extractions/coq/model/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/model) |
-| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) | [`extractions/python/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python) |
+| C (reference) | [`extractions/c/spec/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/contract) | [`extractions/c/spec/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/spec/src) |
+| C (optimized) | [`extractions/c/optimised/contract/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/contract) | [`extractions/c/optimised/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/c/optimised/src) |
+| Lean | [`HostAxioms.lean`](https://github.com/frisitano/evm-sail/blob/main/extractions/lean/contract/HostAxioms.lean) | [`extractions/lean/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/lean/src) |
+| Coq | [`ExternBoundary.v`](https://github.com/frisitano/evm-sail/blob/main/extractions/coq/contract/ExternBoundary.v) | [`extractions/coq/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/coq/src) |
+| Python | [`HostContract.py`](https://github.com/frisitano/evm-sail/blob/main/extractions/python/contract/HostContract.py) | [`extractions/python/src/`](https://github.com/frisitano/evm-sail/tree/main/extractions/python/src) |
 
 The Sail source these are extracted from is
 [`sail/`](https://github.com/frisitano/evm-sail/tree/main/sail); the
