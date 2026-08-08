@@ -169,7 +169,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail extractions/contracts -name '*.sail' | sort)
 
-.PHONY: all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python fmt fmt-check help lean-extract lean-harness lint python-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -195,6 +195,10 @@ help:
 	@echo "  make docs-env       - create/update the repo-local uv documentation environment"
 	@echo "  make extract-python - generate and smoke-test the complete Python model"
 	@echo "  make python-lint    - lint generated Python with Ruff $(RUFF_VERSION)"
+	@echo "  make python-tools-lint - lint the handwritten harness/tools Python"
+	@echo "  make python-tools-fmt-check - report Ruff format drift in handwritten Python"
+	@echo "  make ffi-clang-format-check - require handwritten FFI C to match .clang-format"
+	@echo "  make coq-contracts-check - compile the hand-maintained Coq extern contract"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -437,6 +441,36 @@ extract-python:
 python-lint:
 	test -s $(PYTHON_MODEL)
 	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
+
+# Handwritten Python: the fixture harness and repository tooling. The generated
+# model keeps the python-lint policy above; these targets own the
+# hand-maintained scripts. Pyflakes correctness plus syntax errors gate;
+# compact one-line statement style (E401/E70x) and deliberate sys.path setup
+# before imports (E402) are accepted in these scripts.
+PYTHON_TOOLS_DIRS         := harness tools
+PYTHON_TOOLS_RUFF_RULES   := E9,F
+PYTHON_TOOLS_RUFF_IGNORES := E741
+
+python-tools-lint:
+	$(PYTHON_RUFF) check --select $(PYTHON_TOOLS_RUFF_RULES) --ignore $(PYTHON_TOOLS_RUFF_IGNORES) --output-format concise $(PYTHON_TOOLS_DIRS)
+
+# Advisory for now: the handwritten scripts predate a formatter policy. CI runs
+# this without failing the build until the tree is formatted once.
+python-tools-fmt-check:
+	$(PYTHON_RUFF) format --check $(PYTHON_TOOLS_DIRS)
+
+# Handwritten FFI formatting only. Unlike c-optimised-clang-format this needs
+# neither the custom Sail compiler nor a generated build tree, so it can run
+# on any machine with clang-format and the repository .clang-format policy.
+ffi-clang-format-check:
+	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+		--scope ffi --strict --jobs $(LINT_JOBS)
+
+# Type-check the hand-maintained Coq extern contract without regenerating the
+# model (no custom Sail needed; requires the Rocq prover from opam).
+coq-contracts-check:
+	mkdir -p $(COQ_CONTRACTS_DIR)
+	$(COQC) -q -noglob -o $(abspath $(COQ_CONTRACTS_DIR))/ExternBoundary.vo $(EXTERN_CONTRACT)
 
 extract: extract-coq extract-lean extract-python
 

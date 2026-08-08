@@ -26,7 +26,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Optional
 
 import pytest
 from execution_testing.client_clis.ethereum_cli import EthereumCLI

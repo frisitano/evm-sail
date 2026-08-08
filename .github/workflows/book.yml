@@ -1,0 +1,153 @@
+# Build and publish the literate specification book to GitHub Pages, plus a
+# manually-triggered ZisK fixture benchmark that refreshes the performance
+# dashboard dataset.
+#
+# The book build is driven entirely through `make docs-site`, which:
+#   1. syncs the repo-local uv docs environment from mkdocstrings-sail/uv.lock
+#      (make docs-env; mkdocstrings-sail is checked into this repository),
+#   2. runs the custom Sail compiler with --doc to produce book/.build/doc.json,
+#   3. builds book/.build/lsp-index.json with sail-lsp-index,
+#   4. generates the reference pages with sail-book-gen, and
+#   5. runs a strict `mkdocs build` (Material theme + the sail-book plugin,
+#      book/mkdocs.yml) into book/site.
+# Keeping every step behind the make target means the planned
+# ffi/ -> extractions/c/contracts restructure does not touch this workflow.
+
+name: book
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_benchmark:
+        description: >-
+          Also run the ZisK fixture benchmark (requires the dedicated
+          self-hosted runner; see the benchmark job's TODO notes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One Pages deployment at a time; queued runs wait rather than cancel so a
+# finished build is never discarded mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # TODO(toolchain): `make docs-site` requires this repository's CUSTOM
+      # Sail compiler (resolved via zkvm/resolve_optimized_sail.sh; upstream
+      # Sail is not a supported fallback). Provision it here and export
+      # SAIL=<path>. Options:
+      #   - build the feature compiler (rems-project/sail fork, branch
+      #     implement-per-newtype-c-representation-overrides-in-sail) with
+      #     ocaml/setup-ocaml@v3 + dune, cached by compiler commit; or
+      #   - download a prebuilt binary artifact published by the compiler
+      #     repository's own CI.
+      # Until provisioning is implemented this step fails fast with a clear
+      # message instead of silently using an incompatible sail.
+      - name: Resolve custom Sail compiler
+        run: |
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable on this runner; implement TODO(toolchain) in .github/workflows/book.yml"
+            exit 1
+          fi
+
+      - name: Build book
+        run: make docs-site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book/site
+
+  deploy:
+    # Publish from main only; manual dispatches on other refs still get the
+    # build check without touching the published site.
+    if: github.ref == 'refs/heads/main'
+    needs: build-book
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Manually-triggered ZisK CPU benchmark over the 25 glamsterdam-devnet-7
+  # fixtures that feed the performance dashboard dataset consumed by the book
+  # (book/docs/assets/generated/performance/). This job CANNOT run on
+  # ubuntu-latest: it needs the ZisK emulator, staged comparison guests, and a
+  # machine-local fixture download.
+  #
+  # TODO(runner): provision a dedicated runner with:
+  #   - a ziskemu binary whose version equals the `ziskos` version pinned in
+  #     zkvm/zisk/Cargo.lock (harness and benchmark enforce this; export
+  #     ZISKEMU=<path> if it is not ~/.zisk/bin/ziskemu),
+  #   - the ZisK guest build prerequisites (custom Sail compiler, RISC-V
+  #     toolchain, cargo-zisk) for `make zisk-guest`,
+  #   - the reth and ethrex comparison guest ELFs for
+  #     tools/stage_zisk_guests.sh (machine-local builds; tools/zisk-guests/
+  #     is git-ignored), and
+  #   - the 25 devnet fixture JSON files (glamsterdam-devnet-7, batches
+  #     110800-110999, selection first_20_batches_newest_first_limit_25;
+  #     machine-local download, not stored in the repository).
+  # Then replace the runs-on labels below with the real runner label set.
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark
+    runs-on: [self-hosted, zisk] # TODO(runner): real label set, see above
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the production ZisK guest ELF
+        run: make zisk-guest
+
+      - name: Stage benchmark guests
+        run: |
+          # TODO(runner): the freshly built evm-sail ELF path plus the
+          # machine-local reth/ethrex comparison ELF paths.
+          echo "::error::configure tools/stage_zisk_guests.sh EVMSAIL_ELF RETH_ELF ETHREX_ELF for this runner"
+          exit 1
+          # tools/stage_zisk_guests.sh \
+          #   zkvm/build-zisk/stateless-validator-evm-sail-zisk.elf \
+          #   /path/to/stateless-validator-reth-zisk.elf \
+          #   /path/to/stateless-validator-ethrex-zisk.elf
+
+      - name: Run fixture benchmark and export the dashboard dataset
+        run: |
+          # TODO(runner): DEVNET_FIXTURES = machine-local directory holding the
+          # 25 devnet fixture JSON files described above.
+          echo "::error::set DEVNET_FIXTURES for this runner"
+          exit 1
+          # python3 tools/benchmark_zisk.py \
+          #   --profile sdk \
+          #   --dashboard-dir book/docs/assets/generated/performance \
+          #   "$DEVNET_FIXTURES"/*.json
+
+      - name: Upload dashboard dataset
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-dashboard
+          path: book/docs/assets/generated/performance

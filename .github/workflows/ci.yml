@@ -1,0 +1,232 @@
+# Lint and format gates for every language surface in the repository: Sail
+# model checks, C boundary audits and clang policies, the Coq/Lean/Python
+# extraction targets, and the handwritten Python tooling.
+#
+# All steps are make-target-based so the planned ffi/ ->
+# extractions/c/contracts restructure does not touch this workflow.
+#
+# Toolchain gating: jobs marked with `vars.EVM_SAIL_TOOLCHAIN_READY` need the
+# repository's CUSTOM Sail compiler (zkvm/resolve_optimized_sail.sh; upstream
+# Sail is not a supported fallback). Set the repository variable
+# EVM_SAIL_TOOLCHAIN_READY=true (Settings > Secrets and variables > Variables)
+# once the TODO(toolchain) provisioning step below is implemented; until then
+# only the toolchain-free jobs run, keeping CI green and honest.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- toolchain-free jobs -------------------------------------------------
+
+  # C: allocation-free optimized FFI boundary audit (pure Python) and the
+  # clang-format policy over the handwritten FFI sources.
+  c-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format
+      - name: Optimized FFI production audit
+        run: make check-optimized-ffi
+      - name: Handwritten FFI clang-format policy
+        run: make ffi-clang-format-check
+
+  # Contracts: textual invariants of the hand-maintained extraction contracts
+  # (ExternBoundary.v, HostAxioms.lean, Specialization.lean, HostContract.py).
+  # SAIL=true skips compiler resolution: the Sail-side contract list is empty
+  # and the remaining checks are pure grep/test.
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Contract invariants
+        run: make check-contracts SAIL=true
+
+  # Coq: type-check the hand-maintained extern contract with the Rocq prover.
+  # This compiles extractions Coq without regenerating the model, so it needs
+  # opam+Rocq but not the custom Sail compiler.
+  coq-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up OCaml/opam
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.2"
+      # TODO(coq): pin the Rocq version to the one used locally (COQC is
+      # `opam exec -- rocq c`; see Makefile) once that version is recorded.
+      - name: Install Rocq
+        run: opam install -y rocq-prover
+      - name: Compile the extern contract
+        run: make coq-contracts-check SAIL=true
+
+  # Python: lint the handwritten harness and tooling scripts with pinned Ruff.
+  # The format check is advisory until the tree is formatted once; drop
+  # continue-on-error after that ratchet.
+  python-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Lint handwritten Python
+        run: make python-tools-lint
+      - name: Ruff format drift report (advisory)
+        continue-on-error: true # TODO(fmt): make blocking after one-time format
+        run: make python-tools-fmt-check
+
+  # --- custom-Sail jobs ----------------------------------------------------
+  # Each job below repeats the same TODO(toolchain) resolution step as
+  # .github/workflows/book.yml; factor it into a composite action when the
+  # provisioning is implemented.
+
+  # Sail: model type-check, warnings + typed readability lints + docs style,
+  # and sail --fmt formatting drift.
+  sail:
+    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - name: Resolve custom Sail compiler
+        run: |
+          # TODO(toolchain): provision the custom compiler; see book.yml.
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
+            exit 1
+          fi
+      - name: Type-check the model
+        run: make check
+      - name: Sail lint (warnings, readability, docs style)
+        run: make lint
+      - name: Sail formatting drift
+        run: make fmt-check
+
+  # C: generate the optimized model and enforce the clang-format and
+  # clang-tidy policies over generated plus handwritten optimized C.
+  c-optimised:
+    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            z3 libgmp-dev pkg-config clang clang-format clang-tidy
+      - name: Resolve custom Sail compiler
+        run: |
+          # TODO(toolchain): provision the custom compiler; see book.yml.
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
+            exit 1
+          fi
+      - name: Optimized C clang-format policy
+        run: make c-optimised-clang-format
+      - name: Optimized C clang-tidy policy
+        run: make c-optimised-clang-tidy
+
+  # Lean: regenerate the Lean model and compile it with lake.
+  lean:
+    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Resolve custom Sail compiler
+        run: |
+          # TODO(toolchain): provision the custom compiler; see book.yml.
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
+            exit 1
+          fi
+      - name: Extract and compile the Lean model
+        run: make extract-lean
+
+  # Coq: regenerate and validate the complete Coq model (heavier than the
+  # toolchain-free coq-contract job above; compiles evm.v).
+  coq-model:
+    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - name: Set up OCaml/opam
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.2"
+      # TODO(coq): pin the Rocq version once recorded (see coq-contract job).
+      - name: Install Rocq
+        run: opam install -y rocq-prover
+      - name: Resolve custom Sail compiler
+        run: |
+          # TODO(toolchain): provision the custom compiler; see book.yml.
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
+            exit 1
+          fi
+      - name: Extract and validate the Coq model
+        run: make extract-coq
+
+  # Python: regenerate the Python model, smoke-test it, and lint it with the
+  # pinned Ruff policy.
+  python-model:
+    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Resolve custom Sail compiler
+        run: |
+          # TODO(toolchain): provision the custom compiler; see book.yml.
+          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
+            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
+          else
+            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
+            exit 1
+          fi
+      - name: Extract and smoke-test the Python model
+        run: make extract-python
+      - name: Lint the generated Python model
+        run: make python-lint
