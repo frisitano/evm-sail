@@ -9,10 +9,24 @@ page carries the current numbers.
 
 ## The cost model comes first
 
-A ZisK guest is priced in **retired RISC-V instructions**. There are no
-caches to warm, no branch predictor to please, no latency to hide, and no
-penalty for code size: every executed instruction costs one step, and
-nothing else costs anything. This inverts several classical intuitions:
+A ZisK guest is measured along **two axes**, and they are not the same
+number. The first is **retired RISC-V instructions** — "steps" — which is
+what the emulator counts and what most of this page optimizes. The second
+is **proving cost**, the prover's own weighting of the trace: operations
+are not uniform there, because accelerated operations consume rows in
+dedicated tables (the arithmetic and hashing precompiles) rather than
+ordinary execution rows, and the resources a proof consumes are a
+weighted sum rather than a raw instruction count. The
+[benchmarks page](performance.md) exposes both, and a change can move
+them in different directions — routing an operation to a precompile can
+cut its steps by an order of magnitude while adding table area, which is
+why accelerator decisions are argued on both axes rather than on steps
+alone.
+
+Within the step axis, the model is unusually simple: there are no caches
+to warm, no branch predictor to please, no latency to hide, and no
+penalty for code size — every executed instruction costs one step. That
+inverts several classical intuitions:
 
 - A link-time-constant address is the cheapest object in the model — it can
   be rematerialized anywhere (`auipc`/`addi`) and never needs to be kept
@@ -27,9 +41,11 @@ nothing else costs anything. This inverts several classical intuitions:
 - Big straight-line code is free. Inlining, unrolled tables, and per-opcode
   specialization never pay an instruction-cache tax.
 
-Every observation on this page reduces to one discipline: **count the
-instructions on the hot path, and be suspicious of any mechanism whose cost
-is an assumption**.
+Most observations on this page reduce to one discipline: **count the
+instructions on the hot path, and be suspicious of any mechanism whose
+cost is an assumption** — while remembering that the step count is one of
+two prices, and that anything touching the accelerated operations must be
+read against proving cost as well.
 
 ## Type-driven lowering: semantic types become machine types
 
