@@ -115,6 +115,28 @@ conversion. Observations that survived measurement:
   arithmetic-table area, so ops are routed to hardware only when the step
   savings dominate on *both* sides of the prover.
 
+The same freedom applies to byte-shaped values, and in the other
+direction. An address or digest is a *sequence of bytes* in the
+specification, and the optimized backend usually represents it as `u64`
+lanes so comparison and hashing operate a word at a time rather than a
+byte at a time. But lanes are not always the right answer: a value whose
+job is to be *handed to something else* — witness bytes fed to the
+hasher, code bytes read by the interpreter, memory and output regions
+crossing the host boundary — wants to be the bytes themselves, addressed
+directly.
+
+So the compiler supports both. A byte-carrying field can be declared a
+**native byte pointer** (`--c-optimized-byte-pointer-field`), and the
+generated C then holds the address of the bytes rather than a copy or a
+lane-packed rendering: the stateless input, the scratch arena, EVM
+memory, code regions, log data, and guest output all take that form. The
+consequence is that nothing is marshalled at the boundary — a hash
+preimage or a code slice is passed as a pointer and a length, exactly as
+a hand-written implementation would, while the specification continues to
+talk about byte sequences and the proof targets continue to see them that
+way. Lanes when a value is *operated on*, pointers when it is *passed
+along*, one semantic type either way.
+
 ## Registers, custody, and why code structure decides
 
 The guest builds with `-mcmodel=medany -mno-relax`, so each distinct global
