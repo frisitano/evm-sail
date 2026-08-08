@@ -323,8 +323,23 @@ class PythonGuest:
         self.evm.reset()
         state = self.host.HostState(stateless_input_bytes=bytes(inp))
         self.host.set_state(state)
-        self.evm.main()
+        try:
+            self.evm.main()
+        except self.evm.SailExit:
+            # Sail's fatal_error is `exit(())`: it leaves the guest without
+            # writing a result. The native backends bind it to a host contract
+            # that emits the invalid-block output first, so the Python vehicle
+            # does the same here and a rejected block stays comparable.
+            self.write_invalid_result()
         return bytes(state.public_output)
+
+    def write_invalid_result(self):
+        try:
+            input_ref = self.evm.decode_stateless_input_ref(self.host.stateless_input())
+        except BaseException:
+            self.evm.write_invalid_result()
+            return
+        self.evm.write_validation_result(input_ref, False)
 
 
 def output_matches(got, expected, zisk=False):
