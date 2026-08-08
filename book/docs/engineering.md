@@ -181,11 +181,17 @@ Identical semantics compile very differently depending on shape; three
 measured examples:
 
 - **Inline budgets are caller-sized.** GCC refuses to inline callees into
-  functions exceeding `large-function-insns`. A macro-expanded interpreter
-  body crossed the cap and silently lost the inlining of its stack
-  primitives; compact per-op helpers stayed under it. Structure, not
-  flags, decided (raising the caps at the LTO partial link measured
-  bit-identical).
+  functions exceeding `large-function-insns`, so a caller's *size* silently
+  changes what gets inlined *into* it. A macro-expanded interpreter body
+  crossed the cap and lost the inlining of its stack primitives; compact
+  per-op helpers stayed under it. The budgets are tunable in principle —
+  `--param large-function-insns` / `large-function-growth` /
+  `inline-unit-growth` — but raising them on our LTO *partial-link*
+  invocation produced a bit-identical binary, because those parameters do
+  not reach the LTRANS phase where the decision is actually made. The
+  lesson is therefore narrower than "flags don't work": the flag has to
+  reach the phase that makes the choice, and until it does, caller
+  structure is what decides.
 - **Tuple returns follow the ABI.** Small carried tuples (≤16 bytes)
   return in registers; wider ones lower via `sret` — the ABI itself passes
   a hidden pointer to a *caller local*, which SROA then promotes after
