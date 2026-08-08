@@ -22,8 +22,7 @@ operation must show its result still lies within them.
 
 **Verification.** The impure boundary is small and enumerable — hashing,
 input, output, the state stores — and proof targets receive exactly those
-as axioms. An optimization is never one of them: it is a lowering of a
-body the proofs still see in full.
+as axioms, with everything else as ordinary definitions.
 
 **Verifying the binary.** Extraction still leaves a compiler between the
 specification and the machine code. Closing that gap is the end goal, and
@@ -36,6 +35,10 @@ construction as in [evm-asm](https://github.com/Verified-zkEVM/evm-asm).
 inverts much of the usual performance intuition. We instrument this guest
 and its peers with the same semantic phases on identical inputs, so "where
 does the cost live?" has an answer with numbers attached.
+
+**Optimisation.** The fast guest is compiled from the same text as the
+proofs, not written beside it. A refinement replaces a body with a faster
+one, never with an assumption — so no optimisation ever becomes an axiom.
 
 **Generality.** Nothing about verifying a stateless validator is specific
 to our guest, so the tooling is built to extend to others.
