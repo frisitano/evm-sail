@@ -48,14 +48,27 @@ including the experiments that failed.
 
 **Verifying the binary, not just the model.** Extraction closes most of
 the gap between a specification and the thing that runs, but not all of
-it: a compiler still stands between them. The end goal is to close that
-last step with **binary analysis** — verifying the RISC-V guest itself
+it: a compiler still stands between them. Closing that last step is the
+end goal, and more than one route is being explored.
+
+One is **binary analysis** — take the compiled RISC-V guest and verify it
 against authoritative ISA semantics, in the style of
-[Islaris](https://doi.org/10.1145/3519939.3523434), so the proof obligation
-lands on the executed machine code rather than on the source it was
-generated from. Sail is the natural substrate for this, because the same
-language already provides the authoritative RISC-V semantics such a proof
-must be stated against.
+[Islaris](https://doi.org/10.1145/3519939.3523434), so the proof
+obligation lands on the executed machine code rather than on the source
+it was generated from. Sail is a natural substrate for that, since the
+same language already provides the RISC-V semantics such a proof must be
+stated against.
+
+The other direction runs the opposite way: rather than analysing a binary
+after the fact, *construct* the guest so that it carries its proofs.
+[evm-asm](https://github.com/Verified-zkEVM/evm-asm) takes this approach —
+a verified macro assembler in Lean 4 where specification, code, and proof
+are co-located, execution cost is bounded explicitly, and the maturity of
+each proof surface is tracked as data rather than prose. The two
+approaches trade off differently: post-hoc analysis accepts an ordinary
+compiler and pays for it in proof effort over generated code, while
+verified construction gets stronger guarantees by giving up the compiler.
+We are interested in both, and in what each says about the other.
 
 That also shapes how the stack is built. Nothing about binary-level
 verification of a stateless validator is specific to *this* guest: the
