@@ -1,7 +1,7 @@
-# Performance engineering notes
+# Engineering notes
 
-This page records the performance model, the compiler machinery, and the
-empirical observations behind EVM Sail's guest performance — including the
+This page records the toolchain, the compiler machinery, and the empirical
+observations behind EVM Sail's guest — including the
 experiments that failed, since several of the most useful results here are
 refutations. Everything below was measured on real devnet blocks with
 byte-exact output gating; the companion [zkVM benchmarks](performance.md)
@@ -226,6 +226,72 @@ the proof targets. [Brandon et al.](https://doi.org/10.1145/3591260) give
 the general account of why specializing such families beats indirect
 calls; the optimized-FFI audit enforces the discipline mechanically by
 rejecting indirect C calls outright.
+
+## Refinement obligations fall out of the lowering
+
+Specialization makes representation choices — this `range` becomes a
+`uint16_t`, this conversion is safe because of that bound — and those
+choices are exactly the things a sceptic should not have to take on
+trust. So the compiler can emit them as **machine-checkable obligations**
+rather than leaving them implicit in generated C.
+
+`--c-specialization-plan` writes a versioned, backend-neutral record of
+every lowering decision: the source identity, the semantic and represented
+signatures, the inferred bounds, each conversion, each call edge, and each
+obligation. Identities are domain-separated digests of *semantic* content —
+the Sail name, signature, source span, represented signature, normalized
+bounds — deliberately excluding generated JIB names, C mangling, and
+display order, so the plan is stable under things like `--c-no-mangle` and
+can never be read as a reference to a compiler-internal symbol.
+
+`--c-specialization-obligations-lean` and `-coq` then emit those
+obligations directly as proof-assistant input, so an independent checker
+can reconstruct what the compiler assumed **without trusting the compiler**.
+Paired with `--c-narrowing`, which records whether each narrowing was
+proved or taken on trust, the result is an auditable list: here is every
+place the machine representation depends on a bound, and here is which
+ones carry a proof. The human-readable report exists too, and is
+explicitly non-normative — the JSON schema is the contract.
+
+## Tooling around the extraction
+
+The compiler is not only a code generator; the surrounding tooling exists
+so that generated C can be read, reviewed, and held to the same standard
+as hand-written code.
+
+**No arbitrary-precision integers may survive.** `--c-require-bounded-int`
+makes an unbounded mathematical integer reaching the C backend an error
+rather than a silent GMP allocation. This is what forces bounds to be
+*stated* — a proof-only counter or an unbounded accumulator has to be
+expressed as a real invariant or restructured, and the guest is
+consequently GMP-free by construction rather than by inspection.
+
+**Readable extraction.** Generated C keeps the specification's names,
+module structure, and comment provenance instead of collapsing into
+numbered temporaries, so a reviewer can put the Sail function and its
+emitted C side by side. That is also what makes the semantic-proof log
+(`--c-specialize-log`) useful: the inferred bounds and representation
+decisions are legible against the source they came from.
+
+**The generated C is linted like source.** `check_optimised_c_format.py`
+and `lint_optimised_c.py` hold compiler output to clang-format and
+clang-tidy-inspired policies, and the optimized-FFI audit enforces the
+production rules — no indirect calls, no capacity-owning static arrays,
+manifest-complete sources. Compiler output that regresses in style or
+violates a production policy fails a gate, not a code review.
+
+**Sail itself is linted and formatted.** `--lint-readability` gives a
+backend-neutral cleanup inventory: parser and typed-Sail rules are
+source-actionable and enforced by `make lint`, while post-Jib diagnostics
+describe compiler-created structure and stay advisory. `sail --fmt`
+provides canonical formatting, and a documentation linter enforces the
+specification's own style guide — every type, val, and substantial
+function carries prose, and module overviews stay in step with the tree.
+
+**Semantic tooling for readers.** A language server and `sail-lsp-index`
+supply the cross-references behind this book: definitions in the rendered
+specification link and hover because the index is built from the same
+typed AST the compiler uses, not from text matching.
 
 ## Methodology
 

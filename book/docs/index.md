@@ -51,8 +51,8 @@ to our guest, so the tooling is built to extend to others.
   tries, and stateless validation.
 - **[Spec extractions](extractions.md)** — how one source becomes C
   backends, Lean and Coq developments, and a Python rendering.
-- **[Performance engineering](engineering.md)** — the cost model, the
-  compiler machinery, and what the experiments showed.
+- **[Engineering](engineering.md)** — the compiler, the extraction
+  toolchain, the cost model, and what the experiments showed.
 - **[zkEVM benchmarks](performance.md)** — this guest against reth and
   ethrex, broken down by execution phase.
 
