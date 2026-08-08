@@ -1281,7 +1281,9 @@
     let shard = null;
     let aggregate = null;
     let pendingFixtureId = null;
-    let measure = MEASURES.steps;
+    // Proving cost is the default: it is the resource a zkEVM guest is
+  // actually charged for. Instruction steps remain one toggle away.
+  let measure = MEASURES.cost;
     let functionGuest = guests[0]?.name;
     renderLegend(view, guests);
 
