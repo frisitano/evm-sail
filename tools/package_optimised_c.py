@@ -86,7 +86,7 @@ def package(generated: Path, ffi_root: Path) -> None:
 
     include_root = generated / "include"
     copy_header_tree(ffi_root / "optimized/include", include_root)
-    for contract in ("zkvm_accelerators.h", "zkvm_io.h"):
+    for contract in ("zkvm_accelerators.h", "zkvm_bigint.h", "zkvm_io.h"):
         shutil.copy2(ffi_root / contract, include_root / contract)
 
     runtime_source_root = RUNTIME_ROOT / "sail256"
