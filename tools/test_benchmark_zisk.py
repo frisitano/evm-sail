@@ -448,6 +448,10 @@ class DashboardExportTests(unittest.TestCase):
                 fixture_entry["guest_total_steps"],
                 {"evm-sail": 1004, "reth": 800, "ethrex": None},
             )
+            self.assertEqual(
+                fixture_entry["guest_total_cost"],
+                {"evm-sail": 4000, "reth": 3200, "ethrex": None},
+            )
             self.assertEqual(shard["cases"][0]["gas_used"], 30_000_000)
             case_guests = shard["cases"][0]["guests"]
             self.assertEqual(
@@ -618,6 +622,9 @@ class DashboardExportTests(unittest.TestCase):
             fixture_entry = catalog["fixtures"][0]
             self.assertEqual(
                 fixture_entry["guest_total_steps"], {"reth": 900}
+            )
+            self.assertEqual(
+                fixture_entry["guest_total_cost"], {"reth": 3600}
             )
             shard = json.loads((output / fixture_entry["shard"]).read_text())
             self.assertEqual(

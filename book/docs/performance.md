@@ -12,29 +12,44 @@ was built from — the repository commit for EVM Sail and the pinned release for
 reth and ethrex — as recorded by the benchmark runner; an unrecorded build is
 labelled as unknown rather than guessed.
 
-The fixture is the only selector. Two always-present rankings order the
-fixtures from high to low: one by the largest guest instruction-step count and
-one by block gas used. Selecting a ranking row (or an entry in the fixture
-list) loads that fixture's full comparison: guests ranked from most to fewest
-instruction steps on a shared scale, with proving cost alongside.
+The **Measure** toggle at the top of the dashboard switches the whole page
+between ZisK **instruction steps** — the deterministic execution size of a
+guest run — and ZisK **proving cost**, the weighted cost the prover charges
+for that same run. Every view below it follows the selected measure: the
+fixture ranking, the guest comparison table and its bar scale, the per-phase
+segments, the semantic-scope table, and all axis labels, column headers, and
+tooltips.
 
-When a guest's benchmark measurements carry per-phase step attributions
+The fixture is the only selector. Two always-present rankings order the
+fixtures from high to low: one by the largest guest total in the selected
+measure and one by block gas used. Selecting a ranking row (or an entry in the
+fixture list) loads that fixture's full comparison: guests ranked from most to
+fewest in the selected measure on a shared scale, with the other measure
+alongside.
+
+When a guest's benchmark measurements carry per-phase attributions
 (input decode, witness indexing, execution, state root, and
 receipts/commitments), the comparison adds a stacked per-phase breakdown per
-guest. These five phases are the cross-guest comparison tier: each guest
-emits them as mutually non-overlapping scopes over its own pipeline. Guests
-without phase instrumentation are labelled as such — absence of a phase is
-never rendered as zero cost.
+guest, in the selected measure. These five phases are the cross-guest
+comparison tier: each guest emits them as mutually non-overlapping scopes over
+its own pipeline. Guests without phase instrumentation are labelled as such —
+absence of a phase is never rendered as zero cost.
 
 The common ZisK operation-cost table includes every costed operation used by at
 least one implementation for the selected input, and aligns operations such as
 `keccak`, `sha256`, `add`, and `dma_memcpy` across all three guests. These are
 ZisK operations (including accelerator operations and RISC-V-derived machine
-operations), not EVM opcodes. EVM Sail's semantic profile tags add an
-inclusive protocol-pipeline breakdown; a guest without the equivalent tag is
-shown as **not instrumented**, rather than as a zero-cost implementation.
-Exact ELF function symbols are listed per guest, so each implementation can be
-inspected without combining unrelated symbols into one oversized comparison.
+operations), not EVM opcodes. That table is always proving cost, because ZisK
+does not report instruction steps per operation. The semantic-scope table below
+it lists every profile tag any guest reported, in the selected measure; a guest
+without the equivalent tag is shown as **not instrumented**, rather than as a
+zero-cost implementation.
+
+Exact ELF function symbols are listed one guest per tab, so each
+implementation can be inspected without combining unrelated symbols into one
+oversized comparison. The symbol filter applies within the selected tab.
+Executed-symbol attribution is reported in instruction steps only; selecting
+proving cost labels that table rather than inventing a per-symbol cost.
 
 The catalog contains one row per fixture file. Individual block profiles are
 loaded only after their fixture is selected, and long fixture lists are capped
@@ -57,13 +72,13 @@ full retained corpus is published.
     not interpreted as zero.
 
     Per-phase segments are **exclusive**: they partition a guest's measured
-    steps into input decode, witness indexing, execution, state root, and
-    receipts/commitments, with any remainder shown as unattributed guest
-    overhead.
+    total — steps or proving cost, whichever is selected — into input decode,
+    witness indexing, execution, state root, and receipts/commitments, with any
+    remainder shown as unattributed guest overhead.
 
     Function steps are **exclusive**: each executed instruction belongs to the
-    ELF symbol whose address range contains it. The selected guest's function
-    rows therefore partition its total steps. If ZisK detects a call-stack
+    ELF symbol whose address range contains it. The selected guest tab's
+    function rows therefore partition that guest's total steps. If ZisK detects a call-stack
     mismatch, inclusive call attribution is unavailable, but this complete
     exclusive symbol inventory remains valid.
 

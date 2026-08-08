@@ -5,6 +5,59 @@
   }
 }
 
+.evmsail-perf-measure {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+}
+
+.evmsail-perf-measure__label {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.evmsail-perf-measure__options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 999px;
+  background: var(--md-code-bg-color);
+}
+
+.evmsail-perf-measure__option {
+  padding: 0.4rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--md-default-fg-color--light);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.evmsail-perf-measure__option:hover {
+  color: var(--md-default-fg-color);
+}
+
+.evmsail-perf-measure__option--active {
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+}
+
+.evmsail-perf-measure__note {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+}
+
 .evmsail-perf-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -280,43 +333,6 @@
   font-size: 0.76rem;
 }
 
-.evmsail-perf-pipeline {
-  display: grid;
-  gap: 0.42rem;
-  margin-top: 1rem;
-}
-
-.evmsail-perf-scope {
-  margin-left: calc(var(--scope-depth) * 0.85rem);
-  padding: 0.4rem 0 0.4rem 0.55rem;
-  border-left: 2px solid var(--md-default-fg-color--lightest);
-}
-
-.evmsail-perf-scope__name {
-  margin-bottom: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.evmsail-perf-scope__comparisons {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.evmsail-perf-scope__guest {
-  display: grid;
-  grid-template-columns: minmax(5.5rem, 0.16fr) minmax(6rem, 0.18fr) 1fr;
-  align-items: center;
-  gap: 0.55rem;
-  font-size: 0.68rem;
-}
-
-.evmsail-perf-scope__guest-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .evmsail-perf-number {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -388,7 +404,7 @@
 
 .evmsail-perf-function-controls {
   display: grid;
-  grid-template-columns: minmax(14rem, 0.6fr);
+  grid-template-columns: minmax(14rem, 0.6fr) minmax(0, 1fr);
   gap: 0.8rem;
   align-items: end;
   margin: 0.8rem 0;
@@ -398,13 +414,64 @@
   background: var(--md-code-bg-color);
 }
 
-.evmsail-perf-function-block {
-  margin-top: 1.2rem;
+.evmsail-perf-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
 }
 
-.evmsail-perf-function-block__title {
-  margin: 0 0 0.4rem;
-  font-size: 0.8rem;
+.evmsail-perf-tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0 0 -1px;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 0.3rem 0.3rem 0 0;
+  background: none;
+  color: var(--md-default-fg-color--light);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evmsail-perf-tab:hover {
+  background: var(--md-code-bg-color);
+}
+
+.evmsail-perf-tab[aria-selected="true"] {
+  border-color: var(--md-default-fg-color--lightest);
+  border-bottom-color: var(--md-default-bg-color);
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.evmsail-perf-tab .evmsail-perf-build {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evmsail-perf-tab__swatch {
+  align-self: center;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 0.15rem;
+}
+
+.evmsail-perf-tabpanel {
+  padding-top: 0.4rem;
+}
+
+.evmsail-perf-th-measure {
+  display: block;
+  color: var(--md-default-fg-color--lighter);
+  font-size: 0.62rem;
+  font-weight: 400;
 }
 
 @media screen and (max-width: 60rem) {
@@ -420,14 +487,6 @@
 
   .evmsail-perf-function-controls {
     grid-template-columns: 1fr;
-  }
-
-  .evmsail-perf-scope {
-    margin-left: calc(var(--scope-depth) * 0.35rem);
-  }
-
-  .evmsail-perf-scope__guest {
-    grid-template-columns: 4.5rem 5.5rem 1fr;
   }
 
   .evmsail-perf-rank-row {

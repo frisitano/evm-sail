@@ -888,7 +888,14 @@ def export_dashboard_data(
     guest_results: dict[str, object],
     benchmark_result: dict[str, object],
 ) -> None:
-    """Write one shared catalog with comparative per-fixture guest shards."""
+    """Write one shared catalog with comparative per-fixture guest shards.
+
+    Each catalog entry carries ``guest_total_steps`` and ``guest_total_cost``:
+    the per-guest sums over the fixture's embedded cases, or ``None`` when any
+    case is unmeasured. The dashboard's measure toggle ranks fixtures by
+    whichever of the two the reader selected, so both totals live in the
+    catalog and no shard has to be fetched to build a ranking.
+    """
     results_by_guest: dict[str, tuple[dict, list, list]] = {}
     for guest in guests:
         guest_result = guest_results.get(guest.name)
@@ -1037,14 +1044,21 @@ def export_dashboard_data(
             json.dumps(shard, separators=(",", ":")) + "\n"
         )
         guest_total_steps: dict[str, int | None] = {}
+        guest_total_cost: dict[str, int | None] = {}
         for guest in guests:
-            totals = [
-                shard_case["guests"].get(guest.name, {}).get("total_steps")
-                for shard_case in shard_cases
-            ]
-            guest_total_steps[guest.name] = (
-                sum(totals) if all(total is not None for total in totals) else None
-            )
+            for field, totals_by_guest in (
+                ("total_steps", guest_total_steps),
+                ("total_cost", guest_total_cost),
+            ):
+                totals = [
+                    shard_case["guests"].get(guest.name, {}).get(field)
+                    for shard_case in shard_cases
+                ]
+                totals_by_guest[guest.name] = (
+                    sum(totals)
+                    if all(total is not None for total in totals)
+                    else None
+                )
         catalog.append(
             {
                 **taxonomy,
@@ -1067,6 +1081,7 @@ def export_dashboard_data(
                 if any(case.gas_used is not None for _, case in fixture_cases)
                 else None,
                 "guest_total_steps": guest_total_steps,
+                "guest_total_cost": guest_total_cost,
             }
         )
 
