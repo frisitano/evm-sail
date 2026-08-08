@@ -7,6 +7,8 @@
 #include "evmsail/host/memory.h"
 #include "evmsail/host/stack.h"
 #include "evmsail/prelude.h"
+#include "evmsail/spec/evm/machine.h"
+#include "evmsail/spec/host/stack.h"
 #include "host/state/internal.h"
 #include "lib/mpt/trie.h"
 #include "primitives/value.h"
@@ -176,10 +178,10 @@ unsigned long guest_debug_dump(const unsigned char **out)
   append_accounts(state_available);
 
   append_byte('S');
-  const uint16_t depth = state_available ? stack_depth() : 0;
+  const uint16_t depth = state_available ? stack_top_height(stack_top) : 0;
   append_u32(depth);
   for (uint16_t index = 0; index < depth; index++)
-    append_word(stack_peek_word(index));
+    append_word(stack_slot_read(stack_top, index));
 
   append_byte('M');
   append_u32(state_available ? (uint32_t)hm_depth() : 0);

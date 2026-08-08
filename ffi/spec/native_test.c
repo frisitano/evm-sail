@@ -207,8 +207,8 @@ extern u256 acct_dump_code_hash(uint64_t);
 extern uint64_t storage_dump_count(u256);
 extern u256 storage_dump_slot(u256, uint64_t);
 extern u256 storage_dump_value(u256, uint64_t);
-extern uint64_t stack_depth(unit);
-extern u256 stack_peek_word(uint64_t);
+extern uint64_t stack_top_height(uint64_t);
+extern u256 stack_slot_read(uint64_t, uint64_t);
 extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
@@ -345,9 +345,9 @@ unsigned long guest_debug_dump(const unsigned char **out)
     }
 
     d_byte('S');
-    uint64_t sd = state_available ? stack_depth(UNIT) : 0;
+    uint64_t sd = state_available ? stack_top_height(zstack_top) : 0;
     d_u32((uint32_t)sd);
-    for (uint64_t n = 0; n < sd; n++) d_word(stack_peek_word(n));
+    for (uint64_t n = 0; n < sd; n++) d_word(stack_slot_read(zstack_top, n));
 
     d_byte('M');
     d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);
