@@ -272,11 +272,11 @@ unsigned long guest_debug_dump(const unsigned char **out)
     d_byte(state_available ? 1 : 0);
     if (!state_available) {
         for (int i = 0; i < 32; i++) d_byte(0);
-        d_byte(have_exception && current_exception
-                   ? (unsigned char)current_exception->variants.zInvalidBlock
-                   : validation_failed
-                         ? (unsigned char)zvalidation_failure_reason
-                         : 0xff);
+        /* The canonical model declares no exception variants, so a thrown
+         * exception carries no reason payload here; only the validator's
+         * own failure record does. */
+        d_byte(validation_failed ? (unsigned char)zvalidation_failure_reason
+                                 : 0xff);
         const char *loc =
             (have_exception && throw_location && *throw_location)
                 ? *throw_location
