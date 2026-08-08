@@ -118,6 +118,6 @@ val execute_jumpdest : unit -> unit
 $[c_inline]
 val execute_push : (push_width, word) -> unit
 $[c_inline]
-val execute_dup : (stack_operation_index) -> unit
+val execute_dup : stack_operation_index -> unit
 $[c_inline]
-val execute_swap : (stack_operation_index) -> unit
+val execute_swap : stack_operation_index -> unit
