@@ -11,7 +11,7 @@ and each target supplies (or assumes) those axioms in its own idiom.
 | target | contract layer | output |
 | --- | --- | --- |
 | **C (spec)** | GMP-backed reference ABI | the byte-exact reference validator used by the harness |
-| **C (optimized)** | fixed-layout ABI: 4×u64 words, u64-lane addresses, pointer-backed stores, cursor tokens | the production zkVM guest |
+| **C (optimized)** | fixed-layout ABI: 4×u64 words, u64-lane addresses, pointer-backed stores, cursor tokens | the research-centric optimised zkEVM guest |
 | **Lean** | axiom stubs for the host interface | the model as Lean definitions for proof work |
 | **Coq** | `ExternBoundary` parameters | the model as Coq definitions |
 | **Python** | host-contract protocol stubs | an executable Python rendering, comparable against `ethereum/execution-specs` |

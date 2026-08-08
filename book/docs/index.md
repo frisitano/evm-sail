@@ -13,9 +13,9 @@ The specification is written in [Sail](https://github.com/rems-project/sail),
 the language used to give ARM, RISC-V, and CHERI their official semantics.
 One source defines the state transition function; from it we extract a
 reference implementation in C, proof objects for Lean and Coq, an
-executable Python rendering, and a production zkVM guest. Because they all
-come from the same text, a claim proved about the specification is a claim
-about the binary that runs.
+executable Python rendering, and a research-centric optimised zkEVM
+guest. Because they all come from the same text, a claim proved about the
+specification is a claim about the binary that runs.
 
 ## What this is for
 
@@ -32,7 +32,7 @@ the hashing core, the input oracle, guest output, the world-state and
 block-environment stores, host buffers, and the trie node database. Proof
 targets receive those as named axioms and everything else as ordinary
 definitions. Optimizations never become axioms: a refinement that makes
-the production guest faster is a *lowering* of a body the proofs still
+the optimised guest faster is a *lowering* of a body the proofs still
 see in full.
 
 **Measuring, and understanding the trade-offs.** A zkEVM guest is priced

@@ -205,7 +205,7 @@ measured examples:
 
 ## Interpreter dispatch
 
-The production interpreter is a computed-`goto` loop (labels-as-values;
+The optimised guest's interpreter is a computed-`goto` loop (labels-as-values;
 one 256-entry table) with arm-tail dispatch: each fast-path arm fetches
 and jumps to the next opcode directly, and all failure edges branch to a
 single halt tail that performs the canonical exceptional halt exactly

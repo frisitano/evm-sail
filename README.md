@@ -72,7 +72,7 @@ symbolic engines (the world is an explicit, finite interface).
 
 To *run* the model, generated C links exactly one complete host backend.
 `extractions/c/spec/contract/` implements the generated GMP-backed specification ABI;
-`extractions/c/optimised/contract/` implements the production fixed-layout ABI and owns
+`extractions/c/optimised/contract/` implements the optimised fixed-layout ABI and owns
 optimized-only high-level replacements. They independently provide EVM memory,
 nominal byte regions, output and scratch arenas, hashing and precompiles, the
 operand stack, account/storage state, and the content-addressed code arena plus
@@ -163,7 +163,7 @@ harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
              materialized as valid stateless blocks by the in-process t8n
 extractions/ maintained C, Coq, and Lean model generation plus extern contracts
-zkvm/        RISC-V zkVM guest targets (Spike and production ZisK stateless
+zkvm/        RISC-V zkVM guest targets (Spike and the optimised ZisK stateless
              block validation)
   runtime/sail256     shared GMP-free runtime for bounded integers
   accel-host/         host crypto cdylib (blst, k256, c-kzg, aurora-modexp, p256)
@@ -243,7 +243,7 @@ python3 run.py --jobs 12 --quiet ../zkvm/.fixtures/current-v062-full
 The sole pass criterion is byte-exact output agreement with the EELS reference
 guest. `--debug` prints an on-demand native post-run state dump on failure;
 `--profile` enables optional zkVM cycle scopes without embedding them in normal
-builds. `--zisk` builds the production, input-agnostic ZisK ELF and runs the
+builds. `--zisk` builds the optimised, input-agnostic ZisK ELF and runs the
 same fixtures through `ziskemu`. The emulator version must match the `ziskos`
 version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
 binary is not at `~/.zisk/bin/ziskemu`:
