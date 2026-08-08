@@ -1045,17 +1045,35 @@
       measureRanking,
     );
     rankingGrid.append(measureRankingPanel);
-    rankingSection.append(
-      element("h2", null, "Fixture ranking"),
+    // The ranking is a browsing aid rather than the point of the page, so it
+    // starts collapsed and the reader opts in.
+    const rankingToggle = element(
+      "button",
+      "evmsail-perf-disclosure",
+      "Show all fixture rankings",
+    );
+    rankingToggle.type = "button";
+    rankingToggle.setAttribute("aria-expanded", "false");
+    const rankingBody = element("div", "evmsail-perf-disclosure__body");
+    rankingBody.hidden = true;
+    rankingBody.append(
       element(
         "p",
         "evmsail-perf-help",
-        "The ranking follows the selected measure and is sorted from high to " +
-          "low. Each row also shows that fixture's block gas used. Select any " +
-          "row to load that fixture's full comparison below.",
+        "Sorted from high to low in the selected measure, annotated with each " +
+          "fixture's block gas used. Select a row to load that comparison.",
       ),
       rankingGrid,
     );
+    rankingToggle.addEventListener("click", () => {
+      const open = rankingToggle.getAttribute("aria-expanded") === "true";
+      rankingToggle.setAttribute("aria-expanded", open ? "false" : "true");
+      rankingBody.hidden = open;
+      rankingToggle.textContent = open
+        ? "Show all fixture rankings"
+        : "Hide fixture rankings";
+    });
+    rankingSection.append(rankingToggle, rankingBody);
 
     const summarySection = element("section", "evmsail-perf-section");
     const summaryHelp = element("p", "evmsail-perf-help");

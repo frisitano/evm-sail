@@ -495,3 +495,31 @@
     grid-template-columns: minmax(4rem, 0.5fr) 1fr minmax(2.5rem, auto);
   }
 }
+
+/* Collapsed-by-default disclosure for the fixture ranking. */
+.evmsail-perf-disclosure {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  color: var(--md-typeset-a-color);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evmsail-perf-disclosure::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.35em;
+  transition: transform 120ms ease;
+}
+
+.evmsail-perf-disclosure[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+
+.evmsail-perf-disclosure:hover {
+  text-decoration: underline;
+}
