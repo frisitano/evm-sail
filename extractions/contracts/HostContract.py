@@ -368,14 +368,14 @@ def _append_code(payload: bytes) -> Any:
 
 
 def _scratch_store(offset: int, payload: bytes) -> Any:
-    from evm.primitives.bytes import ScratchRegionReady, scratch_slice
+    from evm.primitives.bytes import scratch_slice
 
     state = get_state()
     start = int(offset)
     end = start + len(payload)
     _ensure_length(state.scratch_bytes, end)
     state.scratch_bytes[start:end] = payload
-    return ScratchRegionReady(scratch_slice(0, end))
+    return scratch_slice(0, end)
 
 
 def _keccak(data: bytes) -> bytes:
@@ -683,20 +683,31 @@ def mem_store_word(offset: int, value: int) -> None:
     )
 
 
-def stack_reset() -> None:
+# The reference reading of the opaque StackTop cursor token is the frame
+# height (the spec C ABI's choice): slot `index` below cursor `top` addresses
+# position `top - 1 - index` of the active frame's word storage.  The cursor
+# is threaded by value through the generated interpreter; this module owns
+# only the word storage and the frame-of-frames structure.
+
+_STACK_TOP_MASK = (1 << 64) - 1
+
+
+def stack_reset() -> int:
     state = get_state()
     state.operand_stack.clear()
     state.operand_stack_frames.clear()
+    return 0
 
 
-def stack_enter_frame() -> None:
+def operand_stack_push_empty_frame() -> int:
     get_state().operand_stack_frames.append(len(get_state().operand_stack))
+    return 0
 
 
-def stack_leave_frame() -> None:
+def operand_stack_pop_frame() -> None:
     state = get_state()
     if not state.operand_stack_frames:
-        raise RuntimeError("cannot leave the root operand-stack frame")
+        raise RuntimeError("cannot pop the root operand-stack frame")
     base = state.operand_stack_frames.pop()
     del state.operand_stack[base:]
 
@@ -705,36 +716,38 @@ def _stack_base(state: HostState) -> int:
     return state.operand_stack_frames[-1] if state.operand_stack_frames else 0
 
 
-def stack_depth() -> int:
+def _stack_slot_position(state: HostState, top: int, index: int) -> int:
+    return _stack_base(state) + int(top) - 1 - int(index)
+
+
+def stack_top_height(top: int) -> int:
+    return int(top)
+
+
+def stack_slot_read(top: int, index: int) -> int:
     state = get_state()
-    return len(state.operand_stack) - _stack_base(state)
-
-
-def stack_push_word(value: int) -> None:
-    get_state().operand_stack.append(int(value))
-
-
-def stack_pop_word() -> int:
-    state = get_state()
-    if len(state.operand_stack) <= _stack_base(state):
-        raise RuntimeError("operand stack underflow")
-    return state.operand_stack.pop()
-
-
-def stack_peek_word(index: int) -> int:
-    state = get_state()
-    position = len(state.operand_stack) - 1 - int(index)
-    if position < _stack_base(state):
-        raise RuntimeError("operand stack underflow")
+    position = _stack_slot_position(state, top, index)
+    if position < _stack_base(state) or position >= len(state.operand_stack):
+        raise RuntimeError("operand stack slot out of range")
     return state.operand_stack[position]
 
 
-def stack_set_word(index: int, value: int) -> None:
+def stack_slot_write(top: int, index: int, value: int) -> None:
     state = get_state()
-    position = len(state.operand_stack) - 1 - int(index)
+    position = _stack_slot_position(state, top, index)
     if position < _stack_base(state):
-        raise RuntimeError("operand stack underflow")
+        raise RuntimeError("operand stack slot out of range")
+    while len(state.operand_stack) <= position:
+        state.operand_stack.append(0)
     state.operand_stack[position] = int(value)
+
+
+def stack_top_advance(top: int, count: int) -> int:
+    return (int(top) + int(count)) & _STACK_TOP_MASK
+
+
+def stack_top_retreat(top: int, count: int) -> int:
+    return (int(top) - int(count)) & _STACK_TOP_MASK
 
 
 def frame_stack_reset() -> None:

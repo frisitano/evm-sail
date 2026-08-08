@@ -898,13 +898,29 @@ private def replaceListAt (values : List α) (index : Nat) (value : α) : List �
   | _ :: rest, 0 => value :: rest
   | head :: rest, index + 1 => head :: replaceListAt rest index value
 
-def stack_reset (_ : Unit) : SailM Unit :=
+private def writeListAt (values : List word) (position : Nat) (value : word) : List word :=
+  if position < values.length then
+    replaceListAt values position value
+  else
+    replaceListAt
+      (values ++ List.replicate (position + 1 - values.length) default)
+      position value
+
+/-- The reference reading of the opaque `StackTop` cursor token is the frame
+height (the spec C ABI's choice): slot `index` below cursor `top` addresses
+position `top - 1 - index` of the active frame's bottom-indexed word list. -/
+private def stackSlotPosition (top : StackTop) (index : stack_index) : Nat :=
+  top.toNat - 1 - index
+
+def stack_reset (_ : Unit) : SailM StackTop := do
   modify fun state => { state with stackFrames := [[]] }
+  pure 0
 
-def stack_enter_frame (_ : Unit) : SailM Unit :=
+def operand_stack_push_empty_frame (_ : Unit) : SailM StackTop := do
   modify fun state => { state with stackFrames := [] :: state.stackFrames }
+  pure 0
 
-def stack_leave_frame (_ : Unit) : SailM Unit :=
+def operand_stack_pop_frame (_ : Unit) : SailM Unit :=
   modify fun state =>
     { state with
       stackFrames :=
@@ -912,27 +928,23 @@ def stack_leave_frame (_ : Unit) : SailM Unit :=
         | _ :: parent :: rest => parent :: rest
         | frames => frames }
 
-def stack_depth (_ : Unit) : SailM operand_stack_height := do
-  pure (currentStack (← get) |>.length)
+def stack_top_height (top : StackTop) : SailM operand_stack_height :=
+  pure top.toNat
 
-def stack_push_word (value : word) : SailM Unit :=
-  modify fun state => replaceCurrentStack state (value :: currentStack state)
+def stack_slot_read (top : StackTop) (index : stack_index) : SailM word := do
+  pure ((currentStack (← get)).getD (stackSlotPosition top index) default)
 
-def stack_pop_word (_ : Unit) : SailM word := do
-  let state ← get
-  match currentStack state with
-  | [] => pure default
-  | value :: rest =>
-      set (replaceCurrentStack state rest)
-      pure value
-
-def stack_peek_word (index : stack_index) : SailM word := do
-  let state ← get
-  pure ((currentStack state).getD index default)
-
-def stack_set_word (index : stack_index) (value : word) : SailM Unit :=
+def stack_slot_write
+    (top : StackTop) (index : stack_index) (value : word) : SailM Unit :=
   modify fun state =>
-    replaceCurrentStack state (replaceListAt (currentStack state) index value)
+    replaceCurrentStack state
+      (writeListAt (currentStack state) (stackSlotPosition top index) value)
+
+def stack_top_advance (top : StackTop) (count : stack_slot_count) : SailM StackTop :=
+  pure (top + BitVec.ofNat 64 count)
+
+def stack_top_retreat (top : StackTop) (count : stack_slot_count) : SailM StackTop :=
+  pure (top - BitVec.ofNat 64 count)
 
 def frame_stack_reset (_ : Unit) : SailM Unit :=
   modify fun state => { state with continuationFrames := [] }

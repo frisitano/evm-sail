@@ -170,8 +170,19 @@ Record ScratchArenaContract := {
 }.
 
 (* sail/host/{memory,stack,frame_stack,output}.sail: EVM memory with frame
-   enter/leave, the operand stack with frame windows, the suspended-frame
-   continuation stack, and the returndata output buffer. *)
+   enter/leave, the cursor-token operand stack with frame windows, the
+   suspended-frame continuation stack, and the returndata output buffer.
+
+   The operand-stack position is the opaque StackTop cursor token (Sail
+   bits(64)), threaded by value through the interpreter in the
+   state-passing convention.  The reference reading of a cursor is the
+   frame height: slot `index` below cursor `top` addresses position
+   `top - 1 - index` of the active frame's word storage, stack_reset and
+   operand_stack_push_empty_frame return an empty cursor (height 0), and
+   stack_top_advance / stack_top_retreat are pure cursor arithmetic with
+   stack_top_height reading the height back.  The 1024-item bound and
+   every slot-index validation live in the Sail EVM layer, so the slot
+   axioms below carry no re-checks. *)
 Record MemoryStackContract := {
   memory_state : Type;
   stack_state : Type;
@@ -189,11 +200,29 @@ Record MemoryStackContract := {
       host_mem_read_ref (host_mem_write_ref mem addr b) addr' =
         host_mem_read_ref mem addr';
 
+  (* stack_slot_read / stack_slot_write over the active frame, addressed
+     as (cursor, index); two cursor/index pairs alias exactly when they
+     resolve to the same slot position `top - 1 - index`. *)
+  stack_slot_read_ref : stack_state -> Z -> Z -> word256;
+  stack_slot_write_step : stack_state -> Z -> Z -> word256 -> stack_state;
+  stack_slot_read_write_same :
+    forall st top index top' index' w,
+      uint256_wf w ->
+      top - 1 - index = top' - 1 - index' ->
+      stack_slot_read_ref (stack_slot_write_step st top index w)
+        top' index' = w;
+  stack_slot_read_write_other :
+    forall st top index top' index' w,
+      top - 1 - index <> top' - 1 - index' ->
+      stack_slot_read_ref (stack_slot_write_step st top index w)
+        top' index' = stack_slot_read_ref st top' index';
+
   memory_frame_lifo_contract : Prop;
   memory_expand_contract : Prop;
   memory_move_contract : Prop;
   output_buffer_contract : Prop;
-  evm_stack_lifo_contract : Prop;
+  stack_cursor_arithmetic_contract : Prop;
+  stack_frame_window_contract : Prop;
   continuation_stack_lifo_contract : Prop;
 }.
 
@@ -1845,7 +1874,8 @@ Definition main_boundary (contract : GuestExternContract) : Prop :=
   memory_expand_contract contract.(guest_memory_stack) /\
   memory_move_contract contract.(guest_memory_stack) /\
   output_buffer_contract contract.(guest_memory_stack) /\
-  evm_stack_lifo_contract contract.(guest_memory_stack) /\
+  stack_cursor_arithmetic_contract contract.(guest_memory_stack) /\
+  stack_frame_window_contract contract.(guest_memory_stack) /\
   continuation_stack_lifo_contract contract.(guest_memory_stack) /\
   code_content_addressing_contract contract.(guest_code_store) /\
   code_region_interning_contract contract.(guest_code_store) /\

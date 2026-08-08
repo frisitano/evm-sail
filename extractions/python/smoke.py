@@ -211,13 +211,20 @@ def main() -> None:
         host_contract.mem_frame_leave()
         assert host_contract.mem_load_word(0) == 0x1234
 
-        host_contract.stack_push_word(7)
-        host_contract.stack_enter_frame()
-        host_contract.stack_push_word(11)
-        assert host_contract.stack_depth() == 1
-        assert host_contract.stack_pop_word() == 11
-        host_contract.stack_leave_frame()
-        assert host_contract.stack_pop_word() == 7
+        parent_top = host_contract.stack_reset()
+        parent_top = host_contract.stack_top_advance(parent_top, 1)
+        host_contract.stack_slot_write(parent_top, 0, 7)
+        child_top = host_contract.operand_stack_push_empty_frame()
+        assert host_contract.stack_top_height(child_top) == 0
+        child_top = host_contract.stack_top_advance(child_top, 1)
+        host_contract.stack_slot_write(child_top, 0, 11)
+        assert host_contract.stack_top_height(child_top) == 1
+        assert host_contract.stack_slot_read(child_top, 0) == 11
+        child_top = host_contract.stack_top_retreat(child_top, 1)
+        host_contract.operand_stack_pop_frame()
+        assert host_contract.stack_top_height(parent_top) == 1
+        assert host_contract.stack_slot_read(parent_top, 0) == 7
+        host_contract.stack_top_retreat(parent_top, 1)
 
         isolated_host_state.stateless_input_bytes = b"\x05\x06\x07"
         input_slice = host_contract.stateless_input()
@@ -226,7 +233,7 @@ def main() -> None:
         stored = host_contract.host_scratch_store_stateless_input(0, input_slice)
         assert host_contract.stateless_input_keccak256(
             input_slice
-        ) == host_contract.scratch_keccak256(stored.value)
+        ) == host_contract.scratch_keccak256(stored)
 
         state_address = Bytes20(b"\x11" * 20)
         assert host_contract.account_is_warm(state_address) is False
@@ -308,18 +315,19 @@ def main() -> None:
     assert evm.address_to_word(account) == adapter.word(0x1234)
 
     cursor_validity = evm.RlpIndexCursorValidity(maximum=16)
+    populated_cursor = evm.rlp_index_cursor(8, 16)
+    initial_item = populated_cursor.current
     cursor = evm.RlpIndexCursor(
         validity=cursor_validity,
         count=evm.Uint(8),
         position=evm.Uint(0),
-        current=None,
+        current=initial_item,
     )
     assert cursor.validity.maximum == 16
-    populated_cursor = evm.rlp_index_cursor(8, 16)
     assert populated_cursor.validity == cursor.validity
     assert populated_cursor.count == cursor.count
     assert populated_cursor.position == cursor.position
-    assert populated_cursor.current is not None
+    assert populated_cursor.current == cursor.current
     expect_raises(ValueError, lambda: evm.RlpIndexCursorValidity(maximum=0))
     expect_raises(ValueError, lambda: evm.RlpIndexCursorValidity(maximum="16"))
     expect_raises(
@@ -328,7 +336,7 @@ def main() -> None:
             validity=cursor_validity,
             count=evm.Uint(17),
             position=evm.Uint(0),
-            current=None,
+            current=initial_item,
         ),
     )
 
@@ -340,7 +348,7 @@ def main() -> None:
         validity=cursor_validity,
         count=evm.Uint(8),
         position=evm.Uint(0),
-        current=None,
+        current=initial_item,
     )
 
     def invalidate_cursor_validity() -> None:

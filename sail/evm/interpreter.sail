@@ -735,7 +735,7 @@ function run_create(
     let (value, top1) = pop(top);
     let (off_word, top2) = pop(top1);
     let (len_word, top3) = pop(top2);
-    let (salt, top4) : (word, StackTop) =
+    let (salt, top4) =
         if semantics.uses_salt then pop(top3) else (WORD_ZERO, top3);
 
     /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
