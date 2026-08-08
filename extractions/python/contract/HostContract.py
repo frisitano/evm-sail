@@ -120,7 +120,7 @@ class AuthorizationRecord:
 
 
 @dataclass(slots=True)
-class StorageBlockRow:
+class StorageBlockCacheRow:
     key: Any
     value: Any
     address_hash: Any | None = None
@@ -173,10 +173,10 @@ class HostState:
     storage_tx: dict[tuple[bytes, int], StorageTxRow] = field(default_factory=dict)
     storage_generations: dict[bytes, int] = field(default_factory=dict)
     storage_next_generation: int = STORAGE_INITIAL_GENERATION
-    storage_block: dict[tuple[bytes, int], StorageBlockRow] = field(
+    storage_block: dict[tuple[bytes, int], StorageBlockCacheRow] = field(
         default_factory=dict
     )
-    storage_iterator: list[StorageBlockRow] = field(default_factory=list)
+    storage_iterator: list[StorageBlockCacheRow] = field(default_factory=list)
     account_tx: dict[bytes, Any] = field(default_factory=dict)
     account_block: dict[bytes, AccountBlockRow] = field(default_factory=dict)
     account_iterator: list[AccountBlockRow] = field(default_factory=list)
@@ -689,19 +689,27 @@ def mem_store_word(offset: int, value: int) -> None:
 # is threaded by value through the generated interpreter; this module owns
 # only the word storage and the frame-of-frames structure.
 
-_STACK_TOP_MASK = (1 << 64) - 1
+_STACK_TOP_WIDTH = 64
+_STACK_TOP_MASK = (1 << _STACK_TOP_WIDTH) - 1
 
 
-def stack_reset() -> int:
+def _stack_top(value: int) -> Any:
+    """`StackTop` is `bits(64)`, so the cursor crosses as an exact bitvector."""
+    from evm._runtime import Bits
+
+    return Bits(_STACK_TOP_WIDTH, int(value) & _STACK_TOP_MASK)
+
+
+def stack_reset() -> Any:
     state = get_state()
     state.operand_stack.clear()
     state.operand_stack_frames.clear()
-    return 0
+    return _stack_top(0)
 
 
-def operand_stack_push_empty_frame() -> int:
+def operand_stack_push_empty_frame() -> Any:
     get_state().operand_stack_frames.append(len(get_state().operand_stack))
-    return 0
+    return _stack_top(0)
 
 
 def operand_stack_pop_frame() -> None:
@@ -720,11 +728,11 @@ def _stack_slot_position(state: HostState, top: int, index: int) -> int:
     return _stack_base(state) + int(top) - 1 - int(index)
 
 
-def stack_top_height(top: int) -> int:
+def stack_top_height(top: Any) -> int:
     return int(top)
 
 
-def stack_slot_read(top: int, index: int) -> int:
+def stack_slot_read(top: Any, index: int) -> int:
     state = get_state()
     position = _stack_slot_position(state, top, index)
     if position < _stack_base(state) or position >= len(state.operand_stack):
@@ -732,7 +740,7 @@ def stack_slot_read(top: int, index: int) -> int:
     return state.operand_stack[position]
 
 
-def stack_slot_write(top: int, index: int, value: int) -> None:
+def stack_slot_write(top: Any, index: int, value: int) -> None:
     state = get_state()
     position = _stack_slot_position(state, top, index)
     if position < _stack_base(state):
@@ -742,12 +750,12 @@ def stack_slot_write(top: int, index: int, value: int) -> None:
     state.operand_stack[position] = int(value)
 
 
-def stack_top_advance(top: int, count: int) -> int:
-    return (int(top) + int(count)) & _STACK_TOP_MASK
+def stack_top_advance(top: Any, count: int) -> Any:
+    return _stack_top(int(top) + int(count))
 
 
-def stack_top_retreat(top: int, count: int) -> int:
-    return (int(top) - int(count)) & _STACK_TOP_MASK
+def stack_top_retreat(top: Any, count: int) -> Any:
+    return _stack_top(int(top) - int(count))
 
 
 def frame_stack_reset() -> None:
@@ -939,15 +947,22 @@ def code_db_store(code: Any) -> Any:
     return _bytes32_from_wire(digest)
 
 
-def code_db_lookup(value: Any) -> Any | None:
+def _code_db_get(value: Any) -> Any | None:
     return get_state().code_db.get(_hash_key(value))
+
+
+def code_db_lookup(value: Any) -> Any:
+    from evm.primitives.code import EMPTY_CODE
+
+    code = _code_db_get(value)
+    return EMPTY_CODE if code is None else code
 
 
 def code_db_read_delegation(value: Any) -> Any:
     from evm.prelude import AddressResult
     from evm.primitives.code import code_bytes
 
-    code = code_db_lookup(value)
+    code = _code_db_get(value)
     if code is None:
         return AddressResult(success=False, address=_bytes20_from_wire(bytes(20)))
     payload = _region_bytes("code", code_bytes(code))
@@ -1202,15 +1217,19 @@ def storage_tx_get(key: Any) -> Any:
     return StorageTxMiss()
 
 
-def storage_tx_pop() -> Any | None:
-    from evm.primitives.account import StorageEntry
+def storage_tx_pop() -> Any:
+    from evm.primitives.account import (
+        StorageEntry,
+        StorageTxPopExhausted,
+        StorageTxPopRow,
+    )
 
     state = get_state()
     while state.storage_tx:
         (address_key, _), row = state.storage_tx.popitem()
         if row.generation == _storage_generation(state, address_key):
-            return StorageEntry(key=row.key, value=row.value)
-    return None
+            return StorageTxPopRow(StorageEntry(key=row.key, value=row.value))
+    return StorageTxPopExhausted()
 
 
 def storage_tx_clear(address: Any) -> None:
@@ -1259,9 +1278,16 @@ def storage_has_writes(address: Any) -> bool:
     )
 
 
-def storage_block_get(key: Any) -> Any | None:
+def storage_block_get(key: Any) -> Any:
+    from evm.prelude import ZERO_WORD
+    from evm.primitives.account import StorageBlockRow, StorageValue
+
     row = get_state().storage_block.get(_storage_key(key))
-    return None if row is None else row.value
+    if row is None:
+        return StorageBlockRow(
+            found=False, value=StorageValue(curr=ZERO_WORD, orig=ZERO_WORD)
+        )
+    return StorageBlockRow(found=True, value=row.value)
 
 
 def _storage_row_hashes(key: Any) -> tuple[Any, Any]:
@@ -1283,7 +1309,7 @@ def storage_block_put(entry: Any) -> None:
     prior = state.storage_block.get(canonical)
     if prior is None:
         address_hash, slot_hash = _storage_row_hashes(entry.key)
-        state.storage_block[canonical] = StorageBlockRow(
+        state.storage_block[canonical] = StorageBlockCacheRow(
             key=entry.key,
             value=StorageValue(curr=entry.value.curr, orig=entry.value.orig),
             address_hash=address_hash,
@@ -1302,7 +1328,7 @@ def storage_block_cache(key: Any, slot_hash: Any, value: int) -> None:
     if canonical in state.storage_block:
         return
     address_hash, _ = _storage_row_hashes(key)
-    state.storage_block[canonical] = StorageBlockRow(
+    state.storage_block[canonical] = StorageBlockCacheRow(
         key=key,
         value=StorageValue(curr=int(value), orig=int(value)),
         address_hash=address_hash,
@@ -1329,25 +1355,36 @@ def storage_block_iter_begin(address: Any) -> None:
     )
 
 
-def storage_block_iter_next(address: Any) -> Any | None:
-    from evm.primitives.account import StorageEntry, StorageTrieEntry
+def storage_block_iter_next(address: Any) -> Any:
+    from evm.primitives.account import (
+        StorageBlockIterExhausted,
+        StorageBlockIterRow,
+        StorageEntry,
+        StorageTrieEntry,
+    )
 
     state = get_state()
     key = _address_key(address)
     while state.storage_iterator:
         row = state.storage_iterator.pop(0)
         if _address_key(row.key.addr) == key:
-            return StorageTrieEntry(
-                entry=StorageEntry(key=row.key, value=row.value),
-                address_hash=row.address_hash,
-                slot_hash=row.slot_hash,
+            return StorageBlockIterRow(
+                StorageTrieEntry(
+                    entry=StorageEntry(key=row.key, value=row.value),
+                    address_hash=row.address_hash,
+                    slot_hash=row.slot_hash,
+                )
             )
-    return None
+    return StorageBlockIterExhausted()
 
 
-def acct_tx_get(address: Any) -> Any | None:
+def acct_tx_get(address: Any) -> Any:
+    from evm.primitives.account import EMPTY_ACCOUNT, AccountRow
+
     row = get_state().account_tx.get(_address_key(address))
-    return None if row is None else row.current
+    if row is None:
+        return AccountRow(found=False, account=deepcopy(EMPTY_ACCOUNT))
+    return AccountRow(found=True, account=row.current)
 
 
 def acct_tx_update(address: Any, value: Any) -> None:
@@ -1501,18 +1538,25 @@ def acct_tx_set_code_hash(address: Any, value: Any) -> None:
         row.current.info.code_hash = value
 
 
-def acct_tx_pop() -> Any | None:
-    from evm.primitives.account import AcctEntry, AcctValue
+def acct_tx_pop() -> Any:
+    from evm.primitives.account import (
+        AcctEntry,
+        AcctTxPopExhausted,
+        AcctTxPopRow,
+        AcctValue,
+    )
 
     state = get_state()
     if not state.account_tx:
-        return None
+        return AcctTxPopExhausted()
     key, row = state.account_tx.popitem()
     block = state.account_block.get(key)
     address = block.address if block is not None else _bytes20_from_wire(key)
-    return AcctEntry(
-        addr=address,
-        value=AcctValue(curr=row.current, orig=row.original),
+    return AcctTxPopRow(
+        AcctEntry(
+            addr=address,
+            value=AcctValue(curr=row.current, orig=row.original),
+        )
     )
 
 
@@ -1520,9 +1564,13 @@ def acct_tx_reset() -> None:
     get_state().account_tx.clear()
 
 
-def acct_block_get(address: Any) -> Any | None:
+def acct_block_get(address: Any) -> Any:
+    from evm.primitives.account import EMPTY_ACCOUNT, AccountRow
+
     row = get_state().account_block.get(_address_key(address))
-    return None if row is None else row.value.curr
+    if row is None:
+        return AccountRow(found=False, account=deepcopy(EMPTY_ACCOUNT))
+    return AccountRow(found=True, account=row.value.curr)
 
 
 def acct_block_write(entry: Any) -> None:
@@ -1564,16 +1612,23 @@ def acct_block_iter_begin() -> None:
     )
 
 
-def acct_block_iter_next() -> Any | None:
-    from evm.primitives.account import AcctEntry, AcctTrieEntry
+def acct_block_iter_next() -> Any:
+    from evm.primitives.account import (
+        AcctBlockIterExhausted,
+        AcctBlockIterRow,
+        AcctEntry,
+        AcctTrieEntry,
+    )
 
     state = get_state()
     if not state.account_iterator:
-        return None
+        return AcctBlockIterExhausted()
     row = state.account_iterator.pop(0)
-    return AcctTrieEntry(
-        entry=AcctEntry(addr=row.address, value=row.value),
-        address_hash=row.address_hash,
+    return AcctBlockIterRow(
+        AcctTrieEntry(
+            entry=AcctEntry(addr=row.address, value=row.value),
+            address_hash=row.address_hash,
+        )
     )
 
 

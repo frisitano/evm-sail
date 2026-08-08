@@ -478,7 +478,7 @@ build-python: extract-python
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m compileall -q $(PYTHON_PACKAGE)
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
 	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON_EVM) $(PYTHON_DIR)/smoke.py
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)) $(PYTHON_EVM) $(PYTHON_DIR)/smoke.py
 
 python-lint:
 	test -s $(PYTHON_MODEL)
