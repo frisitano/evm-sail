@@ -80,9 +80,45 @@ make docs-site
 `--dashboard-only` uses the SDK pass as the benchmark measurement and parses
 total cost, steps, and any inclusive semantic scope tags from it. The
 supplemental full pass supplies every costed ZisK operation used by the input
-and every executed ELF symbol with its exclusive instruction steps. Reth and
-ethrex therefore participate in shared total and operation comparisons without
-being assigned zero values for EVM Sail-only semantic tags. A ZisK call-stack
+and every executed ELF symbol with its exclusive instruction steps.
+
+## Aligned semantic scopes in the reth and ethrex guests
+
+The staged reth and ethrex guests are built with ZisK profile-tag markers
+whose phase names align with the evm-sail `EVM_PROFILE` cycle scopes, so the
+same tag means the same work in all three guests:
+
+- `decode_input` — serialized input bytes to native block structures (SSZ
+  deserialization plus payload-to-engine-type conversion).
+- `index_witness` — witness parsing/indexing/authentication, including
+  ancestor-header decoding and (for reth/ethrex) sparse-trie construction and
+  pre-state-root verification.
+- `execute_block` — transaction signature/public-key verification plus block
+  execution (system calls and transactions), matching evm-sail, which decodes
+  and recovers transactions inside its execution scope.
+- `state_root` — post-execution state-root computation (for ethrex this also
+  covers applying account updates to the trie, the work reth performs inside
+  `calculate_state_root`).
+- `receipts_root` — receipts/commitments validation: receipts root, logs
+  bloom, requests hash, and block-access-list hash. evm-sail's own
+  `receipts_root` tag is narrower (its BAL check reports under
+  `block_access_list`).
+
+They are built from `.agent-tmp/ere-guests-scoped/`, a copy of the local
+`~/dev/ethereum/ere-guests` checkout whose zisk bin workspaces `[patch]` the
+pinned `stateless` and `ethrex` revisions with vendored copies carrying the
+markers (`vendor/stateless/`, `vendor/ethrex/`). Rebuild either guest with:
+
+```sh
+cd .agent-tmp/ere-guests-scoped/bin/stateless-validator-reth/zisk  # or ethrex
+RUSTUP_TOOLCHAIN=zisk RUSTFLAGS="-C passes=lower-atomic" \
+  cargo build --release --target riscv64ima-zisk-zkvm-elf --features cycle-scope
+```
+
+The markers are profile syscalls interpreted only by the emulator; plain and
+`--stats --sdk` runs produce byte-identical public outputs. An ELF containing
+them cannot be proved by the ZisK ASM prover, so keep these staged guests for
+emulator benchmarking and profiling only. A ZisK call-stack
 mismatch prevents inclusive call attribution, but does not affect the complete
 exclusive function inventory. Successful raw input, output, disassembly, and
 text-report artifacts are discarded; `results.json`, the benchmark report, and
