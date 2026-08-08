@@ -41,6 +41,14 @@ echo '{"version": "reth v1.11.0", "commit": "<reth commit>"}' \
   > tools/zisk-guests/stateless-validator-reth-zisk.elf.build.json
 ```
 
+The sidecars are machine-local like the ELFs they describe and are ignored by
+Git. The pins the currently staged peer guests were built from are:
+
+| Guest | ere-guests | engine source |
+| --- | --- | --- |
+| reth | `9d3d4b9` | `han0110/stateless` `711c3f91`, vendored with cycle-scope |
+| ethrex | `9d3d4b9` | `lambdaclass/ethrex` `e8860d29`, vendored with cycle-scope |
+
 The `evm-sail` guest defaults to the repository HEAD commit (suffixed
 `-dirty` for local changes). Unknown provenance is recorded as `null` and the
 dashboard shows it as unknown.
@@ -224,9 +232,10 @@ before publishing a fresh site.
 For a quick UI check, add `--limit 1`. The browser loads only the fixture
 catalog initially and fetches a selected fixture's case shard on demand. The
 fixture is the dashboard's only selector; long fixture option lists require
-search after the first 200 matches. If per-phase step attributions
-(`measurements[].phases`, see the runner docstring) are present, the
-dashboard adds a stacked per-phase view per guest.
+search after the first 200 matches. The runner reads the five aligned phase
+tags out of each SDK profile into `measurements[].phases` (see the runner
+docstring), and the dashboard turns them into a stacked per-phase view per
+guest; a guest emitting none of them is reported as not instrumented.
 
 An existing `results.json` can be re-exported without re-running any
 emulator:

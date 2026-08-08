@@ -19,12 +19,16 @@ results.json schema notes (format_version 2):
   unknown; the dashboard renders it as such rather than guessing.
 - ``guests.{name}.cases[].measurements[].phases`` is an OPTIONAL ordered list
   of coarse per-phase step attributions:
-  ``[{"name": str, "steps": int}, ...]``. The canonical phase names are
-  ``input-decode``, ``execution``, ``state-root``, and
-  ``receipts-commitments`` (see ``PHASE_NAMES``). Phase steps are exclusive
-  and sum to at most the measurement's total ``steps``; any remainder is
-  unattributed guest overhead. Guests without phase instrumentation omit the
-  key entirely — absence means "not instrumented", never zero.
+  ``[{"name": str, "steps": int}, ...]``. The canonical phases are
+  ``input-decode``, ``witness-indexing``, ``execution``, ``state-root``, and
+  ``receipts-commitments``; each is read from the aligned cross-guest profile
+  tag of the same phase (``decode_input``, ``index_witness``,
+  ``execute_block``, ``state_root``, ``receipts_root`` — see
+  ``PHASE_SCOPES``). Those five tags are emitted as mutually non-overlapping
+  scopes, so the phase steps are exclusive and sum to at most the
+  measurement's total ``steps``; any remainder is unattributed guest
+  overhead. Guests without phase instrumentation omit the key entirely —
+  absence means "not instrumented", never zero.
 
 ``--regenerate-dashboard results.json`` re-exports the dashboard dataset from
 an existing benchmark result without running any emulator.
@@ -109,12 +113,14 @@ DISASSEMBLY_INSTRUCTION_ROW = re.compile(
     r"^\s+[0-9a-f]+:\s+([0-9][0-9,]*)\s+"
 )
 FIXTURE_SUITES = frozenset(("blockchain_tests", "blockchain_tests_engine"))
-PHASE_NAMES = (
-    "input-decode",
-    "execution",
-    "state-root",
-    "receipts-commitments",
+PHASE_SCOPES = (
+    ("input-decode", "decode_input"),
+    ("witness-indexing", "index_witness"),
+    ("execution", "execute_block"),
+    ("state-root", "state_root"),
+    ("receipts-commitments", "receipts_root"),
 )
+PHASE_NAMES = tuple(phase for phase, _ in PHASE_SCOPES)
 DASHBOARD_FORMAT_VERSION = 6
 
 
@@ -401,6 +407,29 @@ def parse_profile_scope_steps(output: str) -> dict[str, int]:
 
 def parse_profile_scope_costs(output: str) -> dict[str, int]:
     return parse_profile_scope_metric(output, "cost")
+
+
+def phase_steps(
+    scope_steps: dict[str, int], total_steps: int
+) -> list[dict[str, object]]:
+    """Attribute a run's steps to the aligned cross-guest phases.
+
+    The five phase tags are emitted as mutually non-overlapping scopes, so
+    their inclusive totals are also exclusive phase totals. A guest that
+    emits none of them is not phase-instrumented and gets an empty list.
+    """
+    phases = [
+        {"name": phase, "steps": scope_steps[tag]}
+        for phase, tag in PHASE_SCOPES
+        if tag in scope_steps
+    ]
+    attributed = sum(int(phase["steps"]) for phase in phases)
+    if attributed > total_steps:
+        raise RuntimeError(
+            f"phase steps {attributed:,} exceed the run's {total_steps:,} "
+            f"total steps; the phase tags are not mutually exclusive"
+        )
+    return phases
 
 
 def parse_top_cost_functions(output: str) -> list[dict[str, object]]:
@@ -737,6 +766,11 @@ def run_profile(
         artifacts["scope_costs"] = (
             parse_profile_scope_costs(diagnostic) if has_scope_costs else {}
         )
+        phases = phase_steps(
+            artifacts["scope_steps"], int(artifacts["steps"])
+        )
+        if phases:
+            artifacts["phases"] = phases
         if comprehensive:
             artifacts["opcode_costs"] = parse_comprehensive_opcode_costs(
                 diagnostic

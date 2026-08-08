@@ -41,12 +41,14 @@
   ];
   const PHASE_ORDER = [
     "input-decode",
+    "witness-indexing",
     "execution",
     "state-root",
     "receipts-commitments",
   ];
   const PHASE_LABELS = {
     "input-decode": "Input decode",
+    "witness-indexing": "Witness indexing",
     execution: "Execution",
     "state-root": "State root",
     "receipts-commitments": "Receipts & commitments",
@@ -1063,11 +1065,11 @@
         "p",
         "evmsail-perf-help",
         "Each guest bar is split into the coarse validation phases " +
-          "reported by its instrumentation: input decode, execution, state " +
-          "root, and receipts/commitments. Segment widths share the same " +
-          "absolute step scale as the comparison above; the muted tail is " +
-          "unattributed guest overhead. Guests without phase data are " +
-          "labelled, never shown as zero.",
+          "reported by its instrumentation: input decode, witness indexing, " +
+          "execution, state root, and receipts/commitments. Segment widths " +
+          "share the same absolute step scale as the comparison above; the " +
+          "muted tail is unattributed guest overhead. Guests without phase " +
+          "data are labelled, never shown as zero.",
       ),
       phasesLegend,
       phases,

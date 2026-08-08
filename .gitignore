@@ -11,6 +11,7 @@ sail_smt_cache
 zkvm/build/
 zkvm/build-zisk/
 /tools/zisk-guests/*.elf
+/tools/zisk-guests/*.elf.build.json
 /tools/zisk-guests/SHA256SUMS
 
 # harness caches

@@ -22,6 +22,7 @@ from tools.benchmark_zisk import (
     parse_profile_scope_steps,
     parse_steps,
     parse_top_cost_functions,
+    phase_steps,
     regenerate_dashboard,
 )
 
@@ -87,6 +88,34 @@ PROFILE TAGS COST (COST, % COST, CALLS, AVG, MIN, MAX)
     def test_rejects_report_without_profile_tags(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "profile-tag section"):
             parse_profile_scope_steps("STEPS: 42")
+
+    def test_derives_phases_from_the_aligned_scope_tags(self) -> None:
+        scopes = {
+            "stateless_validation": 990,
+            "receipts_root": 50,
+            "execute_block": 700,
+            "decode_input": 100,
+            "state_root": 120,
+            "index_witness": 20,
+        }
+        self.assertEqual(
+            phase_steps(scopes, 1000),
+            [
+                {"name": "input-decode", "steps": 100},
+                {"name": "witness-indexing", "steps": 20},
+                {"name": "execution", "steps": 700},
+                {"name": "state-root", "steps": 120},
+                {"name": "receipts-commitments", "steps": 50},
+            ],
+        )
+
+    def test_reports_no_phases_without_the_aligned_scope_tags(self) -> None:
+        self.assertEqual(phase_steps({"serialize_output": 12}, 1000), [])
+        self.assertEqual(phase_steps({}, 1000), [])
+
+    def test_rejects_phase_tags_that_exceed_the_total_steps(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "not mutually exclusive"):
+            phase_steps({"execute_block": 700, "state_root": 400}, 1000)
 
     def test_parses_boxed_sdk_total_steps(self) -> None:
         self.assertEqual(parse_steps("║  STEPS     846,724  ║"), 846724)
@@ -288,8 +317,9 @@ class DashboardExportTests(unittest.TestCase):
                 if instrumented:
                     measurement["phases"] = [
                         {"name": "input-decode", "steps": 100},
+                        {"name": "witness-indexing", "steps": 20},
                         {"name": "execution", "steps": 700},
-                        {"name": "state-root", "steps": 150},
+                        {"name": "state-root", "steps": 130},
                         {"name": "receipts-commitments", "steps": 50},
                     ]
                 guest_results[guest.name] = {
@@ -424,8 +454,9 @@ class DashboardExportTests(unittest.TestCase):
                 case_guests["evm-sail"]["phases"],
                 [
                     {"name": "input-decode", "steps": 100},
+                    {"name": "witness-indexing", "steps": 20},
                     {"name": "execution", "steps": 700},
-                    {"name": "state-root", "steps": 150},
+                    {"name": "state-root", "steps": 130},
                     {"name": "receipts-commitments", "steps": 50},
                 ],
             )

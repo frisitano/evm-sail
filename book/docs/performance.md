@@ -19,10 +19,12 @@ list) loads that fixture's full comparison: guests ranked from most to fewest
 instruction steps on a shared scale, with proving cost alongside.
 
 When a guest's benchmark measurements carry per-phase step attributions
-(input decode, execution, state root, and receipts/commitments), the
-comparison adds a stacked per-phase breakdown per guest. Guests without phase
-instrumentation are labelled as such — absence of a phase is never rendered as
-zero cost.
+(input decode, witness indexing, execution, state root, and
+receipts/commitments), the comparison adds a stacked per-phase breakdown per
+guest. These five phases are the cross-guest comparison tier: each guest
+emits them as mutually non-overlapping scopes over its own pipeline. Guests
+without phase instrumentation are labelled as such — absence of a phase is
+never rendered as zero cost.
 
 The common ZisK operation-cost table includes every costed operation used by at
 least one implementation for the selected input, and aligns operations such as
@@ -55,8 +57,9 @@ full retained corpus is published.
     not interpreted as zero.
 
     Per-phase segments are **exclusive**: they partition a guest's measured
-    steps into input decode, execution, state root, and receipts/commitments,
-    with any remainder shown as unattributed guest overhead.
+    steps into input decode, witness indexing, execution, state root, and
+    receipts/commitments, with any remainder shown as unattributed guest
+    overhead.
 
     Function steps are **exclusive**: each executed instruction belongs to the
     ELF symbol whose address range contains it. The selected guest's function
