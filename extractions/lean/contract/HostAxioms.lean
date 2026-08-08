@@ -1187,16 +1187,6 @@ namespace Evm.Functions
 
 open Defs
 
-/-- Runs the generated entry point.  The generated `Evm.lean` calls
-`main_of_sail_main` under `open Evm.Functions`, and Sail's own combinator only
-accepts a bare register-monad program; this overload supplies the initial host
-store so the host-stateful program can be run unchanged. -/
-def main_of_sail_main
-    (initialState : PreSail.SequentialState RegisterType trivialChoiceSource)
-    (program : Unit → SailM Unit) : IO UInt32 :=
-  Sail.main_of_sail_main initialState fun _ =>
-    Prod.fst <$> (program () |>.run initialHostState)
-
 /-! ### Byte-array helpers -/
 
 private def ensureArraySize
