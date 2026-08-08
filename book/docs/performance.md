@@ -82,11 +82,29 @@ full retained corpus is published.
     mismatch, inclusive call attribution is unavailable, but this complete
     exclusive symbol inventory remains valid.
 
+!!! warning "How to read these comparisons"
+
+    All three guests are built and measured **locally**, from pinned sources,
+    on the same emulator and the same inputs. That makes the comparison
+    internally consistent, but it does **not** make it an authoritative
+    statement about how fast reth or ethrex can be as zkVM guests: we build
+    them with the configuration we could reproduce, which is not necessarily
+    the configuration their authors would choose, and we do not tune them.
+    Read these numbers as *this build, this configuration, this workload* —
+    useful for locating where cost lives and for tracking our own progress,
+    not as a verdict on another project's engineering. The build provenance
+    shown under each guest records exactly what was measured; the recipes are
+    in `tools/zisk-guests/README.md`, and corrections from the respective
+    teams are welcome.
+
+    The instrumented comparison ELFs also carry profiling syscalls, which the
+    emulator counts but the ASM prover cannot consume; a provable build omits
+    them.
+
 !!! note "Dataset availability"
 
-    The profile JSON is generated from the local retained fixture corpus and is
-    intentionally not committed. Documentation builds without generated data
-    still succeed and show the command needed to populate the dashboard. An
+    The dashboard dataset — the fixture catalog and the per-fixture shards —
+    is committed, so this page renders without re-running any benchmark. An
     existing benchmark result can be re-exported without re-running any
     emulator via `tools/benchmark_zisk.py --regenerate-dashboard results.json
     --dashboard-dir …`. Public Glamsterdam runs use the linked
