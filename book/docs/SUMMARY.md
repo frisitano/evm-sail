@@ -68,5 +68,5 @@
         - [Host interface](reference/sail/host/index.md)
         - reference/sail/host/*.md
 - [Spec extractions](extractions.md)
-- [Engineering](engineering.md)
+- [Research](engineering.md)
 - [zkEVM benchmarks](performance.md)

@@ -120,7 +120,7 @@ broken down by execution phase, on the
 [benchmarks dashboard](https://frisitano.github.io/evm-sail/performance.html);
 the reasoning behind the design — cost model, type-driven lowering, register
 custody, and the experiments that failed — is in the
-[engineering notes](https://frisitano.github.io/evm-sail/engineering.html).
+[research notes](https://frisitano.github.io/evm-sail/engineering.html).
 The optimisation backlog and validation requirements remain in
 [`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md).
 

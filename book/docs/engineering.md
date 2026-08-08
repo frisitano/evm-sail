@@ -1,4 +1,4 @@
-# Engineering notes
+# Research notes
 
 This page records the toolchain, the compiler machinery, and the empirical
 observations behind EVM Sail's guest — including the
