@@ -147,10 +147,14 @@ runs:
       shell: bash
       working-directory: .sail-lsp
       run: |
-        # libsail resolves to the pin established above, so this cannot pull
-        # the public package.
+        # libsail resolves to the fork named in sail-lsp's pin-depends, so this
+        # cannot pull the public package.
         opam install . --deps-only --yes
-        opam exec -- dune build --profile release
+        # @install rather than the default alias: the default builds the test
+        # directory too, whose ppx_expect is a with-test dependency that
+        # --deps-only does not install. This job wants the server binary, not
+        # the test suite.
+        opam exec -- dune build --profile release @install
         opam exec -- dune install
         if ! command -v sail_lsp >/dev/null 2>&1; then
           echo "::error::sail_lsp was not installed onto PATH"
