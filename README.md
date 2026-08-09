@@ -123,6 +123,29 @@ custody, and the experiments that failed — is in the
 [research notes](https://frisitano.github.io/evm-sail/engineering.html).
 
 
+
+### Editor setup
+
+`.vscode/` is not tracked, so configure the Sail language server locally. In
+this repository's workspace settings:
+
+```json
+{
+  "sail.projectFile": "sail/evm.sail_project",
+  "sail.projectAllModules": true,
+  "sail.lsp.args": ["--stdio", "--memo-z3-path", "${workspaceFolder}/sail_smt_cache"]
+}
+```
+
+Naming the project matters for more than tidiness. Without it the server
+rediscovers a project for each file it opens and finds none for the compiler's
+own library files, so every one of those keys a separate compiler-model cache
+entry and triggers a full project type check — which makes go-to-definition
+and indexing appear to hang. Keep this in workspace settings rather than user
+settings so a multi-root window keeps each repository's configuration to
+itself. Leave `sail.lsp.path` and `sail.executablePath` unset (or set to the
+bare names) so the editor uses the same `sail` as every other target.
+
 ## Layout
 
 ```
@@ -205,9 +228,10 @@ sail --version
 
 The compiler and `rocq-sail-stdpp` package must have compatible Sail releases.
 
-All repository targets use one custom Sail compiler, selected by
-the installed `sail` on `PATH` (override with `SAIL=`): an explicit `SAIL` takes precedence, followed
-by the adjacent feature worktree and then `sail` on `PATH`. The compiler
+All repository targets use one custom Sail compiler: the installed `sail` on
+`PATH`, overridden with `SAIL=/path/to/sail`. There is no other fallback, and
+deliberately so — a stale or upstream compiler produces a wrong model rather
+than an error, so an absent one fails loudly instead. The compiler
 supports the standard Sail backends plus spliceable type definitions and
 bound-driven native C representations. Those extensions affect only optimized
 C lowering; Lean and Coq use the same compiler without the C-only splice and
