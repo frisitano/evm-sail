@@ -160,8 +160,21 @@ def build_index(
     compiler_tokens: bool = True,
     files: list[str] | None = None,
     workspace_root: Path | None = None,
+    project: str | None = None,
+    module: str | None = None,
 ) -> dict[str, Any]:
-    client = LspClient([binary, "--stdio"])
+    # Tell the server which project these files belong to. Without it the
+    # server rediscovers a project per opened file, and files outside the tree
+    # -- every library file under the compiler's share directory -- find none.
+    # Each of those then keys its own compiler-model cache entry and triggers a
+    # fresh whole-project type check, turning indexing from one check into one
+    # per library file.
+    command = [binary, "--stdio"]
+    if project:
+        command += ["--project", str(project)]
+        if module:
+            command += ["--module", module]
+    client = LspClient(command)
     try:
         workspace_root = workspace_root or root
         init = client.request(
@@ -295,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         compiler_tokens=not args.no_compiler_tokens,
         files=files,
         workspace_root=Path(args.workspace_root).resolve() if args.workspace_root else None,
+        project=args.project,
+        module=args.module,
     )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
