@@ -10,7 +10,7 @@
 # + run_once surface (test_utils.c).
 #
 #   export PATH="$HOME/.opam/sail/bin:$PATH"
-#   eval "$(opam env --root=/Users/f/.opam --switch=sail)"
+#   eval "$(opam env --root="$HOME/.opam" --switch=sail)"
 #   ./build_lib.sh
 #   EVM_OPT_LEVEL=3 EVM_LTO=on ./build_lib.sh  # heavier release experiment
 # ===========================================================================

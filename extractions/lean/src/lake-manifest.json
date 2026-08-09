@@ -7,7 +7,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir":
-   "/Users/f/dev/ethereum/evm-sail/extractions/lean/evm/.lake/packages/Sail",
+   ".lake/packages/Sail",
    "configFile": "lakefile.toml"}],
  "name": "evm",
  "lakeDir": ".lake"}

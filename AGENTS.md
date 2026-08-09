@@ -8,12 +8,11 @@ duplicating instructions elsewhere.
 
 ## Local Operating Rules
 
-- In Tau's Codex environment, prefix shell commands with `rtk` as required by
-  `/Users/f/.codex/RTK.md`.
-- Work in the active worktree. Do not write to the protected main checkout at
-  `/Users/f/dev/ethereum/evm-sail` unless Tau explicitly asks for that checkout
-  to be modified.
-- Before edits, check the worktree state with `rtk git status --short --branch`.
+- Some environments require shell commands to be prefixed with a proxy such as
+  `rtk`; follow the environment's own instructions where that applies.
+- Work in the active worktree. Do not write to the repository's primary
+  checkout unless explicitly asked for that checkout to be modified.
+- Before edits, check the worktree state with `git status --short --branch`.
 - Prefer `rg` / `rg --files` for search.
 - Use `apply_patch` for hand-written file edits.
 - Do not clean, revert, or remove unrelated user changes or generated artifacts

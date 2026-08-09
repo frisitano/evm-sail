@@ -18,7 +18,7 @@
 # builds additionally require GMP. NO HTIF, NO spike.
 #
 #   export PATH="$HOME/.opam/sail/bin:$PATH"
-#   eval "$(opam env --root=/Users/f/.opam --switch=sail)"
+#   eval "$(opam env --root="$HOME/.opam" --switch=sail)"
 #   ./build.sh
 # ===========================================================================
 set -euo pipefail

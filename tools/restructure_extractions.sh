@@ -2,7 +2,7 @@
 # Restructure the extraction backends into a per-target layout:
 #
 #   ffi/                                -> extractions/c/
-#   ffi/optimized/                      -> extractions/c/optimised/contract/   (z -> s, per Tau's
+#   ffi/optimized/                      -> extractions/c/optimised/contract/   (z -> s, matching the
 #   ffi/spec/                           -> extractions/c/spec/contract/         repo-wide spelling:
 #                                                                                sail/optimised,
 #                                                                                make c-optimised)

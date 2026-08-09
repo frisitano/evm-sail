@@ -2,8 +2,14 @@
 """Build a secure-MPT from an EEST alloc via execution-specs, collect all
 trie nodes (hash -> rlp), and return the state root. Verified by building a
 fixture's POST alloc and matching its expected postStateHash."""
-import sys, json
-sys.path.insert(0, "/Users/f/dev/ethereum/execution-specs/src")
+import os, sys, json
+
+# execution-specs is expected beside this repository; override for other layouts.
+_ELDIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_EXECSPECS_ROOT = os.environ.get(
+    "EXECSPECS_ROOT", os.path.abspath(os.path.join(_ELDIR, "..", "execution-specs"))
+)
+sys.path.insert(0, os.path.join(_EXECSPECS_ROOT, "src"))
 
 from ethereum_rlp import rlp
 from ethereum.crypto.hash import keccak256
