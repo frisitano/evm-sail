@@ -4,7 +4,7 @@ moreLeanArgs = ["--tstack=400000"]
 
 [[require]]
 name = "evm"
-path = "../evm"
+path = "../src"
 
 [[lean_lib]]
 name = "EvmLeanRunner"

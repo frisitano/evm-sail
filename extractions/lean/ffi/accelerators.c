@@ -1,6 +1,6 @@
 #include <lean/lean.h>
 
-#include "../../../ffi/zkvm_accelerators.h"
+#include "../../c/zkvm_accelerators.h"
 
 #include <stdbool.h>
 #include <stdint.h>
