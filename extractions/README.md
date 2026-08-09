@@ -89,7 +89,7 @@ rtk make extract
 
 All full-model backends use `sail/evm.sail_project` directly and are generated
 by the same custom Sail compiler selected by
-`zkvm/resolve_optimized_sail.sh`. `c-spec` retains Sail's default name mangling,
+the installed `sail` on `PATH` (override with `SAIL=`). `c-spec` retains Sail's default name mangling,
 the generated GMP-backed ABI, and explicit Sail operations. `c-optimised` uses
 the optimized package/source-tree emitter, fixed-width specialization, unmangled
 source names, external handwritten host-slice types, and the ordered modules in

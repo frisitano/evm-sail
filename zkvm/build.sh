@@ -242,11 +242,7 @@ build_runtime() {
 }
 
 resolve_sail() {
-  if [ -z "${GUEST:-}" ]; then
-    SAIL="$(bash "$HERE/resolve_optimized_sail.sh")"
-  else
-    SAIL="${SAIL:-sail}"
-  fi
+  SAIL="${SAIL:-sail}"
   export SAIL
 }
 

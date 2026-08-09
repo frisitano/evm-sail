@@ -1,9 +1,14 @@
-# Provision this repository's CUSTOM Sail compiler and export SAIL.
+# Install this repository's CUSTOM Sail compiler onto PATH.
 #
-# Every model check, extraction target and executable build resolves the same
-# compiler through zkvm/resolve_optimized_sail.sh; upstream Sail is not a
-# supported fallback, because the repository depends on spliceable type
-# definitions and bound-driven C specialization that upstream does not have.
+# Targets use `sail` from PATH and honour SAIL= for a different build. Upstream
+# Sail is not a supported fallback, because the repository depends on
+# spliceable type definitions and bound-driven C specialization that upstream
+# does not have.
+#
+# The compiler is installed with `dune install`, which places its share tree and
+# backend plugins where the binary finds them relative to itself. No wrapper
+# script, and no SAIL_DIR or DUNE_DIR_LOCATIONS: those exist only to run an
+# uninstalled build out of its _build directory.
 #
 # The build is cached on the compiler's commit, so only the first job on a new
 # compiler revision pays for it. Workflows that fan out into several
@@ -11,8 +16,8 @@
 # ci.yml) so the others land on a warm cache instead of rebuilding in
 # parallel.
 
-name: Set up the custom Sail compiler
-description: Build (or restore) the custom Sail compiler and export SAIL.
+name: Install the custom Sail compiler
+description: Build (or restore) the custom Sail compiler and put it on PATH.
 
 inputs:
   repository:
@@ -43,11 +48,14 @@ runs:
       run: |
         echo "SAIL_COMMIT=$(git -C .sail-compiler rev-parse HEAD)" >> "$GITHUB_ENV"
 
+    # Cache the whole _build tree: the install tree's bin/sail is a symlink into
+    # _build/default, so caching only _build/install/default restores a dangling
+    # link and the compiler looks built when it is not.
     - name: Restore the built compiler
       id: sail-cache
       uses: actions/cache@v4
       with:
-        path: .sail-compiler/_build/install/default
+        path: .sail-compiler/_build
         key: sail-${{ runner.os }}-ocaml${{ inputs.ocaml-compiler }}-${{ env.SAIL_COMMIT }}
 
     # The switch is needed even on a cache hit: the compiler links against
@@ -66,18 +74,27 @@ runs:
         opam install . --deps-only --yes
         opam exec -- dune build --profile release
 
-    # Sail loads its backends as plugins from the install tree's share
-    # directory, so DUNE_DIR_LOCATIONS has to point at it exactly as the
-    # compiler's own `sail` wrapper script does.
-    - name: Export SAIL
+    - name: Install onto PATH
       shell: bash
       run: |
-        install_root="$GITHUB_WORKSPACE/.sail-compiler/_build/install/default"
-        sail_bin="$install_root/bin/sail"
-        if [ ! -x "$sail_bin" ]; then
-          echo "::error::custom Sail compiler was not built at $sail_bin"
+        prefix="$RUNNER_TEMP/sail-install"
+        (cd .sail-compiler && opam exec -- dune install --prefix "$prefix")
+        if [ ! -x "$prefix/bin/sail" ]; then
+          echo "::error::sail was not installed at $prefix/bin/sail"
           exit 1
         fi
-        echo "SAIL=$sail_bin" >> "$GITHUB_ENV"
-        echo "DUNE_DIR_LOCATIONS=libsail:share:$install_root/share/libsail" >> "$GITHUB_ENV"
-        "$sail_bin" --version || true
+        echo "$prefix/bin" >> "$GITHUB_PATH"
+
+    - name: Verify the installed compiler
+      shell: bash
+      run: |
+        prefix="$RUNNER_TEMP/sail-install"
+        "$prefix/bin/sail" --version
+        # The backends are plugins, so a bare --version would not catch a share
+        # tree that failed to install.
+        for backend in lean coq c doc; do
+          if ! "$prefix/bin/sail" --help 2>&1 | grep -q -- "-$backend\b"; then
+            echo "::error::sail backend --$backend unavailable; share tree incomplete"
+            exit 1
+          fi
+        done

@@ -5,8 +5,8 @@
 # All steps are make-target-based so the extractions layout can move
 # extractions/c restructure does not touch this workflow.
 #
-# Jobs below the divider need the repository's CUSTOM Sail compiler
-# (zkvm/resolve_optimized_sail.sh; upstream Sail is not a supported fallback).
+# Jobs below the divider need the repository's CUSTOM Sail compiler (targets
+# default to `sail` on PATH and honour SAIL=; upstream Sail is not supported).
 # It is provisioned by .github/actions/setup-sail, which builds it from the
 # compiler repository and caches it on its commit. Those jobs depend on the
 # `sail-compiler` job so the compiler is built once and the rest start from a

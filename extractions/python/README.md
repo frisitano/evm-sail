@@ -15,14 +15,11 @@ With an installed Sail Python plugin:
 rtk make extract-python
 ```
 
-To validate an uninstalled Sail worktree, identify both its Sail executable
-and plugin:
+To validate a different build of the compiler, point `SAIL` at it. An
+installed compiler carries its own plugins, so nothing else is needed:
 
 ```sh
-rtk env SAIL_DIR=/path/to/sail/worktree make \
-  SAIL=/path/to/sail.exe \
-  SAIL_PYTHON_PLUGIN=/path/to/sail_plugin_python.cmxs \
-  extract-python
+make SAIL=/path/to/sail extract-python
 ```
 
 The target regenerates the complete model with an embedded runtime, compiles

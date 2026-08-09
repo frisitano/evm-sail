@@ -19,7 +19,7 @@ zkEVM benchmark dashboard.
 🛠 **[Custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)** —
 the fork this repository builds with, carrying bound-driven C specialization,
 the splice mechanism, and proof-aware narrowing policies. Upstream Sail is not
-a supported substitute; `zkvm/resolve_optimized_sail.sh` resolves it.
+a supported substitute; the installed `sail` on `PATH` (override with `SAIL=`) resolves it.
 
 Objectives:
 
@@ -206,7 +206,7 @@ sail --version
 The compiler and `rocq-sail-stdpp` package must have compatible Sail releases.
 
 All repository targets use one custom Sail compiler, selected by
-`zkvm/resolve_optimized_sail.sh`: an explicit `SAIL` takes precedence, followed
+the installed `sail` on `PATH` (override with `SAIL=`): an explicit `SAIL` takes precedence, followed
 by the adjacent feature worktree and then `sail` on `PATH`. The compiler
 supports the standard Sail backends plus spliceable type definitions and
 bound-driven native C representations. Those extensions affect only optimized

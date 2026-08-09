@@ -25,15 +25,16 @@
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
-# Requires this repository's custom rems-project Sail compiler. It is resolved
-# once through zkvm/resolve_optimized_sail.sh and used for checks plus the C,
-# Coq, and Lean backends. See README.md.
+# Requires this repository's custom rems-project Sail compiler, used for
+# checks plus the C, Coq, and Lean backends. It defaults to `sail` on PATH;
+# override with `make SAIL=/path/to/sail`. Upstream Sail is not a supported
+# fallback -- it produces a wrong model rather than an error. See README.md.
 #
 # Block EXECUTION (compile to C and run) is validated by the EEST harness
 # and the zkVM guest (harness/run.py over the zkvm/native-runner builds).
 # ===========================================================================
 
-SAIL ?= $(shell bash zkvm/resolve_optimized_sail.sh)
+SAIL ?= sail
 Z3_MEMO_PATH ?= $(abspath sail_smt_cache)
 SAIL_Z3_FLAGS := --memo-z3 --memo-z3-path $(Z3_MEMO_PATH)
 LAKE ?= lake

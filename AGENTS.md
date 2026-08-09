@@ -253,8 +253,8 @@ recursive and trie-shaped:
 
 ## Build And Lint
 
-Every model check, extraction target, and executable build resolves the same
-custom Sail compiler through `zkvm/resolve_optimized_sail.sh`. That compiler
+Every model check, extraction target, and executable build uses the same
+custom Sail compiler: `sail` on `PATH`, overridable with `SAIL=`. That compiler
 supports the standard Sail backends plus spliceable type definitions and
 bound-driven C specialization. With `--c-specialize`, proof-backed fixed
 representations are preserved across function arguments and results, and the
@@ -300,9 +300,11 @@ optimized-exception annotations, while `sail/optimised/` may refine a semantic
 type to an optimized-only C representation. In particular, canonical 20-byte
 addresses and 32-byte digests retain byte-index semantics in Sail but use
 `fixed_bytes_u64_lanes` in optimized C. Lean/Coq extraction retains the
-ordinary semantic types without loading the C-only splice. Set `SAIL`
-explicitly to test another build of this custom compiler; upstream Sail is not
-a supported fallback for repository targets. Sail/Z3 query memoization is
+ordinary semantic types without loading the C-only splice. Targets use the
+installed `sail` on `PATH` and honour `SAIL=` for a different build (a
+worktree, a bisect, a compiler under test). Upstream Sail is not supported
+for repository targets: a stale or upstream compiler produces a wrong model
+rather than an error, so install the custom compiler as your `sail`. Sail/Z3 query memoization is
 explicitly enabled for model checks, extraction, and native/guest generation,
 using the repo-local `sail_smt_cache` file. `Z3_MEMO_PATH` overrides it in Make
 and `SAIL_Z3_MEMO_PATH` overrides it in the build scripts. Ordinary

@@ -180,9 +180,9 @@ Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. Every repository
 target uses the same custom Sail compiler. Its optimized C lowering supports
 spliceable type definitions and bound-driven native C representations, while
 its standard Lean and Coq backends preserve the model's semantic types. The
-build's `resolve_optimized_sail.sh` uses `SAIL` when set, auto-detects the local
-feature worktree used by this repository, and otherwise uses the compiler on
-`PATH`. Upstream Sail is not a proof-extraction fallback; the real target build
+build uses `sail` on `PATH` and honours `SAIL=` for a different build; there is
+no auto-detection, because silently resolving a stale compiler yields a wrong
+model instead of an error. Upstream Sail is not a proof-extraction fallback; the real target build
 is the capability check.
 
 ```

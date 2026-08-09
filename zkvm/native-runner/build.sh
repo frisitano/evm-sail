@@ -41,7 +41,7 @@ OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 mkdir -p "$BUILD"
 
-SAIL="$(bash "$ROOT/zkvm/resolve_optimized_sail.sh")"
+SAIL="${SAIL:-sail}"
 export SAIL
 CC="${CC:-cc}"
 EVM_PROFILE="${EVM_PROFILE:-off}"
@@ -113,8 +113,8 @@ if [ "$EVM_BUILD_MODE" = standard ] && [ "$EVM_PROFILE" = on ]; then
 fi
 
 # --- Sail C runtime include dir (where sail.h lives) ------------------------
-# Query Sail rather than deriving this from the executable path. This also
-# supports an uninstalled compiler worktree whose wrapper sets SAIL_DIR.
+# Query Sail rather than deriving this from the executable path, so the
+# location moves with the compiler rather than being assumed here.
 SAIL_LIB="$("$SAIL" --dir)/lib"
 if [ ! -f "$SAIL_LIB/sail.h" ]; then
   echo "error: sail.h not found under $SAIL_LIB" >&2
