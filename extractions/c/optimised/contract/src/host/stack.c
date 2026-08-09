@@ -76,8 +76,7 @@ u256 *stack_frame_base(void)
 
 uint16_t stack_top_height(uint64_t top)
 {
-  return (uint16_t)((const u256 *)(uintptr_t)top -
-                    operand_stack.frames[operand_stack.depth].words);
+  return (uint16_t)((const u256 *)(uintptr_t)top - operand_stack.frames[operand_stack.depth].words);
 }
 
 u256 stack_slot_read(uint64_t top, uint16_t index)

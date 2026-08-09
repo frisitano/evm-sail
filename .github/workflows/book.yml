@@ -15,7 +15,9 @@
 #   5. runs a strict `mkdocs build` (Material theme + the sail-book plugin,
 #      book/mkdocs.yml) into book/site.
 # Every step is make-target-based, so repository layout can move without
-# touching this workflow.
+# touching this workflow. The custom Sail compiler that step 2 needs is
+# provisioned by .github/actions/setup-sail, which builds it from the
+# compiler repository and caches it on its commit.
 
 name: book
 
@@ -47,25 +49,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      # TODO(toolchain): `make docs-site` requires this repository's CUSTOM
-      # Sail compiler (resolved via zkvm/resolve_optimized_sail.sh; upstream
-      # Sail is not a supported fallback). Provision it here and export
-      # SAIL=<path>. Options:
-      #   - build the feature compiler (rems-project/sail fork, branch
-      #     implement-per-newtype-c-representation-overrides-in-sail) with
-      #     ocaml/setup-ocaml@v3 + dune, cached by compiler commit; or
-      #   - download a prebuilt binary artifact published by the compiler
-      #     repository's own CI.
-      # Until provisioning is implemented this step fails fast with a clear
-      # message instead of silently using an incompatible sail.
-      - name: Resolve custom Sail compiler
-        run: |
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable on this runner; implement TODO(toolchain) in .github/workflows/book.yml"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
 
       - name: Build book
         run: make docs-site

@@ -1,0 +1,83 @@
+# Provision this repository's CUSTOM Sail compiler and export SAIL.
+#
+# Every model check, extraction target and executable build resolves the same
+# compiler through zkvm/resolve_optimized_sail.sh; upstream Sail is not a
+# supported fallback, because the repository depends on spliceable type
+# definitions and bound-driven C specialization that upstream does not have.
+#
+# The build is cached on the compiler's commit, so only the first job on a new
+# compiler revision pays for it. Workflows that fan out into several
+# toolchain jobs should run one job first (see the `sail-compiler` job in
+# ci.yml) so the others land on a warm cache instead of rebuilding in
+# parallel.
+
+name: Set up the custom Sail compiler
+description: Build (or restore) the custom Sail compiler and export SAIL.
+
+inputs:
+  repository:
+    description: Repository holding the custom compiler.
+    required: false
+    default: frisitano/sail
+  ref:
+    description: Branch, tag or SHA to build.
+    required: false
+    default: evm-sail
+  ocaml-compiler:
+    description: OCaml compiler version used to build it.
+    required: false
+    default: "5.2"
+
+runs:
+  using: composite
+  steps:
+    - name: Check out the custom compiler
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        path: .sail-compiler
+
+    - name: Record the compiler revision
+      shell: bash
+      run: |
+        echo "SAIL_COMMIT=$(git -C .sail-compiler rev-parse HEAD)" >> "$GITHUB_ENV"
+
+    - name: Restore the built compiler
+      id: sail-cache
+      uses: actions/cache@v4
+      with:
+        path: .sail-compiler/_build/install/default
+        key: sail-${{ runner.os }}-ocaml${{ inputs.ocaml-compiler }}-${{ env.SAIL_COMMIT }}
+
+    # The switch is needed even on a cache hit: the compiler links against
+    # libraries from it at run time.
+    - name: Set up OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: ${{ inputs.ocaml-compiler }}
+        opam-pin: false
+
+    - name: Build the compiler
+      if: steps.sail-cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: .sail-compiler
+      run: |
+        opam install . --deps-only --yes
+        opam exec -- dune build --profile release
+
+    # Sail loads its backends as plugins from the install tree's share
+    # directory, so DUNE_DIR_LOCATIONS has to point at it exactly as the
+    # compiler's own `sail` wrapper script does.
+    - name: Export SAIL
+      shell: bash
+      run: |
+        install_root="$GITHUB_WORKSPACE/.sail-compiler/_build/install/default"
+        sail_bin="$install_root/bin/sail"
+        if [ ! -x "$sail_bin" ]; then
+          echo "::error::custom Sail compiler was not built at $sail_bin"
+          exit 1
+        fi
+        echo "SAIL=$sail_bin" >> "$GITHUB_ENV"
+        echo "DUNE_DIR_LOCATIONS=libsail:share:$install_root/share/libsail" >> "$GITHUB_ENV"
+        "$sail_bin" --version || true

@@ -219,100 +219,100 @@ Bytes interpret(void)
   T_NEXT
 
   static const void *const interp_dispatch[256] = {
-    [0x00] = &&op_00,
-    [0x01] = &&op_01,
-    [0x02] = &&op_02,
-    [0x03] = &&op_03,
-    [0x04] = &&op_04,
-    [0x05] = &&op_05,
-    [0x06] = &&op_06,
-    [0x07] = &&op_07,
-    [0x08] = &&op_08,
-    [0x09] = &&op_09,
-    [0x0a] = &&op_0a,
-    [0x0b] = &&op_0b,
-    [0x0c ... 0x0f] = &&op_invalid,
-    [0x10] = &&op_10,
-    [0x11] = &&op_11,
-    [0x12] = &&op_12,
-    [0x13] = &&op_13,
-    [0x14] = &&op_14,
-    [0x15] = &&op_15,
-    [0x16] = &&op_16,
-    [0x17] = &&op_17,
-    [0x18] = &&op_18,
-    [0x19] = &&op_19,
-    [0x1a] = &&op_1a,
-    [0x1b] = &&op_1b,
-    [0x1c] = &&op_1c,
-    [0x1d] = &&op_1d,
-    [0x1e] = &&op_1e,
-    [0x1f] = &&op_invalid,
-    [0x20] = &&op_20,
-    [0x21 ... 0x2f] = &&op_invalid,
-    [0x30] = &&op_30,
-    [0x31] = &&op_31,
-    [0x32] = &&op_32,
-    [0x33] = &&op_33,
-    [0x34] = &&op_34,
-    [0x35] = &&op_35,
-    [0x36] = &&op_36,
-    [0x37] = &&op_37,
-    [0x38] = &&op_38,
-    [0x39] = &&op_39,
-    [0x3a] = &&op_3a,
-    [0x3b] = &&op_3b,
-    [0x3c] = &&op_3c,
-    [0x3d] = &&op_3d,
-    [0x3e] = &&op_3e,
-    [0x3f] = &&op_3f,
-    [0x40] = &&op_40,
-    [0x41] = &&op_41,
-    [0x42] = &&op_42,
-    [0x43] = &&op_43,
-    [0x44] = &&op_44,
-    [0x45] = &&op_45,
-    [0x46] = &&op_46,
-    [0x47] = &&op_47,
-    [0x48] = &&op_48,
-    [0x49] = &&op_49,
-    [0x4a] = &&op_4a,
-    [0x4b] = &&op_4b,
-    [0x4c ... 0x4f] = &&op_invalid,
-    [0x50] = &&op_50,
-    [0x51] = &&op_51,
-    [0x52] = &&op_52,
-    [0x53] = &&op_53,
-    [0x54] = &&op_54,
-    [0x55] = &&op_55,
-    [0x56] = &&op_56,
-    [0x57] = &&op_57,
-    [0x58] = &&op_58,
-    [0x59] = &&op_59,
-    [0x5a] = &&op_5a,
-    [0x5b] = &&op_5b,
-    [0x5c] = &&op_5c,
-    [0x5d] = &&op_5d,
-    [0x5e] = &&op_5e,
-    [0x5f ... 0x7f] = &&op_push,
-    [0x80 ... 0x8f] = &&op_dup,
-    [0x90 ... 0x9f] = &&op_swap,
-    [0xa0 ... 0xa4] = &&op_log,
-    [0xa5 ... 0xe5] = &&op_invalid,
-    [0xe6 ... 0xe8] = &&op_ext,
-    [0xe9 ... 0xef] = &&op_invalid,
-    [0xf0] = &&op_f0,
-    [0xf1] = &&op_f1,
-    [0xf2] = &&op_f2,
-    [0xf3] = &&op_f3,
-    [0xf4] = &&op_f4,
-    [0xf5] = &&op_f5,
-    [0xf6 ... 0xf9] = &&op_invalid,
-    [0xfa] = &&op_fa,
-    [0xfb ... 0xfc] = &&op_invalid,
-    [0xfd] = &&op_fd,
-    [0xfe] = &&op_invalid,
-    [0xff] = &&op_ff,
+      [0x00] = &&op_00,
+      [0x01] = &&op_01,
+      [0x02] = &&op_02,
+      [0x03] = &&op_03,
+      [0x04] = &&op_04,
+      [0x05] = &&op_05,
+      [0x06] = &&op_06,
+      [0x07] = &&op_07,
+      [0x08] = &&op_08,
+      [0x09] = &&op_09,
+      [0x0a] = &&op_0a,
+      [0x0b] = &&op_0b,
+      [0x0c ... 0x0f] = &&op_invalid,
+      [0x10] = &&op_10,
+      [0x11] = &&op_11,
+      [0x12] = &&op_12,
+      [0x13] = &&op_13,
+      [0x14] = &&op_14,
+      [0x15] = &&op_15,
+      [0x16] = &&op_16,
+      [0x17] = &&op_17,
+      [0x18] = &&op_18,
+      [0x19] = &&op_19,
+      [0x1a] = &&op_1a,
+      [0x1b] = &&op_1b,
+      [0x1c] = &&op_1c,
+      [0x1d] = &&op_1d,
+      [0x1e] = &&op_1e,
+      [0x1f] = &&op_invalid,
+      [0x20] = &&op_20,
+      [0x21 ... 0x2f] = &&op_invalid,
+      [0x30] = &&op_30,
+      [0x31] = &&op_31,
+      [0x32] = &&op_32,
+      [0x33] = &&op_33,
+      [0x34] = &&op_34,
+      [0x35] = &&op_35,
+      [0x36] = &&op_36,
+      [0x37] = &&op_37,
+      [0x38] = &&op_38,
+      [0x39] = &&op_39,
+      [0x3a] = &&op_3a,
+      [0x3b] = &&op_3b,
+      [0x3c] = &&op_3c,
+      [0x3d] = &&op_3d,
+      [0x3e] = &&op_3e,
+      [0x3f] = &&op_3f,
+      [0x40] = &&op_40,
+      [0x41] = &&op_41,
+      [0x42] = &&op_42,
+      [0x43] = &&op_43,
+      [0x44] = &&op_44,
+      [0x45] = &&op_45,
+      [0x46] = &&op_46,
+      [0x47] = &&op_47,
+      [0x48] = &&op_48,
+      [0x49] = &&op_49,
+      [0x4a] = &&op_4a,
+      [0x4b] = &&op_4b,
+      [0x4c ... 0x4f] = &&op_invalid,
+      [0x50] = &&op_50,
+      [0x51] = &&op_51,
+      [0x52] = &&op_52,
+      [0x53] = &&op_53,
+      [0x54] = &&op_54,
+      [0x55] = &&op_55,
+      [0x56] = &&op_56,
+      [0x57] = &&op_57,
+      [0x58] = &&op_58,
+      [0x59] = &&op_59,
+      [0x5a] = &&op_5a,
+      [0x5b] = &&op_5b,
+      [0x5c] = &&op_5c,
+      [0x5d] = &&op_5d,
+      [0x5e] = &&op_5e,
+      [0x5f ... 0x7f] = &&op_push,
+      [0x80 ... 0x8f] = &&op_dup,
+      [0x90 ... 0x9f] = &&op_swap,
+      [0xa0 ... 0xa4] = &&op_log,
+      [0xa5 ... 0xe5] = &&op_invalid,
+      [0xe6 ... 0xe8] = &&op_ext,
+      [0xe9 ... 0xef] = &&op_invalid,
+      [0xf0] = &&op_f0,
+      [0xf1] = &&op_f1,
+      [0xf2] = &&op_f2,
+      [0xf3] = &&op_f3,
+      [0xf4] = &&op_f4,
+      [0xf5] = &&op_f5,
+      [0xf6 ... 0xf9] = &&op_invalid,
+      [0xfa] = &&op_fa,
+      [0xfb ... 0xfc] = &&op_invalid,
+      [0xfd] = &&op_fd,
+      [0xfe] = &&op_invalid,
+      [0xff] = &&op_ff,
   };
 
   uint8_t opcode;
@@ -332,29 +332,28 @@ interp_next:
     goto interp_halted;
   T_NEXT;
 
-interp_halted:
-  {
-    /* The frame stopped: publish the carried state at this one frame
+interp_halted: {
+  /* The frame stopped: publish the carried state at this one frame
      * boundary, then unwind or resume through the registers. */
-    pc = pc_local;
-    gas_remaining = lgas;
-    stack_top = (uint64_t)(uintptr_t)sp;
-    evm_memory = lmem;
-    Bytes output = frame_output();
-    struct FrameContinuation continuation = frame_stack_pop();
-    if (continuation.kind == Kind_Empty) {
-      return output;
-    }
-    resume_frame(continuation, output);
-    pc_local = pc;
-    lgas = gas_remaining;
-    sp = (u256 *)(uintptr_t)stack_top;
-    sbase = stack_frame_base();
-    lmem = evm_memory;
-    cbytes = frame_code.bytes;
-    clen = frame_code.len;
-    goto interp_next;
+  pc = pc_local;
+  gas_remaining = lgas;
+  stack_top = (uint64_t)(uintptr_t)sp;
+  evm_memory = lmem;
+  Bytes output = frame_output();
+  struct FrameContinuation continuation = frame_stack_pop();
+  if (continuation.kind == Kind_Empty) {
+    return output;
   }
+  resume_frame(continuation, output);
+  pc_local = pc;
+  lgas = gas_remaining;
+  sp = (u256 *)(uintptr_t)stack_top;
+  sbase = stack_frame_base();
+  lmem = evm_memory;
+  cbytes = frame_code.bytes;
+  clen = frame_code.len;
+  goto interp_next;
+}
 
 op_end_of_code:
   /* Past the end of code the frame implicitly executes STOP (YP). */
@@ -367,7 +366,7 @@ interp_exc:
   lgas = exc_halt(lgas, halt_reason);
   goto interp_halted;
 
-  op_push:
+op_push:
   if (opcode == 0x5f && active_fork() < EVMSAIL_FORK_SHANGHAI) {
     goto op_invalid;
   }
@@ -382,7 +381,7 @@ interp_exc:
   }
   T_NEXT;
 
-  op_ext:
+op_ext:
   if (active_fork() < EVMSAIL_FORK_AMSTERDAM) {
     goto op_invalid;
   }
@@ -425,262 +424,254 @@ interp_exc:
   }
   T_NEXT;
 
-  op_dup:
-  {
-    uint32_t n = (uint32_t)(opcode - 0x7f);
-    T_CHECK(n, n + 1);
-    T_CHARGE(GAS_VERYLOW);
-    sp[0] = sp[-(ptrdiff_t)n];
-    sp += 1;
-  }
+op_dup: {
+  uint32_t n = (uint32_t)(opcode - 0x7f);
+  T_CHECK(n, n + 1);
+  T_CHARGE(GAS_VERYLOW);
+  sp[0] = sp[-(ptrdiff_t)n];
+  sp += 1;
+}
   T_NEXT;
 
-  op_swap:
-  {
-    uint32_t n = (uint32_t)(opcode - 0x8f);
-    T_CHECK(n + 1, n + 1);
-    T_CHARGE(GAS_VERYLOW);
-    u256 swapped = sp[-1];
-    sp[-1] = sp[-1 - (ptrdiff_t)n];
-    sp[-1 - (ptrdiff_t)n] = swapped;
-  }
+op_swap: {
+  uint32_t n = (uint32_t)(opcode - 0x8f);
+  T_CHECK(n + 1, n + 1);
+  T_CHARGE(GAS_VERYLOW);
+  u256 swapped = sp[-1];
+  sp[-1] = sp[-1 - (ptrdiff_t)n];
+  sp[-1 - (ptrdiff_t)n] = swapped;
+}
   T_NEXT;
 
-  op_log:
-  {
-    uint8_t topics = (uint8_t)(opcode - 0xa0);
-    T_CHECK((uint32_t)topics + 2U, 0);
-    struct tuple_bits_64_Bytes_uint_64 r =
-        execute_log(topics, (uint64_t)(uintptr_t)sp, lmem, lgas);
-    sp = (u256 *)(uintptr_t)r.tup0;
-    lmem = r.tup1;
-    lgas = r.tup2;
-  }
+op_log: {
+  uint8_t topics = (uint8_t)(opcode - 0xa0);
+  T_CHECK((uint32_t)topics + 2U, 0);
+  struct tuple_bits_64_Bytes_uint_64 r = execute_log(topics, (uint64_t)(uintptr_t)sp, lmem, lgas);
+  sp = (u256 *)(uintptr_t)r.tup0;
+  lmem = r.tup1;
+  lgas = r.tup2;
+}
   goto interp_next;
 
-  op_00:
-    execute_stop();
-    goto interp_next;
-  op_01:
-    T_BINARY(GAS_VERYLOW, alu_add);
-  op_02:
-    T_BINARY(GAS_LOW, alu_mul);
-  op_03:
-    T_BINARY(GAS_VERYLOW, alu_sub);
-  op_04:
-    T_BINARY(GAS_LOW, alu_div);
-  op_05:
-    T_BINARY(GAS_LOW, alu_sdiv);
-  op_06:
-    T_BINARY(GAS_LOW, alu_mod);
-  op_07:
-    T_BINARY(GAS_LOW, alu_smod);
-  op_08:
-    T_TERNARY(GAS_MID, alu_addmod);
-  op_09:
-    T_TERNARY(GAS_MID, alu_mulmod);
-  op_0a:
-  {
-    T_CHECK(2, 1);
-    T_CHARGE(exp_gas(sp[-2]));
-    sp[-2] = alu_exp(sp[-1], sp[-2]);
-    sp -= 1;
-  }
+op_00:
+  execute_stop();
+  goto interp_next;
+op_01:
+  T_BINARY(GAS_VERYLOW, alu_add);
+op_02:
+  T_BINARY(GAS_LOW, alu_mul);
+op_03:
+  T_BINARY(GAS_VERYLOW, alu_sub);
+op_04:
+  T_BINARY(GAS_LOW, alu_div);
+op_05:
+  T_BINARY(GAS_LOW, alu_sdiv);
+op_06:
+  T_BINARY(GAS_LOW, alu_mod);
+op_07:
+  T_BINARY(GAS_LOW, alu_smod);
+op_08:
+  T_TERNARY(GAS_MID, alu_addmod);
+op_09:
+  T_TERNARY(GAS_MID, alu_mulmod);
+op_0a: {
+  T_CHECK(2, 1);
+  T_CHARGE(exp_gas(sp[-2]));
+  sp[-2] = alu_exp(sp[-1], sp[-2]);
+  sp -= 1;
+}
   T_NEXT;
-  op_0b:
-    T_BINARY(GAS_LOW, alu_signextend);
-  op_10:
-    T_BINARY(GAS_VERYLOW, alu_lt);
-  op_11:
-    T_BINARY(GAS_VERYLOW, alu_gt);
-  op_12:
-    T_BINARY(GAS_VERYLOW, alu_slt);
-  op_13:
-    T_BINARY(GAS_VERYLOW, alu_sgt);
-  op_14:
-    T_BINARY(GAS_VERYLOW, alu_eq);
-  op_15:
-    T_UNARY(GAS_VERYLOW, alu_iszero);
-  op_16:
-    T_BINARY(GAS_VERYLOW, alu_and);
-  op_17:
-    T_BINARY(GAS_VERYLOW, alu_or);
-  op_18:
-    T_BINARY(GAS_VERYLOW, alu_xor);
-  op_19:
-    T_UNARY(GAS_VERYLOW, alu_not);
-  op_1a:
-    T_BINARY(GAS_VERYLOW, alu_byte);
-  op_1b:
-    T_BINARY(GAS_VERYLOW, alu_shl);
-  op_1c:
-    T_BINARY(GAS_VERYLOW, alu_shr);
-  op_1d:
-    T_BINARY(GAS_VERYLOW, alu_sar);
-  op_1e:
-    if (active_fork() >= EVMSAIL_FORK_OSAKA) {
-      T_UNARY(GAS_LOW, alu_clz);
-    } else {
-      goto op_invalid;
-    }
-  op_20:
-    T_CALL_B(keccak256, 2, 1);
-  op_30:
-    T_CALL_A(address, 0, 1);
-  op_31:
-    T_CALL_A(balance, 1, 1);
-  op_32:
-    T_CALL_A(origin, 0, 1);
-  op_33:
-    T_CALL_A(caller, 0, 1);
-  op_34:
-    T_CALL_A(callvalue, 0, 1);
-  op_35:
-    T_CALL_A(calldataload, 1, 1);
-  op_36:
-    T_CALL_A(calldatasize, 0, 1);
-  op_37:
-    T_CALL_B(calldatacopy, 3, 0);
-  op_38:
-    T_CALL_A(codesize, 0, 1);
-  op_39:
-    T_CALL_B(codecopy, 3, 0);
-  op_3a:
-    T_CALL_A(gasprice, 0, 1);
-  op_3b:
-    T_CALL_A(extcodesize, 1, 1);
-  op_3c:
-    T_CALL_B(extcodecopy, 4, 0);
-  op_3d:
-    T_CALL_A(returndatasize, 0, 1);
-  op_3e:
-    T_CALL_B(returndatacopy, 3, 0);
-  op_3f:
-    T_CALL_A(extcodehash, 1, 1);
-  op_40:
-    T_CALL_A(blockhash, 1, 1);
-  op_41:
-    T_CALL_A(coinbase, 0, 1);
-  op_42:
-    T_CALL_A(timestamp, 0, 1);
-  op_43:
-    T_CALL_A(number, 0, 1);
-  op_44:
-    T_CALL_A(prevrandao, 0, 1);
-  op_45:
-    T_CALL_A(gaslimit, 0, 1);
-  op_46:
-    T_CALL_A(chainid, 0, 1);
-  op_47:
-    T_CALL_A(selfbalance, 0, 1);
-  op_48:
-    if (active_fork() >= EVMSAIL_FORK_LONDON) {
-      T_CALL_A(basefee, 0, 1);
-    } else {
-      goto op_invalid;
-    }
-  op_49:
-    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
-      T_CALL_A(blobhash, 1, 1);
-    } else {
-      goto op_invalid;
-    }
-  op_4a:
-    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
-      T_CALL_A(blobbasefee, 0, 1);
-    } else {
-      goto op_invalid;
-    }
-  op_4b:
-    if (active_fork() >= EVMSAIL_FORK_AMSTERDAM) {
-      T_CALL_A(slotnum, 0, 1);
-    } else {
-      goto op_invalid;
-    }
-  op_50:
-  {
-    T_CHECK(1, 0);
-    T_CHARGE(GAS_BASE);
-    sp -= 1;
+op_0b:
+  T_BINARY(GAS_LOW, alu_signextend);
+op_10:
+  T_BINARY(GAS_VERYLOW, alu_lt);
+op_11:
+  T_BINARY(GAS_VERYLOW, alu_gt);
+op_12:
+  T_BINARY(GAS_VERYLOW, alu_slt);
+op_13:
+  T_BINARY(GAS_VERYLOW, alu_sgt);
+op_14:
+  T_BINARY(GAS_VERYLOW, alu_eq);
+op_15:
+  T_UNARY(GAS_VERYLOW, alu_iszero);
+op_16:
+  T_BINARY(GAS_VERYLOW, alu_and);
+op_17:
+  T_BINARY(GAS_VERYLOW, alu_or);
+op_18:
+  T_BINARY(GAS_VERYLOW, alu_xor);
+op_19:
+  T_UNARY(GAS_VERYLOW, alu_not);
+op_1a:
+  T_BINARY(GAS_VERYLOW, alu_byte);
+op_1b:
+  T_BINARY(GAS_VERYLOW, alu_shl);
+op_1c:
+  T_BINARY(GAS_VERYLOW, alu_shr);
+op_1d:
+  T_BINARY(GAS_VERYLOW, alu_sar);
+op_1e:
+  if (active_fork() >= EVMSAIL_FORK_OSAKA) {
+    T_UNARY(GAS_LOW, alu_clz);
+  } else {
+    goto op_invalid;
   }
+op_20:
+  T_CALL_B(keccak256, 2, 1);
+op_30:
+  T_CALL_A(address, 0, 1);
+op_31:
+  T_CALL_A(balance, 1, 1);
+op_32:
+  T_CALL_A(origin, 0, 1);
+op_33:
+  T_CALL_A(caller, 0, 1);
+op_34:
+  T_CALL_A(callvalue, 0, 1);
+op_35:
+  T_CALL_A(calldataload, 1, 1);
+op_36:
+  T_CALL_A(calldatasize, 0, 1);
+op_37:
+  T_CALL_B(calldatacopy, 3, 0);
+op_38:
+  T_CALL_A(codesize, 0, 1);
+op_39:
+  T_CALL_B(codecopy, 3, 0);
+op_3a:
+  T_CALL_A(gasprice, 0, 1);
+op_3b:
+  T_CALL_A(extcodesize, 1, 1);
+op_3c:
+  T_CALL_B(extcodecopy, 4, 0);
+op_3d:
+  T_CALL_A(returndatasize, 0, 1);
+op_3e:
+  T_CALL_B(returndatacopy, 3, 0);
+op_3f:
+  T_CALL_A(extcodehash, 1, 1);
+op_40:
+  T_CALL_A(blockhash, 1, 1);
+op_41:
+  T_CALL_A(coinbase, 0, 1);
+op_42:
+  T_CALL_A(timestamp, 0, 1);
+op_43:
+  T_CALL_A(number, 0, 1);
+op_44:
+  T_CALL_A(prevrandao, 0, 1);
+op_45:
+  T_CALL_A(gaslimit, 0, 1);
+op_46:
+  T_CALL_A(chainid, 0, 1);
+op_47:
+  T_CALL_A(selfbalance, 0, 1);
+op_48:
+  if (active_fork() >= EVMSAIL_FORK_LONDON) {
+    T_CALL_A(basefee, 0, 1);
+  } else {
+    goto op_invalid;
+  }
+op_49:
+  if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+    T_CALL_A(blobhash, 1, 1);
+  } else {
+    goto op_invalid;
+  }
+op_4a:
+  if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+    T_CALL_A(blobbasefee, 0, 1);
+  } else {
+    goto op_invalid;
+  }
+op_4b:
+  if (active_fork() >= EVMSAIL_FORK_AMSTERDAM) {
+    T_CALL_A(slotnum, 0, 1);
+  } else {
+    goto op_invalid;
+  }
+op_50: {
+  T_CHECK(1, 0);
+  T_CHARGE(GAS_BASE);
+  sp -= 1;
+}
   T_NEXT;
-  op_51:
-    T_CALL_B(mload, 1, 1);
-  op_52:
-    T_CALL_B(mstore, 2, 0);
-  op_53:
-    T_CALL_B(mstore8, 2, 0);
-  op_54:
-    T_CALL_A(sload_, 1, 1);
-  op_55:
-    T_CALL_A(sstore_, 2, 0);
-  op_56:
-    T_CALL_FLOW(jump, 1, 0);
-  op_57:
-    T_CALL_FLOW(jumpi, 2, 0);
-  op_58:
-  {
-    /* PC pushes the carried, already-advanced counter minus one. The arm
+op_51:
+  T_CALL_B(mload, 1, 1);
+op_52:
+  T_CALL_B(mstore, 2, 0);
+op_53:
+  T_CALL_B(mstore8, 2, 0);
+op_54:
+  T_CALL_A(sload_, 1, 1);
+op_55:
+  T_CALL_A(sstore_, 2, 0);
+op_56:
+  T_CALL_FLOW(jump, 1, 0);
+op_57:
+  T_CALL_FLOW(jumpi, 2, 0);
+op_58: {
+  /* PC pushes the carried, already-advanced counter minus one. The arm
      * avoids the register-file pc compatibility macro entirely. */
-    T_CHECK(0, 1);
-    T_CHARGE(GAS_BASE);
-    sp[0] = (u256){{(uint64_t)(pc_local - 1U), 0, 0, 0}};
-    sp += 1;
-  }
+  T_CHECK(0, 1);
+  T_CHARGE(GAS_BASE);
+  sp[0] = (u256){{(uint64_t)(pc_local - 1U), 0, 0, 0}};
+  sp += 1;
+}
   T_NEXT;
-  op_59:
-    T_CALL_B(msize, 0, 1);
-  op_5a:
-  {
-    /* GAS pushes the carried gas remaining after its own charge. */
-    T_CHECK(0, 1);
-    T_CHARGE(GAS_BASE);
-    sp[0] = (u256){{lgas, 0, 0, 0}};
-    sp += 1;
-  }
+op_59:
+  T_CALL_B(msize, 0, 1);
+op_5a: {
+  /* GAS pushes the carried gas remaining after its own charge. */
+  T_CHECK(0, 1);
+  T_CHARGE(GAS_BASE);
+  sp[0] = (u256){{lgas, 0, 0, 0}};
+  sp += 1;
+}
   T_NEXT;
-  op_5b:
-    T_CHARGE(GAS_JUMPDEST);
-    T_NEXT;
-  op_5c:
-    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
-      T_CALL_A(tload, 1, 1);
-    } else {
-      goto op_invalid;
-    }
-  op_5d:
-    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
-      T_CALL_A(tstore, 2, 0);
-    } else {
-      goto op_invalid;
-    }
-  op_5e:
-    if (active_fork() >= EVMSAIL_FORK_CANCUN) {
-      T_CALL_B(mcopy, 3, 0);
-    } else {
-      goto op_invalid;
-    }
-  op_f0:
-    T_CALL_SYSTEM(create, 3, 1);
-  op_f1:
-    T_CALL_SYSTEM(call, 7, 1);
-  op_f2:
-    T_CALL_SYSTEM(callcode, 7, 1);
-  op_f3:
-    T_CALL_B(return, 2, 0);
-  op_f4:
-    T_CALL_SYSTEM(delegatecall, 6, 1);
-  op_f5:
-    T_CALL_SYSTEM(create2, 4, 1);
-  op_fa:
-    T_CALL_SYSTEM(staticcall, 6, 1);
-  op_fd:
-    T_CALL_B(revert, 2, 0);
-  op_ff:
-    T_CALL_A(selfdestruct, 1, 0);
-  op_invalid:
-    /* INVALID consumes all carried gas before the exceptional halt. */
-    lgas = 0;
-    halt_reason = InvalidOpcode;
-    goto interp_exc;
+op_5b:
+  T_CHARGE(GAS_JUMPDEST);
+  T_NEXT;
+op_5c:
+  if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+    T_CALL_A(tload, 1, 1);
+  } else {
+    goto op_invalid;
+  }
+op_5d:
+  if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+    T_CALL_A(tstore, 2, 0);
+  } else {
+    goto op_invalid;
+  }
+op_5e:
+  if (active_fork() >= EVMSAIL_FORK_CANCUN) {
+    T_CALL_B(mcopy, 3, 0);
+  } else {
+    goto op_invalid;
+  }
+op_f0:
+  T_CALL_SYSTEM(create, 3, 1);
+op_f1:
+  T_CALL_SYSTEM(call, 7, 1);
+op_f2:
+  T_CALL_SYSTEM(callcode, 7, 1);
+op_f3:
+  T_CALL_B(return, 2, 0);
+op_f4:
+  T_CALL_SYSTEM(delegatecall, 6, 1);
+op_f5:
+  T_CALL_SYSTEM(create2, 4, 1);
+op_fa:
+  T_CALL_SYSTEM(staticcall, 6, 1);
+op_fd:
+  T_CALL_B(revert, 2, 0);
+op_ff:
+  T_CALL_A(selfdestruct, 1, 0);
+op_invalid:
+  /* INVALID consumes all carried gas before the exceptional halt. */
+  lgas = 0;
+  halt_reason = InvalidOpcode;
+  goto interp_exc;
 }

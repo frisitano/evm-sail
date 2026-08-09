@@ -58,16 +58,14 @@ static inline bytes20 address_from_word(u256 value)
   bytes20 result = {{0}};
   result.lanes[0] = (uint64_t)bswap32((uint32_t)value.limbs[2]) |
                     ((bswap64(value.limbs[1]) & UINT64_C(0xffffffff)) << 32);
-  result.lanes[1] = (bswap64(value.limbs[1]) >> 32) |
-                    ((bswap64(value.limbs[0]) & UINT64_C(0xffffffff)) << 32);
+  result.lanes[1] =
+      (bswap64(value.limbs[1]) >> 32) | ((bswap64(value.limbs[0]) & UINT64_C(0xffffffff)) << 32);
   result.lanes[2] = bswap64(value.limbs[0]) >> 32;
   return result;
 }
 
-
 /* ---- shared fixed-value machinery (consolidated from the former
  * src/primitives/value.h; that path remains as an include shim). ---- */
-
 
 #if !defined(__BYTE_ORDER__) || !defined(__ORDER_LITTLE_ENDIAN__)
 #error "optimized fixed-byte lanes require compiler byte-order definitions"
@@ -252,6 +250,5 @@ static inline u256 be_bytes_to_sail_word(const uint8_t in[32])
           },
   };
 }
-
 
 #endif

@@ -5,12 +5,12 @@
 # All steps are make-target-based so the extractions layout can move
 # extractions/c restructure does not touch this workflow.
 #
-# Toolchain gating: jobs marked with `vars.EVM_SAIL_TOOLCHAIN_READY` need the
-# repository's CUSTOM Sail compiler (zkvm/resolve_optimized_sail.sh; upstream
-# Sail is not a supported fallback). Set the repository variable
-# EVM_SAIL_TOOLCHAIN_READY=true (Settings > Secrets and variables > Variables)
-# once the TODO(toolchain) provisioning step below is implemented; until then
-# only the toolchain-free jobs run, keeping CI green and honest.
+# Jobs below the divider need the repository's CUSTOM Sail compiler
+# (zkvm/resolve_optimized_sail.sh; upstream Sail is not a supported fallback).
+# It is provisioned by .github/actions/setup-sail, which builds it from the
+# compiler repository and caches it on its commit. Those jobs depend on the
+# `sail-compiler` job so the compiler is built once and the rest start from a
+# warm cache rather than rebuilding it in parallel.
 
 name: ci
 
@@ -90,14 +90,24 @@ jobs:
         run: make python-tools-fmt-check
 
   # --- custom-Sail jobs ----------------------------------------------------
-  # Each job below repeats the same TODO(toolchain) resolution step as
-  # .github/workflows/book.yml; factor it into a composite action when the
-  # provisioning is implemented.
+
+  # Build the custom compiler once and populate the cache the jobs below read.
+  # It carries no checks of its own; its value is that the five jobs after it
+  # do not each build the same compiler concurrently.
+  sail-compiler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and cache the custom Sail compiler
+        uses: ./.github/actions/setup-sail
+
+  # Each job below provisions the compiler through the shared composite
+  # action, the same one .github/workflows/book.yml uses.
 
   # Sail: model type-check, warnings + typed readability lints + docs style,
   # and sail --fmt formatting drift.
   sail:
-    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    needs: sail-compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,15 +115,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-      - name: Resolve custom Sail compiler
-        run: |
-          # TODO(toolchain): provision the custom compiler; see book.yml.
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
       - name: Type-check the model
         run: make check
       - name: Sail lint (warnings, readability, docs style)
@@ -124,7 +127,7 @@ jobs:
   # C: generate the optimized model and enforce the clang-format and
   # clang-tidy policies over generated plus handwritten optimized C.
   c-optimised:
-    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    needs: sail-compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,15 +136,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             z3 libgmp-dev pkg-config clang clang-format clang-tidy
-      - name: Resolve custom Sail compiler
-        run: |
-          # TODO(toolchain): provision the custom compiler; see book.yml.
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
       - name: Optimized C clang-format policy
         run: make c-optimised-clang-format
       - name: Optimized C clang-tidy policy
@@ -149,7 +145,7 @@ jobs:
 
   # Lean: regenerate the Lean model and compile it with lake.
   lean:
-    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    needs: sail-compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -162,22 +158,15 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
             | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: Resolve custom Sail compiler
-        run: |
-          # TODO(toolchain): provision the custom compiler; see book.yml.
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
       - name: Extract and compile the Lean model
         run: make extract-lean
 
   # Coq: regenerate and validate the complete Coq model (heavier than the
   # toolchain-free coq-contract job above; compiles evm.v).
   coq-model:
-    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    needs: sail-compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -192,22 +181,15 @@ jobs:
       # TODO(coq): pin the Rocq version once recorded (see coq-contract job).
       - name: Install Rocq
         run: opam install -y rocq-prover
-      - name: Resolve custom Sail compiler
-        run: |
-          # TODO(toolchain): provision the custom compiler; see book.yml.
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
       - name: Extract and validate the Coq model
         run: make extract-coq
 
   # Python: regenerate the Python model, smoke-test it, and lint it with the
   # pinned Ruff policy.
   python-model:
-    if: vars.EVM_SAIL_TOOLCHAIN_READY == 'true'
+    needs: sail-compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -217,15 +199,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
       - name: Install uv
         uses: astral-sh/setup-uv@v5
-      - name: Resolve custom Sail compiler
-        run: |
-          # TODO(toolchain): provision the custom compiler; see book.yml.
-          if SAIL_BIN="$(bash zkvm/resolve_optimized_sail.sh)"; then
-            echo "SAIL=$SAIL_BIN" >> "$GITHUB_ENV"
-          else
-            echo "::error::custom Sail compiler unavailable; implement TODO(toolchain)"
-            exit 1
-          fi
+      - name: Set up the custom Sail compiler
+        uses: ./.github/actions/setup-sail
       - name: Extract and smoke-test the Python model
         run: make extract-python
       - name: Lint the generated Python model
