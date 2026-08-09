@@ -49,8 +49,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Set up the custom Sail compiler
+      # The book needs sail_lsp too: step 3 builds the semantic index with it.
+      - name: Set up the custom Sail compiler and sail-lsp
         uses: ./.github/actions/setup-sail
+        with:
+          install-lsp: "true"
 
       - name: Build book
         run: make docs-site

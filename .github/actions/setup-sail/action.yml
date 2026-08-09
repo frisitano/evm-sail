@@ -32,6 +32,20 @@ inputs:
     description: OCaml compiler version used to build it.
     required: false
     default: "5.2"
+  install-lsp:
+    description: >
+      Also build and install sail_lsp. The book build needs it for the
+      semantic index; the lint and extraction jobs do not.
+    required: false
+    default: "false"
+  lsp-repository:
+    description: Repository holding sail-lsp.
+    required: false
+    default: frisitano/sail-lsp
+  lsp-ref:
+    description: sail-lsp branch, tag or SHA to build.
+    required: false
+    default: main
 
 runs:
   using: composite
@@ -66,35 +80,80 @@ runs:
         ocaml-compiler: ${{ inputs.ocaml-compiler }}
         opam-pin: false
 
+    # Always install deps: dune itself comes from here, and a cache hit skips
+    # the build below, so gating this too leaves the switch without dune.
+    - name: Install compiler dependencies
+      shell: bash
+      working-directory: .sail-compiler
+      run: opam install . --deps-only --yes
+
     - name: Build the compiler
       if: steps.sail-cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: .sail-compiler
-      run: |
-        opam install . --deps-only --yes
-        opam exec -- dune build --profile release
+      run: opam exec -- dune build --profile release
 
-    - name: Install onto PATH
+    - name: Install the compiler into the opam switch
       shell: bash
       run: |
-        prefix="$RUNNER_TEMP/sail-install"
-        (cd .sail-compiler && opam exec -- dune install --prefix "$prefix")
+        # Install into the switch rather than a private prefix, so the backend
+        # plugins and share tree land where the binary finds them.
+        (cd .sail-compiler && opam exec -- dune install)
+
+        # dune install writes files; it does NOT tell opam's solver that
+        # libsail is present. That matters for the sail-lsp step below, whose
+        # `libsail` dependency would otherwise resolve to the PUBLIC package
+        # and link the server against upstream Sail -- a wrong model rather
+        # than an error. A version bound cannot express the difference: the
+        # public package is 0.20.1 and BOTH this fork and upstream sail2 carry
+        # 0.20.2, so only the source identifies it.
+        #
+        # No pin is needed here: sail-lsp names the fork in its own
+        # pin-depends, and opam honours that from `opam install . --deps-only`
+        # (verified: it resolves libsail from the pin, not the repository).
+        prefix="$(opam var prefix)"
         if [ ! -x "$prefix/bin/sail" ]; then
           echo "::error::sail was not installed at $prefix/bin/sail"
           exit 1
         fi
         echo "$prefix/bin" >> "$GITHUB_PATH"
+        echo "SAIL_PREFIX=$prefix" >> "$GITHUB_ENV"
 
     - name: Verify the installed compiler
       shell: bash
       run: |
-        prefix="$RUNNER_TEMP/sail-install"
-        "$prefix/bin/sail" --version
+        "$SAIL_PREFIX/bin/sail" --version
         # The backends are plugins, so a bare --version would not catch a share
         # tree that failed to install.
         for backend in lean coq c doc; do
-          if ! "$prefix/bin/sail" --help 2>&1 | grep -q -- "-$backend\b"; then
+          if ! "$SAIL_PREFIX/bin/sail" --help 2>&1 | grep -q -- "-$backend\\b"; then
             echo "::error::sail backend --$backend unavailable; share tree incomplete"
             exit 1
           fi
         done
+
+    # sail-lsp is a separate project that links against libsail. The book build
+    # needs it for the semantic index (sail-lsp-index drives `sail_lsp`).
+    - name: Check out sail-lsp
+      if: inputs.install-lsp == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.lsp-repository }}
+        ref: ${{ inputs.lsp-ref }}
+        path: .sail-lsp
+
+    - name: Install sail-lsp
+      if: inputs.install-lsp == 'true'
+      shell: bash
+      working-directory: .sail-lsp
+      run: |
+        # libsail resolves to the pin established above, so this cannot pull
+        # the public package.
+        opam install . --deps-only --yes
+        opam exec -- dune build --profile release
+        opam exec -- dune install
+        if ! command -v sail_lsp >/dev/null 2>&1; then
+          echo "::error::sail_lsp was not installed onto PATH"
+          exit 1
+        fi
+        sail_lsp --version 2>/dev/null || true
