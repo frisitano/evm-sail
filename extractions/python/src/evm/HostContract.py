@@ -24,11 +24,46 @@ DELEGATION_PREFIX = b"\xef\x01\x00"
 STORAGE_INITIAL_GENERATION = 1
 
 
+#: Encoded ``pairing_check_result``: below two is malformed input, and the
+#: low-order parity of a valid value is the pairing outcome.
+PAIRING_MALFORMED = 0
+PAIRING_VALID_FALSE = 2
+PAIRING_VALID_TRUE = 3
+
+#: ``ZKVM_EOK`` from ``extractions/c/zkvm_accelerators.h``.
+ZKVM_EOK = 0
+
+#: EIP-2537 carries each Fp in a 64-byte word with 16 leading zero bytes; the
+#: accelerator ABI takes the compact 48-byte value.  Sail validates the zero
+#: padding before these adapters run.
+FP_WIRE = 64
+FP_COMPACT = 48
+FP_PAD = FP_WIRE - FP_COMPACT
+
+
 class AcceleratorContract:
-    """Typed extension point for genuine cryptographic accelerators."""
+    """The shared cryptographic accelerators, bound to the canonical library.
+
+    These operations are axioms of the model, so rather than reimplement them
+    this binds the same Rust accelerator cdylib that the C and ZisK guests
+    link (``zkvm/accel-host``).  There is one crypto implementation across
+    every executable target, and the Python extraction exercises it rather
+    than a parallel one.
+
+    Only the wire adaptation lives here, mirroring
+    ``extractions/c/spec/contract/precompiles.c``: EVM calldata is
+    zero-extended on short reads, and BLS12-381 field elements are narrowed
+    from their 64-byte EIP-2537 words to the accelerator's compact 48-byte
+    form and widened again on the way out.
+    """
 
     def ripemd160(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("RIPEMD-160 accelerator is not configured")
+        raw = _calldata_bytes(data)
+        digest = _out_buffer(32)
+        if _accel().zkvm_ripemd160(raw, len(raw), digest) != ZKVM_EOK:
+            return False
+        _store_output(state, digest.raw)
+        return True
 
     def modexp(
         self,
@@ -38,46 +73,177 @@ class AcceleratorContract:
         exponent_length: int,
         modulus_length: int,
     ) -> bool:
-        raise NotImplementedError("MODEXP accelerator is not configured")
+        base_length = int(base_length)
+        exponent_length = int(exponent_length)
+        modulus_length = int(modulus_length)
+        # The three 32-byte length fields precede the operands.
+        raw = _buffer_read(
+            _calldata_bytes(data),
+            0,
+            96 + base_length + exponent_length + modulus_length,
+        )
+        base = 96
+        exponent = base + base_length
+        modulus = exponent + exponent_length
+        result = _out_buffer(modulus_length)
+        if (
+            _accel().zkvm_modexp(
+                raw[base:exponent],
+                base_length,
+                raw[exponent:modulus],
+                exponent_length,
+                raw[modulus:],
+                modulus_length,
+                result,
+            )
+            != ZKVM_EOK
+        ):
+            return False
+        _store_output(state, result.raw)
+        return True
 
     def bn254_add(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BN254 add accelerator is not configured")
+        raw = _buffer_read(_calldata_bytes(data), 0, 128)
+        result = _out_buffer(64)
+        if _accel().zkvm_bn254_g1_add(raw[:64], raw[64:], result) != ZKVM_EOK:
+            return False
+        _store_output(state, result.raw)
+        return True
 
     def bn254_mul(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BN254 mul accelerator is not configured")
+        raw = _buffer_read(_calldata_bytes(data), 0, 96)
+        result = _out_buffer(64)
+        if _accel().zkvm_bn254_g1_mul(raw[:64], raw[64:], result) != ZKVM_EOK:
+            return False
+        _store_output(state, result.raw)
+        return True
 
     def bn254_pairing(self, state: HostState, data: Any) -> int:
-        raise NotImplementedError("BN254 pairing accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) % 192 != 0:
+            return PAIRING_MALFORMED
+        # The accelerator pair layout is the wire layout for BN254.
+        return _pairing_status(
+            _accel().zkvm_bn254_pairing, raw, len(raw) // 192
+        )
 
     def blake2f(self, state: HostState, data: Any, rounds: int, final: Any) -> bool:
-        raise NotImplementedError("BLAKE2F accelerator is not configured")
+        raw = _calldata_bytes(data)
+        rounds = int(rounds)
+        final = int(final)
+        if len(raw) != 213 or rounds > 0xFFFFFFFF or final > 1:
+            return False
+        # The state word is updated in place and is the result.
+        h = _out_buffer(64, _buffer_read(raw, 4, 64))
+        message = _buffer_read(raw, 68, 128)
+        offset = _buffer_read(raw, 196, 16)
+        if _accel().zkvm_blake2f(rounds, h, message, offset, final) != ZKVM_EOK:
+            return False
+        _store_output(state, h.raw)
+        return True
 
     def kzg_point_evaluation(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("KZG accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 192:
+            return False
+        # The Sail caller owns the constant success payload, so this reports
+        # only whether the proof verified.
+        verified = _bool_out()
+        status = _accel().zkvm_kzg_point_eval(
+            _buffer_read(raw, 96, 48),
+            _buffer_read(raw, 32, 32),
+            _buffer_read(raw, 64, 32),
+            _buffer_read(raw, 144, 48),
+            verified,
+        )
+        return status == ZKVM_EOK and bool(verified.value)
 
     def bls_g1_add(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS G1 add accelerator is not configured")
-
-    def bls_g1_msm(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS G1 MSM accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 256:
+            return False
+        result = _out_buffer(96)
+        if (
+            _accel().zkvm_bls12_g1_add(
+                _compact_g1(raw, 0), _compact_g1(raw, 128), result
+            )
+            != ZKVM_EOK
+        ):
+            return False
+        _store_output(state, _pad_g1(result.raw))
+        return True
 
     def bls_g2_add(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS G2 add accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 512:
+            return False
+        result = _out_buffer(192)
+        if (
+            _accel().zkvm_bls12_g2_add(
+                _compact_g2(raw, 0), _compact_g2(raw, 256), result
+            )
+            != ZKVM_EOK
+        ):
+            return False
+        _store_output(state, _pad_g2(result.raw))
+        return True
+
+    def bls_g1_msm(self, state: HostState, data: Any) -> bool:
+        return _bls_msm(
+            state, data, 160, 128, 96, _compact_g1, _pad_g1,
+            _accel().zkvm_bls12_g1_msm,
+        )
 
     def bls_g2_msm(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS G2 MSM accelerator is not configured")
+        return _bls_msm(
+            state, data, 288, 256, 192, _compact_g2, _pad_g2,
+            _accel().zkvm_bls12_g2_msm,
+        )
 
     def bls_pairing(self, state: HostState, data: Any) -> int:
-        raise NotImplementedError("BLS pairing accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) == 0 or len(raw) % 384 != 0:
+            return PAIRING_MALFORMED
+        count = len(raw) // 384
+        pairs = bytearray()
+        for index in range(count):
+            base = index * 384
+            pairs += _compact_g1(raw, base)
+            pairs += _compact_g2(raw, base + 128)
+        return _pairing_status(
+            _accel().zkvm_bls12_pairing, bytes(pairs), count
+        )
 
     def bls_map_fp_to_g1(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS map-to-G1 accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 64:
+            return False
+        result = _out_buffer(96)
+        if _accel().zkvm_bls12_map_fp_to_g1(_compact_fp(raw, 0), result) != ZKVM_EOK:
+            return False
+        _store_output(state, _pad_g1(result.raw))
+        return True
 
     def bls_map_fp2_to_g2(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("BLS map-to-G2 accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 128:
+            return False
+        fp2 = _compact_fp(raw, 0) + _compact_fp(raw, 64)
+        result = _out_buffer(192)
+        if _accel().zkvm_bls12_map_fp2_to_g2(fp2, result) != ZKVM_EOK:
+            return False
+        _store_output(state, _pad_g2(result.raw))
+        return True
 
     def p256_verify(self, state: HostState, data: Any) -> bool:
-        raise NotImplementedError("P-256 accelerator is not configured")
+        raw = _calldata_bytes(data)
+        if len(raw) != 160:
+            return False
+        verified = _bool_out()
+        status = _accel().zkvm_secp256r1_verify(
+            raw[0:32], raw[32:96], raw[96:160], verified
+        )
+        return status == ZKVM_EOK and bool(verified.value)
 
     def ecrecover(
         self, state: HostState, digest: Any, y_parity: Any, r: int, s: int
@@ -90,6 +256,185 @@ class AcceleratorContract:
         if recovered is None:
             return AddressResult(success=False, address=_bytes20_from_wire(bytes(20)))
         return AddressResult(success=True, address=_bytes20_from_wire(recovered))
+
+
+_accel_library: Any = None
+
+
+def _accel() -> Any:
+    """The canonical accelerator cdylib, loaded once.
+
+    This is the very library the native and ZisK guests link, so every
+    executable target shares one cryptographic implementation.  Override the
+    location with ``EVMSAIL_ACCEL_LIB`` when it is not in the build tree.
+    """
+    global _accel_library
+    if _accel_library is None:
+        import ctypes
+        import os
+
+        override = os.environ.get("EVMSAIL_ACCEL_LIB")
+        if override:
+            candidates = [override]
+        else:
+            # .../extractions/python/src/evm/HostContract.py -> repository root
+            root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), *[os.pardir] * 4)
+            )
+            built = os.path.join(
+                root, "zkvm", "accel-host", "target", "release"
+            )
+            candidates = [
+                os.path.join(built, f"libzkvm_accel_host.{suffix}")
+                for suffix in ("dylib", "so")
+            ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                _accel_library = _declare_accel(ctypes.CDLL(candidate))
+                break
+        else:
+            raise RuntimeError(
+                "cannot locate the accelerator library "
+                f"(tried {', '.join(candidates)}); build it with "
+                "zkvm/native-runner/build.sh or set EVMSAIL_ACCEL_LIB"
+            )
+    return _accel_library
+
+
+def _declare_accel(lib: Any) -> Any:
+    """Pin argument types so ctypes never guesses at the ABI."""
+    import ctypes
+
+    data = ctypes.c_char_p
+    size = ctypes.c_size_t
+    out = ctypes.c_void_p
+    flag = ctypes.POINTER(ctypes.c_bool)
+    signatures = {
+        "zkvm_ripemd160": [data, size, out],
+        "zkvm_modexp": [data, size, data, size, data, size, out],
+        "zkvm_bn254_g1_add": [data, data, out],
+        "zkvm_bn254_g1_mul": [data, data, out],
+        "zkvm_bn254_pairing": [data, size, flag],
+        "zkvm_blake2f": [ctypes.c_uint32, out, data, data, ctypes.c_uint8],
+        "zkvm_kzg_point_eval": [data, data, data, data, flag],
+        "zkvm_bls12_g1_add": [data, data, out],
+        "zkvm_bls12_g2_add": [data, data, out],
+        "zkvm_bls12_g1_msm": [data, size, out],
+        "zkvm_bls12_g2_msm": [data, size, out],
+        "zkvm_bls12_pairing": [data, size, flag],
+        "zkvm_bls12_map_fp_to_g1": [data, out],
+        "zkvm_bls12_map_fp2_to_g2": [data, out],
+        "zkvm_secp256r1_verify": [data, data, data, flag],
+    }
+    for name, argtypes in signatures.items():
+        entry = getattr(lib, name)
+        entry.argtypes = argtypes
+        entry.restype = ctypes.c_int
+    return lib
+
+
+def _out_buffer(length: int, initial: bytes = b"") -> Any:
+    import ctypes
+
+    return ctypes.create_string_buffer(
+        initial.ljust(length, b"\x00") if initial else bytes(length), length
+    )
+
+
+def _bool_out() -> Any:
+    import ctypes
+
+    return ctypes.c_bool(False)
+
+
+def _pairing_status(entry: Any, pairs: bytes, count: int) -> int:
+    """Run a pairing check and encode it as ``pairing_check_result``."""
+    verified = _bool_out()
+    if entry(pairs, count, verified) != ZKVM_EOK:
+        return PAIRING_MALFORMED
+    return PAIRING_VALID_TRUE if verified.value else PAIRING_VALID_FALSE
+
+
+def _compact_fp(raw: bytes, offset: int) -> bytes:
+    """Narrow one 64-byte EIP-2537 word to its compact 48-byte value."""
+    return _buffer_read(raw, offset + FP_PAD, FP_COMPACT)
+
+
+def _pad_fp(compact: bytes) -> bytes:
+    return bytes(FP_PAD) + compact
+
+
+def _compact_g1(raw: bytes, offset: int) -> bytes:
+    return _compact_fp(raw, offset) + _compact_fp(raw, offset + FP_WIRE)
+
+
+def _pad_g1(compact: bytes) -> bytes:
+    return _pad_fp(compact[:FP_COMPACT]) + _pad_fp(compact[FP_COMPACT:])
+
+
+def _compact_g2(raw: bytes, offset: int) -> bytes:
+    # The accelerator G2 layout matches EIP-2537 component order (c0 then c1),
+    # so the four field elements narrow straight through.
+    return b"".join(
+        _compact_fp(raw, offset + index * FP_WIRE) for index in range(4)
+    )
+
+
+def _pad_g2(compact: bytes) -> bytes:
+    return b"".join(
+        _pad_fp(compact[index * FP_COMPACT : (index + 1) * FP_COMPACT])
+        for index in range(4)
+    )
+
+
+def _bls_msm(
+    state: HostState,
+    data: Any,
+    wire_stride: int,
+    point_wire: int,
+    point_compact: int,
+    compact: Any,
+    pad: Any,
+    entry: Any,
+) -> bool:
+    """Shared body for the BLS12-381 multi-scalar multiplications."""
+    raw = _calldata_bytes(data)
+    if len(raw) == 0 or len(raw) % wire_stride != 0:
+        return False
+    count = len(raw) // wire_stride
+    pairs = bytearray()
+    for index in range(count):
+        base = index * wire_stride
+        pairs += compact(raw, base)
+        pairs += _buffer_read(raw, base + point_wire, WORD_BYTES)
+    result = _out_buffer(point_compact)
+    if entry(bytes(pairs), count, result) != ZKVM_EOK:
+        return False
+    _store_output(state, pad(result.raw))
+    return True
+
+
+def _calldata_bytes(value: Any) -> bytes:
+    """Materialize a ``CalldataSlice`` whichever provenance it carries."""
+    from evm import InputCalldata, MemoryCalldata
+
+    match value:
+        case InputCalldata(inner):
+            return _region_bytes("input", inner)
+        case MemoryCalldata(inner):
+            return _region_bytes("memory", inner)
+        case _:
+            raise TypeError(f"not a CalldataSlice: {value!r}")
+
+
+def _buffer_read(data: bytes, start: int, length: int) -> bytes:
+    """EVM buffer semantics: a read past the end is zero-filled."""
+    chunk = data[start : start + length]
+    return bytes(chunk) + bytes(length - len(chunk))
+
+
+def _store_output(state: HostState, payload: bytes) -> None:
+    state.output_bytes[:] = payload
 
 
 @dataclass(slots=True)

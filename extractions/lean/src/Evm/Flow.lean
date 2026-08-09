@@ -56,7 +56,7 @@ open BalIterEntry
 open AcctTxPopResult
 open AcctBlockIterResult
 
-/- Type quantifiers: k_ex547280_ : Bool, k_ex547279_ : Bool -/
+/- Type quantifiers: k_ex547346_ : Bool, k_ex547345_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

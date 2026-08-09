@@ -115,9 +115,9 @@ and land on a `JUMPDEST` (the precomputed valid-destination set,
 YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
 bytes that happen to equal `0x5b` are not valid. Returns the next
 program counter and the carried gas. -/
-/- Type quantifiers: k_ex552632_ : Nat, k_ex552631_ : Nat, k_ex552630_ : Nat, 0 ≤ k_ex552630_ ∧
-  k_ex552630_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552631_, 0 ≤ k_ex552632_ ∧
-  k_ex552632_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex552698_ : Nat, k_ex552697_ : Nat, k_ex552696_ : Nat, 0 ≤ k_ex552696_ ∧
+  k_ex552696_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552697_, 0 ≤ k_ex552698_ ∧
+  k_ex552698_ ≤ (2 ^ 256 - 1) -/
 def do_jump (pc_in : Nat) (g : Nat) (destination_value : Nat) : SailM (Nat × Nat) := do
   let code_length ← do (frame_code_len ())
   if ((destination_value <b code_length) : Bool)
@@ -131,7 +131,7 @@ def do_jump (pc_in : Nat) (g : Nat) (destination_value : Nat) : SailM (Nat × Na
   else (pure (pc_in, (← (exc_halt g InvalidJump))))
 
 /-- Pops `count` log topics from the stack into its bounded representation. -/
-/- Type quantifiers: k_ex552633_ : Nat, 0 ≤ k_ex552633_ ∧ k_ex552633_ ≤ 4 -/
+/- Type quantifiers: k_ex552699_ : Nat, 0 ≤ k_ex552699_ ∧ k_ex552699_ ≤ 4 -/
 def pop_log_topics (count : Nat) (top : (BitVec 64)) : SailM (LogTopics × (BitVec 64)) := do
   match count with
   | 0 => (pure ((LogTopics0 ()), top))
@@ -160,7 +160,7 @@ def pop_log_topics (count : Nat) (top : (BitVec 64)) : SailM (LogTopics × (BitV
   | _ => (pure ((LogTopics0 ()), top))
 
 /-- Implements `ADD`. -/
-/- Type quantifiers: k_ex552634_ : Nat, 0 ≤ k_ex552634_ -/
+/- Type quantifiers: k_ex552700_ : Nat, 0 ≤ k_ex552700_ -/
 def execute_add (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -173,7 +173,7 @@ def execute_add (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `MUL`. -/
-/- Type quantifiers: k_ex552635_ : Nat, 0 ≤ k_ex552635_ -/
+/- Type quantifiers: k_ex552701_ : Nat, 0 ≤ k_ex552701_ -/
 def execute_mul (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -186,7 +186,7 @@ def execute_mul (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `SUB`. -/
-/- Type quantifiers: k_ex552636_ : Nat, 0 ≤ k_ex552636_ -/
+/- Type quantifiers: k_ex552702_ : Nat, 0 ≤ k_ex552702_ -/
 def execute_sub (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -199,7 +199,7 @@ def execute_sub (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements unsigned `DIV`. -/
-/- Type quantifiers: k_ex552637_ : Nat, 0 ≤ k_ex552637_ -/
+/- Type quantifiers: k_ex552703_ : Nat, 0 ≤ k_ex552703_ -/
 def execute_div (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -212,7 +212,7 @@ def execute_div (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements signed `SDIV`. -/
-/- Type quantifiers: k_ex552638_ : Nat, 0 ≤ k_ex552638_ -/
+/- Type quantifiers: k_ex552704_ : Nat, 0 ≤ k_ex552704_ -/
 def execute_sdiv (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -225,7 +225,7 @@ def execute_sdiv (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := d
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements unsigned `MOD`. -/
-/- Type quantifiers: k_ex552639_ : Nat, 0 ≤ k_ex552639_ -/
+/- Type quantifiers: k_ex552705_ : Nat, 0 ≤ k_ex552705_ -/
 def execute_mod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -238,7 +238,7 @@ def execute_mod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements signed `SMOD`. -/
-/- Type quantifiers: k_ex552640_ : Nat, 0 ≤ k_ex552640_ -/
+/- Type quantifiers: k_ex552706_ : Nat, 0 ≤ k_ex552706_ -/
 def execute_smod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -251,7 +251,7 @@ def execute_smod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := d
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `ADDMOD`. -/
-/- Type quantifiers: k_ex552641_ : Nat, 0 ≤ k_ex552641_ -/
+/- Type quantifiers: k_ex552707_ : Nat, 0 ≤ k_ex552707_ -/
 def execute_addmod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_mid)
   if ((! gas_charged) : Bool)
@@ -265,7 +265,7 @@ def execute_addmod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top3 result)), g1)))
 
 /-- Implements `MULMOD`. -/
-/- Type quantifiers: k_ex552642_ : Nat, 0 ≤ k_ex552642_ -/
+/- Type quantifiers: k_ex552708_ : Nat, 0 ≤ k_ex552708_ -/
 def execute_mulmod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_mid)
   if ((! gas_charged) : Bool)
@@ -279,7 +279,7 @@ def execute_mulmod (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top3 result)), g1)))
 
 /-- Implements `EXP`, including exponent-dependent gas. -/
-/- Type quantifiers: k_ex552643_ : Nat, 0 ≤ k_ex552643_ -/
+/- Type quantifiers: k_ex552709_ : Nat, 0 ≤ k_ex552709_ -/
 def execute_exp (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (a, top1) ← do (pop top)
   let (e, top2) ← do (pop top1)
@@ -293,7 +293,7 @@ def execute_exp (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `SIGNEXTEND`. -/
-/- Type quantifiers: k_ex552644_ : Nat, 0 ≤ k_ex552644_ -/
+/- Type quantifiers: k_ex552710_ : Nat, 0 ≤ k_ex552710_ -/
 def execute_signextend (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -306,7 +306,7 @@ def execute_signextend (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements unsigned `LT`. -/
-/- Type quantifiers: k_ex552645_ : Nat, 0 ≤ k_ex552645_ -/
+/- Type quantifiers: k_ex552711_ : Nat, 0 ≤ k_ex552711_ -/
 def execute_lt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -319,7 +319,7 @@ def execute_lt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements unsigned `GT`. -/
-/- Type quantifiers: k_ex552646_ : Nat, 0 ≤ k_ex552646_ -/
+/- Type quantifiers: k_ex552712_ : Nat, 0 ≤ k_ex552712_ -/
 def execute_gt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -332,7 +332,7 @@ def execute_gt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements signed `SLT`. -/
-/- Type quantifiers: k_ex552647_ : Nat, 0 ≤ k_ex552647_ -/
+/- Type quantifiers: k_ex552713_ : Nat, 0 ≤ k_ex552713_ -/
 def execute_slt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -345,7 +345,7 @@ def execute_slt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements signed `SGT`. -/
-/- Type quantifiers: k_ex552648_ : Nat, 0 ≤ k_ex552648_ -/
+/- Type quantifiers: k_ex552714_ : Nat, 0 ≤ k_ex552714_ -/
 def execute_sgt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -358,7 +358,7 @@ def execute_sgt (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `EQ`. -/
-/- Type quantifiers: k_ex552649_ : Nat, 0 ≤ k_ex552649_ -/
+/- Type quantifiers: k_ex552715_ : Nat, 0 ≤ k_ex552715_ -/
 def execute_eq (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -371,7 +371,7 @@ def execute_eq (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements `ISZERO`. -/
-/- Type quantifiers: k_ex552650_ : Nat, 0 ≤ k_ex552650_ -/
+/- Type quantifiers: k_ex552716_ : Nat, 0 ≤ k_ex552716_ -/
 def execute_iszero (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -383,7 +383,7 @@ def execute_iszero (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top1 result)), g1)))
 
 /-- Implements bitwise `AND`. -/
-/- Type quantifiers: k_ex552651_ : Nat, 0 ≤ k_ex552651_ -/
+/- Type quantifiers: k_ex552717_ : Nat, 0 ≤ k_ex552717_ -/
 def execute_and (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -396,7 +396,7 @@ def execute_and (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements bitwise `OR`. -/
-/- Type quantifiers: k_ex552652_ : Nat, 0 ≤ k_ex552652_ -/
+/- Type quantifiers: k_ex552718_ : Nat, 0 ≤ k_ex552718_ -/
 def execute_or (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -409,7 +409,7 @@ def execute_or (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements bitwise `XOR`. -/
-/- Type quantifiers: k_ex552653_ : Nat, 0 ≤ k_ex552653_ -/
+/- Type quantifiers: k_ex552719_ : Nat, 0 ≤ k_ex552719_ -/
 def execute_xor (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -422,7 +422,7 @@ def execute_xor (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements bitwise `NOT`. -/
-/- Type quantifiers: k_ex552654_ : Nat, 0 ≤ k_ex552654_ -/
+/- Type quantifiers: k_ex552720_ : Nat, 0 ≤ k_ex552720_ -/
 def execute_not (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -434,7 +434,7 @@ def execute_not (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top1 result)), g1)))
 
 /-- Implements `BYTE`. -/
-/- Type quantifiers: k_ex552655_ : Nat, 0 ≤ k_ex552655_ -/
+/- Type quantifiers: k_ex552721_ : Nat, 0 ≤ k_ex552721_ -/
 def execute_byte (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -447,7 +447,7 @@ def execute_byte (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := d
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements logical left shift `SHL` (EIP-145). -/
-/- Type quantifiers: k_ex552656_ : Nat, 0 ≤ k_ex552656_ -/
+/- Type quantifiers: k_ex552722_ : Nat, 0 ≤ k_ex552722_ -/
 def execute_shl (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -460,7 +460,7 @@ def execute_shl (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements logical right shift `SHR` (EIP-145). -/
-/- Type quantifiers: k_ex552657_ : Nat, 0 ≤ k_ex552657_ -/
+/- Type quantifiers: k_ex552723_ : Nat, 0 ≤ k_ex552723_ -/
 def execute_shr (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -473,7 +473,7 @@ def execute_shr (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements arithmetic right shift `SAR` (EIP-145). -/
-/- Type quantifiers: k_ex552658_ : Nat, 0 ≤ k_ex552658_ -/
+/- Type quantifiers: k_ex552724_ : Nat, 0 ≤ k_ex552724_ -/
 def execute_sar (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -486,7 +486,7 @@ def execute_sar (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top2 result)), g1)))
 
 /-- Implements count-leading-zeroes `CLZ` (EIP-7939). -/
-/- Type quantifiers: k_ex552659_ : Nat, 0 ≤ k_ex552659_ -/
+/- Type quantifiers: k_ex552725_ : Nat, 0 ≤ k_ex552725_ -/
 def execute_clz (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -498,10 +498,10 @@ def execute_clz (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure ((← (push_word top1 result)), g1)))
 
 /-- Implements `KECCAK256` over an expanded memory range. -/
-/- Type quantifiers: k_ex552668_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552734_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552668_ -/
+  ≤ k_ex552734_ -/
 def execute_keccak256 (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -549,7 +549,7 @@ def execute_keccak256 (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
             (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g2 : Nat)))))
 
 /-- Implements `ADDRESS`. -/
-/- Type quantifiers: k_ex552669_ : Nat, 0 ≤ k_ex552669_ -/
+/- Type quantifiers: k_ex552735_ : Nat, 0 ≤ k_ex552735_ -/
 def execute_address (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -561,7 +561,7 @@ def execute_address (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :
       (pure ((← (push_word top address_word)), g1)))
 
 /-- Implements `ORIGIN`. -/
-/- Type quantifiers: k_ex552670_ : Nat, 0 ≤ k_ex552670_ -/
+/- Type quantifiers: k_ex552736_ : Nat, 0 ≤ k_ex552736_ -/
 def execute_origin (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -572,7 +572,7 @@ def execute_origin (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top origin)), g1)))
 
 /-- Implements `CALLER`. -/
-/- Type quantifiers: k_ex552671_ : Nat, 0 ≤ k_ex552671_ -/
+/- Type quantifiers: k_ex552737_ : Nat, 0 ≤ k_ex552737_ -/
 def execute_caller (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -583,7 +583,7 @@ def execute_caller (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top caller)), g1)))
 
 /-- Implements `CALLVALUE`. -/
-/- Type quantifiers: k_ex552672_ : Nat, 0 ≤ k_ex552672_ -/
+/- Type quantifiers: k_ex552738_ : Nat, 0 ≤ k_ex552738_ -/
 def execute_callvalue (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -591,7 +591,7 @@ def execute_callvalue (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat)
   else (pure ((← (push_word top (← readReg message).value)), g1))
 
 /-- Implements `GASPRICE`. -/
-/- Type quantifiers: k_ex552673_ : Nat, 0 ≤ k_ex552673_ -/
+/- Type quantifiers: k_ex552739_ : Nat, 0 ≤ k_ex552739_ -/
 def execute_gasprice (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -602,7 +602,7 @@ def execute_gasprice (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) 
       (pure ((← (push_word top gas_price)), g1)))
 
 /-- Implements `CALLDATASIZE`. -/
-/- Type quantifiers: k_ex552674_ : Nat, 0 ≤ k_ex552674_ -/
+/- Type quantifiers: k_ex552740_ : Nat, 0 ≤ k_ex552740_ -/
 def execute_calldatasize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -615,7 +615,7 @@ def execute_calldatasize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × N
       (pure ((← (push_word top length_word)), g1)))
 
 /-- Implements `CALLDATALOAD`. -/
-/- Type quantifiers: k_ex552675_ : Nat, 0 ≤ k_ex552675_ -/
+/- Type quantifiers: k_ex552741_ : Nat, 0 ≤ k_ex552741_ -/
 def execute_calldataload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -627,10 +627,10 @@ def execute_calldataload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × N
       (pure ((← (push_word top1 value)), g1)))
 
 /-- Implements `CALLDATACOPY`. -/
-/- Type quantifiers: k_ex552684_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552750_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552684_ -/
+  ≤ k_ex552750_ -/
 def execute_calldatacopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -696,7 +696,7 @@ def execute_calldatacopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
                 (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g3 : Nat))))))
 
 /-- Implements `CODESIZE`. -/
-/- Type quantifiers: k_ex552685_ : Nat, 0 ≤ k_ex552685_ -/
+/- Type quantifiers: k_ex552751_ : Nat, 0 ≤ k_ex552751_ -/
 def execute_codesize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -708,10 +708,10 @@ def execute_codesize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) 
       (pure ((← (push_word top length_word)), g1)))
 
 /-- Implements `CODECOPY`. -/
-/- Type quantifiers: k_ex552694_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552760_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552694_ -/
+  ≤ k_ex552760_ -/
 def execute_codecopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -778,7 +778,7 @@ def execute_codecopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
                 (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g3 : Nat))))))
 
 /-- Implements `BALANCE`, including warm/cold account access. -/
-/- Type quantifiers: k_ex552695_ : Nat, 0 ≤ k_ex552695_ -/
+/- Type quantifiers: k_ex552761_ : Nat, 0 ≤ k_ex552761_ -/
 def execute_balance (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (address_word, top1) ← do (pop top)
   let a := (word_to_address address_word)
@@ -794,7 +794,7 @@ def execute_balance (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :
       (pure ((← (push_word top1 balance)), g1)))
 
 /-- Implements `SELFBALANCE`. -/
-/- Type quantifiers: k_ex552696_ : Nat, 0 ≤ k_ex552696_ -/
+/- Type quantifiers: k_ex552762_ : Nat, 0 ≤ k_ex552762_ -/
 def execute_selfbalance (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_low)
   if ((! gas_charged) : Bool)
@@ -806,7 +806,7 @@ def execute_selfbalance (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Na
       (pure ((← (push_word top balance)), g1)))
 
 /-- Implements `EXTCODESIZE`, including warm/cold account access. -/
-/- Type quantifiers: k_ex552697_ : Nat, 0 ≤ k_ex552697_ -/
+/- Type quantifiers: k_ex552763_ : Nat, 0 ≤ k_ex552763_ -/
 def execute_extcodesize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (address_word, top1) ← do (pop top)
   let a := (word_to_address address_word)
@@ -824,10 +824,10 @@ def execute_extcodesize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Na
       (pure ((← (push_word top1 size_word)), g1)))
 
 /-- Implements `EXTCODECOPY`, including access and copy gas. -/
-/- Type quantifiers: k_ex552706_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552772_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552706_ -/
+  ≤ k_ex552772_ -/
 def execute_extcodecopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -898,7 +898,7 @@ def execute_extcodecopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
                 (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g3 : Nat))))))
 
 /-- Implements `EXTCODEHASH`, including warm/cold account access. -/
-/- Type quantifiers: k_ex552707_ : Nat, 0 ≤ k_ex552707_ -/
+/- Type quantifiers: k_ex552773_ : Nat, 0 ≤ k_ex552773_ -/
 def execute_extcodehash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (address_word, top1) ← do (pop top)
   let a := (word_to_address address_word)
@@ -915,7 +915,7 @@ def execute_extcodehash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Na
       (pure ((← (push_word top1 hash_word)), g1)))
 
 /-- Implements `RETURNDATASIZE`. -/
-/- Type quantifiers: k_ex552708_ : Nat, 0 ≤ k_ex552708_ -/
+/- Type quantifiers: k_ex552774_ : Nat, 0 ≤ k_ex552774_ -/
 def execute_returndatasize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -927,10 +927,10 @@ def execute_returndatasize (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) ×
       (pure ((← (push_word top size_word)), g1)))
 
 /-- Implements bounds-checked `RETURNDATACOPY`. -/
-/- Type quantifiers: k_ex552717_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552783_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552717_ -/
+  ≤ k_ex552783_ -/
 def execute_returndatacopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -995,7 +995,7 @@ def execute_returndatacopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =
                 (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g4 : Nat))))))
 
 /-- Implements `BLOCKHASH`. -/
-/- Type quantifiers: k_ex552718_ : Nat, 0 ≤ k_ex552718_ -/
+/- Type quantifiers: k_ex552784_ : Nat, 0 ≤ k_ex552784_ -/
 def execute_blockhash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g 20)
   if ((! gas_charged) : Bool)
@@ -1008,7 +1008,7 @@ def execute_blockhash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat)
       (pure ((← (push_word top1 hash_word)), g1)))
 
 /-- Implements `COINBASE`. -/
-/- Type quantifiers: k_ex552719_ : Nat, 0 ≤ k_ex552719_ -/
+/- Type quantifiers: k_ex552785_ : Nat, 0 ≤ k_ex552785_ -/
 def execute_coinbase (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1019,7 +1019,7 @@ def execute_coinbase (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) 
       (pure ((← (push_word top coinbase)), g1)))
 
 /-- Implements `TIMESTAMP`. -/
-/- Type quantifiers: k_ex552720_ : Nat, 0 ≤ k_ex552720_ -/
+/- Type quantifiers: k_ex552786_ : Nat, 0 ≤ k_ex552786_ -/
 def execute_timestamp (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1030,7 +1030,7 @@ def execute_timestamp (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat)
       (pure ((← (push_word top timestamp)), g1)))
 
 /-- Implements `NUMBER`. -/
-/- Type quantifiers: k_ex552721_ : Nat, 0 ≤ k_ex552721_ -/
+/- Type quantifiers: k_ex552787_ : Nat, 0 ≤ k_ex552787_ -/
 def execute_number (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1041,7 +1041,7 @@ def execute_number (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
       (pure ((← (push_word top block_number)), g1)))
 
 /-- Implements `SLOTNUM`. -/
-/- Type quantifiers: k_ex552722_ : Nat, 0 ≤ k_ex552722_ -/
+/- Type quantifiers: k_ex552788_ : Nat, 0 ≤ k_ex552788_ -/
 def execute_slotnum (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1052,7 +1052,7 @@ def execute_slotnum (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :
       (pure ((← (push_word top slot_number)), g1)))
 
 /-- Implements `PREVRANDAO`. -/
-/- Type quantifiers: k_ex552723_ : Nat, 0 ≤ k_ex552723_ -/
+/- Type quantifiers: k_ex552789_ : Nat, 0 ≤ k_ex552789_ -/
 def execute_prevrandao (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1063,7 +1063,7 @@ def execute_prevrandao (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat
       (pure ((← (push_word top prev_randao)), g1)))
 
 /-- Implements `GASLIMIT`. -/
-/- Type quantifiers: k_ex552724_ : Nat, 0 ≤ k_ex552724_ -/
+/- Type quantifiers: k_ex552790_ : Nat, 0 ≤ k_ex552790_ -/
 def execute_gaslimit (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1074,7 +1074,7 @@ def execute_gaslimit (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) 
       (pure ((← (push_word top gas_limit)), g1)))
 
 /-- Implements `CHAINID`. -/
-/- Type quantifiers: k_ex552725_ : Nat, 0 ≤ k_ex552725_ -/
+/- Type quantifiers: k_ex552791_ : Nat, 0 ≤ k_ex552791_ -/
 def execute_chainid (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1085,7 +1085,7 @@ def execute_chainid (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :
       (pure ((← (push_word top chain_id)), g1)))
 
 /-- Implements `BASEFEE`. -/
-/- Type quantifiers: k_ex552726_ : Nat, 0 ≤ k_ex552726_ -/
+/- Type quantifiers: k_ex552792_ : Nat, 0 ≤ k_ex552792_ -/
 def execute_basefee (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1096,7 +1096,7 @@ def execute_basefee (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :
       (pure ((← (push_word top base_fee)), g1)))
 
 /-- Implements `BLOBBASEFEE`. -/
-/- Type quantifiers: k_ex552727_ : Nat, 0 ≤ k_ex552727_ -/
+/- Type quantifiers: k_ex552793_ : Nat, 0 ≤ k_ex552793_ -/
 def execute_blobbasefee (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1112,7 +1112,7 @@ def execute_blobbasefee (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Na
       (pure ((← (push_word top base_fee)), g1)))
 
 /-- Implements `BLOBHASH`. -/
-/- Type quantifiers: k_ex552728_ : Nat, 0 ≤ k_ex552728_ -/
+/- Type quantifiers: k_ex552794_ : Nat, 0 ≤ k_ex552794_ -/
 def execute_blobhash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -1124,7 +1124,7 @@ def execute_blobhash (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) 
       (pure ((← (push_word top1 blob_hash)), g1)))
 
 /-- Implements `POP`. -/
-/- Type quantifiers: k_ex552729_ : Nat, 0 ≤ k_ex552729_ -/
+/- Type quantifiers: k_ex552795_ : Nat, 0 ≤ k_ex552795_ -/
 def execute_pop (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1135,10 +1135,10 @@ def execute_pop (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
       (pure (top1, g1)))
 
 /-- Implements `MLOAD`. -/
-/- Type quantifiers: k_ex552738_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552804_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552738_ -/
+  ≤ k_ex552804_ -/
 def execute_mload (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1189,10 +1189,10 @@ def execute_mload (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
             (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g2 : Nat)))))
 
 /-- Implements `MSTORE`. -/
-/- Type quantifiers: k_ex552747_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552813_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552747_ -/
+  ≤ k_ex552813_ -/
 def execute_mstore (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1243,10 +1243,10 @@ def execute_mstore (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
             (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g2 : Nat)))))
 
 /-- Implements `MSTORE8`. -/
-/- Type quantifiers: k_ex552756_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552822_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552756_ -/
+  ≤ k_ex552822_ -/
 def execute_mstore8 (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1296,10 +1296,10 @@ def execute_mstore8 (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
             (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g2 : Nat)))))
 
 /-- Implements `MSIZE`. -/
-/- Type quantifiers: k_ex552765_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552831_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552765_ -/
+  ≤ k_ex552831_ -/
 def execute_msize (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1333,10 +1333,10 @@ def execute_msize (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
         (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g1 : Nat))))
 
 /-- Implements overlapping memory copy `MCOPY` (EIP-5656). -/
-/- Type quantifiers: k_ex552774_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552840_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552774_ -/
+  ≤ k_ex552840_ -/
 def execute_mcopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1410,7 +1410,7 @@ def execute_mcopy (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
                 (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g3 : Nat))))))
 
 /-- Implements `SLOAD`, including warm/cold access gas. -/
-/- Type quantifiers: k_ex552775_ : Nat, 0 ≤ k_ex552775_ -/
+/- Type quantifiers: k_ex552841_ : Nat, 0 ≤ k_ex552841_ -/
 def execute_sload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (s, top1) ← do (pop top)
   let address ← do (self_addr ())
@@ -1426,7 +1426,7 @@ def execute_sload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := 
       (pure ((← (push_word top1 entry.curr)), g1)))
 
 /-- Implements `SSTORE`, including fork-specific gas and refunds. -/
-/- Type quantifiers: k_ex552776_ : Nat, 0 ≤ k_ex552776_ -/
+/- Type quantifiers: k_ex552842_ : Nat, 0 ≤ k_ex552842_ -/
 def execute_sstore (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := SailME.run do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -1483,7 +1483,7 @@ def execute_sstore (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
                   (pure (top2, g3))))))
 
 /-- Implements transient-storage load `TLOAD` (EIP-1153). -/
-/- Type quantifiers: k_ex552777_ : Nat, 0 ≤ k_ex552777_ -/
+/- Type quantifiers: k_ex552843_ : Nat, 0 ≤ k_ex552843_ -/
 def execute_tload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_warm_access)
   if ((! gas_charged) : Bool)
@@ -1496,7 +1496,7 @@ def execute_tload (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := 
       (pure ((← (push_word top1 value)), g1)))
 
 /-- Implements transient-storage write `TSTORE` (EIP-1153). -/
-/- Type quantifiers: k_ex552778_ : Nat, 0 ≤ k_ex552778_ -/
+/- Type quantifiers: k_ex552844_ : Nat, 0 ≤ k_ex552844_ -/
 def execute_tstore (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (write_protected, g0) ← do (guard_static g)
   if (write_protected : Bool)
@@ -1515,8 +1515,8 @@ def execute_tstore (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) :=
           (pure (top2, g1))))
 
 /-- Implements unconditional `JUMP`. -/
-/- Type quantifiers: k_ex552780_ : Nat, k_ex552779_ : Nat, 0 ≤ k_ex552779_ ∧
-  k_ex552779_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552780_ -/
+/- Type quantifiers: k_ex552846_ : Nat, k_ex552845_ : Nat, 0 ≤ k_ex552845_ ∧
+  k_ex552845_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552846_ -/
 def execute_jump (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM (Nat × (BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_mid)
   if ((! gas_charged) : Bool)
@@ -1528,8 +1528,8 @@ def execute_jump (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM (Nat × (Bi
       (pure (next_pc, top1, g2)))
 
 /-- Implements conditional `JUMPI`. -/
-/- Type quantifiers: k_ex552782_ : Nat, k_ex552781_ : Nat, 0 ≤ k_ex552781_ ∧
-  k_ex552781_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552782_ -/
+/- Type quantifiers: k_ex552848_ : Nat, k_ex552847_ : Nat, 0 ≤ k_ex552847_ ∧
+  k_ex552847_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552848_ -/
 def execute_jumpi (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM (Nat × (BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_high)
   if ((! gas_charged) : Bool)
@@ -1548,8 +1548,8 @@ def execute_jumpi (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM (Nat × (B
 
 /-- Implements `PC`, returning the current opcode position from the
 carried, already-advanced program counter. -/
-/- Type quantifiers: k_ex552784_ : Nat, k_ex552783_ : Nat, 0 ≤ k_ex552783_ ∧
-  k_ex552783_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552784_ -/
+/- Type quantifiers: k_ex552850_ : Nat, k_ex552849_ : Nat, 0 ≤ k_ex552849_ ∧
+  k_ex552849_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552850_ -/
 def execute_pc (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1562,7 +1562,7 @@ def execute_pc (pc_in : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) 
 
 /-- Implements `GAS`, returning the carried gas remaining after its own
 charge. -/
-/- Type quantifiers: k_ex552785_ : Nat, 0 ≤ k_ex552785_ -/
+/- Type quantifiers: k_ex552851_ : Nat, 0 ≤ k_ex552851_ -/
 def execute_gas (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_base)
   if ((! gas_charged) : Bool)
@@ -1576,8 +1576,8 @@ def execute_jumpdest (g : Nat) : SailM Nat := do
   (pure g1)
 
 /-- Implements the `PUSH0` through `PUSH32` family. -/
-/- Type quantifiers: k_ex552789_ : Nat, k_ex552788_ : Nat, k_ex552787_ : Nat, 0 ≤ k_ex552787_ ∧
-  k_ex552787_ ≤ 32, 0 ≤ k_ex552788_ ∧ k_ex552788_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex552789_ -/
+/- Type quantifiers: k_ex552855_ : Nat, k_ex552854_ : Nat, k_ex552853_ : Nat, 0 ≤ k_ex552853_ ∧
+  k_ex552853_ ≤ 32, 0 ≤ k_ex552854_ ∧ k_ex552854_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex552855_ -/
 def execute_push (n : Nat) (v : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   if ((n == 0) : Bool)
   then
@@ -1594,8 +1594,8 @@ def execute_push (n : Nat) (v : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((Bit
       else (pure ((← (push_word top v)), g1)))
 
 /-- Implements the `DUP1` through `DUP16` family. -/
-/- Type quantifiers: k_ex552791_ : Nat, k_ex552790_ : Nat, 1 ≤ k_ex552790_ ∧ k_ex552790_ ≤ 16, 0
-  ≤ k_ex552791_ -/
+/- Type quantifiers: k_ex552857_ : Nat, k_ex552856_ : Nat, 1 ≤ k_ex552856_ ∧ k_ex552856_ ≤ 16, 0
+  ≤ k_ex552857_ -/
 def execute_dup (n : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -1606,8 +1606,8 @@ def execute_dup (n : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × 
       (pure ((← (push_word top value)), g1)))
 
 /-- Implements the `SWAP1` through `SWAP16` family. -/
-/- Type quantifiers: k_ex552793_ : Nat, k_ex552792_ : Nat, 1 ≤ k_ex552792_ ∧ k_ex552792_ ≤ 16, 0
-  ≤ k_ex552793_ -/
+/- Type quantifiers: k_ex552859_ : Nat, k_ex552858_ : Nat, 1 ≤ k_ex552858_ ∧ k_ex552858_ ≤ 16, 0
+  ≤ k_ex552859_ -/
 def execute_swap (n : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let (gas_charged, g1) ← do (charge g G_verylow)
   if ((! gas_charged) : Bool)
@@ -1621,7 +1621,7 @@ def execute_swap (n : Nat) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) ×
       (pure (top, g1)))
 
 /-- Implements immediate deep-stack duplication `DUPN`. -/
-/- Type quantifiers: k_ex552794_ : Nat, 0 ≤ k_ex552794_ -/
+/- Type quantifiers: k_ex552860_ : Nat, 0 ≤ k_ex552860_ -/
 def execute_dupn (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let valid_immediate := (deep_stack_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -1638,7 +1638,7 @@ def execute_dupn (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : SailM 
           (pure ((← (push_word top value)), g1))))
 
 /-- Implements immediate deep-stack exchange `SWAPN`. -/
-/- Type quantifiers: k_ex552795_ : Nat, 0 ≤ k_ex552795_ -/
+/- Type quantifiers: k_ex552861_ : Nat, 0 ≤ k_ex552861_ -/
 def execute_swapn (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let valid_immediate := (deep_stack_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -1658,7 +1658,7 @@ def execute_swapn (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : SailM
           (pure (top, g1))))
 
 /-- Implements immediate pairwise deep-stack `EXCHANGE`. -/
-/- Type quantifiers: k_ex552796_ : Nat, 0 ≤ k_ex552796_ -/
+/- Type quantifiers: k_ex552862_ : Nat, 0 ≤ k_ex552862_ -/
 def execute_exchange (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := do
   let valid_immediate := (exchange_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -1678,10 +1678,10 @@ def execute_exchange (immediate : (BitVec 8)) (top : (BitVec 64)) (g : Nat) : Sa
           (pure (top, g1))))
 
 /-- Implements the `LOG0` through `LOG4` family. -/
-/- Type quantifiers: k_ex552806_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552801_
-  : Nat, 0 ≤ k_ex552801_ ∧ k_ex552801_ ≤ 4, 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552872_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552867_
+  : Nat, 0 ≤ k_ex552867_ ∧ k_ex552867_ ≤ 4, 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552806_ -/
+  ≤ k_ex552872_ -/
 def execute_log (n : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1751,10 +1751,10 @@ def execute_stop (_ : Unit) : SailM Unit := do
   writeReg frame_status (Halted reason)
 
 /-- Implements successful `RETURN`. -/
-/- Type quantifiers: k_ex552815_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552881_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552815_ -/
+  ≤ k_ex552881_ -/
 def execute_return (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1791,10 +1791,10 @@ def execute_return (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
         (EvmMemorySliceFields mem_dependentWitness0 mem_dependentWitness1)))), (g1 : Nat))))
 
 /-- Implements rollback-carrying `REVERT` (EIP-140). -/
-/- Type quantifiers: k_ex552824_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552890_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0
   ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552824_ -/
+  ≤ k_ex552890_ -/
 def execute_revert (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM ((BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -1839,7 +1839,7 @@ def execute_invalid (g : Nat) : SailM Nat := do
   (exc_halt consumed InvalidOpcode)
 
 /-- Implements `SELFDESTRUCT` with fork-specific semantics. -/
-/- Type quantifiers: k_ex552826_ : Nat, 0 ≤ k_ex552826_ -/
+/- Type quantifiers: k_ex552892_ : Nat, 0 ≤ k_ex552892_ -/
 def execute_selfdestruct (top : (BitVec 64)) (g : Nat) : SailM ((BitVec 64) × Nat) := SailME.run do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -1975,10 +1975,10 @@ layout: `value`, `offset`, `length`, `salt` (for `CREATE2`). Pushes
 the new address on success, 0 on failure. Takes the parent's carried
 machine state; returns the parent's updated state on the non-entering
 paths and the freshly installed child's state after a frame entry. -/
-/- Type quantifiers: k_ex552836_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552831_
-  : Nat, 0 ≤ k_ex552831_ ∧ k_ex552831_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552902_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552897_
+  : Nat, 0 ≤ k_ex552897_ ∧ k_ex552897_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552836_ -/
+  ≤ k_ex552902_ -/
 def run_create (kind : CreateKind) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat)
   => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2301,10 +2301,10 @@ def run_create (kind : CreateKind) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sig
                                   readReg evm_memory), (child_gas : Nat))))))))))
 
 /-- Implements `CREATE` through the common create runner. -/
-/- Type quantifiers: k_ex552846_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552841_
-  : Nat, 0 ≤ k_ex552841_ ∧ k_ex552841_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552912_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552907_
+  : Nat, 0 ≤ k_ex552907_ ∧ k_ex552907_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552846_ -/
+  ≤ k_ex552912_ -/
 def execute_create (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2316,10 +2316,10 @@ def execute_create (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : 
   (run_create CreateByNonce pc_in top ⟨_, ⟨_, mem⟩⟩ g)
 
 /-- Implements `CREATE2` through the common create runner. -/
-/- Type quantifiers: k_ex552856_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552851_
-  : Nat, 0 ≤ k_ex552851_ ∧ k_ex552851_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552922_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552917_
+  : Nat, 0 ≤ k_ex552917_ ∧ k_ex552917_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552856_ -/
+  ≤ k_ex552922_ -/
 def execute_create2 (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2363,7 +2363,7 @@ def call_semantics (kind : CallKind) : CallSemantics :=
 account runs the code at its delegation target, following exactly one
 hop; a delegation whose target is a precompile (or has no code)
 executes as empty code. An undelegated account runs its own code. -/
-/- Type quantifiers: k_ex552860_ : Bool -/
+/- Type quantifiers: k_ex552926_ : Bool -/
 def executable_code (target : (Vector (BitVec 8) 20)) (dele : Bool) (dtgt : (Vector (BitVec 8) 20)) : SailM (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) := do
   if _sailIf0 : (dele : Bool) = true
@@ -2402,10 +2402,10 @@ Operand layout (top of stack first): `gas`, `target`, `value` (for
 Pushes 1 on success, 0 on failure. Takes the parent's carried machine
 state; returns the parent's updated state on the non-entering paths
 and the freshly installed child's state after a frame entry. -/
-/- Type quantifiers: k_ex552870_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552865_
-  : Nat, 0 ≤ k_ex552865_ ∧ k_ex552865_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552936_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552931_
+  : Nat, 0 ≤ k_ex552931_ ∧ k_ex552931_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552870_ -/
+  ≤ k_ex552936_ -/
 def run_call (kind : CallKind) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2806,10 +2806,10 @@ def run_call (kind : CallKind) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma f
                               readReg evm_memory), (child_gas : Nat)))))))))
 
 /-- Implements `CALL` through the common call runner. -/
-/- Type quantifiers: k_ex552880_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552875_
-  : Nat, 0 ≤ k_ex552875_ ∧ k_ex552875_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552946_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552941_
+  : Nat, 0 ≤ k_ex552941_ ∧ k_ex552941_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552880_ -/
+  ≤ k_ex552946_ -/
 def execute_call (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2821,10 +2821,10 @@ def execute_call (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Na
   (run_call Call pc_in top ⟨_, ⟨_, mem⟩⟩ g)
 
 /-- Implements `CALLCODE` through the common call runner. -/
-/- Type quantifiers: k_ex552890_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552885_
-  : Nat, 0 ≤ k_ex552885_ ∧ k_ex552885_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552956_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552951_
+  : Nat, 0 ≤ k_ex552951_ ∧ k_ex552951_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552890_ -/
+  ≤ k_ex552956_ -/
 def execute_callcode (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2836,10 +2836,10 @@ def execute_callcode (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off 
   (run_call CallCode pc_in top ⟨_, ⟨_, mem⟩⟩ g)
 
 /-- Implements `DELEGATECALL` through the common call runner. -/
-/- Type quantifiers: k_ex552900_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552895_
-  : Nat, 0 ≤ k_ex552895_ ∧ k_ex552895_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552966_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552961_
+  : Nat, 0 ≤ k_ex552961_ ∧ k_ex552961_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552900_ -/
+  ≤ k_ex552966_ -/
 def execute_delegatecall (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2851,10 +2851,10 @@ def execute_delegatecall (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_
   (run_call DelegateCall pc_in top ⟨_, ⟨_, mem⟩⟩ g)
 
 /-- Implements `STATICCALL` through the common call runner. -/
-/- Type quantifiers: k_ex552910_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552905_
-  : Nat, 0 ≤ k_ex552905_ ∧ k_ex552905_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552976_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552971_
+  : Nat, 0 ≤ k_ex552971_ ∧ k_ex552971_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552910_ -/
+  ≤ k_ex552976_ -/
 def execute_staticcall (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -2986,10 +2986,10 @@ def opcode_stack_effect (op : ast) : SailM (Nat × Nat) := do
 /-- Standard decoded-opcode dispatcher. Each arm invokes the same narrow
 semantic function used directly by the optimized raw-byte interpreter,
 threading exactly the machine state that family carries. -/
-/- Type quantifiers: k_ex552920_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552915_
-  : Nat, 0 ≤ k_ex552915_ ∧ k_ex552915_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552986_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552981_
+  : Nat, 0 ≤ k_ex552981_ ∧ k_ex552981_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552920_ -/
+  ≤ k_ex552986_ -/
 def execute_opcode (op : ast) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>
@@ -3802,10 +3802,10 @@ def execute_opcode (op : ast) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fu
 /-- The single-step transition function over the standard decoded AST. Stack
 validity is established before gas charging or any instruction side
 effect, as part of the Yellow Paper exceptional-halt predicate. -/
-/- Type quantifiers: k_ex552930_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552925_
-  : Nat, 0 ≤ k_ex552925_ ∧ k_ex552925_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
+/- Type quantifiers: k_ex552996_ : Nat, mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, k_ex552991_
+  : Nat, 0 ≤ k_ex552991_ ∧ k_ex552991_ ≤ (2 ^ 32 - 1), 0 ≤ mem_dependentWitness0 ∧
   0 ≤ mem_dependentWitness1 ∧ (mem_dependentWitness0 + mem_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552930_ -/
+  ≤ k_ex552996_ -/
 def execute (op : ast) (pc_in : Nat) (top : (BitVec 64)) (mem : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (g : Nat) : SailM (Nat × (BitVec 64) × (Sigma
   fun (mem_dependentWitness0 : Nat) =>

@@ -211,6 +211,9 @@ struct zexception {
   union {struct { unit z__dummy_exnz3; };} variants;
 };
 
+// type abbreviation code_scan_position
+typedef uint32_t zcode_scan_position;
+
 // type abbreviation code_pointer
 typedef uint32_t zcode_pointer;
 
@@ -2222,7 +2225,7 @@ unit zcode_slice_copy_word_offset(struct zCodeRegionSliceFields zs, uint32_t zds
 
 unit zcalldata_slice_copy_word_offset(struct zCalldataSlice zs, uint32_t zdst, u256 zoff, uint32_t zlen);
 
-uint32_t zscratch_begin(unit z3zE4570);
+uint32_t zscratch_begin(unit z3zE4573);
 
 uint32_t zscratch_reserve(uint32_t zlen);
 
@@ -2248,7 +2251,7 @@ struct zScratchSliceFields zscratch_finish(uint32_t zstart);
 
 unit zscratch_rewind(uint32_t zmark);
 
-unit zscratch_reset(unit z3zE4565);
+unit zscratch_reset(unit z3zE4568);
 
 void create_letbind_35(void);
 void kill_letbind_35(void);
@@ -2467,8 +2470,6 @@ struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_fields(uint64_t zlimit, 
 void create_letbind_77(void);
 void kill_letbind_77(void);
 
-
-unit zanalyzze_code_from(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint32_t zpc);
 
 struct zCodeRegionSliceFields zcode_db_intern_input(struct zStatelessInputSliceFields zbytes);
 
@@ -4848,15 +4849,7 @@ uint64_t zanalyzze_code_struct_zzCodeRegionSliceFields_uint8_t_to_uint64_t(struc
 
 uint64_t zanalyzze_code_struct_zzCodeRegionSliceFields_uint8_t_to_uint64_t_variant_2(struct zCodeRegionSliceFields zcode, uint8_t zfork);
 
-unit zanalyzze_code_from_struct_zzCodeRegionSliceFields_uint8_t_uint64_t_uint32_t_to_unit(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint32_t zpc);
-
-unit zanalyzze_code_from_struct_zzCodeRegionSliceFields_uint8_t_uint64_t_uint32_t_to_unit_variant_2(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint32_t zpc);
-
-unit zanalyzze_code_from_struct_zzCodeRegionSliceFields_uint8_t_uint64_t_uint8_t_to_unit(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint8_t zpc);
-
-unit zanalyzze_code_from_struct_zzCodeRegionSliceFields_uint8_t_uint64_t_uint8_t_to_unit_variant_2(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint8_t zpc);
-
-unit zanalyzze_code_from_struct_zzCodeRegionSliceFields_uint8_t_uint64_t_uint8_t_to_unit_variant_3(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint8_t zpc);
+unit zanalyzze_code_from(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint8_t zpc);
 
 struct zAuthorizzationListRefFields zauthorizzation_list_ref_struct_zzStatelessInputSliceFields_uint8_t_to_struct_zzAuthorizzzzationListRefFields(struct zStatelessInputSliceFields zencoded, uint8_t zcount);
 

@@ -101,12 +101,12 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex552938_ : Nat, k_ex552937_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+/- Type quantifiers: k_ex553004_ : Nat, k_ex553003_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
   : Nat, 0 ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex552937_
-  ∧ k_ex552937_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552938_ ∧ k_ex552938_ ≤ 32 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex553003_
+  ∧ k_ex553003_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex553004_ ∧ k_ex553004_ ≤ 32 -/
 def read_push (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
