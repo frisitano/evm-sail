@@ -168,6 +168,20 @@ type gas_refund = range(
 
 let GAS_REFUND_ZERO : gas_refund = 0
 
+/*! EIP-8037's `SSTORE` storage-clear refund. */
+type amsterdam_storage_clear_refund : Int = 12480
+
+/*! One EIP-8037 `SSTORE` transition's signed refund delta. A transition either
+    establishes the storage-clear refund or withdraws the one an earlier write
+    in the same transaction established, so it moves the accumulator by at most
+    that refund in either direction. The accumulator itself is [gas_refund][],
+    which this sits well inside. The pre-Amsterdam schedule prices its
+    transitions from its own constants and is bounded separately. */
+type gas_refund_delta = range(
+    -amsterdam_storage_clear_refund,
+    amsterdam_storage_clear_refund,
+)
+
 /*! Net state gas consumed by one execution frame. A credit can make this
     negative until transaction settlement clamps the block-level value at
     zero. The canonical model remains mathematically unbounded; production

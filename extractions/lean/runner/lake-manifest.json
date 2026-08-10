@@ -13,8 +13,7 @@
    "name": "Sail",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir":
-   "../src/.lake/packages/Sail",
+   "dir": "../src/.lake/packages/Sail",
    "configFile": "lakefile.toml"}],
  "name": "«evm-lean-runner»",
  "lakeDir": ".lake"}

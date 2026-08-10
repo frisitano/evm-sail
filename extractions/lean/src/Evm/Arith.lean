@@ -56,19 +56,19 @@ open BalIterEntry
 open AcctTxPopResult
 open AcctBlockIterResult
 
-/- Type quantifiers: k_ex547362_ : Int, k_ex547361_ : Int -/
+/- Type quantifiers: k_ex547392_ : Int, k_ex547391_ : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
-/- Type quantifiers: k_ex547364_ : Int, k_ex547363_ : Int -/
+/- Type quantifiers: k_ex547394_ : Int, k_ex547393_ : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
-/- Type quantifiers: k_ex547371_ : Int, k_ex547370_ : Int -/
+/- Type quantifiers: k_ex547401_ : Int, k_ex547400_ : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
@@ -77,7 +77,7 @@ def fdiv_int (n : Int) (m : Int) : Int :=
     then ((Int.tdiv (n - 1) m) -i 1)
     else (Int.tdiv n m))
 
-/- Type quantifiers: k_ex547373_ : Int, k_ex547372_ : Int -/
+/- Type quantifiers: k_ex547403_ : Int, k_ex547402_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
 

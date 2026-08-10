@@ -1219,8 +1219,10 @@ private def wordBytesLow (value : word) (len : Nat) : List byte :=
   (List.range len).map fun index =>
     BitVec.ofNat 8 ((value / (2 ^ (8 * (len - 1 - index)))) % 256)
 
-/-- Fixed vectors index byte zero at the leading protocol byte, so a canonical
-wire sequence is the vector's own element order. -/
+/-- An `inc` fixed vector -- `address`, `b256` and everything built on them --
+indexes byte zero at the leading protocol byte, so a canonical wire sequence is
+the vector's own element order.  A `dec` vector reverses that, and its callers
+reverse this result. -/
 private def vectorBytes {size : Nat} (bytes : Vector byte size) : List byte :=
   bytes.toList
 
@@ -1628,11 +1630,14 @@ def host_scratch_store_b256 (off : Nat) (value : b256) (len : Nat) :
       Sigma fun (k_len : Nat) => ScratchSliceFields k_off k_len) :=
   scratchStore off ((vectorBytes value).take len)
 
+/-- The logs bloom is the model's one `dec` vector: element zero is its
+trailing wire byte, unlike `address` and `b256`, which are `inc`.  Appending it
+in canonical wire order therefore walks the vector backwards. -/
 def host_scratch_store_fixed_bytes_256
     (off : Nat) (value : Vector byte 256) :
     SailM (Sigma fun (k_off : Nat) =>
       Sigma fun (k_len : Nat) => ScratchSliceFields k_off k_len) :=
-  scratchStore off (vectorBytes value)
+  scratchStore off (vectorBytes value).reverse
 
 def host_scratch_store_word (off : Nat) (value : word) (len : Nat) :
     SailM (Sigma fun (k_off : Nat) =>
@@ -2250,9 +2255,11 @@ def acct_block_iter_next (_ : Unit) : SailM AcctBlockIterResult := do
 /-! ### The EIP-7928 block-access-list recorder
 
 Recording keeps one flat, account-tagged event list in record order.  All
-canonicalization -- secure-key account order, per-kind grouping, last-write-wins
-per key, and dropping reads shadowed by a change -- happens once in
-`bal_prepare_iter`. -/
+canonicalization -- EIP-7928's raw ascending address and slot order, per-kind
+grouping, last-write-wins per key, and dropping reads shadowed by a change --
+happens once in `bal_prepare_iter`.  This list is encoded and hashed as it
+stands, so it is ordered by the raw key rather than by the secure key that
+orders trie traversal. -/
 
 private def touchBalAccount
     (accounts : List address) (account : address) : List address :=
@@ -2350,10 +2357,9 @@ private def balEventsForAccount
   let orderedChanges :=
     changes.mergeSort fun left right =>
       if left.slot == right.slot then left.index <= right.index
-      else storageSecureSortKey left.slot <= storageSecureSortKey right.slot
+      else left.slot <= right.slot
   let orderedReads :=
-    (keepLastByKey id reads).mergeSort fun left right =>
-      storageSecureSortKey left <= storageSecureSortKey right
+    (keepLastByKey id reads).mergeSort fun left right => left <= right
   [BalIterEntry.BalAccount account] ++
     orderedChanges.map BalIterEntry.BalStorageChange ++
     orderedReads.map BalIterEntry.BalStorageRead ++
@@ -2366,7 +2372,7 @@ def bal_prepare_iter (_ : Unit) : SailM Unit :=
   modify fun state =>
     let accounts :=
       state.balAccounts.mergeSort fun left right =>
-        accountSecureSortKey left <= accountSecureSortKey right
+        addressSortKey left <= addressSortKey right
     { state with
       balIterator :=
         accounts.foldl

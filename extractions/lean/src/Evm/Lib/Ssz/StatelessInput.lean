@@ -392,7 +392,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex554016_ : Nat, 0 ≤ k_ex554016_ ∧ k_ex554016_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex554046_ : Nat, 0 ≤ k_ex554046_ ∧ k_ex554046_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -876,8 +876,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex554087_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex554087_ ∧ k_ex554087_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex554117_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex554117_ ∧ k_ex554117_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1371,11 +1371,11 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex554195_ : Nat, k_ex554194_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
+/- Type quantifiers: k_ex554225_ : Nat, k_ex554224_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
   : Nat, 0 ≤ cc_dependentWitness0 ∧
   0 ≤ cc_dependentWitness1 ∧ (cc_dependentWitness0 + cc_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex554194_ ∧ k_ex554194_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex554195_ ∧
-  k_ex554195_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex554224_ ∧ k_ex554224_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex554225_ ∧
+  k_ex554225_ ≤ (2 ^ 64 - 1) -/
 def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
   let cc_dependentWitness0 := (cc).1
@@ -1461,20 +1461,20 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
   writeReg k_chain_id chain_config.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex612300_ : Nat) =>
-    (Sigma fun (k_ex612301_ : Nat) =>
-    (Sigma fun (k_ex612302_ : Nat) =>
-    (Sigma fun (k_ex612303_ : Nat) =>
-    (Sigma fun (k_ex612304_ : Nat) =>
-    (Sigma fun (k_ex612305_ : Nat) =>
-    (Sigma fun (k_ex612306_ : Nat) =>
-    (Sigma fun (k_ex612307_ : Nat) =>
-    (Sigma fun (k_ex612308_ : Nat) =>
-    (Sigma fun (k_ex612309_ : Nat) =>
-    (Sigma fun (k_ex612310_ : Nat) =>
-    (ExecutionProfileFields k_ex612300_ k_ex612301_ k_ex612302_ k_ex612303_ k_ex612304_ k_ex612305_ k_ex612306_ k_ex612307_ k_ex612308_ k_ex612309_ k_ex612310_ (if ( k_ex612310_
-    < k_ex612306_  : Bool) then k_ex612310_ else k_ex612306_) (if ( (if ( k_ex612310_ < k_ex612306_  : Bool) then k_ex612310_ else k_ex612306_)
-    < k_ex612307_  : Bool) then (if ( k_ex612310_ < k_ex612306_  : Bool) then k_ex612310_ else k_ex612306_) else k_ex612307_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex612334_ : Nat) =>
+    (Sigma fun (k_ex612335_ : Nat) =>
+    (Sigma fun (k_ex612336_ : Nat) =>
+    (Sigma fun (k_ex612337_ : Nat) =>
+    (Sigma fun (k_ex612338_ : Nat) =>
+    (Sigma fun (k_ex612339_ : Nat) =>
+    (Sigma fun (k_ex612340_ : Nat) =>
+    (Sigma fun (k_ex612341_ : Nat) =>
+    (Sigma fun (k_ex612342_ : Nat) =>
+    (Sigma fun (k_ex612343_ : Nat) =>
+    (Sigma fun (k_ex612344_ : Nat) =>
+    (ExecutionProfileFields k_ex612334_ k_ex612335_ k_ex612336_ k_ex612337_ k_ex612338_ k_ex612339_ k_ex612340_ k_ex612341_ k_ex612342_ k_ex612343_ k_ex612344_ (if ( k_ex612344_
+    < k_ex612340_  : Bool) then k_ex612344_ else k_ex612340_) (if ( (if ( k_ex612344_ < k_ex612340_  : Bool) then k_ex612344_ else k_ex612340_)
+    < k_ex612341_  : Bool) then (if ( k_ex612344_ < k_ex612340_  : Bool) then k_ex612344_ else k_ex612340_) else k_ex612341_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,

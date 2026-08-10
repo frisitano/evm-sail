@@ -195,9 +195,9 @@ abbrev BLOB_HASH_LENGTH : Nat := 32
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex551313_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex551343_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex551313_ ∧ k_ex551313_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex551343_ ∧ k_ex551343_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>

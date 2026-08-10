@@ -119,8 +119,8 @@ def inline_node_hash (node : InlineNode) : SailM (Vector (BitVec 8) 32) := do
   (pure digest)
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex553454_ : Nat, k_ex553453_ : Nat, 0 ≤ k_ex553453_ ∧ k_ex553453_ ≤ 529, 0
-  ≤ k_ex553454_ ∧ k_ex553454_ ≤ 33 -/
+/- Type quantifiers: k_ex553484_ : Nat, k_ex553483_ : Nat, 0 ≤ k_ex553483_ ∧ k_ex553483_ ≤ 529, 0
+  ≤ k_ex553484_ ∧ k_ex553484_ ≤ 33 -/
 def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))

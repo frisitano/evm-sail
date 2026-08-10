@@ -6,8 +6,7 @@
    "name": "Sail",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir":
-   ".lake/packages/Sail",
+   "dir": ".lake/packages/Sail",
    "configFile": "lakefile.toml"}],
  "name": "evm",
  "lakeDir": ".lake"}

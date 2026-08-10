@@ -282,7 +282,13 @@ let G_amsterdam_state_byte : gas_constant = 1530
 let G_amsterdam_state_storage_set : state_gas_spill = 97920
 let G_amsterdam_state_new_account : state_gas_spill = 183600
 let G_amsterdam_state_auth_base : state_gas_spill = 35190
-let R_amsterdam_storage_clear : gas_constant = 12480
+
+/* Singleton rather than the wider gas_constant: the dirty-slot transition
+ * withdraws this refund as well as awarding it, and [gas_refund_delta][] is
+ * stated over exactly this magnitude. */
+let R_amsterdam_storage_clear : range(amsterdam_storage_clear_refund, amsterdam_storage_clear_refund) = sizeof(
+    amsterdam_storage_clear_refund
+)
 let G_sstore_sentry : gas_cost = 2301
 
 /*md
@@ -1441,7 +1447,7 @@ function amsterdam_sstore_costs(original : word, current : word, new_value : wor
     let current_is_nonzero = not_bool(current_is_zero);
     let execution : gas_cost =
         if clean_change then access + G_amsterdam_storage_write else access;
-    let clear_delta =
+    let clear_delta : gas_refund_delta =
         if changed & original_is_nonzero & current_is_nonzero & new_value_is_zero
         then R_amsterdam_storage_clear
         else if changed & original_is_nonzero & current_is_zero then 0 - R_amsterdam_storage_clear else 0;

@@ -187,8 +187,8 @@ def log_store_index_increment (value : Nat) : SailM Nat := do
       throw Error.Exit)
 
 /-- Adds a relative log offset to its series start without wrapping. -/
-/- Type quantifiers: k_ex549733_ : Nat, k_ex549732_ : Nat, 0 ≤ k_ex549732_ ∧
-  k_ex549732_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549733_ ∧ k_ex549733_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex549763_ : Nat, k_ex549762_ : Nat, 0 ≤ k_ex549762_ ∧
+  k_ex549762_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549763_ ∧ k_ex549763_ ≤ (2 ^ 64 - 1) -/
 def log_store_index_add (left : Nat) (right : Nat) : SailM Nat := do
   if ((right ≤b (((2 ^i 64) - 1) - left)) : Bool)
   then (pure (left + right))
@@ -201,14 +201,14 @@ def undefined_LogSeriesRef (_ : Unit) : SailM LogSeriesRef := do
   (pure { start := ← (undefined_range 0 ((2 ^i 64) - 1)),
           count := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
-/- Type quantifiers: k_ex549789_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex549819_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation _limit _regular_limit gas_used execution_gas state_gas) -/
 def receipt_fields (_limit : Nat) (_regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (ReceiptFields _limit _regular_limit gas_used execution_gas state_gas) :=
   { tx_type := tx_type,
     success := success,
     logs := logs }
 
-/- Type quantifiers: k_ex549835_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex549865_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation limit regular_limit gas_used execution_gas state_gas) -/
 def receipt_within (limit : Nat) (regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (Sigma
   fun (k_syn_state_gas : Nat) =>

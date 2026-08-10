@@ -34,7 +34,40 @@ private structure LastRun where
 
 initialize lastRun : IO.Ref LastRun ← IO.mkRef {}
 
-private def execute (input : ByteArray) : ByteArray × Bool :=
+private def runAction
+    (input : ByteArray) (action : Evm.SailM Unit) : Option ByteArray :=
+  let hostState :=
+    { initialHostState with
+      inputBytes := modelBytes input }
+  match (action.run hostState).run initialSequentialState with
+  | .ok (_, finalHostState) _ => some (nativeBytes finalHostState.publicOutput)
+  | .error _ _ => none
+
+/-- The guest's terminal-failure boundary, which `fatal_error` owns in C
+(`extractions/c/spec/contract/exceptions.c`): a rejected block still publishes a
+public output.  The extracted `fatal_error` is the canonical `exit(())` body, so
+here the boundary lives outside the model.  `Evm.SailM` carries the host state
+through `StateT`, which a throw discards along with the output region, so the
+verdict is republished on a fresh state: `write_validation_result(ref, false)`
+once the input decodes, and `write_invalid_result` when it does not -- the same
+two cases, chosen the same way, as the C boundary's `decoded_input_present`. -/
+private def failureOutput (input : ByteArray) : ByteArray :=
+  let rejected : Evm.SailM Unit := do
+    sail_model_init ()
+    scratch_reset ()
+    let ⟨_, ⟨_, input_bytes⟩⟩ ← stateless_input ()
+    let input_ref ← decode_stateless_input_ref ⟨_, ⟨_, input_bytes⟩⟩
+    write_validation_result input_ref false
+  match runAction input rejected with
+  | some output => output
+  | none =>
+      let undecodable : Evm.SailM Unit := do
+        sail_model_init ()
+        scratch_reset ()
+        write_invalid_result ()
+      (runAction input undecodable).getD {}
+
+private def execute (input : ByteArray) : ByteArray × Bool × String :=
   let hostState :=
     { initialHostState with
       inputBytes := modelBytes input }
@@ -43,14 +76,16 @@ private def execute (input : ByteArray) : ByteArray × Bool :=
     sail_main ()
   match (action.run hostState).run initialSequentialState with
   | .ok (_, finalHostState) _ =>
-      (nativeBytes finalHostState.publicOutput, true)
-  | .error _ _ =>
-      ({}, false)
+      (nativeBytes finalHostState.publicOutput, true, "")
+  | .error e _ =>
+      (failureOutput input, false, e.print)
 
 @[export evmsail_lean_run_once]
 def runOnce (input : ByteArray) : IO ByteArray := do
   setThreadStackSize runnerStackBytes
-  let (output, completed) := execute input
+  let (output, completed, reason) := execute input
+  if !completed then
+    (← IO.getStderr).putStrLn s!"EVMSAIL_LEAN_ERROR {reason}"
   lastRun.set { input, output, completed }
   pure output
 

@@ -164,7 +164,7 @@ def k_account_occupied (a : (Vector (BitVec 8) 20)) : SailM Bool := do
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
-/- Type quantifiers: k_ex551942_ : Nat, 0 ≤ k_ex551942_ ∧ k_ex551942_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551972_ : Nat, 0 ≤ k_ex551972_ ∧ k_ex551972_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
@@ -201,7 +201,7 @@ def k_add_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
-/- Type quantifiers: k_ex551943_ : Nat, 0 ≤ k_ex551943_ ∧ k_ex551943_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551973_ : Nat, 0 ≤ k_ex551973_ ∧ k_ex551973_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
   let value_is_zero := (word_is_zero v)

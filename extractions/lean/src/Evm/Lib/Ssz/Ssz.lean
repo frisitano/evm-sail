@@ -116,11 +116,11 @@ def ssz_u32 (input : (Sigma fun (k_off : Nat) =>
 
 /-- Reads an offset-table entry after establishing that the dynamic table
 position is contained by its enclosing input slice. -/
-/- Type quantifiers: k_ex550463_ : Nat, input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex550493_ : Nat, input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0
   ≤ input_dependentWitness0 ∧
   0 ≤ input_dependentWitness1 ∧
-  (input_dependentWitness0 + input_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550463_ ∧
-  k_ex550463_ ≤ (2 ^ 32 - 1) -/
+  (input_dependentWitness0 + input_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550493_ ∧
+  k_ex550493_ ≤ (2 ^ 32 - 1) -/
 def ssz_u32_in_slice (input : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
   let input_dependentWitness0 := (input).1

@@ -126,7 +126,7 @@ def bloom_bit_mask (bit_to_set : Nat) : (BitVec 8) :=
   (0x01#8 <<< bit_to_set)
 
 /-- Sets one bit (0–2047) in the bloom, most-significant-byte first. -/
-/- Type quantifiers: k_ex551938_ : Nat, 0 ≤ k_ex551938_ ∧ k_ex551938_ ≤ 2047 -/
+/- Type quantifiers: k_ex551968_ : Nat, 0 ≤ k_ex551968_ ∧ k_ex551968_ ≤ 2047 -/
 def bloom_set_bit (bloom : (Vector (BitVec 8) 256)) (bit_to_set : Nat) : (Vector (BitVec 8) 256) :=
   let out := bloom
   let quotient := (bit_to_set / 8)
@@ -153,7 +153,7 @@ def bloom_add_entry_hash (bloom : (Vector (BitVec 8) 256)) (h : (Vector (BitVec 
   (bloom_set_bit out third_index)
 
 /-- Adds one retained log record to the bloom (YP §4.4.1, the M function). -/
-/- Type quantifiers: k_ex551939_ : Nat, 0 ≤ k_ex551939_ ∧ k_ex551939_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex551969_ : Nat, 0 ≤ k_ex551969_ ∧ k_ex551969_ ≤ (2 ^ 64 - 1) -/
 def bloom_add_log_at (bloom : (Vector (BitVec 8) 256)) (index : Nat) : SailM (Vector (BitVec 8) 256) := do
   let address ← do (log_address index)
   let address_hash ← do (keccak256_address address)
@@ -204,7 +204,7 @@ def logs_bloom_or (left : (Vector (BitVec 8) 256)) (right : (Vector (BitVec 8) 2
 
 /-- Emits the EIP-7708 transfer log for a nonzero, non-self value
 transfer (Amsterdam onward). -/
-/- Type quantifiers: k_ex551940_ : Nat, 0 ≤ k_ex551940_ ∧ k_ex551940_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551970_ : Nat, 0 ≤ k_ex551970_ ∧ k_ex551970_ ≤ (2 ^ 256 - 1) -/
 def k_emit_transfer_log (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -222,7 +222,7 @@ def k_emit_transfer_log (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8)
 
 /-- Emits the EIP-7708 burn log when a selfdestruct deletion burns a
 nonzero balance (Amsterdam onward). -/
-/- Type quantifiers: k_ex551941_ : Nat, 0 ≤ k_ex551941_ ∧ k_ex551941_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex551971_ : Nat, 0 ≤ k_ex551971_ ∧ k_ex551971_ ≤ (2 ^ 256 - 1) -/
 def k_emit_burn_log (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile

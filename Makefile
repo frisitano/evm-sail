@@ -105,7 +105,17 @@ PYTHON_RUFF_RULES   := E4,E7,E9,F
 PYTHON_RUFF_IGNORES := E741,F841
 LEAN_HOST_AXIOMS    := extractions/lean/contract/HostAxioms.lean
 LEAN_SPECIALIZATION := extractions/lean/contract/Specialization.lean
+# Sail's Lean support library. LEAN_SAIL_LIB is where it lives on disk;
+# LEAN_SAIL_LIB_REQUIRE is the path recorded in the generated lakefile's
+# `require`, resolved by Lake relative to the generated package root. Keeping
+# the recorded path relative is what makes the committed lakefile portable, so
+# override both together when pointing at a checkout elsewhere. The library is
+# an ordinary Lake package rather than part of the compiler's share tree, so
+# the target provisions it on first use at the revision the backend expects.
 LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
+LEAN_SAIL_LIB_REQUIRE ?= .lake/packages/Sail
+LEAN_SAIL_LIB_GIT   ?= https://github.com/rems-project/lean-sail
+LEAN_SAIL_LIB_REV   ?= v4
 COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
 C_SPEC_HEADERS      := sail_failure.h exceptions.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
@@ -431,12 +441,24 @@ sail-readability-lint-report:
 		--output $(SAIL_READABILITY_REPORT) --json-output $(SAIL_READABILITY_JSON_REPORT)
 	@cat $(SAIL_READABILITY_REPORT)
 
-extract-lean:
+# Clone the support library the Lean backend expects, pinned to the revision
+# it names. Lake would fetch it too, but only from a lakefile that records a
+# git require; the committed lakefile records a path, so the checkout has to
+# exist before generation rather than after it.
+$(LEAN_SAIL_LIB)/lakefile.toml:
+	mkdir -p $(dir $(LEAN_SAIL_LIB))
+	git clone --branch $(LEAN_SAIL_LIB_REV) --depth 1 $(LEAN_SAIL_LIB_GIT) $(LEAN_SAIL_LIB)
+	test -s $@
+
+extract-lean: $(LEAN_SAIL_LIB)/lakefile.toml
 	mkdir -p $(LEAN_MODEL_DIR)
-	test -s $(LEAN_SAIL_LIB)/lakefile.toml
 	rm -rf $(LEAN_MODEL_DIR)/Evm
 	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	$(SAIL) $(SAIL_Z3_FLAGS) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
+	@# Generate into an empty staging tree. Sail clears its output directory,
+	@# but only of the entries a glob matches, so a stale .lake left by an
+	@# interrupted run would otherwise be copied over the real one below.
+	rm -rf $(LEAN_DIR)/evm
+	$(SAIL) $(SAIL_Z3_FLAGS) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB_REQUIRE) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
 	@# Sail derives the output directory from -o, which also names the Lake
 	@# package; move the generated tree into src/ (preserving any .lake
 	@# packages already there) so the layout matches the other targets.
