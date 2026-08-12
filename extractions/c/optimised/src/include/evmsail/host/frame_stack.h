@@ -10,7 +10,7 @@ struct FrameContinuation;
 void frame_stack_reset(void);
 /* By-value return matches the ABI the generated model declares for the
  * `frame_stack_pop` extern when the generated interpreter loop is kept
- * (EVM_GENERATED_INTERP=on). */
+ *. */
 struct FrameContinuation frame_stack_pop(void);
 
 #endif

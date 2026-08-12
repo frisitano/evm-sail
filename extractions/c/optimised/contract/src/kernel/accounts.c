@@ -71,9 +71,10 @@ struct Account k_aload(bytes32 parent_state_root, bytes20 address)
     return account;
   }
 
-  bal_note_account_touch(address);
-  /* bal_note_account_touch already resolved the address and fataled on a BAL
-   * miss, so the block view cannot miss here. */
+  const AccountId account_id = get_account_id(&address);
+  bal_note_account_touch(account_id);
+  /* get_account_id already fataled on a BAL miss, so the block view cannot
+   * miss here. */
   if (account_block_view(&address, &view)) {
     account_from_view(&account, &view);
   }

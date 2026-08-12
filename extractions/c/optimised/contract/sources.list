@@ -4,7 +4,6 @@
 # are selected explicitly by their owning harness and never belong here.
 workspace.c
 exceptions.c
-evm/execute.c
 evm/interpreter.c
 executor/block_access_list.c
 executor/payload.c

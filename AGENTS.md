@@ -156,45 +156,44 @@ duplicating instructions elsewhere.
   one-time workspace-binding rule rather than owning capacity-sized static
   arrays.
   The machine follows a STATE-PASSING convention (YP μ′ = Ξ(μ)): every
-  opcode handler in `sail/evm/execute.sail` takes the hot machine state it
-  uses — the carried gas, the operand-stack cursor (`StackTop`), the memory
-  cursor (`EvmMemorySlice`) for the memory family, and the program counter
-  for the flow family — by value and returns it updated. `charge` is
-  `(gas, cost) -> (bool, gas)`, `exc_halt` is `(gas, kind) -> gas` (it
-  performs the state-gas refill against the carried value in the canonical
-  read-then-zero order and returns the zeroed gas), and `validate_stack`
-  guards every instruction's stack effect against the carried cursor before
-  its handler runs, so handler bodies consume operands unchecked. The
-  `pc`/`gas_remaining`/`stack_top`/`evm_memory` registers are authoritative
-  ONLY at frame boundaries: the canonical loop supplies each step's
-  arguments from them and assigns the returned tuple back, `run_call`/
-  `run_create` publish the carried parent state immediately before
-  `suspend_frame`, and `FrameCheckpoint` saves/restores all four. `StackTop`
-  is an abstract 64-bit cursor token (spec backend: frame height; optimized
-  backend: raw row pointer); the stack module owns only word storage, and
-  the cursor moves through the `stack_slot_read/write` and
-  `stack_top_advance/retreat` host axioms.
-  The hand-written raw-byte interpreter (`extractions/c/optimised/contract/src/evm/interpreter.c`)
-  is the SINGLE optimized interpreter: a computed-goto loop (one 256-entry
-  label table, labels-as-values) carrying pc, gas, the stack cursor, the
-  memory cursor, and the code slice in loop LOCALS. In-TU fast-path arms
-  (ALU, PUSH/POP/DUP/SWAP/deep-stack, EXP, PC, GAS, JUMPDEST) validate and
-  charge against the carried locals and dispatch the next opcode from their
-  own tail; every in-TU failure branches to the single `interp_exc` tail,
-  which performs the carried-gas `exc_halt` exactly once. Arms whose
-  handler is a generated Sail body pass the locals as arguments and unpack
-  the returned tuple — there is no register synchronization around
-  handlers; the registers are published when a frame stops and reloaded
-  after resume or child entry (frame entry additionally reloads the code
-  and stack-base locals). There is no switch-dispatch variant and no
-  `EVM_INTERP` knob.
+  opcode handler in `sail/evm/execute.sail` takes one
+  `EvmInterpreterState` and returns one `EvmInterpreterState`. Only decoded
+  instruction data such as PUSH values/widths, DUP/SWAP indices, LOG topic
+  counts, and CALL/CREATE family selectors remain explicit parameters. Handler
+  bodies update `pc`, `sp`, `evm_memory`, and `gas_remaining` directly on that
+  state. `charge` remains `(gas, cost) -> (bool, gas)`, while each handler
+  writes the returned gas into its state before returning. `validate_stack`
+  runs before opcode dispatch and writes exceptional-halt gas back into the
+  same state. `EvmInterpreterState` does not contain decoded instructions.
+  The canonical loop threads the aggregate between steps and publishes its
+  four machine fields only at frame boundaries; `run_call`/`run_create`
+  publish the parent immediately before `suspend_frame` and return either the
+  updated parent or freshly installed child state. `FrameCheckpoint` continues
+  to save/restore all four fields. `StackPointer` carries an abstract storage
+  coordinate together with its semantic operand-stack height. The spec backend
+  represents the coordinate as a frame-local row index; the optimized backend
+  refines it to `{ u256 *storage, uint16_t height }`, so the threaded interpreter
+  validates stack effects without loading a frame base or reconstructing height
+  from pointer arithmetic. Sail moves the cursor only through
+  `stack_top_advance`/`stack_top_retreat`; direct typed-pointer indexing remains
+  confined to the handwritten optimized C loop.
+  The hand-written raw-byte optimized interpreter uses computed-goto dispatch
+  and carries pc, gas, the complete stack cursor, memory cursor, code slice, and
+  frame metadata as locals. Its C table and labels own only threaded control
+  flow and generated-tuple plumbing. PUSH/immediate decoding, DUP/SWAP/LOG
+  family classification, stack validation, charging, fork availability,
+  CALL/CREATE selection, exceptional-state normalization, and frame resumption
+  remain canonical Sail operations exposed through optimized `$[c_inline]`
+  declarations. Persistent-storage handlers retain optimized Sail replacements
+  so dense account and storage identifiers stay behind the host boundary.
   The optimized FFI audit enforces the source manifest and the remaining
   production policies. What matters is the FFI boundary: the abstract `val`
   contracts define the interface, and an implementation is free to choose
-  whatever internal control flow it needs behind them. The BAL recorder uses distinct keyed hash
-  tables for storage reads `(address, slot)` and storage changes
-  `(address, slot, block_access_index)` plus field changes keyed by
-  `(address, block_access_index)`. It sorts the dense rows once and exposes one
+  whatever internal control flow it needs behind them. The BAL recorder indexes
+  account and storage touch state directly by stable dense `AccountId` and
+  `StorageId`, with transaction-indexed value histories chained from those rows.
+  Addresses and slots are materialized only for canonical output ordering. It
+  sorts the dense rows once and exposes one
   account-delimited event stream; canonical RLP cursors, not the host stream,
   drive validation and enforce the address-plus-storage-key item limit.
   At the `extractions/c/` root, only the standardized `zkvm_accelerators.h` and

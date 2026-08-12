@@ -58,35 +58,39 @@ let DEPOSIT_REQUEST_INDEX : int(184) = 184
 /* Enter a top-level protocol system-call frame. The caller has already made a
  * fresh memory frame and, for a word input, frozen the parent-memory span that
  * `input` references. */
-/*! Enters a top-level protocol system-call frame. The caller has already
-    made a fresh memory frame and, for a word input, frozen the
-    parent-memory span that `input` references. */
-function enter_system_call_frame(tgt : address, input : CalldataSlice) -> unit = {
+/*! Runs a top-level protocol system-call frame. The caller has already made
+    a fresh memory frame and, for a word input, frozen the parent-memory span
+    that `input` references. */
+function run_system_call_frame(tgt : address, input : CalldataSlice) -> (
+    gas,
+    state_gas,
+    state_gas_spill,
+    gas_refund,
+    FrameStatus,
+    OutputSlice,
+) = {
     let execution_profile = k_execution_profile;
     let gas_limits = execution_profile.gas;
     k_journal_checkpoint();
-    pc = 0;
-    call_depth = 0;
-    gas_remaining = gas_limits.system_regular_limit;
-    state_gas_remaining = gas_limits.system_state_limit;
-    state_gas_spilled = STATE_GAS_SPILL_ZERO;
-    frame_refund = GAS_REFUND_ZERO;
-    stack_top = stack_reset();
-    returndata_clear();
-    frame_status = Running();
-    calldata = input;
-    message =
-        struct {
-            caller = SYSTEM_ADDRESS,
-            address = tgt,
-            code_address = tgt,
-            value = ZERO_WORD,
-            state_gas_reservoir = gas_limits.system_state_limit,
-            is_static = false,
-            depth = 0,
-        };
     let code_hash = k_code_key(tgt);
-    frame_code = code_db_resolve(code_hash)
+    let code = code_db_resolve(code_hash);
+    interpret(
+        gas_limits.system_regular_limit,
+        gas_limits.system_state_limit,
+        STATE_GAS_SPILL_ZERO,
+        GAS_REFUND_ZERO,
+        stack_reset(),
+        EMPTY_EVM_MEMORY_SLICE,
+        SYSTEM_ADDRESS,
+        tgt,
+        tgt,
+        ZERO_WORD,
+        gas_limits.system_state_limit,
+        false,
+        0,
+        code,
+        input,
+    )
 }
 
 /*! Issues one unchecked block-start system call: a 30M-gas frame from
@@ -100,21 +104,18 @@ function system_call(tgt : address, input : hash) -> unit = {
 
     /* Freeze the word in a parent memory frame. The system call executes
      * above that frame, so its own memory writes cannot mutate calldata. */
-    memory_reset();
+    let initial_memory = memory_reset();
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-    let (_, expanded_memory) = memory_expand_to(evm_memory, input_range.len);
-    evm_memory = expanded_memory;
+    let (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len);
     let input_word = hash_to_word(input);
     mem_store_word(input_range.off, input_word);
-    let (input_slice, accessed_memory) = active_memory_slice(evm_memory, input_range.off, input_range.len);
-    evm_memory = accessed_memory;
+    let (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
     let parent_memory = memory_frame_enter();
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
-    enter_system_call_frame(tgt, frame_input);
-    let _ = interpret();
-    memory_frame_leave(parent_memory);
-    let succeeded = frame_succeeded();
+    let (_, _, _, _, status, _) = run_system_call_frame(tgt, frame_input);
+    let _ = memory_frame_leave(parent_memory);
+    let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
     if failed then {
         k_journal_revert()
@@ -142,21 +143,20 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
     if code_hash == KECCAK_EMPTY then {
         fatal_error(ExecutionInvalid)
     } else {
-        memory_reset();
+        let _ = memory_reset();
         let parent_memory = memory_frame_enter();
-        enter_system_call_frame(tgt, EMPTY_CALLDATA);
-        let output = interpret();
-        let succeeded = frame_succeeded();
+        let (_, _, _, _, status, output) = run_system_call_frame(tgt, EMPTY_CALLDATA);
+        let succeeded = frame_succeeded(status);
         if succeeded then {
             let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
-            memory_frame_leave(parent_memory);
+            let _ = memory_frame_leave(parent_memory);
             k_journal_commit();
             k_tx_merge(); /* system call is a top-level boundary: merge its storage */
             result
         } else {
-            memory_frame_leave(parent_memory);
+            let _ = memory_frame_leave(parent_memory);
             k_journal_revert();
             k_tx_merge();
             fatal_error(ExecutionInvalid)

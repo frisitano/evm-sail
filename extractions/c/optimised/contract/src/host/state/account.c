@@ -43,15 +43,19 @@
 /* Immutable block-local account identity plus inexpensive execution metadata.
  *
  * storage_begin/storage_count identify the account's contiguous StorageId
- * range, populated during BAL loading. UINT32_MAX means the range has not yet
- * been bound. warm_epoch implements EIP-2929 without clearing every account
- * between transactions. storage_generation identifies the currently visible
- * storage incarnation; clearing storage increments it in O(1). */
+ * range, populated during BAL loading. storage_change_count splits its
+ * independently sorted changes and reads prefixes. UINT32_MAX means the range
+ * has not yet been bound. warm_epoch implements EIP-2929 without clearing
+ * every account between transactions. storage_generation identifies the
+ * currently visible storage incarnation; clearing storage increments it in
+ * O(1). */
 typedef struct {
   /* Canonical 20-byte address and the table's lookup identity. */
   bytes20 address;
   /* First StorageId in this account's contiguous BAL-defined interval. */
   StorageId storage_begin;
+  /* Number of leading StorageIds sourced from storageChanges. */
+  uint32_t storage_change_count;
   /* Number of StorageIds owned by this account. */
   uint32_t storage_count;
   /* Last transaction epoch in which the address was marked warm. */
@@ -119,23 +123,6 @@ static AccountTable acct_table = {
     .count = 1U,
 };
 
-/* The active EVM frame has one deterministic state-owning account. Keep its
- * stable AccountId together with a direct workspace-backed row pointer so
- * frame-local state operations do not repeatedly probe or compare addresses.
- * The entered address is retained so the context can heal itself against the
- * model's `message.address` register: the hand-written interpreter loop
- * enters the context eagerly at every frame installation, but the GENERATED
- * interpreter loop (EVM_GENERATED_INTERP=on) has no such hook, so
- * current_account_context_id() re-enters whenever the active frame owner
- * changed. */
-typedef struct {
-  AccountId id;
-  AccountEntry *entry;
-  bytes20 address;
-} CurrentAccountContext;
-
-static CurrentAccountContext current_account_context;
-
 /* Distinct AccountIds touched by the current transaction. */
 static AccountId *acct_tx_rows;
 static uint32_t acct_tx_rows_n = 0;
@@ -179,53 +166,6 @@ AccountId get_account_id(const bytes20 *address)
   return id;
 }
 
-void current_account_context_invalidate(void)
-{
-  current_account_context.id = ACCOUNT_ID_NONE;
-  current_account_context.entry = NULL;
-}
-
-/* Installs the current frame's state owner once. External account lookups never
- * update this context. */
-void current_account_context_enter(bytes20 address)
-{
-  const AccountId id = lookup_account_id(&address);
-  if (id == ACCOUNT_ID_NONE) {
-    fatal_error(InvalidBlockAccessList);
-  }
-  current_account_context.id = id;
-  current_account_context.entry = &acct_table.entries[id];
-  current_account_context.address = address;
-}
-
-AccountId current_account_context_id(void)
-{
-  /* Self-heal against the active frame owner. Frame installation paths that
-   * enter the context eagerly (the hand-written interpreter loop) make this
-   * comparison a cheap constant-true check; the generated interpreter loop
-   * relies on it entirely. Enter fatals on a BAL miss, so a healed context
-   * is always populated. */
-  if (current_account_context.id == ACCOUNT_ID_NONE ||
-      !address_equal(&current_account_context.address, &message.address)) {
-    current_account_context_enter(message.address);
-  }
-  return current_account_context.id;
-}
-
-/* Suspended frames retain only the stable dense ID. Reconstructing the pointer
- * is O(1) and avoids storing a process pointer in Sail-visible continuation
- * state. */
-void current_account_context_restore(AccountId id)
-{
-  if (id == ACCOUNT_ID_NONE) {
-    current_account_context_invalidate();
-    return;
-  }
-  current_account_context.id = id;
-  current_account_context.entry = &acct_table.entries[id];
-  current_account_context.address = acct_table.entries[id].address;
-}
-
 /* Reports whether storage updates may contribute to this account's post-state.
  * A nonexistent account cannot own live storage. */
 bool account_exists(AccountId id)
@@ -262,6 +202,7 @@ AccountId account_schema_insert(const bytes20 *address)
   acct_table.entries[id] = (AccountEntry){
       .address = *address,
       .storage_begin = UINT32_MAX,
+      .storage_change_count = 0,
       .storage_count = 0,
       .warm_epoch = 0,
       .storage_generation = STORAGE_INITIAL_GENERATION,
@@ -318,21 +259,39 @@ const bytes20 *account_id_address(AccountId id)
   return &acct_table.entries[id].address;
 }
 
+struct AccountExecutionContext account_execution_context(bytes20 address)
+{
+  const AccountId account_id = get_account_id(&address);
+  const AccountEntry *entry = &acct_table.entries[account_id];
+  return (struct AccountExecutionContext){
+      .account_id = account_id,
+      .storage_begin = entry->storage_begin,
+      .storage_change_count = entry->storage_change_count,
+      .storage_count = entry->storage_count,
+      .storage_generation = entry->storage_generation,
+  };
+}
+
 /* Binds the one contiguous StorageId interval assigned during BAL loading.
  * Binding is single-assignment and remains stable for the block. */
-void account_storage_range_bind(AccountId id, StorageId begin, uint32_t count)
+void account_bind_storage_schema(AccountId id, StorageId begin, uint32_t change_count,
+                                 uint32_t count)
 {
   AccountEntry *entry = &acct_table.entries[id];
+  if (entry->storage_begin != UINT32_MAX || change_count > count) {
+    fatal_error(InvalidBlockAccessList);
+  }
   entry->storage_begin = begin;
+  entry->storage_change_count = change_count;
   entry->storage_count = count;
 }
 
-/* Reads an account's already-bound StorageId interval. */
-void account_storage_range(AccountId id, StorageId *begin, uint32_t *count)
+bool storage_has_writes(bytes20 address)
 {
-  const AccountEntry *entry = &acct_table.entries[id];
-  *begin = entry->storage_begin;
-  *count = entry->storage_count;
+  const AccountId account_id = get_account_id(&address);
+  const AccountEntry *entry = &acct_table.entries[account_id];
+  return storage_range_has_writes(entry->storage_begin, entry->storage_count,
+                                  entry->storage_generation);
 }
 
 /* Captures the transaction-start semantic value once. The shared journal owns
@@ -385,9 +344,22 @@ uint32_t account_transaction_count(void)
   return acct_tx_rows_n;
 }
 
-AccountId account_transaction_id_at(uint32_t index)
+void account_transaction_storage_view_at(uint32_t index, AccountTransactionStorageView *view)
 {
-  return acct_tx_rows[index];
+  const AccountId account_id = acct_tx_rows[index];
+  const AccountEntry *entry = &acct_table.entries[account_id];
+  const AccountState *state = &acct_table.states[account_id];
+  *view = (AccountTransactionStorageView){
+      .account_id = account_id,
+      .storage_begin = entry->storage_begin,
+      .storage_count = entry->storage_count,
+      .transaction_storage_count = state->transaction_storage_count,
+      .original_storage_generation = state->transaction_epoch == current_warm_epoch
+                                         ? state->original_storage_generation
+                                         : entry->storage_generation,
+      .storage_generation = entry->storage_generation,
+      .exists = state->current.exists != 0U,
+  };
 }
 
 void account_transaction_pop_last(void)
@@ -434,15 +406,6 @@ StorageGeneration account_storage_generation(AccountId id)
   return acct_table.entries[id].storage_generation;
 }
 
-/* Returns the storage incarnation visible at transaction entry. Accounts not
- * yet touched in this transaction still observe their current block value. */
-StorageGeneration account_transaction_original_storage_generation(AccountId id)
-{
-  const AccountState *state = &acct_table.states[id];
-  return state->transaction_epoch == current_warm_epoch ? state->original_storage_generation
-                                                        : acct_table.entries[id].storage_generation;
-}
-
 /* Restores a generation recorded by the shared state journal during revert. */
 void account_storage_generation_restore(AccountId id, StorageGeneration generation)
 {
@@ -480,7 +443,6 @@ void acct_db_reset(void)
 {
   acct_table.count = 1u;
   acct_tx_rows_n = 0;
-  current_account_context_invalidate();
   return;
 }
 #endif
@@ -630,13 +592,17 @@ bool account_trie_binding_get(uint32_t index, AccountTrieView *view)
 {
   const AccountTrieBinding *binding = &acct_table.trie_bindings[index];
   const AccountId id = binding->account_id;
+  const AccountEntry *entry = &acct_table.entries[id];
   const AccountState *state = &acct_table.states[id];
   view->account_id = id;
+  view->storage_begin = entry->storage_begin;
+  view->storage_count = entry->storage_count;
+  view->storage_generation = entry->storage_generation;
   view->secure_key = &binding->secure_key;
-  view->storage_base_node = acct_table.entries[id].storage_generation != STORAGE_INITIAL_GENERATION
+  view->storage_base_node = entry->storage_generation != STORAGE_INITIAL_GENERATION
                                 ? EVMSAIL_NODE_ID_EMPTY
                                 : binding->storage_root_node;
-  view->storage_base_root = acct_table.entries[id].storage_generation != STORAGE_INITIAL_GENERATION
+  view->storage_base_root = entry->storage_generation != STORAGE_INITIAL_GENERATION
                                 ? &EVMSAIL_EMPTY_TRIE_ROOT
                                 : &binding->storage_root;
   view->original_storage_root = &binding->storage_root;
@@ -752,7 +718,6 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
     const AccountId account_id = acct_tx_rows[i];
     AccountState *state = &acct_table.states[account_id];
     AccountEntry *entry = &acct_table.entries[account_id];
-    const bytes20 address = acct_table.entries[account_id].address;
     const bool deleted =
         (state->selfdestructed && (!semantics.delete_only_created || state->created)) != 0;
 
@@ -780,13 +745,13 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
         entry->storage_generation != state->original_storage_generation;
 
     if (state->current.nonce != state->original.nonce) {
-      bal_note_nonce_change(current_transaction_epoch, address, state->current.nonce);
+      bal_note_nonce_change(current_transaction_epoch, account_id, state->current.nonce);
     }
     if (!word_equal(&state->current.balance, &state->original.balance)) {
-      bal_note_balance_change(current_transaction_epoch, address, state->current.balance);
+      bal_note_balance_change(current_transaction_epoch, account_id, state->current.balance);
     }
     if (!hash_equal(&state->current.code_hash, &state->original.code_hash)) {
-      bal_note_code_change(current_transaction_epoch, address, state->current.code_hash);
+      bal_note_code_change(current_transaction_epoch, account_id, state->current.code_hash);
     }
 
     const bool changed =
@@ -826,5 +791,4 @@ void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count
   WORKSPACE_BIND(acct_tx_rows, account_count);
   WORKSPACE_BIND(transaction_storage_ids, storage_count);
   acct_table.count = 1U;
-  current_account_context_invalidate();
 }

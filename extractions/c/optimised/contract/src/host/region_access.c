@@ -168,14 +168,52 @@ static u256 region_load_word(const uint8_t *source, uint64_t len, uint64_t index
 
 /* Sail slice_load_n wrappers call only under index < s.len with
  * 0 <= 'n <= 32 (sail/host/region_access.sail). */
-static u256 region_load_n_word(const uint8_t *source, uint64_t len, uint64_t index,
-                               uint64_t requested)
+static inline __attribute__((__always_inline__)) u256
+region_load_n_word(const uint8_t *source, uint64_t len, uint64_t index, uint64_t requested)
 {
-  uint8_t bytes[32] = {0};
   uint64_t count = len - index;
   if (count > requested) {
     count = requested;
   }
+
+  /* The ordinary case has the complete requested field. Build Sail's
+   * little-endian limb representation directly from the big-endian source,
+   * avoiding a zeroed 32-byte staging buffer and a second four-lane load.
+   * This is particularly important for PUSH immediates and RLP quantities. */
+  if (count == requested) {
+    u256 result = {{0}};
+    const uint8_t *const begin = source + index;
+    const uint64_t full_limbs = requested >> 3;
+    const uint64_t leading = requested & 7;
+    const uint8_t *cursor = begin + requested;
+
+    if (full_limbs >= 1) {
+      cursor -= 8;
+      result.limbs[0] = bswap64(load_u64(cursor));
+    }
+    if (full_limbs >= 2) {
+      cursor -= 8;
+      result.limbs[1] = bswap64(load_u64(cursor));
+    }
+    if (full_limbs >= 3) {
+      cursor -= 8;
+      result.limbs[2] = bswap64(load_u64(cursor));
+    }
+    if (full_limbs >= 4) {
+      cursor -= 8;
+      result.limbs[3] = bswap64(load_u64(cursor));
+    }
+    if (leading != 0) {
+      uint64_t partial = 0;
+      memcpy(&partial, begin, (size_t)leading);
+      result.limbs[full_limbs] = bswap64(partial) >> ((8 - leading) * 8);
+    }
+    return result;
+  }
+
+  /* A PUSH may run past the end of code. Preserve the semantic right-hand
+   * zero padding for that uncommon path. */
+  uint8_t bytes[32] = {0};
   memcpy(bytes + sizeof(bytes) - requested, source + index, (size_t)count);
   return be_bytes_to_sail_word(bytes);
 }

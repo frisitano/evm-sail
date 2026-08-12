@@ -66,6 +66,7 @@ C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
 C_SPEC_SPECIALIZATION_LIMIT ?= 256
 C_OPT_BUILD_DIR     := build/c-optimised
+C_OPT_SPECIALIZATION_LIMIT ?= 256
 C_OPT_GENERATED_DIR := $(C_OPT_BUILD_DIR)/generated
 C_OPT_GENERATED_INCLUDE_DIR := $(C_OPT_GENERATED_DIR)/include
 C_OPT_GENERATED_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/spec
@@ -73,6 +74,7 @@ C_OPT_GENERATED_MANIFEST := $(C_OPT_GENERATED_SOURCE_DIR)/sources.list
 C_OPT_PACKAGE_MANIFEST := $(C_OPT_GENERATED_DIR)/src/sources.list
 C_OPT_STAGED_FFI_SOURCE_DIR := $(C_OPT_GENERATED_DIR)/src/ffi
 C_OPT_EXTRA_SAIL_FLAGS ?=
+C_OPT_INLINE_FLAGS ?= --c-inline-attr --c-always-inline-attr
 C_OPT_SPECIALIZE_LOG_FLAGS ?= --c-specialize-log
 C_OPT_PACKAGE       := evmsail
 C_OPTIMISED_DIR     := sail/optimised
@@ -130,7 +132,9 @@ C_OPTIMIZED_EXTERNAL_TYPES := StatelessInputSliceFields \
                               LogDataSliceFields \
                               OutputSliceFields \
                               PreparedAuthorizationList
-C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := $(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER))
+C_OPTIMIZED_EXTERNAL_TYPE_FLAGS := \
+	$(foreach type,$(C_OPTIMIZED_EXTERNAL_TYPES),--c-optimized-external-type $(type)=$(C_OPTIMIZED_EXTERNAL_TYPES_HEADER)) \
+	--c-optimized-external-type StackPointer=evmsail/host/stack.h
 C_OPTIMIZED_BYTE_POINTER_FLAGS := \
 	--c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct \
 	--c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct \
@@ -147,8 +151,24 @@ C_SPEC_PRESERVE_FLAGS := --c-preserve main \
                        --c-preserve compute_state_root \
                        --c-preserve trie_root \
                        --c-preserve decode_stateless_input_ref
+C_OPT_OPCODE_HANDLER_NAMES := $(shell sed -n 's/^function \(execute_[a-z0-9_]*\).*/\1/p' sail/evm/execute.sail)
+C_OPT_OPCODE_HANDLER_PRESERVE_FLAGS := $(foreach name,$(C_OPT_OPCODE_HANDLER_NAMES),--c-preserve $(name))
 C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve resume_frame \
+                        --c-preserve run_call \
+			--c-preserve run_create \
+			--c-preserve run_frame_entry_encoded \
+			--c-preserve opcode_available \
+			--c-preserve execute_push_encoded \
+			--c-preserve execute_dup_encoded \
+			--c-preserve execute_swap_encoded \
+			--c-preserve execute_log_encoded \
+                        --c-preserve execute_deep_stack_encoded \
+                        --c-preserve frame_output \
+                        --c-preserve opcode_frame_status \
+                        --c-preserve exceptional_state \
+                        --c-preserve account_execution_context \
+                        --c-preserve refresh_account_execution_context \
                         --c-preserve validation_debug_record \
                         --c-preserve write_invalid_result \
                         --c-preserve sload_cost \
@@ -156,7 +176,8 @@ C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve sstore_costs \
                         --c-preserve process_transaction \
                         --c-preserve compute_state_root \
-                        --c-preserve decode_stateless_input_ref
+                        --c-preserve decode_stateless_input_ref \
+                        $(C_OPT_OPCODE_HANDLER_PRESERVE_FLAGS)
 SAIL_CONTRACTS      :=
 EXTERN_CONTRACT     := extractions/coq/contract/ExternBoundary.v
 # Installed Sail Python plugins are discovered automatically. Set this to the
@@ -379,6 +400,8 @@ extract-c-optimised: check-optimized-ffi
 		--c-optimized-include-dir $(C_OPTIMIZED_INCLUDE_DIR) \
 		$(C_OPTIMIZED_EXTERNAL_TYPE_FLAGS) \
 		$(C_OPTIMIZED_BYTE_POINTER_FLAGS) \
+		--c-specialization-limit $(C_OPT_SPECIALIZATION_LIMIT) \
+		$(C_OPT_INLINE_FLAGS) \
 		$(C_OPT_PRESERVE_FLAGS) $(C_OPT_SPECIALIZE_LOG_FLAGS) \
 		$(C_OPT_EXTRA_SAIL_FLAGS) \
 		$(C_OPTIMISED_SPLICE_FLAGS) \

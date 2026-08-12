@@ -87,23 +87,22 @@ static uint32_t account_count(uint32_t binding_count)
   return count;
 }
 
-static void append_storage(AccountId account_id)
+static void append_storage(const AccountTrieView *account)
 {
-  StorageId begin;
-  StorageGeneration generation;
-  const uint32_t candidates = storage_trie_candidates(account_id, &begin, &generation);
   uint32_t count = 0;
-  for (uint32_t offset = 0; offset < candidates; offset++) {
+  for (uint32_t offset = 0; offset < account->storage_count; offset++) {
     StorageTrieView view;
-    if (storage_trie_binding_get(begin + offset, generation, &view))
+    if (storage_trie_binding_get(account->storage_begin + offset,
+                                 account->storage_generation, &view))
       count++;
   }
   append_u32(count);
-  for (uint32_t offset = 0; offset < candidates; offset++) {
+  for (uint32_t offset = 0; offset < account->storage_count; offset++) {
     StorageTrieView view;
-    if (!storage_trie_binding_get(begin + offset, generation, &view))
+    const StorageId storage_id = account->storage_begin + offset;
+    if (!storage_trie_binding_get(storage_id, account->storage_generation, &view))
       continue;
-    append_word(*storage_id_slot(begin + offset));
+    append_word(*storage_id_slot(storage_id));
     append_word(*view.current);
   }
 }
@@ -125,7 +124,7 @@ static void append_accounts(bool state_available)
     append_hash(storage_root);
     append_hash(storage_root);
     append_hash(*view.code_hash);
-    append_storage(view.account_id);
+    append_storage(&view);
   }
 }
 
@@ -178,10 +177,7 @@ unsigned long guest_debug_dump(const unsigned char **out)
   append_accounts(state_available);
 
   append_byte('S');
-  const uint16_t depth = state_available ? stack_top_height(stack_top) : 0;
-  append_u32(depth);
-  for (uint16_t index = 0; index < depth; index++)
-    append_word(stack_slot_read(stack_top, index));
+  append_u32(0);
 
   append_byte('M');
   append_u32(state_available ? (uint32_t)hm_depth() : 0);

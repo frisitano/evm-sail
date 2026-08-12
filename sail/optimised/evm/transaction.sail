@@ -35,7 +35,12 @@ function transaction_costs(
         if blob_gas == 0 then {
             WORD_ZERO
         } else {
-            let blob_price = blob_base_fee(profile, excess_blob_gas);
+            let blob_price = blob_base_fee(
+                profile.fork,
+                profile.blob_schedule,
+                profile.excess_blob_gas_limit,
+                excess_blob_gas,
+            );
             if word_ule(blob_price, tx.max_blob_fee) then {
                 validated_word_product(blob_price, blob_gas)
             } else {

@@ -21,15 +21,21 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 BUILD="${NATIVE_BUILD:-$HERE/.build}"
 
 # 1. produce all objects (generated model C, sf runtime, FFI, test_utils
-#    harness). No EXTRA_PRESERVE needed: the reset shim (test_utils.c) calls
-#    the FFI reset symbols directly, so it depends on no Sail-level reset.
+#    harness). Optimized builds use the same release optimization and LTO
+#    settings while compiling every object and while linking this library.
+if [ "${EVM_BUILD_MODE:-optimized}" = optimized ]; then
+  EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-3}"
+  EVM_LTO="${EVM_LTO:-on}"
+else
+  EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
+  EVM_LTO="${EVM_LTO:-off}"
+fi
+export EVM_OPT_LEVEL EVM_LTO
 "$HERE/build.sh"
 
 CC="${CC:-cc}"
 ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/extractions/c"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
-EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
-EVM_LTO="${EVM_LTO:-off}"
 OPT_FLAGS=(-O"$EVM_OPT_LEVEL")
 if [ "$EVM_LTO" = on ]; then OPT_FLAGS+=(-flto); fi
 CFLAGS=("${OPT_FLAGS[@]}" -Wno-error=implicit-function-declaration)

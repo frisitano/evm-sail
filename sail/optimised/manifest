@@ -1,8 +1,10 @@
 prelude.sail
+primitives/quantities.sail
 primitives/code.sail
 primitives/gas.sail
 primitives/block.sail
 host/code.sail
+host/stack.sail
 host/output.sail
 kernel/logs.sail
 kernel/accounts.sail

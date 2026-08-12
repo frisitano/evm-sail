@@ -35,31 +35,19 @@ void storage_preload(AccountId account_id, NodeId storage_root_node, u256 slot,
   *storage_id = id;
 }
 
-struct StorageValue storage_load_by_id(bytes32 parent_state_root, bytes20 address, u256 slot,
-                                       StorageId storage_id)
+struct StorageValue storage_load_by_id(AccountId account_id, StorageGeneration generation,
+                                       StorageId storage_id, bool mark_warm)
 {
-  (void)parent_state_root;
   struct StorageValue value;
   memset(&value, 0, sizeof(value));
-  const AccountId account_id = current_account_context_id();
+  if (mark_warm) {
+    storage_id_mark_warm(storage_id);
+  }
 
   StorageView view;
-  const StorageViewStatus tx_status = storage_transaction_view(account_id, storage_id, &view);
-  if (tx_status == STORAGE_VIEW_FOUND) {
-    value.curr = view.current;
-    value.orig = view.original;
-    return value;
-  }
-
-  bal_note_storage_read(address, slot);
-  if (tx_status == STORAGE_VIEW_CLEARED) {
-    return value;
-  }
-
-  if (storage_block_view(account_id, storage_id, &view)) {
-    value.curr = view.current;
-    value.orig = view.original;
-    return value;
-  }
-  fatal_error(InvalidBlockAccessList);
+  storage_load_view(generation, storage_id, &view);
+  bal_note_storage_touch(account_id, storage_id);
+  value.curr = view.current;
+  value.orig = view.original;
+  return value;
 }

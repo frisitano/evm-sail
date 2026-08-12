@@ -17,6 +17,7 @@ unit operand_stack_pop_frame(const unit u);            /* return: release the ch
 uint64_t stack_top_height(uint64_t top);               /* words below a cursor */
 u256 stack_slot_read(uint64_t top, uint64_t index);    /* index-from-top read */
 unit stack_slot_write(uint64_t top, uint64_t index, const u256 w); /* index-from-top write */
+unit stack_slot_write_next(uint64_t top, const u256 w); /* next free slot */
 uint64_t stack_top_advance(uint64_t top, uint64_t count); /* cursor over pushed slots */
 uint64_t stack_top_retreat(uint64_t top, uint64_t count); /* cursor over popped slots */
 #endif

@@ -39,19 +39,31 @@ build_guest() {
     local gcc="${GCC:-riscv64-unknown-elf-gcc}"
     # EVM_LTO=full performs whole-program LTO at this link; the machine-code
     # _start in libziskos.a roots the symbol graph through main.
+    local opt_flags=(-O3)
     local lto_flags=()
-    if [ "${EVM_LTO:-off}" = full ]; then
-        lto_flags=(-flto -O2)
+    if [ "${EVM_LTO:-full}" = full ]; then
+        lto_flags=(-flto)
     fi
-    "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0 \
-        -O2 -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -fno-pic -mno-relax \
-        ${lto_flags[@]+"${lto_flags[@]}"} \
-        -Wall -Wextra -c "$HERE/main.c" -o "$BUILD/zisk_cmain.o"
+    local -a c_entry=()
+    local -a unity_roots=()
+    if [ "${EVM_UNITY:-off}" = off ]; then
+        "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0 \
+            "${opt_flags[@]}" -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -fno-pic -mno-relax \
+            ${lto_flags[@]+"${lto_flags[@]}"} \
+            -Wall -Wextra -c "$HERE/main.c" -o "$BUILD/zisk_cmain.o"
+        c_entry=("$BUILD/zisk_cmain.o")
+    else
+        # main lives in the unity archive. Root it before scanning that archive;
+        # libziskos introduces its reference only later in the link order.
+        unity_roots=(-Wl,-u,main)
+    fi
     "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -mno-relax \
+        "${opt_flags[@]}" \
         -nostdlib -static -T "$HERE/link_main.ld" \
         ${lto_flags[@]+"${lto_flags[@]}"} \
         -Wl,--no-relax -Wl,--gc-sections \
-        "$BUILD/zisk_cmain.o" \
+        "${unity_roots[@]}" \
+        "${c_entry[@]}" \
         "$BUILD/libevmsail_zisk.a" "$ziskos_lib" -lgcc \
         -o "$BUILD/stateless-validator-evm-sail-zisk.elf"
     echo "built $BUILD/stateless-validator-evm-sail-zisk.elf (C-direct link)"

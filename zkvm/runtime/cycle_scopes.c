@@ -62,6 +62,14 @@ ZISK_PROFILE_TAG(tx_merge_accounts);
 ZISK_PROFILE_TAG(tx_merge_storage);
 ZISK_PROFILE_TAG(system_call_interpret);
 ZISK_PROFILE_TAG(system_call_merge);
+ZISK_PROFILE_TAG(evm_alu);
+ZISK_PROFILE_TAG(evm_stack);
+ZISK_PROFILE_TAG(evm_memory);
+ZISK_PROFILE_TAG(evm_flow);
+ZISK_PROFILE_TAG(evm_environment);
+ZISK_PROFILE_TAG(evm_state);
+ZISK_PROFILE_TAG(evm_frame);
+ZISK_PROFILE_TAG(evm_halt);
 
 #define ZISK_PROFILE_REPORT(tag, command) \
     __asm__ volatile( \
@@ -188,6 +196,22 @@ __asm__(
     ".set __ZISKOS_PROFILE_ID_50_system_call_interpret, 50\n"
     ".globl __ZISKOS_PROFILE_ID_51_system_call_merge\n"
     ".set __ZISKOS_PROFILE_ID_51_system_call_merge, 51\n"
+    ".globl __ZISKOS_PROFILE_ID_52_evm_alu\n"
+    ".set __ZISKOS_PROFILE_ID_52_evm_alu, 52\n"
+    ".globl __ZISKOS_PROFILE_ID_53_evm_stack\n"
+    ".set __ZISKOS_PROFILE_ID_53_evm_stack, 53\n"
+    ".globl __ZISKOS_PROFILE_ID_54_evm_memory\n"
+    ".set __ZISKOS_PROFILE_ID_54_evm_memory, 54\n"
+    ".globl __ZISKOS_PROFILE_ID_55_evm_flow\n"
+    ".set __ZISKOS_PROFILE_ID_55_evm_flow, 55\n"
+    ".globl __ZISKOS_PROFILE_ID_56_evm_environment\n"
+    ".set __ZISKOS_PROFILE_ID_56_evm_environment, 56\n"
+    ".globl __ZISKOS_PROFILE_ID_57_evm_state\n"
+    ".set __ZISKOS_PROFILE_ID_57_evm_state, 57\n"
+    ".globl __ZISKOS_PROFILE_ID_58_evm_frame\n"
+    ".set __ZISKOS_PROFILE_ID_58_evm_frame, 58\n"
+    ".globl __ZISKOS_PROFILE_ID_59_evm_halt\n"
+    ".set __ZISKOS_PROFILE_ID_59_evm_halt, 59\n"
 );
 
 #define START_SCOPE(id, tag) case id: __asm__ volatile("addi x0, x1, " #id ::: "memory"); break
@@ -261,6 +285,14 @@ static inline void cycle_scope_report_end(uint64_t scope)
     END_SCOPE(49, tx_merge_storage);
     END_SCOPE(50, system_call_interpret);
     END_SCOPE(51, system_call_merge);
+    END_SCOPE(52, evm_alu);
+    END_SCOPE(53, evm_stack);
+    END_SCOPE(54, evm_memory);
+    END_SCOPE(55, evm_flow);
+    END_SCOPE(56, evm_environment);
+    END_SCOPE(57, evm_state);
+    END_SCOPE(58, evm_frame);
+    END_SCOPE(59, evm_halt);
     default: break;
     }
 }
@@ -325,6 +357,14 @@ unit cycle_scope_start(uint64_t scope)
     START_SCOPE(49, tx_merge_storage);
     START_SCOPE(50, system_call_interpret);
     START_SCOPE(51, system_call_merge);
+    START_SCOPE(52, evm_alu);
+    START_SCOPE(53, evm_stack);
+    START_SCOPE(54, evm_memory);
+    START_SCOPE(55, evm_flow);
+    START_SCOPE(56, evm_environment);
+    START_SCOPE(57, evm_state);
+    START_SCOPE(58, evm_frame);
+    START_SCOPE(59, evm_halt);
     default: break;
     }
 #else

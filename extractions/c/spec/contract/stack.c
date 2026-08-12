@@ -86,6 +86,12 @@ unit stack_slot_write(uint64_t top, uint64_t index, const u256 w) {
   return UNIT;
 }
 
+unit stack_slot_write_next(uint64_t top, const u256 w) {
+  hs_frame *f = &hs_stk[hs_top];
+  sail_word_to_le_words4(f->w[top], (w));
+  return UNIT;
+}
+
 uint64_t stack_top_advance(uint64_t top, uint64_t count) { return top + count; }
 
 uint64_t stack_top_retreat(uint64_t top, uint64_t count) { return top - count; }

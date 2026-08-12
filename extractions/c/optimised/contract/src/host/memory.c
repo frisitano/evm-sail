@@ -136,22 +136,30 @@ static uint8_t *frame_write_region(uint64_t off, uint64_t len)
  * gas-side watermark already covers the range. */
 u256 mem_load_word(uint32_t off)
 {
-  uint64_t offset = off;
-  uint8_t buf[32];
-  for (int i = 0; i < 32; i++) {
-    uint64_t o = offset + (uint64_t)i;
-    buf[i] = o < f_len[h_top] ? arena[f_base[h_top] + o] : 0;
+  const uint64_t offset = off;
+  const uint64_t length = f_len[h_top];
+  const uint8_t *base = arena + f_base[h_top];
+
+  if (offset <= length && length - offset >= 32) {
+    return be_bytes_to_sail_word(base + offset);
   }
-  return (be_bytes_to_sail_word(buf));
+
+  uint8_t buf[32] = {0};
+  if (offset < length) {
+    uint64_t available = length - offset;
+    if (available > sizeof buf) {
+      available = sizeof buf;
+    }
+    memcpy(buf, base + offset, (size_t)available);
+  }
+  return be_bytes_to_sail_word(buf);
 }
 
 /* MSTORE: the 32-byte big-endian word at off (establish + one memcpy) */
 void mem_store_word(uint32_t off, u256 w)
 {
-  uint8_t buf[32];
-  sail_word_to_be_bytes(buf, w);
   uint8_t *d = frame_write_region(off, 32);
-  memcpy(d, buf, 32);
+  sail_word_to_be_bytes(d, w);
 }
 
 /* MCOPY: overlapping-safe copy within the current frame. Both ranges are

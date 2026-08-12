@@ -21,11 +21,12 @@
  * mechanism performs no re-checks. */
 #include "evmsail/host/stack.h"
 #include "evmsail/prelude.h"
-#include "host/stack_ops.h"
 #include "workspace.h"
 
 #include <stddef.h>
 #include <stdint.h>
+
+#define STACK_ALWAYS_INLINE extern inline __attribute__((__always_inline__))
 
 typedef struct {
   u256 words[GUEST_OPERAND_FRAME_WORDS];
@@ -44,18 +45,21 @@ void stack_workspace_bind(void)
   operand_stack.depth = 0;
 }
 
-uint64_t stack_reset(void)
+StackPointer stack_reset(void)
 {
   operand_stack.depth = 0;
-  return (uint64_t)(uintptr_t)operand_stack.frames[0].words;
+  return (StackPointer){.storage = operand_stack.frames[0].words, .height = 0};
 }
 
 /* The Sail-enforced 1024 call-depth limit keeps depth below
  * GUEST_OPERAND_FRAMES. */
-uint64_t operand_stack_push_empty_frame(void)
+StackPointer operand_stack_push_empty_frame(void)
 {
   operand_stack.depth++;
-  return (uint64_t)(uintptr_t)operand_stack.frames[operand_stack.depth].words;
+  return (StackPointer){
+      .storage = operand_stack.frames[operand_stack.depth].words,
+      .height = 0,
+  };
 }
 
 void operand_stack_pop_frame(void)
@@ -66,37 +70,36 @@ void operand_stack_pop_frame(void)
   operand_stack.depth--;
 }
 
-/* The interpreter's carried frame base: the deepest row of the active
- * frame, reloaded by the C loop at the same frame boundaries that reload
- * the code slice. */
-u256 *stack_frame_base(void)
+STACK_ALWAYS_INLINE uint16_t stack_top_height(StackPointer top)
 {
-  return operand_stack.frames[operand_stack.depth].words;
+  return top.height;
 }
 
-uint16_t stack_top_height(uint64_t top)
+STACK_ALWAYS_INLINE u256 stack_slot_read(StackPointer top, uint16_t index)
 {
-  return (uint16_t)((const u256 *)(uintptr_t)top - operand_stack.frames[operand_stack.depth].words);
+  return top.storage[-1 - (ptrdiff_t)index];
 }
 
-u256 stack_slot_read(uint64_t top, uint16_t index)
+STACK_ALWAYS_INLINE void stack_slot_write(StackPointer top, uint16_t index, u256 word)
 {
-  const u256 *rows = (const u256 *)(uintptr_t)top;
-  return rows[-1 - (ptrdiff_t)index];
+  top.storage[-1 - (ptrdiff_t)index] = word;
 }
 
-void stack_slot_write(uint64_t top, uint16_t index, u256 word)
+STACK_ALWAYS_INLINE void stack_slot_write_next(StackPointer top, u256 word)
 {
-  u256 *rows = (u256 *)(uintptr_t)top;
-  rows[-1 - (ptrdiff_t)index] = word;
+  top.storage[0] = word;
 }
 
-uint64_t stack_top_advance(uint64_t top, uint16_t count)
+STACK_ALWAYS_INLINE StackPointer stack_top_advance(StackPointer top, uint16_t count)
 {
-  return top + (uint64_t)count * sizeof(u256);
+  top.storage += count;
+  top.height = (uint16_t)(top.height + count);
+  return top;
 }
 
-uint64_t stack_top_retreat(uint64_t top, uint16_t count)
+STACK_ALWAYS_INLINE StackPointer stack_top_retreat(StackPointer top, uint16_t count)
 {
-  return top - (uint64_t)count * sizeof(u256);
+  top.storage -= count;
+  top.height = (uint16_t)(top.height - count);
+  return top;
 }

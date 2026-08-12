@@ -34,7 +34,8 @@ void stateless_storage_read(NodeId root_node, bytes32 slot_hash, u256 *value, bo
  * AccountTable; storage IDs remain stable and are exposed through the shared
  * MPT order workspace for the duration of one storage-trie traversal. */
 uint32_t mpt_account_updates_prepare(void);
-uint32_t mpt_storage_updates_prepare(AccountId account_id, StorageGeneration *generation);
+uint32_t mpt_storage_updates_prepare(StorageId begin, uint32_t candidates,
+                                     StorageGeneration generation);
 StorageId mpt_storage_update_id_at(uint32_t index);
 
 /* One-call optimized indexing of the source-backed SSZ witness-node list. */

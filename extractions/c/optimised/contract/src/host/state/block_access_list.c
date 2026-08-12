@@ -112,9 +112,8 @@ void bal_storage_schema_initialize(StorageId id)
   bal_storage[id].block_epoch = 0;
 }
 
-static AccountId bal_account_activate(const bytes20 *address)
+static void bal_account_activate(AccountId id)
 {
-  const AccountId id = get_account_id(address);
   BalAccountState *account = &bal_accounts[id];
   if (account->block_epoch != block_epoch) {
     account->block_epoch = block_epoch;
@@ -125,12 +124,10 @@ static AccountId bal_account_activate(const bytes20 *address)
     bal_account_order[bal_account_order_n++] = id;
   }
   account->touched = 1;
-  return id;
 }
 
-static StorageId bal_storage_activate(AccountId account_id, const u256 *slot)
+static void bal_storage_activate(AccountId account_id, StorageId storage_id)
 {
-  const StorageId storage_id = get_storage_id(account_id, slot);
   BalStorageState *bal = &bal_storage[storage_id];
   if (bal->block_epoch != block_epoch) {
     bal->block_epoch = block_epoch;
@@ -139,7 +136,6 @@ static StorageId bal_storage_activate(AccountId account_id, const u256 *slot)
     bal->change_head = bal->change_tail = BAL_NO_HISTORY;
     bal_storage_order[bal_storage_order_n++] = storage_id;
   }
-  return storage_id;
 }
 
 /* Returns the chain-tail history row for transaction_epoch, appending a new
@@ -169,16 +165,16 @@ static BalHistoryRow *bal_append_history(BalHistoryRow *rows, uint32_t *length, 
   return entry;
 }
 
-void bal_note_account_touch(bytes20 a)
+void bal_note_account_touch(AccountId account_id)
 {
-  (void)bal_account_activate(&a);
+  bal_account_activate(account_id);
 }
 
-void bal_note_storage_change(uint64_t transaction_epoch, bytes20 address, const u256 slot,
-                             const u256 value)
+void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id,
+                             StorageId storage_id, const u256 value)
 {
-  const AccountId account_id = bal_account_activate(&address);
-  const StorageId storage_id = bal_storage_activate(account_id, &slot);
+  bal_account_activate(account_id);
+  bal_storage_activate(account_id, storage_id);
   BalStorageState *bal = &bal_storage[storage_id];
   BalHistoryRow *row =
       bal_append_history(bal_storage_history, &bal_storage_history_n, GUEST_BAL_STORAGE_CHANGES,
@@ -186,16 +182,16 @@ void bal_note_storage_change(uint64_t transaction_epoch, bytes20 address, const 
   sail_word_to_le_words4(row->value.word, value);
 }
 
-void bal_note_storage_read(bytes20 a, const u256 slot)
+void bal_note_storage_touch(AccountId account_id, StorageId storage_id)
 {
-  const AccountId account_id = bal_account_activate(&a);
-  const StorageId storage_id = bal_storage_activate(account_id, &slot);
+  bal_account_activate(account_id);
+  bal_storage_activate(account_id, storage_id);
   bal_storage[storage_id].read = 1;
 }
 
-void bal_note_balance_change(uint64_t transaction_epoch, bytes20 address, const u256 value)
+void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, const u256 value)
 {
-  const AccountId account_id = bal_account_activate(&address);
+  bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   BalHistoryRow *row = bal_append_history(bal_balance_history, &bal_balance_history_n,
                                           GUEST_BAL_BALANCE_CHANGES, &account->balance_head,
@@ -203,9 +199,9 @@ void bal_note_balance_change(uint64_t transaction_epoch, bytes20 address, const 
   sail_word_to_le_words4(row->value.word, value);
 }
 
-void bal_note_nonce_change(uint64_t transaction_epoch, bytes20 address, uint64_t nonce)
+void bal_note_nonce_change(uint64_t transaction_epoch, AccountId account_id, uint64_t nonce)
 {
-  const AccountId account_id = bal_account_activate(&address);
+  bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   BalHistoryRow *row =
       bal_append_history(bal_nonce_histories, &bal_nonce_history_n, GUEST_BAL_NONCE_CHANGES,
@@ -213,9 +209,9 @@ void bal_note_nonce_change(uint64_t transaction_epoch, bytes20 address, uint64_t
   row->value.nonce = nonce;
 }
 
-void bal_note_code_change(uint64_t transaction_epoch, bytes20 address, bytes32 code_hash)
+void bal_note_code_change(uint64_t transaction_epoch, AccountId account_id, bytes32 code_hash)
 {
-  const AccountId account_id = bal_account_activate(&address);
+  bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   BalHistoryRow *row =
       bal_append_history(bal_code_histories, &bal_code_history_n, GUEST_BAL_CODE_CHANGES,

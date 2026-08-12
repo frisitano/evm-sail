@@ -535,11 +535,17 @@ struct Message = {
     /* CALLVALUE (I_v) */
     value : word,
     /* State-gas reservoir available when the frame was entered. */
-    state_gas_reservoir : gas,
+    state_gas_reservoir : state_gas,
     /* inside a STATICCALL frame (EIP-214) */
     is_static : bool,
     /* call depth (YP I_e), bounded by call_depth_limit */
     depth : frame_depth,
+}
+
+/*! Lightweight result of one opcode handler. */
+union OpcodeOutcome = {
+    Continue : unit,
+    Failed : ExceptionKind,
 }
 
 /* The complete suspended parent frame at a nested execution boundary. The
@@ -549,13 +555,12 @@ struct Message = {
 struct FrameCheckpoint = {
     pc : code_pointer,
     gas_remaining : gas,
-    stack_top : StackTop,
-    state_gas_remaining : gas,
+    stack_top : StackPointer,
+    state_gas_remaining : state_gas,
     state_gas_spilled : state_gas_spill,
     refund : gas_refund,
     status : FrameStatus,
     message : Message,
-    call_depth : frame_depth,
     code : Code,
     calldata : CalldataSlice,
     memory : EvmMemorySlice,
@@ -594,7 +599,7 @@ let DEFAULT_MESSAGE : Message = struct {
         address = ZERO_ADDRESS,
         code_address = ZERO_ADDRESS,
         value = ZERO_WORD,
-        state_gas_reservoir = GAS_ZERO,
+        state_gas_reservoir = STATE_GAS_ZERO,
         is_static = false,
         depth = 0,
     }

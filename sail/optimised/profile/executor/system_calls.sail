@@ -1,12 +1,19 @@
 /* Optimized C overrides for `sail/executor/system_calls.sail`. */
 
-/*! Profiles the interpreter. A fatal validation failure terminates the guest,
-    so only the returning path closes the scope. */
-function profiled_system_call_interpret() -> OutputSlice = {
+/*! Profiles one system-call frame. A fatal validation failure terminates the
+    guest, so only the returning path closes the scope. */
+function profiled_run_system_call_frame(tgt : address, input : CalldataSlice) -> (
+    gas,
+    state_gas,
+    state_gas_spill,
+    gas_refund,
+    FrameStatus,
+    OutputSlice,
+) = {
     cycle_scope_start(50);
-    let output = interpret();
+    let result = run_system_call_frame(tgt, input);
     cycle_scope_end(50);
-    output
+    result
 }
 
 /*! Profiles a system-call transaction merge with the same exception-safe
@@ -27,47 +34,51 @@ function profiled_system_call_checked(scope : cycle_scope_id, tgt : address) -> 
 }
 
 function system_call(tgt : address, input : hash) -> unit = {
-    if k_code_key(tgt) == KECCAK_EMPTY then {
-        ()
+    let code_hash = k_code_key(tgt);
+    if code_hash == KECCAK_EMPTY then {
+        return ()
+    };
+
+    let initial_memory = memory_reset();
+    let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
+    let (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len);
+    let input_word = hash_to_word(input);
+    mem_store_word(input_range.off, input_word);
+    let (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
+    let parent_memory = memory_frame_enter();
+    let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
+    let frame_input = MemoryCalldata(memory_input);
+    let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, frame_input);
+    let _ = memory_frame_leave(parent_memory);
+    let succeeded = frame_succeeded(status);
+    let failed = not_bool(succeeded);
+    if failed then {
+        k_journal_revert()
     } else {
-        memory_reset();
-        let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-        let (_, expanded_memory) = memory_expand_to(evm_memory, input_range.len);
-        evm_memory = expanded_memory;
-        mem_store_word(input_range.off, hash_to_word(input));
-        let (input_slice, accessed_memory) = active_memory_slice(evm_memory, input_range.off, input_range.len);
-        evm_memory = accessed_memory;
-        let parent_memory = memory_frame_enter();
-        enter_system_call_frame(tgt, MemoryCalldata(evm_memory_slice(input_slice.bytes, input_slice.len)));
-        let _ = profiled_system_call_interpret();
-        memory_frame_leave(parent_memory);
-        if not_bool(frame_succeeded()) then {
-            k_journal_revert()
-        } else {
-            k_journal_commit()
-        };
-        profiled_system_call_merge()
-    }
+        k_journal_commit()
+    };
+    profiled_system_call_merge()
 }
 
 function system_call_checked(tgt : address) -> ScratchSlice = {
-    if k_code_key(tgt) == KECCAK_EMPTY then {
+    let code_hash = k_code_key(tgt);
+    if code_hash == KECCAK_EMPTY then {
         fatal_error(ExecutionInvalid)
     } else {
-        memory_reset();
+        let _ = memory_reset();
         let parent_memory = memory_frame_enter();
-        enter_system_call_frame(tgt, EMPTY_CALLDATA);
-        let output = profiled_system_call_interpret();
-        if frame_succeeded() then {
+        let (_, _, _, _, status, output) = profiled_run_system_call_frame(tgt, EMPTY_CALLDATA);
+        let succeeded = frame_succeeded(status);
+        if succeeded then {
             let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
-            memory_frame_leave(parent_memory);
+            let _ = memory_frame_leave(parent_memory);
             k_journal_commit();
             profiled_system_call_merge();
             result
         } else {
-            memory_frame_leave(parent_memory);
+            let _ = memory_frame_leave(parent_memory);
             k_journal_revert();
             profiled_system_call_merge();
             fatal_error(ExecutionInvalid)

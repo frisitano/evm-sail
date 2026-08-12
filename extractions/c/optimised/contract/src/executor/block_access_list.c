@@ -353,9 +353,11 @@ void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
     bal_expect(BAL_ITER_ACCOUNT, account_id, UINT32_MAX, NULL);
 
     storage_schema_account_begin(account_id);
+    const uint32_t storage_changes_begin = storage_id_count();
     bal_initialize_storage_changes(&storage_changes, account_id, storage_root_node);
+    const uint32_t storage_change_count = storage_id_count() - storage_changes_begin;
     bal_initialize_storage_reads(&storage_reads, account_id, storage_root_node);
-    storage_schema_account_end(account_id);
+    storage_schema_account_end(account_id, storage_change_count);
 
     bal_initialize_account_changes(&balance_changes, account_id, BAL_ITER_BALANCE_CHANGE);
     bal_initialize_account_changes(&nonce_changes, account_id, BAL_ITER_NONCE_CHANGE);

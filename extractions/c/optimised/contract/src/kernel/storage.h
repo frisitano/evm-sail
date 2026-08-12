@@ -5,7 +5,7 @@
 #include "evmsail/host/state/primitives.h"
 #include "evmsail/prelude.h"
 
-struct StorageValue storage_load_by_id(bytes32 parent_state_root, bytes20 address, u256 slot,
-                                       StorageId storage_id);
+struct StorageValue storage_load_by_id(AccountId account_id, StorageGeneration generation,
+                                       StorageId storage_id, bool mark_warm);
 
 #endif

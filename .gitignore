@@ -62,3 +62,4 @@ zkvm/native-runner/.build*/
 /.mcp.json
 /.vscode/
 /.worktrees/
+/.sail-compiler/

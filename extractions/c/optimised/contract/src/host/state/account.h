@@ -27,6 +27,9 @@ void acct_tx_set_code_hash(bytes20 address, bytes32 code_hash);
  * so this module preserves journal and generation invariants. */
 typedef struct {
   AccountId account_id;
+  StorageId storage_begin;
+  uint32_t storage_count;
+  StorageGeneration storage_generation;
   const bytes32 *secure_key;
   NodeId storage_base_node;
   const bytes32 *storage_base_root;

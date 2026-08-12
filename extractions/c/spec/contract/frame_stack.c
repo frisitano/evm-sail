@@ -16,24 +16,13 @@ static struct zFrameContinuation *frame_slots;
 static uint64_t frame_top;
 static uint64_t frame_initialized;
 
-static void frame_int_clone(sail_int *dst, const sail_int src) {
-  CREATE(sail_int)(dst);
-  COPY(sail_int)(dst, src);
-}
-
 static void frame_checkpoint_clone(struct zFrameCheckpoint *dst,
   const struct zFrameCheckpoint *src) {
   *dst = *src;
-  frame_int_clone(&dst->zgas_remaining, src->zgas_remaining);
-  frame_int_clone(&dst->zmessage.zstate_gas_reservoir,
-                  src->zmessage.zstate_gas_reservoir);
-  frame_int_clone(&dst->zstate_gas_remaining, src->zstate_gas_remaining);
 }
 
 static void frame_checkpoint_drop(struct zFrameCheckpoint *checkpoint) {
-  KILL(sail_int)(&checkpoint->zgas_remaining);
-  KILL(sail_int)(&checkpoint->zmessage.zstate_gas_reservoir);
-  KILL(sail_int)(&checkpoint->zstate_gas_remaining);
+  (void)checkpoint;
 }
 
 static void frame_continuation_drop(struct zFrameContinuation *continuation) {

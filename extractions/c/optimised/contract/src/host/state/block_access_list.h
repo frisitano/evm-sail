@@ -26,11 +26,12 @@ enum bal_iter_tag {
 enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_id, uint64_t *index,
                                       u256 *value, uint64_t *nonce, bytes32 *code_hash);
 
-void bal_note_storage_change(uint64_t transaction_epoch, bytes20 address, u256 slot, u256 value);
-void bal_note_account_touch(bytes20 address);
-void bal_note_storage_read(bytes20 address, u256 slot);
-void bal_note_balance_change(uint64_t transaction_epoch, bytes20 address, u256 value);
-void bal_note_nonce_change(uint64_t transaction_epoch, bytes20 address, uint64_t nonce);
-void bal_note_code_change(uint64_t transaction_epoch, bytes20 address, bytes32 code_hash);
+void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id,
+                             StorageId storage_id, u256 value);
+void bal_note_account_touch(AccountId account_id);
+void bal_note_storage_touch(AccountId account_id, StorageId storage_id);
+void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, u256 value);
+void bal_note_nonce_change(uint64_t transaction_epoch, AccountId account_id, uint64_t nonce);
+void bal_note_code_change(uint64_t transaction_epoch, AccountId account_id, bytes32 code_hash);
 
 #endif

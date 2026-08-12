@@ -181,6 +181,14 @@ separately measurable counterpart; the note says where that work is counted):
 | `tx_merge` | merging the tx write-set at epoch end | — | — (levm writes through its cache; no separate merge step) |
 | `system_call_interpret` | running one system contract | — | the system-contract `VM::execute` in `generic_system_contract_levm` |
 | `system_call_merge` | merging system-call effects | — | — (no separate merge step) |
+| `evm_alu` | ALU handlers and their incoming dispatch | — | — |
+| `evm_stack` | PUSH, POP, DUP, SWAP, and deep-stack handlers and their incoming dispatch | — | — |
+| `evm_memory` | memory, copying, hashing, and LOG handlers and their incoming dispatch | — | — |
+| `evm_flow` | jump, PC, GAS, and JUMPDEST handlers and their incoming dispatch | — | — |
+| `evm_environment` | call-data and block/environment query handlers and their incoming dispatch | — | — |
+| `evm_state` | account, storage, and external-code handlers and their incoming dispatch | — | — |
+| `evm_frame` | CALL and CREATE frame-entry handlers and their incoming dispatch | — | — |
+| `evm_halt` | STOP, RETURN, REVERT, SELFDESTRUCT, and invalid-opcode tails | — | — |
 
 The evm-sail runtime declares further tag ids (`htr_*`, `account_*`,
 `storage_*`, `bal_*`, `account_mutation`, `storage_mutation`,

@@ -419,10 +419,12 @@ void exit(int code)
 
 /* ----- Sail failure backend (sail_failure.h) ------------------------------- */
 
+#ifndef EVMSAIL_OPTIMIZED_FFI
 void sail_match_failure(char *msg)
 {
     zkvm_abort(msg ? msg : "Sail match failure");
 }
+#endif
 
 void sail_failure(char *msg)
 {

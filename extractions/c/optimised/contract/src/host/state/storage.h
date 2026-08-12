@@ -29,8 +29,6 @@ typedef struct {
   bool prestate_exists;
 } StorageTrieView;
 
-uint32_t storage_trie_candidates(AccountId account_id, StorageId *begin,
-                                 StorageGeneration *generation);
 bool storage_trie_binding_live(StorageId storage_id, StorageGeneration generation);
 NodeId storage_trie_binding_terminal_node(StorageId storage_id);
 const bytes32 *storage_trie_binding_secure_key(StorageId storage_id);

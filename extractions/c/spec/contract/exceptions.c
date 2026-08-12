@@ -23,7 +23,10 @@ unit fatal_error_set_input(struct zStatelessInputRef input_ref)
 
 _Noreturn void fatal_error(enum zFatalError reason)
 {
-  (void)reason;
+  /* Direct fatal_error calls do not pass through a staged validation guard.
+   * Preserve their terminal reason for the native debug dump before emitting
+   * the ordinary invalid result.  Stage zero denotes the unscoped boundary. */
+  zvalidation_debug_record(UINT8_C(0), reason);
   if (writing_error) {
     abort();
   }

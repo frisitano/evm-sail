@@ -198,7 +198,7 @@ static bool mpt_word_zero(u256 value)
   return (value.limbs[0] | value.limbs[1] | value.limbs[2] | value.limbs[3]) == 0;
 }
 
-static NodeReference mpt_empty_reference(void)
+static inline __attribute__((__always_inline__)) NodeReference mpt_empty_reference(void)
 {
   NodeReference ref;
   memset(&ref, 0, sizeof(ref));
@@ -206,7 +206,8 @@ static NodeReference mpt_empty_reference(void)
   return ref;
 }
 
-static NodeReference mpt_hash_reference(const uint8_t bytes[32])
+static inline __attribute__((__always_inline__)) NodeReference
+mpt_hash_reference(const uint8_t bytes[32])
 {
   NodeReference ref = mpt_empty_reference();
   ref.kind = NODE_REFERENCE_HASHED;
@@ -215,7 +216,8 @@ static NodeReference mpt_hash_reference(const uint8_t bytes[32])
   return ref;
 }
 
-static NodeReference mpt_inline_reference(const uint8_t *bytes, size_t len)
+static inline __attribute__((__always_inline__)) NodeReference
+mpt_inline_reference(const uint8_t *bytes, size_t len)
 {
   NodeReference ref = mpt_empty_reference();
   ref.kind = NODE_REFERENCE_INLINE;
@@ -227,7 +229,8 @@ static NodeReference mpt_inline_reference(const uint8_t *bytes, size_t len)
 }
 
 /* Copy only when an original edge enters the owned post-state builder. */
-static NodeReference mpt_copy_witness_reference(const WitnessChild *ref)
+static inline __attribute__((__always_inline__)) NodeReference
+mpt_copy_witness_reference(const WitnessChild *ref)
 {
   switch (mpt_witness_child_kind(ref)) {
   case NODE_REFERENCE_HASHED:
@@ -450,7 +453,7 @@ static void mpt_encode_branch_reference(const TrieBranchFrame *frame, NodeRefere
   mpt_make_child_reference(encoded, writer.len, out);
 }
 
-static PendingNode pending_node_empty(void)
+static inline __attribute__((__always_inline__)) PendingNode pending_node_empty(void)
 {
   PendingNode pending;
   memset(&pending, 0, sizeof(pending));
@@ -460,7 +463,8 @@ static PendingNode pending_node_empty(void)
   return pending;
 }
 
-static PendingNode pending_node_reference(const NodeReference *ref)
+static inline __attribute__((__always_inline__)) PendingNode
+pending_node_reference(const NodeReference *ref)
 {
   PendingNode pending = pending_node_empty();
   if (ref->kind != NODE_REFERENCE_EMPTY) {
@@ -470,7 +474,8 @@ static PendingNode pending_node_reference(const NodeReference *ref)
   return pending;
 }
 
-static PendingNode pending_node_leaf(const NibblePath *path, const uint8_t *value, size_t value_len)
+static inline __attribute__((__always_inline__)) PendingNode
+pending_node_leaf(const NibblePath *path, const uint8_t *value, size_t value_len)
 {
   PendingNode pending = pending_node_empty();
   pending.kind = PENDING_NODE_LEAF;
@@ -1134,15 +1139,14 @@ static bool mpt_update_source_next(MptUpdateSource *source, TrieUpdate *update, 
     account_trie_binding_get(account_index, &meta);
 
     bytes32 post = *meta.storage_base_root;
-    StorageGeneration storage_generation;
-    const uint32_t storage_count =
-        mpt_storage_updates_prepare(meta.account_id, &storage_generation);
+    const uint32_t storage_count = mpt_storage_updates_prepare(
+        meta.storage_begin, meta.storage_count, meta.storage_generation);
     if (meta.current_live && storage_count != 0) {
       const MptUpdateSource storage_source = {
           .kind = MPT_UPDATE_SOURCE_STORAGE,
           .position = 0,
           .count = storage_count,
-          .storage_generation = storage_generation,
+          .storage_generation = meta.storage_generation,
       };
       bool storage_changed = false;
       if (!mpt_merge_update_source_node(meta.storage_base_node, meta.storage_base_root,
@@ -1270,12 +1274,10 @@ uint32_t mpt_account_updates_prepare(void)
   return count;
 }
 
-uint32_t mpt_storage_updates_prepare(AccountId account_id, StorageGeneration *generation)
+uint32_t mpt_storage_updates_prepare(StorageId begin, uint32_t candidates,
+                                     StorageGeneration generation)
 {
-  StorageId begin;
-  const uint32_t candidates =
-      storage_trie_candidates(account_id, &begin, &order_workspace.storage_generation);
-  *generation = order_workspace.storage_generation;
+  order_workspace.storage_generation = generation;
   if (candidates > order_workspace_capacity) {
     fatal_error(WitnessDeficient);
   }
@@ -1536,7 +1538,7 @@ static bool mpt_merge_decoded_node(DecodedNode *node, ByteSpan encoded, uint32_t
                                    const NibblePath *prefix, TrieUpdateBuffer *updates,
                                    size_t begin, size_t end, SubtreeMergeResult *result)
 {
-  memset(result, 0, sizeof(*result));
+  result->changed = false;
   mpt_node_reference(encoded, node_id, &result->original);
   const size_t item_begin = mpt_merge_entries.count;
   bool node_changed = false;

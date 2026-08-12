@@ -28,6 +28,25 @@ val word_to_address = pure { c: "word_to_address" } : word -> address
 
 val address_to_word = pure { c: "address_to_word" } : address -> word
 
+/* Keep the native-word opcode subgraph in the threaded interpreter. */
+$[c_inline]
+val word_sub_word : (word, word) -> word
+
+$[c_inline]
+val word_is_zero : word -> bool
+
+$[c_inline]
+val word_byte_length : word -> range(0, 32)
+
+$[c_inline]
+val word_arithmetic_shift_right : (word, word_bit_count) -> word
+
+$[c_inline]
+val word_abs : word -> word
+
+$[c_inline]
+val word_slt : (word, word) -> bool
+
 /*
  * Sail's semantic count-leading-zeros primitive returns a dependent integer.
  * The generic C ABI therefore routes it through `sail_int`; the optimized

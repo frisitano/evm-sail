@@ -189,9 +189,11 @@ void state_journal_push_account_storage_generation(AccountId account_id, Storage
   entry->data.storage_generation.prior = prior;
 }
 
-static void revert_to(uint32_t entry_count)
+void state_journal_revert(void)
 {
-  while (count > entry_count) {
+  uint32_t committed_checkpoints = 0;
+
+  while (count > 0) {
     const StateJournalEntry *entry = &entries[--count];
     switch (entry->tag) {
     case JOURNAL_TRANSIENT_CHANGED:
@@ -249,11 +251,18 @@ static void revert_to(uint32_t entry_count)
                                          entry->data.storage_generation.prior);
       break;
     case JOURNAL_FRAME_CHECKPOINTED:
+      if (committed_checkpoints == 0) {
+        return;
+      }
+      committed_checkpoints--;
+      break;
     case JOURNAL_FRAME_COMMITTED:
-      /* Structural records have no semantic inverse. */
+      committed_checkpoints++;
       break;
     }
   }
+
+  GUEST_ABORT();
 }
 
 void state_journal_reset(void)
@@ -261,55 +270,9 @@ void state_journal_reset(void)
   count = 0;
 }
 
-/* Find the innermost checkpoint not paired with a later commit marker.
- * Walking the tag stream is the journal's defunctionalized control flow:
- * committed child pairs are skipped, so no checkpoint identity needs to cross
- * the Sail/C boundary or live in a suspended frame. */
-static uint32_t open_checkpoint_index(void)
-{
-  uint32_t closed = 0;
-  for (uint32_t i = count; i > 0; --i) {
-    switch (entries[i - 1].tag) {
-    case JOURNAL_FRAME_COMMITTED:
-      closed++;
-      break;
-    case JOURNAL_FRAME_CHECKPOINTED:
-      if (closed == 0) {
-        return i - 1;
-      }
-      closed--;
-      break;
-    case JOURNAL_TRANSIENT_CHANGED:
-    case JOURNAL_WARM_ACCOUNT_CHANGED:
-    case JOURNAL_WARM_STORAGE_CHANGED:
-    case JOURNAL_ACCOUNT_BALANCE_CHANGED:
-    case JOURNAL_ACCOUNT_NONCE_CHANGED:
-    case JOURNAL_ACCOUNT_CODE_HASH_CHANGED:
-    case JOURNAL_ACCOUNT_EXISTS_CHANGED:
-    case JOURNAL_ACCOUNT_CREATED_CHANGED:
-    case JOURNAL_ACCOUNT_SELFDESTRUCTED_CHANGED:
-    case JOURNAL_ACCOUNT_TRANSACTION_LISTED:
-    case JOURNAL_ACCOUNT_STORAGE_LISTED:
-    case JOURNAL_LOG_APPENDED:
-    case JOURNAL_STORAGE_VALUE_CHANGED:
-    case JOURNAL_STORAGE_ROW_GENERATION_CHANGED:
-    case JOURNAL_ACCOUNT_STORAGE_GENERATION_CHANGED:
-      break;
-    }
-  }
-  GUEST_ABORT();
-}
-
 void state_journal_checkpoint(void)
 {
   (void)push(JOURNAL_FRAME_CHECKPOINTED);
-}
-
-void state_journal_revert(void)
-{
-  const uint32_t marker_index = open_checkpoint_index();
-  revert_to(marker_index + 1U);
-  count = marker_index;
 }
 
 void state_journal_commit(void)

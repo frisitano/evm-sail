@@ -311,10 +311,10 @@ unsigned long guest_debug_dump(const unsigned char **out)
     d_byte('B');
     d_byte(zvalidation_debug_gas_present ? 1 : 0);
     if (zvalidation_debug_gas_present) {
-        d_u64(sail_int_get_ui(zvalidation_debug_header_gas_actual));
-        d_u64(sail_int_get_ui(zvalidation_debug_header_gas_expected));
-        d_u64(sail_int_get_ui(zvalidation_debug_execution_gas));
-        d_u64(sail_int_get_ui(zvalidation_debug_state_gas));
+        d_u64(zvalidation_debug_header_gas_actual);
+        d_u64(zvalidation_debug_header_gas_expected);
+        d_u64(zvalidation_debug_execution_gas);
+        d_u64(zvalidation_debug_state_gas);
     }
 
     d_byte('A');
@@ -345,9 +345,7 @@ unsigned long guest_debug_dump(const unsigned char **out)
     }
 
     d_byte('S');
-    uint64_t sd = state_available ? stack_top_height(zstack_top) : 0;
-    d_u32((uint32_t)sd);
-    for (uint64_t n = 0; n < sd; n++) d_word(stack_slot_read(zstack_top, n));
+    d_u32(0);
 
     d_byte('M');
     d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);

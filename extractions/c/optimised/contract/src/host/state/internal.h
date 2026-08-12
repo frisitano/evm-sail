@@ -80,13 +80,18 @@ typedef struct {
   bool selfdestructed;
 } AccountView;
 
-/* Storage lookup distinguishes an absent BAL identity from a known slot made
- * logically zero by an account-wide storage-generation change. */
-typedef enum {
-  STORAGE_VIEW_MISSING,
-  STORAGE_VIEW_FOUND,
-  STORAGE_VIEW_CLEARED,
-} StorageViewStatus;
+/* Account-owned storage metadata carried once per transaction worklist row.
+ * Storage consumes this value without projecting fields back out of the
+ * account table. */
+typedef struct {
+  AccountId account_id;
+  StorageId storage_begin;
+  uint32_t storage_count;
+  uint32_t transaction_storage_count;
+  StorageGeneration original_storage_generation;
+  StorageGeneration storage_generation;
+  bool exists;
+} AccountTransactionStorageView;
 
 typedef struct {
   u256 current;
@@ -114,17 +119,13 @@ typedef union {
 uint32_t account_id_count(void);
 AccountId account_schema_insert(const bytes20 *address);
 const bytes20 *account_id_address(AccountId id);
+struct AccountExecutionContext account_execution_context(bytes20 address);
 AccountId lookup_account_id(const bytes20 *address);
 AccountId get_account_id(const bytes20 *address);
-void current_account_context_enter(bytes20 address);
-AccountId current_account_context_id(void);
-void current_account_context_restore(AccountId id);
-void current_account_context_invalidate(void);
-void account_storage_range_bind(AccountId id, StorageId begin, uint32_t count);
-void account_storage_range(AccountId id, StorageId *begin, uint32_t *count);
+void account_bind_storage_schema(AccountId id, StorageId begin, uint32_t change_count,
+                                 uint32_t count);
 void account_warm_restore(AccountId id, uint32_t prior_epoch);
 StorageGeneration account_storage_generation(AccountId id);
-StorageGeneration account_transaction_original_storage_generation(AccountId id);
 void account_storage_generation_restore(AccountId id, StorageGeneration generation);
 void account_clear_storage_generation(AccountId id);
 bool account_exists(AccountId id);
@@ -133,7 +134,7 @@ bool account_block_view(const bytes20 *address, AccountView *view);
 void account_field_restore(AccountId id, AccountRestoreField field, AccountRestorePrior prior);
 void account_transaction_touch(AccountId id);
 uint32_t account_transaction_count(void);
-AccountId account_transaction_id_at(uint32_t index);
+void account_transaction_storage_view_at(uint32_t index, AccountTransactionStorageView *view);
 void account_transaction_pop_last(void);
 void account_transaction_storage_append(AccountId id, StorageId storage_id);
 void account_transaction_storage_pop_last(AccountId id);
@@ -143,23 +144,23 @@ StorageId account_transaction_storage_id_at(AccountId id, uint32_t index);
 extern uint32_t current_warm_epoch;
 
 StorageId storage_schema_insert(AccountId account_id, const u256 *slot, const bytes32 *secure_key);
-StorageId get_storage_id(AccountId account_id, const u256 *slot);
-StorageId storage_resolve_slot(u256 slot);
+StorageId get_storage_id(StorageId begin, uint32_t change_count, uint32_t count, const u256 *slot);
+StorageId storage_resolve_slot(StorageId begin, uint32_t change_count, uint32_t count, u256 slot);
 bool storage_id_is_warm(StorageId storage_id);
 void storage_id_mark_warm(StorageId storage_id);
-void storage_update_by_id(StorageId storage_id, u256 value, u256 original);
+void storage_update_by_id(AccountId account_id, StorageGeneration generation,
+                          StorageId storage_id, u256 value, u256 original);
 uint32_t storage_id_count(void);
 const u256 *storage_id_slot(StorageId id);
 void storage_schema_account_begin(AccountId id);
-void storage_schema_account_end(AccountId id);
+void storage_schema_account_end(AccountId id, uint32_t change_count);
 void storage_schema_seal(void);
 void storage_warm_restore(StorageId id, uint32_t prior_epoch);
 void storage_value_restore(StorageId id, u256 prior);
 void storage_generation_restore(StorageId id, StorageGeneration prior);
 void storage_transaction_forget(StorageId id);
-StorageViewStatus storage_transaction_view(AccountId account_id, StorageId storage_id,
-                                           StorageView *view);
-bool storage_block_view(AccountId account_id, StorageId storage_id, StorageView *view);
+void storage_load_view(StorageGeneration generation, StorageId storage_id, StorageView *view);
+bool storage_range_has_writes(StorageId begin, uint32_t count, StorageGeneration generation);
 
 void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count);
 void storage_state_workspace_bind(uint32_t storage_count);

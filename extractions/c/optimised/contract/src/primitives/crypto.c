@@ -12,7 +12,7 @@
 
 static const uint8_t hash_empty = 0;
 
-static bytes32 keccak_bytes(const uint8_t *bytes, uint64_t len)
+static bytes32 crypto_keccak_bytes(const uint8_t *bytes, uint64_t len)
 {
   zkvm_keccak256_hash native_digest = {{0}};
   _Static_assert(sizeof(bytes32) == sizeof(native_digest), "accelerator digest must be 32 bytes");
@@ -23,7 +23,7 @@ static bytes32 keccak_bytes(const uint8_t *bytes, uint64_t len)
   return hash_from_be_bytes(native_digest.data);
 }
 
-static bytes32 sha256_bytes(const uint8_t *bytes, uint64_t len)
+static bytes32 crypto_sha256_bytes(const uint8_t *bytes, uint64_t len)
 {
   zkvm_sha256_hash native_digest = {{0}};
   _Static_assert(sizeof(bytes32) == sizeof(native_digest), "accelerator digest must be 32 bytes");
@@ -36,47 +36,47 @@ static bytes32 sha256_bytes(const uint8_t *bytes, uint64_t len)
 
 bytes32 host_keccak_stateless_input(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_scratch(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_memory(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_output(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_log_data(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_sha256_stateless_input(Bytes input)
 {
-  return sha256_bytes(input.bytes, input.len);
+  return crypto_sha256_bytes(input.bytes, input.len);
 }
 
 bytes32 host_sha256_scratch(Bytes input)
 {
-  return sha256_bytes(input.bytes, input.len);
+  return crypto_sha256_bytes(input.bytes, input.len);
 }
 
 bytes32 host_sha256_memory(Bytes input)
 {
-  return sha256_bytes(input.bytes, input.len);
+  return crypto_sha256_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_code(Bytes input)
 {
-  return keccak_bytes(input.bytes, input.len);
+  return crypto_keccak_bytes(input.bytes, input.len);
 }
 
 bytes32 host_keccak_word(const u256 input)

@@ -47,6 +47,7 @@ CC="${CC:-cc}"
 EVM_PROFILE="${EVM_PROFILE:-off}"
 EVM_BUILD_MODE="${EVM_BUILD_MODE:-optimized}"
 C_SPEC_SPECIALIZATION_LIMIT="${C_SPEC_SPECIALIZATION_LIMIT:-256}"
+C_OPT_SPECIALIZATION_LIMIT="${C_OPT_SPECIALIZATION_LIMIT:-256}"
 case "$EVM_PROFILE" in
   off|on) ;;
   *) echo "error: EVM_PROFILE must be off or on" >&2; exit 2 ;;
@@ -90,8 +91,8 @@ if [ "$EVM_REGISTER_FILE_THREAD" = on ]; then
   CONST_TABLE_FLAGS+=(--c-register-file-thread)
 fi
 # Experimental: EVM_GENERATED_INTERP=on keeps the GENERATED Sail interpreter
-# loop (splices evm/interpreter_generated.sail instead of evm/interpreter.sail
-# and drops the hand-written evm/interpreter.c from the staged manifest);
+# loop (omits the evm/interpreter.sail override and drops the hand-written
+# evm/interpreter.c from the staged manifest);
 # EVM_INLINE_ATTR=on passes --c-inline-attr for $[c_inline] dispatch fusion.
 # See zkvm/build.sh for the authoritative description.
 EVM_GENERATED_INTERP="${EVM_GENERATED_INTERP:-off}"
@@ -99,13 +100,25 @@ case "$EVM_GENERATED_INTERP" in
   off|on) ;;
   *) echo "error: EVM_GENERATED_INTERP must be off or on" >&2; exit 2 ;;
 esac
-EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-on}"
+else
+  EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
+fi
 case "$EVM_INLINE_ATTR" in
   off|on) ;;
   *) echo "error: EVM_INLINE_ATTR must be off or on" >&2; exit 2 ;;
 esac
 if [ "$EVM_INLINE_ATTR" = on ]; then
   CONST_TABLE_FLAGS+=(--c-inline-attr)
+fi
+EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-on}"
+case "$EVM_ALWAYS_INLINE_ATTR" in
+  off|on) ;;
+  *) echo "error: EVM_ALWAYS_INLINE_ATTR must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_ALWAYS_INLINE_ATTR" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-always-inline-attr)
 fi
 if [ "$EVM_BUILD_MODE" = standard ] && [ "$EVM_PROFILE" = on ]; then
   echo "error: EVM_PROFILE=on is available only for optimized builds" >&2
@@ -188,7 +201,23 @@ case "$(uname -s)" in
   *)      STACK_FLAGS=(-Wl,-z,stacksize=0x20000000) ;;
 esac
 
-CFLAGS=(-O2 -Wno-error=implicit-function-declaration)
+if [ "$EVM_BUILD_MODE" = optimized ]; then
+  EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-3}"
+  EVM_LTO="${EVM_LTO:-on}"
+else
+  EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
+  EVM_LTO="${EVM_LTO:-off}"
+fi
+case "$EVM_OPT_LEVEL" in
+  0|1|2|3|s|z|g) ;;
+  *) echo "error: EVM_OPT_LEVEL must be a compiler optimization level" >&2; exit 2 ;;
+esac
+case "$EVM_LTO" in
+  off|on) ;;
+  *) echo "error: EVM_LTO must be off or on" >&2; exit 2 ;;
+esac
+CFLAGS=(-O"$EVM_OPT_LEVEL" -Wno-error=implicit-function-declaration)
+if [ "$EVM_LTO" = on ]; then CFLAGS+=(-flto); fi
 MODEL_CFLAGS=()
 if [ "$EVM_BUILD_MODE" = standard ]; then
   GMP_CFLAGS=()
@@ -245,6 +274,20 @@ else
     --c-preserve sstore_sentry_cost
     --c-preserve sstore_costs
   )
+  if [ "$EVM_GENERATED_INTERP" = off ]; then
+    for callback in \
+      account_execution_context exceptional_state frame_output \
+      opcode_frame_status refresh_account_execution_context \
+      resume_frame run_call run_create run_frame_entry_encoded opcode_available \
+      execute_push_encoded execute_dup_encoded execute_swap_encoded \
+      execute_log_encoded execute_deep_stack_encoded; do
+      PRESERVE_FLAGS+=(--c-preserve "$callback")
+    done
+    while IFS= read -r callback; do
+      PRESERVE_FLAGS+=(--c-preserve "$callback")
+    done < <(rg -o --no-filename 'execute_[A-Za-z0-9_]+' \
+      "$MODEL_FFI/src/evm/interpreter.c" | sort -u)
+  fi
 fi
 for s in ${EXTRA_PRESERVE:-}; do PRESERVE_FLAGS+=(--c-preserve "$s"); done
 if [ "$EVM_BUILD_MODE" = optimized ]; then
@@ -253,6 +296,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     -c -O --Oconstant-fold --all-modules
     --c-optimized-model --c-package "$OPTIMIZED_PACKAGE"
     --c-output-dir "$OPTIMIZED_GENERATED"
+    --c-specialization-limit "$C_OPT_SPECIALIZATION_LIMIT"
     --c-optimized-source-root sail
     --c-optimized-include-dir "$MODEL_FFI/include"
     --c-optimized-external-type StatelessInputSliceFields=evmsail/host/types.h
@@ -262,6 +306,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h
     --c-optimized-external-type OutputSliceFields=evmsail/host/types.h
     --c-optimized-external-type PreparedAuthorizationList=evmsail/host/types.h
+    --c-optimized-external-type StackPointer=evmsail/host/stack.h
     --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct
     --c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct
     --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct
@@ -291,7 +336,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
   while IFS= read -r relative || [ -n "$relative" ]; do
     [ -z "$relative" ] && continue
     if [ "$EVM_GENERATED_INTERP" = on ] && [ "$relative" = "evm/interpreter.sail" ]; then
-      relative="evm/interpreter_generated.sail"
+      continue
     fi
     SAIL_CMD+=(--splice "$C_OPTIMISED_DIR/$relative")
   done < "$C_OPTIMISED_MANIFEST"

@@ -102,13 +102,22 @@ function fake_exponential_word(schedule, numerator) = {
     }
 }
 
-/*! Evaluates the word result for one complete correlated profile. The profile
-    keeps the selected schedule and its reachable excess-gas bound related, so
-    the generic recurrence needs no fork-specific dispatch. */
-function blob_base_fee(profile : ProtocolProfile, excess_blob_gas : excess_blob_gas) -> word = {
-    let limit = profile.excess_blob_gas_limit;
-    if (profile.fork >= Cancun) & (excess_blob_gas <= limit) then {
-        fake_exponential_word(profile.blob_schedule, excess_blob_gas)
+/*! Evaluates the word result for one fork-selected blob schedule and its
+    reachable excess-gas bound. */
+val blob_base_fee : forall 'fork 'target 'maximum 'denominator 'excess,
+                            0 <= 'fork
+                         &  'fork <= amsterdam_fork_value
+                         &  blob_schedule_parameters('target, 'maximum, 'denominator)
+                         &  0 <= 'excess
+                         &  'excess <= excess_blob_gas_bound. (
+        int('fork),
+        BlobScheduleFields('target, 'maximum, 'denominator),
+        profile_excess_blob_gas_limit('fork, 'target, 'maximum, 'denominator),
+        int('excess),
+    ) -> word
+function blob_base_fee(fork, schedule, limit, excess_blob_gas) = {
+    if (fork >= Cancun) & (excess_blob_gas <= limit) then {
+        fake_exponential_word(schedule, excess_blob_gas)
     } else {
         fatal_error(InvalidConfig)
     }
@@ -170,7 +179,12 @@ function next_excess_blob_gas(
         /* EIP-7918 compares BLOB_BASE_COST*base_fee with
            GAS_PER_BLOB*blob_fee. Their ratio is exactly 16, so this avoids
            forming either potentially 257+-bit product. */
-        let parent_blob_base_fee = blob_base_fee(profile, parent_excess_blob_gas);
+        let parent_blob_base_fee = blob_base_fee(
+            profile.fork,
+            profile.blob_schedule,
+            profile.excess_blob_gas_limit,
+            parent_excess_blob_gas,
+        );
         if (profile.fork >= Osaka) & (16 * parent_blob_base_fee < parent_base_fee_per_gas) then {
             let maximum = profile.blob_schedule.max;
             if maximum == 0 then {
@@ -331,28 +345,34 @@ function sstore_clear_refund() -> gas_constant = {
 /* covered raises an out-of-gas exceptional halt (YP: the step is invalid,  */
 /* all remaining gas is consumed). A non-positive amount is a no-op.        */
 
-/*! Debits an exact cost from the carried frame gas. Returns false and the
-    zeroed gas after entering an out-of-gas exceptional halt, allowing the
-    current opcode body to return immediately to the interpreter loop
-    without polling [is_running][]. */
-val charge : forall 'amount, 0 <= 'amount. (gas, int('amount)) -> (bool, gas)
+/*! Debits an exact cost from the carried frame gas. The caller turns an
+    unaffordable debit into an exceptional halt using its carried frame
+    metadata. */
+val charge : forall 'g 'amount,
+    live_gas_valid('g) & 0 <= 'amount.
+    (int('g), int('amount)) -> {'next_g,
+           live_gas_valid('next_g)
+        &  'next_g <= 'g.
+        (bool, int('next_g))}
 function charge(g, amount) = {
     if amount <= g then {
-        (true, g - amount)
+        (false, g - amount)
     } else {
-        (false, exc_halt(g, OutOfGas))
+        (true, GAS_ZERO)
     }
 }
 
 /*! Checks that the frame can pay an execution-gas cost without debiting it.
     State reads that affect the block access list call this before touching
     authenticated state. */
-val check_execution_gas : forall 'amount, 0 <= 'amount. (gas, int('amount)) -> (bool, gas)
+val check_execution_gas : forall 'g 'amount,
+    live_gas_valid('g) & 0 <= 'amount.
+    (int('g), int('amount)) -> (bool, int('g))
 function check_execution_gas(g, amount) = {
     if g < amount then {
-        (false, exc_halt(g, OutOfGas))
-    } else {
         (true, g)
+    } else {
+        (false, g)
     }
 }
 
@@ -362,7 +382,15 @@ val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= transaction_execu
     )
 function state_gas_spill_room(left) = sizeof(transaction_execution_gas_limit_value) - left
 
-val state_gas_spill_add : forall 'right, 0 <= 'right. (state_gas_spill, int('right)) -> state_gas_spill
+val state_gas_spill_add : forall 'left 'right,
+       0 <= 'left
+    &  'left <= transaction_execution_gas_limit_value
+    &  0 <= 'right.
+    (int('left), int('right)) -> {'result,
+          'result == 'left + 'right
+        & 0 <= 'result
+        & 'result <= transaction_execution_gas_limit_value.
+        int('result)}
 /*! Adds a nonnegative spill amount or rejects a value beyond the transaction cap. */
 function state_gas_spill_add(left, right) =
     let room = state_gas_spill_room(left) in
@@ -373,88 +401,97 @@ function state_gas_spill_add(left, right) =
     }
 
 /*! Debits Amsterdam state gas from the frame reservoir first and spills the
-    remainder into the carried execution gas. Returns false when the two
+    remainder into the carried execution gas. Returns true when the two
     pools cannot cover the charge. */
-val debit_state_gas : forall 'amount, 0 <= 'amount. (gas, int('amount)) -> (bool, gas)
-function debit_state_gas(g, amount) = {
+val debit_state_gas : forall 'amount, 0 <= 'amount.
+    (gas, state_gas, state_gas_spill, int('amount)) -> (bool, gas, state_gas, state_gas_spill)
+function debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
     if amount == 0 then {
-        return (true, g)
+        return (true, g, state_gas_remaining, state_gas_spilled)
     };
     let state_left = state_gas_remaining;
     if amount <= state_left then {
-        state_gas_remaining = state_left - amount;
-        (true, g)
+        (true, g, state_left - amount, state_gas_spilled)
     } else {
         let remainder = amount - state_left;
         if remainder <= g then {
             let spilled = state_gas_spilled;
-            state_gas_remaining = GAS_ZERO;
-            state_gas_spilled = state_gas_spill_add(spilled, remainder);
-            (true, g - remainder)
+            (true, g - remainder, STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
         } else {
-            (false, g)
+            (false, g, state_gas_remaining, state_gas_spilled)
         }
     }
 }
 
 /*! Charges state gas while an opcode frame is running. */
-val charge_state_gas : forall 'amount, 0 <= 'amount. (gas, int('amount)) -> (bool, gas)
-function charge_state_gas(g, amount) = {
-    let (debited, debited_gas) = debit_state_gas(g, amount);
+val charge_state_gas : forall 'amount, 0 <= 'amount.
+    (gas, state_gas, state_gas_spill, int('amount)) -> (bool, gas, state_gas, state_gas_spill)
+function charge_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
+    let (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount);
     if debited then {
-        (true, debited_gas)
+        (false, debited_gas, state_gas_remaining, state_gas_spilled)
     } else {
-        (false, exc_halt(debited_gas, OutOfGas))
+        (true, debited_gas, state_gas_remaining, state_gas_spilled)
     }
 }
 
 /*! Charges state gas for code returned by already-halted successful initcode.
     This is the create-message post-execution hook, not another opcode step. */
-val charge_deployment_state_gas : forall 'amount, 0 <= 'amount. (gas, int('amount)) -> (bool, gas)
-function charge_deployment_state_gas(g, amount) = {
-    let (debited, debited_gas) = debit_state_gas(g, amount);
+val charge_deployment_state_gas : forall 'amount, 0 <= 'amount.
+    (gas, state_gas, state_gas_spill, int('amount)) -> (bool, gas, state_gas, state_gas_spill)
+function charge_deployment_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
+    let (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount);
     if debited then {
-        (true, debited_gas)
+        (false, debited_gas, state_gas_remaining, state_gas_spilled)
     } else {
-        (false, exc_halt(debited_gas, OutOfGas))
+        (true, debited_gas, state_gas_remaining, state_gas_spilled)
     }
 }
 
 /*! Credits a state-gas charge in exact reverse order: execution spill first,
     then the state reservoir. Returns the carried gas with any spill
     portion restored. */
-function credit_state_gas_refund(g : gas, amount : state_gas_spill) -> gas = {
+val credit_state_gas_refund : (gas, state_gas, state_gas_spill, state_gas_spill) ->
+    (gas, state_gas, state_gas_spill)
+function credit_state_gas_refund(g, state_gas_remaining, state_gas_spilled, amount) = {
     let spilled = state_gas_spilled;
     if amount <= spilled then {
         if amount != 0 then {
-            state_gas_spilled = spilled - amount;
-            conserved_gas_add(g, amount)
+            (conserved_gas_add(g, amount), state_gas_remaining, spilled - amount)
         } else {
-            g
+            (g, state_gas_remaining, state_gas_spilled)
         }
     } else {
-        let credited : gas =
+        let credited =
             if spilled != 0 then {
-                state_gas_spilled = STATE_GAS_SPILL_ZERO;
                 conserved_gas_add(g, spilled)
             } else {
                 g
             };
         let to_state : state_gas_spill = amount - spilled;
-        state_gas_remaining = conserved_gas_add(state_gas_remaining, to_state);
-        credited
+        (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
     }
 }
 
 /*! Returns a completed child's remaining state reservoir to its parent and
     carries forward any state gas that the child drew from execution gas. */
-function return_child_state_gas(child_remaining : gas, child_spilled : state_gas_spill) -> unit = {
-    state_gas_remaining = conserved_gas_add(state_gas_remaining, child_remaining);
-    state_gas_spilled = state_gas_spill_add(state_gas_spilled, child_spilled)
+val return_child_state_gas : (state_gas, state_gas_spill, state_gas, state_gas_spill) ->
+    (state_gas, state_gas_spill)
+function return_child_state_gas(parent_remaining, parent_spilled, child_remaining, child_spilled) = {
+    let state_room = (2 ^ 64 - 1) - parent_remaining;
+    if child_remaining <= state_room then {
+        (
+            parent_remaining + child_remaining,
+            state_gas_spill_add(parent_spilled, child_spilled),
+        )
+    } else {
+        fatal_error(ExecutionInvalid)
+    }
 }
 
 /*! Returns unused child gas to the parent frame's carried gas. */
-function refund_gas(g : gas, amount : gas) -> gas =
+val refund_gas : (gas, gas) -> gas
+function refund_gas(g, amount) =
     conserved_gas_add(g, amount)
 
 /*! Total gas subtraction. Protocol callers establish affordability first;
@@ -545,8 +582,22 @@ val memory_required_size : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 &
 function memory_required_size(start, size) =
     if size == 0 then {
         0
+    } else if start <= sizeof(memory_region_bound) then {
+        let (bounded_start as 'bounded_start) :
+                {'bounded_start,
+                 'bounded_start == 'start & 0 <= 'bounded_start & 'bounded_start <= memory_region_bound.
+                 int('bounded_start)} = start;
+        if size <= sizeof(memory_region_bound) - bounded_start then {
+            let (bounded_size as 'bounded_size) :
+                    {'bounded_size,
+                     'bounded_size == 'size & 0 < 'bounded_size & 'bounded_size <= memory_region_bound - 'bounded_start.
+                     int('bounded_size)} = size;
+            bounded_start + bounded_size
+        } else {
+            sizeof(memory_region_bound + 1)
+        }
     } else {
-        start + size
+        sizeof(memory_region_bound + 1)
     }
 
 /* A zero-sized operand does not access memory, irrespective of its offset. */
@@ -583,27 +634,37 @@ function memory_access(start, size) =
         fatal_error(ExecutionInvalid)
     }
 
-/*! Computes the total incremental cost for reaching a memory size over the
-    carried memory cursor. Gas affordability is checked exactly once by
-    `charge` at the caller. */
-val memory_expansion_cost : forall 'required, memory_expansion_endpoint('required). (EvmMemorySlice, int('required)) -> memory_expansion_charge
+/*! Charges the incremental `C_mem` cost for reaching an EVM memory endpoint.
+    An endpoint outside the materializable arena is necessarily unaffordable:
+    represent that fact in the charge result rather than with a numeric
+    `2^64` sentinel that is not itself live gas. */
+val charge_memory_expansion : forall 'g 'required,
+       live_gas_valid('g)
+    &  memory_expansion_endpoint('required).
+    (int('g), EvmMemorySlice, int('required)) -> {'next_g,
+           live_gas_valid('next_g)
+        &  'next_g <= 'g.
+        (bool, int('next_g))}
 
-function memory_expansion_cost(mem, required_size) = {
-    let new_words = memory_word_count(required_size);
-    let old_size = memory_high_water(mem);
-    let old_words = memory_word_count(old_size);
-    if new_words <= old_words then {
-        0
-    } else {
-        let old_cost = mem_cost(old_words);
-        let new_cost = mem_cost(new_words);
-        if old_cost <= new_cost then {
-            new_cost - old_cost
+function charge_memory_expansion(g, mem, required_size) =
+    if required_size <= sizeof(memory_region_bound) then {
+        let materialized_size : memory_length = required_size;
+        let new_words = memory_word_count(materialized_size);
+        let old_words = memory_word_count(memory_high_water(mem));
+        if new_words <= old_words then {
+            (false, g)
         } else {
-            0
+            let old_cost = mem_cost(old_words);
+            let new_cost = mem_cost(new_words);
+            if old_cost <= new_cost then {
+                charge(g, new_cost - old_cost)
+            } else {
+                (false, g)
+            }
         }
+    } else {
+        (true, GAS_ZERO)
     }
-}
 
 /*! Materializes the exact byte high-water mark after gas has been charged,
     returning the updated memory cursor. */
@@ -1490,7 +1551,7 @@ word (YP Appendix G).
     so optimized builds never materialize an overflowing native gas cost. */
 function charge_word_scaled_gas(g : gas, per_unit : gas_constant, units : word) -> (bool, gas) = {
     if per_unit == 0 | units == 0 then {
-        return (true, g)
+        return (false, g)
     };
     if units <= g then {
         let affordable_units : gas_cost = units;
@@ -1499,21 +1560,21 @@ function charge_word_scaled_gas(g : gas, per_unit : gas_constant, units : word) 
             let cost : gas_cost = exact_cost;
             charge(g, cost)
         } else {
-            (false, exc_halt(g, OutOfGas))
+            (true, g)
         }
     } else {
-        (false, exc_halt(g, OutOfGas))
+        (true, g)
     }
 }
 
 /*! Charges an opcode base cost and its per-memory-word component. */
 function charge_memory_word_gas(g : gas, base : gas_constant, per_word : gas_constant, size : word) -> (bool, gas) = {
-    let (base_charged, base_gas) = charge(g, base);
-    if base_charged then {
+    let (base_halt, base_gas) = charge(g, base);
+    if base_halt then {
+        (true, base_gas)
+    } else {
         let words = memory_word_count_word(size);
         charge_word_scaled_gas(base_gas, per_word, words)
-    } else {
-        (false, base_gas)
     }
 }
 
@@ -1528,17 +1589,17 @@ function charge_copy_gas(g : gas, size : word) -> (bool, gas) =
 /* LOG0..LOG4: base + per-topic + per-data-byte. */
 /*! Charges the base, topic, and data-byte components of a log operation. */
 function charge_log_gas(g : gas, num_topics : log_topic_count, size : word) -> (bool, gas) = {
-    let (base_charged, base_gas) = charge(g, G_log);
-    if base_charged then {
-        let topic_cost : gas_cost = G_logtopic * num_topics;
-        let (topics_charged, topics_gas) = charge(base_gas, topic_cost);
-        if topics_charged then {
-            charge_word_scaled_gas(topics_gas, G_logdata, size)
-        } else {
-            (false, topics_gas)
-        }
+    let (base_halt, base_gas) = charge(g, G_log);
+    if base_halt then {
+        (true, base_gas)
     } else {
-        (false, base_gas)
+        let topic_cost : gas_cost = G_logtopic * num_topics;
+        let (topics_halt, topics_gas) = charge(base_gas, topic_cost);
+        if topics_halt then {
+            (true, topics_gas)
+        } else {
+            charge_word_scaled_gas(topics_gas, G_logdata, size)
+        }
     }
 }
 

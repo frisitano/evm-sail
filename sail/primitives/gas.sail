@@ -31,14 +31,48 @@ type block_gas_limit_bound : Int = ssz_uint_bound
 type block_access_list_item_gas : Int = 2000
 let BLOCK_ACCESS_LIST_ITEM_GAS : int(block_access_list_item_gas) = sizeof(block_access_list_item_gas)
 
-/*! Available gas in a running EVM frame. */
-type gas = nat
+/*! Available gas in a running EVM frame. Every admitted transaction gas
+    limit originates in the execution payload's SSZ `uint64` gas-limit
+    domain, and child frames can only receive gas from their parent. */
+type gas = range(0, 2 ^ 64 - 1)
 
 /*! Representation invariant for a value copied from the live frame gas
-    counter.  The canonical model requires only non-negativity; production
-    splices may strengthen it from the admitted input and counter lifecycle. */
+    counter. */
 type live_gas_valid('value : Int) -> Bool =
-    0 <= 'value
+    0 <= 'value & 'value <= 2 ^ 64 - 1
+
+/*! Gas that can be restored to a particular live counter without exceeding
+    the admitted `uint64` gas domain. The index is type-level only; optimized
+    C represents the value as the same native gas scalar. */
+type gas_credit('available : Int) = {
+    'credit,
+       0 <= 'credit
+    &  'available + 'credit <= 2 ^ 64 - 1.
+    int('credit)
+}
+
+/*! State-gas spill that can be restored to the indicated execution gas. */
+type state_gas_spill_credit('available : Int) = {
+    'credit,
+       0 <= 'credit
+    &  'credit <= 2 ^ 24
+    &  'available + 'credit <= 2 ^ 64 - 1.
+    int('credit)
+}
+
+/*! Amsterdam's per-frame state-gas reservoir. The transaction's total gas
+    allowance remains in the execution payload's `uint64` domain; only the
+    regular-gas portion and state-gas spill into that portion are capped by
+    EIP-7825. */
+type state_gas = range(0, 2 ^ 64 - 1)
+
+/*! Child state gas that can be restored to the indicated parent reservoir. */
+type state_gas_credit('available : Int) = {
+    'credit,
+       0 <= 'credit
+    &  'available + 'credit <= 2 ^ 64 - 1.
+    int('credit)
+}
 
 /*! Gas supplied by a transaction before fork-specific validation. Any value
     above the execution payload's SSZ `uint64` block-gas-limit domain cannot be
@@ -46,10 +80,10 @@ type live_gas_valid('value : Int) -> Bool =
     transaction. */
 type transaction_gas = range(0, block_gas_limit_bound)
 
-/*! A transient computed charge. Canonically this is an exact natural;
-    optimized builds use a native representation only after the computation's
-    semantic bound has been established. */
-type gas_cost = nat
+/*! A transient computed charge after its affordability or structural bound
+    has been established. Unaffordable larger computations are represented by
+    `GasCharge.affordable = false` rather than materialized as a cost. */
+type gas_cost = range(0, 2 ^ 64 - 1)
 
 let GAS_COST_ZERO : gas_cost = 0
 
@@ -75,33 +109,38 @@ let GAS_CHARGE_UNAFFORDABLE : GasCharge = struct { affordable = false, cost = GA
 function gas_charge(cost : gas_cost) -> GasCharge =
     struct { affordable = true, cost = cost }
 
-/*! Intermediate MODEXP affordability factors.  The canonical model keeps
-    their exact natural values; production splices bound them from the live
-    gas counter and the at-most-255-bit exponent-head contribution. */
-type modexp_factor = nat
+/*! Intermediate MODEXP affordability factors, bounded by live gas and the
+    at-most-255-bit exponent-head contribution. */
+type modexp_factor = range(0, 3 * (2 ^ 64 - 1) + 257)
 
 /*! Products of two bounded MODEXP affordability factors. */
-type modexp_product = nat
+type modexp_product = range(
+    0,
+    (3 * (2 ^ 64 - 1) + 257) * (3 * (2 ^ 64 - 1) + 257),
+)
 
 /*! Long-exponent byte counts after the fork-specific affordability check. */
-type modexp_osaka_extra = nat
+type modexp_osaka_extra = range(0, div(2 ^ 64 - 1, 16))
 /*! Long-exponent byte counts used by the pre-Osaka MODEXP gas formula. */
-type modexp_pre_osaka_extra = nat
+type modexp_pre_osaka_extra = range(0, div(3 * (2 ^ 64 - 1) + 2, 8))
 
 /*! EIP-2537's base-cost/discount product. */
-type bls_msm_coefficient = nat
+type bls_msm_coefficient = range(0, 45000 * (2 ^ 16 - 1))
 
 /*! Exact EIP-2537 MSM products before their affordability check. */
-type bls_msm_product = nat
+type bls_msm_product = range(
+    0,
+    45000 * (2 ^ 16 - 1) * (2 ^ 64 - 1),
+)
 
 /*! EIP-2537's bounded remainder product before division by 1000. */
-type bls_msm_tail_product = nat
+type bls_msm_tail_product = range(0, 45000 * (2 ^ 16 - 1) * 999)
 
 /*! Linear precompile multiplier before adding the fixed base charge. */
-type linear_gas_variable_product = nat
+type linear_gas_variable_product = range(0, 45000 * (2 ^ 64 - 1))
 
 /*! Exact linear precompile cost before its live-gas affordability check. */
-type linear_gas_product = nat
+type linear_gas_product = range(0, 45000 * 2 ^ 64)
 
 /*! The EIP-7825 per-transaction execution-gas limit reused by EIP-8037's
     regular-gas pool. */
@@ -119,7 +158,7 @@ let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value)
     draws spill only from the regular-gas pool, which is capped by EIP-7825. */
 type state_gas_spill = range(0, transaction_execution_gas_limit_value)
 
-let STATE_GAS_SPILL_ZERO : state_gas_spill = 0
+let STATE_GAS_SPILL_ZERO : int(0) = 0
 let STATE_GAS_SPILL_LIMIT : state_gas_spill = sizeof(transaction_execution_gas_limit_value)
 
 /*! A block header's gas limit. Its SSZ execution-payload field is `uint64`;
@@ -141,7 +180,8 @@ type receipt_cumulative_gas = range(0, 2 * block_gas_limit_bound)
 type receipt_cumulative_gas_value_valid('value : Int) -> Bool =
     0 <= 'value & 'value <= 2 * block_gas_limit_bound
 
-let GAS_ZERO : gas = 0
+let GAS_ZERO : int(0) = 0
+let STATE_GAS_ZERO : int(0) = 0
 
 /*! The execution-gas allowance of each protocol system call (EIP-4788,
     EIP-2935, EIP-7002, EIP-7251, and EIP-8282). */
@@ -184,25 +224,37 @@ type gas_refund_delta = range(
 
 /*! Net state gas consumed by one execution frame. A credit can make this
     negative until transaction settlement clamps the block-level value at
-    zero. The canonical model remains mathematically unbounded; production
-    splices refine this type from the live-counter lifecycle. */
-type frame_state_gas_delta = int
+    zero. The bounds follow from subtracting two live `uint64` counters and
+    adding at most one EIP-7825 regular-pool spill. */
+type frame_state_gas_delta = range(
+    -(2 ^ 64 - 1),
+    (2 ^ 64 - 1) + transaction_execution_gas_limit_value,
+)
 
 let FRAME_STATE_GAS_DELTA_ZERO : frame_state_gas_delta = 0
 
 /*! Combined state-gas delta for the Amsterdam authorization and execution
     frames. */
-type state_gas_delta = int
+type state_gas_delta = range(
+    -(2 * (2 ^ 64 - 1)),
+    2 * ((2 ^ 64 - 1) + transaction_execution_gas_limit_value),
+)
 
 let STATE_GAS_DELTA_ZERO : state_gas_delta = 0
 
 /*! State gas after adding the intrinsic transaction charge and before the
     block-level non-negative/u64 checks. */
-type transaction_state_gas_delta = int
+type transaction_state_gas_delta = range(
+    -(2 * (2 ^ 64 - 1)),
+    3 * (2 ^ 64 - 1) + 2 * transaction_execution_gas_limit_value,
+)
 
 /*! A non-negative transaction state-gas total after settlement has rejected
     a negative signed delta. */
-type transaction_state_gas_used = nat
+type transaction_state_gas_used = range(
+    0,
+    3 * (2 ^ 64 - 1) + 2 * transaction_execution_gas_limit_value,
+)
 
 /* The transaction refund cap is `gas_used / 2` before London and
  * `gas_used / 5` from London onward.  Keep the exact protocol alternatives

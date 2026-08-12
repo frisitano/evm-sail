@@ -34,6 +34,7 @@ esac
 # generated objects and the linked ELF (run.py --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
+C_OPT_SPECIALIZATION_LIMIT="${C_OPT_SPECIALIZATION_LIMIT:-256}"
 SAIL_Z3_MEMO_PATH="${SAIL_Z3_MEMO_PATH:-$ROOT/sail_smt_cache}"
 SAIL_Z3_FLAGS=(--memo-z3 --memo-z3-path "$SAIL_Z3_MEMO_PATH")
 C_OPTIMISED_DIR="$ROOT/sail/optimised"
@@ -51,6 +52,7 @@ OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
 AR="${AR:-riscv64-unknown-elf-ar}"
+CLANG="${CLANG:-clang}"
 SPIKE="${SPIKE:-spike}"
 HOSTCC="${HOSTCC:-cc}"
 HOSTCXX="${HOSTCXX:-c++}"
@@ -117,16 +119,26 @@ case "$EVM_GENERATED_INTERP" in
   off|on) ;;
   *) echo "error: EVM_GENERATED_INTERP must be off or on" >&2; exit 2 ;;
 esac
-# Experimental: EVM_INLINE_ATTR=on passes --c-inline-attr so functions
-# annotated $[c_inline] in the optimised splices are inlined into their
-# callers (dispatch fusion for the generated interpreter).
-EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
+# Experimental: source-level Sail/JIB call-site inlining.  This is independent
+# of the C compiler attribute used by the hand-written threaded interpreter.
+EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-on}"
 case "$EVM_INLINE_ATTR" in
   off|on) ;;
   *) echo "error: EVM_INLINE_ATTR must be off or on" >&2; exit 2 ;;
 esac
 if [ "$EVM_INLINE_ATTR" = on ]; then
   CONST_TABLE_FLAGS+=(--c-inline-attr)
+fi
+# Emit __always_inline__ on $[c_inline]-annotated generated C declarations and
+# definitions.  Full LTO then exposes those bodies to the threaded interpreter
+# without first duplicating them throughout Sail's JIB graph.
+EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-on}"
+case "$EVM_ALWAYS_INLINE_ATTR" in
+  off|on) ;;
+  *) echo "error: EVM_ALWAYS_INLINE_ATTR must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_ALWAYS_INLINE_ATTR" = on ]; then
+  CONST_TABLE_FLAGS+=(--c-always-inline-attr)
 fi
 PROFILE_OBJ=""
 
@@ -155,12 +167,15 @@ fi
 MODEL_HEADER_FLAG="-DEVMSAIL_MODEL_H=\"$MODEL_HEADER\""
 # Freestanding includes FIRST so <stdio.h>/<stdlib.h>/<string.h>/<gmp.h> resolve
 # to our shims + vendored mini-gmp instead of newlib / libgmp.
-CFLAGS=("${ARCH[@]}" -O2 -ffreestanding -nostdlib -fno-builtin
+CFLAGS=("${ARCH[@]}" -O3 -ffreestanding -nostdlib -fno-builtin
         -fno-stack-protector -fno-pic -mno-relax -DNDEBUG
         -ffunction-sections -fdata-sections
         -I"$RT/sail256" -I"$RT/freestanding" -I"$RT"
         -I"$ROOT/zkvm" -I"$ROOT/zkvm/io-device"
         "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT")
+if [ "$EVM_PROFILE" = on ]; then
+  CFLAGS+=(-DEVMSAIL_OPCODE_PROFILE=1)
+fi
 if [ -z "${GUEST:-}" ]; then
   CFLAGS+=(-DEVMSAIL_OPTIMIZED_FFI)
 fi
@@ -180,11 +195,27 @@ fi
 # EVM_LTO=full keeps bitcode all the way into the archive for a final link
 # that is itself gcc -flto (the C-direct guest); the entry objects then
 # participate in whole-program optimization too.
-EVM_LTO="${EVM_LTO:-off}"
+EVM_LTO="${EVM_LTO:-full}"
 case "$EVM_LTO" in
   on|full|off) ;;
   *) echo "error: EVM_LTO must be off, on, or full" >&2; exit 2 ;;
 esac
+EVM_UNITY="${EVM_UNITY:-off}"
+case "$EVM_UNITY" in
+  off|on) ;;
+  *) echo "error: EVM_UNITY must be off or on" >&2; exit 2 ;;
+esac
+if [ "$EVM_UNITY" = on ]; then
+  if [ "$PLATFORM" != zisk ] || [ -n "${GUEST:-}" ]; then
+    echo "error: EVM_UNITY=on supports only the optimized ZisK build" >&2; exit 2
+  fi
+  if [ "$EVM_LTO" != off ]; then
+    echo "error: EVM_UNITY=on requires EVM_LTO=off" >&2; exit 2
+  fi
+  if [ "$EVM_PROFILE" != off ]; then
+    echo "error: EVM_UNITY=on currently requires EVM_PROFILE=off" >&2; exit 2
+  fi
+fi
 if [ "$EVM_LTO" != off ]; then
   CFLAGS+=(-flto)
 fi
@@ -260,7 +291,7 @@ compile_common() {
     while IFS= read -r relative || [ -n "$relative" ]; do
       [ -z "$relative" ] && continue
       if [ "$EVM_GENERATED_INTERP" = on ] && [ "$relative" = "evm/interpreter.sail" ]; then
-        relative="evm/interpreter_generated.sail"
+        continue
       fi
       optimized_splice_flags+=(--splice "$C_OPTIMISED_DIR/$relative")
     done < "$C_OPTIMISED_MANIFEST"
@@ -271,10 +302,25 @@ compile_common() {
         profile_splice_flags+=(--splice "$C_PROFILE_DIR/$relative")
       done < "$C_PROFILE_MANIFEST"
     fi
+    local interpreter_preserve_flags=()
+    local callback
+    for callback in \
+      account_execution_context exceptional_state frame_output \
+      opcode_frame_status refresh_account_execution_context \
+      resume_frame run_call run_create run_frame_entry_encoded opcode_available \
+      execute_push_encoded execute_dup_encoded execute_swap_encoded \
+      execute_log_encoded execute_deep_stack_encoded; do
+      interpreter_preserve_flags+=(--c-preserve "$callback")
+    done
+    while IFS= read -r callback; do
+      interpreter_preserve_flags+=(--c-preserve "$callback")
+    done < <(grep -oE 'execute_[A-Za-z0-9_]+' \
+      "$MODEL_FFI/src/evm/interpreter.c" | sort -u)
     ( cd "$ROOT" && "$SAIL" "${SAIL_Z3_FLAGS[@]}" \
         -c -O --Oconstant-fold --all-modules \
         --c-optimized-model --c-package "$OPTIMIZED_PACKAGE" \
         --c-output-dir "$OPTIMIZED_GENERATED" \
+        --c-specialization-limit "$C_OPT_SPECIALIZATION_LIMIT" \
         --c-optimized-source-root sail \
         --c-optimized-include-dir "$MODEL_FFI/include" \
         --c-optimized-external-type StatelessInputSliceFields=evmsail/host/types.h \
@@ -284,6 +330,7 @@ compile_common() {
         --c-optimized-external-type LogDataSliceFields=evmsail/host/types.h \
         --c-optimized-external-type OutputSliceFields=evmsail/host/types.h \
         --c-optimized-external-type PreparedAuthorizationList=evmsail/host/types.h \
+        --c-optimized-external-type StackPointer=evmsail/host/stack.h \
         --c-optimized-byte-pointer-field StatelessInputSliceFields.bytes=__direct \
         --c-optimized-byte-pointer-field ScratchSliceFields.bytes=__direct \
         --c-optimized-byte-pointer-field EvmMemorySliceFields.bytes=__direct \
@@ -295,6 +342,7 @@ compile_common() {
         --c-preserve validation_debug_record --c-preserve write_invalid_result \
         --c-preserve sload_cost --c-preserve sstore_sentry_cost \
         --c-preserve sstore_costs \
+        "${interpreter_preserve_flags[@]}" \
         --c-specialize-log "${MODEL_INCLUDE_FLAGS[@]}" \
         ${CONST_TABLE_FLAGS[@]+"${CONST_TABLE_FLAGS[@]}"} \
         "${optimized_splice_flags[@]}" \
@@ -313,22 +361,26 @@ compile_common() {
   #    The model calls setup_rts/cleanup_rts (provided by runtime.c) without a
   #    prototype since --c-no-rts omits rts.h; downgrade that to a warning.
   MODEL_OBJS=()
+  MODEL_SOURCES=()
   if [ -z "${GUEST:-}" ]; then
     [ -s "$OPTIMIZED_MODEL_MANIFEST" ] || { echo "error: missing generated model manifest" >&2; exit 2; }
     while IFS= read -r relative || [ -n "$relative" ]; do
       [ -z "$relative" ] && continue
       local source="$OPTIMIZED_GENERATED/src/spec/$relative"
       [ -f "$source" ] || { echo "error: missing generated model source: $relative" >&2; exit 2; }
-      local object_name="${relative%.c}"
-      object_name="${object_name//\//__}"
-      local object="$BUILD/model__${object_name}.o"
-      "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-          "$MODEL_HEADER_FLAG" \
-          -Wno-unused -Wno-error=implicit-function-declaration \
-          -c "$source" -o "$object"
-      MODEL_OBJS+=("$object")
+      MODEL_SOURCES+=("$source")
+      if [ "$EVM_UNITY" = off ]; then
+        local object_name="${relative%.c}"
+        object_name="${object_name//\//__}"
+        local object="$BUILD/model__${object_name}.o"
+        "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+            "$MODEL_HEADER_FLAG" \
+            -Wno-unused -Wno-error=implicit-function-declaration \
+            -c "$source" -o "$object"
+        MODEL_OBJS+=("$object")
+      fi
     done < "$OPTIMIZED_MODEL_MANIFEST"
-    [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
+    [ "${#MODEL_SOURCES[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
   else
     local object="$BUILD/zkvm_block.o"
     "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
@@ -341,18 +393,22 @@ compile_common() {
   #     tree and are compiled from one deterministic manifest. The spec backend
   #     retains its independent GMP ABI and flat implementation.
   MODEL_BACKEND_OBJS=()
+  MODEL_BACKEND_SOURCES=()
   if [ -z "${GUEST:-}" ]; then
     while IFS= read -r relative || [ -n "$relative" ]; do
       case "$relative" in ''|'#'*) continue ;; esac
       local source="$OPTIMIZED_STAGED_FFI/$relative"
       [ -f "$source" ] || { echo "error: missing optimized source: $relative" >&2; exit 2; }
-      local object_name="${relative%.c}"
-      object_name="${object_name//\//__}"
-      local object="$BUILD/optimized__${object_name}.o"
-      "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
-          -Wno-unused "$MODEL_HEADER_FLAG" \
-          -c "$source" -o "$object"
-      MODEL_BACKEND_OBJS+=("$object")
+      MODEL_BACKEND_SOURCES+=("$source")
+      if [ "$EVM_UNITY" = off ]; then
+        local object_name="${relative%.c}"
+        object_name="${object_name//\//__}"
+        local object="$BUILD/optimized__${object_name}.o"
+        "$GCC" "${CFLAGS[@]}" -I"$BUILD" -I"$lib" \
+            -Wno-unused "$MODEL_HEADER_FLAG" \
+            -c "$source" -o "$object"
+        MODEL_BACKEND_OBJS+=("$object")
+      fi
     done < "$OPTIMIZED_STAGED_FFI/sources.list"
   else
     local source_and_name source object
@@ -385,9 +441,11 @@ compile_common() {
     done
   fi
   # 3. GMP-free Sail runtime: exact bounded integers and inline 256-bit lbits.
-  "$GCC" "${CFLAGS[@]}" -I"$lib" \
-      -Wno-unused -Wno-error=implicit-function-declaration \
-      -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
+  if [ "$EVM_UNITY" = off ]; then
+    "$GCC" "${CFLAGS[@]}" -I"$lib" \
+        -Wno-unused -Wno-error=implicit-function-declaration \
+        -c "$RT/sail256/sail.c" -o "$BUILD/sail.o"
+  fi
 }
 
 compile_profile_scope() {
@@ -441,6 +499,56 @@ cmd_zisk_lib() {
   resolve_sail
   local lib; lib="$(sail_lib)"
   compile_common
+  if [ "$EVM_UNITY" = on ]; then
+    local unity_source="$BUILD/evmsail_unity.c"
+    local unity_object="$BUILD/evmsail_unity.o"
+    local -a unity_sources=(
+      "${MODEL_SOURCES[@]}"
+      "${MODEL_BACKEND_SOURCES[@]}"
+      "$RT/runtime.c"
+      "$RT/harness.c"
+      "$HERE/zisk/platform.c"
+      "$HERE/zisk/bigint.c"
+      "$HERE/zisk/main.c"
+    )
+    : > "$unity_source"
+    local source
+    for source in "${unity_sources[@]}"; do
+      printf '#include "%s"\n' "$source" >> "$unity_source"
+    done
+    local -a llvm_tuning=(
+      -mllvm --inline-threshold=4749
+      -mllvm --inline-instr-cost=1
+      -mllvm --inline-memaccess-cost=1
+      -mllvm --inline-call-penalty=12
+      -mllvm --unroll-threshold=378
+      -mllvm --disable-licm-promotion
+      -mllvm --licm-versioning-max-depth-threshold=0
+      -mllvm --memdep-block-number-limit=2510
+      -mllvm --memdep-block-scan-limit=98
+      -mllvm --jump-threading-threshold=16
+      -mllvm --jump-threading-implication-search-threshold=6
+      -mllvm --max-speculation-depth=0
+      -mllvm --max-uses-for-sinking=119
+      -mllvm --available-load-scan-limit=23
+      -mllvm --bonus-inst-threshold=5
+      -mllvm --max-num-inline-blocks=6
+      -mllvm --loop-interchange-threshold=2
+      -mllvm --early-ifcvt-limit=29
+      -mllvm --loop-distribute-scev-check-threshold=0
+      -mllvm --loop-load-elimination-scev-check-threshold=7
+      -mllvm --max-dependences=6
+      -mllvm --max-nested-scalar-reduction-interleave=2
+    )
+    "$CLANG" --target=riscv64-unknown-elf -march=rv64ima_zicclsm \
+        "${CFLAGS[@]}" -O3 "${llvm_tuning[@]}" -I"$BUILD" -I"$lib" \
+        "$MODEL_HEADER_FLAG" -Wno-unused -Wno-error=implicit-function-declaration \
+        -c "$unity_source" -o "$unity_object"
+    rm -f "$BUILD/libevmsail_zisk.a"
+    "$AR" crs "$BUILD/libevmsail_zisk.a" "$unity_object"
+    echo "built $BUILD/libevmsail_zisk.a (Clang unity)"
+    return
+  fi
   "$GCC" "${CFLAGS[@]}" -I"$lib" -Wall -Wextra \
       -c "$RT/runtime.c" -o "$BUILD/runtime.o"
   # In partial-LTO mode the platform entry points are called only from the
