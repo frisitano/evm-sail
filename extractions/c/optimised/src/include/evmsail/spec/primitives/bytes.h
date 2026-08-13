@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/gas.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -34,10 +35,6 @@ uint32_t calldata_slice_length(struct CalldataSlice s);
 
 uint32_t stateless_input_slice_length(Bytes s);
 
-void create_letbind_25(void);
-void kill_letbind_25(void);
-
-
 void create_letbind_26(void);
 void kill_letbind_26(void);
 
@@ -50,12 +47,16 @@ void create_letbind_28(void);
 void kill_letbind_28(void);
 
 
-void create_letbind_30(void);
-void kill_letbind_30(void);
+void create_letbind_29(void);
+void kill_letbind_29(void);
 
 
 void create_letbind_31(void);
 void kill_letbind_31(void);
+
+
+void create_letbind_32(void);
+void kill_letbind_32(void);
 
 
 Bytes stateless_input_sub_slice(Bytes s, uint32_t off, uint32_t len);
@@ -77,8 +78,6 @@ Bytes output_buffer_slice(uint32_t /* arg_0 */);
 Bytes host_log_data_slice(uint64_t /* arg_0 */);
 
 Bytes mem_frame_enter_slice(void);
-
-Bytes interpret(void);
 
 Bytes scratch_store_receipt_logs_bloom(uint32_t /* arg_0 */, uint64_t /* arg_1 */, uint64_t /* arg_2 */);
 

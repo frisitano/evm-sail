@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/system.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +96,8 @@ struct Account k_aload(bytes32 /* arg_0 */, bytes20 /* arg_1 */);
 void store_account(bytes20 /* arg_0 */, struct Account /* arg_1 */);
 
 void store_account_info(bytes20 /* arg_0 */, struct Account /* arg_1 */, struct AccountInfo /* arg_2 */);
+
+struct StorageValue storage_load_by_id(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, bool /* arg_3 */);
 
 
 #ifdef __cplusplus

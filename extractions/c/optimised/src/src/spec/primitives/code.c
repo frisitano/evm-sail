@@ -23,24 +23,51 @@ Bytes validated_code_slice(Bytes bytes)
   return code_slice(bytes);
 }
 
-void create_letbind_33(void) {
+void create_letbind_34(void) {
 
-  Bytes let_value_3_44 = code_slice(EMPTY_CODE_REGION_SLICE);
-  EMPTY_CODE_SLICE = let_value_3_44;
+  Bytes let_value_3_45 = code_slice(EMPTY_CODE_REGION_SLICE);
+  EMPTY_CODE_SLICE = let_value_3_45;
 }
-void kill_letbind_33(void) {
+void kill_letbind_34(void) {
+}
+
+enum DeepStackOperation deep_stack_operation(uint8_t opcode)
+{
+  if (opcode == UINT8_C(230)) {
+    return DeepStackDuplicate;
+  }
+  if (opcode == UINT8_C(231)) {
+    return DeepStackSwap;
+  }
+  if (opcode == UINT8_C(232)) {
+    return DeepStackExchange;
+  }
+  return NotDeepStackOperation;
 }
 
 bool deep_stack_immediate_valid(uint64_t immediate)
 {
-  uint8_t tmp_3_3564 = (uint8_t)immediate;
-  return (bool)((tmp_3_3564 <= UINT8_C(90)) || (UINT8_C(128) <= tmp_3_3564));
+  uint8_t tmp_3_3754 = (uint8_t)immediate;
+  return (bool)((tmp_3_3754 <= UINT8_C(90)) || (UINT8_C(128) <= tmp_3_3754));
 }
 
 bool exchange_immediate_valid(uint64_t immediate)
 {
-  uint8_t tmp_3_3562 = (uint8_t)immediate;
-  return (bool)((tmp_3_3562 <= UINT8_C(81)) || (UINT8_C(128) <= tmp_3_3562));
+  uint8_t tmp_3_3752 = (uint8_t)immediate;
+  return (bool)((tmp_3_3752 <= UINT8_C(81)) || (UINT8_C(128) <= tmp_3_3752));
+}
+
+bool deep_stack_operation_immediate_valid(enum DeepStackOperation operation, uint64_t immediate)
+{
+  switch (operation) {
+  case DeepStackDuplicate:
+  case DeepStackSwap:
+    return deep_stack_immediate_valid(immediate);
+  case DeepStackExchange:
+    return exchange_immediate_valid(immediate);
+  case NotDeepStackOperation:
+    return false;
+  }
 }
 
 struct CodeFields analyzed_code(Bytes bytes, uint8_t * jumpdests)
@@ -53,11 +80,11 @@ Bytes code_bytes(struct CodeFields code)
   return ((Bytes){.bytes = code.bytes, .len = code.len});
 }
 
-void create_letbind_34(void) {
+void create_letbind_35(void) {
 
-  struct CodeFields let_value_3_45 = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE);
-  EMPTY_CODE = let_value_3_45;
+  struct CodeFields let_value_3_46 = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE);
+  EMPTY_CODE = let_value_3_46;
 }
-void kill_letbind_34(void) {
+void kill_letbind_35(void) {
 }
 

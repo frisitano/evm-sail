@@ -17,6 +17,14 @@ uint64_t memory_slice_byte(Bytes s, uint32_t off)
   return UINT64_C(0x00);
 }
 
+uint64_t code_slice_byte(Bytes s, uint32_t off)
+{
+  if (off < s.len) {
+    return code_region_byte_at(s, off);
+  }
+  return UINT64_C(0x00);
+}
+
 uint64_t calldata_slice_byte(struct CalldataSlice s, uint32_t off)
 {
   switch (s.kind) {
@@ -61,8 +69,8 @@ u256 calldata_slice_load(struct CalldataSlice s, uint32_t off)
 u256 stateless_input_slice_load_word_offset(Bytes s, u256 off)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_3808 = (uint32_t)u256_to_u64(off);
-    return stateless_input_slice_load(s, tmp_3_3808);
+    uint32_t tmp_3_4013 = (uint32_t)u256_to_u64(off);
+    return stateless_input_slice_load(s, tmp_3_4013);
   }
   return ZERO_WORD;
 }
@@ -70,8 +78,8 @@ u256 stateless_input_slice_load_word_offset(Bytes s, u256 off)
 u256 memory_slice_load_word_offset(Bytes s, u256 off)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_3809 = (uint32_t)u256_to_u64(off);
-    return memory_slice_load(s, tmp_3_3809);
+    uint32_t tmp_3_4014 = (uint32_t)u256_to_u64(off);
+    return memory_slice_load(s, tmp_3_4014);
   }
   return ZERO_WORD;
 }
@@ -90,6 +98,14 @@ u256 stateless_input_slice_load_n(Bytes s, uint32_t off, uint8_t n)
 {
   if (off < s.len) {
     return stateless_input_load_n_word(s, off, n);
+  }
+  return ZERO_WORD;
+}
+
+u256 code_slice_load_n(Bytes s, uint32_t off, uint8_t n)
+{
+  if (off < s.len) {
+    return code_region_load_n_word(s, off, n);
   }
   return ZERO_WORD;
 }
@@ -125,8 +141,8 @@ void output_slice_copy(Bytes s, uint32_t dst, uint32_t off, uint32_t len)
 void stateless_input_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_3810 = (uint32_t)u256_to_u64(off);
-    stateless_input_slice_copy(s, dst, tmp_3_3810, len);
+    uint32_t tmp_3_4015 = (uint32_t)u256_to_u64(off);
+    stateless_input_slice_copy(s, dst, tmp_3_4015, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);
@@ -135,8 +151,8 @@ void stateless_input_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uin
 void memory_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_3811 = (uint32_t)u256_to_u64(off);
-    memory_slice_copy(s, dst, tmp_3_3811, len);
+    uint32_t tmp_3_4016 = (uint32_t)u256_to_u64(off);
+    memory_slice_copy(s, dst, tmp_3_4016, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);
@@ -145,8 +161,8 @@ void memory_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len
 void code_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_3812 = (uint32_t)u256_to_u64(off);
-    code_slice_copy(s, dst, tmp_3_3812, len);
+    uint32_t tmp_3_4017 = (uint32_t)u256_to_u64(off);
+    code_slice_copy(s, dst, tmp_3_4017, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);

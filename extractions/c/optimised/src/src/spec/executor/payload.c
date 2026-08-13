@@ -38,8 +38,8 @@ void validate_execution_payload(struct StatelessInput input, struct StatelessInp
   }
   uint32_t expected_excess_blob_gas = expected_payload_excess_blob_gas(witness);
   bool result_2_131 = (bool)(profile.fork >= Cancun);
-  bool tmp_3_626 = (bool)(result_2_131 && (header.excess_blob_gas != expected_excess_blob_gas));
-  if (tmp_3_626) {
+  bool tmp_3_627 = (bool)(result_2_131 && (header.excess_blob_gas != expected_excess_blob_gas));
+  if (tmp_3_627) {
     fatal_error(InvalidExcessBlobGas);
   }
   bool result_2_134 = (bool)(profile.fork >= Paris);

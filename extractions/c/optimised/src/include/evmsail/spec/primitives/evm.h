@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/block.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -62,12 +63,22 @@ struct Message {
   u256 value;
 };
 
+// union OpcodeOutcome
+enum kind_OpcodeOutcome { Kind_Continue, Kind_Failed };
+
+struct OpcodeOutcome {
+  enum kind_OpcodeOutcome kind;
+  union {
+    struct { unit Continue; };
+    struct { enum ExceptionKind Failed; };
+  } variants;
+};
+
 // enum CreateKind
 enum CreateKind { CreateByNonce, CreateBySalt };
 
 // struct FrameCheckpoint
 struct FrameCheckpoint {
-  uint16_t call_depth;
   struct CalldataSlice calldata;
   struct CodeFields code;
   uint64_t gas_remaining;
@@ -75,7 +86,7 @@ struct FrameCheckpoint {
   struct Message message;
   uint32_t pc;
   __int128 refund;
-  uint64_t stack_top;
+  StackPointer stack_top;
   uint64_t state_gas_remaining;
   uint32_t state_gas_spilled;
   struct FrameStatus status;
@@ -126,16 +137,9 @@ struct TxValidityFields tx_validity_fields(bytes20 sender, uint64_t nonce_before
 
 struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_fields(uint64_t limit, uint64_t regular, uint64_t calldata_floor, uint64_t remaining, uint64_t state_used);
 
-void create_letbind_77(void);
-void kill_letbind_77(void);
-
-
 struct TransactionInitialGasFields transaction_initial_gas_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TransactionInitialGasFields(uint64_t total, uint64_t regular, uint64_t intrinsic_execution, uint64_t intrinsic_state, uint64_t calldata_floor, uint64_t execution, uint8_t state);
 
 struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TxFrameGasSnapshotFields(uint64_t limit, uint64_t regular, uint64_t calldata_floor, uint64_t remaining, uint8_t state_used);
-
-extern struct Message DEFAULT_MESSAGE;
-
 
 
 #ifdef __cplusplus

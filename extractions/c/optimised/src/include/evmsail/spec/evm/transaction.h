@@ -3,6 +3,7 @@
 #include "evmsail/spec/evm/interpreter.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +38,38 @@ struct IntrinsicGasCost {
   uint64_t state;
 };
 
+// struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes
+struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint32_t tup2;
+  __int128 tup3;
+  StackPointer tup4;
+  Bytes tup5;
+};
+
+// struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes
+struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint8_t tup2;
+  __int128 tup3;
+  StackPointer tup4;
+  Bytes tup5;
+};
+
+// struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice
+struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice {
+  struct TransactionPreparation tup0;
+  uint64_t tup1;
+  uint64_t tup2;
+  uint32_t tup3;
+  bytes20 tup4;
+  bytes20 tup5;
+  struct CodeFields tup6;
+  struct CalldataSlice tup7;
+};
+
 Bytes transaction_initcode_slice(Bytes input);
 
 uint64_t calldata_cost(Bytes input);
@@ -63,9 +96,9 @@ uint64_t process_auth_cursor(PreparedAuthorizationList authorizations, uint16_t 
 
 uint64_t process_auth_list(PreparedAuthorizationList authorizations);
 
-bool process_amsterdam_auth(struct Authorization au, bytes20 sender, bytes20 current_target, bool transfers_value);
+struct tuple_bool_uint_64_uint_64_uint_32 process_amsterdam_auth(struct Authorization au, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill);
 
-bool process_amsterdam_auth_cursor(PreparedAuthorizationList authorizations, uint16_t count, bytes20 sender, bytes20 current_target, bool transfers_value);
+struct tuple_bool_uint_64_uint_64_uint_32 process_amsterdam_auth_cursor(PreparedAuthorizationList authorizations, uint16_t count, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t gas, uint64_t state_gas, uint32_t state_spill);
 
 void warm_access_list_keys(Bytes cursor, bytes20 addr);
 
@@ -79,13 +112,11 @@ struct TxValidityFields check_transaction_validity(struct TransactionFields tx, 
 
 struct TxUpfrontResult apply_transaction_upfront_effects(struct TransactionFields tx, struct TxValidityFields v, PreparedAuthorizationList authorizations);
 
-void enter_transaction_frame(struct TxValidityFields v);
+struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes enter_transaction_frame(struct TxValidityFields v);
 
-struct TransactionPreparation prepare_amsterdam_transaction_dispatch(struct TransactionFields tx, struct TxValidityFields v, struct TxUpfrontResult upfront);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, Bytes carried_memory, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
 
-void run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before);
-
-void run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, Bytes carried_memory, bytes20 carried_code_address, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
 
 struct TxFrameResultFields run_legacy_transaction_frame(struct TransactionFields tx, struct TxValidityFields v);
 
@@ -99,11 +130,15 @@ struct ReceiptFields settle_transaction(struct TransactionFields tx, struct TxVa
 
 struct ReceiptFields process_transaction(struct TransactionFields tx, struct TransactionGasAllowanceFields allowance);
 
+struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice prepare_amsterdam_transaction_dispatch(struct TransactionFields tx, struct TxValidityFields v, struct TxUpfrontResult upfront, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill);
+
 struct TransactionGasAllowanceFields transaction_gas_allowance(uint64_t value, uint64_t total_limit, uint64_t regular_limit);
 
 struct TransactionInitialGasFields transaction_initial_gas(struct TransactionGasAllowanceFields allowance, uint64_t intrinsic_execution, uint64_t intrinsic_state, uint64_t calldata_floor);
 
 struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_struct_TransactionInitialGasFields_uint64_t_uint64_t___int128_to_struct_TxFrameGasSnapshotFields(struct TransactionInitialGasFields initial, uint64_t execution, uint64_t state, __int128 state_delta);
+
+struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_struct_TransactionInitialGasFields_uint8_t_uint8_t___int128_to_struct_TxFrameGasSnapshotFields(struct TransactionInitialGasFields initial, uint8_t execution, uint8_t state, __int128 state_delta);
 
 u256 validated_word_product_u256_uint32_t_to_u256(u256 value, uint32_t factor);
 

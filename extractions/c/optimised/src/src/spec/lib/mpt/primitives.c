@@ -15,46 +15,46 @@ struct tuple_bool_TriePath hex_prefix_decode_ref(struct RlpFieldRef f)
     fatal_error(RlpDecode);
   }
   if (f.content_len == UINT8_C(0)) {
-    struct TriePath tmp_3_3261;
-    vector_32_bits_8 tmp_3_3262 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(0), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(1), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(2), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(3), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(4), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(5), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(6), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(7), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(8), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(9), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(10), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(11), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(12), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(13), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(14), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(15), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(16), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(17), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(18), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(19), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(20), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(21), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(22), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(23), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(24), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(25), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(26), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(27), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(28), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(29), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(30), UINT64_C(0x00));
-    tmp_3_3262 = internal_vector_update_vector_32_bits_8(tmp_3_3262, INT64_C(31), UINT64_C(0x00));
-    tmp_3_3261.data = bytes32_zero();
-    for (size_t tmp_8_1028 = 0; tmp_8_1028 < 32; ++tmp_8_1028) {
-      tmp_3_3261.data = fast_unsigned_vector_update_bytes32(tmp_3_3261.data, tmp_8_1028, tmp_3_3262.data[tmp_8_1028]);
+    struct TriePath tmp_3_3447;
+    vector_32_bits_8 tmp_3_3448 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(0), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(1), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(2), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(3), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(4), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(5), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(6), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(7), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(8), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(9), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(10), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(11), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(12), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(13), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(14), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(15), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(16), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(17), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(18), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(19), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(20), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(21), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(22), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(23), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(24), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(25), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(26), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(27), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(28), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(29), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(30), UINT64_C(0x00));
+    tmp_3_3448 = internal_vector_update_vector_32_bits_8(tmp_3_3448, INT64_C(31), UINT64_C(0x00));
+    tmp_3_3447.data = bytes32_zero();
+    for (size_t tmp_8_1565 = 0; tmp_8_1565 < 32; ++tmp_8_1565) {
+      tmp_3_3447.data = fast_unsigned_vector_update_bytes32(tmp_3_3447.data, tmp_8_1565, tmp_3_3448.data[tmp_8_1565]);
     }
-    tmp_3_3261.len = UINT8_C(0);
-    return ((struct tuple_bool_TriePath){.tup0 = false, .tup1 = tmp_3_3261});
+    tmp_3_3447.len = UINT8_C(0);
+    return ((struct tuple_bool_TriePath){.tup0 = false, .tup1 = tmp_3_3447});
   }
   uint8_t maximum_length = HEX_PREFIX_MAX_LENGTH;
   if (maximum_length < f.content_len) {
@@ -68,17 +68,17 @@ struct tuple_bool_TriePath hex_prefix_decode_ref(struct RlpFieldRef f)
     if (((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))) < UINT8_C(64)) {
       u256 shifted = word_shift_right_u256_uint8_t_to_u256(packed, UINT8_C(4));
       bytes32 bytes = word_to_hash(shifted);
-      uint64_t plain_vector_access_result_2_1934 = fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0));
-      bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & (plain_vector_access_result_2_1934 >> UINT8_C(0))));
+      uint64_t plain_vector_access_result_2_2151 = fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0));
+      bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & (plain_vector_access_result_2_2151 >> UINT8_C(0))));
       bytes32 path_data = B256(bytes);
       struct TriePath path = path_new(path_data, ((uint8_t)((uint32_t)UINT8_C(1) + ((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1))))));
       return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path});
     }
     fatal_error(WitnessDeficient);
   }
-  bytes32 path_data_3_3264 = word_to_hash(packed);
-  struct TriePath path_3_3265 = path_new(path_data_3_3264, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
-  return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path_3_3265});
+  bytes32 path_data_3_3450 = word_to_hash(packed);
+  struct TriePath path_3_3451 = path_new(path_data_3_3450, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
+  return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path_3_3451});
 }
 
 uint8_t path_len(struct TriePath path)
@@ -94,11 +94,11 @@ uint64_t path_nibble(struct TriePath path, uint8_t i)
   }
   uint8_t byte_index = path_byte_index(i);
   if ((i & UINT8_C(1)) == UINT8_C(0)) {
-    uint64_t plain_vector_access_result_2_1914 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
-    return (UINT64_C(0xF) & (plain_vector_access_result_2_1914 >> UINT8_C(4)));
+    uint64_t plain_vector_access_result_2_2131 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
+    return (UINT64_C(0xF) & (plain_vector_access_result_2_2131 >> UINT8_C(4)));
   }
-  uint64_t plain_vector_access_result_2_1915 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
-  return (UINT64_C(0xF) & (plain_vector_access_result_2_1915 >> UINT8_C(0)));
+  uint64_t plain_vector_access_result_2_2132 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
+  return (UINT64_C(0xF) & (plain_vector_access_result_2_2132 >> UINT8_C(0)));
 }
 
 struct TriePath path_append_nibble(struct TriePath path, uint64_t value)
@@ -110,8 +110,8 @@ struct TriePath path_append_nibble(struct TriePath path, uint64_t value)
     if ((length_ & UINT8_C(1)) == UINT8_C(0)) {
       bytes = fast_unsigned_vector_update_bytes32(bytes, byte_index, (value << 4) | UINT64_C(0x0));
     } else {
-      uint64_t plain_vector_access_result_2_626 = fast_unsigned_vector_access_bytes32(bytes, byte_index);
-      bytes = fast_unsigned_vector_update_bytes32(bytes, byte_index, ((UINT64_C(0xF) & (plain_vector_access_result_2_626 >> UINT8_C(4))) << 4) | value);
+      uint64_t plain_vector_access_result_2_634 = fast_unsigned_vector_access_bytes32(bytes, byte_index);
+      bytes = fast_unsigned_vector_update_bytes32(bytes, byte_index, ((UINT64_C(0xF) & (plain_vector_access_result_2_634 >> UINT8_C(4))) << 4) | value);
     }
     bytes32 path_data = B256(bytes);
     return path_new(path_data, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)length_)));
@@ -121,54 +121,54 @@ struct TriePath path_append_nibble(struct TriePath path, uint64_t value)
 
 struct TriePath path_single(uint64_t n)
 {
-  struct TriePath tmp_3_1048;
-  vector_32_bits_8 tmp_3_1049 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(0), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(1), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(2), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(3), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(4), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(5), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(6), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(7), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(8), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(9), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(10), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(11), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(12), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(13), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(14), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(15), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(16), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(17), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(18), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(19), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(20), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(21), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(22), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(23), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(24), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(25), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(26), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(27), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(28), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(29), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(30), UINT64_C(0x00));
-  tmp_3_1049 = internal_vector_update_vector_32_bits_8(tmp_3_1049, INT64_C(31), UINT64_C(0x00));
-  tmp_3_1048.data = bytes32_zero();
-  for (size_t tmp_8_1029 = 0; tmp_8_1029 < 32; ++tmp_8_1029) {
-    tmp_3_1048.data = fast_unsigned_vector_update_bytes32(tmp_3_1048.data, tmp_8_1029, tmp_3_1049.data[tmp_8_1029]);
+  struct TriePath tmp_3_1038;
+  vector_32_bits_8 tmp_3_1039 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(0), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(1), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(2), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(3), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(4), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(5), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(6), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(7), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(8), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(9), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(10), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(11), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(12), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(13), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(14), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(15), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(16), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(17), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(18), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(19), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(20), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(21), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(22), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(23), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(24), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(25), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(26), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(27), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(28), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(29), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(30), UINT64_C(0x00));
+  tmp_3_1039 = internal_vector_update_vector_32_bits_8(tmp_3_1039, INT64_C(31), UINT64_C(0x00));
+  tmp_3_1038.data = bytes32_zero();
+  for (size_t tmp_8_1566 = 0; tmp_8_1566 < 32; ++tmp_8_1566) {
+    tmp_3_1038.data = fast_unsigned_vector_update_bytes32(tmp_3_1038.data, tmp_8_1566, tmp_3_1039.data[tmp_8_1566]);
   }
-  tmp_3_1048.len = UINT8_C(0);
-  return path_append_nibble(tmp_3_1048, n);
+  tmp_3_1038.len = UINT8_C(0);
+  return path_append_nibble(tmp_3_1038, n);
 }
 
 struct TriePath path_concat(struct TriePath a, struct TriePath b)
 {
   uint8_t alen = path_len(a);
   uint8_t blen = path_len(b);
-  bool lteq_int_result_2_621 = (bool)(((uint8_t)((uint32_t)blen + (uint32_t)alen)) <= UINT8_C(64));
-  if (!lteq_int_result_2_621) {
+  bool lteq_int_result_2_629 = (bool)(((uint8_t)((uint32_t)blen + (uint32_t)alen)) <= UINT8_C(64));
+  if (!lteq_int_result_2_629) {
     fatal_error(WitnessDeficient);
   }
   struct TriePath result = a;
@@ -190,92 +190,92 @@ struct TriePath path_drop(struct TriePath path, uint8_t n)
 {
   uint8_t length_ = path_len(path);
   if (length_ <= n) {
-    struct TriePath tmp_3_1042;
-    vector_32_bits_8 tmp_3_1043 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(0), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(1), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(2), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(3), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(4), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(5), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(6), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(7), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(8), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(9), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(10), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(11), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(12), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(13), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(14), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(15), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(16), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(17), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(18), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(19), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(20), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(21), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(22), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(23), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(24), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(25), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(26), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(27), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(28), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(29), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(30), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(31), UINT64_C(0x00));
-    tmp_3_1042.data = bytes32_zero();
-    for (size_t tmp_8_1031 = 0; tmp_8_1031 < 32; ++tmp_8_1031) {
-      tmp_3_1042.data = fast_unsigned_vector_update_bytes32(tmp_3_1042.data, tmp_8_1031, tmp_3_1043.data[tmp_8_1031]);
+    struct TriePath tmp_3_1032;
+    vector_32_bits_8 tmp_3_1033 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(0), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(1), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(2), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(3), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(4), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(5), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(6), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(7), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(8), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(9), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(10), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(11), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(12), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(13), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(14), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(15), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(16), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(17), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(18), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(19), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(20), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(21), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(22), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(23), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(24), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(25), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(26), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(27), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(28), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(29), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(30), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(31), UINT64_C(0x00));
+    tmp_3_1032.data = bytes32_zero();
+    for (size_t tmp_8_1568 = 0; tmp_8_1568 < 32; ++tmp_8_1568) {
+      tmp_3_1032.data = fast_unsigned_vector_update_bytes32(tmp_3_1032.data, tmp_8_1568, tmp_3_1033.data[tmp_8_1568]);
     }
-    tmp_3_1042.len = UINT8_C(0);
-    return tmp_3_1042;
+    tmp_3_1032.len = UINT8_C(0);
+    return tmp_3_1032;
   }
   if (n == UINT8_C(0)) {
     return path;
   }
   uint8_t remain = ((uint8_t)((uint32_t)length_ - (uint32_t)n));
   struct TriePath result;
-  struct TriePath tmp_3_1034;
-  vector_32_bits_8 tmp_3_1035 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(0), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(1), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(2), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(3), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(4), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(5), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(6), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(7), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(8), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(9), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(10), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(11), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(12), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(13), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(14), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(15), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(16), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(17), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(18), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(19), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(20), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(21), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(22), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(23), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(24), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(25), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(26), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(27), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(28), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(29), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(30), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(31), UINT64_C(0x00));
-  tmp_3_1034.data = bytes32_zero();
-  for (size_t tmp_8_1030 = 0; tmp_8_1030 < 32; ++tmp_8_1030) {
-    tmp_3_1034.data = fast_unsigned_vector_update_bytes32(tmp_3_1034.data, tmp_8_1030, tmp_3_1035.data[tmp_8_1030]);
+  struct TriePath tmp_3_1024;
+  vector_32_bits_8 tmp_3_1025 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(0), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(1), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(2), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(3), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(4), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(5), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(6), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(7), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(8), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(9), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(10), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(11), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(12), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(13), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(14), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(15), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(16), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(17), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(18), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(19), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(20), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(21), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(22), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(23), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(24), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(25), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(26), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(27), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(28), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(29), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(30), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(31), UINT64_C(0x00));
+  tmp_3_1024.data = bytes32_zero();
+  for (size_t tmp_8_1567 = 0; tmp_8_1567 < 32; ++tmp_8_1567) {
+    tmp_3_1024.data = fast_unsigned_vector_update_bytes32(tmp_3_1024.data, tmp_8_1567, tmp_3_1025.data[tmp_8_1567]);
   }
-  tmp_3_1034.len = UINT8_C(0);
-  result = tmp_3_1034;
+  tmp_3_1024.len = UINT8_C(0);
+  result = tmp_3_1024;
   uint8_t offset = UINT8_C(0);
   while (offset < remain) {
     uint8_t candidate = ((uint8_t)((uint32_t)offset + (uint32_t)n));
@@ -354,46 +354,46 @@ struct tuple_bool_TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldR
     fatal_error(RlpDecode);
   }
   if (f.content_len == UINT8_C(0)) {
-    struct TriePath tmp_3_1024;
-    vector_32_bits_8 tmp_3_1025 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(0), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(1), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(2), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(3), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(4), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(5), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(6), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(7), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(8), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(9), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(10), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(11), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(12), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(13), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(14), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(15), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(16), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(17), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(18), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(19), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(20), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(21), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(22), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(23), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(24), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(25), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(26), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(27), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(28), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(29), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(30), UINT64_C(0x00));
-    tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(31), UINT64_C(0x00));
-    tmp_3_1024.data = bytes32_zero();
-    for (size_t tmp_8_1032 = 0; tmp_8_1032 < 32; ++tmp_8_1032) {
-      tmp_3_1024.data = fast_unsigned_vector_update_bytes32(tmp_3_1024.data, tmp_8_1032, tmp_3_1025.data[tmp_8_1032]);
+    struct TriePath tmp_3_1014;
+    vector_32_bits_8 tmp_3_1015 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(0), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(1), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(2), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(3), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(4), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(5), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(6), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(7), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(8), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(9), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(10), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(11), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(12), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(13), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(14), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(15), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(16), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(17), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(18), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(19), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(20), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(21), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(22), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(23), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(24), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(25), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(26), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(27), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(28), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(29), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(30), UINT64_C(0x00));
+    tmp_3_1015 = internal_vector_update_vector_32_bits_8(tmp_3_1015, INT64_C(31), UINT64_C(0x00));
+    tmp_3_1014.data = bytes32_zero();
+    for (size_t tmp_8_1569 = 0; tmp_8_1569 < 32; ++tmp_8_1569) {
+      tmp_3_1014.data = fast_unsigned_vector_update_bytes32(tmp_3_1014.data, tmp_8_1569, tmp_3_1015.data[tmp_8_1569]);
     }
-    tmp_3_1024.len = UINT8_C(0);
-    return ((struct tuple_bool_TriePath){.tup0 = false, .tup1 = tmp_3_1024});
+    tmp_3_1014.len = UINT8_C(0);
+    return ((struct tuple_bool_TriePath){.tup0 = false, .tup1 = tmp_3_1014});
   }
   uint8_t maximum_length = HEX_PREFIX_MAX_LENGTH;
   if (maximum_length < f.content_len) {
@@ -407,17 +407,17 @@ struct tuple_bool_TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldR
     if (((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))) < UINT8_C(64)) {
       u256 shifted = word_shift_right_u256_uint8_t_to_u256(packed, UINT8_C(4));
       bytes32 bytes = word_to_hash(shifted);
-      uint64_t plain_vector_access_result_2_595 = fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0));
-      bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & (plain_vector_access_result_2_595 >> UINT8_C(0))));
+      uint64_t plain_vector_access_result_2_603 = fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0));
+      bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & (plain_vector_access_result_2_603 >> UINT8_C(0))));
       bytes32 path_data = B256(bytes);
       struct TriePath path = path_new(path_data, ((uint8_t)((uint32_t)UINT8_C(1) + ((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1))))));
       return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path});
     }
     fatal_error(WitnessDeficient);
   }
-  bytes32 path_data_3_1027 = word_to_hash(packed);
-  struct TriePath path_3_1028 = path_new(path_data_3_1027, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
-  return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path_3_1028});
+  bytes32 path_data_3_1017 = word_to_hash(packed);
+  struct TriePath path_3_1018 = path_new(path_data_3_1017, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
+  return ((struct tuple_bool_TriePath){.tup0 = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1)), .tup1 = path_3_1018});
 }
 
 uint8_t path_byte_index(uint8_t i)
@@ -429,89 +429,89 @@ struct TriePath path_drop_struct_TriePath_uint8_t_to_struct_TriePath(struct Trie
 {
   uint8_t length_ = path_len(path);
   if (length_ <= n) {
-    struct TriePath tmp_3_1042;
-    vector_32_bits_8 tmp_3_1043 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(0), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(1), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(2), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(3), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(4), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(5), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(6), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(7), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(8), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(9), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(10), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(11), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(12), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(13), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(14), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(15), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(16), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(17), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(18), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(19), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(20), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(21), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(22), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(23), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(24), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(25), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(26), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(27), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(28), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(29), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(30), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(31), UINT64_C(0x00));
-    tmp_3_1042.data = bytes32_zero();
-    for (size_t tmp_8_1034 = 0; tmp_8_1034 < 32; ++tmp_8_1034) {
-      tmp_3_1042.data = fast_unsigned_vector_update_bytes32(tmp_3_1042.data, tmp_8_1034, tmp_3_1043.data[tmp_8_1034]);
+    struct TriePath tmp_3_1032;
+    vector_32_bits_8 tmp_3_1033 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(0), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(1), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(2), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(3), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(4), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(5), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(6), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(7), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(8), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(9), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(10), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(11), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(12), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(13), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(14), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(15), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(16), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(17), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(18), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(19), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(20), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(21), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(22), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(23), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(24), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(25), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(26), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(27), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(28), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(29), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(30), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(31), UINT64_C(0x00));
+    tmp_3_1032.data = bytes32_zero();
+    for (size_t tmp_8_1571 = 0; tmp_8_1571 < 32; ++tmp_8_1571) {
+      tmp_3_1032.data = fast_unsigned_vector_update_bytes32(tmp_3_1032.data, tmp_8_1571, tmp_3_1033.data[tmp_8_1571]);
     }
-    tmp_3_1042.len = UINT8_C(0);
-    return tmp_3_1042;
+    tmp_3_1032.len = UINT8_C(0);
+    return tmp_3_1032;
   }
   uint8_t remain = ((uint8_t)((uint32_t)length_ - (uint32_t)n));
   struct TriePath result;
-  struct TriePath tmp_3_1034;
-  vector_32_bits_8 tmp_3_1035 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(0), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(1), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(2), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(3), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(4), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(5), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(6), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(7), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(8), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(9), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(10), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(11), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(12), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(13), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(14), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(15), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(16), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(17), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(18), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(19), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(20), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(21), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(22), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(23), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(24), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(25), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(26), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(27), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(28), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(29), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(30), UINT64_C(0x00));
-  tmp_3_1035 = internal_vector_update_vector_32_bits_8(tmp_3_1035, INT64_C(31), UINT64_C(0x00));
-  tmp_3_1034.data = bytes32_zero();
-  for (size_t tmp_8_1033 = 0; tmp_8_1033 < 32; ++tmp_8_1033) {
-    tmp_3_1034.data = fast_unsigned_vector_update_bytes32(tmp_3_1034.data, tmp_8_1033, tmp_3_1035.data[tmp_8_1033]);
+  struct TriePath tmp_3_1024;
+  vector_32_bits_8 tmp_3_1025 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(0), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(1), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(2), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(3), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(4), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(5), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(6), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(7), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(8), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(9), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(10), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(11), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(12), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(13), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(14), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(15), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(16), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(17), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(18), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(19), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(20), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(21), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(22), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(23), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(24), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(25), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(26), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(27), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(28), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(29), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(30), UINT64_C(0x00));
+  tmp_3_1025 = internal_vector_update_vector_32_bits_8(tmp_3_1025, INT64_C(31), UINT64_C(0x00));
+  tmp_3_1024.data = bytes32_zero();
+  for (size_t tmp_8_1570 = 0; tmp_8_1570 < 32; ++tmp_8_1570) {
+    tmp_3_1024.data = fast_unsigned_vector_update_bytes32(tmp_3_1024.data, tmp_8_1570, tmp_3_1025.data[tmp_8_1570]);
   }
-  tmp_3_1034.len = UINT8_C(0);
-  result = tmp_3_1034;
+  tmp_3_1024.len = UINT8_C(0);
+  result = tmp_3_1024;
   uint8_t offset = UINT8_C(0);
   while (offset < remain) {
     uint8_t candidate = ((uint8_t)((uint32_t)offset + (uint32_t)n));
@@ -534,46 +534,46 @@ struct TriePath path_drop_struct_TriePath_uint8_t_to_struct_TriePath_variant_2(s
 {
   uint8_t length_ = path_len(path);
   if (length_ <= n) {
-    struct TriePath tmp_3_1042;
-    vector_32_bits_8 tmp_3_1043 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(0), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(1), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(2), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(3), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(4), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(5), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(6), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(7), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(8), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(9), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(10), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(11), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(12), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(13), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(14), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(15), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(16), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(17), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(18), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(19), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(20), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(21), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(22), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(23), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(24), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(25), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(26), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(27), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(28), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(29), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(30), UINT64_C(0x00));
-    tmp_3_1043 = internal_vector_update_vector_32_bits_8(tmp_3_1043, INT64_C(31), UINT64_C(0x00));
-    tmp_3_1042.data = bytes32_zero();
-    for (size_t tmp_8_1035 = 0; tmp_8_1035 < 32; ++tmp_8_1035) {
-      tmp_3_1042.data = fast_unsigned_vector_update_bytes32(tmp_3_1042.data, tmp_8_1035, tmp_3_1043.data[tmp_8_1035]);
+    struct TriePath tmp_3_1032;
+    vector_32_bits_8 tmp_3_1033 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(0), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(1), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(2), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(3), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(4), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(5), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(6), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(7), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(8), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(9), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(10), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(11), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(12), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(13), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(14), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(15), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(16), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(17), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(18), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(19), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(20), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(21), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(22), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(23), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(24), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(25), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(26), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(27), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(28), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(29), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(30), UINT64_C(0x00));
+    tmp_3_1033 = internal_vector_update_vector_32_bits_8(tmp_3_1033, INT64_C(31), UINT64_C(0x00));
+    tmp_3_1032.data = bytes32_zero();
+    for (size_t tmp_8_1572 = 0; tmp_8_1572 < 32; ++tmp_8_1572) {
+      tmp_3_1032.data = fast_unsigned_vector_update_bytes32(tmp_3_1032.data, tmp_8_1572, tmp_3_1033.data[tmp_8_1572]);
     }
-    tmp_3_1042.len = UINT8_C(0);
-    return tmp_3_1042;
+    tmp_3_1032.len = UINT8_C(0);
+    return tmp_3_1032;
   }
   return path;
 }
@@ -615,7 +615,7 @@ uint64_t path_nibble_struct_TriePath_uint8_t_to_uint64_t(struct TriePath path, u
     return UINT64_C(0x0);
   }
   uint8_t byte_index = path_byte_index(i);
-  uint64_t plain_vector_access_result_2_1914 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
-  return (UINT64_C(0xF) & (plain_vector_access_result_2_1914 >> UINT8_C(4)));
+  uint64_t plain_vector_access_result_2_2131 = fast_unsigned_vector_access_bytes32(path.data, byte_index);
+  return (UINT64_C(0xF) & (plain_vector_access_result_2_2131 >> UINT8_C(4)));
 }
 

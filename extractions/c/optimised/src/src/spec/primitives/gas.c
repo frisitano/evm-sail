@@ -7,10 +7,13 @@ const uint64_t GAS_COST_ZERO = UINT64_C(0);
 struct GasCharge GAS_CHARGE_UNAFFORDABLE;
 
 
-const uint32_t STATE_GAS_SPILL_ZERO = UINT32_C(0);
+const uint8_t STATE_GAS_SPILL_ZERO = UINT8_C(0);
 
 
-const uint64_t GAS_ZERO = UINT64_C(0);
+const uint8_t GAS_ZERO = UINT8_C(0);
+
+
+const uint8_t STATE_GAS_ZERO = UINT8_C(0);
 
 
 const uint32_t SYSTEM_CALL_GAS_LIMIT = UINT32_C(30000000);

@@ -3,6 +3,7 @@
 #include "evmsail/spec/evm/machine.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -24,11 +25,39 @@ typedef struct vector_128_uint_16 {
 } vector_128_uint_16;
 #endif
 
+// struct tuple_bool_uint_64
+struct tuple_bool_uint_64 {
+  bool tup0;
+  uint64_t tup1;
+};
+
+// struct tuple_bool_uint_8
+struct tuple_bool_uint_8 {
+  bool tup0;
+  uint8_t tup1;
+};
+
+// struct tuple_bool_uint_64_uint_64_uint_32
+struct tuple_bool_uint_64_uint_64_uint_32 {
+  bool tup0;
+  uint64_t tup1;
+  uint64_t tup2;
+  uint32_t tup3;
+};
+
+// struct tuple_bool_uint_64_uint_8_uint_32
+struct tuple_bool_uint_64_uint_8_uint_32 {
+  bool tup0;
+  uint64_t tup1;
+  uint8_t tup2;
+  uint32_t tup3;
+};
+
 u256 protocol_word(u256 value);
 
 u256 fake_exponential_word(struct BlobScheduleFields schedule, uint32_t numerator);
 
-u256 blob_base_fee(struct ProtocolProfileFields profile, uint32_t excess_blob_gas);
+u256 blob_base_fee(uint8_t fork, struct BlobScheduleFields schedule, uint32_t limit, uint32_t excess_blob_gas);
 
 uint32_t block_blob_gas_add(uint8_t maximum_count, uint32_t accumulated, uint32_t transaction);
 
@@ -38,21 +67,21 @@ uint16_t sstore_clear_refund(void);
 
 uint32_t state_gas_spill_room(uint32_t left);
 
-uint64_t credit_state_gas_refund(uint64_t g, uint32_t amount);
+struct tuple_uint_64_uint_64_uint_32 credit_state_gas_refund(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
 
-void return_child_state_gas(uint64_t child_remaining, uint32_t child_spilled);
+struct tuple_uint_64_uint_32 return_child_state_gas(uint64_t parent_remaining, uint32_t parent_spilled, uint64_t child_remaining, uint32_t child_spilled);
 
 uint64_t refund_gas(uint64_t g, uint64_t amount);
 
 uint64_t gas_sub(uint64_t left, uint64_t right);
 
-u256 memory_word_count_word(u256 byte_len);
+__attribute__((__always_inline__)) u256 memory_word_count_word(u256 byte_len);
 
-uint64_t memory_required_size(u256 start, u256 size);
+__attribute__((__always_inline__)) uint64_t memory_required_size(u256 start, u256 size);
 
-struct MemoryAccessFields memory_access(u256 start, u256 size);
+__attribute__((__always_inline__)) struct MemoryAccessFields memory_access(u256 start, u256 size);
 
-Bytes expand_memory(Bytes mem, uint32_t required_size);
+__attribute__((__always_inline__)) Bytes expand_memory(Bytes mem, uint32_t required_size);
 
 uint16_t account_cost(bool warm);
 
@@ -106,31 +135,45 @@ uint32_t block_blob_gas_add_uint8_t_uint32_t_uint32_t_to_uint32_t(uint8_t maximu
 
 struct GasCharge bls_msm_gas(vector_128_uint_16 table, uint16_t base, uint16_t maxd, uint32_t k, uint64_t available);
 
-struct tuple_bool_uint_64 charge_uint64_t_u128_to_struct_tuple_bool_uint_64(uint64_t g, u128 amount);
+__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t amount);
 
-struct tuple_bool_uint_64 charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t amount);
+__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
 
-struct tuple_bool_uint_64 charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
+__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
 
-struct tuple_bool_uint_64 charge_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
+__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint8_t_to_struct_tuple_bool_uint_64(uint64_t g, uint8_t amount);
 
-struct tuple_bool_uint_64 charge_uint64_t_uint8_t_to_struct_tuple_bool_uint_64(uint64_t g, uint8_t amount);
+struct tuple_bool_uint_64 charge_copy_gas_uint64_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, u256 size);
 
-struct tuple_bool_uint_64 charge_deployment_state_gas(uint64_t g, uint64_t amount);
+struct tuple_bool_uint_64_uint_64_uint_32 charge_deployment_state_gas(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
 
 struct tuple_bool_uint_64 charge_log_gas(uint64_t g, uint8_t num_topics, u256 size);
 
+__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_memory_expansion(uint64_t g, Bytes mem, uint64_t required_size);
+
+struct tuple_bool_uint_64 charge_memory_word_gas_uint64_t_uint16_t_uint16_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t base, uint16_t per_word, u256 size);
+
 struct tuple_bool_uint_64 charge_memory_word_gas_uint64_t_uint16_t_uint8_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t base, uint8_t per_word, u256 size);
 
-struct tuple_bool_uint_64 charge_state_gas(uint64_t g, uint32_t amount);
+struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
+
+struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
+
+struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
 
 struct tuple_bool_uint_64 charge_word_scaled_gas_uint64_t_uint8_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint8_t per_unit, u256 units);
 
-struct tuple_bool_uint_64 check_execution_gas(uint64_t g, uint32_t amount);
+struct tuple_bool_uint_64 charge_word_scaled_gas_uint64_t_uint8_t_u256_to_struct_tuple_bool_uint_64_variant_2(uint64_t g, uint8_t per_unit, u256 units);
 
-struct tuple_bool_uint_64 debit_state_gas_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
+struct tuple_bool_uint_64 check_execution_gas_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
 
-struct tuple_bool_uint_64 debit_state_gas_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
+struct tuple_bool_uint_64 check_execution_gas_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
+
+struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
+
+struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
+
+struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
 
 bool deployed_code_size_allowed(uint32_t size);
 
@@ -148,17 +191,21 @@ struct GasCharge linear_gas_uint16_t_uint8_t_uint32_t_uint64_t_to_struct_GasChar
 
 struct GasCharge linear_gas_uint8_t_uint8_t_uint32_t_uint64_t_to_struct_GasCharge(uint8_t base, uint8_t per_unit, uint32_t units, uint64_t available);
 
-uint64_t mem_cost(uint32_t words);
+__attribute__((__always_inline__)) uint64_t mem_cost(uint32_t words);
 
-struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields(u256 start, u256 size);
+__attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields(u256 start, u256 size);
 
-u128 memory_expansion_cost(Bytes mem, uint64_t required_size);
+__attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(u256 start, u256 size);
 
-uint64_t memory_required_size_u256_u256_to_uint64_t(u256 start, u256 size);
+__attribute__((__always_inline__)) uint64_t memory_required_size_u256_u256_to_uint64_t(u256 start, u256 size);
+
+__attribute__((__always_inline__)) uint64_t memory_required_size_u256_u256_to_uint64_t_variant_2(u256 start, u256 size);
 
 uint16_t memory_word_count_uint32_t_to_uint16_t(uint32_t byte_len);
 
 uint32_t memory_word_count_uint32_t_to_uint32_t(uint32_t byte_len);
+
+__attribute__((__always_inline__)) u256 memory_word_count_word_u256_to_u256(u256 byte_len);
 
 u256 pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(struct CalldataSlice input, uint8_t start, uint8_t byte_count);
 
@@ -168,7 +215,11 @@ uint32_t state_gas_spill_add_uint32_t___int128_to_uint32_t(uint32_t left, __int1
 
 uint32_t state_gas_spill_add_uint32_t_int64_t_to_uint32_t(uint32_t left, int64_t right);
 
+uint32_t state_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(uint32_t left, int64_t right);
+
 uint32_t state_gas_spill_add_uint32_t_uint32_t_to_uint32_t(uint32_t left, uint32_t right);
+
+uint32_t state_gas_spill_room_uint32_t_to_uint32_t(uint32_t left);
 
 extern const uint16_t G_zero;
 

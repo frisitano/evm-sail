@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/evm.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {

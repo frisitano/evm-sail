@@ -4,8 +4,8 @@
 bool k_account_is_warm(bytes20 a)
 {
   enum PrecompileId precompile_id = precompile_id_for_address(a);
-  bool neq_anything_result_2_1960 = neq_anything_EPrecompileId__(precompile_id, NotPrecompile);
-  if (neq_anything_result_2_1960) {
+  bool neq_anything_result_2_2177 = neq_anything_EPrecompileId__(precompile_id, NotPrecompile);
+  if (neq_anything_result_2_2177) {
     return true;
   }
   return account_is_warm(a);
@@ -14,8 +14,8 @@ bool k_account_is_warm(bytes20 a)
 void k_account_mark_warm(bytes20 a)
 {
   enum PrecompileId precompile_id = precompile_id_for_address(a);
-  bool neq_anything_result_2_1959 = neq_anything_EPrecompileId__(precompile_id, NotPrecompile);
-  if (neq_anything_result_2_1959) {
+  bool neq_anything_result_2_2176 = neq_anything_EPrecompileId__(precompile_id, NotPrecompile);
+  if (neq_anything_result_2_2176) {
     return;
   }
   account_mark_warm(a);

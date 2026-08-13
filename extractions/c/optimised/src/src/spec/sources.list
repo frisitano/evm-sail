@@ -48,6 +48,8 @@ evm/machine.c
 evm/gas.c
 evm/precompiles.c
 evm/instructions.c
+evm/execute.c
+evm/interpreter.c
 evm/transaction.c
 lib/mpt/primitives.c
 lib/mpt/nodes.c

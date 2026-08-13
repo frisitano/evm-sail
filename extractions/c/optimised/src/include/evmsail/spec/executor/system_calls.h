@@ -3,12 +3,13 @@
 #include "evmsail/spec/executor/receipts.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void enter_system_call_frame(bytes20 tgt, struct CalldataSlice input);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame(bytes20 tgt, struct CalldataSlice input);
 
 void system_call(bytes20 tgt, bytes32 input);
 

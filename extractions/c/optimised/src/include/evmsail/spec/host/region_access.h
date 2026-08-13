@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/rlp.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -13,6 +14,8 @@ Bytes stateless_input(void);
 uint64_t stateless_input_byte_at(Bytes /* arg_0 */, uint32_t /* arg_1 */);
 
 uint64_t memory_slice_byte_at(Bytes /* arg_0 */, uint32_t /* arg_1 */);
+
+uint64_t code_region_byte_at(Bytes /* arg_0 */, uint32_t /* arg_1 */);
 
 uint64_t scratch_slice_byte_at(Bytes /* arg_0 */, uint32_t /* arg_1 */);
 
@@ -36,6 +39,8 @@ u256 log_data_slice_load_word(Bytes /* arg_0 */, uint32_t /* arg_1 */);
 
 u256 stateless_input_load_n_word(Bytes /* arg_0 */, uint32_t /* arg_1 */, uint8_t /* arg_2 */);
 
+u256 code_region_load_n_word(Bytes /* arg_0 */, uint32_t /* arg_1 */, uint8_t /* arg_2 */);
+
 u256 scratch_slice_load_n_word(Bytes /* arg_0 */, uint32_t /* arg_1 */, uint8_t /* arg_2 */);
 
 void stateless_input_copy_to_memory(Bytes /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, uint32_t /* arg_3 */);
@@ -54,6 +59,8 @@ uint64_t stateless_input_slice_byte(Bytes s, uint32_t off);
 
 uint64_t memory_slice_byte(Bytes s, uint32_t off);
 
+uint64_t code_slice_byte(Bytes s, uint32_t off);
+
 uint64_t calldata_slice_byte(struct CalldataSlice s, uint32_t off);
 
 uint32_t slice_count_nonzero(Bytes s);
@@ -71,6 +78,8 @@ u256 memory_slice_load_word_offset(Bytes s, u256 off);
 u256 calldata_slice_load_word_offset(struct CalldataSlice s, u256 off);
 
 u256 stateless_input_slice_load_n(Bytes s, uint32_t off, uint8_t n);
+
+u256 code_slice_load_n(Bytes s, uint32_t off, uint8_t n);
 
 u256 scratch_slice_load_n(Bytes s, uint32_t off, uint8_t n);
 

@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/bytes.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,12 @@ struct tuple_bool_uint_32_uint_64 {
   bool tup0;
   uint32_t tup1;
   uint64_t tup2;
+};
+
+// struct tuple_uint_64_uint_32
+struct tuple_uint_64_uint_32 {
+  uint64_t tup0;
+  uint32_t tup1;
 };
 
 _Noreturn void fatal_error(enum FatalError _reason);

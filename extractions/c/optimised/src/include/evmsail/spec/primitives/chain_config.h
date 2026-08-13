@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/fork.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -54,12 +55,12 @@ struct ExecutionProfileFields execution_profile_for(struct ProtocolProfileFields
 
 struct ProtocolProfileFields schema_protocol_profile(uint64_t schema_fork);
 
-void create_letbind_56(void);
-void kill_letbind_56(void);
-
-
 void create_letbind_57(void);
 void kill_letbind_57(void);
+
+
+void create_letbind_58(void);
+void kill_letbind_58(void);
 
 
 uint32_t compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(uint8_t fork, uint8_t target, uint8_t maximum, uint32_t denominator);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -92,7 +93,7 @@ bytes20 word_to_address(u256 value);
 
 u256 word_add_word(u256 left, u256 right);
 
-u256 word_sub_word(u256 left, u256 right);
+__attribute__((__always_inline__)) u256 word_sub_word(u256 left, u256 right);
 
 u256 word_and(u256 left, u256 right);
 
@@ -108,7 +109,7 @@ uint64_t word_low_byte(u256 value);
 
 u256 word_of_bool(bool b);
 
-bool word_is_zero(u256 w);
+__attribute__((__always_inline__)) bool word_is_zero(u256 w);
 
 bool word_nonzero(u256 w);
 
@@ -130,17 +131,17 @@ u256 word_shift_left(u256 value, uint16_t amount);
 
 u256 word_shift_right(u256 value, uint16_t amount);
 
-uint8_t word_byte_length(u256 value);
+__attribute__((__always_inline__)) uint8_t word_byte_length(u256 value);
 
-u256 word_arithmetic_shift_right(u256 value, uint16_t amount);
+__attribute__((__always_inline__)) u256 word_arithmetic_shift_right(u256 value, uint16_t amount);
 
 u256 address_to_word(bytes20 bytes);
 
 u256 word_negate(u256 value);
 
-u256 word_abs(u256 value);
+__attribute__((__always_inline__)) u256 word_abs(u256 value);
 
-bool word_slt(u256 a, u256 b);
+__attribute__((__always_inline__)) bool word_slt(u256 a, u256 b);
 
 u256 alu_add(u256 a, u256 b);
 
@@ -208,9 +209,11 @@ uint64_t rlp_length_byte_native(uint8_t /* arg_0 */);
 
 bytes20 create2_address(bytes20 /* arg_0 */, u256 /* arg_1 */, bytes32 /* arg_2 */);
 
-uint64_t execute_sload(uint64_t /* arg_0 */, uint64_t /* arg_1 */);
+bool storage_id_is_warm(uint32_t /* arg_0 */);
 
-uint64_t execute_sstore(uint64_t /* arg_0 */, uint64_t /* arg_1 */);
+uint32_t storage_resolve_slot(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, u256 /* arg_3 */);
+
+void storage_update_by_id(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, u256 /* arg_3 */, u256 /* arg_4 */);
 
 void receipt_table_reset(void);
 
@@ -244,13 +247,15 @@ uint16_t word_bit_length_uint64_t_to_uint16_t(uint64_t value);
 
 uint16_t word_bit_length_uint8_t_to_uint16_t(uint8_t value);
 
-uint8_t word_byte_length_u128_to_uint8_t(u128 value);
+__attribute__((__always_inline__)) uint8_t word_byte_length_u128_to_uint8_t(u128 value);
 
-uint8_t word_byte_length_uint64_t_to_uint8_t(uint64_t value);
+__attribute__((__always_inline__)) uint8_t word_byte_length_uint64_t_to_uint8_t(uint64_t value);
 
-uint8_t word_byte_length_uint8_t_to_uint8_t(uint8_t value);
+__attribute__((__always_inline__)) uint8_t word_byte_length_uint8_t_to_uint8_t(uint8_t value);
 
 u256 word_div_word_u256_u256_to_u256(u256 dividend, u256 divisor);
+
+u256 word_div_word_u256_u256_to_u256_variant_2(u256 dividend, u256 divisor);
 
 u256 word_div_word_u256_uint32_t_to_u256(u256 dividend, uint32_t divisor);
 
@@ -260,11 +265,11 @@ u256 word_div_word_u256_uint64_t_to_u256(u256 dividend, uint64_t divisor);
 
 u256 word_div_word_u256_uint8_t_to_u256(u256 dividend, uint8_t divisor);
 
-bool word_is_zero_u128_to_bool(u128 w);
+__attribute__((__always_inline__)) bool word_is_zero_u128_to_bool(u128 w);
 
-bool word_is_zero_uint32_t_to_bool(uint32_t w);
+__attribute__((__always_inline__)) bool word_is_zero_uint32_t_to_bool(uint32_t w);
 
-bool word_is_zero_uint64_t_to_bool(uint64_t w);
+__attribute__((__always_inline__)) bool word_is_zero_uint64_t_to_bool(uint64_t w);
 
 uint64_t word_low_byte_u128_to_uint64_t(u128 value);
 
@@ -272,7 +277,9 @@ uint64_t word_low_byte_uint64_t_to_uint64_t(uint64_t value);
 
 uint64_t word_low_byte_uint8_t_to_uint64_t(uint8_t value);
 
-u256 word_mod_word(u256 dividend, u256 divisor);
+u256 word_mod_word_u256_u256_to_u256(u256 dividend, u256 divisor);
+
+u256 word_mod_word_u256_u256_to_u256_variant_2(u256 dividend, u256 divisor);
 
 u256 word_mul_word_u256_uint32_t_to_u256(u256 a, uint32_t b);
 
@@ -282,7 +289,7 @@ u256 word_shift_left_u256_uint8_t_to_u256(u256 value, uint8_t amount);
 
 u256 word_shift_right_u256_uint8_t_to_u256(u256 value, uint8_t amount);
 
-u256 word_sub_word_u256_uint8_t_to_u256(u256 left, uint8_t right);
+__attribute__((__always_inline__)) u256 word_sub_word_u256_uint8_t_to_u256(u256 left, uint8_t right);
 
 bool word_ule_uint8_t_u256_to_bool(uint8_t a, u256 b);
 

@@ -3,15 +3,34 @@
 #include "evmsail/spec/kernel/lifecycle.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// struct tuple_u256_bits_64
-struct tuple_u256_bits_64 {
-  u256 tup0;
+// enum StackValidation
+enum StackValidation { StackValid, StackUnderflowFailure, StackOverflowFailure };
+
+// struct tuple_uint_64_uint_64_uint_32
+struct tuple_uint_64_uint_64_uint_32 {
+  uint64_t tup0;
   uint64_t tup1;
+  uint32_t tup2;
+};
+
+// struct tuple_uint_64_uint_64_uint_8
+struct tuple_uint_64_uint_64_uint_8 {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint8_t tup2;
+};
+
+// struct tuple_uint_64_uint_32_FrameStatus
+struct tuple_uint_64_uint_32_FrameStatus {
+  uint64_t tup0;
+  uint32_t tup1;
+  struct FrameStatus tup2;
 };
 
 // struct tuple_Bytes_Bytes
@@ -26,65 +45,71 @@ struct tuple_Bytes_Bytes_1 {
   Bytes tup1;
 };
 
+// struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice
+struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice {
+  uint32_t tup0;
+  uint64_t tup1;
+  struct CalldataSlice tup10;
+  StackPointer tup2;
+  Bytes tup3;
+  uint64_t tup4;
+  uint32_t tup5;
+  __int128 tup6;
+  struct FrameStatus tup7;
+  struct Message tup8;
+  struct CodeFields tup9;
+};
+
 // struct tuple_u256_Bytes
 struct tuple_u256_Bytes {
   u256 tup0;
   Bytes tup1;
 };
 
-// struct tuple_bool_uint_64
-struct tuple_bool_uint_64 {
-  bool tup0;
-  uint64_t tup1;
+// struct tuple_FrameCheckpoint_StackPointer_Bytes
+struct tuple_FrameCheckpoint_StackPointer_Bytes {
+  struct FrameCheckpoint tup0;
+  StackPointer tup1;
+  Bytes tup2;
 };
 
 __int128 validated_refund_add(__int128 left, __int128 right);
 
-void record_refund(__int128 delta);
+__int128 record_refund(__int128 refund, __int128 delta);
 
-uint32_t frame_code_len(void);
+uint32_t frame_code_len(struct CodeFields frame_code);
 
-bool frame_jumpdest_valid(uint32_t dest);
+bool frame_jumpdest_valid(struct CodeFields frame_code, uint32_t dest);
 
-uint64_t conserved_gas_add(uint64_t left, uint64_t right);
+uint64_t conserved_gas_add(uint64_t available, uint64_t credit);
 
-uint64_t refill_frame_state_gas(uint64_t g);
+struct tuple_uint_64_uint_64_uint_32 refill_frame_state_gas(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir);
 
-__int128 frame_state_gas_used(void);
+__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining, uint32_t state_gas_spilled);
 
-uint64_t exc_halt(uint64_t g, enum ExceptionKind k);
+__attribute__((__always_inline__)) struct FrameStatus exceptional_state(uint64_t *restrict state_gas_remaining, uint32_t *restrict state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k);
 
-uint16_t stack_height(uint64_t top);
+__attribute__((__always_inline__)) uint16_t stack_height(StackPointer top);
 
-u256 peek(uint64_t top, uint16_t n);
+__attribute__((__always_inline__)) u256 read_stack_word(StackPointer sp);
 
-uint64_t push_word(uint64_t top, u256 w);
+__attribute__((__always_inline__)) void write_stack_word(StackPointer sp, u256 value);
 
-uint64_t push_gas(uint64_t top, uint64_t value);
+__attribute__((__always_inline__)) void stack_set(StackPointer top, uint16_t n, u256 w);
 
-struct tuple_u256_bits_64 pop(uint64_t top);
+Bytes returndata_clear(void);
 
-void stack_set(uint64_t top, uint16_t n, u256 w);
+uint32_t returndata_size(Bytes returndata);
 
-void calldata_install(struct CalldataSlice data);
+void returndata_copy(Bytes returndata, uint32_t dst, uint32_t off, uint32_t len);
 
-void returndata_clear(void);
-
-uint32_t returndata_size(void);
-
-void returndata_copy(uint32_t dst, uint32_t off, uint32_t len);
-
-void returndata_copy_prefix(uint32_t dst, uint32_t want);
+void returndata_copy_prefix(Bytes returndata, uint32_t dst, uint32_t want);
 
 uint32_t returndata_remaining(uint32_t available, uint32_t offset);
 
-uint64_t validated_returndata_copy(uint64_t g, uint32_t dst, u256 source_offset, u256 length_);
-
-uint64_t returndata_copy_words(uint64_t g, uint32_t dst, u256 source_offset, u256 length_);
-
 uint32_t memory_high_water(Bytes mem);
 
-void memory_reset(void);
+Bytes memory_reset(void);
 
 struct tuple_Bytes_Bytes memory_expand_to(Bytes mem, uint32_t new_size);
 
@@ -94,11 +119,9 @@ struct tuple_Bytes_Bytes_1 memory_code_slice(Bytes mem, uint32_t off, uint32_t l
 
 Bytes memory_frame_enter(void);
 
-void memory_frame_leave(Bytes parent);
+Bytes memory_frame_leave(Bytes parent);
 
-struct FrameCheckpoint suspend_frame(void);
-
-void restore_frame(struct FrameCheckpoint checkpoint);
+struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice restore_frame(struct FrameCheckpoint checkpoint);
 
 void mem_set_byte(uint32_t off, uint64_t v);
 
@@ -112,63 +135,28 @@ void mem_mcopy(uint32_t dst, uint32_t src, uint32_t len);
 
 struct tuple_u256_Bytes mem_keccak(Bytes mem, struct MemoryRangeFields range);
 
-uint64_t conserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t left, uint32_t right);
+uint64_t conserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t available, uint32_t credit);
 
-uint64_t exc_halt_uint64_t_enum_ExceptionKind_to_uint64_t(uint64_t g, enum ExceptionKind k);
+__int128 record_refund___int128_uint16_t_to___int128(__int128 refund, uint16_t delta);
 
-u256 peek_uint64_t_uint8_t_to_u256(uint64_t top, uint8_t n);
+__attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w);
 
-void record_refund_uint16_t_to_unit(uint16_t delta);
+struct tuple_FrameCheckpoint_StackPointer_Bytes suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, Bytes evm_memory, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata);
 
-uint64_t refill_frame_state_gas_uint64_t_to_uint64_t(uint64_t g);
+__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs);
 
-void stack_set_uint64_t_uint8_t_u256_to_unit(uint64_t top, uint8_t n, u256 w);
+__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint8_t outputs);
 
-struct tuple_bool_uint_64 validate_stack(uint64_t g, uint64_t top, uint16_t inputs, uint16_t outputs);
+__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(StackPointer top, uint8_t inputs, uint8_t outputs);
+
+__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(StackPointer top, uint8_t inputs, uint8_t outputs);
+
+__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs);
 
 __int128 validated_refund_add___int128_uint16_t_to___int128(__int128 left, uint16_t right);
 
-// register zpc
-extern uint32_t pc;
-
-// register zgas_remaining
-extern uint64_t gas_remaining;
-
-// register zstack_top
-extern uint64_t stack_top;
-
-// register zstate_gas_remaining
-extern uint64_t state_gas_remaining;
-
-// register zstate_gas_spilled
-extern uint32_t state_gas_spilled;
-
-// register zframe_refund
-extern __int128 frame_refund;
-
-// register zframe_status
-extern struct FrameStatus frame_status;
-
-// register zmessage
-extern struct Message message;
-
-// register zcall_depth
-extern uint16_t call_depth;
-
-// register zframe_code
-extern struct CodeFields frame_code;
-
 extern const uint16_t STACK_LIMIT;
 
-
-// register zcalldata
-extern struct CalldataSlice calldata;
-
-// register zreturndata
-extern Bytes returndata;
-
-// register zevm_memory
-extern Bytes evm_memory;
 
 
 #ifdef __cplusplus

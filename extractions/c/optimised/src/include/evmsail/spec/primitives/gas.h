@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/quantities.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -26,10 +27,13 @@ extern const uint64_t GAS_COST_ZERO;
 extern struct GasCharge GAS_CHARGE_UNAFFORDABLE;
 
 
-extern const uint32_t STATE_GAS_SPILL_ZERO;
+extern const uint8_t STATE_GAS_SPILL_ZERO;
 
 
-extern const uint64_t GAS_ZERO;
+extern const uint8_t GAS_ZERO;
+
+
+extern const uint8_t STATE_GAS_ZERO;
 
 
 extern const uint32_t SYSTEM_CALL_GAS_LIMIT;

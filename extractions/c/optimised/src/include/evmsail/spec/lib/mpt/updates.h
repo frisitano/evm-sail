@@ -3,6 +3,7 @@
 #include "evmsail/spec/lib/mpt/codec.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -106,8 +107,8 @@ struct tuple_TrieUpdate_bool {
   bool tup1;
 };
 
-void create_letbind_205(void);
-void kill_letbind_205(void);
+void create_letbind_206(void);
+void kill_letbind_206(void);
 
 
 bytes32 trie_subtree_root(struct TrieItem subtree);

@@ -9,8 +9,8 @@ struct MemoryAccessFields EMPTY_MEMORY_ACCESS;
 
 bool neq_anything_EPrecompileId__(enum PrecompileId x, enum PrecompileId y)
 {
-  bool eq_anything_result_2_2558 = eq_PrecompileId(y, x);
-  return (bool)(!eq_anything_result_2_2558);
+  bool eq_anything_result_2_2778 = eq_PrecompileId(y, x);
+  return (bool)(!eq_anything_result_2_2778);
 }
 
 uint64_t word_of_account_nonce(uint64_t value)

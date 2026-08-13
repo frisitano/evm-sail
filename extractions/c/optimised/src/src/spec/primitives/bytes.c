@@ -46,72 +46,72 @@ uint32_t stateless_input_slice_length(Bytes s)
   return s.len;
 }
 
-void create_letbind_25(void) {
-
-  Bytes let_value_3_31;
-  Bytes tmp_3_30;
-  tmp_3_30.bytes = NULL;
-  tmp_3_30.len = UINT32_C(0);
-  let_value_3_31 = tmp_3_30;
-  EMPTY_STATELESS_INPUT_SLICE = let_value_3_31;
-}
-void kill_letbind_25(void) {
-}
-
 void create_letbind_26(void) {
 
-  Bytes let_value_3_33;
-  Bytes tmp_3_32;
-  tmp_3_32.bytes = NULL;
-  tmp_3_32.len = UINT32_C(0);
-  let_value_3_33 = tmp_3_32;
-  EMPTY_SCRATCH_SLICE = let_value_3_33;
+  Bytes let_value_3_32;
+  Bytes tmp_3_31;
+  tmp_3_31.bytes = NULL;
+  tmp_3_31.len = UINT32_C(0);
+  let_value_3_32 = tmp_3_31;
+  EMPTY_STATELESS_INPUT_SLICE = let_value_3_32;
 }
 void kill_letbind_26(void) {
 }
 
 void create_letbind_27(void) {
 
-  Bytes let_value_3_35;
-  Bytes tmp_3_34;
-  tmp_3_34.bytes = NULL;
-  tmp_3_34.len = UINT32_C(0);
-  let_value_3_35 = tmp_3_34;
-  EMPTY_EVM_MEMORY_SLICE = let_value_3_35;
+  Bytes let_value_3_34;
+  Bytes tmp_3_33;
+  tmp_3_33.bytes = NULL;
+  tmp_3_33.len = UINT32_C(0);
+  let_value_3_34 = tmp_3_33;
+  EMPTY_SCRATCH_SLICE = let_value_3_34;
 }
 void kill_letbind_27(void) {
 }
 
 void create_letbind_28(void) {
 
-  Bytes let_value_3_37;
-  Bytes tmp_3_36;
-  tmp_3_36.bytes = NULL;
-  tmp_3_36.len = UINT32_C(0);
-  let_value_3_37 = tmp_3_36;
-  EMPTY_CODE_REGION_SLICE = let_value_3_37;
+  Bytes let_value_3_36;
+  Bytes tmp_3_35;
+  tmp_3_35.bytes = NULL;
+  tmp_3_35.len = UINT32_C(0);
+  let_value_3_36 = tmp_3_35;
+  EMPTY_EVM_MEMORY_SLICE = let_value_3_36;
 }
 void kill_letbind_28(void) {
 }
 
-void create_letbind_30(void) {
+void create_letbind_29(void) {
 
-  Bytes let_value_3_41;
-  Bytes tmp_3_40;
-  tmp_3_40.bytes = NULL;
-  tmp_3_40.len = UINT32_C(0);
-  let_value_3_41 = tmp_3_40;
-  EMPTY_OUTPUT_SLICE = let_value_3_41;
+  Bytes let_value_3_38;
+  Bytes tmp_3_37;
+  tmp_3_37.bytes = NULL;
+  tmp_3_37.len = UINT32_C(0);
+  let_value_3_38 = tmp_3_37;
+  EMPTY_CODE_REGION_SLICE = let_value_3_38;
 }
-void kill_letbind_30(void) {
+void kill_letbind_29(void) {
 }
 
 void create_letbind_31(void) {
 
-  struct CalldataSlice let_value_3_42 = InputCalldata(EMPTY_STATELESS_INPUT_SLICE);
-  EMPTY_CALLDATA = let_value_3_42;
+  Bytes let_value_3_42;
+  Bytes tmp_3_41;
+  tmp_3_41.bytes = NULL;
+  tmp_3_41.len = UINT32_C(0);
+  let_value_3_42 = tmp_3_41;
+  EMPTY_OUTPUT_SLICE = let_value_3_42;
 }
 void kill_letbind_31(void) {
+}
+
+void create_letbind_32(void) {
+
+  struct CalldataSlice let_value_3_43 = InputCalldata(EMPTY_STATELESS_INPUT_SLICE);
+  EMPTY_CALLDATA = let_value_3_43;
+}
+void kill_letbind_32(void) {
 }
 
 Bytes stateless_input_sub_slice(Bytes s, uint32_t off, uint32_t len)
@@ -158,12 +158,12 @@ struct CalldataSlice calldata_sub_slice(struct CalldataSlice s, uint8_t off, uin
   }
   case Kind_MemoryCalldata:
   {
-    Bytes bytes_3_3574 = s.variants.MemoryCalldata;
-    if (((uint64_t)len + (uint64_t)off) > bytes_3_3574.len) {
+    Bytes bytes_3_3771 = s.variants.MemoryCalldata;
+    if (((uint64_t)len + (uint64_t)off) > bytes_3_3771.len) {
       __builtin_trap();
     }
-    Bytes subslice_3_3575 = memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3574, off, len);
-    return MemoryCalldata(subslice_3_3575);
+    Bytes subslice_3_3772 = memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3771, off, len);
+    return MemoryCalldata(subslice_3_3772);
   }
   }
 }

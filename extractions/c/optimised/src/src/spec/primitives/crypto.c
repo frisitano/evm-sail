@@ -34,9 +34,8 @@ bytes32 calldata_sha256(struct CalldataSlice input)
   }
 }
 
-struct tuple_bool_bytes20 ecrecover_addr(bytes32 h, uint8_t yparity, u256 r, u256 s)
+struct AddressResult ecrecover_addr(bytes32 h, uint8_t yparity, u256 r, u256 s)
 {
-  struct AddressResult recovered = precompile_ecrecover_hash_sig(h, yparity, r, s);
-  return ((struct tuple_bool_bytes20){.tup0 = recovered.success, .tup1 = recovered.address});
+  return precompile_ecrecover_hash_sig(h, yparity, r, s);
 }
 

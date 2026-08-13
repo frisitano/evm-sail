@@ -36,16 +36,16 @@ struct TxTypeSemantics tx_type_semantics(enum TxType t)
   }
 }
 
-void create_letbind_72(void) {
+void create_letbind_73(void) {
 
-  struct BlobHashesFields let_value_3_97;
-  struct BlobHashesFields tmp_3_96;
-  tmp_3_96.bytes = EMPTY_STATELESS_INPUT_SLICE;
-  tmp_3_96.count = UINT8_C(0);
-  let_value_3_97 = tmp_3_96;
-  EMPTY_BLOB_HASHES = let_value_3_97;
+  struct BlobHashesFields let_value_3_98;
+  struct BlobHashesFields tmp_3_97;
+  tmp_3_97.bytes = EMPTY_STATELESS_INPUT_SLICE;
+  tmp_3_97.count = UINT8_C(0);
+  let_value_3_98 = tmp_3_97;
+  EMPTY_BLOB_HASHES = let_value_3_98;
 }
-void kill_letbind_72(void) {
+void kill_letbind_73(void) {
 }
 
 uint64_t log_store_index_increment(uint64_t value)

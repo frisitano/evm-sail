@@ -3,6 +3,7 @@
 #include "evmsail/spec/host/debug_disabled.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -72,8 +73,8 @@ void index_witness_nodes_(struct BoundedSszListRef nodes);
 
 void index_witness_codes_(struct BoundedSszListRef codes);
 
-void create_letbind_273(void);
-void kill_letbind_273(void);
+void create_letbind_274(void);
+void kill_letbind_274(void);
 
 
 uint8_t next_parent_header_field(uint8_t index);

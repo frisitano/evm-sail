@@ -3,6 +3,7 @@
 #include "evmsail/spec/primitives/account.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
@@ -130,8 +131,8 @@ uint64_t tx_envelope_type(enum TxType t);
 
 struct TxTypeSemantics tx_type_semantics(enum TxType t);
 
-void create_letbind_72(void);
-void kill_letbind_72(void);
+void create_letbind_73(void);
+void kill_letbind_73(void);
 
 
 uint64_t log_store_index_increment(uint64_t value);

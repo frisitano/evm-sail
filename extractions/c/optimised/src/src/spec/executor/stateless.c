@@ -10,8 +10,8 @@ void validate_executed_block(struct Block block, struct BlockExecutionResult res
     fatal_error(InvalidGasUsed);
   }
   bool result_2_108 = (bool)(profile.fork >= Cancun);
-  bool tmp_3_617 = (bool)(result_2_108 && (result.blob_gas_used != header.blob_gas_used));
-  if (tmp_3_617) {
+  bool tmp_3_618 = (bool)(result_2_108 && (result.blob_gas_used != header.blob_gas_used));
+  if (tmp_3_618) {
     fatal_error(InvalidBlobGasUsed);
   }
   bytes32 poststate = compute_state_root();

@@ -3,10 +3,17 @@
 #include "evmsail/spec/kernel/accounts.h"
 
 #include "evmsail/spec/abi.h"
+#include "evmsail/host/stack.h"
 #include "evmsail/host/types.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// struct tuple_bool_bytes20
+struct tuple_bool_bytes20 {
+  bool tup0;
+  bytes20 tup1;
+};
 
 bytes32 k_code_key(bytes20 a);
 
