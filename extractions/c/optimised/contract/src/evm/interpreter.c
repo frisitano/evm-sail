@@ -298,8 +298,6 @@ threaded_interpret(uint64_t initial_gas, uint64_t initial_state_gas,
       [0xfa] = EVMSAIL_SCOPE_EVM_FRAME,
       [0xfb ... 0xff] = EVMSAIL_SCOPE_EVM_HALT,
   };
-#else
-  static const uint8_t opcode_families[1] = {0};
 #endif
 
   uint64_t gas = initial_gas;
