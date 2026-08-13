@@ -13,8 +13,8 @@ val decode_deep_immediate : (Code, code_scan_position, DeepStackOperation) -> (c
 $[c_inline]
 val execute_push_encoded : (
     Code,
-    code_scan_position,
     opcode,
+    code_scan_position,
     gas,
     StackPointer,
 ) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
@@ -38,8 +38,8 @@ val execute_log_encoded : (
 $[c_inline]
 val execute_deep_stack_encoded : (
     Code,
-    code_scan_position,
     opcode,
+    code_scan_position,
     gas,
     StackPointer,
 ) -> (code_pointer, gas, StackPointer, OpcodeOutcome)

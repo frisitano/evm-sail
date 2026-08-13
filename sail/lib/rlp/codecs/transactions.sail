@@ -256,20 +256,20 @@ function decode_authorization(tuple) = {
     let address_word = rlp_decode_word(addr_f);
     let auth_addr = word_to_address(address_word);
     let signing_hash = auth_signing_hash(chain_id, auth_addr, auth_nonce);
-    let (ok, authority) : (bool, address) = match y {
+    let recovered : AddressResult = match y {
         RlpOk(false) => ecrecover_addr(signing_hash, 0, r, s),
         RlpOk(true) => ecrecover_addr(signing_hash, 1, r, s),
-        RlpInvalidValue() => (false, ZERO_ADDRESS),
+        RlpInvalidValue() => struct { success = false, address = ZERO_ADDRESS },
     };
     struct {
         valid_sig =
-              ok
+              recovered.success
             & word_ult(ZERO_WORD, r)
             & word_ult(r, SECP_N_FULL)
             & word_ult(ZERO_WORD, s)
             & word_ule(s, SECP_N_HALF)
             & (auth_nonce != sizeof(account_nonce_bound)),
-        authority = authority,
+        authority = recovered.address,
         address = auth_addr,
         nonce = auth_nonce,
         chain_id = chain_id,

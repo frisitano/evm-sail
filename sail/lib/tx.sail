@@ -55,6 +55,6 @@ function tx_auth_valid(sender : address, h : hash, parity : y_parity, r : word, 
     if high_s then {
         false
     } else {
-        let (recovered, recovered_sender) = ecrecover_addr(h, parity, r, s);
-        recovered & (recovered_sender == sender)
+        let recovered = ecrecover_addr(h, parity, r, s);
+        recovered.success & (recovered.address == sender)
     }

@@ -120,7 +120,6 @@ let SECP_N_HALF : word = word_from_bits(0x7fffffffffffffffffffffffffffffff5d576e
 
 /*! Recovers the signer address from `(h, y_parity, r, s)`, returning
     recovery success and the recovered address (used by EIP-7702). */
-function ecrecover_addr(h : hash, yparity : y_parity, r : word, s : word) -> (bool, address) = {
-    let recovered = host_ecrecover(h, yparity, r, s);
-    (recovered.success, recovered.address)
+function ecrecover_addr(h : hash, yparity : y_parity, r : word, s : word) -> AddressResult = {
+    host_ecrecover(h, yparity, r, s)
 }

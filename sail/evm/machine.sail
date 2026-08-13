@@ -248,6 +248,11 @@ function memory_reset() -> EvmMemorySlice = {
 
 /*! Expands the carried frame memory to an already-charged size, returning
     the resulting high-water-mark witness and the updated cursor. */
+/* TODO: Refactor memory_expand_to, active_memory_slice, and memory_code_slice
+ * together to return the updated carried memory before the derived view. That
+ * would align this family with the (state..., result) handler convention. Do
+ * not reorder one helper alone: the view and state currently share the same C
+ * representation, so every caller must change with the semantic interface. */
 val memory_expand_to : forall 'required, source_valid_range(0, 'required). (EvmMemorySlice, int('required)) -> (
         EvmMemorySliceLength('required),
         EvmMemorySlice,

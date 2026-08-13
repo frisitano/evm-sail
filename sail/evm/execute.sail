@@ -1679,9 +1679,9 @@ function execute_sstore(context, fork, carried_is_static, carried_gas, carried_s
     if opcode_failed(stack_status) then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, stack_status)
     };
-    let (_, guard_result) = guard_static(carried_gas, carried_is_static);
+    let (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static);
     if opcode_failed(guard_result) then {
-        return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result)
+        return (gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result)
     };
     if (fork < Amsterdam) & (carried_gas <= G_callstipend) then {
         return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, Failed(OutOfGas))
@@ -1777,7 +1777,7 @@ function execute_tstore(carried_address : address, carried_is_static : bool, car
 }
 
 /*! Implements unconditional `JUMP`. */
-function execute_jump(carried_pc : code_pointer, carried_gas : gas, carried_code : Code, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
+function execute_jump(carried_code : Code, carried_pc : code_pointer, carried_gas : gas, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 0);
     if opcode_failed(stack_status) then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
@@ -1799,7 +1799,7 @@ let (halt, gas_after_charge) = charge(gas_after, G_mid);
 }
 
 /*! Implements conditional `JUMPI`. */
-function execute_jumpi(carried_pc : code_pointer, carried_gas : gas, carried_code : Code, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
+function execute_jumpi(carried_code : Code, carried_pc : code_pointer, carried_gas : gas, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if opcode_failed(stack_status) then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
@@ -2115,9 +2115,9 @@ let offset_word = read_stack_word(sp_after);
 
 /*! Implements rollback-carrying `REVERT` (EIP-140). */
 val execute_revert :
-    (gas, state_gas, state_gas_spill, state_gas, StackPointer, EvmMemorySlice) ->
+    (state_gas, gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice) ->
     (gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice, FrameStatus)
-function execute_revert(carried_gas, carried_state_gas, carried_state_spill, carried_state_gas_reservoir, carried_sp, carried_memory) = {
+function execute_revert(carried_state_gas_reservoir, carried_gas, carried_state_gas, carried_state_spill, carried_sp, carried_memory) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if opcode_failed(stack_status) then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_sp, carried_memory, opcode_frame_status(stack_status))
@@ -2164,9 +2164,9 @@ function execute_selfdestruct(carried_address, fork, carried_is_static, carried_
     if opcode_failed(stack_status) then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(stack_status))
     };
-    let (_, guard_result) = guard_static(carried_gas, carried_is_static);
+    let (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static);
     if opcode_failed(guard_result) then {
-        return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(guard_result))
+        return (gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(guard_result))
     };
     let beneficiary_word = read_stack_word(carried_sp);
     let sp_after = stack_top_retreat(carried_sp, 1);

@@ -22,6 +22,116 @@ enum {
   EVM_GAS_VERYLOW = 3,
 };
 
+/* Frame-environment values are cold relative to arithmetic, stack, and memory
+ * execution. Keep one address-taken context instead of extending their live
+ * ranges through the threaded loop as independent scalar locals. */
+struct InterpreterFrameContext {
+  bytes20 caller;
+  bytes20 address;
+  bytes20 code_address;
+  u256 value;
+  uint64_t state_gas_reservoir;
+  bool is_static;
+  uint16_t depth;
+  struct CodeFields code;
+  struct CalldataSlice calldata;
+  Bytes returndata;
+  struct AccountExecutionContext account;
+  uint32_t next_pc;
+};
+
+static const uint8_t empty_code_byte = 0;
+
+static inline const uint8_t *interpreter_code_bytes(
+    const struct InterpreterFrameContext *frame)
+{
+  return frame->code.len == 0 ? &empty_code_byte : frame->code.bytes;
+}
+
+static inline uint32_t interpreter_cursor_pc(
+    const struct InterpreterFrameContext *frame, const uint8_t *ip)
+{
+  return (uint32_t)(ip - interpreter_code_bytes(frame));
+}
+
+static inline void interpreter_load_cursor(
+    const struct InterpreterFrameContext *frame, const uint8_t **ip,
+    const uint8_t **code_end)
+{
+  const uint8_t *code_bytes = interpreter_code_bytes(frame);
+  const uint32_t pc = frame->next_pc < frame->code.len
+                          ? frame->next_pc
+                          : frame->code.len;
+  *ip = code_bytes + pc;
+  *code_end = code_bytes + frame->code.len;
+}
+
+typedef struct tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes
+    FrameTransitionResult;
+
+static inline void apply_frame_transition_result(
+    struct InterpreterFrameContext *frame, uint64_t *gas,
+    uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
+    __int128 *refund, StackPointer *sp, Bytes *memory,
+    struct FrameStatus *status, FrameTransitionResult result)
+{
+  frame->next_pc = result.tup0;
+  *gas = result.tup1;
+  *state_gas_remaining = result.tup2;
+  *state_gas_spilled = result.tup3;
+  *refund = result.tup4;
+  *status = result.tup5;
+  *sp = result.tup6;
+  *memory = result.tup7;
+  frame->caller = result.tup8;
+  frame->address = result.tup9;
+  frame->code_address = result.tup10;
+  frame->value = result.tup11;
+  frame->state_gas_reservoir = result.tup12;
+  frame->is_static = result.tup13;
+  frame->depth = result.tup14;
+  frame->code = result.tup15;
+  frame->calldata = result.tup16;
+  frame->returndata = result.tup17;
+}
+
+__attribute__((noinline)) static void run_frame_entry_transition(
+    struct InterpreterFrameContext *frame, uint64_t *gas,
+    uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
+    __int128 *refund, StackPointer *sp, Bytes *memory, uint8_t opcode,
+    struct FrameStatus *status)
+{
+  const bytes20 previous_address = frame->address;
+  FrameTransitionResult result = run_frame_entry_encoded(
+      frame->next_pc, *gas, *state_gas_remaining, *state_gas_spilled, *refund,
+      *sp, *memory, frame->caller, frame->address, frame->code_address,
+      frame->value, frame->state_gas_reservoir, frame->is_static,
+      frame->depth, frame->code, frame->calldata, frame->returndata, opcode);
+  apply_frame_transition_result(frame, gas, state_gas_remaining,
+                                state_gas_spilled, refund, sp, memory, status,
+                                result);
+  frame->account = refresh_account_execution_context(
+      frame->account, previous_address, frame->address);
+}
+
+__attribute__((noinline)) static void resume_frame_transition(
+    struct InterpreterFrameContext *frame,
+    const struct FrameContinuation *continuation, Bytes output, uint64_t *gas,
+    uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
+    __int128 *refund, StackPointer *sp, Bytes *memory,
+    struct FrameStatus *status)
+{
+  const bytes20 previous_address = frame->address;
+  FrameTransitionResult result = resume_frame(
+      *continuation, output, *gas, *state_gas_remaining, *state_gas_spilled,
+      *refund, *status, frame->state_gas_reservoir);
+  apply_frame_transition_result(frame, gas, state_gas_remaining,
+                                state_gas_spilled, refund, sp, memory, status,
+                                result);
+  frame->account = refresh_account_execution_context(
+      frame->account, previous_address, frame->address);
+}
+
 #if defined(EVMSAIL_OPCODE_PROFILE)
 enum {
   EVMSAIL_SCOPE_EVM_ALU = 52,
@@ -59,11 +169,10 @@ enum {
 
 #define NEXT_OPCODE()                                                            \
   do {                                                                            \
-    if (pc >= code.len) {                                                         \
-      goto end_of_code;                                                        \
-    }                                                                              \
-    opcode = code.bytes[pc];                                                      \
-    pc += 1U;                                                                     \
+    if (ip == code_end) {                                                         \
+      goto end_of_code;                                                           \
+    }                                                                             \
+    opcode = *ip++;                                                               \
     OPCODE_FAMILY_SWITCH(opcode_families[opcode]);                                \
     goto *dispatch[opcode];                                                       \
   } while (0)
@@ -87,8 +196,7 @@ enum {
 
 #define EXECUTE_HANDLER(call)                                                     \
   do {                                                                            \
-    struct OpcodeOutcome outcome;                                                 \
-    call;                                                                          \
+    struct OpcodeOutcome outcome = (call);                                        \
     FINISH_OPCODE(outcome);                                                       \
   } while (0)
 
@@ -194,32 +302,36 @@ threaded_interpret(uint64_t initial_gas, uint64_t initial_state_gas,
   static const uint8_t opcode_families[1] = {0};
 #endif
 
-  uint32_t pc = 0;
   uint64_t gas = initial_gas;
   uint64_t state_gas_remaining = initial_state_gas;
   uint32_t state_gas_spilled = initial_state_spill;
   __int128 refund = initial_refund;
   StackPointer sp = initial_sp;
   Bytes memory = initial_memory;
-  bytes20 caller = initial_caller;
-  bytes20 address = initial_address;
-  bytes20 code_address = initial_code_address;
-  u256 value = initial_value;
-  uint64_t state_gas_reservoir = initial_state_gas_reservoir;
-  bool is_static = initial_is_static;
-  uint16_t depth = initial_depth;
-  struct CodeFields code = initial_code;
-  struct CalldataSlice calldata = initial_calldata;
-  Bytes returndata = EMPTY_OUTPUT_SLICE;
+  struct InterpreterFrameContext frame = {
+      .caller = initial_caller,
+      .address = initial_address,
+      .code_address = initial_code_address,
+      .value = initial_value,
+      .state_gas_reservoir = initial_state_gas_reservoir,
+      .is_static = initial_is_static,
+      .depth = initial_depth,
+      .code = initial_code,
+      .calldata = initial_calldata,
+      .returndata = EMPTY_OUTPUT_SLICE,
+      .account = account_execution_context(initial_address),
+      .next_pc = 0,
+  };
   struct FrameStatus status = {.kind = Kind_Running};
-  struct AccountExecutionContext account_context =
-      account_execution_context(initial_address);
+  const uint8_t *ip;
+  const uint8_t *code_end;
   uint8_t opcode;
 #if defined(EVMSAIL_OPCODE_PROFILE)
   uint8_t active_opcode_family = OPCODE_FAMILY_NONE;
 #endif
 
   frame_stack_reset();
+  interpreter_load_cursor(&frame, &ip, &code_end);
   NEXT_OPCODE();
 
 end_of_code:
@@ -230,71 +342,71 @@ end_of_code:
 opcode_stop:
   status = execute_stop();
   goto interpreter_continue;
-opcode_add: EXECUTE_HANDLER(execute_add(&gas, &sp, &outcome));
-opcode_mul: EXECUTE_HANDLER(execute_mul(&gas, &sp, &outcome));
-opcode_sub: EXECUTE_HANDLER(execute_sub(&gas, &sp, &outcome));
-opcode_div: EXECUTE_HANDLER(execute_div(&gas, &sp, &outcome));
-opcode_sdiv: EXECUTE_HANDLER(execute_sdiv(&gas, &sp, &outcome));
-opcode_mod: EXECUTE_HANDLER(execute_mod(&gas, &sp, &outcome));
-opcode_smod: EXECUTE_HANDLER(execute_smod(&gas, &sp, &outcome));
-opcode_addmod: EXECUTE_HANDLER(execute_addmod(&gas, &sp, &outcome));
-opcode_mulmod: EXECUTE_HANDLER(execute_mulmod(&gas, &sp, &outcome));
-opcode_exp: EXECUTE_HANDLER(execute_exp(&gas, &sp, &outcome));
-opcode_signextend: EXECUTE_HANDLER(execute_signextend(&gas, &sp, &outcome));
-opcode_lt: EXECUTE_HANDLER(execute_lt(&gas, &sp, &outcome));
-opcode_gt: EXECUTE_HANDLER(execute_gt(&gas, &sp, &outcome));
-opcode_slt: EXECUTE_HANDLER(execute_slt(&gas, &sp, &outcome));
-opcode_sgt: EXECUTE_HANDLER(execute_sgt(&gas, &sp, &outcome));
-opcode_eq: EXECUTE_HANDLER(execute_eq(&gas, &sp, &outcome));
-opcode_iszero: EXECUTE_HANDLER(execute_iszero(&gas, &sp, &outcome));
-opcode_and: EXECUTE_HANDLER(execute_and(&gas, &sp, &outcome));
-opcode_or: EXECUTE_HANDLER(execute_or(&gas, &sp, &outcome));
-opcode_xor: EXECUTE_HANDLER(execute_xor(&gas, &sp, &outcome));
-opcode_not: EXECUTE_HANDLER(execute_not(&gas, &sp, &outcome));
-opcode_byte: EXECUTE_HANDLER(execute_byte(&gas, &sp, &outcome));
-opcode_shl: EXECUTE_HANDLER(execute_shl(&gas, &sp, &outcome));
-opcode_shr: EXECUTE_HANDLER(execute_shr(&gas, &sp, &outcome));
-opcode_sar: EXECUTE_HANDLER(execute_sar(&gas, &sp, &outcome));
+opcode_add: EXECUTE_HANDLER(execute_add(&gas, &sp));
+opcode_mul: EXECUTE_HANDLER(execute_mul(&gas, &sp));
+opcode_sub: EXECUTE_HANDLER(execute_sub(&gas, &sp));
+opcode_div: EXECUTE_HANDLER(execute_div(&gas, &sp));
+opcode_sdiv: EXECUTE_HANDLER(execute_sdiv(&gas, &sp));
+opcode_mod: EXECUTE_HANDLER(execute_mod(&gas, &sp));
+opcode_smod: EXECUTE_HANDLER(execute_smod(&gas, &sp));
+opcode_addmod: EXECUTE_HANDLER(execute_addmod(&gas, &sp));
+opcode_mulmod: EXECUTE_HANDLER(execute_mulmod(&gas, &sp));
+opcode_exp: EXECUTE_HANDLER(execute_exp(&gas, &sp));
+opcode_signextend: EXECUTE_HANDLER(execute_signextend(&gas, &sp));
+opcode_lt: EXECUTE_HANDLER(execute_lt(&gas, &sp));
+opcode_gt: EXECUTE_HANDLER(execute_gt(&gas, &sp));
+opcode_slt: EXECUTE_HANDLER(execute_slt(&gas, &sp));
+opcode_sgt: EXECUTE_HANDLER(execute_sgt(&gas, &sp));
+opcode_eq: EXECUTE_HANDLER(execute_eq(&gas, &sp));
+opcode_iszero: EXECUTE_HANDLER(execute_iszero(&gas, &sp));
+opcode_and: EXECUTE_HANDLER(execute_and(&gas, &sp));
+opcode_or: EXECUTE_HANDLER(execute_or(&gas, &sp));
+opcode_xor: EXECUTE_HANDLER(execute_xor(&gas, &sp));
+opcode_not: EXECUTE_HANDLER(execute_not(&gas, &sp));
+opcode_byte: EXECUTE_HANDLER(execute_byte(&gas, &sp));
+opcode_shl: EXECUTE_HANDLER(execute_shl(&gas, &sp));
+opcode_shr: EXECUTE_HANDLER(execute_shr(&gas, &sp));
+opcode_sar: EXECUTE_HANDLER(execute_sar(&gas, &sp));
 opcode_clz:
   REQUIRE_OPCODE_AVAILABLE(0x1e);
-  EXECUTE_HANDLER(execute_clz(&gas, &sp, &outcome));
-opcode_keccak256: EXECUTE_HANDLER(execute_keccak256(&gas, &sp, &memory, &outcome));
-opcode_address: EXECUTE_HANDLER(execute_address(address, &gas, &sp, &outcome));
-opcode_balance: EXECUTE_HANDLER(execute_balance(&gas, &sp, &outcome));
-opcode_origin: EXECUTE_HANDLER(execute_origin(&gas, &sp, &outcome));
-opcode_caller: EXECUTE_HANDLER(execute_caller(caller, &gas, &sp, &outcome));
-opcode_callvalue: EXECUTE_HANDLER(execute_callvalue(value, &gas, &sp, &outcome));
-opcode_calldataload: EXECUTE_HANDLER(execute_calldataload(calldata, &gas, &sp, &outcome));
-opcode_calldatasize: EXECUTE_HANDLER(execute_calldatasize(calldata, &gas, &sp, &outcome));
-opcode_calldatacopy: EXECUTE_HANDLER(execute_calldatacopy(calldata, &gas, &sp, &memory, &outcome));
-opcode_codesize: EXECUTE_HANDLER(execute_codesize(code, &gas, &sp, &outcome));
-opcode_codecopy: EXECUTE_HANDLER(execute_codecopy(code, &gas, &sp, &memory, &outcome));
-opcode_gasprice: EXECUTE_HANDLER(execute_gasprice(&gas, &sp, &outcome));
-opcode_extcodesize: EXECUTE_HANDLER(execute_extcodesize(&gas, &sp, &outcome));
-opcode_extcodecopy: EXECUTE_HANDLER(execute_extcodecopy(&gas, &sp, &memory, &outcome));
-opcode_returndatasize: EXECUTE_HANDLER(execute_returndatasize(returndata, &gas, &sp, &outcome));
-opcode_returndatacopy: EXECUTE_HANDLER(execute_returndatacopy(returndata, &gas, &sp, &memory, &outcome));
-opcode_extcodehash: EXECUTE_HANDLER(execute_extcodehash(&gas, &sp, &outcome));
-opcode_blockhash: EXECUTE_HANDLER(execute_blockhash(&gas, &sp, &outcome));
-opcode_coinbase: EXECUTE_HANDLER(execute_coinbase(&gas, &sp, &outcome));
-opcode_timestamp: EXECUTE_HANDLER(execute_timestamp(&gas, &sp, &outcome));
-opcode_number: EXECUTE_HANDLER(execute_number(&gas, &sp, &outcome));
-opcode_prevrandao: EXECUTE_HANDLER(execute_prevrandao(&gas, &sp, &outcome));
-opcode_gaslimit: EXECUTE_HANDLER(execute_gaslimit(&gas, &sp, &outcome));
-opcode_chainid: EXECUTE_HANDLER(execute_chainid(&gas, &sp, &outcome));
-opcode_selfbalance: EXECUTE_HANDLER(execute_selfbalance(address, &gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_clz(&gas, &sp));
+opcode_keccak256: EXECUTE_HANDLER(execute_keccak256(&gas, &sp, &memory));
+opcode_address: EXECUTE_HANDLER(execute_address(frame.address, &gas, &sp));
+opcode_balance: EXECUTE_HANDLER(execute_balance(&gas, &sp));
+opcode_origin: EXECUTE_HANDLER(execute_origin(&gas, &sp));
+opcode_caller: EXECUTE_HANDLER(execute_caller(frame.caller, &gas, &sp));
+opcode_callvalue: EXECUTE_HANDLER(execute_callvalue(frame.value, &gas, &sp));
+opcode_calldataload: EXECUTE_HANDLER(execute_calldataload(frame.calldata, &gas, &sp));
+opcode_calldatasize: EXECUTE_HANDLER(execute_calldatasize(frame.calldata, &gas, &sp));
+opcode_calldatacopy: EXECUTE_HANDLER(execute_calldatacopy(frame.calldata, &gas, &sp, &memory));
+opcode_codesize: EXECUTE_HANDLER(execute_codesize(frame.code, &gas, &sp));
+opcode_codecopy: EXECUTE_HANDLER(execute_codecopy(frame.code, &gas, &sp, &memory));
+opcode_gasprice: EXECUTE_HANDLER(execute_gasprice(&gas, &sp));
+opcode_extcodesize: EXECUTE_HANDLER(execute_extcodesize(&gas, &sp));
+opcode_extcodecopy: EXECUTE_HANDLER(execute_extcodecopy(&gas, &sp, &memory));
+opcode_returndatasize: EXECUTE_HANDLER(execute_returndatasize(frame.returndata, &gas, &sp));
+opcode_returndatacopy: EXECUTE_HANDLER(execute_returndatacopy(frame.returndata, &gas, &sp, &memory));
+opcode_extcodehash: EXECUTE_HANDLER(execute_extcodehash(&gas, &sp));
+opcode_blockhash: EXECUTE_HANDLER(execute_blockhash(&gas, &sp));
+opcode_coinbase: EXECUTE_HANDLER(execute_coinbase(&gas, &sp));
+opcode_timestamp: EXECUTE_HANDLER(execute_timestamp(&gas, &sp));
+opcode_number: EXECUTE_HANDLER(execute_number(&gas, &sp));
+opcode_prevrandao: EXECUTE_HANDLER(execute_prevrandao(&gas, &sp));
+opcode_gaslimit: EXECUTE_HANDLER(execute_gaslimit(&gas, &sp));
+opcode_chainid: EXECUTE_HANDLER(execute_chainid(&gas, &sp));
+opcode_selfbalance: EXECUTE_HANDLER(execute_selfbalance(frame.address, &gas, &sp));
 opcode_basefee:
   REQUIRE_OPCODE_AVAILABLE(0x48);
-  EXECUTE_HANDLER(execute_basefee(&gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_basefee(&gas, &sp));
 opcode_blobhash:
   REQUIRE_OPCODE_AVAILABLE(0x49);
-  EXECUTE_HANDLER(execute_blobhash(&gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_blobhash(&gas, &sp));
 opcode_blobbasefee:
   REQUIRE_OPCODE_AVAILABLE(0x4a);
-  EXECUTE_HANDLER(execute_blobbasefee(blob_fee, &gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_blobbasefee(blob_fee, &gas, &sp));
 opcode_slotnum:
   REQUIRE_OPCODE_AVAILABLE(0x4b);
-  EXECUTE_HANDLER(execute_slotnum(&gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_slotnum(&gas, &sp));
 opcode_pop:
   if (sp.height == 0) {
     goto exceptional_stack_underflow;
@@ -306,44 +418,51 @@ opcode_pop:
   sp.storage--;
   sp.height--;
   NEXT_OPCODE();
-opcode_mload: EXECUTE_HANDLER(execute_mload(&gas, &sp, &memory, &outcome));
-opcode_mstore: EXECUTE_HANDLER(execute_mstore(&gas, &sp, &memory, &outcome));
-opcode_mstore8: EXECUTE_HANDLER(execute_mstore8(&gas, &sp, &memory, &outcome));
-opcode_sload: EXECUTE_HANDLER(execute_sload(account_context, &gas, &sp, &outcome));
+opcode_mload: EXECUTE_HANDLER(execute_mload(&gas, &sp, &memory));
+opcode_mstore: EXECUTE_HANDLER(execute_mstore(&gas, &sp, &memory));
+opcode_mstore8: EXECUTE_HANDLER(execute_mstore8(&gas, &sp, &memory));
+opcode_sload: EXECUTE_HANDLER(execute_sload(frame.account, &gas, &sp));
 opcode_sstore: {
-  struct OpcodeOutcome outcome;
-  execute_sstore(account_context, fork, is_static, &gas,
-                 &state_gas_remaining, &state_gas_spilled, &refund, &sp,
-                 &outcome);
+  struct OpcodeOutcome outcome = execute_sstore(
+      frame.account, fork, frame.is_static, &gas, &state_gas_remaining,
+      &state_gas_spilled, &refund, &sp);
   FINISH_OPCODE(outcome);
 }
 opcode_jump: {
-  struct OpcodeOutcome outcome;
-  execute_jump(&pc, &gas, code, &sp, &outcome);
+  frame.next_pc = interpreter_cursor_pc(&frame, ip);
+  struct OpcodeOutcome outcome =
+      execute_jump(frame.code, &frame.next_pc, &gas, &sp);
+  interpreter_load_cursor(&frame, &ip, &code_end);
   FINISH_OPCODE(outcome);
 }
 opcode_jumpi: {
-  struct OpcodeOutcome outcome;
-  execute_jumpi(&pc, &gas, code, &sp, &outcome);
+  frame.next_pc = interpreter_cursor_pc(&frame, ip);
+  struct OpcodeOutcome outcome =
+      execute_jumpi(frame.code, &frame.next_pc, &gas, &sp);
+  interpreter_load_cursor(&frame, &ip, &code_end);
   FINISH_OPCODE(outcome);
 }
-opcode_pc: EXECUTE_HANDLER(execute_pc(&pc, &gas, &sp, &outcome));
-opcode_msize: EXECUTE_HANDLER(execute_msize(&gas, &sp, &memory, &outcome));
-opcode_gas: EXECUTE_HANDLER(execute_gas(&gas, &sp, &outcome));
+opcode_pc: {
+  frame.next_pc = interpreter_cursor_pc(&frame, ip);
+  struct OpcodeOutcome outcome = execute_pc(&frame.next_pc, &gas, &sp);
+  interpreter_load_cursor(&frame, &ip, &code_end);
+  FINISH_OPCODE(outcome);
+}
+opcode_msize: EXECUTE_HANDLER(execute_msize(&gas, &sp, &memory));
+opcode_gas: EXECUTE_HANDLER(execute_gas(&gas, &sp));
 opcode_jumpdest: {
-  struct tuple_uint_64_OpcodeOutcome result = execute_jumpdest(gas);
-  gas = result.tup0;
-  FINISH_OPCODE(result.tup1);
+  struct OpcodeOutcome outcome = execute_jumpdest(&gas);
+  FINISH_OPCODE(outcome);
 }
 opcode_tload:
   REQUIRE_OPCODE_AVAILABLE(0x5c);
-  EXECUTE_HANDLER(execute_tload(address, &gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_tload(frame.address, &gas, &sp));
 opcode_tstore:
   REQUIRE_OPCODE_AVAILABLE(0x5d);
-  EXECUTE_HANDLER(execute_tstore(address, is_static, &gas, &sp, &outcome));
+  EXECUTE_HANDLER(execute_tstore(frame.address, frame.is_static, &gas, &sp));
 opcode_mcopy:
   REQUIRE_OPCODE_AVAILABLE(0x5e);
-  EXECUTE_HANDLER(execute_mcopy(&gas, &sp, &memory, &outcome));
+  EXECUTE_HANDLER(execute_mcopy(&gas, &sp, &memory));
 
 opcode_push_family:
   if (opcode == 0x5f) {
@@ -352,7 +471,9 @@ opcode_push_family:
   {
     uint8_t width = opcode - 0x5f;
     uint64_t push_cost = width == 0 ? EVM_GAS_BASE : EVM_GAS_VERYLOW;
-    Bytes code_bytes = {.len = code.len, .bytes = code.bytes};
+    const uint8_t *code_bytes = interpreter_code_bytes(&frame);
+    const uint32_t immediate_pc = interpreter_cursor_pc(&frame, ip);
+    Bytes code_slice = {.len = frame.code.len, .bytes = code_bytes};
 
     if (sp.height == EVM_STACK_LIMIT) {
       goto exceptional_stack_overflow;
@@ -360,10 +481,11 @@ opcode_push_family:
     if (gas < push_cost) {
       goto exceptional_out_of_gas;
     }
-    u256 pushed = read_push(code_bytes, pc, width);
+    u256 pushed = read_push(code_slice, immediate_pc, width);
 
     gas -= push_cost;
-    pc += width;
+    const uint32_t remaining = (uint32_t)(code_end - ip);
+    ip += width < remaining ? width : remaining;
     sp.storage[0] = pushed;
     sp.storage++;
     sp.height++;
@@ -407,53 +529,52 @@ opcode_swap_family: {
 }
 
 opcode_log_family: {
-  struct OpcodeOutcome outcome;
-  execute_log_encoded(address, is_static, &gas, &sp, &memory, opcode,
-                      &outcome);
+  struct OpcodeOutcome outcome = execute_log_encoded(
+      frame.address, frame.is_static, &gas, &sp, &memory, opcode);
   FINISH_OPCODE(outcome);
 }
 
 opcode_deep_stack_family: {
   REQUIRE_OPCODE_AVAILABLE(opcode);
-  struct OpcodeOutcome outcome;
-  execute_deep_stack_encoded(code, &pc, opcode, &gas, &sp, &outcome);
+  frame.next_pc = interpreter_cursor_pc(&frame, ip);
+  struct OpcodeOutcome outcome = execute_deep_stack_encoded(
+      frame.code, opcode, &frame.next_pc, &gas, &sp);
+  interpreter_load_cursor(&frame, &ip, &code_end);
   FINISH_OPCODE(outcome);
 }
 
 opcode_frame_entry: {
-  bytes20 previous_address = address;
-  run_frame_entry_encoded(
-      &pc, &gas, &state_gas_remaining, &state_gas_spilled, &refund, &sp,
-      &memory, &caller, &address, &code_address, &value,
-      &state_gas_reservoir, &is_static, &depth, &code, &calldata, &returndata,
-      opcode, &status);
-  account_context = refresh_account_execution_context(
-      account_context, previous_address, address);
+  frame.next_pc = interpreter_cursor_pc(&frame, ip);
+  run_frame_entry_transition(
+      &frame, &gas, &state_gas_remaining, &state_gas_spilled, &refund, &sp,
+      &memory, opcode, &status);
+  interpreter_load_cursor(&frame, &ip, &code_end);
   goto interpreter_continue;
 }
 
 opcode_return: {
-  execute_return(&gas, &sp, &memory, &status);
+  status = execute_return(&gas, &sp, &memory);
   goto opcode_done;
 }
 
 opcode_revert: {
-  execute_revert(&gas, &state_gas_remaining, &state_gas_spilled,
-                 state_gas_reservoir, &sp, &memory, &status);
+  status = execute_revert(frame.state_gas_reservoir, &gas,
+                          &state_gas_remaining, &state_gas_spilled, &sp,
+                          &memory);
   goto opcode_done;
 }
 
 opcode_selfdestruct: {
-  execute_selfdestruct(address, fork, is_static, &gas, &state_gas_remaining,
-                       &state_gas_spilled, &refund, &sp, &status);
+  status = execute_selfdestruct(
+      frame.address, fork, frame.is_static, &gas, &state_gas_remaining,
+      &state_gas_spilled, &refund, &sp);
   goto opcode_done;
 }
 
 opcode_invalid:
   {
-    struct tuple_uint_64_OpcodeOutcome result = execute_invalid(gas);
-    gas = result.tup0;
-    FINISH_OPCODE(result.tup1);
+    struct OpcodeOutcome outcome = execute_invalid(&gas);
+    FINISH_OPCODE(outcome);
   }
 
 exceptional_stack_underflow:
@@ -483,9 +604,9 @@ exceptional_out_of_gas:
 opcode_done:
   if (status.kind == Kind_Exceptional) {
     gas = 0;
-    exceptional_state(&state_gas_remaining, &state_gas_spilled,
-                      state_gas_reservoir, status.variants.Exceptional,
-                      &status);
+    status = exceptional_state(&state_gas_remaining, &state_gas_spilled,
+                               frame.state_gas_reservoir,
+                               status.variants.Exceptional);
   }
 
 interpreter_continue:
@@ -508,14 +629,10 @@ interpreter_continue:
       };
     }
 
-    bytes20 previous_address = address;
-    resume_frame(
-        *continuation, output, &gas, &state_gas_remaining, &state_gas_spilled,
-        &refund, &status, &state_gas_reservoir, &pc, &sp, &memory, &caller,
-        &address, &code_address, &value, &is_static, &depth, &code, &calldata,
-        &returndata);
-    account_context = refresh_account_execution_context(
-        account_context, previous_address, address);
+    resume_frame_transition(
+        &frame, continuation, output, &gas, &state_gas_remaining,
+        &state_gas_spilled, &refund, &sp, &memory, &status);
+    interpreter_load_cursor(&frame, &ip, &code_end);
     goto interpreter_continue;
   }
 }

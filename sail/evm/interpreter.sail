@@ -98,8 +98,8 @@ function decode_deep_immediate(
     generated from Sail. */
 function execute_push_encoded(
     frame_code : Code,
-    immediate_offset : code_scan_position,
     opcode : opcode,
+    immediate_offset : code_scan_position,
     execution_gas : gas,
     sp : StackPointer,
 ) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
@@ -158,8 +158,8 @@ function execute_log_encoded(
     semantics; the raw-byte interpreter supplies only the opcode byte. */
 function execute_deep_stack_encoded(
     frame_code : Code,
-    immediate_offset : code_scan_position,
     opcode : opcode,
+    immediate_offset : code_scan_position,
     execution_gas : gas,
     sp : StackPointer,
 ) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
@@ -754,11 +754,11 @@ function interpret(
             (carried_pc, gas_after, state_gas_after, state_spill_after, refund_after, sp_after, carried_memory, opcode_frame_status(status_after))
         },
         JUMP() => {
-            let (pc_after, gas_after, sp_after, status_after) = execute_jump(carried_pc, carried_gas, carried_code, carried_sp);
+            let (pc_after, gas_after, sp_after, status_after) = execute_jump(carried_code, carried_pc, carried_gas, carried_sp);
             (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
         },
         JUMPI() => {
-            let (pc_after, gas_after, sp_after, status_after) = execute_jumpi(carried_pc, carried_gas, carried_code, carried_sp);
+            let (pc_after, gas_after, sp_after, status_after) = execute_jumpi(carried_code, carried_pc, carried_gas, carried_sp);
             (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
         },
         PC() => {
@@ -829,7 +829,7 @@ function interpret(
         },
         REVERT() => {
             let (gas_after, state_gas_after, state_spill_after, sp_after, memory_after, status_after) =
-                execute_revert(carried_gas, carried_state_gas, carried_state_spill, carried_state_gas_reservoir, carried_sp, carried_memory);
+                execute_revert(carried_state_gas_reservoir, carried_gas, carried_state_gas, carried_state_spill, carried_sp, carried_memory);
             (carried_pc, gas_after, state_gas_after, state_spill_after, carried_refund, sp_after, memory_after, status_after)
         },
         INVALID() => {

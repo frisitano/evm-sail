@@ -45,6 +45,166 @@ val storage_update_by_id_host = impure { c: "storage_update_by_id" } : (
     word,
     word,
 ) -> unit
+
+/* State-passing functions retain their pure Sail tuple signatures. Optimized
+ * C lowers the mirrored state fields to in/out pointers and returns the sole
+ * semantic outcome directly. */
+$[c_inline]
+val guard_static : (gas, bool) -> (gas, OpcodeOutcome)
+$[c_inline]
+val do_jump : (code_pointer, gas, Code, word) -> (code_pointer, gas, OpcodeOutcome)
+$[c_inline]
+val execute_sdiv : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_smod : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_exp : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_signextend : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_sar : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_clz : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_keccak256 : (gas, StackPointer, EvmMemorySlice) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_address : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_origin : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_caller : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_callvalue : (word, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_gasprice : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_calldatasize : (CalldataSlice, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_calldataload : (CalldataSlice, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_calldatacopy : (CalldataSlice, gas, StackPointer, EvmMemorySlice) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_codesize : (Code, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_codecopy : (Code, gas, StackPointer, EvmMemorySlice) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_balance : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_selfbalance : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_extcodesize : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_extcodecopy : (gas, StackPointer, EvmMemorySlice) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_extcodehash : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_returndatasize : (OutputSlice, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_returndatacopy : (OutputSlice, gas, StackPointer, EvmMemorySlice) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_blockhash : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_coinbase : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_timestamp : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_number : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_slotnum : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_prevrandao : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_gaslimit : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_chainid : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_basefee : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_blobbasefee : (word, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_blobhash : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_pop : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_mload : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+$[c_inline]
+val execute_mstore : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+$[c_inline]
+val execute_mstore8 : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+$[c_inline]
+val execute_msize : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+$[c_inline]
+val execute_mcopy : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+$[c_inline]
+val execute_tload : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_tstore : (address, bool, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_jump : (Code, code_pointer, gas, StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_jumpi : (Code, code_pointer, gas, StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_pc : (code_pointer, gas, StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_gas : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_jumpdest : gas -> (gas, OpcodeOutcome)
+$[c_inline]
+val execute_push : (gas, StackPointer, push_width, word) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_dup : (gas, StackPointer, stack_operation_index) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_swap : (gas, StackPointer, stack_operation_index) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_dupn : (gas, StackPointer, byte) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_swapn : (gas, StackPointer, byte) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_exchange : (gas, StackPointer, byte) -> (gas, StackPointer, OpcodeOutcome)
+$[c_inline]
+val execute_log : (address, bool, gas, StackPointer, EvmMemorySlice, log_topic_count) -> (
+    gas,
+    StackPointer,
+    EvmMemorySlice,
+    OpcodeOutcome,
+)
+$[c_inline]
+val execute_return : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, FrameStatus)
+$[c_inline]
+val execute_revert :
+    (state_gas, gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice) ->
+    (gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice, FrameStatus)
+$[c_inline]
+val execute_invalid : gas -> (gas, OpcodeOutcome)
+$[c_inline]
+val execute_selfdestruct :
+    (address, Fork, bool, gas, state_gas, state_gas_spill, gas_refund, StackPointer) ->
+    (gas, state_gas, state_gas_spill, gas_refund, StackPointer, FrameStatus)
 /*! Implements `SLOAD` while retaining the optimized storage identifier
     across the warmness and load operations. */
 $[c_inline]
@@ -105,9 +265,9 @@ function execute_sstore(
     if opcode_failed(stack_status) then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, stack_status)
     };
-    let (_, guard_result) = guard_static(carried_gas, carried_is_static);
+    let (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static);
     if opcode_failed(guard_result) then {
-        return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result)
+        return (gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result)
     };
     if (fork < Amsterdam) & (carried_gas <= G_callstipend) then {
         return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, Failed(OutOfGas))

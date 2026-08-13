@@ -195,9 +195,9 @@ function run_ecrecover(input : CalldataSlice) -> PrecompileResult = {
         let message_hash = word_to_hash(message_word);
         let r = slice_load(input, PRECOMPILE_DOUBLE_WORD_OFFSET);
         let s = slice_load(input, ECRECOVER_S_OFFSET);
-        let (recovered, address) = ecrecover_addr(message_hash, parity, r, s);
-        if recovered then {
-            let address_word = address_to_word(address);
+        let recovered = ecrecover_addr(message_hash, parity, r, s);
+        if recovered.success then {
+            let address_word = address_to_word(recovered.address);
             let output = output_buffer_word(address_word);
             precompile_success(output)
         } else {
