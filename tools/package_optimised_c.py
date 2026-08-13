@@ -5,7 +5,13 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import sys
 from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.optimised_c_build import manifest_entries, package_makefile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,51 +19,6 @@ DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 RUNTIME_ROOT = ROOT / "zkvm/runtime"
 RUNTIME_SOURCES = ("sail.c", "cycle_scopes.c")
 RUNTIME_HEADERS = ("sail.h", "sail_failure.h", "cycle_scopes.h")
-
-PACKAGE_MAKEFILE = """\
-.DEFAULT_GOAL := all
-
-CC ?= cc
-AR ?= ar
-CFLAGS ?= -O2 -std=c11 -DNDEBUG
-CPPFLAGS ?=
-
-SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*$$/d' src/sources.list)
-OBJECTS := $(patsubst %.c,build/%.o,$(SOURCES))
-MODEL_CPPFLAGS := -DEVMSAIL_MODEL_H=\\\"evmsail/spec.h\\\" -DEVMSAIL_OPTIMIZED_FFI
-MODEL_CFLAGS := -ffunction-sections -fdata-sections
-
-.PHONY: all clean
-
-all: libevmsail.a
-
-libevmsail.a: $(OBJECTS)
-\t$(AR) crs $@ $(OBJECTS)
-
-build/%.o: src/%.c
-\t@mkdir -p $(dir $@)
-\t$(CC) $(CPPFLAGS) $(MODEL_CPPFLAGS) $(CFLAGS) $(MODEL_CFLAGS) \\
-\t\t-Iinclude -Isrc/ffi -c $< -o $@
-
-clean:
-\trm -rf build libevmsail.a
-"""
-
-
-def manifest_entries(path: Path) -> list[str]:
-    if not path.is_file():
-        raise ValueError(f"missing source manifest: {path}")
-    entries: list[str] = []
-    for line in path.read_text().splitlines():
-        entry = line.strip()
-        if not entry or entry.startswith("#"):
-            continue
-        if Path(entry).is_absolute() or ".." in Path(entry).parts:
-            raise ValueError(f"manifest entry escapes its source tree: {entry}")
-        entries.append(entry)
-    if not entries:
-        raise ValueError(f"empty source manifest: {path}")
-    return entries
 
 
 def copy_header_tree(source: Path, destination: Path) -> None:
@@ -126,7 +87,7 @@ def package(generated: Path, ffi_root: Path) -> None:
         + "".join(f"runtime/{entry}\n" for entry in RUNTIME_SOURCES)
     )
     shutil.copy2(ROOT / "LICENSE", generated / "LICENSE")
-    (generated / "Makefile").write_text(PACKAGE_MAKEFILE)
+    (generated / "Makefile").write_text(package_makefile())
     (generated / "PACKAGE.md").write_text(
         "# Optimized evm-sail C package\n\n"
         "This directory is the self-contained production source package for "

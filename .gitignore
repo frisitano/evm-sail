@@ -20,6 +20,8 @@ harness/.rtcache/
 # Generated C compile checks
 /build/c-spec/
 /build/c-optimised/
+/build/extraction-quality/
+/compile_commands.json
 
 # theorem-prover build artifacts (generated sources and manifests are tracked)
 **/.lake/

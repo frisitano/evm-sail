@@ -35,6 +35,7 @@
 # ===========================================================================
 
 SAIL ?= sail
+SAIL_SOURCE ?=
 Z3_MEMO_PATH ?= $(abspath sail_smt_cache)
 SAIL_Z3_FLAGS := --memo-z3 --memo-z3-path $(Z3_MEMO_PATH)
 LAKE ?= lake
@@ -77,6 +78,12 @@ C_OPT_EXTRA_SAIL_FLAGS ?=
 C_OPT_INLINE_FLAGS ?= --c-inline-attr --c-always-inline-attr
 C_OPT_SPECIALIZE_LOG_FLAGS ?= --c-specialize-log
 C_OPT_PACKAGE       := evmsail
+C_OPT_COMPDB        := compile_commands.json
+C_OPT_QUALITY_DIR   := build/extraction-quality
+C_OPT_QUALITY_RECORD := $(C_OPT_QUALITY_DIR)/record.json
+C_OPT_QUALITY_SUMMARY := $(C_OPT_QUALITY_DIR)/summary.md
+C_OPT_EVALUATION_PURPOSE ?= experiment
+C_OPT_SAIL_SOURCE_ARG = $(if $(strip $(SAIL_SOURCE)),--sail-source "$(SAIL_SOURCE)")
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
 C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
@@ -200,7 +207,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-conformance c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -213,6 +220,8 @@ help:
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
+	@echo "  make c-optimised-compdb - write and smoke-check root clangd metadata"
+	@echo "  make c-optimised-evaluate - write the versioned extraction-quality record"
 	@echo "  make c-optimised-conformance - compile-check and audit optimized generated-C style"
 	@echo "  make c-optimised-lint-report - run comprehensive Clang checks, ordered by compiler cleanup pass"
 	@echo "  make c-optimised-clang-tidy - require all clang-tidy checks over generated and FFI C"
@@ -418,6 +427,28 @@ build-c-optimised: extract-c-optimised
 # Backwards-compatible alias: extract then build.
 c-optimised: build-c-optimised
 
+# clangd discovers this root database automatically. It deliberately names
+# generated translation units plus the original editable FFI sources, never
+# the package's staged FFI copies.
+c-optimised-compdb: extract-c-optimised
+	$(PYTHON) tools/generate_optimised_c_compdb.py --sail $(SAIL) --clang $(CLANG) \
+		--output $(C_OPT_COMPDB) --check $(C_OPT_GENERATED_DIR)
+
+c-optimised-evaluator-test:
+	$(PYTHON) -m unittest tools.test_optimised_c_evaluator
+
+# A valid record may intentionally contain red gates. The evaluator owns the
+# package build so that a compilation failure is recorded instead of preventing
+# publication. Use --require-pass when an experiment or release is ready to
+# make every recorded blocking gate fatal.
+c-optimised-evaluate: c-optimised-compdb
+	$(PYTHON) tools/evaluate_optimised_c.py --sail $(SAIL) --clang $(CLANG) \
+		$(C_OPT_SAIL_SOURCE_ARG) \
+		--purpose $(C_OPT_EVALUATION_PURPOSE) --compdb $(C_OPT_COMPDB) \
+		--built-library $(C_OPT_GENERATED_DIR)/libevmsail.a \
+		--output $(C_OPT_QUALITY_RECORD) --summary $(C_OPT_QUALITY_SUMMARY) \
+		$(C_OPT_GENERATED_DIR)
+
 c-optimised-conformance: c-optimised
 	$(PYTHON) tools/check_optimised_c.py $(C_OPT_GENERATED_DIR)
 
@@ -597,7 +628,7 @@ lean-harness:
 
 clean:
 	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
-	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(C_OPT_QUALITY_DIR) $(C_OPT_COMPDB) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
 
 clear-z3-memo:
 	rm -f "$(Z3_MEMO_PATH)" sail/sail_smt_cache

@@ -20,6 +20,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.optimised_c_build import (
+    compilation_flags,
+    compilation_layout,
+    compilation_sources,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
@@ -160,19 +169,6 @@ def finding_owner(finding: Finding) -> str:
     return "included runtime/support code"
 
 
-def manifest_paths(manifest: Path, source_root: Path) -> list[Path]:
-    paths: list[Path] = []
-    for entry in manifest.read_text().splitlines():
-        entry = entry.strip()
-        if not entry or entry.startswith("#"):
-            continue
-        path = source_root / entry
-        if not path.is_file():
-            raise ValueError(f"manifest source does not exist: {path}")
-        paths.append(path)
-    return paths
-
-
 def parse_findings(output: str) -> set[Finding]:
     findings: set[Finding] = set()
     for line in output.splitlines():
@@ -257,20 +253,9 @@ def main() -> int:
     args = parser.parse_args()
 
     generated = args.generated.resolve()
-    generated_source = generated / "src/spec"
-    generated_manifest = generated_source / "sources.list"
-    packaged_ffi_source = generated / "src/ffi"
-    packaged_ffi_manifest = packaged_ffi_source / "sources.list"
-    if packaged_ffi_manifest.is_file():
-        ffi_source = packaged_ffi_source
-        ffi_manifest = packaged_ffi_manifest
-        packaged = True
-    else:
-        ffi_source = ROOT / "extractions/c/optimised/contract/src"
-        ffi_manifest = ROOT / "extractions/c/optimised/contract/sources.list"
-        packaged = False
-    if not generated_manifest.is_file():
-        print(f"optimized C lint: missing generated manifest: {generated_manifest}")
+    layout = compilation_layout(generated, editable_ffi=False)
+    if not layout.generated_manifest.is_file():
+        print(f"optimized C lint: missing generated manifest: {layout.generated_manifest}")
         return 2
 
     clang = shutil.which(args.clang)
@@ -283,41 +268,12 @@ def main() -> int:
         return 2
 
     try:
-        sources = manifest_paths(generated_manifest, generated_source)
-        sources.extend(manifest_paths(ffi_manifest, ffi_source))
+        generated_sources, ffi_sources = compilation_sources(layout)
+        sources = [*generated_sources, *ffi_sources]
+        flags = compilation_flags(layout, sail=shutil.which(args.sail) or args.sail)
     except ValueError as error:
         print(f"optimized C lint: {error}")
         return 2
-
-    flags = [
-        "-std=c11",
-        '-DEVMSAIL_MODEL_H="evmsail/spec.h"',
-        f"-I{generated / 'include'}",
-        f"-I{ffi_source}",
-    ]
-    if not packaged:
-        sail = shutil.which(args.sail) or args.sail
-        sail_dir_result = subprocess.run(
-            [sail, "--dir"],
-            cwd=ROOT,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if sail_dir_result.returncode != 0:
-            print("optimized C lint: cannot resolve the custom Sail library directory")
-            return 2
-        sail_lib = Path(sail_dir_result.stdout.strip()) / "lib"
-        flags.extend(
-            [
-                f"-I{ROOT / 'zkvm/runtime/sail256'}",
-                f"-I{ROOT / 'zkvm/runtime'}",
-                f"-I{sail_lib}",
-                f"-I{ROOT / 'extractions/c/optimised/contract/include'}",
-                f"-I{ROOT / 'extractions/c'}",
-            ]
-        )
     focused_warnings = [
         "-Werror=unused-label",
         "-Werror=unused-variable",
