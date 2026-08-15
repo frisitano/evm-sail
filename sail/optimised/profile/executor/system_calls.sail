@@ -2,16 +2,15 @@
 
 /*! Profiles one system-call frame. A fatal validation failure terminates the
     guest, so only the returning path closes the scope. */
-function profiled_run_system_call_frame(tgt : address, input : CalldataSlice) -> (
-    gas,
-    state_gas,
-    state_gas_spill,
-    gas_refund,
-    FrameStatus,
-    OutputSlice,
+function profiled_run_system_call_frame(
+    tgt : address,
+    code : Code,
+    input : CalldataSlice,
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
     cycle_scope_start(50);
-    let result = run_system_call_frame(tgt, input);
+    let result = run_system_call_frame(tgt, code, input);
     cycle_scope_end(50);
     result
 }
@@ -38,6 +37,7 @@ function system_call(tgt : address, input : hash) -> unit = {
     if code_hash == KECCAK_EMPTY then {
         return ()
     };
+    let code = code_db_resolve(code_hash);
 
     let initial_memory = memory_reset();
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
@@ -48,7 +48,7 @@ function system_call(tgt : address, input : hash) -> unit = {
     let parent_memory = memory_frame_enter();
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
-    let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, frame_input);
+    let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, code, frame_input);
     let _ = memory_frame_leave(parent_memory);
     let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
@@ -65,9 +65,10 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
     if code_hash == KECCAK_EMPTY then {
         fatal_error(ExecutionInvalid)
     } else {
+        let code = code_db_resolve(code_hash);
         let _ = memory_reset();
         let parent_memory = memory_frame_enter();
-        let (_, _, _, _, status, output) = profiled_run_system_call_frame(tgt, EMPTY_CALLDATA);
+        let (_, _, _, _, status, output) = profiled_run_system_call_frame(tgt, code, EMPTY_CALLDATA);
         let succeeded = frame_succeeded(status);
         if succeeded then {
             let start = scratch_reserve(output.len);

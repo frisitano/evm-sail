@@ -55,25 +55,22 @@ let DEPOSIT_REQUEST_AMOUNT : int(80) = 80
 let DEPOSIT_REQUEST_SIGNATURE : int(88) = 88
 let DEPOSIT_REQUEST_INDEX : int(184) = 184
 
-/* Enter a top-level protocol system-call frame. The caller has already made a
- * fresh memory frame and, for a word input, frozen the parent-memory span that
- * `input` references. */
-/*! Runs a top-level protocol system-call frame. The caller has already made
-    a fresh memory frame and, for a word input, frozen the parent-memory span
-    that `input` references. */
-function run_system_call_frame(tgt : address, input : CalldataSlice) -> (
-    gas,
-    state_gas,
-    state_gas_spill,
-    gas_refund,
-    FrameStatus,
-    OutputSlice,
+/* Enter a top-level protocol system-call frame. The caller has already
+ * resolved `code`, made a fresh memory frame and, for a word input, frozen
+ * the parent-memory span that `input` references. */
+/*! Runs a top-level protocol system-call frame. The caller has already
+    resolved `code`, made a fresh memory frame and, for a word input, frozen
+    the parent-memory span that `input` references. */
+function run_system_call_frame(
+    tgt : address,
+    code : Code,
+    input : CalldataSlice,
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
     let execution_profile = k_execution_profile;
     let gas_limits = execution_profile.gas;
     k_journal_checkpoint();
-    let code_hash = k_code_key(tgt);
-    let code = code_db_resolve(code_hash);
     interpret(
         gas_limits.system_regular_limit,
         gas_limits.system_state_limit,
@@ -101,6 +98,7 @@ function system_call(tgt : address, input : hash) -> unit = {
     if code_hash == KECCAK_EMPTY then {
         return () /* system contract absent -> skip (EIP-4788 / EIP-2935) */
     };
+    let code = code_db_resolve(code_hash);
 
     /* Freeze the word in a parent memory frame. The system call executes
      * above that frame, so its own memory writes cannot mutate calldata. */
@@ -113,7 +111,7 @@ function system_call(tgt : address, input : hash) -> unit = {
     let parent_memory = memory_frame_enter();
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
-    let (_, _, _, _, status, _) = run_system_call_frame(tgt, frame_input);
+    let (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input);
     let _ = memory_frame_leave(parent_memory);
     let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
@@ -143,9 +141,10 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
     if code_hash == KECCAK_EMPTY then {
         fatal_error(ExecutionInvalid)
     } else {
+        let code = code_db_resolve(code_hash);
         let _ = memory_reset();
         let parent_memory = memory_frame_enter();
-        let (_, _, _, _, status, output) = run_system_call_frame(tgt, EMPTY_CALLDATA);
+        let (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA);
         let succeeded = frame_succeeded(status);
         if succeeded then {
             let start = scratch_reserve(output.len);
