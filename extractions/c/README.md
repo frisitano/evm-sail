@@ -77,6 +77,13 @@ gate outcomes, and explicit reasons for every skipped higher-cost gate. A red
 gate remains a recorded result; callers can pass `--require-pass` directly to
 the evaluator when a blocking experiment or release must be green.
 
+The `distinct_intermediate_tuple_identifiers` metric is lexer-aware. It counts
+distinct function-local `struct tuple_*` declarations whose identifier has
+Sail's generated `_<phase>_<serial>` suffix. Tuple-valued function returns,
+parameters, compound literals, and human-named semantic aggregates are outside
+the metric: it measures removable generated carrier plumbing, not the model's
+tuple ABI or deliberate product values.
+
 For a review record, identify both sides of the compiler provenance explicitly:
 
 ```sh

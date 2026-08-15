@@ -35,6 +35,7 @@ BASELINE_METRICS = {
     "generated_nonblank_lines": 10389,
     "distinct_temporary_identifiers": 200,
     "distinct_result_identifiers": 150,
+    "distinct_intermediate_tuple_identifiers": 310,
     "goto_keyword_tokens": 3,
 }
 SAMPLE_STRATA = (
@@ -185,11 +186,60 @@ def strip_c_comments_and_literals(text: str) -> str:
     return "".join(output)
 
 
+def intermediate_tuple_identifiers(text: str) -> set[str]:
+    """Find generated tuple-valued locals without counting semantic tuple ABI."""
+    code = strip_c_comments_and_literals(text)
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*|[{}();,=*]", code)
+    identifiers: set[str] = set()
+    function_depth = 0
+
+    def starts_function_body(brace_index: int) -> bool:
+        if brace_index == 0 or tokens[brace_index - 1] != ")":
+            return False
+        paren_depth = 1
+        cursor = brace_index - 2
+        while cursor >= 0:
+            if tokens[cursor] == ")":
+                paren_depth += 1
+            elif tokens[cursor] == "(":
+                paren_depth -= 1
+                if paren_depth == 0:
+                    break
+            cursor -= 1
+        return (
+            cursor > 0
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[cursor - 1]) is not None
+            and tokens[cursor - 1] not in {"if", "for", "switch", "while"}
+        )
+
+    for index, token in enumerate(tokens):
+        if token == "{":
+            if function_depth > 0:
+                function_depth += 1
+            elif starts_function_body(index):
+                function_depth = 1
+            continue
+        if token == "}":
+            function_depth = max(0, function_depth - 1)
+            continue
+        if token != "struct" or function_depth == 0 or index + 3 >= len(tokens):
+            continue
+        tuple_type, identifier, following = tokens[index + 1 : index + 4]
+        if (
+            tuple_type.startswith("tuple_")
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*_[0-9]+_[0-9]+", identifier)
+            and following in {"=", ";", ","}
+        ):
+            identifiers.add(identifier)
+    return identifiers
+
+
 def source_metrics(sources: list[Path]) -> dict[str, int]:
     physical = 0
     nonblank = 0
     temporaries: set[str] = set()
     results: set[str] = set()
+    intermediate_tuples: set[str] = set()
     gotos = 0
     for source in sources:
         text = source.read_text(errors="replace")
@@ -199,6 +249,7 @@ def source_metrics(sources: list[Path]) -> dict[str, int]:
         code = strip_c_comments_and_literals(text)
         temporaries.update(re.findall(r"\b(?:z?tmp)_[A-Za-z0-9_]+\b", code))
         results.update(re.findall(r"\bresult_[A-Za-z0-9_]+\b", code))
+        intermediate_tuples.update(intermediate_tuple_identifiers(text))
         gotos += len(re.findall(r"\bgoto\b", code))
     return {
         "manifest_translation_units": len(sources),
@@ -206,6 +257,7 @@ def source_metrics(sources: list[Path]) -> dict[str, int]:
         "generated_nonblank_lines": nonblank,
         "distinct_temporary_identifiers": len(temporaries),
         "distinct_result_identifiers": len(results),
+        "distinct_intermediate_tuple_identifiers": len(intermediate_tuples),
         "goto_keyword_tokens": gotos,
     }
 
@@ -247,6 +299,10 @@ def metric_records(values: dict[str, int]) -> list[dict[str, Any]]:
         "generated_nonblank_lines": "nonblank lines across manifest generated sources",
         "distinct_temporary_identifiers": r"distinct tokens matching (?:z?tmp)_[A-Za-z0-9_]+",
         "distinct_result_identifiers": r"distinct tokens matching result_[A-Za-z0-9_]+",
+        "distinct_intermediate_tuple_identifiers": (
+            "distinct function-local struct tuple_* declarations whose identifier "
+            "carries Sail's generated _<phase>_<serial> suffix"
+        ),
         "goto_keyword_tokens": "lexer-aware goto tokens outside comments and literals",
     }
     return [

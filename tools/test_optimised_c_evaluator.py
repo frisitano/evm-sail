@@ -12,6 +12,7 @@ from tools.evaluate_optimised_c import (
     SCHEMA_VERSION,
     display_path,
     gate,
+    intermediate_tuple_identifiers,
     package_build_gate,
     representative_sample,
     source_metrics,
@@ -65,9 +66,46 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
                     "generated_nonblank_lines": 5,
                     "distinct_temporary_identifiers": 2,
                     "distinct_result_identifiers": 1,
+                    "distinct_intermediate_tuple_identifiers": 0,
                     "goto_keyword_tokens": 1,
                 },
             )
+
+    def test_intermediate_tuple_metric_excludes_semantic_tuple_abi(self) -> None:
+        source = (
+            "struct tuple_bool_uint_64 api_result(uint64_t value);\n"
+            "void consume(struct tuple_bool_uint_64 parameter);\n"
+            "struct tuple_bool_uint_64 semantic_global;\n"
+            "struct tuple_bool_uint_64 global_result_5_23;\n"
+            "struct wrapper { struct tuple_bool_uint_64 field_6_24; };\n"
+            "struct tuple_bool_uint_64 return_plumbing(void) {\n"
+            "  struct tuple_bool_uint_64 return_result_9_20 = api_result(3);\n"
+            "  return return_result_9_20;\n"
+            "}\n"
+            "void evaluate(void) {\n"
+            "  struct tuple_bool_uint_64 call_result_2_17 = api_result(1);\n"
+            "  struct /* stable across comments */ "
+            "tuple_bool_uint_64 unpack_result_3_18;\n"
+            "  bool unpacked = unpack_result_3_18.tup0;\n"
+            "  struct tuple_bool_uint_64 assignment_result_8_19;\n"
+            "  assignment_result_8_19 = api_result(2);\n"
+            "  struct tuple_bool_uint_64 semantic_state;\n"
+            '  const char *hidden = "struct tuple_bool_uint_64 tmp_8_99;";\n'
+            "  // struct tuple_bool_uint_64 result_8_88;\n"
+            "  semantic_state = (struct tuple_bool_uint_64){.tup0 = true};\n"
+            "  call_result_2_17 = semantic_state;\n"
+            "  if (unpacked) consume(semantic_state);\n"
+            "}\n"
+        )
+        self.assertEqual(
+            intermediate_tuple_identifiers(source),
+            {
+                "assignment_result_8_19",
+                "call_result_2_17",
+                "return_result_9_20",
+                "unpack_result_3_18",
+            },
+        )
 
     def test_manifest_rejects_duplicates_and_parent_traversal(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
