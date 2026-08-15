@@ -81,10 +81,13 @@ function guard_stack(
     carried_sp : StackPointer,
     inputs : operand_stack_height,
     outputs : operand_stack_height,
-) -> OpcodeOutcome = match validate_stack(carried_sp, inputs, outputs) {
-    StackValid => Continue(),
-    StackUnderflowFailure => Failed(StackUnderflow),
-    StackOverflowFailure => Failed(StackOverflow),
+) -> OpcodeOutcome = {
+    let stack_validation = validate_stack(carried_sp, inputs, outputs);
+    match stack_validation {
+        StackValid => Continue(),
+        StackUnderflowFailure => Failed(StackUnderflow),
+        StackOverflowFailure => Failed(StackOverflow),
+    }
 }
 
 
@@ -141,7 +144,8 @@ before calling a generated body, without materializing an `ast`.
 /*! Implements `ADD`. */
 function execute_add(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -163,7 +167,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `MUL`. */
 function execute_mul(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -185,7 +190,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements `SUB`. */
 function execute_sub(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -207,7 +213,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements unsigned `DIV`. */
 function execute_div(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -229,7 +236,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements signed `SDIV`. */
 function execute_sdiv(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -251,7 +259,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements unsigned `MOD`. */
 function execute_mod(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -273,7 +282,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements signed `SMOD`. */
 function execute_smod(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -295,7 +305,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements `ADDMOD`. */
 function execute_addmod(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -319,7 +330,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_mid);
 /*! Implements `MULMOD`. */
 function execute_mulmod(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -343,7 +355,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_mid);
 /*! Implements `EXP`, including exponent-dependent gas. */
 function execute_exp(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -366,7 +379,8 @@ let a = read_stack_word(sp_after);
 /*! Implements `SIGNEXTEND`. */
 function execute_signextend(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -388,7 +402,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements unsigned `LT`. */
 function execute_lt(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -410,7 +425,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements unsigned `GT`. */
 function execute_gt(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -432,7 +448,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements signed `SLT`. */
 function execute_slt(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -454,7 +471,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements signed `SGT`. */
 function execute_sgt(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -476,7 +494,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `EQ`. */
 function execute_eq(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -498,7 +517,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `ISZERO`. */
 function execute_iszero(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -517,7 +537,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements bitwise `AND`. */
 function execute_and(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -539,7 +560,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements bitwise `OR`. */
 function execute_or(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -561,7 +583,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements bitwise `XOR`. */
 function execute_xor(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -583,7 +606,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements bitwise `NOT`. */
 function execute_not(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -602,7 +626,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `BYTE`. */
 function execute_byte(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -624,7 +649,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements logical left shift `SHL` (EIP-145). */
 function execute_shl(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -647,7 +673,8 @@ function execute_shl(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 /*! Implements logical right shift `SHR` (EIP-145). */
 function execute_shr(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -670,7 +697,8 @@ function execute_shr(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 /*! Implements arithmetic right shift `SAR` (EIP-145). */
 function execute_sar(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -693,7 +721,8 @@ function execute_sar(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 /*! Implements count-leading-zeroes `CLZ` (EIP-7939). */
 function execute_clz(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -713,7 +742,8 @@ function execute_clz(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 /*! Implements `KECCAK256` over an expanded memory range. */
 function execute_keccak256(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -747,7 +777,8 @@ let offset_word = read_stack_word(sp_after);
 /*! Implements `ADDRESS`. */
 function execute_address(carried_address : address, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -767,7 +798,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `ORIGIN`. */
 function execute_origin(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -787,7 +819,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CALLER`. */
 function execute_caller(carried_caller : address, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -807,7 +840,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CALLVALUE`. */
 function execute_callvalue(carried_value : word, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -826,7 +860,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `GASPRICE`. */
 function execute_gasprice(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -846,7 +881,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CALLDATASIZE`. */
 function execute_calldatasize(carried_calldata : CalldataSlice, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -868,7 +904,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CALLDATALOAD`. */
 function execute_calldataload(carried_calldata : CalldataSlice, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -890,7 +927,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `CALLDATACOPY`. */
 function execute_calldatacopy(carried_calldata : CalldataSlice, carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -930,7 +968,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `CODESIZE`. */
 function execute_codesize(carried_code : Code, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -951,7 +990,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CODECOPY`. */
 function execute_codecopy(carried_code : Code, carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -993,7 +1033,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `BALANCE`, including warm/cold account access. */
 function execute_balance(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1019,7 +1060,8 @@ let address_word = read_stack_word(sp_after);
 /*! Implements `SELFBALANCE`. */
 function execute_selfbalance(carried_address : address, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1039,7 +1081,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_low);
 /*! Implements `EXTCODESIZE`, including warm/cold account access. */
 function execute_extcodesize(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1067,7 +1110,8 @@ let address_word = read_stack_word(sp_after);
 /*! Implements `EXTCODECOPY`, including access and copy gas. */
 function execute_extcodecopy(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 4, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1114,7 +1158,8 @@ let address_word = read_stack_word(sp_after);
 /*! Implements `EXTCODEHASH`, including warm/cold account access. */
 function execute_extcodehash(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1141,7 +1186,8 @@ let address_word = read_stack_word(sp_after);
 /*! Implements `RETURNDATASIZE`. */
 function execute_returndatasize(carried_returndata : OutputSlice, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1162,7 +1208,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements bounds-checked `RETURNDATACOPY`. */
 function execute_returndatacopy(carried_returndata : OutputSlice, carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1213,7 +1260,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `BLOCKHASH`. */
 function execute_blockhash(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1236,7 +1284,8 @@ let (halt, gas_after_charge) = charge(gas_after, 20);
 /*! Implements `COINBASE`. */
 function execute_coinbase(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1256,7 +1305,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `TIMESTAMP`. */
 function execute_timestamp(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1276,7 +1326,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `NUMBER`. */
 function execute_number(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1296,7 +1347,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `SLOTNUM`. */
 function execute_slotnum(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1316,7 +1368,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `PREVRANDAO`. */
 function execute_prevrandao(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1336,7 +1389,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `GASLIMIT`. */
 function execute_gaslimit(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1356,7 +1410,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `CHAINID`. */
 function execute_chainid(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1376,7 +1431,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `BASEFEE`. */
 function execute_basefee(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1400,7 +1456,8 @@ function execute_blobbasefee(
     carried_sp : StackPointer,
 ) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1419,7 +1476,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `BLOBHASH`. */
 function execute_blobhash(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1441,7 +1499,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements `POP`. */
 function execute_pop(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1460,7 +1519,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements `MLOAD`. */
 function execute_mload(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1493,7 +1553,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `MSTORE`. */
 function execute_mstore(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1526,7 +1587,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `MSTORE8`. */
 function execute_mstore8(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1558,7 +1620,8 @@ let (base_halt, gas_after_base) = charge(gas_after, G_verylow);
 /*! Implements `MSIZE`. */
 function execute_msize(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1580,7 +1643,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
 /*! Implements overlapping memory copy `MCOPY` (EIP-5656). */
 function execute_mcopy(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1648,7 +1712,8 @@ function refresh_account_execution_context(
 /*! Implements `SLOAD`, including warm/cold access gas. */
 function execute_sload(context : AccountExecutionContext, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1676,11 +1741,13 @@ val execute_sstore : (AccountExecutionContext, Fork, bool, gas, state_gas, state
     (gas, state_gas, state_gas_spill, gas_refund, StackPointer, OpcodeOutcome)
 function execute_sstore(context, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, stack_status)
     };
     let (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static);
-    if opcode_failed(guard_result) then {
+    let guard_failed = opcode_failed(guard_result);
+    if guard_failed then {
         return (gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result)
     };
     if (fork < Amsterdam) & (carried_gas <= G_callstipend) then {
@@ -1728,7 +1795,8 @@ function execute_sstore(context, fork, carried_is_static, carried_gas, carried_s
 /*! Implements transient-storage load `TLOAD` (EIP-1153). */
 function execute_tload(carried_address : address, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1751,14 +1819,16 @@ function execute_tload(carried_address : address, carried_gas : gas, carried_sp 
 /*! Implements transient-storage write `TSTORE` (EIP-1153). */
 function execute_tstore(carried_address : address, carried_is_static : bool, carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
     var sp_after : StackPointer = carried_sp;
 /* EIP-1153 */
     let (gas_after_static_guard, status_after_guard) = guard_static(gas_after, carried_is_static);
-    if opcode_failed(status_after_guard) then {
+    let guard_failed = opcode_failed(status_after_guard);
+    if guard_failed then {
         gas_after = gas_after_static_guard;
         return (gas_after, sp_after, status_after_guard)
     };
@@ -1779,7 +1849,8 @@ function execute_tstore(carried_address : address, carried_is_static : bool, car
 /*! Implements unconditional `JUMP`. */
 function execute_jump(carried_code : Code, carried_pc : code_pointer, carried_gas : gas, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 1, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
     var pc_after : code_pointer = carried_pc;
@@ -1801,7 +1872,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_mid);
 /*! Implements conditional `JUMPI`. */
 function execute_jumpi(carried_code : Code, carried_pc : code_pointer, carried_gas : gas, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
     var pc_after : code_pointer = carried_pc;
@@ -1831,7 +1903,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_high);
     carried, already-advanced program counter. */
 function execute_pc(carried_pc : code_pointer, carried_gas : gas, carried_sp : StackPointer) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1853,7 +1926,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_base);
     charge. */
 function execute_gas(carried_gas : gas, carried_sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1884,7 +1958,8 @@ let (halt, next_gas) = charge(gas_after, G_jumpdest);
 /*! Implements the `PUSH0` through `PUSH32` family. */
 function execute_push(carried_gas : gas, carried_sp : StackPointer, n : push_width, v : word) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1915,7 +1990,8 @@ if n == 0 then {
 /*! Implements the `DUP1` through `DUP16` family. */
 function execute_dup(carried_gas : gas, carried_sp : StackPointer, n : stack_operation_index) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, n, n + 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1935,7 +2011,8 @@ let (halt, gas_after_charge) = charge(gas_after, G_verylow);
 /*! Implements the `SWAP1` through `SWAP16` family. */
 function execute_swap(carried_gas : gas, carried_sp : StackPointer, n : stack_operation_index) -> (gas, StackPointer, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, n + 1, n + 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas_after : gas = carried_gas;
@@ -1962,7 +2039,8 @@ function execute_dupn(carried_gas : gas, carried_sp : StackPointer, immediate : 
     } else {
         let n = decode_single_stack_index(immediate);
         let stack_status = guard_stack(carried_sp, n, n + 1);
-        if opcode_failed(stack_status) then {
+        let stack_failed = opcode_failed(stack_status);
+        if stack_failed then {
             return (GAS_ZERO, carried_sp, stack_status)
         };
         let (halt, gas_after_charge) = charge(gas_after, G_verylow);
@@ -1987,7 +2065,8 @@ function execute_swapn(carried_gas : gas, carried_sp : StackPointer, immediate :
     } else {
         let n = decode_single_stack_index(immediate);
         let stack_status = guard_stack(carried_sp, n + 1, n + 1);
-        if opcode_failed(stack_status) then {
+        let stack_failed = opcode_failed(stack_status);
+        if stack_failed then {
             return (GAS_ZERO, carried_sp, stack_status)
         };
         let (halt, gas_after_charge) = charge(gas_after, G_verylow);
@@ -2013,7 +2092,8 @@ function execute_exchange(carried_gas : gas, carried_sp : StackPointer, immediat
     };
     let (n, m) = decode_exchange_stack_indices(immediate);
     let stack_status = guard_stack(carried_sp, m + 1, m + 1);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
     let (halt, gas_after_charge) = charge(gas_after, G_verylow);
@@ -2032,14 +2112,16 @@ function execute_exchange(carried_gas : gas, carried_sp : StackPointer, immediat
 /*! Implements the `LOG0` through `LOG4` family. */
 function execute_log(carried_address : address, carried_is_static : bool, carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice, n : log_topic_count) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
     let stack_status = guard_stack(carried_sp, n + 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas_after : gas = carried_gas;
     var sp_after : StackPointer = carried_sp;
     var memory_after : EvmMemorySlice = carried_memory;
 let (gas_after_static_guard, status_after_guard) = guard_static(gas_after, carried_is_static);
-    if opcode_failed(status_after_guard) then {
+    let guard_failed = opcode_failed(status_after_guard);
+    if guard_failed then {
         gas_after = gas_after_static_guard;
         return (gas_after, sp_after, memory_after, status_after_guard)
     };
@@ -2083,7 +2165,8 @@ function execute_stop() -> FrameStatus = {
 /*! Implements successful `RETURN`. */
 function execute_return(carried_gas : gas, carried_sp : StackPointer, carried_memory : EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, FrameStatus) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_sp, carried_memory, opcode_frame_status(stack_status))
     };
     var status_after : FrameStatus = Running();
@@ -2119,7 +2202,8 @@ val execute_revert :
     (gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice, FrameStatus)
 function execute_revert(carried_state_gas_reservoir, carried_gas, carried_state_gas, carried_state_spill, carried_sp, carried_memory) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_sp, carried_memory, opcode_frame_status(stack_status))
     };
     var status_after : FrameStatus = Running();
@@ -2161,11 +2245,13 @@ val execute_selfdestruct :
     (gas, state_gas, state_gas_spill, gas_refund, StackPointer, FrameStatus)
 function execute_selfdestruct(carried_address, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp) = {
     let stack_status = guard_stack(carried_sp, 1, 0);
-    if opcode_failed(stack_status) then {
+    let stack_failed = opcode_failed(stack_status);
+    if stack_failed then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(stack_status))
     };
     let (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static);
-    if opcode_failed(guard_result) then {
+    let guard_failed = opcode_failed(guard_result);
+    if guard_failed then {
         return (gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(guard_result))
     };
     let beneficiary_word = read_stack_word(carried_sp);
