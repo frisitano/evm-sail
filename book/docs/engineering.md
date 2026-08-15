@@ -134,8 +134,8 @@ emitted C side by side. That is also what makes the semantic-proof log
 (`--c-specialize-log`) useful: the inferred bounds and representation
 decisions are legible against the source they came from.
 
-**The generated C is linted like source.** `check_optimised_c_format.py`
-and `lint_optimised_c.py` hold compiler output to clang-format and
+**The generated C is linted like source.** `devtools.optimised_c.format`
+and `devtools.optimised_c.lint` hold compiler output to clang-format and
 clang-tidy-inspired policies, and the optimized-FFI audit enforces the
 production rules — no indirect calls, no capacity-owning static arrays,
 manifest-complete sources. Compiler output that regresses in style or

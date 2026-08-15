@@ -23,7 +23,7 @@ and **instruction steps**; the fixture is the only other selector.
     would choose, and we do not tune them. Treat the numbers as *this build,
     this workload*: useful for locating cost and tracking our own progress,
     not as a verdict on another project. Build provenance appears under each
-    guest; recipes are in `tools/zisk-guests/README.md`, and corrections are
+    guest; recipes are in `devtools/benchmarks/zisk-guests/README.md`, and corrections are
     welcome.
 
 !!! info "How to read the counters"
@@ -44,6 +44,6 @@ and **instruction steps**; the fixture is the only other selector.
 
     The catalog and per-fixture shards are committed, so this page renders
     without re-running anything. Re-export an existing result with
-    `tools/benchmark_zisk.py --regenerate-dashboard results.json
+    `python3 -m devtools.benchmarks.zisk --regenerate-dashboard results.json
     --dashboard-dir …`. Fixtures come from the
     [devnet batch catalog](https://pub-df22334654034ebab51bc096137a59d8.r2.dev/devnets/glamsterdam-devnet-7/index.html).

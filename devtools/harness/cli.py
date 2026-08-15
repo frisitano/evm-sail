@@ -2,8 +2,9 @@
 """Run EEST fixtures through evm-sail's single main.sail entry.
 
 Architecture: the Sail model is built ONCE into a shared library and driven
-IN-PROCESS via ctypes (dump_state.py). Each fixture case is serialized to the
-SSZ SszStatelessInput (ssz_builder.py, under the execution-specs venv) and fed
+IN-PROCESS via ctypes (devtools.harness.guest). Each fixture case is serialized
+to the SSZ SszStatelessInput (devtools.harness.ssz_builder, under the
+execution-specs venv) and fed
 to main.sail's full-block validator, gated BYTE-EXACT against the EELS
 reference. Two input
 sources, auto-detected per fixture file:
@@ -20,23 +21,56 @@ unchanged ELF. This subsumes the old
 zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 
 Usage:
-    python3 harness/run.py <test.json|dir> [...] [--fork F] [--limit N]
+    python3 -m devtools.harness.cli <test.json|dir> [...] [--fork F] [--limit N]
             [--build standard|optimized] [--python|--spike|--zisk] [--rebuild]
             [--verbose] [--debug]
-Requires `sail` on PATH and a C compiler; ssz_builder.py runs under the
+Requires `sail` on PATH and a C compiler; devtools.harness.ssz_builder runs under the
 execution-specs venv (EXECSPECS_PY).
 """
-import argparse, json, os, re, subprocess, sys, tempfile, traceback
-import dump_state
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import traceback
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
+
+from devtools.harness import guest as dump_state
+from devtools.paths import REPO_ROOT, temporary_root
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ELDIR = os.path.abspath(os.path.join(HERE, ".."))
-TMP_ROOT = os.environ.get("AGENT_TMPDIR", os.path.join(ELDIR, ".agent-tmp"))
-os.makedirs(TMP_ROOT, exist_ok=True)
+ELDIR = str(REPO_ROOT)
+TMP_ROOT = str(temporary_root())
+
+
+class GuestBackend(Protocol):
+    """Execution seam shared by native, extracted, and zkVM guests."""
+
+    def run_once(self, inp: bytes) -> bytes: ...
+
+
+@dataclass(frozen=True)
+class FunctionGuest:
+    """Adapt an already-loaded native or Lean guest function to the seam."""
+
+    runner: Callable[[bytes], bytes]
+
+    def run_once(self, inp: bytes) -> bytes:
+        return self.runner(inp)
+
 
 def h2i(x):
-    if isinstance(x, int): return x
-    x = str(x); return int(x, 16) if x.startswith("0x") else int(x)
+    if isinstance(x, int):
+        return x
+    x = str(x)
+    return int(x, 16) if x.startswith("0x") else int(x)
+
+
 def ai(a):
     return int(a.lower().replace("0x", ""), 16) if a else 0
 
@@ -52,28 +86,47 @@ def fixture_items(path):
                 value = row["v"]
                 yield row["k"], json.loads(value) if isinstance(value, str) else value
     else:
-        yield from json.load(open(path)).items()
+        with open(path) as fixture_file:
+            yield from json.load(fixture_file).items()
 
 
 def collect(path, want_fork, limit):
     out = []
     for name, t in fixture_items(path):
-        if "post" not in t: continue
+        if "post" not in t:
+            continue
         for fork, entries in t["post"].items():
-            if want_fork and fork != want_fork: continue
+            if want_fork and fork != want_fork:
+                continue
             for pe in entries:
-                idx = pe["indexes"]; tx = t["transaction"]
-                out.append({
-                    "cid": f"{name.split('::')[-1]}|{fork}|d{idx['data']}g{idx['gas']}v{idx['value']}",
-                    "env": t["env"], "pre": t["pre"], "tx": tx,
-                    "fork": fork, "idx": idx,   # for ssz_builder (fork rules + tx index)
-                    "config": t.get("config", {}), "txbytes": pe.get("txbytes"),
-                    "gas": h2i(tx["gasLimit"][idx["gas"]]), "val": h2i(tx["value"][idx["value"]]),
-                    "data": tx["data"][idx["data"]], "post": pe["state"], "hash": pe.get("hash"),
-                    "al": (tx["accessLists"][idx["data"]] if "accessLists" in tx
-                           and idx["data"] < len(tx["accessLists"]) else [])})
-                if limit and len(out) >= limit: return out
+                idx = pe["indexes"]
+                tx = t["transaction"]
+                out.append(
+                    {
+                        "cid": f"{name.split('::')[-1]}|{fork}|d{idx['data']}g{idx['gas']}v{idx['value']}",
+                        "env": t["env"],
+                        "pre": t["pre"],
+                        "tx": tx,
+                        "fork": fork,
+                        "idx": idx,  # for ssz_builder (fork rules + tx index)
+                        "config": t.get("config", {}),
+                        "txbytes": pe.get("txbytes"),
+                        "gas": h2i(tx["gasLimit"][idx["gas"]]),
+                        "val": h2i(tx["value"][idx["value"]]),
+                        "data": tx["data"][idx["data"]],
+                        "post": pe["state"],
+                        "hash": pe.get("hash"),
+                        "al": (
+                            tx["accessLists"][idx["data"]]
+                            if "accessLists" in tx and idx["data"] < len(tx["accessLists"])
+                            else []
+                        ),
+                    }
+                )
+                if limit and len(out) >= limit:
+                    return out
     return out
+
 
 # Interpreter for the execution-specs venv: it owns the stateless SSZ types, the
 # serializer, and the pre-state MPT builder. Default to the sibling checkout,
@@ -85,18 +138,25 @@ EXECSPECS_PY = os.environ.get(
     "EXECSPECS_PY", os.path.join(EXECSPECS_ROOT, ".venv", "bin", "python3")
 )
 
-# Persistent SSZ SszStatelessInput builder (ssz_builder.py --serve), run under the
+# Persistent SSZ SszStatelessInput builder (devtools.harness.ssz_builder --serve), run under the
 # execution-specs venv (it owns the stateless SSZ types + serializer + t8n). One
 # case JSON per line in, one JSON response per line out ({"input": hex[,
 # "expected": hex]} or {"err": msg}).
 _ssz_proc = None
+
+
 def _serve_request(payload):
     global _ssz_proc
     if _ssz_proc is None:
         _ssz_proc = subprocess.Popen(
-            [EXECSPECS_PY, os.path.join(HERE, "ssz_builder.py"), "--serve"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    _ssz_proc.stdin.write((json.dumps(payload) + "\n").encode()); _ssz_proc.stdin.flush()
+            [EXECSPECS_PY, "-m", "devtools.harness.ssz_builder", "--serve"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
+    assert _ssz_proc.stdin is not None
+    assert _ssz_proc.stdout is not None
+    _ssz_proc.stdin.write((json.dumps(payload) + "\n").encode())
+    _ssz_proc.stdin.flush()
     line = _ssz_proc.stdout.readline()
     if not line:
         raise RuntimeError("ssz_builder --serve exited unexpectedly")
@@ -105,16 +165,24 @@ def _serve_request(payload):
         raise RuntimeError(resp["err"])
     return resp
 
+
 def build_guest_pair(case):
     """case -> (input bytes, expected SszStatelessValidationResult bytes): a fully
     VALID Amsterdam block built by the in-process EELS t8n, plus the reference
     guest's byte-exact expected output over that exact input."""
-    resp = _serve_request({
-        "env": case["env"], "pre": case["pre"], "tx": case["tx"],
-        "fork": case["fork"], "idx": case["idx"], "config": case["config"],
-        "txbytes": case["txbytes"],
-    })
+    resp = _serve_request(
+        {
+            "env": case["env"],
+            "pre": case["pre"],
+            "tx": case["tx"],
+            "fork": case["fork"],
+            "idx": case["idx"],
+            "config": case["config"],
+            "txbytes": case["txbytes"],
+        }
+    )
     return bytes.fromhex(resp["input"]), bytes.fromhex(resp["expected"])
+
 
 def collect_stateless(path):
     """Blockchain/stateless fixture blocks carrying statelessInputBytes:
@@ -126,9 +194,13 @@ def collect_stateless(path):
             if not sib:
                 continue
             want = b.get("statelessOutputBytes")
-            out.append((f"{name.split('::')[-1]}#{i}",
-                        bytes.fromhex(sib.removeprefix("0x")),
-                        bytes.fromhex(want.removeprefix("0x")) if want else None))
+            out.append(
+                (
+                    f"{name.split('::')[-1]}#{i}",
+                    bytes.fromhex(sib.removeprefix("0x")),
+                    bytes.fromhex(want.removeprefix("0x")) if want else None,
+                )
+            )
     return out
 
 
@@ -152,9 +224,7 @@ class SpikeGuest:
 
     def run_once(self, inp):
         self.rebuild = False
-        with tempfile.NamedTemporaryFile(
-            suffix=".ssz", delete=False, dir=TMP_ROOT
-        ) as tf:
+        with tempfile.NamedTemporaryFile(suffix=".ssz", delete=False, dir=TMP_ROOT) as tf:
             tf.write(inp)
             vec = tf.name
         env = dict(os.environ, VEC=vec, ZKVM_BUILD=self.build_dir)
@@ -162,17 +232,23 @@ class SpikeGuest:
         if self.built:
             env["RUN_ONLY"] = "1"
         try:
-            r = subprocess.run([os.path.join(self.zkvm, "build.sh"), "run"],
-                               capture_output=True, env=env,
-                               timeout=self.timeout, cwd=self.zkvm)
+            r = subprocess.run(
+                [os.path.join(self.zkvm, "build.sh"), "run"],
+                capture_output=True,
+                env=env,
+                timeout=self.timeout,
+                cwd=self.zkvm,
+            )
         finally:
             os.unlink(vec)
         if r.returncode == 0:
             self.built = True
         m = re.search(rb"^output_hex=([0-9a-f]*)\s*$", r.stdout, re.M)
         if r.returncode != 0 or not m:
-            raise RuntimeError(f"spike run failed rc={r.returncode}: "
-                               f"{r.stderr.decode(errors='replace')[-200:].strip()}")
+            raise RuntimeError(
+                f"spike run failed rc={r.returncode}: "
+                f"{r.stderr.decode(errors='replace')[-200:].strip()}"
+            )
         return bytes.fromhex(m.group(1).decode())
 
 
@@ -189,9 +265,7 @@ class ZiskGuest:
     def __init__(self, timeout, profile=False, rebuild=False):
         self.build_script = os.path.join(ELDIR, "zkvm", "zisk", "build.sh")
         self.build_dir = tempfile.mkdtemp(prefix="zkvm-zisk-", dir=TMP_ROOT)
-        self.ziskemu = os.environ.get(
-            "ZISKEMU", os.path.expanduser("~/.zisk/bin/ziskemu")
-        )
+        self.ziskemu = os.environ.get("ZISKEMU", os.path.expanduser("~/.zisk/bin/ziskemu"))
         self._check_emulator_version()
         self.built = False
         self.timeout = timeout
@@ -221,15 +295,12 @@ class ZiskGuest:
                 timeout=10,
             )
         except OSError as exc:
-            raise RuntimeError(
-                f"cannot execute ZisK emulator {self.ziskemu!r}: {exc}"
-            ) from exc
+            raise RuntimeError(f"cannot execute ZisK emulator {self.ziskemu!r}: {exc}") from exc
         output = (result.stdout + result.stderr).strip()
         match = re.search(r"\bziskemu\s+([^\s]+)", output)
         if result.returncode != 0 or not match:
             raise RuntimeError(
-                f"cannot determine the version of ZisK emulator "
-                f"{self.ziskemu!r}: {output}"
+                f"cannot determine the version of ZisK emulator {self.ziskemu!r}: {output}"
             )
         if match.group(1) != required:
             raise RuntimeError(
@@ -262,12 +333,8 @@ class ZiskGuest:
         self.rebuild = False
         if not self.built:
             self._build()
-        elf = os.path.join(
-            self.build_dir, "stateless-validator-evm-sail-zisk.elf"
-        )
-        with tempfile.TemporaryDirectory(
-            prefix="case-", dir=self.build_dir
-        ) as case_dir:
+        elf = os.path.join(self.build_dir, "stateless-validator-evm-sail-zisk.elf")
+        with tempfile.TemporaryDirectory(prefix="case-", dir=self.build_dir) as case_dir:
             input_path = os.path.join(case_dir, "input.bin")
             output_path = os.path.join(case_dir, "output.bin")
             with open(input_path, "wb") as f:
@@ -275,9 +342,12 @@ class ZiskGuest:
             r = subprocess.run(
                 [
                     self.ziskemu,
-                    "--elf", elf,
-                    "--inputs", input_path,
-                    "--output", output_path,
+                    "--elf",
+                    elf,
+                    "--inputs",
+                    input_path,
+                    "--output",
+                    output_path,
                     "--steps",
                 ],
                 capture_output=True,
@@ -348,7 +418,7 @@ def output_matches(got, expected, zisk=False):
         return False
     if not zisk:
         return got == expected
-    return got[:len(expected)] == expected and not any(got[len(expected):])
+    return got[: len(expected)] == expected and not any(got[len(expected) :])
 
 
 def run_fixtures(files, args):
@@ -360,31 +430,31 @@ def run_fixtures(files, args):
     executable Lean extraction, the real RISC-V ELF on Spike, or the production
     ZisK ELF on ziskemu."""
     if args.spike:
-        run_once = SpikeGuest(
+        backend: GuestBackend = SpikeGuest(
             args.timeout or 900.0,
             profile=args.profile,
             rebuild=args.rebuild,
-        ).run_once
+        )
     elif args.zisk:
-        run_once = ZiskGuest(
+        backend = ZiskGuest(
             args.timeout or 900.0,
             profile=args.profile,
             rebuild=args.rebuild,
-        ).run_once
+        )
     elif args.lean:
         dump_state.load_lean_guest(rebuild=args.rebuild)
-        run_once = dump_state.run_once_guest
+        backend = FunctionGuest(dump_state.run_once_guest)
     elif args.python:
-        run_once = PythonGuest().run_once
+        backend = PythonGuest()
     else:
         dump_state.load_guest(
             rebuild=args.rebuild,
             profile=args.profile,
             build_mode=args.build_mode,
         )
-        run_once = dump_state.run_once_guest
+        backend = FunctionGuest(dump_state.run_once_guest)
     npass = ntotal = 0
-    fail_reasons = {}
+    fail_reasons: dict[str, int] = {}
     printed_fails = 0
     suppressed_fails = 0
     for f in files:
@@ -406,12 +476,13 @@ def run_fixtures(files, args):
                 if args.fail_limit <= 0 or printed_fails < args.fail_limit:
                     printed_fails += 1
                     print(f"FAIL {cid} [{f}]")
-                    if args.verbose: print(f"      {exp}")
+                    if args.verbose:
+                        print(f"      {exp}")
                 else:
                     suppressed_fails += 1
                 continue
             try:
-                got = run_once(inp)
+                got = backend.run_once(inp)
             except Exception as e:
                 fail_reasons["runerr"] = fail_reasons.get("runerr", 0) + 1
                 if args.fail_limit <= 0 or printed_fails < args.fail_limit:
@@ -427,7 +498,8 @@ def run_fixtures(files, args):
                 continue
             if output_matches(got, exp, zisk=args.zisk):
                 npass += 1
-                if not args.quiet: print(f"PASS {cid}")
+                if not args.quiet:
+                    print(f"PASS {cid}")
             else:
                 cat = "noref" if exp is None else "diff"
                 fail_reasons[cat] = fail_reasons.get(cat, 0) + 1
@@ -437,11 +509,14 @@ def run_fixtures(files, args):
                     if args.verbose and exp is not None:
                         gv = got[32:33].hex() if len(got) > 32 else "??"
                         ev = exp[32:33].hex() if len(exp) > 32 else "??"
-                        print(f"      got_len={len(got)} exp_len={len(exp)} "
-                              f"valid_byte got={gv} exp={ev}")
+                        print(
+                            f"      got_len={len(got)} exp_len={len(exp)} "
+                            f"valid_byte got={gv} exp={ev}"
+                        )
                     if args.debug and not (args.spike or args.zisk):
                         snap = dump_state.format_snapshot(
-                            dump_state.snapshot(), limit=0 if args.verbose else 12)
+                            dump_state.snapshot(), limit=0 if args.verbose else 12
+                        )
                         print("\n".join("      " + ln for ln in snap.splitlines()))
                 else:
                     suppressed_fails += 1
@@ -458,17 +533,19 @@ def run_fixtures(files, args):
     print(f"\n=== {npass}/{ntotal} passed ({vehicle}, byte-exact) ===")
     if suppressed_fails:
         print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
-    if fail_reasons: print("fail categories:", dict(sorted(fail_reasons.items(), key=lambda x:-x[1])))
+    if fail_reasons:
+        print("fail categories:", dict(sorted(fail_reasons.items(), key=lambda x: -x[1])))
     if ntotal == 0 or npass != ntotal:
         sys.exit(1)
-
 
 
 def run_sharded(files, args):
     """Shard fixture files across N self-invocations (one library instance per
     process -- the C world state is process-global, so this is the only safe
     concurrency) and aggregate their summaries."""
-    import ast, concurrent.futures as cf
+    import ast
+    import concurrent.futures as cf
+
     n = min(args.jobs, len(files))
     shards = [files[i::n] for i in range(n)]
     flags = ["--quiet"] if args.quiet else ([])
@@ -476,23 +553,33 @@ def run_sharded(files, args):
     # Keep a flushed file breadcrumb in sharded children so such failures are
     # attributable without adding noise to successful parent output.
     flags.append("--_trace-files")
-    if args.verbose: flags.append("--verbose")
-    if args.profile: flags.append("--profile")
-    if args.lean: flags.append("--lean")
-    if args.python: flags.append("--python")
+    if args.verbose:
+        flags.append("--verbose")
+    if args.profile:
+        flags.append("--profile")
+    if args.lean:
+        flags.append("--lean")
+    if args.python:
+        flags.append("--python")
     flags += ["--build", args.build_mode]
-    if args.fork: flags += ["--fork", args.fork]
-    if args.limit: flags += ["--limit", str(args.limit)]
-    if args.timeout is not None: flags += ["--timeout", str(args.timeout)]
-    if args.fail_limit: flags += ["--fail-limit", str(args.fail_limit)]
-    script = os.path.abspath(__file__)
+    if args.fork:
+        flags += ["--fork", args.fork]
+    if args.limit:
+        flags += ["--limit", str(args.limit)]
+    if args.timeout is not None:
+        flags += ["--timeout", str(args.timeout)]
+    if args.fail_limit:
+        flags += ["--fail-limit", str(args.fail_limit)]
 
     def run_shard(shard):
-        return subprocess.run([sys.executable, script] + shard + flags,
-                              capture_output=True, text=True)
+        return subprocess.run(
+            [sys.executable, "-m", "devtools.harness.cli", *shard, *flags],
+            capture_output=True,
+            text=True,
+        )
 
     npass = ntotal = ntimeout = 0
-    cats = {}
+    cats: dict[str, int] = {}
     rc = 0
     with cf.ThreadPoolExecutor(n) as ex:
         futs = {ex.submit(run_shard, sh): i for i, sh in enumerate(shards)}
@@ -504,13 +591,15 @@ def run_sharded(files, args):
                     print(ln)
             m = re.search(r"=== (\d+)/(\d+) passed(?: \((\d+) timeouts\))?", out)
             if m:
-                npass += int(m.group(1)); ntotal += int(m.group(2))
+                npass += int(m.group(1))
+                ntotal += int(m.group(2))
                 ntimeout += int(m.group(3) or 0)
                 print(f"[shard {futs[fut] + 1}/{n} done: {m.group(1)}/{m.group(2)}]")
             else:
                 rc = 1
                 if r.returncode < 0:
                     import signal
+
                     try:
                         cause = signal.Signals(-r.returncode).name
                     except ValueError:
@@ -528,14 +617,17 @@ def run_sharded(files, args):
         f"({'Lean extraction' if args.lean else 'Python extraction' if args.python else args.build_mode + ' guest'}, "
         f"byte-exact) === [{n} jobs]"
     )
-    if cats: print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
+    if cats:
+        print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
     return 1 if (rc or ntotal == 0 or npass != ntotal or ntimeout != 0) else 0
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("files", nargs="+"); ap.add_argument("--fork", default=None)
-    ap.add_argument("--limit", type=int, default=0); ap.add_argument("--rebuild", action="store_true")
+    ap.add_argument("files", nargs="+")
+    ap.add_argument("--fork", default=None)
+    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument(
         "--build",
@@ -543,40 +635,70 @@ def main():
         choices=("standard", "optimized"),
         default="optimized",
         help="native C build mode (default: optimized); standard omits the "
-             "sail/optimised module overrides",
+        "sail/optimised module overrides",
     )
-    ap.add_argument("--timeout", type=float, default=None,
-                    help="per-case wall-clock budget; only meaningful with --spike/--zisk "
-                         "(default 900s there) -- warm in-process libs cannot "
-                         "interrupt a C call and the model is gas-bounded")
+    ap.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="per-case wall-clock budget; only meaningful with --spike/--zisk "
+        "(default 900s there) -- warm in-process libs cannot "
+        "interrupt a C call and the model is gas-bounded",
+    )
     ap.add_argument("--quiet", action="store_true", help="only print failures + summary")
-    ap.add_argument("--spike", action="store_true",
-                    help="run the REAL RISC-V guest ELF on spike "
-                         "(full build once, runtime input per case) instead of "
-                         "the native in-process lib")
-    ap.add_argument("--zisk", action="store_true",
-                    help="run the production ZisK guest ELF on ziskemu "
-                         "(full build once, runtime input per case) instead of "
-                         "the native in-process lib")
-    ap.add_argument("--lean", action="store_true",
-                    help="run the executable Lean extraction in process through "
-                         "the shared fixture-harness ABI")
-    ap.add_argument("--python", action="store_true",
-                    help="run the generated typed Python extraction in process "
-                         "through the shared fixture-harness ABI")
-    ap.add_argument("--profile", action="store_true",
-                    help="build with optional zkVM cycle-scope markers")
-    ap.add_argument("--fail-limit", type=int, default=0,
-                    help="print at most this many individual FAIL lines (0 = unlimited)")
-    ap.add_argument("--debug", "--dump", dest="debug", action="store_true",
-                    help="on a native FAIL, print the on-demand post-run state dump")
-    ap.add_argument("--jobs", type=int, default=1,
-                    help="shard fixture FILES across N worker processes (each worker "
-                         "loads its own library instance, so the process-global C "
-                         "world state stays isolated); incompatible with --spike/--zisk, "
-                         "--debug and --rebuild (rebuild once with --jobs 1 first)")
-    ap.add_argument("--_trace-files", dest="_trace_files", action="store_true",
-                    help=argparse.SUPPRESS)
+    ap.add_argument(
+        "--spike",
+        action="store_true",
+        help="run the REAL RISC-V guest ELF on spike "
+        "(full build once, runtime input per case) instead of "
+        "the native in-process lib",
+    )
+    ap.add_argument(
+        "--zisk",
+        action="store_true",
+        help="run the production ZisK guest ELF on ziskemu "
+        "(full build once, runtime input per case) instead of "
+        "the native in-process lib",
+    )
+    ap.add_argument(
+        "--lean",
+        action="store_true",
+        help="run the executable Lean extraction in process through the shared fixture-harness ABI",
+    )
+    ap.add_argument(
+        "--python",
+        action="store_true",
+        help="run the generated typed Python extraction in process "
+        "through the shared fixture-harness ABI",
+    )
+    ap.add_argument(
+        "--profile", action="store_true", help="build with optional zkVM cycle-scope markers"
+    )
+    ap.add_argument(
+        "--fail-limit",
+        type=int,
+        default=0,
+        help="print at most this many individual FAIL lines (0 = unlimited)",
+    )
+    ap.add_argument(
+        "--debug",
+        "--dump",
+        dest="debug",
+        action="store_true",
+        help="on a native FAIL, print the on-demand post-run state dump",
+    )
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="shard fixture FILES across N worker processes (each worker "
+        "loads its own library instance, so the process-global C "
+        "world state stays isolated); incompatible with --spike/--zisk, "
+        "--debug and --rebuild (rebuild once with --jobs 1 first)",
+    )
+    ap.add_argument(
+        "--_trace-files", dest="_trace_files", action="store_true", help=argparse.SUPPRESS
+    )
     args = ap.parse_args()
     if sum((args.spike, args.zisk, args.lean, args.python)) > 1:
         ap.error("--python, --spike, --zisk, and --lean are mutually exclusive")
@@ -589,6 +711,7 @@ def main():
 
     # Expand regular fixtures and EEST worker-shard JSONL files recursively.
     import glob as _glob
+
     files = []
     for p in args.files:
         if os.path.isdir(p):
@@ -606,11 +729,11 @@ def main():
             elif args.python:
                 PythonGuest()
             else:
-                dump_state.load_guest(
-                    profile=args.profile, build_mode=args.build_mode)
+                dump_state.load_guest(profile=args.profile, build_mode=args.build_mode)
             sys.exit(run_sharded(files, args))
         # a single file: nothing to shard, fall through sequentially
     run_fixtures(files, args)
+
 
 if __name__ == "__main__":
     main()

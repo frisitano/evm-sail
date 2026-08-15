@@ -47,18 +47,17 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, cast
 
+from devtools.paths import REPO_ROOT, temporary_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_TMP_ROOT = Path(
-    os.environ.get("AGENT_TMPDIR", REPO_ROOT / ".agent-tmp")
-)
+DEFAULT_TMP_ROOT = temporary_root()
 DEFAULT_ZISKEMU = Path.home() / ".zisk" / "bin" / "ziskemu"
 DEFAULT_ZISK_LOCK = REPO_ROOT / "zkvm" / "zisk" / "Cargo.lock"
-DEFAULT_GUEST_DIR = REPO_ROOT / "tools" / "zisk-guests"
+DEFAULT_GUEST_DIR = REPO_ROOT / "devtools" / "benchmarks" / "zisk-guests"
 DEFAULT_GUESTS = (
     ("evm-sail", "stateless-validator-evm-sail-zisk.elf"),
     ("reth", "stateless-validator-reth-zisk.elf"),
@@ -73,9 +72,7 @@ STEP_PATTERNS = (
 COST_PATTERNS = (
     re.compile(r"(?i)\bcost\b\s*[:=]\s*([0-9][0-9,_]*)"),
     re.compile(r"(?im)^[║│]\s*COST\s+([0-9][0-9,_]*)\s+[║│]\s*$"),
-    re.compile(
-        r"(?im)^TOTAL\s+([0-9][0-9,_]*)\s+100(?:\.0+)?%\s*$"
-    ),
+    re.compile(r"(?im)^TOTAL\s+([0-9][0-9,_]*)\s+100(?:\.0+)?%\s*$"),
 )
 PROFILE_TAG_ROW = re.compile(
     r"^[║│]\s{2}([a-z][a-z0-9_]*)\s+.*?"
@@ -109,9 +106,7 @@ FULL_FROP_COST_ROW = re.compile(
     r"([0-9][0-9,]*)\s+([0-9]+(?:\.[0-9]+)?)%"
 )
 DISASSEMBLY_SYMBOL_ROW = re.compile(r"^[0-9a-f]+ <(.+)>:$")
-DISASSEMBLY_INSTRUCTION_ROW = re.compile(
-    r"^\s+[0-9a-f]+:\s+([0-9][0-9,]*)\s+"
-)
+DISASSEMBLY_INSTRUCTION_ROW = re.compile(r"^\s+[0-9a-f]+:\s+([0-9][0-9,]*)\s+")
 FIXTURE_SUITES = frozenset(("blockchain_tests", "blockchain_tests_engine"))
 PHASE_SCOPES = (
     ("input-decode", "decode_input"),
@@ -242,9 +237,7 @@ def load_cases(paths: Iterable[Path]) -> list[FixtureCase]:
                         block_index=block_index,
                         payload=decode_hex(input_hex),
                         expected=decode_hex(output_hex),
-                        gas_used=decode_quantity(
-                            (block.get("blockHeader") or {}).get("gasUsed")
-                        ),
+                        gas_used=decode_quantity((block.get("blockHeader") or {}).get("gasUsed")),
                     )
                 )
     return cases
@@ -277,7 +270,7 @@ def default_guests() -> list[Guest]:
         raise ValueError(
             "standard guest ELF(s) are missing:\n  "
             + "\n  ".join(missing)
-            + "\nstage them with tools/stage_zisk_guests.sh or pass --guest"
+            + "\nstage them with devtools/benchmarks/stage_zisk_guests.sh or pass --guest"
         )
     return guests
 
@@ -304,9 +297,7 @@ def repo_head_commit() -> str | None:
     return f"{head}-dirty" if status else head
 
 
-def guest_build_provenance(
-    guest: Guest, override: str | None
-) -> dict[str, str | None] | None:
+def guest_build_provenance(guest: Guest, override: str | None) -> dict[str, str | None] | None:
     """Resolve what a guest ELF was built from, at benchmark time.
 
     Resolution order: an explicit --guest-build value, an `<elf>.build.json`
@@ -323,9 +314,7 @@ def guest_build_provenance(
         commit = recorded.get("commit")
         version = recorded.get("version")
         if commit is None and version is None:
-            raise ValueError(
-                f"build sidecar has neither commit nor version: {sidecar}"
-            )
+            raise ValueError(f"build sidecar has neither commit nor version: {sidecar}")
         return {"commit": commit, "version": version, "source": "sidecar"}
     if guest.name == "evm-sail":
         commit = repo_head_commit()
@@ -389,15 +378,11 @@ def parse_profile_scope_metric(output: str, metric: str) -> dict[str, int]:
     for line in section.splitlines():
         match = row_pattern.match(line)
         if match:
-            scopes[match.group(name_group)] = int(
-                match.group(value_group).replace(",", "")
-            )
+            scopes[match.group(name_group)] = int(match.group(value_group).replace(",", ""))
         elif scopes and (not line.strip() or line.startswith(("╚", "└"))):
             break
     if not scopes:
-        raise RuntimeError(
-            f"ZisK {metric} profile-tag section contains no scope rows"
-        )
+        raise RuntimeError(f"ZisK {metric} profile-tag section contains no scope rows")
     return scopes
 
 
@@ -409,9 +394,7 @@ def parse_profile_scope_costs(output: str) -> dict[str, int]:
     return parse_profile_scope_metric(output, "cost")
 
 
-def phase_steps(
-    scope_steps: dict[str, int], total_steps: int
-) -> list[dict[str, object]]:
+def phase_steps(scope_steps: dict[str, int], total_steps: int) -> list[dict[str, object]]:
     """Attribute a run's steps to the aligned cross-guest phases.
 
     The five phase tags are emitted as mutually non-overlapping scopes, so
@@ -423,7 +406,7 @@ def phase_steps(
         for phase, tag in PHASE_SCOPES
         if tag in scope_steps
     ]
-    attributed = sum(int(phase["steps"]) for phase in phases)
+    attributed = sum(scope_steps[tag] for _, tag in PHASE_SCOPES if tag in scope_steps)
     if attributed > total_steps:
         raise RuntimeError(
             f"phase steps {attributed:,} exceed the run's {total_steps:,} "
@@ -510,7 +493,7 @@ def parse_comprehensive_opcode_costs(output: str) -> list[dict[str, object]]:
 
     result = []
     for entry in operations.values():
-        cost = int(entry["op_cost"]) + int(entry["frop_cost"])
+        cost = cast(int, entry["op_cost"]) + cast(int, entry["frop_cost"])
         result.append(
             {
                 **entry,
@@ -518,12 +501,13 @@ def parse_comprehensive_opcode_costs(output: str) -> list[dict[str, object]]:
                 "share_percent": 100.0 * cost / total_cost,
             }
         )
-    return sorted(result, key=lambda entry: (-int(entry["cost"]), entry["name"]))
+    return sorted(
+        result,
+        key=lambda entry: (-cast(int, entry["cost"]), cast(str, entry["name"])),
+    )
 
 
-def parse_executed_functions(
-    disassembly: str, total_steps: int
-) -> list[dict[str, object]]:
+def parse_executed_functions(disassembly: str, total_steps: int) -> list[dict[str, object]]:
     """Aggregate exclusive executed steps under every non-local ELF symbol."""
     current_symbol = "<guest startup>"
     steps_by_symbol: dict[str, int] = {}
@@ -537,9 +521,7 @@ def parse_executed_functions(
         instruction_match = DISASSEMBLY_INSTRUCTION_ROW.match(line)
         if instruction_match:
             count = int(instruction_match.group(1).replace(",", ""))
-            steps_by_symbol[current_symbol] = (
-                steps_by_symbol.get(current_symbol, 0) + count
-            )
+            steps_by_symbol[current_symbol] = steps_by_symbol.get(current_symbol, 0) + count
 
     accounted_steps = sum(steps_by_symbol.values())
     if accounted_steps != total_steps:
@@ -558,7 +540,10 @@ def parse_executed_functions(
     ]
     return sorted(
         functions,
-        key=lambda entry: (-int(entry["exclusive_steps"]), entry["name"]),
+        key=lambda entry: (
+            -cast(int, entry["exclusive_steps"]),
+            cast(str, entry["name"]),
+        ),
     )
 
 
@@ -591,9 +576,7 @@ def check_ziskemu_version(ziskemu: Path, lock_path: Path) -> tuple[str, str]:
     required = locked_zisk_version(lock_path)
     actual = actual_match.group(1)
     if actual != required:
-        raise RuntimeError(
-            f"ziskemu {actual} is incompatible with locked ziskos {required}"
-        )
+        raise RuntimeError(f"ziskemu {actual} is incompatible with locked ziskos {required}")
     return actual_output, required
 
 
@@ -717,9 +700,7 @@ def run_profile(
                 str(disassembly_path),
             ]
         )
-        artifacts.update(
-            profiler=str(profiler_path), disassembly=str(disassembly_path)
-        )
+        artifacts.update(profiler=str(profiler_path), disassembly=str(disassembly_path))
 
     started = time.perf_counter_ns()
     result = subprocess.run(
@@ -733,11 +714,9 @@ def run_profile(
     report_path.write_text(diagnostic)
     actual = output_path.read_bytes() if output_path.exists() else b""
     if result.returncode != 0 or not output_matches(actual, case.expected):
-        raise RuntimeError(
-            f"{guest.name} {mode} profile failed {case.identity}; "
-            f"see {report_path}"
-        )
-    artifacts["steps"] = parse_steps(diagnostic)
+        raise RuntimeError(f"{guest.name} {mode} profile failed {case.identity}; see {report_path}")
+    steps = parse_steps(diagnostic)
+    artifacts["steps"] = steps
     artifacts["elapsed_ns"] = elapsed_ns
     artifacts["actual_output_bytes"] = len(actual)
     if mode == "sdk":
@@ -746,38 +725,21 @@ def run_profile(
         artifacts["function_profile_status"] = (
             "stack_mismatch"
             if "STACK MISMATCH DETECTED" in diagnostic
-            else (
-                "ok"
-                if artifacts["top_cost_functions"]
-                else "no_function_rows"
-            )
+            else ("ok" if artifacts["top_cost_functions"] else "no_function_rows")
         )
-        has_scope_steps = (
-            "STEPS PROFILE TAGS" in diagnostic
-            or "PROFILE TAGS STEPS" in diagnostic
-        )
-        has_scope_costs = (
-            "COST PROFILE TAGS" in diagnostic
-            or "PROFILE TAGS COST" in diagnostic
-        )
-        artifacts["scope_steps"] = (
-            parse_profile_scope_steps(diagnostic) if has_scope_steps else {}
-        )
-        artifacts["scope_costs"] = (
-            parse_profile_scope_costs(diagnostic) if has_scope_costs else {}
-        )
-        phases = phase_steps(
-            artifacts["scope_steps"], int(artifacts["steps"])
-        )
+        has_scope_steps = "STEPS PROFILE TAGS" in diagnostic or "PROFILE TAGS STEPS" in diagnostic
+        has_scope_costs = "COST PROFILE TAGS" in diagnostic or "PROFILE TAGS COST" in diagnostic
+        scope_steps = parse_profile_scope_steps(diagnostic) if has_scope_steps else {}
+        artifacts["scope_steps"] = scope_steps
+        artifacts["scope_costs"] = parse_profile_scope_costs(diagnostic) if has_scope_costs else {}
+        phases = phase_steps(scope_steps, steps)
         if phases:
             artifacts["phases"] = phases
         if comprehensive:
-            artifacts["opcode_costs"] = parse_comprehensive_opcode_costs(
-                diagnostic
-            )
+            artifacts["opcode_costs"] = parse_comprehensive_opcode_costs(diagnostic)
             artifacts["opcode_profile_completeness"] = "all_used_operations"
             artifacts["executed_functions"] = parse_executed_functions(
-                disassembly_path.read_text(), int(artifacts["steps"])
+                disassembly_path.read_text(), steps
             )
             artifacts["function_inventory_status"] = "ok"
             if not keep_report:
@@ -857,33 +819,27 @@ def fixture_taxonomy(path: Path) -> dict[str, str]:
 
 
 def measurement_phases(
-    measurements: list, guest: Guest, identity: str
+    measurements: list[dict[str, Any]], guest: Guest, identity: str
 ) -> list[dict[str, object]] | None:
     """Validate and return a measurement's optional per-phase step list."""
     phases = measurements[0].get("phases") if measurements else None
     if phases is None:
         return None
     if not isinstance(phases, list) or not phases:
-        raise ValueError(
-            f"invalid phase breakdown for {guest.name} {identity}"
-        )
+        raise ValueError(f"invalid phase breakdown for {guest.name} {identity}")
     for phase in phases:
         if (
             not isinstance(phase, dict)
             or not isinstance(phase.get("name"), str)
             or not isinstance(phase.get("steps"), int)
         ):
-            raise ValueError(
-                f"invalid phase entry for {guest.name} {identity}: {phase}"
-            )
-    return [
-        {"name": phase["name"], "steps": phase["steps"]} for phase in phases
-    ]
+            raise ValueError(f"invalid phase entry for {guest.name} {identity}: {phase}")
+    return [{"name": phase["name"], "steps": phase["steps"]} for phase in phases]
 
 
 def export_dashboard_data(
     dashboard_dir: Path,
-    cases: list[FixtureCase | RecordedCase],
+    cases: Sequence[FixtureCase | RecordedCase],
     guests: list[Guest],
     guest_results: dict[str, object],
     benchmark_result: dict[str, object],
@@ -896,7 +852,9 @@ def export_dashboard_data(
     whichever of the two the reader selected, so both totals live in the
     catalog and no shard has to be fetched to build a ranking.
     """
-    results_by_guest: dict[str, tuple[dict, list, list]] = {}
+    results_by_guest: dict[
+        str, tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]
+    ] = {}
     for guest in guests:
         guest_result = guest_results.get(guest.name)
         if not isinstance(guest_result, dict):
@@ -904,33 +862,34 @@ def export_dashboard_data(
         measured = guest_result.get("cases")
         profiles = guest_result.get("profiles")
         if not isinstance(measured, list) or not isinstance(profiles, list):
-            raise ValueError(
-                f"dashboard export requires measured SDK profiles for {guest.name}"
-            )
+            raise ValueError(f"dashboard export requires measured SDK profiles for {guest.name}")
         if len(measured) != len(cases) or len(profiles) != len(cases):
             raise ValueError(
-                f"dashboard profile count does not match fixture cases for "
-                f"{guest.name}"
+                f"dashboard profile count does not match fixture cases for {guest.name}"
             )
-        results_by_guest[guest.name] = (guest_result, measured, profiles)
+        results_by_guest[guest.name] = (
+            cast(dict[str, Any], guest_result),
+            cast(list[dict[str, Any]], measured),
+            cast(list[dict[str, Any]], profiles),
+        )
 
     dashboard_dir.mkdir(parents=True, exist_ok=True)
     shards_dir = dashboard_dir / "fixtures"
     shards_dir.mkdir(parents=True, exist_ok=True)
-    grouped: dict[Path, list[tuple[int, FixtureCase]]] = {}
+    grouped: dict[Path, list[tuple[int, FixtureCase | RecordedCase]]] = {}
     for case_index, case in enumerate(cases):
         grouped.setdefault(case.fixture, []).append((case_index, case))
 
-    catalog = []
+    catalog: list[dict[str, Any]] = []
     for fixture, fixture_cases in grouped.items():
         taxonomy = fixture_taxonomy(fixture)
         fixture_id = hashlib.sha256(
             f"{taxonomy['path']}\0{fixture_cases[0][1].fixture_sha256}".encode()
         ).hexdigest()[:20]
         shard_name = f"fixtures/{fixture_id}.json"
-        shard_cases = []
+        shard_cases: list[dict[str, Any]] = []
         for case_index, case in fixture_cases:
-            case_guests = {}
+            case_guests: dict[str, dict[str, Any]] = {}
             for guest in guests:
                 _, measured, profiles = results_by_guest[guest.name]
                 measurement = measured[case_index]
@@ -938,73 +897,51 @@ def export_dashboard_data(
                 measurements = measurement.get("measurements")
                 artifacts = profile.get("artifacts")
                 if not isinstance(artifacts, dict):
-                    raise ValueError(
-                        f"missing profile artifacts for {guest.name} "
-                        f"{case.identity}"
-                    )
+                    raise ValueError(f"missing profile artifacts for {guest.name} {case.identity}")
                 unavailable = artifacts.get("unavailable")
                 if isinstance(unavailable, dict):
                     case_guests[guest.name] = {"unavailable": unavailable}
                     continue
                 if not isinstance(measurements, list) or not measurements:
-                    raise ValueError(
-                        f"missing measurements for {guest.name} {case.identity}"
-                    )
+                    raise ValueError(f"missing measurements for {guest.name} {case.identity}")
                 scope_steps = artifacts.get("scope_steps", {})
                 scope_costs = artifacts.get("scope_costs", {})
                 total_cost = artifacts.get("cost")
                 opcode_costs = artifacts.get("opcode_costs", [])
                 functions = artifacts.get("top_cost_functions", [])
                 executed_functions = artifacts.get("executed_functions", [])
-                function_profile_status = artifacts.get(
-                    "function_profile_status", "unknown"
-                )
-                function_inventory_status = artifacts.get(
-                    "function_inventory_status", "unknown"
-                )
+                function_profile_status = artifacts.get("function_profile_status", "unknown")
+                function_inventory_status = artifacts.get("function_inventory_status", "unknown")
                 opcode_profile_completeness = artifacts.get(
                     "opcode_profile_completeness", "sdk_top_operations"
                 )
-                if not isinstance(scope_steps, dict) or not isinstance(
-                    scope_costs, dict
-                ):
-                    raise ValueError(
-                        f"invalid SDK scope totals for {guest.name} "
-                        f"{case.identity}"
-                    )
+                if not isinstance(scope_steps, dict) or not isinstance(scope_costs, dict):
+                    raise ValueError(f"invalid SDK scope totals for {guest.name} {case.identity}")
                 if not isinstance(total_cost, int):
-                    raise ValueError(
-                        f"missing SDK total cost for {guest.name} {case.identity}"
-                    )
+                    raise ValueError(f"missing SDK total cost for {guest.name} {case.identity}")
                 if not isinstance(functions, list):
                     raise ValueError(
-                        f"invalid SDK function totals for {guest.name} "
-                        f"{case.identity}"
+                        f"invalid SDK function totals for {guest.name} {case.identity}"
                     )
                 if not isinstance(executed_functions, list):
                     raise ValueError(
-                        f"invalid executed-function inventory for {guest.name} "
-                        f"{case.identity}"
+                        f"invalid executed-function inventory for {guest.name} {case.identity}"
                     )
                 if not isinstance(opcode_costs, list):
                     raise ValueError(
-                        f"invalid SDK operation totals for {guest.name} "
-                        f"{case.identity}"
+                        f"invalid SDK operation totals for {guest.name} {case.identity}"
                     )
                 if not isinstance(function_profile_status, str):
                     raise ValueError(
-                        f"invalid function profile status for {guest.name} "
-                        f"{case.identity}"
+                        f"invalid function profile status for {guest.name} {case.identity}"
                     )
                 if not isinstance(function_inventory_status, str):
                     raise ValueError(
-                        f"invalid function inventory status for {guest.name} "
-                        f"{case.identity}"
+                        f"invalid function inventory status for {guest.name} {case.identity}"
                     )
                 if not isinstance(opcode_profile_completeness, str):
                     raise ValueError(
-                        f"invalid operation profile completeness for "
-                        f"{guest.name} {case.identity}"
+                        f"invalid operation profile completeness for {guest.name} {case.identity}"
                     )
                 case_guests[guest.name] = {
                     "total_steps": int(artifacts["steps"]),
@@ -1012,17 +949,13 @@ def export_dashboard_data(
                     "scope_steps": scope_steps,
                     "scope_costs": scope_costs,
                     "opcode_costs": opcode_costs,
-                    "opcode_profile_completeness": (
-                        opcode_profile_completeness
-                    ),
+                    "opcode_profile_completeness": (opcode_profile_completeness),
                     "top_cost_functions": functions,
                     "function_profile_status": function_profile_status,
                     "executed_functions": executed_functions,
                     "function_inventory_status": function_inventory_status,
                 }
-                phases = measurement_phases(
-                    measurements, guest, case.identity
-                )
+                phases = measurement_phases(measurements, guest, case.identity)
                 if phases is not None:
                     case_guests[guest.name]["phases"] = phases
             shard_cases.append(
@@ -1040,9 +973,7 @@ def export_dashboard_data(
             "fixture": {**taxonomy, "id": fixture_id},
             "cases": shard_cases,
         }
-        (dashboard_dir / shard_name).write_text(
-            json.dumps(shard, separators=(",", ":")) + "\n"
-        )
+        (dashboard_dir / shard_name).write_text(json.dumps(shard, separators=(",", ":")) + "\n")
         guest_total_steps: dict[str, int | None] = {}
         guest_total_cost: dict[str, int | None] = {}
         for guest in guests:
@@ -1055,9 +986,7 @@ def export_dashboard_data(
                     for shard_case in shard_cases
                 ]
                 totals_by_guest[guest.name] = (
-                    sum(totals)
-                    if all(total is not None for total in totals)
-                    else None
+                    sum(totals) if all(total is not None for total in totals) else None
                 )
         catalog.append(
             {
@@ -1066,17 +995,11 @@ def export_dashboard_data(
                 "shard": shard_name,
                 "case_count": len(shard_cases),
                 "max_gas_used": max(
-                    (
-                        case.gas_used
-                        for _, case in fixture_cases
-                        if case.gas_used is not None
-                    ),
+                    (case.gas_used for _, case in fixture_cases if case.gas_used is not None),
                     default=None,
                 ),
                 "total_gas_used": sum(
-                    case.gas_used
-                    for _, case in fixture_cases
-                    if case.gas_used is not None
+                    case.gas_used for _, case in fixture_cases if case.gas_used is not None
                 )
                 if any(case.gas_used is not None for _, case in fixture_cases)
                 else None,
@@ -1118,9 +1041,7 @@ def export_dashboard_data(
         "case_count": len(cases),
         "fixtures": catalog,
     }
-    (dashboard_dir / "catalog.json").write_text(
-        json.dumps(payload, separators=(",", ":")) + "\n"
-    )
+    (dashboard_dir / "catalog.json").write_text(json.dumps(payload, separators=(",", ":")) + "\n")
 
 
 def regenerate_dashboard(
@@ -1152,15 +1073,11 @@ def regenerate_dashboard(
         if guest_result.get("build") is None:
             override = guest_builds.get(name)
             guest_result["build"] = (
-                {"commit": None, "version": override, "source": "cli"}
-                if override
-                else None
+                {"commit": None, "version": override, "source": "cli"} if override else None
             )
     unknown_builds = set(guest_builds) - set(guest_results)
     if unknown_builds:
-        raise ValueError(
-            f"unknown --guest-build guests: {', '.join(sorted(unknown_builds))}"
-        )
+        raise ValueError(f"unknown --guest-build guests: {', '.join(sorted(unknown_builds))}")
     export_dashboard_data(dashboard_dir, cases, guests, guest_results, result)
 
 
@@ -1258,7 +1175,7 @@ def parse_args() -> argparse.Namespace:
         type=parse_guest,
         help=(
             "named guest ELF as NAME=PATH (repeatable); defaults to the three "
-            "ELFs under tools/zisk-guests"
+            "ELFs under devtools/benchmarks/zisk-guests"
         ),
     )
     parser.add_argument(
@@ -1335,9 +1252,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    guest_builds = dict(
-        parse_assignment(value, "guest build") for value in args.guest_build
-    )
+    guest_builds = dict(parse_assignment(value, "guest build") for value in args.guest_build)
     if args.regenerate_dashboard:
         if not args.dashboard_dir:
             raise ValueError("--regenerate-dashboard requires --dashboard-dir")
@@ -1367,30 +1282,22 @@ def main() -> int:
         raise ValueError(f"unknown baseline guest: {baseline}")
     unknown_profile_guests = set(args.profile_guest) - set(guest_names)
     if unknown_profile_guests:
-        raise ValueError(
-            f"unknown profile guests: {', '.join(sorted(unknown_profile_guests))}"
-        )
+        raise ValueError(f"unknown profile guests: {', '.join(sorted(unknown_profile_guests))}")
     unknown_build_guests = set(guest_builds) - set(guest_names)
     if unknown_build_guests:
-        raise ValueError(
-            f"unknown --guest-build guests: "
-            f"{', '.join(sorted(unknown_build_guests))}"
-        )
+        raise ValueError(f"unknown --guest-build guests: {', '.join(sorted(unknown_build_guests))}")
     dashboard_guest_names = args.profile_guest or guest_names
     if args.dashboard_dir and (
         args.profile != "sdk" or set(dashboard_guest_names) != set(guest_names)
     ):
         raise ValueError(
-            "--dashboard-dir requires --profile sdk and profiles for every "
-            "selected guest"
+            "--dashboard-dir requires --profile sdk and profiles for every selected guest"
         )
     if args.dashboard_only and (
-        not args.dashboard_dir
-        or set(dashboard_guest_names) != set(guest_names)
+        not args.dashboard_dir or set(dashboard_guest_names) != set(guest_names)
     ):
         raise ValueError(
-            "--dashboard-only requires --dashboard-dir and profiles for every "
-            "selected guest"
+            "--dashboard-only requires --dashboard-dir and profiles for every selected guest"
         )
 
     ziskemu = args.ziskemu.expanduser().resolve()
@@ -1400,9 +1307,7 @@ def main() -> int:
         emulator_version = ziskemu_version(ziskemu)
         locked_version = None
     else:
-        emulator_version, locked_version = check_ziskemu_version(
-            ziskemu, args.zisk_lock.resolve()
-        )
+        emulator_version, locked_version = check_ziskemu_version(ziskemu, args.zisk_lock.resolve())
 
     cases = load_cases(args.fixtures)
     if args.limit is not None:
@@ -1456,10 +1361,8 @@ def main() -> int:
             print(f"  warmup {warmup + 1}/{args.warmups}", flush=True)
             run_emulator(ziskemu, guest, cases[0], run_dir, args.timeout)
 
-        profiles = []
-        if args.profile != "none" and (
-            not args.profile_guest or guest.name in args.profile_guest
-        ):
+        profiles: list[dict[str, object]] = []
+        if args.profile != "none" and (not args.profile_guest or guest.name in args.profile_guest):
             for case_index, case in enumerate(cases, 1):
                 print(
                     f"  {args.profile} profile {case_index}/{len(cases)}",
@@ -1479,9 +1382,7 @@ def main() -> int:
                 except (RuntimeError, subprocess.TimeoutExpired) as error:
                     if not args.continue_on_error:
                         raise
-                    unavailable = unavailable_profile(
-                        error, guest, case, run_dir, args.profile
-                    )
+                    unavailable = unavailable_profile(error, guest, case, run_dir, args.profile)
                     print(f"    {unavailable['message']}", flush=True)
                     artifacts = {"unavailable": unavailable}
                 profiles.append(
@@ -1496,28 +1397,28 @@ def main() -> int:
         measured_cases: list[dict[str, object]] = []
         if args.dashboard_only:
             for case, profile in zip(cases, profiles):
-                artifacts = profile["artifacts"]
-                assert isinstance(artifacts, dict)
-                unavailable = artifacts.get("unavailable")
-                if isinstance(unavailable, dict):
+                profile_artifacts = profile["artifacts"]
+                assert isinstance(profile_artifacts, dict)
+                profile_unavailable = profile_artifacts.get("unavailable")
+                if isinstance(profile_unavailable, dict):
                     measured_cases.append(
                         {
                             "identity": case.identity,
                             "name": case.name,
                             "block_index": case.block_index,
                             "measurements": [],
-                            "unavailable": unavailable,
+                            "unavailable": profile_unavailable,
                         }
                     )
                     continue
                 measurement = {
-                    "steps": artifacts["steps"],
-                    "elapsed_ns": artifacts["elapsed_ns"],
-                    "actual_output_bytes": artifacts["actual_output_bytes"],
+                    "steps": profile_artifacts["steps"],
+                    "elapsed_ns": profile_artifacts["elapsed_ns"],
+                    "actual_output_bytes": profile_artifacts["actual_output_bytes"],
                     "output_matched": True,
                 }
-                if "phases" in artifacts:
-                    measurement["phases"] = artifacts["phases"]
+                if "phases" in profile_artifacts:
+                    measurement["phases"] = profile_artifacts["phases"]
                 measured_cases.append(
                     {
                         "identity": case.identity,
@@ -1535,11 +1436,7 @@ def main() -> int:
                         f"{repetition + 1}/{args.repetitions}",
                         flush=True,
                     )
-                    measurements.append(
-                        run_emulator(
-                            ziskemu, guest, case, run_dir, args.timeout
-                        )
-                    )
+                    measurements.append(run_emulator(ziskemu, guest, case, run_dir, args.timeout))
                 measured_cases.append(
                     {
                         "identity": case.identity,

@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import json
-from pathlib import Path
 import re
-
+from collections import Counter
+from pathlib import Path
 
 DIAGNOSTIC = re.compile(
     r"^Warning: (?P<phase>Jib )?[Rr]eadability lint \[(?P<rule>[^]]+)]"
@@ -24,7 +23,9 @@ def parse(path: Path, phase: str) -> list[tuple[str, str, str]]:
             continue
         reported_phase = "jib" if match.group("phase") else "source"
         if reported_phase == phase:
-            findings.append((phase, match.group("rule"), match.group("location") or "<no source location>"))
+            findings.append(
+                (phase, match.group("rule"), match.group("location") or "<no source location>")
+            )
     return findings
 
 
@@ -54,8 +55,7 @@ def main() -> int:
     ]
     if counts:
         lines.extend(
-            f"  {phase}:{rule}: {count}"
-            for (phase, rule), count in sorted(counts.items())
+            f"  {phase}:{rule}: {count}" for (phase, rule), count in sorted(counts.items())
         )
     else:
         lines.append("  none")

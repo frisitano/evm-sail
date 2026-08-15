@@ -17,8 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from devtools.paths import REPO_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 
 
@@ -62,14 +63,8 @@ def optimized_files(generated: Path, scope: str) -> list[tuple[Path, str]]:
     if scope in ("all", "ffi"):
         ffi_source = ROOT / "extractions/c/optimised/contract/src"
         ffi_manifest = ROOT / "extractions/c/optimised/contract/sources.list"
-        files.extend(
-            (path, "optimized FFI")
-            for path in manifest_paths(ffi_manifest, ffi_source)
-        )
-        files.extend(
-            (path, "optimized FFI")
-            for path in sorted(ffi_source.rglob("*.h"))
-        )
+        files.extend((path, "optimized FFI") for path in manifest_paths(ffi_manifest, ffi_source))
+        files.extend((path, "optimized FFI") for path in sorted(ffi_source.rglob("*.h")))
         files.extend(
             (path, "optimized FFI")
             for path in sorted((ROOT / "extractions/c/optimised/contract/include").rglob("*.h"))
@@ -81,9 +76,7 @@ def optimized_files(generated: Path, scope: str) -> list[tuple[Path, str]]:
     return sorted(deduplicated.items())
 
 
-def check_file(
-    clang_format: str, style: Path, item: tuple[Path, str]
-) -> FormatResult:
+def check_file(clang_format: str, style: Path, item: tuple[Path, str]) -> FormatResult:
     path, owner = item
     result = subprocess.run(
         [
@@ -94,8 +87,7 @@ def check_file(
         ],
         cwd=ROOT,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if result.returncode != 0:
@@ -107,16 +99,13 @@ def check_file(
     return FormatResult(path, owner, replacements)
 
 
-def format_file(
-    clang_format: str, style: Path, item: tuple[Path, str]
-) -> FormatResult:
+def format_file(clang_format: str, style: Path, item: tuple[Path, str]) -> FormatResult:
     path, owner = item
     result = subprocess.run(
         [clang_format, f"--style=file:{style}", "-i", str(path)],
         cwd=ROOT,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if result.returncode != 0:

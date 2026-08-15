@@ -356,7 +356,7 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
 fi
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
+  ( cd "$ROOT" && python3 -m devtools.optimised_c.package "$OPTIMIZED_GENERATED" )
   if [ "$EVM_GENERATED_INTERP" = on ]; then
     grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
       > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"

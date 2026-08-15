@@ -200,10 +200,11 @@ duplicating instructions elsewhere.
   `zkvm_io.h` platform contracts are shared. See `extractions/c/README.md`; common
   protocol behavior belongs in Sail rather than in a shared C compatibility
   layer.
-- `harness/run.py` is the SINGLE fixture harness for the single executable
+- `devtools/harness/cli.py` is the SINGLE fixture harness for the single executable
   entry, built ONCE as a shared library and driven IN-PROCESS via ctypes
-  (`harness/dump_state.py`). Each case is serialized to the SSZ
-  `SszStatelessInput` (`ssz_builder.py`, under the execution-specs venv).
+  (`devtools/harness/guest.py`). Each case is serialized to the SSZ
+  `SszStatelessInput` (`devtools/harness/ssz_builder.py`, under the
+  execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
   EELS reference. State-test cases are executed through the in-process EELS
   t8n, which builds a fully VALID single-tx block input AND the reference
@@ -216,10 +217,10 @@ duplicating instructions elsewhere.
   it with `ziskemu`. The harness requires the emulator version to equal the
   `ziskos` version in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` to select a
   compatible binary.
-  `tools/zisk-guests/` is the stable machine-local home for the optimized EVM
+  `devtools/benchmarks/zisk-guests/` is the stable machine-local home for the optimized EVM
   Sail, reth, and ethrex comparison ELFs. The binaries are ignored by Git;
-  `tools/stage_zisk_guests.sh` refreshes them and their checksums, and
-  `tools/benchmark_zisk.py` uses these three guests by default.
+  `devtools/benchmarks/stage_zisk_guests.sh` refreshes them and their checksums,
+  and `python3 -m devtools.benchmarks.zisk` uses these three guests by default.
   `--debug` invokes the
   native-only `guest_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.
@@ -354,23 +355,23 @@ evidence.
 Run one native embedded fixture from the repository root:
 
 ```sh
-rtk python3 harness/run.py --limit 1 --quiet \
+rtk python3 -m devtools.harness.cli --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 Run the complete retained corpus with parallel native workers:
 
 ```sh
-rtk python3 harness/run.py --jobs 8 --quiet zkvm/.fixtures/current-v062-full
+rtk python3 -m devtools.harness.cli --jobs 8 --quiet zkvm/.fixtures/current-v062-full
 ```
 
 The same fixture can drive the real RISC-V guest on Spike or the production
 ZisK guest:
 
 ```sh
-rtk python3 harness/run.py --spike --limit 1 --quiet \
+rtk python3 -m devtools.harness.cli --spike --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-rtk env ZISKEMU=/path/to/matching/ziskemu python3 harness/run.py --zisk --limit 1 --quiet \
+rtk env ZISKEMU=/path/to/matching/ziskemu python3 -m devtools.harness.cli --zisk --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 

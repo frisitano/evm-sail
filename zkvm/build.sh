@@ -11,7 +11,7 @@
 #
 # VEC is a raw schema-prefixed SszStatelessInput file used only by the Spike
 # validation device. It is never compiled or linked into the ELF. The canonical
-# driver is harness/run.py --spike, which builds the guest once and supplies a
+# driver is devtools.harness.cli --spike, which builds the guest once and supplies a
 # different runtime input to the unchanged ELF for each fixture.
 #
 # Requires: feature-capable Sail (resolved below), riscv64-unknown-elf-gcc,
@@ -31,7 +31,7 @@ case "$PLATFORM" in
   *) echo "error: ZKVM_PLATFORM must be spike or zisk" >&2; exit 2 ;;
 esac
 # Override for concurrency: two builds sharing one directory still race on
-# generated objects and the linked ELF (run.py --spike isolates itself).
+# generated objects and the linked ELF (devtools.harness.cli --spike isolates itself).
 BUILD="${ZKVM_BUILD:-$HERE/build}"
 ROOT="$(cd "$HERE/.." && pwd)"
 C_OPT_SPECIALIZATION_LIMIT="${C_OPT_SPECIALIZATION_LIMIT:-256}"
@@ -349,7 +349,7 @@ compile_common() {
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" )
-    python3 "$ROOT/tools/package_optimised_c.py" "$OPTIMIZED_GENERATED"
+    ( cd "$ROOT" && python3 -m devtools.optimised_c.package "$OPTIMIZED_GENERATED" )
     if [ "$EVM_GENERATED_INTERP" = on ]; then
       grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
         > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"
@@ -639,7 +639,7 @@ cmd_clean() { rm -rf "$BUILD"; echo "cleaned"; }
 
 # The one-time platform bring-up probes (derisk: HTIF smoke; traptest:
 # guard-region enforcement) were deleted once the real guest gate
-# (run.py --spike) covered the platform end-to-end; recover them
+# (devtools.harness.cli --spike) covered the platform end-to-end; recover them
 # from git history if the platform glue (start.S / link.ld / htif.c) changes.
 case "$COMMAND" in
   guest)    cmd_guest ;;

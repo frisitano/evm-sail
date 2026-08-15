@@ -170,7 +170,7 @@ unsigned long guest_run(const unsigned char *in, unsigned long n,
 /* ------------------------- debug state dump ------------------------------ */
 /* An on-demand C-side dump of the model's live FFI state AFTER a run,
  * marshalled into a
- * self-describing binary blob that Python (dump_state.py) decodes into native
+ * self-describing binary blob that Python (devtools.harness.guest) decodes into native
  * types. This is a native test utility, never linked into the real guest, and
  * normal fixture runs do not invoke it.
  *

@@ -3,7 +3,7 @@
 # The benchmark dataset (fixture catalog and per-fixture shards under
 # book/docs/assets/generated/performance/) is COMMITTED, so this workflow only
 # builds the site — it never runs the emulator. Refresh the dataset locally
-# with tools/benchmark_zisk.py and commit the result; see the zkEVM benchmarks
+# with devtools.benchmarks.zisk and commit the result; see the zkEVM benchmarks
 # page for the recipe.
 #
 # The build is driven entirely through `make docs-site`, which:

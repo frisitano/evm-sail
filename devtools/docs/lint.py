@@ -65,7 +65,9 @@ def lint_file(path: Path, rel: str) -> list[str]:
         else:
             title = first.split("\n", 1)[0][2:].strip()
             if len(title) > 40:
-                problems.append(f"{rel}: page title too long for the nav ({len(title)} chars): {title!r}")
+                problems.append(
+                    f"{rel}: page title too long for the nav ({len(title)} chars): {title!r}"
+                )
 
     for block in md_blocks:
         for level, heading in HEADING.findall(block):
@@ -90,8 +92,12 @@ def lint_file(path: Path, rel: str) -> list[str]:
         problems.append(f"{rel}: host-interface page missing the Non-normative banner")
 
     if md_blocks:
-        intro = MD_BLOCK.search(text).group(1)
-        if not any(line.strip() and not line.lstrip().startswith("#") for line in intro.splitlines()):
+        intro_match = MD_BLOCK.search(text)
+        assert intro_match is not None
+        intro = intro_match.group(1)
+        if not any(
+            line.strip() and not line.lstrip().startswith("#") for line in intro.splitlines()
+        ):
             problems.append(f"{rel}: page introduction has no prose")
 
     problems.extend(coverage(text, rel))
@@ -99,7 +105,17 @@ def lint_file(path: Path, rel: str) -> list[str]:
     return problems
 
 
-DEF_KEYWORDS = ("function ", "val ", "register ", "type ", "enum ", "struct ", "union ", "mapping ", "let ")
+DEF_KEYWORDS = (
+    "function ",
+    "val ",
+    "register ",
+    "type ",
+    "enum ",
+    "struct ",
+    "union ",
+    "mapping ",
+    "let ",
+)
 ALWAYS_DOCUMENTED = ("register ", "type ", "enum ", "struct ", "union ", "mapping ")
 
 
@@ -112,7 +128,14 @@ def coverage(text: str, rel: str) -> list[str]:
     for i, line in enumerate(lines):
         for kw in DEF_KEYWORDS:
             if line.startswith(kw):
-                name = line[len(kw):].split("(")[0].split(":")[0].split("=")[0].split(" forall")[0].strip()
+                name = (
+                    line[len(kw) :]
+                    .split("(")[0]
+                    .split(":")[0]
+                    .split("=")[0]
+                    .split(" forall")[0]
+                    .strip()
+                )
                 defs.append((i, kw, name))
                 break
 
@@ -142,11 +165,7 @@ def coverage(text: str, rel: str) -> list[str]:
         doc = has_doc(i)
         if not doc and kw == "function " and n > 0:
             previous_i, previous_kw, previous_name = defs[n - 1]
-            doc = (
-                previous_kw == "val "
-                and previous_name == name
-                and has_doc(previous_i)
-            )
+            doc = previous_kw == "val " and previous_name == name and has_doc(previous_i)
         if kw == "function " and doc:
             documented_functions.add(name)
         if kw in ALWAYS_DOCUMENTED and not doc:
@@ -191,7 +210,9 @@ def coverage(text: str, rel: str) -> list[str]:
     if caps_lets >= 4:
         md = "\n".join(MD_BLOCK.findall(text))
         if "## Constants" not in md and "| --" not in md and "|---" not in md and "| -" not in md:
-            problems.append(f"{rel}: {caps_lets} constants but no Constants section or summary table")
+            problems.append(
+                f"{rel}: {caps_lets} constants but no Constants section or summary table"
+            )
 
     return problems
 
@@ -219,13 +240,16 @@ def lint_mod(path: Path, rel: str) -> list[str]:
         title = text.split("\n", 1)[0][2:].strip()
         if len(title) > 40:
             problems.append(f"{rel}: title too long for the nav ({len(title)} chars): {title!r}")
-    for level, heading in HEADING.findall(text):
+    for _level, heading in HEADING.findall(text):
         if CITED_HEADING.search(heading):
             problems.append(f"{rel}: heading carries a citation: {heading!r}")
     for match in BANNED.finditer(text):
         line = text[: match.start()].count("\n") + 1
         problems.append(f"{rel}:{line}: banned term {match.group(0)!r}")
-    if not any(line.strip() and not line.lstrip().startswith(("#", "-", "!!!", " ")) for line in text.splitlines()):
+    if not any(
+        line.strip() and not line.lstrip().startswith(("#", "-", "!!!", " "))
+        for line in text.splitlines()
+    ):
         problems.append(f"{rel}: overview has no prose")
     is_host = "/host/" in f"/{rel}"
     if is_host and "Non-normative" not in text:

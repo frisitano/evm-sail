@@ -5,16 +5,12 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sys
 from pathlib import Path
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from devtools.optimised_c.build import manifest_entries, package_makefile
+from devtools.paths import REPO_ROOT
 
-from tools.optimised_c_build import manifest_entries, package_makefile
-
-
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 RUNTIME_ROOT = ROOT / "zkvm/runtime"
 RUNTIME_SOURCES = ("sail.c", "cycle_scopes.c")

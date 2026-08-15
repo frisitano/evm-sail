@@ -21,12 +21,13 @@ on real fixtures, so every invocation is bounded by a hard timeout
 the child is killed, so it cannot accumulate.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import pytest
 from execution_testing.client_clis.ethereum_cli import EthereumCLI
@@ -45,9 +46,9 @@ class EvmSailEvm(EthereumCLI):
     default_binary = Path("zkvm_native")
     detect_binary_pattern = re.compile(r"^evm-sail\b")
     version_flag = "-v"
-    cached_version: Optional[str] = None
+    cached_version: str | None = None
 
-    def __init__(self, binary: Optional[Path] = None, trace: bool = False):
+    def __init__(self, binary: Path | None = None, trace: bool = False):
         """Store the resolved binary path (trace is unused by this guest)."""
         self.binary = binary if binary else self.default_binary
         self.trace = trace
@@ -64,8 +65,8 @@ class EvmSailFixtureConsumer(
         self,
         fixture_format: FixtureFormat,
         fixture_path: Path,
-        fixture_name: Optional[str] = None,
-        debug_output_path: Optional[Path] = None,
+        fixture_name: str | None = None,
+        debug_output_path: Path | None = None,
     ) -> None:
         """Run the named fixture's stateless blocks through the guest."""
         if fixture_format != BlockchainFixture:
@@ -81,9 +82,7 @@ class EvmSailFixtureConsumer(
                 sib = getattr(block, "stateless_input_bytes", None)
                 if sib is None:
                     continue
-                got = self._run_guest(
-                    bytes(sib), debug_output_path, f"{name} block {i}"
-                )
+                got = self._run_guest(bytes(sib), debug_output_path, f"{name} block {i}")
                 want = getattr(block, "stateless_output_bytes", None)
                 if want is not None:
                     want_hex = bytes(want).hex()
@@ -101,7 +100,7 @@ class EvmSailFixtureConsumer(
     def _run_guest(
         self,
         input_bytes: bytes,
-        debug_output_path: Optional[Path],
+        debug_output_path: Path | None,
         label: str,
     ) -> str:
         """Run the guest over one SSZ input, returning its hex output line."""
@@ -112,14 +111,11 @@ class EvmSailFixtureConsumer(
             try:
                 result = subprocess.run(
                     [str(self.binary), tpath],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     timeout=TIMEOUT,
                 )
-            except subprocess.TimeoutExpired:
-                raise Exception(
-                    f"evm-sail guest TIMEOUT after {TIMEOUT:g}s [{label}]"
-                )
+            except subprocess.TimeoutExpired as error:
+                raise Exception(f"evm-sail guest TIMEOUT after {TIMEOUT:g}s [{label}]") from error
         finally:
             os.unlink(tpath)
 
@@ -141,4 +137,4 @@ class EvmSailFixtureConsumer(
 
 # Importing this module is enough to register the tool. Re-export the consumer
 # class name so a conftest can `from evm_sail_consumer import EvmSailFixtureConsumer`.
-__all__ = ["EvmSailFixtureConsumer", "EvmSailEvm"]
+__all__ = ["EvmSailEvm", "EvmSailFixtureConsumer"]

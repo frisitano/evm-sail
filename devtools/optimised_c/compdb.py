@@ -8,31 +8,33 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
+from typing import TypedDict
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from tools.optimised_c_build import (
+from devtools.optimised_c.build import (
     ROOT,
     compilation_flags,
     compilation_layout,
     compilation_sources,
 )
 
-
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 DEFAULT_OUTPUT = ROOT / "compile_commands.json"
 
 
+class CompilationEntry(TypedDict):
+    directory: str
+    file: str
+    arguments: list[str]
+
+
 def database_entries(
     generated: Path, *, clang: str, sail: str
-) -> tuple[list[dict], int]:
+) -> tuple[list[CompilationEntry], int]:
     layout = compilation_layout(generated, editable_ffi=True)
     generated_sources, ffi_sources = compilation_sources(layout)
     flags = compilation_flags(layout, sail=sail)
-    entries = [
+    entries: list[CompilationEntry] = [
         {
             "directory": str(ROOT),
             "file": str(source),
@@ -43,12 +45,12 @@ def database_entries(
     return entries, len(generated_sources)
 
 
-def write_database(output: Path, entries: list[dict]) -> None:
+def write_database(output: Path, entries: list[CompilationEntry]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(entries, indent=2) + "\n")
 
 
-def check_database(output: Path, expected: list[dict], generated_count: int) -> None:
+def check_database(output: Path, expected: list[CompilationEntry], generated_count: int) -> None:
     recorded = json.loads(output.read_text())
     expected_files = [entry["file"] for entry in expected]
     recorded_files = [entry.get("file") for entry in recorded]
@@ -108,9 +110,7 @@ def main() -> int:
         print(f"optimized C compdb: Sail not found: {args.sail}")
         return 2
     try:
-        entries, generated_count = database_entries(
-            args.generated, clang=clang, sail=sail
-        )
+        entries, generated_count = database_entries(args.generated, clang=clang, sail=sail)
         write_database(args.output.resolve(), entries)
         if args.check:
             check_database(args.output.resolve(), entries, generated_count)
@@ -119,9 +119,7 @@ def main() -> int:
         return 1
 
     ffi_count = len(entries) - generated_count
-    check_status = (
-        "; membership and representative syntax check passed" if args.check else ""
-    )
+    check_status = "; membership and representative syntax check passed" if args.check else ""
     print(
         f"optimized C compdb: wrote {args.output.resolve()} "
         f"({generated_count} generated + {ffi_count} editable FFI = {len(entries)} entries"

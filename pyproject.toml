@@ -1,0 +1,52 @@
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = ["extractions/python"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"devtools/harness/ssz_builder.py" = ["E402"]
+"devtools/harness/prestate_mpt.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["devtools"]
+
+[[tool.mypy.overrides]]
+module = [
+  "ethereum.*",
+  "ethereum_rlp.*",
+  "ethereum_spec_tools.*",
+  "ethereum_types.*",
+  "evm.*",
+  "execution_testing.*",
+  "pytest",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "devtools.harness.cli",
+  "devtools.harness.guest",
+  "devtools.harness.prestate_mpt",
+  "devtools.harness.ssz_builder",
+]
+# These boundary modules adapt dynamic ctypes and EELS runtime objects;
+# strict checking remains enabled for the package, while their external calls
+# cannot expose useful static signatures.
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "devtools.harness.consumer"
+# EEST supplies these dynamic plugin base classes only in its own environment.
+# Their subclass hook and base types cannot be reconstructed by mypy when the
+# package is absent from the developer-tools environment.
+disable_error_code = ["call-arg", "misc"]
+
+[tool.pytest.ini_options]
+testpaths = ["devtools/tests"]
+addopts = ["--strict-config", "--strict-markers"]

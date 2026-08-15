@@ -2,29 +2,42 @@
 """Build a secure-MPT from an EEST alloc via execution-specs, collect all
 trie nodes (hash -> rlp), and return the state root. Verified by building a
 fixture's POST alloc and matching its expected postStateHash."""
-import os, sys, json
+
+import json
+import os
+import sys
+from typing import Any
+
+from devtools.paths import REPO_ROOT
 
 # execution-specs is expected beside this repository; override for other layouts.
-_ELDIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ELDIR = str(REPO_ROOT)
 _EXECSPECS_ROOT = os.environ.get(
     "EXECSPECS_ROOT", os.path.abspath(os.path.join(_ELDIR, "..", "execution-specs"))
 )
 sys.path.insert(0, os.path.join(_EXECSPECS_ROOT, "src"))
 
-from ethereum_rlp import rlp
-from ethereum.crypto.hash import keccak256
 import ethereum.merkle_patricia_trie as M
+from ethereum.crypto.hash import keccak256
 from ethereum.merkle_patricia_trie import (
-    Trie, trie_set, root, LeafNode, ExtensionNode, BranchNode,
+    BranchNode,
+    ExtensionNode,
+    LeafNode,
+    Trie,
     nibble_list_to_compact,
+    root,
+    trie_set,
 )
 from ethereum.state import Account
-from ethereum_types.numeric import U256, Uint
+from ethereum_rlp import rlp
 from ethereum_types.bytes import Bytes
+from ethereum_types.numeric import U256, Uint
 
 NODES = {}  # keccak(rlp) -> rlp bytes, for every internal node >= 32 bytes
 
+
 def _encode_internal_node(node):
+    unencoded: Any
     if node is None:
         unencoded = b""
     elif isinstance(node, LeafNode):
@@ -32,7 +45,7 @@ def _encode_internal_node(node):
     elif isinstance(node, ExtensionNode):
         unencoded = (nibble_list_to_compact(node.key_segment, False), node.subnode)
     elif isinstance(node, BranchNode):
-        unencoded = list(node.subnodes) + [node.value]
+        unencoded = [*list(node.subnodes), node.value]
     else:
         raise AssertionError(type(node))
     encoded = rlp.encode(unencoded)
@@ -42,10 +55,13 @@ def _encode_internal_node(node):
     NODES[bytes(h)] = bytes(encoded)
     return h
 
+
 M.encode_internal_node = _encode_internal_node  # patch (patricialize calls it by module name)
+
 
 def _u256(x):
     return U256(int(x, 16) if isinstance(x, str) else int(x))
+
 
 def build(alloc):
     """alloc: {addr_hex: {nonce,balance,code,storage:{k:v}}} -> (state_root_hex, NODES)."""
@@ -70,9 +86,10 @@ def build(alloc):
     sr = root(account_trie, lambda a: storage_roots[a])
     return "0x" + bytes(sr).hex(), dict(NODES)
 
+
 def serve():
     """Persistent builder: one JSON alloc per stdin line -> one JSON result line
-    {"root": "0x..", "nodes": ["<hex rlp>", ...]}. Lets run.py (which lacks
+    {"root": "0x..", "nodes": ["<hex rlp>", ...]}. Lets the harness CLI (which lacks
     the execution-specs deps) build pre-state tries via this interpreter."""
     for line in sys.stdin:
         line = line.strip()
@@ -80,14 +97,18 @@ def serve():
             continue
         alloc = json.loads(line)
         sr, nodes = build(alloc)
-        sys.stdout.write(json.dumps({"root": sr, "nodes": [v.hex() for v in nodes.values()]}) + "\n")
+        sys.stdout.write(
+            json.dumps({"root": sr, "nodes": [v.hex() for v in nodes.values()]}) + "\n"
+        )
         sys.stdout.flush()
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
         serve()
     else:
-        fx = json.load(open(sys.argv[1]))
+        with open(sys.argv[1]) as fixture_file:
+            fx = json.load(fixture_file)
         _, case = next(iter(fx.items()))
         sr, nodes = build(case["pre"])
         print("pre-state root:", sr, "nodes:", len(nodes))

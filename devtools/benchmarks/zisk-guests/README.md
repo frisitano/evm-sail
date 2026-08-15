@@ -1,7 +1,7 @@
 # Local ZisK benchmark guests
 
 This directory is the stable repository-local home for the three guest ELFs
-used by `tools/benchmark_zisk.py`:
+used by `python3 -m devtools.benchmarks.zisk`:
 
 - `stateless-validator-evm-sail-zisk.elf`
 - `stateless-validator-reth-zisk.elf`
@@ -15,7 +15,7 @@ The ELFs and generated `SHA256SUMS` are machine-local build artifacts and are
 ignored by Git. Stage freshly built guests with:
 
 ```sh
-bash tools/stage_zisk_guests.sh \
+bash devtools/benchmarks/stage_zisk_guests.sh \
   path/to/stateless-validator-evm-sail-zisk.elf \
   path/to/stateless-validator-reth-zisk \
   path/to/stateless-validator-ethrex-zisk
@@ -24,7 +24,7 @@ bash tools/stage_zisk_guests.sh \
 Once staged, the standard comparison needs no `--guest` arguments:
 
 ```sh
-python3 tools/benchmark_zisk.py path/to/fixture.json
+python3 -m devtools.benchmarks.zisk path/to/fixture.json
 ```
 
 The runner validates every public output before recording a step count.
@@ -38,7 +38,7 @@ to the staged ELF, written when the guest is built:
 
 ```sh
 echo '{"version": "reth v1.11.0", "commit": "<reth commit>"}' \
-  > tools/zisk-guests/stateless-validator-reth-zisk.elf.build.json
+  > devtools/benchmarks/zisk-guests/stateless-validator-reth-zisk.elf.build.json
 ```
 
 The sidecars are machine-local like the ELFs they describe and are ignored by
@@ -71,10 +71,10 @@ for semantic tags and a full statistics/disassembly pass for comprehensive
 operation and executed-function data.
 
 ```sh
-python3 tools/benchmark_zisk.py \
+python3 -m devtools.benchmarks.zisk \
   --guest evm-sail=.agent-tmp/build-zisk-profile/stateless-validator-evm-sail-zisk.elf \
-  --guest reth=tools/zisk-guests/stateless-validator-reth-zisk.elf \
-  --guest ethrex=tools/zisk-guests/stateless-validator-ethrex-zisk.elf \
+  --guest reth=devtools/benchmarks/zisk-guests/stateless-validator-reth-zisk.elf \
+  --guest ethrex=devtools/benchmarks/zisk-guests/stateless-validator-ethrex-zisk.elf \
   --baseline reth \
   --profile sdk \
   --dashboard-only \
@@ -249,7 +249,7 @@ An existing `results.json` can be re-exported without re-running any
 emulator:
 
 ```sh
-python3 tools/benchmark_zisk.py \
+python3 -m devtools.benchmarks.zisk \
   --regenerate-dashboard .agent-tmp/zisk-dashboard-run/results.json \
   --dashboard-dir book/docs/assets/generated/performance
 ```

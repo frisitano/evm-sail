@@ -6,13 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.benchmark_zisk import (
+from devtools.benchmarks.zisk import (
     FixtureCase,
     Guest,
     RecordedCase,
     export_dashboard_data,
-    frame_guest_input,
     fixture_taxonomy,
+    frame_guest_input,
     guest_build_provenance,
     parse_comprehensive_opcode_costs,
     parse_cost,
@@ -25,9 +25,8 @@ from tools.benchmark_zisk import (
     phase_steps,
     regenerate_dashboard,
 )
+from devtools.paths import REPO_ROOT
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
 TMP_ROOT = Path(os.environ.get("AGENT_TMPDIR", REPO_ROOT / ".agent-tmp"))
 
 
@@ -291,7 +290,7 @@ class DashboardExportTests(unittest.TestCase):
                 Guest("reth", elf),
                 Guest("ethrex", elf),
             ]
-            guest_results = {}
+            guest_results: dict[str, object] = {}
             for guest in guests:
                 if guest.name == "ethrex":
                     unavailable = {
@@ -304,16 +303,12 @@ class DashboardExportTests(unittest.TestCase):
                             "size_bytes": 3,
                             "sha256": "cd" * 32,
                         },
-                        "cases": [
-                            {"measurements": [], "unavailable": unavailable}
-                        ],
-                        "profiles": [
-                            {"artifacts": {"unavailable": unavailable}}
-                        ],
+                        "cases": [{"measurements": [], "unavailable": unavailable}],
+                        "profiles": [{"artifacts": {"unavailable": unavailable}}],
                     }
                     continue
                 instrumented = guest.name == "evm-sail"
-                measurement = {"steps": 1000, "elapsed_ns": 1}
+                measurement: dict[str, object] = {"steps": 1000, "elapsed_ns": 1}
                 if instrumented:
                     measurement["phases"] = [
                         {"name": "input-decode", "steps": 100},
@@ -376,29 +371,19 @@ class DashboardExportTests(unittest.TestCase):
                                         "cost": 1500 if instrumented else 1000,
                                         "op_count": 20,
                                         "frop_count": 0,
-                                        "op_cost": (
-                                            1500 if instrumented else 1000
-                                        ),
+                                        "op_cost": (1500 if instrumented else 1000),
                                         "frop_cost": 0,
-                                        "share_percent": (
-                                            37.5 if instrumented else 31.25
-                                        ),
+                                        "share_percent": (37.5 if instrumented else 31.25),
                                     }
                                 ],
-                                "opcode_profile_completeness": (
-                                    "all_used_operations"
-                                ),
+                                "opcode_profile_completeness": ("all_used_operations"),
                                 "function_profile_status": (
-                                    "ok"
-                                    if instrumented
-                                    else "stack_mismatch"
+                                    "ok" if instrumented else "stack_mismatch"
                                 ),
                                 "executed_functions": [
                                     {
                                         "name": "main",
-                                        "exclusive_steps": (
-                                            1004 if instrumented else 800
-                                        ),
+                                        "exclusive_steps": (1004 if instrumented else 800),
                                         "share_percent": 100.0,
                                     }
                                 ],
@@ -414,9 +399,7 @@ class DashboardExportTests(unittest.TestCase):
             }
             output = tmp / "dashboard"
 
-            export_dashboard_data(
-                output, [case], guests, guest_results, benchmark_result
-            )
+            export_dashboard_data(output, [case], guests, guest_results, benchmark_result)
 
             catalog = json.loads((output / "catalog.json").read_text())
             self.assertEqual(catalog["case_count"], 1)
@@ -438,9 +421,7 @@ class DashboardExportTests(unittest.TestCase):
                     "source": "repository",
                 },
             )
-            self.assertEqual(
-                catalog["guests"][1]["build"]["version"], "reth v1.11.0"
-            )
+            self.assertEqual(catalog["guests"][1]["build"]["version"], "reth v1.11.0")
             self.assertIsNone(catalog["guests"][2]["build"])
             self.assertEqual(fixture_entry["max_gas_used"], 30_000_000)
             self.assertEqual(fixture_entry["total_gas_used"], 30_000_000)
@@ -467,27 +448,17 @@ class DashboardExportTests(unittest.TestCase):
             self.assertNotIn("phases", case_guests["reth"])
             self.assertEqual(case_guests["evm-sail"]["total_steps"], 1004)
             self.assertEqual(case_guests["evm-sail"]["total_cost"], 4000)
-            self.assertEqual(
-                case_guests["evm-sail"]["scope_steps"]["execute_block"], 500
-            )
-            self.assertEqual(
-                case_guests["evm-sail"]["scope_costs"]["execute_block"], 2000
-            )
+            self.assertEqual(case_guests["evm-sail"]["scope_steps"]["execute_block"], 500)
+            self.assertEqual(case_guests["evm-sail"]["scope_costs"]["execute_block"], 2000)
             self.assertEqual(case_guests["reth"]["scope_costs"], {})
-            self.assertEqual(
-                case_guests["reth"]["top_cost_functions"][0]["name"], "sha256"
-            )
-            self.assertEqual(
-                case_guests["evm-sail"]["opcode_costs"][0]["name"], "keccak"
-            )
+            self.assertEqual(case_guests["reth"]["top_cost_functions"][0]["name"], "sha256")
+            self.assertEqual(case_guests["evm-sail"]["opcode_costs"][0]["name"], "keccak")
             self.assertEqual(
                 case_guests["reth"]["function_profile_status"],
                 "stack_mismatch",
             )
             self.assertEqual(
-                case_guests["reth"]["executed_functions"][0][
-                    "exclusive_steps"
-                ],
+                case_guests["reth"]["executed_functions"][0]["exclusive_steps"],
                 800,
             )
             self.assertEqual(
@@ -534,9 +505,7 @@ class DashboardExportTests(unittest.TestCase):
             )
             self.assertIsNone(guest_build_provenance(guest, None))
             sidecar = tmp / "guest.elf.build.json"
-            sidecar.write_text(
-                json.dumps({"commit": "fe" * 20, "version": "v1.12.0"})
-            )
+            sidecar.write_text(json.dumps({"commit": "fe" * 20, "version": "v1.12.0"}))
             self.assertEqual(
                 guest_build_provenance(guest, None),
                 {
@@ -557,7 +526,10 @@ class DashboardExportTests(unittest.TestCase):
             build = guest_build_provenance(Guest("evm-sail", elf), None)
             if build is not None:
                 self.assertEqual(build["source"], "repository")
-                self.assertRegex(build["commit"], r"^[0-9a-f]{40}(-dirty)?$")
+                commit = build["commit"]
+                self.assertIsNotNone(commit)
+                assert commit is not None
+                self.assertRegex(commit, r"^[0-9a-f]{40}(-dirty)?$")
 
     def test_regenerates_dashboard_from_recorded_results(self) -> None:
         TMP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -599,9 +571,7 @@ class DashboardExportTests(unittest.TestCase):
                             "size_bytes": 3,
                             "sha256": "ef" * 32,
                         },
-                        "cases": [
-                            {"measurements": [{"steps": 900, "elapsed_ns": 1}]}
-                        ],
+                        "cases": [{"measurements": [{"steps": 900, "elapsed_ns": 1}]}],
                         "profiles": [{"artifacts": artifacts}],
                     }
                 },
@@ -610,29 +580,17 @@ class DashboardExportTests(unittest.TestCase):
             results_path.write_text(json.dumps(results))
             output = tmp / "dashboard"
 
-            regenerate_dashboard(
-                results_path, output, {"reth": "reth v1.11.0"}
-            )
+            regenerate_dashboard(results_path, output, {"reth": "reth v1.11.0"})
 
             catalog = json.loads((output / "catalog.json").read_text())
             self.assertEqual(catalog["case_count"], 1)
-            self.assertEqual(
-                catalog["guests"][0]["build"]["version"], "reth v1.11.0"
-            )
+            self.assertEqual(catalog["guests"][0]["build"]["version"], "reth v1.11.0")
             fixture_entry = catalog["fixtures"][0]
-            self.assertEqual(
-                fixture_entry["guest_total_steps"], {"reth": 900}
-            )
-            self.assertEqual(
-                fixture_entry["guest_total_cost"], {"reth": 3600}
-            )
+            self.assertEqual(fixture_entry["guest_total_steps"], {"reth": 900})
+            self.assertEqual(fixture_entry["guest_total_cost"], {"reth": 3600})
             shard = json.loads((output / fixture_entry["shard"]).read_text())
-            self.assertEqual(
-                shard["cases"][0]["id"], f"block-42-block-0-{'cd' * 6}"
-            )
-            self.assertEqual(
-                shard["cases"][0]["guests"]["reth"]["total_steps"], 900
-            )
+            self.assertEqual(shard["cases"][0]["id"], f"block-42-block-0-{'cd' * 6}")
+            self.assertEqual(shard["cases"][0]["guests"]["reth"]["total_steps"], 900)
 
 
 if __name__ == "__main__":

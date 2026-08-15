@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import re
-from pathlib import Path
 
+from devtools.paths import REPO_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 FFI_ROOT = ROOT / "extractions/c/optimised/contract"
 SOURCE_ROOT = ROOT / "extractions/c/optimised/contract/src"
 INCLUDE_ROOT = ROOT / "extractions/c/optimised/contract/include"
@@ -37,9 +37,7 @@ FORBIDDEN_C_SEMANTIC_TAG = re.compile(
     r"\b(?:zCallKind|zCreateKind|"
     r"zDeepStackOperation|zTxSignatureScheme)\b"
 )
-RAW_MODEL_TYPE = re.compile(
-    r"\b(?:sail_fixed_bytes_(?:u64_lanes_20|u64_lanes_32|256)|sail_u256)\b"
-)
+RAW_MODEL_TYPE = re.compile(r"\b(?:sail_fixed_bytes_(?:u64_lanes_20|u64_lanes_32|256)|sail_u256)\b")
 FORBIDDEN_MPT_STATUS = re.compile(r"\b(?:mpt_status|mpt_fail)\b")
 SAIL_C_BINDING = re.compile(r'\bc\s*:\s*"([^"]+)"')
 
@@ -102,9 +100,7 @@ def strip_comments_and_literals(source: str) -> str:
                     result[index + 1] = " "
                 index += 2
                 continue
-            if (state == "string" and char == '"') or (
-                state == "character" and char == "'"
-            ):
+            if (state == "string" and char == '"') or (state == "character" and char == "'"):
                 state = "code"
             if char != "\n":
                 result[index] = " "
@@ -144,9 +140,7 @@ def main() -> int:
             path = SOURCE_ROOT / entry
             if not path.is_file():
                 continue
-            source = strip_comments_and_literals(
-                path.read_text(errors="replace")
-            )
+            source = strip_comments_and_literals(path.read_text(errors="replace"))
             for pattern, label in (
                 (FORBIDDEN_CALLS, "forbidden allocation/sort call"),
                 (FORBIDDEN_STDIO, "production stdio call"),
@@ -157,9 +151,7 @@ def main() -> int:
             if entry != "workspace.c":
                 for match in FORBIDDEN_MODULE_BACKING_ARRAY.finditer(source):
                     line = source.count("\n", 0, match.start()) + 1
-                    errors.append(
-                        f"{entry}:{line}: module-owned capacity backing array"
-                    )
+                    errors.append(f"{entry}:{line}: module-owned capacity backing array")
 
         for path in sorted(FFI_ROOT.rglob("*")):
             if path.suffix not in {".c", ".h"} or not path.is_file():
@@ -171,8 +163,7 @@ def main() -> int:
                     continue
                 line = source.count("\n", 0, match.start()) + 1
                 errors.append(
-                    f"{relative}:{line}: redundant optimized-host prefix: "
-                    f"{match.group(0)}"
+                    f"{relative}:{line}: redundant optimized-host prefix: {match.group(0)}"
                 )
             if path != PRELUDE:
                 for match in RAW_MODEL_TYPE.finditer(source):
@@ -184,15 +175,11 @@ def main() -> int:
             for match in FORBIDDEN_C_SEMANTIC_TAG.finditer(source):
                 line = source.count("\n", 0, match.start()) + 1
                 errors.append(
-                    f"{relative}:{line}: source-owned semantic dispatch tag in C: "
-                    f"{match.group(0)}"
+                    f"{relative}:{line}: source-owned semantic dispatch tag in C: {match.group(0)}"
                 )
             for match in FORBIDDEN_MPT_STATUS.finditer(source):
                 line = source.count("\n", 0, match.start()) + 1
-                errors.append(
-                    f"{relative}:{line}: deferred MPT fatal status: "
-                    f"{match.group(0)}"
-                )
+                errors.append(f"{relative}:{line}: deferred MPT fatal status: {match.group(0)}")
 
         for path in sorted(SAIL_ROOT.rglob("*.sail")):
             source = path.read_text(errors="replace")
@@ -201,14 +188,12 @@ def main() -> int:
                 symbol = match.group(1)
                 if symbol.startswith(("evmsail_", "optimized_")):
                     line = source.count("\n", 0, match.start()) + 1
-                    errors.append(
-                        f"{relative}:{line}: prefixed optimized C binding: {symbol}"
-                    )
+                    errors.append(f"{relative}:{line}: prefixed optimized C binding: {symbol}")
 
     if errors:
         print("optimized FFI audit failed:")
-        for error in errors:
-            print(f"  {error}")
+        for violation in errors:
+            print(f"  {violation}")
         return 1
 
     scope = "manifest" if args.manifest_only else "manifest and production policy"

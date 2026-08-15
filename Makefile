@@ -22,6 +22,8 @@
 #   make eest-smoke     run one embedded v0.6.2 stateless fixture
 #   make extract-python generate and smoke-test the complete Python model
 #   make python-lint    lint the generated Python model with pinned Ruff
+#   make python-tools-check
+#                       lint, format-check, type-check, and test devtools
 #   make all            check + lint + fmt-check
 #   make clean          remove build artifacts
 #
@@ -31,7 +33,7 @@
 # fallback -- it produces a wrong model rather than an error. See README.md.
 #
 # Block EXECUTION (compile to C and run) is validated by the EEST harness
-# and the zkVM guest (harness/run.py over the zkvm/native-runner builds).
+# and the zkVM guest (devtools.harness.cli over the zkvm/native-runner builds).
 # ===========================================================================
 
 SAIL ?= sail
@@ -53,10 +55,14 @@ DOCS_VENV_ABS := $(abspath $(DOCS_VENV))
 DOCS_BIN := $(DOCS_VENV_ABS)/bin
 DOCS_ENV_STAMP := $(DOCS_VENV_ABS)/.evm-sail-docs-ready
 RUFF_VERSION ?= 0.15.22
+MYPY_VERSION ?= 1.18.2
+PYTEST_VERSION ?= 8.4.2
 ETHEREUM_TYPES_VERSION ?= 0.4.1
 PYDANTIC_VERSION ?= 2.12.5
 PYCRYPTODOME_VERSION ?= 3.23.0
 PYTHON_RUFF ?= $(UV) run --no-project --with ruff==$(RUFF_VERSION) ruff
+PYTHON_MYPY ?= $(UV) run --no-project --with mypy==$(MYPY_VERSION) mypy
+PYTHON_PYTEST ?= $(UV) run --no-project --with pytest==$(PYTEST_VERSION) pytest
 PYTHON_EVM ?= $(UV) run --no-project --with ethereum-types==$(ETHEREUM_TYPES_VERSION) --with pydantic==$(PYDANTIC_VERSION) --with pycryptodome==$(PYCRYPTODOME_VERSION) python
 
 PROJECT             := sail/evm.sail_project
@@ -207,7 +213,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-check python-tools-fixture-smoke python-tools-fmt-check python-tools-format python-tools-format-check python-tools-lint python-tools-test python-tools-typecheck runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -235,8 +241,9 @@ help:
 	@echo "  make docs-env       - create/update the repo-local uv documentation environment"
 	@echo "  make extract-python - generate and smoke-test the complete Python model"
 	@echo "  make python-lint    - lint generated Python with Ruff $(RUFF_VERSION)"
-	@echo "  make python-tools-lint - lint the handwritten harness/tools Python"
-	@echo "  make python-tools-fmt-check - report Ruff format drift in handwritten Python"
+	@echo "  make python-tools-check - run all handwritten Python quality gates"
+	@echo "  make python-tools-format - format handwritten Python with Ruff"
+	@echo "  make python-tools-fixture-smoke - run one embedded v0.6.2 fixture"
 	@echo "  make ffi-clang-format-check - require handwritten FFI C to match .clang-format"
 	@echo "  make coq-contracts-check - compile the hand-maintained Coq extern contract"
 	@echo "  make docs-site      - build the literate specification book"
@@ -258,7 +265,7 @@ lint:
 	@o=$$($(SAIL) $(SAIL_Z3_FLAGS) --all-warnings --lint-readability $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (Sail warnings or readability findings)"; exit 1; fi; \
 	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
 	echo "lint: clean"
-	@$(PYTHON) tools/docs_lint.py . || { echo "lint: FAILED (docs style)"; exit 1; }
+	@$(PYTHON) -m devtools.docs.lint . || { echo "lint: FAILED (docs style)"; exit 1; }
 
 # one sail call per file: the files $include each other, so a single multi-file
 # invocation double-loads them and errors.
@@ -272,16 +279,15 @@ runtime-test:
 	$(PYTHON) zkvm/runtime/sail256/test_runtime.py
 
 check-optimized-ffi-manifest:
-	$(PYTHON) tools/check_optimized_ffi.py --manifest-only
+	$(PYTHON) -m devtools.optimised_c.ffi --manifest-only
 
 check-optimized-ffi:
-	$(PYTHON) tools/check_optimized_ffi.py
+	$(PYTHON) -m devtools.optimised_c.ffi
 
 zisk-guest:
 	bash zkvm/zisk/build.sh guest
 
-eest-smoke:
-	@$(PYTHON) harness/run.py $(EEST_SMOKE) --limit 1 --quiet
+eest-smoke: python-tools-fixture-smoke
 
 check-contracts:
 	@for f in $(SAIL_CONTRACTS); do $(SAIL) $(SAIL_Z3_FLAGS) "$$f"; done
@@ -415,7 +421,7 @@ extract-c-optimised: check-optimized-ffi
 		$(C_OPT_EXTRA_SAIL_FLAGS) \
 		$(C_OPTIMISED_SPLICE_FLAGS) \
 		$(MODEL) --variable EVM_DEBUG=off
-	$(PYTHON) tools/package_optimised_c.py $(C_OPT_GENERATED_DIR)
+	$(PYTHON) -m devtools.optimised_c.package $(C_OPT_GENERATED_DIR)
 	test -s $(C_OPT_GENERATED_MANIFEST)
 	test -s $(C_OPT_PACKAGE_MANIFEST)
 	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
@@ -431,18 +437,18 @@ c-optimised: build-c-optimised
 # generated translation units plus the original editable FFI sources, never
 # the package's staged FFI copies.
 c-optimised-compdb: extract-c-optimised
-	$(PYTHON) tools/generate_optimised_c_compdb.py --sail $(SAIL) --clang $(CLANG) \
+	$(PYTHON) -m devtools.optimised_c.compdb --sail $(SAIL) --clang $(CLANG) \
 		--output $(C_OPT_COMPDB) --check $(C_OPT_GENERATED_DIR)
 
 c-optimised-evaluator-test:
-	$(PYTHON) -m unittest tools.test_optimised_c_evaluator
+	$(PYTHON_PYTEST) -q devtools/tests/test_optimised_c_evaluator.py
 
 # A valid record may intentionally contain red gates. The evaluator owns the
 # package build so that a compilation failure is recorded instead of preventing
 # publication. Use --require-pass when an experiment or release is ready to
 # make every recorded blocking gate fatal.
 c-optimised-evaluate: c-optimised-compdb
-	$(PYTHON) tools/evaluate_optimised_c.py --sail $(SAIL) --clang $(CLANG) \
+	$(PYTHON) -m devtools.optimised_c.evaluate --sail $(SAIL) --clang $(CLANG) \
 		$(C_OPT_SAIL_SOURCE_ARG) \
 		--purpose $(C_OPT_EVALUATION_PURPOSE) --compdb $(C_OPT_COMPDB) \
 		--built-library $(C_OPT_GENERATED_DIR)/libevmsail.a \
@@ -450,32 +456,32 @@ c-optimised-evaluate: c-optimised-compdb
 		$(C_OPT_GENERATED_DIR)
 
 c-optimised-conformance: c-optimised
-	$(PYTHON) tools/check_optimised_c.py $(C_OPT_GENERATED_DIR)
+	$(PYTHON) -m devtools.optimised_c.check $(C_OPT_GENERATED_DIR)
 
 # Advisory by default: this is the compiler-pass work queue. The deterministic
 # conformance target and semantic fixtures remain gates while we burn down the
 # baseline. Diagnostics are deduplicated and ordered by the pass that should
 # own the fix instead of by translation-unit traversal order.
 c-optimised-lint-report: c-optimised-conformance
-	$(PYTHON) tools/lint_optimised_c.py --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
+	$(PYTHON) -m devtools.optimised_c.lint --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
 		--profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # This is intentionally separate from c-optimised-conformance: extraction and
 # the deterministic source contract remain runnable on machines without
 # clang-tidy, while reviewers and CI can opt into the richer AST diagnostics.
 c-optimised-clang-tidy: c-optimised-conformance
-	$(PYTHON) tools/lint_optimised_c.py --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
+	$(PYTHON) -m devtools.optimised_c.lint --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
 		--require-clang-tidy --strict --profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # Keep the report target read-only. The explicit clang-format target produces
 # the pretty-C review artifact from canonical compiler output and verifies both
 # generated and handwritten optimized C against the same policy.
 c-optimised-format-report: c-optimised-conformance
-	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
 		--jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 c-optimised-clang-format: c-optimised-conformance
-	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
 		--fix --strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # Source diagnostics run both before elaboration and after type/effect
@@ -490,7 +496,7 @@ sail-readability-lint-report:
 	$(MAKE) --no-print-directory c-optimised SAIL="$(SAIL)" \
 		C_OPT_EXTRA_SAIL_FLAGS="--no-color --lint-readability" C_OPT_SPECIALIZE_LOG_FLAGS= \
 		> $(SAIL_READABILITY_JIB_LOG) 2>&1
-	$(PYTHON) tools/summarize_sail_readability.py \
+	$(PYTHON) -m devtools.docs.sail_readability \
 		--source-log $(SAIL_READABILITY_SOURCE_LOG) --jib-log $(SAIL_READABILITY_JIB_LOG) \
 		--output $(SAIL_READABILITY_REPORT) --json-output $(SAIL_READABILITY_JSON_REPORT)
 	@cat $(SAIL_READABILITY_REPORT)
@@ -562,28 +568,37 @@ python-lint:
 	test -s $(PYTHON_MODEL)
 	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
 
-# Handwritten Python: the fixture harness and repository tooling. The generated
-# model keeps the python-lint policy above; these targets own the
-# hand-maintained scripts. Pyflakes correctness plus syntax errors gate;
-# compact one-line statement style (E401/E70x) and deliberate sys.path setup
-# before imports (E402) are accepted in these scripts.
-PYTHON_TOOLS_DIRS         := harness tools
-PYTHON_TOOLS_RUFF_RULES   := E9,F
-PYTHON_TOOLS_RUFF_IGNORES := E741
+# Handwritten Python lives under one package tree. The generated model keeps
+# the separate python-lint policy above.
+PYTHON_TOOLS_DIRS := devtools
+
+python-tools-check: python-tools-lint python-tools-format-check python-tools-typecheck python-tools-test
 
 python-tools-lint:
-	$(PYTHON_RUFF) check --select $(PYTHON_TOOLS_RUFF_RULES) --ignore $(PYTHON_TOOLS_RUFF_IGNORES) --output-format concise $(PYTHON_TOOLS_DIRS)
+	$(PYTHON_RUFF) check --output-format concise $(PYTHON_TOOLS_DIRS)
 
-# Advisory for now: the handwritten scripts predate a formatter policy. CI runs
-# this without failing the build until the tree is formatted once.
-python-tools-fmt-check:
+python-tools-format:
+	$(PYTHON_RUFF) format $(PYTHON_TOOLS_DIRS)
+
+python-tools-format-check:
 	$(PYTHON_RUFF) format --check $(PYTHON_TOOLS_DIRS)
+
+python-tools-fmt-check: python-tools-format-check
+
+python-tools-typecheck:
+	$(PYTHON_MYPY) devtools
+
+python-tools-test:
+	$(PYTHON_PYTEST) -q devtools/tests
+
+python-tools-fixture-smoke:
+	@$(PYTHON) -m devtools.harness.cli $(EEST_SMOKE) --limit 1 --quiet
 
 # Handwritten FFI formatting only. Unlike c-optimised-clang-format this needs
 # neither the custom Sail compiler nor a generated build tree, so it can run
 # on any machine with clang-format and the repository .clang-format policy.
 ffi-clang-format-check:
-	$(PYTHON) tools/check_optimised_c_format.py --clang-format $(CLANG_FORMAT) \
+	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
 		--scope ffi --strict --jobs $(LINT_JOBS)
 
 # Type-check the hand-maintained Coq extern contract without regenerating the

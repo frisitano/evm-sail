@@ -199,9 +199,10 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
              zkvm_accelerators.h (eth-act zkvm-standards crypto), plus
              spec/ generated-ABI adapters and optimized/ fixed-layout and
              whole-operation refinements
-harness/     the EEST harness: run.py drives main.sail in-process and gates its
-             canonical output byte-exactly against EELS; state tests are first
-             materialized as valid stateless blocks by the in-process t8n
+devtools/    handwritten Python and developer tooling: devtools/harness/cli.py drives
+             main.sail in-process and gates its canonical output byte-exactly
+             against EELS; benchmarks/, docs/, and optimised_c/ own the other
+             repository developer utilities
 extractions/ one directory per target, each with contract/ (the axiom or ABI
              layer) and src/ (the committed generated output):
                c/spec/       GMP-backed reference model
@@ -280,10 +281,9 @@ Run the conformance suite against the workspace-local
 `tests-zkevm@v0.6.2` corpus:
 
 ```sh
-cd harness
-python3 run.py --rebuild --limit 1 --quiet \
-  ../zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-python3 run.py --jobs 12 --quiet ../zkvm/.fixtures/current-v062-full
+python3 -m devtools.harness.cli --rebuild --limit 1 --quiet \
+  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+python3 -m devtools.harness.cli --jobs 12 --quiet zkvm/.fixtures/current-v062-full
 ```
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
@@ -295,8 +295,8 @@ version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
 binary is not at `~/.zisk/bin/ziskemu`:
 
 ```sh
-ZISKEMU=/path/to/ziskemu python3 run.py --zisk --limit 1 --quiet \
-  ../zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+ZISKEMU=/path/to/ziskemu python3 -m devtools.harness.cli --zisk --limit 1 --quiet \
+  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The crypto

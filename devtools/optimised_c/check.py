@@ -7,8 +7,9 @@ import argparse
 import re
 from pathlib import Path
 
+from devtools.paths import REPO_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 
 SCALAR_DECLARATION = re.compile(
@@ -27,12 +28,8 @@ GAS_DECLARATION = re.compile(
     r"^(?P<qualifier>extern\s+const\s+)?"
     r"(?:bool|u?int(?:8|16|32|64)_t|u128|u256|u320)\s+G_[A-Za-z0-9_]+\s*;"
 )
-FUNCTION_START = re.compile(
-    r"^u256 stateless_input_slice_load\(Bytes s, uint32_t off\)$"
-)
-FATAL_MATCH_FAILURE = re.compile(
-    r"fatal_error\([^;]+\);\s*sail_match_failure\(", re.MULTILINE
-)
+FUNCTION_START = re.compile(r"^u256 stateless_input_slice_load\(Bytes s, uint32_t off\)$")
+FATAL_MATCH_FAILURE = re.compile(r"fatal_error\([^;]+\);\s*sail_match_failure\(", re.MULTILINE)
 
 
 def source_files(generated: Path) -> list[Path]:
@@ -141,21 +138,16 @@ def main() -> int:
         errors.extend(adjacent_split_initializers(path, text))
         errors.extend(immediate_scalar_return_temporaries(path, text))
         if FATAL_MATCH_FAILURE.search(text):
-            errors.append(
-                f"{path}: fatal_error retains an unreachable Sail exit bridge"
-            )
+            errors.append(f"{path}: fatal_error retains an unreachable Sail exit bridge")
         for legacy_exception_state in ("have_exception", "current_exception"):
             if re.search(rf"\b{legacy_exception_state}\b", text):
                 errors.append(
-                    f"{path}: generated C retains legacy exception state "
-                    f"{legacy_exception_state}"
+                    f"{path}: generated C retains legacy exception state {legacy_exception_state}"
                 )
         for number, line in enumerate(text.splitlines(), 1):
             gas_definition = GAS_DEFINITION.match(line)
             if gas_definition and gas_definition.group("qualifier") is None:
-                errors.append(
-                    f"{path}:{number}: literal gas storage is not const: {line.strip()}"
-                )
+                errors.append(f"{path}:{number}: literal gas storage is not const: {line.strip()}")
 
     include_root = generated / "include"
     headers = list(include_root.rglob("*.h"))
@@ -203,8 +195,8 @@ def main() -> int:
             errors.append("stateless_input_slice_load is not a direct two-branch return")
 
     if errors:
-        for error in errors:
-            print(error)
+        for violation in errors:
+            print(violation)
         print(f"optimized C conformance: FAILED ({len(errors)} violations)")
         return 1
 

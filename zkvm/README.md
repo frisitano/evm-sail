@@ -12,13 +12,14 @@ semantics wired up.
 ## Fixture gate
 
 ```
-$ python3 ../harness/run.py --spike --limit 1 --quiet \
-    .fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+$ cd ..
+$ python3 -m devtools.harness.cli --spike --limit 1 --quiet \
+    zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The gate diffs the guest's canonical SSZ `SszStatelessValidationResult` BYTE-EXACT
 against the EELS reference: any EEST state test is executed through the
-in-process EELS t8n (`harness/ssz_builder.py`), which produces a fully VALID
+in-process EELS t8n (`devtools/harness/ssz_builder.py`), which produces a fully VALID
 Amsterdam block input AND the reference guest's expected output bytes over that
 exact input (fixtures already carrying `statelessInputBytes`/
 `statelessOutputBytes` run directly). The same harness drives the native
@@ -47,8 +48,8 @@ successful_validation=1          # public output byte 32
 
 A failed validation is a NORMAL result (`successful_validation=0`, exit 0).
 Input vectors are raw `statelessInputBytes` — from EEST-generated fixtures or
-built from any state test by `harness/ssz_builder.py` (in-process EELS t8n);
-`run.py --spike` supplies them to the unchanged ELF at runtime. The fixture is
+built from any state test by `devtools/harness/ssz_builder.py` (in-process EELS t8n);
+`devtools.harness.cli --spike` supplies them to the unchanged ELF at runtime. The fixture is
 never compiled or linked into the guest. The stateless validator itself is
 `../sail/main.sail` over the shared decoders/trie/HTR in `../sail/host/` and
 `../sail/lib/`.
@@ -186,7 +187,7 @@ model instead of an error. Upstream Sail is not a proof-extraction fallback; the
 is the capability check.
 
 ```
-python3 ../harness/run.py --spike <state-test.json> --fork F   # the gate
+cd .. && python3 -m devtools.harness.cli --spike <state-test.json> --fork F   # the gate
 VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
 ./build.sh guest                   # input-free build (build/zkvm_guest.elf)
 ./build.sh clean

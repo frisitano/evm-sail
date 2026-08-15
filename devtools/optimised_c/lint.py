@@ -20,17 +20,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from tools.optimised_c_build import (
+from devtools.optimised_c.build import (
     compilation_flags,
     compilation_layout,
     compilation_sources,
 )
+from devtools.paths import REPO_ROOT
 
-
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 DIAGNOSTIC = re.compile(
     r"^(?P<path>.*?):(?P<line>\d+):(?P<column>\d+): "
@@ -137,9 +134,7 @@ def stable_analyzer_checkers(clang: str) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            "cannot enumerate Clang static-analyzer checkers:\n" + result.stdout
-        )
+        raise RuntimeError("cannot enumerate Clang static-analyzer checkers:\n" + result.stdout)
     # Annex K's bounds-checking interfaces are optional in C11 and unavailable
     # in the guest toolchains. The corresponding analyzer checker recommends
     # fprintf_s for fatal diagnostics, which is less portable than fprintf and
@@ -148,11 +143,7 @@ def stable_analyzer_checkers(clang: str) -> list[str]:
     checkers = []
     for line in result.stdout.splitlines():
         match = re.match(r"^  (\S+)(?:\s|$)", line)
-        if (
-            match is not None
-            and "." in match.group(1)
-            and match.group(1) not in excluded
-        ):
+        if match is not None and "." in match.group(1) and match.group(1) not in excluded:
             checkers.append(match.group(1))
     if not checkers:
         raise RuntimeError("Clang reported no stable static-analyzer checkers")
@@ -381,7 +372,7 @@ def main() -> int:
             json.dumps(sorted(finding_key(finding) for finding in findings), indent=2) + "\n"
         )
 
-    grouped = {name: [] for name in PASS_ORDER}
+    grouped: dict[str, list[Finding]] = {name: [] for name in PASS_ORDER}
     for finding in new_findings:
         grouped[cleanup_pass(finding)].append(finding)
 
@@ -408,13 +399,15 @@ def main() -> int:
     for finding in findings:
         owner = finding_owner(finding)
         owner_counts[owner] = owner_counts.get(owner, 0) + 1
-    owner_summary = ", ".join(
-        f"{owner}: {count}" for owner, count in sorted(owner_counts.items())
-    ) or "no findings"
+    owner_summary = (
+        ", ".join(f"{owner}: {count}" for owner, count in sorted(owner_counts.items()))
+        or "no findings"
+    )
     check_counts = Counter(finding.check for finding in findings)
-    check_summary = ", ".join(
-        f"{check}: {count}" for check, count in check_counts.most_common(12)
-    ) or "no findings"
+    check_summary = (
+        ", ".join(f"{check}: {count}" for check, count in check_counts.most_common(12))
+        or "no findings"
+    )
     current_keys = {finding_key(finding) for finding in findings}
     tidy_status = "enabled (broad C profile)" if tidy is not None else "not installed"
     print(

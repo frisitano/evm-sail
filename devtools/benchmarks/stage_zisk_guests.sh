@@ -6,8 +6,8 @@ if [[ $# -ne 3 ]]; then
     exit 2
 fi
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-guest_dir="$root/tools/zisk-guests"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+guest_dir="$root/devtools/benchmarks/zisk-guests"
 mkdir -p "$guest_dir"
 
 stage_guest() {

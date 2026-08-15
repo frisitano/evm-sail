@@ -7,7 +7,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.evaluate_optimised_c import (
+from devtools.optimised_c.build import (
+    MODEL_CFLAGS,
+    MODEL_DEFINES,
+    ROOT,
+    manifest_entries,
+    package_makefile,
+)
+from devtools.optimised_c.evaluate import (
     SAMPLE_STRATA,
     SCHEMA_VERSION,
     display_path,
@@ -18,14 +25,6 @@ from tools.evaluate_optimised_c import (
     strip_c_comments_and_literals,
     validate_record,
 )
-from tools.optimised_c_build import (
-    MODEL_CFLAGS,
-    MODEL_DEFINES,
-    ROOT,
-    manifest_entries,
-    package_makefile,
-)
-
 
 TMP_ROOT = Path(os.environ.get("AGENT_TMPDIR", ROOT / ".agent-tmp"))
 
@@ -101,12 +100,10 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(with_source.returncode, 0, with_source.stderr)
         evaluator_command = with_source.stdout.split(
-            "tools/evaluate_optimised_c.py", maxsplit=1
+            "-m devtools.optimised_c.evaluate", maxsplit=1
         )[1]
         self.assertIn("--sail /review/compiler/bin/sail", evaluator_command)
-        self.assertIn(
-            '--sail-source "/review/compiler/source"', evaluator_command
-        )
+        self.assertIn('--sail-source "/review/compiler/source"', evaluator_command)
 
         without_source = subprocess.run(
             [*common, "SAIL_SOURCE="],
@@ -117,7 +114,7 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(without_source.returncode, 0, without_source.stderr)
         evaluator_command = without_source.stdout.split(
-            "tools/evaluate_optimised_c.py", maxsplit=1
+            "-m devtools.optimised_c.evaluate", maxsplit=1
         )[1]
         self.assertNotIn("--sail-source", evaluator_command)
 
@@ -157,14 +154,12 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
             root = Path(directory)
             log = root / "quality/build.log"
             with patch(
-                "tools.evaluate_optimised_c.run",
+                "devtools.optimised_c.evaluate.run",
                 return_value=subprocess.CompletedProcess(
                     ["make"], returncode=1, stdout="compile failed\n"
                 ),
             ):
-                record, written_log = package_build_gate(
-                    root, "clang", root / "libevmsail.a", log
-                )
+                record, written_log = package_build_gate(root, "clang", root / "libevmsail.a", log)
             self.assertEqual(record["status"], "fail")
             self.assertEqual(record["evidence"], [display_path(log)])
             self.assertEqual(written_log, log)

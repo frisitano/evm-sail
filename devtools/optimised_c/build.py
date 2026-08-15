@@ -7,8 +7,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from devtools.paths import REPO_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 FFI_ROOT = ROOT / "extractions/c"
 EDITABLE_FFI_SOURCE = FFI_ROOT / "optimised/contract/src"
 EDITABLE_FFI_MANIFEST = FFI_ROOT / "optimised/contract/sources.list"
@@ -92,8 +93,7 @@ def resolve_sail_lib(sail: str) -> Path:
         [sail, "--dir"],
         cwd=ROOT,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if result.returncode != 0:

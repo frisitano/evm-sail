@@ -13,17 +13,12 @@ import re
 import shlex
 import shutil
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from tools.generate_optimised_c_compdb import check_database, database_entries
-from tools.optimised_c_build import ROOT, compilation_layout, compilation_sources
-
+from devtools.optimised_c.build import ROOT, compilation_layout, compilation_sources
+from devtools.optimised_c.compdb import check_database, database_entries
 
 SCHEMA_VERSION = "evm-sail-extraction-quality/v1"
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
@@ -125,9 +120,7 @@ def discover_sail_source(executable: Path, explicit: Path | None) -> Path:
         probe = run(["git", "rev-parse", "--show-toplevel"], candidate)
         if probe.returncode == 0:
             return Path(probe.stdout.strip()).resolve()
-    raise ValueError(
-        "cannot discover the Sail compiler source checkout; pass --sail-source"
-    )
+    raise ValueError("cannot discover the Sail compiler source checkout; pass --sail-source")
 
 
 def strip_c_comments_and_literals(text: str) -> str:
@@ -177,9 +170,7 @@ def strip_c_comments_and_literals(text: str) -> str:
                 escaped = False
             elif char == "\\":
                 escaped = True
-            elif (state == "string" and char == '"') or (
-                state == "char" and char == "'"
-            ):
+            elif (state == "string" and char == '"') or (state == "char" and char == "'"):
                 state = "code"
         index += 1
     return "".join(output)
@@ -278,9 +269,7 @@ def artifact(path: Path, classification: str, owner: str) -> dict[str, Any]:
     }
 
 
-def representative_sample(
-    path: Path, stratum: str, anchor_symbol: str
-) -> dict[str, str]:
+def representative_sample(path: Path, stratum: str, anchor_symbol: str) -> dict[str, str]:
     source = strip_c_comments_and_literals(path.read_text(errors="replace"))
     if re.search(rf"\b{re.escape(anchor_symbol)}\s*\(", source) is None:
         raise ValueError(f"representative sample anchor is absent: {path}: {anchor_symbol}")
@@ -319,36 +308,35 @@ def gate(
 
 
 def conformance_gate(generated: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    command = ["python3", "tools/check_optimised_c.py", display_path(generated)]
+    command = [
+        "python3",
+        "-m",
+        "devtools.optimised_c.check",
+        display_path(generated),
+    ]
     started = datetime.now(timezone.utc)
     result = run(command)
     elapsed = (datetime.now(timezone.utc) - started).total_seconds()
     output_lines = result.stdout.splitlines()
     finding_lines = [
-        line
-        for line in output_lines
-        if line and not line.startswith("optimized C conformance:")
+        line for line in output_lines if line and not line.startswith("optimized C conformance:")
     ]
     findings = []
     for index, message in enumerate(finding_lines, 1):
-        location = re.match(
-            r"(?P<path>.*?\.c)(?::(?P<line>\d+))?: (?P<message>.*)", message
-        )
+        location = re.match(r"(?P<path>.*?\.c)(?::(?P<line>\d+))?: (?P<message>.*)", message)
         path = display_path(generated)
         line_number = None
         detail = message
         if location:
             path = display_path(Path(location.group("path")))
-            line_number = (
-                int(location.group("line")) if location.group("line") else None
-            )
+            line_number = int(location.group("line")) if location.group("line") else None
             detail = location.group("message")
         fingerprint = hashlib.sha256(message.encode()).hexdigest()
         findings.append(
             {
                 "id": f"generated-conformance-{index:03d}",
                 "gate_id": "deterministic_generated_c_conformance",
-                "tool": "tools/check_optimised_c.py",
+                "tool": "devtools.optimised_c.check",
                 "check": "optimized-generated-c-contract",
                 "severity": "error",
                 "path": path,
@@ -412,8 +400,7 @@ def package_build_gate(
         command,
         "pass" if passed else "fail",
         "optimized package archive exists after a successful build",
-        [display_path(log_path)]
-        + ([display_path(built_library)] if passed else []),
+        [display_path(log_path)] + ([display_path(built_library)] if passed else []),
     )
     record["elapsed_seconds"] = round(elapsed, 3)
     return record, log_path
@@ -550,11 +537,12 @@ def validate_record(record: dict[str, Any]) -> None:
             raise ValueError(f"quality gate has no owner: {item['id']}")
         if not isinstance(item["evidence"], list):
             raise ValueError(f"quality gate evidence is not a list: {item['id']}")
-        if item["status"] in {"skipped", "unavailable"}:
-            if not item["skip_reason"] or item["elapsed_seconds"] is not None:
-                raise ValueError(
-                    f"non-executed quality gate lacks a reason or has elapsed time: {item['id']}"
-                )
+        if item["status"] in {"skipped", "unavailable"} and (
+            not item["skip_reason"] or item["elapsed_seconds"] is not None
+        ):
+            raise ValueError(
+                f"non-executed quality gate lacks a reason or has elapsed time: {item['id']}"
+            )
     for finding in record["findings"]:
         if not finding["owner"]:
             raise ValueError(f"quality finding has no owner: {finding['id']}")
@@ -648,7 +636,7 @@ def main() -> int:
 
     try:
         layout = compilation_layout(generated, editable_ffi=True)
-        generated_sources, ffi_sources = compilation_sources(layout)
+        generated_sources, _ffi_sources = compilation_sources(layout)
         evm_repository = git_repository(ROOT)
         sail_source = discover_sail_source(sail_executable, args.sail_source)
         sail_repository = git_repository(sail_source)
@@ -665,9 +653,7 @@ def main() -> int:
         check_started = datetime.now(timezone.utc)
         check_database(args.compdb.resolve(), expected_compdb, generated_count)
         check_elapsed = (datetime.now(timezone.utc) - check_started).total_seconds()
-        built_library = (
-            args.built_library.resolve() if args.built_library is not None else None
-        )
+        built_library = args.built_library.resolve() if args.built_library is not None else None
         build_gate, build_log = package_build_gate(
             generated,
             clang,
@@ -678,16 +664,12 @@ def main() -> int:
         print(f"optimized C evaluator: {error}")
         return 2
 
-    artifacts = [
-        artifact(layout.generated_manifest, "source_manifest", "Sail C backend")
-    ]
+    artifacts = [artifact(layout.generated_manifest, "source_manifest", "Sail C backend")]
     package_manifest = layout.generated / "src/sources.list"
     if not package_manifest.is_file():
         print(f"optimized C evaluator: missing package manifest: {package_manifest}")
         return 2
-    artifacts.append(
-        artifact(package_manifest, "package_manifest", "optimized C package")
-    )
+    artifacts.append(artifact(package_manifest, "package_manifest", "optimized C package"))
     artifacts.extend(
         artifact(source, "generated_translation_unit", "Sail C backend")
         for source in generated_sources
@@ -696,19 +678,11 @@ def main() -> int:
         artifact(header, "generated_header", "Sail C backend")
         for header in sorted(layout.include_root.rglob("*.h"))
     )
-    artifacts.append(
-        artifact(args.compdb.resolve(), "compilation_database", "build tooling")
-    )
+    artifacts.append(artifact(args.compdb.resolve(), "compilation_database", "build tooling"))
     if build_log is not None:
-        artifacts.append(
-            artifact(build_log, "build_log", "optimized C package")
-        )
+        artifacts.append(artifact(build_log, "build_log", "optimized C package"))
     if build_gate["status"] == "pass" and built_library is not None:
-        artifacts.append(
-            artifact(
-                built_library, "static_library", "optimized C package"
-            )
-        )
+        artifacts.append(artifact(built_library, "static_library", "optimized C package"))
 
     samples = []
     for relative, stratum, anchor in SAMPLE_STRATA:
@@ -759,7 +733,8 @@ def main() -> int:
         "T1",
         [
             "python3",
-            "tools/generate_optimised_c_compdb.py",
+            "-m",
+            "devtools.optimised_c.compdb",
             "--sail",
             str(sail_executable),
             "--clang",
@@ -843,7 +818,8 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, indent=2) + "\n")
     write_summary(args.summary, record)
-    failed = [item["id"] for item in record["gates"] if item["status"] == "fail"]
+    gates = cast(list[dict[str, Any]], record["gates"])
+    failed = [item["id"] for item in gates if item["status"] == "fail"]
     print(
         f"optimized C evaluator: wrote {args.output.resolve()} and {args.summary.resolve()} "
         f"({len(generated_sources)} generated units; {len(failed)} failing gates)"

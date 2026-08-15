@@ -19,7 +19,7 @@ generation at a checkout elsewhere.
 retained corpus byte-exact against the reference output:
 
 ```sh
-python3 harness/run.py --lean --jobs 8 --quiet zkvm/.fixtures/current-v062-full
+python3 -m devtools.harness.cli --lean --jobs 8 --quiet zkvm/.fixtures/current-v062-full
 ```
 
 `runner/Runner.lean` also owns what `fatal_error` owns in C: the extracted
