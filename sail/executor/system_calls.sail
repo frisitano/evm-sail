@@ -68,12 +68,10 @@ function run_system_call_frame(
 ) -> (
     (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
-    let execution_profile = k_execution_profile;
-    let gas_limits = execution_profile.gas;
     k_journal_checkpoint();
     interpret(
-        gas_limits.system_regular_limit,
-        gas_limits.system_state_limit,
+        SYSTEM_CALL_GAS_LIMIT,
+        STATE_GAS_ZERO,
         STATE_GAS_SPILL_ZERO,
         GAS_REFUND_ZERO,
         stack_reset(),
@@ -82,7 +80,7 @@ function run_system_call_frame(
         tgt,
         tgt,
         ZERO_WORD,
-        gas_limits.system_state_limit,
+        STATE_GAS_ZERO,
         false,
         0,
         code,
