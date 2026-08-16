@@ -225,10 +225,10 @@ function execute_sload(
     );
     let warm = storage_id_is_warm_host(storage_id);
     let gas_cost = sload_cost(warm);
-    let (halt, gas) = charge(carried_gas, gas_cost);
-    if halt then {
-        (gas, sp, Failed(OutOfGas))
+    if carried_gas < gas_cost then {
+        (GAS_ZERO, sp, Failed(OutOfGas))
     } else {
+        let gas : gas = carried_gas - gas_cost;
         let entry = storage_load_by_id_host(context.account_id, context.storage_generation, storage_id, not_bool(warm));
         sp = stack_top_advance(sp, 1);
         write_stack_word(sp, entry.curr);
@@ -288,9 +288,8 @@ function execute_sstore(
     let cold = not_bool(warm);
     if fork >= Amsterdam then {
         let sentry_cost = sstore_sentry_cost(cold);
-        (halt, gas) = check_execution_gas(gas, sentry_cost);
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))
+        if gas < sentry_cost then {
+            return (GAS_ZERO, state_gas, state_spill, refund, sp, Failed(OutOfGas))
         }
     };
     let entry = storage_load_by_id_host(context.account_id, context.storage_generation, storage_id, cold);
@@ -298,10 +297,10 @@ function execute_sstore(
     if costs.state_credit != 0 then {
         (gas, state_gas, state_spill) = credit_state_gas_refund(gas, state_gas, state_spill, costs.state_credit)
     };
-    (halt, gas) = charge(gas, costs.execution);
-    if halt then {
-        return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))
+    if gas < costs.execution then {
+        return (GAS_ZERO, state_gas, state_spill, refund, sp, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, costs.execution);
     (halt, gas, state_gas, state_spill) = charge_state_gas(gas, state_gas, state_spill, costs.state_charge);
     if halt then {
         return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))

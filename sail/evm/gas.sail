@@ -344,44 +344,6 @@ function sstore_clear_refund() -> gas_constant = {
     }
 }
 
-/* --------------------------- charging hook ------------------------------ */
-/* Debit `amount` from the carried frame gas. A debit that cannot be        */
-/* covered raises an out-of-gas exceptional halt (YP: the step is invalid,  */
-/* all remaining gas is consumed). A non-positive amount is a no-op.        */
-
-/*! Debits an exact cost from the carried frame gas. The caller turns an
-    unaffordable debit into an exceptional halt using its carried frame
-    metadata. */
-val charge : forall 'g 'amount, live_gas_valid('g) & 0 <= 'amount. (int('g), int('amount)) -> {'next_g,
-                                                                                                  live_gas_valid(
-                                                                                                      'next_g,
-                                                                                                  )
-                                                                                               &  'next_g
-                                                                                               <= 'g.
-                                                                                               (bool, int('next_g))}
-function charge(g, amount) = {
-    if amount <= g then {
-        (false, g - amount)
-    } else {
-        (true, GAS_ZERO)
-    }
-}
-
-/*! Checks that the frame can pay an execution-gas cost without debiting it.
-    State reads that affect the block access list call this before touching
-    authenticated state. */
-val check_execution_gas : forall 'g 'amount, live_gas_valid('g) & 0 <= 'amount. (int('g), int('amount)) -> (
-        bool,
-        int('g),
-    )
-function check_execution_gas(g, amount) = {
-    if g < amount then {
-        (true, g)
-    } else {
-        (false, g)
-    }
-}
-
 /*! Adds state-gas spill while preserving EIP-8037's regular-gas cap. */
 val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= transaction_execution_gas_limit_value. int('left) -> int(
         transaction_execution_gas_limit_value - 'left,
@@ -651,35 +613,41 @@ function memory_access(start, size) =
         fatal_error(ExecutionInvalid)
     }
 
-/*! Charges the incremental `C_mem` cost for reaching an EVM memory endpoint.
+/*! Computes the incremental `C_mem` cost for reaching an EVM memory endpoint.
     An endpoint outside the materializable arena is necessarily unaffordable:
-    represent that fact in the charge result rather than with a numeric
+    represent that fact in the cost result rather than with a numeric
     `2^64` sentinel that is not itself live gas. */
-val charge_memory_expansion : forall 'g 'required, live_gas_valid('g) & memory_expansion_endpoint('required). (
-        int('g),
+val memory_expansion_gas_cost : forall 'required, memory_expansion_endpoint('required). (
         EvmMemorySlice,
         int('required),
-    ) -> {'next_g, live_gas_valid('next_g) & 'next_g <= 'g. (bool, int('next_g))}
+        gas,
+    ) -> GasCharge
 
-function charge_memory_expansion(g, mem, required_size) =
+function memory_expansion_gas_cost(mem, required_size, available) =
     if required_size <= sizeof(memory_region_bound) then {
         let materialized_size : memory_length = required_size;
         let new_words = memory_word_count(materialized_size);
         let old_size = memory_high_water(mem);
         let old_words = memory_word_count(old_size);
         if new_words <= old_words then {
-            (false, g)
+            gas_charge(GAS_COST_ZERO)
         } else {
             let old_cost = mem_cost(old_words);
             let new_cost = mem_cost(new_words);
             if old_cost <= new_cost then {
-                charge(g, new_cost - old_cost)
+                let exact_cost = new_cost - old_cost;
+                if exact_cost <= available then {
+                    let cost : gas_cost = exact_cost;
+                    gas_charge(cost)
+                } else {
+                    GAS_CHARGE_UNAFFORDABLE
+                }
             } else {
-                (false, g)
+                gas_charge(GAS_COST_ZERO)
             }
         }
     } else {
-        (true, GAS_ZERO)
+        GAS_CHARGE_UNAFFORDABLE
     }
 
 /*! Materializes the exact byte high-water mark after gas has been charged,
@@ -1563,58 +1531,76 @@ Operand-sized costs that ride on top of an opcode's static cost,
 word-counted via `⌈byte_len / 32⌉` where the spec charges per 32-byte
 word (YP Appendix G).
 */
-/*! Charges a word-sized unit count only after proving the product affordable,
+/*! Computes a word-sized unit cost only after proving the product affordable,
     so optimized builds never materialize an overflowing native gas cost. */
-function charge_word_scaled_gas(g : gas, per_unit : gas_constant, units : word) -> (bool, gas) = {
+function word_scaled_gas_cost(per_unit : gas_constant, units : word, available : gas) -> GasCharge = {
     if per_unit == 0 | units == 0 then {
-        return (false, g)
+        return gas_charge(GAS_COST_ZERO)
     };
-    if units <= g then {
+    if units <= available then {
         let affordable_units : gas_cost = units;
         let exact_cost : linear_gas_variable_product = per_unit * affordable_units;
-        if exact_cost <= g then {
+        if exact_cost <= available then {
             let cost : gas_cost = exact_cost;
-            charge(g, cost)
+            gas_charge(cost)
         } else {
-            (true, g)
+            GAS_CHARGE_UNAFFORDABLE
         }
     } else {
-        (true, g)
+        GAS_CHARGE_UNAFFORDABLE
     }
 }
 
-/*! Charges an opcode base cost and its per-memory-word component. */
-function charge_memory_word_gas(g : gas, base : gas_constant, per_word : gas_constant, size : word) -> (bool, gas) = {
-    let (base_halt, base_gas) = charge(g, base);
-    if base_halt then {
-        (true, base_gas)
+/*! Computes an opcode base cost and its per-memory-word component. */
+function memory_word_gas_cost(base : gas_constant, per_word : gas_constant, size : word, available : gas) -> GasCharge = {
+    if base > available then {
+        GAS_CHARGE_UNAFFORDABLE
     } else {
+        let after_base : gas = available - base;
         let words = memory_word_count_word(size);
-        charge_word_scaled_gas(base_gas, per_word, words)
+        let variable = word_scaled_gas_cost(per_word, words, after_base);
+        if variable.affordable then {
+            let exact_cost : linear_gas_product = base + variable.cost;
+            if exact_cost <= available then {
+                let cost : gas_cost = exact_cost;
+                gas_charge(cost)
+            } else {
+                GAS_CHARGE_UNAFFORDABLE
+            }
+        } else {
+            GAS_CHARGE_UNAFFORDABLE
+        }
     }
 }
 
 /* KECCAK256: base + per-word hashing cost. */
-function charge_keccak_gas(g : gas, size : word) -> (bool, gas) =
-    charge_memory_word_gas(g, G_keccak, G_keccak_word, size)
+function keccak_gas_cost(size : word, available : gas) -> GasCharge =
+    memory_word_gas_cost(G_keccak, G_keccak_word, size, available)
 
 /* *COPY (CALLDATA/CODE/RETURNDATA/EXTCODECOPY, MCOPY): per-word copy cost. */
-function charge_copy_gas(g : gas, size : word) -> (bool, gas) =
-    charge_memory_word_gas(g, GAS_CONSTANT_ZERO, G_copy_word, size)
+function copy_gas_cost(size : word, available : gas) -> GasCharge =
+    memory_word_gas_cost(GAS_CONSTANT_ZERO, G_copy_word, size, available)
 
 /* LOG0..LOG4: base + per-topic + per-data-byte. */
-/*! Charges the base, topic, and data-byte components of a log operation. */
-function charge_log_gas(g : gas, num_topics : log_topic_count, size : word) -> (bool, gas) = {
-    let (base_halt, base_gas) = charge(g, G_log);
-    if base_halt then {
-        (true, base_gas)
+/*! Computes the base, topic, and data-byte components of a log operation. */
+function log_gas_cost(num_topics : log_topic_count, size : word, available : gas) -> GasCharge = {
+    let topic_cost = G_logtopic * num_topics;
+    let fixed_cost = G_log + topic_cost;
+    if fixed_cost > available then {
+        GAS_CHARGE_UNAFFORDABLE
     } else {
-        let topic_cost : gas_cost = G_logtopic * num_topics;
-        let (topics_halt, topics_gas) = charge(base_gas, topic_cost);
-        if topics_halt then {
-            (true, topics_gas)
+        let after_fixed : gas = available - fixed_cost;
+        let variable = word_scaled_gas_cost(G_logdata, size, after_fixed);
+        if variable.affordable then {
+            let exact_cost : linear_gas_product = fixed_cost + variable.cost;
+            if exact_cost <= available then {
+                let cost : gas_cost = exact_cost;
+                gas_charge(cost)
+            } else {
+                GAS_CHARGE_UNAFFORDABLE
+            }
         } else {
-            charge_word_scaled_gas(topics_gas, G_logdata, size)
+            GAS_CHARGE_UNAFFORDABLE
         }
     }
 }

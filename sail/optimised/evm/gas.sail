@@ -21,19 +21,11 @@ val memory_access : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 & 0 <= '
     ) -> MemoryAccess
 
 $[c_inline]
-val charge_memory_expansion : forall 'g 'required, live_gas_valid('g) & memory_expansion_endpoint('required). (
-        int('g),
+val memory_expansion_gas_cost : forall 'required, memory_expansion_endpoint('required). (
         EvmMemorySlice,
         int('required),
-    ) -> {'next_g, live_gas_valid('next_g) & 'next_g <= 'g. (bool, int('next_g))}
+        gas,
+    ) -> GasCharge
 
 $[c_inline]
 val expand_memory : (EvmMemorySlice, memory_length) -> EvmMemorySlice
-$[c_inline]
-val charge : forall 'g 'amount, live_gas_valid('g) & 0 <= 'amount. (int('g), int('amount)) -> {'next_g,
-                                                                                                  live_gas_valid(
-                                                                                                      'next_g,
-                                                                                                  )
-                                                                                               &  'next_g
-                                                                                               <= 'g.
-                                                                                               (bool, int('next_g))}

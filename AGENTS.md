@@ -161,8 +161,8 @@ duplicating instructions elsewhere.
   instruction data such as PUSH values/widths, DUP/SWAP indices, LOG topic
   counts, and CALL/CREATE family selectors remain explicit parameters. Handler
   bodies update `pc`, `sp`, `evm_memory`, and `gas_remaining` directly on that
-  state. `charge` remains `(gas, cost) -> (bool, gas)`, while each handler
-  writes the returned gas into its state before returning. `validate_stack`
+  state. Gas helpers compute semantic costs, while each handler checks
+  affordability and debits its carried gas directly. `validate_stack`
   runs before opcode dispatch and writes exceptional-halt gas back into the
   same state. `EvmInterpreterState` does not contain decoded instructions.
   The canonical loop threads the aggregate between steps and publishes its

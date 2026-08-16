@@ -92,9 +92,9 @@ let GAS_COST_ZERO : gas_cost = 0
     materializable arena with one proven-unaffordable sentinel. */
 type memory_required_endpoint = nat
 
-/*! Exact incremental memory charge. Optimized C retains one additional
-    sentinel value above every representable live-gas value so `charge`
-    remains the sole out-of-gas decision. */
+/*! Exact incremental memory cost. Optimized C retains one additional
+    sentinel value above every representable live-gas value so affordability
+    can be decided without overflowing the native cost representation. */
 type memory_expansion_charge = nat
 
 /*! One affordability decision together with its bounded cost. The payload is

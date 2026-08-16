@@ -2427,9 +2427,8 @@ function run_call(
             let ret_required = memory_required_size(ret_off_word, ret_len_word);
             let required_size =
                 if args_required < ret_required then ret_required else args_required;
-            let (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size);
-            gas_after = gas_after_expansion;
-            if expansion_halt then {
+            let expansion_cost = memory_expansion_gas_cost(memory_after, required_size, gas_after);
+            if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
                     state_gas_after,
@@ -2458,17 +2457,16 @@ function run_call(
                     returndata_after,
                 )
             };
+            gas_after = gas_sub(gas_after, expansion_cost.cost);
 
-            /* Static gas is charged before any state access: the
-               target's access + value-transfer cost is checked AFTER memory gas and BEFORE reading
-               any of the target's state. A frame that cannot afford it halts here, having
+            /* Static gas is charged before any state access: the target's access and
+               value-transfer cost is checked after memory gas and before reading any
+               of the target's state. A frame that cannot afford it halts here, having
                touched no account -- so the stateless witness need not prove the target.
                (Resolving the EIP-7702 delegation or the empty-account check below reads
                the target's account, which an OOG-before-access tx must never do.) */
             let static_base : gas_cost = target_cost + transfer_cost;
-            let (static_base_halt, gas_after_static_base) = charge(gas_after, static_base);
-            gas_after = gas_after_static_base;
-            if static_base_halt then {
+            if gas_after < static_base then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
                     state_gas_after,
@@ -2497,6 +2495,7 @@ function run_call(
                     returndata_after,
                 )
             };
+            gas_after = gas_sub(gas_after, static_base);
 
             /* The target access happens once the static charge is affordable. Mark it
                before pricing EIP-7702's delegation target: a self-delegation therefore
@@ -2524,9 +2523,7 @@ function run_call(
                 then G_newaccount
                 else GAS_CONSTANT_ZERO;
             let additional_cost : gas_cost = delegation_cost + create_cost;
-            let (additional_cost_halt, gas_after_additional_cost) = charge(gas_after, additional_cost);
-            gas_after = gas_after_additional_cost;
-            if additional_cost_halt then {
+            if gas_after < additional_cost then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
                     state_gas_after,
@@ -2555,6 +2552,7 @@ function run_call(
                     returndata_after,
                 )
             };
+            gas_after = gas_sub(gas_after, additional_cost);
             let stipend : gas =
                 if value_nonzero then G_callstipend else GAS_ZERO;
 
@@ -2606,9 +2604,7 @@ function run_call(
                     }
                 };
                 base_child = call_gas_cap_word(gas_after, gas_request);
-                let (child_gas_halt, child_charged_gas) = charge(gas_after, base_child);
-                gas_after = child_charged_gas;
-                if child_gas_halt then {
+                if gas_after < base_child then {
                     gas_after = GAS_ZERO;
                     (state_gas_after, state_spill_after, status_after) = exceptional_state(
                         state_gas_after,
@@ -2636,12 +2632,11 @@ function run_call(
                         carried_calldata,
                         returndata_after,
                     )
-                }
+                };
+                gas_after = gas_sub(gas_after, base_child)
             } else {
                 base_child = call_gas_cap_word(gas_after, gas_request);
-                let (child_gas_halt, child_charged_gas) = charge(gas_after, base_child);
-                gas_after = child_charged_gas;
-                if child_gas_halt then {
+                if gas_after < base_child then {
                     gas_after = GAS_ZERO;
                     (state_gas_after, state_spill_after, status_after) = exceptional_state(
                         state_gas_after,
@@ -2669,7 +2664,8 @@ function run_call(
                         carried_calldata,
                         returndata_after,
                     )
-                }
+                };
+                gas_after = gas_sub(gas_after, base_child)
             };
             if tg_deleg then {
                 k_account_mark_warm(tg_target)
@@ -3122,9 +3118,8 @@ function run_create(
                 )
             };
             let required_size = memory_required_size(off_word, len_word);
-            let (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size);
-            gas_after = gas_after_expansion;
-            if expansion_halt then {
+            let expansion_cost = memory_expansion_gas_cost(memory_after, required_size, gas_after);
+            if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
                     state_gas_after,
@@ -3153,17 +3148,17 @@ function run_create(
                     returndata_after,
                 )
             };
+            gas_after = gas_sub(gas_after, expansion_cost.cost);
             let initcode_access = memory_access(off_word, len_word);
             let mem1 = expand_memory(memory_after, initcode_access.required_size);
             let initcode = initcode_access.range;
 
-            /* up-front charges: memory expansion over the initcode, the CREATE base
-               cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
-               only -- the keccak word cost of hashing the initcode for the address. */
+            /* Up-front charges: memory expansion over the initcode, the CREATE base
+               cost (G_create), the EIP-3860 per-initcode-word cost, and -- for
+               CREATE2 only -- the keccak word cost of hashing the initcode for the
+               address. */
             let access_cost = create_access_cost();
-            let (access_halt, gas_after_access) = charge(gas_after, access_cost);
-            gas_after = gas_after_access;
-            if access_halt then {
+            if gas_after < access_cost then {
                 memory_after = mem1;
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
@@ -3193,15 +3188,11 @@ function run_create(
                     returndata_after,
                 )
             };
+            gas_after = gas_sub(gas_after, access_cost);
             let initcode_word_count = memory_word_count_word(len_word);
             if profile.fork >= Shanghai then {
-                let (initcode_charge_halt, initcode_gas) = charge_word_scaled_gas(
-                    gas_after,
-                    G_initcode_word,
-                    initcode_word_count,
-                );
-                gas_after = initcode_gas;
-                if initcode_charge_halt then {
+                let initcode_cost = word_scaled_gas_cost(G_initcode_word, initcode_word_count, gas_after);
+                if not_bool(initcode_cost.affordable) then {
                     memory_after = mem1;
                     gas_after = GAS_ZERO;
                     (state_gas_after, state_spill_after, status_after) = exceptional_state(
@@ -3230,12 +3221,12 @@ function run_create(
                         carried_calldata,
                         returndata_after,
                     )
-                }
+                };
+                gas_after = gas_sub(gas_after, initcode_cost.cost)
             };
             if semantics.uses_salt then {
-                let (hashing_halt, hashing_gas) = charge_word_scaled_gas(gas_after, G_keccak_word, initcode_word_count);
-                gas_after = hashing_gas;
-                if hashing_halt then {
+                let hashing_cost = word_scaled_gas_cost(G_keccak_word, initcode_word_count, gas_after);
+                if not_bool(hashing_cost.affordable) then {
                     memory_after = mem1;
                     gas_after = GAS_ZERO;
                     (state_gas_after, state_spill_after, status_after) = exceptional_state(
@@ -3264,7 +3255,8 @@ function run_create(
                         carried_calldata,
                         returndata_after,
                     )
-                }
+                };
+                gas_after = gas_sub(gas_after, hashing_cost.cost)
             };
 
             /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as

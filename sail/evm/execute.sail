@@ -152,10 +152,10 @@ function execute_add(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -174,10 +174,10 @@ function execute_mul(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -196,10 +196,10 @@ function execute_sub(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -218,10 +218,10 @@ function execute_div(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -240,10 +240,10 @@ function execute_sdiv(carried_gas : gas, carried_sp : StackPointer) -> (gas, Sta
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -262,10 +262,10 @@ function execute_mod(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -284,10 +284,10 @@ function execute_smod(carried_gas : gas, carried_sp : StackPointer) -> (gas, Sta
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -306,10 +306,10 @@ function execute_addmod(carried_gas : gas, carried_sp : StackPointer) -> (gas, S
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_mid);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_mid then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_mid;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -330,10 +330,10 @@ function execute_mulmod(carried_gas : gas, carried_sp : StackPointer) -> (gas, S
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_mid);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_mid then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_mid;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -358,10 +358,10 @@ function execute_exp(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     sp = stack_top_retreat(sp, 1);
     let e = read_stack_word(sp);
     let gas_cost = exp_gas(e);
-    let (halt, gas) = charge(carried_gas, gas_cost);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < gas_cost then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - gas_cost;
     let result = alu_exp(a, e);
     write_stack_word(sp, result);
     (gas, sp, Continue())
@@ -377,10 +377,10 @@ function execute_signextend(carried_gas : gas, carried_sp : StackPointer) -> (ga
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let bi = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
@@ -399,10 +399,10 @@ function execute_lt(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stack
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -421,10 +421,10 @@ function execute_gt(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stack
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -443,10 +443,10 @@ function execute_slt(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -465,10 +465,10 @@ function execute_sgt(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -487,10 +487,10 @@ function execute_eq(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stack
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -508,10 +508,10 @@ function execute_iszero(carried_gas : gas, carried_sp : StackPointer) -> (gas, S
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(carried_sp);
     let result = alu_iszero(a);
     write_stack_word(carried_sp, result);
@@ -528,10 +528,10 @@ function execute_and(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -550,10 +550,10 @@ function execute_or(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stack
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -572,10 +572,10 @@ function execute_xor(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let b = read_stack_word(sp);
@@ -593,10 +593,10 @@ function execute_not(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let a = read_stack_word(carried_sp);
     let result = alu_not(a);
     write_stack_word(carried_sp, result);
@@ -613,10 +613,10 @@ function execute_byte(carried_gas : gas, carried_sp : StackPointer) -> (gas, Sta
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let i = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let x = read_stack_word(sp);
@@ -637,10 +637,10 @@ function execute_shl(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     var sp : StackPointer = carried_sp;
 
     /* EIP-145 */
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let s = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
@@ -661,10 +661,10 @@ function execute_shr(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     var sp : StackPointer = carried_sp;
 
     /* EIP-145 */
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let s = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
@@ -685,10 +685,10 @@ function execute_sar(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     var sp : StackPointer = carried_sp;
 
     /* EIP-145 */
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let s = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
@@ -708,10 +708,10 @@ function execute_clz(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     };
 
     /* EIP-7939 */
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let x = read_stack_word(carried_sp);
     let result = alu_clz(x);
     write_stack_word(carried_sp, result);
@@ -734,22 +734,23 @@ function execute_keccak256(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    (halt, gas) = charge_keccak_gas(gas, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let keccak_cost = keccak_gas_cost(length_word, gas);
+    if not_bool(keccak_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, keccak_cost.cost);
     let required_size = memory_required_size(offset_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let (digest, memory) = mem_keccak(memory, access.range);
@@ -774,10 +775,10 @@ function execute_address(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let address_word = address_to_word(carried_address);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, address_word);
@@ -794,10 +795,10 @@ function execute_origin(carried_gas : gas, carried_sp : StackPointer) -> (gas, S
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let origin = k_env(F_Origin);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, origin);
@@ -820,10 +821,10 @@ function execute_caller(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let caller = address_to_word(carried_caller);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, caller);
@@ -846,10 +847,10 @@ function execute_callvalue(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, carried_value);
     (gas, sp, Continue())
@@ -865,10 +866,10 @@ function execute_gasprice(carried_gas : gas, carried_sp : StackPointer) -> (gas,
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let gas_price = k_env(F_GasPrice);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, gas_price);
@@ -891,10 +892,10 @@ function execute_calldatasize(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let input = carried_calldata;
     let input_length = region_slice_length(input);
     let length_word = word_of_byte_count(input_length);
@@ -919,10 +920,10 @@ function execute_calldataload(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let value = slice_load_word_offset(carried_calldata, offset_word);
@@ -948,28 +949,29 @@ function execute_calldatacopy(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let destination_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let source_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    (halt, gas) = charge_copy_gas(gas, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let copy_cost = copy_gas_cost(length_word, gas);
+    if not_bool(copy_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, copy_cost.cost);
     let required_size = memory_required_size(destination_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -993,10 +995,10 @@ function execute_codesize(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let code_length = frame_code_len(carried_code);
     let length_word = word_of_byte_count(code_length);
     sp = stack_top_advance(sp, 1);
@@ -1021,28 +1023,29 @@ function execute_codecopy(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let destination_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let source_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    (halt, gas) = charge_copy_gas(gas, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let copy_cost = copy_gas_cost(length_word, gas);
+    if not_bool(copy_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, copy_cost.cost);
     let required_size = memory_required_size(destination_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -1067,10 +1070,10 @@ function execute_balance(carried_gas : gas, carried_sp : StackPointer) -> (gas, 
     let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
     let gas_cost = account_cost(warm);
-    let (halt, gas) = charge(carried_gas, gas_cost);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < gas_cost then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - gas_cost;
     k_account_mark_warm(a);
     let balance = k_get_balance(a);
     sp = stack_top_advance(sp, 1);
@@ -1094,10 +1097,10 @@ function execute_selfbalance(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_low);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_low then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_low;
     let balance = k_get_balance(carried_address);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, balance);
@@ -1120,10 +1123,10 @@ function execute_extcodesize(carried_gas : gas, carried_sp : StackPointer) -> (g
     let warm = k_account_is_warm(a);
     let access_cost = account_cost(warm);
     let read_cost = external_code_read_cost();
-    let (halt, gas) = charge(carried_gas, access_cost + read_cost);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < access_cost + read_cost then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = gas_sub(carried_gas, access_cost + read_cost);
     k_account_mark_warm(a);
     let code_size = k_get_code_size(a);
     let size_word = word_of_byte_count(code_size);
@@ -1148,7 +1151,6 @@ function execute_extcodecopy(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
     let address_word = read_stack_word(sp);
@@ -1163,19 +1165,21 @@ function execute_extcodecopy(
     let warm = k_account_is_warm(a);
     let access_cost = account_cost(warm);
     let read_cost = external_code_read_cost();
-    (halt, gas) = charge(gas, access_cost + read_cost);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < access_cost + read_cost then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
-    (halt, gas) = charge_copy_gas(gas, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    gas = gas_sub(gas, access_cost + read_cost);
+    let copy_cost = copy_gas_cost(length_word, gas);
+    if not_bool(copy_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, copy_cost.cost);
     let required_size = memory_required_size(destination_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -1199,10 +1203,10 @@ function execute_extcodehash(carried_gas : gas, carried_sp : StackPointer) -> (g
     let a = word_to_address(address_word);
     let warm = k_account_is_warm(a);
     let gas_cost = account_cost(warm);
-    let (halt, gas) = charge(carried_gas, gas_cost);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < gas_cost then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - gas_cost;
     k_account_mark_warm(a);
     let code_hash = k_get_codehash(a);
     let hash_word = hash_to_word(code_hash);
@@ -1227,10 +1231,10 @@ function execute_returndatasize(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let return_data_size = returndata_size(carried_returndata);
     let size_word = word_of_byte_count(return_data_size);
     sp = stack_top_advance(sp, 1);
@@ -1255,13 +1259,12 @@ function execute_returndatacopy(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let destination_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let source_word = read_stack_word(sp);
@@ -1274,15 +1277,17 @@ function execute_returndatacopy(
         let bounded_source_offset : source_pointer = source_word;
         if length_word <= remaining then {
             let bounded_length : memory_length = length_word;
-            (halt, gas) = charge_copy_gas(gas, length_word);
-            if halt then {
-                return (gas, sp, memory, Failed(OutOfGas))
+            let copy_cost = copy_gas_cost(length_word, gas);
+            if not_bool(copy_cost.affordable) then {
+                return (GAS_ZERO, sp, memory, Failed(OutOfGas))
             };
+            gas = gas_sub(gas, copy_cost.cost);
             let required_size = memory_required_size(destination_word, length_word);
-            (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-            if halt then {
-                return (gas, sp, memory, Failed(OutOfGas))
+            let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+            if not_bool(expansion_cost.affordable) then {
+                return (GAS_ZERO, sp, memory, Failed(OutOfGas))
             };
+            gas = gas_sub(gas, expansion_cost.cost);
             let access = memory_access(destination_word, length_word);
             memory = expand_memory(memory, access.required_size);
             returndata_copy(carried_returndata, access.range.off, bounded_source_offset, bounded_length);
@@ -1305,10 +1310,10 @@ function execute_blockhash(carried_gas : gas, carried_sp : StackPointer) -> (gas
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, 20);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < 20 then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - 20;
     let block_number = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let block_hash = k_blockhash(block_number);
@@ -1328,10 +1333,10 @@ function execute_coinbase(carried_gas : gas, carried_sp : StackPointer) -> (gas,
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let coinbase = k_env(F_Coinbase);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, coinbase);
@@ -1348,10 +1353,10 @@ function execute_timestamp(carried_gas : gas, carried_sp : StackPointer) -> (gas
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let timestamp = k_env(F_Timestamp);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, timestamp);
@@ -1368,10 +1373,10 @@ function execute_number(carried_gas : gas, carried_sp : StackPointer) -> (gas, S
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let block_number = k_env(F_Number);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, block_number);
@@ -1388,10 +1393,10 @@ function execute_slotnum(carried_gas : gas, carried_sp : StackPointer) -> (gas, 
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let slot_number = k_env(F_SlotNumber);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, slot_number);
@@ -1408,10 +1413,10 @@ function execute_prevrandao(carried_gas : gas, carried_sp : StackPointer) -> (ga
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let prev_randao = k_env(F_PrevRandao);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, prev_randao);
@@ -1428,10 +1433,10 @@ function execute_gaslimit(carried_gas : gas, carried_sp : StackPointer) -> (gas,
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let gas_limit = k_env(F_GasLimit);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, gas_limit);
@@ -1448,10 +1453,10 @@ function execute_chainid(carried_gas : gas, carried_sp : StackPointer) -> (gas, 
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let chain_id = k_env(F_ChainId);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, chain_id);
@@ -1468,10 +1473,10 @@ function execute_basefee(carried_gas : gas, carried_sp : StackPointer) -> (gas, 
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let base_fee = k_env(F_BaseFee);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, base_fee);
@@ -1494,10 +1499,10 @@ function execute_blobbasefee(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, blob_fee);
     (gas, sp, Continue())
@@ -1513,10 +1518,10 @@ function execute_blobhash(carried_gas : gas, carried_sp : StackPointer) -> (gas,
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let index = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let blob_hash = k_blobhash(index);
@@ -1535,10 +1540,10 @@ function execute_pop(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let _ = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     (gas, sp, Continue())
@@ -1560,21 +1565,21 @@ function execute_mload(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let word_size = u256(32);
     let required_size = memory_required_size(offset_word, word_size);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, word_size);
     memory = expand_memory(memory, access.required_size);
     let value = mem_load(access.range.off);
@@ -1599,23 +1604,23 @@ function execute_mstore(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let word_size = u256(32);
     let required_size = memory_required_size(offset_word, word_size);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, word_size);
     memory = expand_memory(memory, access.required_size);
     mem_store(access.range.off, v);
@@ -1638,22 +1643,22 @@ function execute_mstore8(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let required_size = memory_required_size(offset_word, WORD_ONE);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, WORD_ONE);
     memory = expand_memory(memory, access.required_size);
     mem_store_byte(access.range.off, v);
@@ -1676,10 +1681,10 @@ function execute_msize(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var sp : StackPointer = carried_sp;
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, sp, carried_memory, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, sp, carried_memory, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let high_water = memory_high_water(carried_memory);
     let words = memory_word_count(high_water);
     let size = word_of_nat_byte_count(words * 32);
@@ -1704,33 +1709,34 @@ function execute_mcopy(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
 
     /* EIP-5656 */
-    (halt, gas) = charge(gas, G_verylow);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    if gas < G_verylow then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_verylow);
     let destination_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let source_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    (halt, gas) = charge_copy_gas(gas, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let copy_cost = copy_gas_cost(length_word, gas);
+    if not_bool(copy_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, copy_cost.cost);
     let destination_required = memory_required_size(destination_word, length_word);
     let source_required = memory_required_size(source_word, length_word);
     let required_size =
         if destination_required < source_required then source_required else destination_required;
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let destination = memory_access(destination_word, length_word);
     let source = memory_access(source_word, length_word);
     let materialized_required_size =
@@ -1796,10 +1802,10 @@ function execute_sload(
     sp = stack_top_retreat(sp, 1);
     let warm = k_slot_is_warm(context.address, s);
     let gas_cost = sload_cost(warm);
-    let (halt, gas) = charge(carried_gas, gas_cost);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < gas_cost then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - gas_cost;
     k_slot_mark_warm(context.address, s);
     let entry = k_sload(context.address, s);
     sp = stack_top_advance(sp, 1);
@@ -1858,9 +1864,8 @@ function execute_sstore(
     let cold = not_bool(warm);
     if fork >= Amsterdam then {
         let sentry_cost = sstore_sentry_cost(cold);
-        (halt, gas) = check_execution_gas(gas, sentry_cost);
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))
+        if gas < sentry_cost then {
+            return (GAS_ZERO, state_gas, state_spill, refund, sp, Failed(OutOfGas))
         }
     };
     k_slot_mark_warm(context.address, s);
@@ -1869,10 +1874,10 @@ function execute_sstore(
     if costs.state_credit != 0 then {
         (gas, state_gas, state_spill) = credit_state_gas_refund(gas, state_gas, state_spill, costs.state_credit)
     };
-    (halt, gas) = charge(gas, costs.execution);
-    if halt then {
-        return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))
+    if gas < costs.execution then {
+        return (GAS_ZERO, state_gas, state_spill, refund, sp, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, costs.execution);
     (halt, gas, state_gas, state_spill) = charge_state_gas(gas, state_gas, state_spill, costs.state_charge);
     if halt then {
         return (gas, state_gas, state_spill, refund, sp, Failed(OutOfGas))
@@ -1904,10 +1909,10 @@ function execute_tload(
     var sp : StackPointer = carried_sp;
 
     /* EIP-1153 */
-    let (halt, gas) = charge(carried_gas, G_warm_access);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if carried_gas < G_warm_access then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_warm_access;
     let s = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let value = k_tload(carried_address, s);
@@ -1933,7 +1938,6 @@ function execute_tstore(
         return (GAS_ZERO, carried_sp, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var status : OpcodeOutcome = Continue();
     var sp : StackPointer = carried_sp;
 
@@ -1945,10 +1949,10 @@ function execute_tstore(
     } then {
         return (gas, sp, status)
     };
-    (halt, gas) = charge(gas, G_warm_access);
-    if halt then {
-        return (gas, sp, Failed(OutOfGas))
+    if gas < G_warm_access then {
+        return (GAS_ZERO, sp, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_warm_access);
     let s = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
@@ -1974,13 +1978,12 @@ function execute_jump(
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var pc : code_pointer = carried_pc;
     var status : OpcodeOutcome = Continue();
-    (halt, gas) = charge(gas, G_mid);
-    if halt then {
-        return (pc, gas, carried_sp, Failed(OutOfGas))
+    if gas < G_mid then {
+        return (pc, GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_mid);
     let dest = read_stack_word(carried_sp);
     let sp = stack_top_retreat(carried_sp, 1);
     (pc, gas, status) = do_jump(pc, gas, carried_code, dest);
@@ -2004,14 +2007,13 @@ function execute_jumpi(
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var pc : code_pointer = carried_pc;
     var status : OpcodeOutcome = Continue();
     var sp : StackPointer = carried_sp;
-    (halt, gas) = charge(gas, G_high);
-    if halt then {
-        return (pc, gas, sp, Failed(OutOfGas))
+    if gas < G_high then {
+        return (pc, GAS_ZERO, sp, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, G_high);
     let dest = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let cond = read_stack_word(sp);
@@ -2040,10 +2042,10 @@ function execute_pc(
     } then {
         return (carried_pc, GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (carried_pc, gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (carried_pc, GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let next_pc = word_of_byte_count(carried_pc);
     let opcode_pc = alu_sub(next_pc, WORD_ONE);
     let sp = stack_top_advance(carried_sp, 1);
@@ -2061,10 +2063,10 @@ function execute_gas(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_base);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_base then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_base;
     let gas_word = word_of_nat_byte_count(gas);
     let sp = stack_top_advance(carried_sp, 1);
     write_stack_word(sp, gas_word);
@@ -2073,10 +2075,10 @@ function execute_gas(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 
 /*! Implements `JUMPDEST`. */
 function execute_jumpdest(carried_gas : gas) -> (gas, OpcodeOutcome) = {
-    let (halt, gas) = charge(carried_gas, G_jumpdest);
-    if halt then {
-        return (gas, Failed(OutOfGas))
+    if carried_gas < G_jumpdest then {
+        return (GAS_ZERO, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_jumpdest;
     (gas, Continue())
 }
 
@@ -2098,10 +2100,10 @@ function execute_push(
     };
     let cost =
         if n == 0 then G_base else G_verylow;
-    let (halt, gas) = charge(carried_gas, cost);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < cost then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - cost;
     let sp = stack_top_advance(carried_sp, 1);
     write_stack_word(sp, v);
     (gas, sp, Continue())
@@ -2122,10 +2124,10 @@ function execute_dup(
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let value = stack_slot_read(carried_sp, n - 1);
     let sp = stack_top_advance(carried_sp, 1);
     write_stack_word(sp, value);
@@ -2147,10 +2149,10 @@ function execute_swap(
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let top_value = read_stack_word(carried_sp);
     let other = stack_slot_read(carried_sp, n);
     stack_set(carried_sp, 0, other);
@@ -2178,10 +2180,10 @@ function execute_dupn(
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let value = stack_slot_read(carried_sp, n - 1);
     let sp = stack_top_advance(carried_sp, 1);
     write_stack_word(sp, value);
@@ -2208,10 +2210,10 @@ function execute_swapn(
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let top_value = read_stack_word(carried_sp);
     let other = stack_slot_read(carried_sp, n);
     stack_set(carried_sp, 0, other);
@@ -2239,10 +2241,10 @@ function execute_exchange(
     } then {
         return (GAS_ZERO, carried_sp, stack_status)
     };
-    let (halt, gas) = charge(carried_gas, G_verylow);
-    if halt then {
-        return (gas, carried_sp, Failed(OutOfGas))
+    if carried_gas < G_verylow then {
+        return (GAS_ZERO, carried_sp, Failed(OutOfGas))
     };
+    let gas : gas = carried_gas - G_verylow;
     let first = stack_slot_read(carried_sp, n);
     let second = stack_slot_read(carried_sp, m);
     stack_set(carried_sp, n, second);
@@ -2269,7 +2271,6 @@ function execute_log(
         return (GAS_ZERO, carried_sp, carried_memory, stack_status)
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var status : OpcodeOutcome = Continue();
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
@@ -2286,15 +2287,17 @@ function execute_log(
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     (topics, sp) = pop_log_topics(n, sp);
-    (halt, gas) = charge_log_gas(gas, n, length_word);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let log_cost = log_gas_cost(n, length_word, gas);
+    if not_bool(log_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, log_cost.cost);
     let required_size = memory_required_size(offset_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Failed(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -2327,7 +2330,6 @@ function execute_return(
         return (GAS_ZERO, carried_sp, carried_memory, opcode_frame_status(stack_status))
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var sp : StackPointer = carried_sp;
     var memory : EvmMemorySlice = carried_memory;
     let offset_word = read_stack_word(sp);
@@ -2335,10 +2337,11 @@ function execute_return(
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let required_size = memory_required_size(offset_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, sp, memory, Exceptional(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, sp, memory, Exceptional(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -2380,7 +2383,6 @@ function execute_revert(
         )
     };
     var gas : gas = carried_gas;
-    var halt : bool = false;
     var state_gas : state_gas = carried_state_gas;
     var state_spill : state_gas_spill = carried_state_spill;
     var sp : StackPointer = carried_sp;
@@ -2392,10 +2394,11 @@ function execute_revert(
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let required_size = memory_required_size(offset_word, length_word);
-    (halt, gas) = charge_memory_expansion(gas, memory, required_size);
-    if halt then {
-        return (gas, carried_state_gas, carried_state_spill, sp, memory, Exceptional(OutOfGas))
+    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    if not_bool(expansion_cost.affordable) then {
+        return (GAS_ZERO, carried_state_gas, carried_state_spill, sp, memory, Exceptional(OutOfGas))
     };
+    gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
@@ -2467,9 +2470,8 @@ function execute_selfdestruct(
     if fork >= Amsterdam then {
         let warm = k_account_is_warm(beneficiary);
         let access_cost = 0 + G_selfdestruct + (if warm then G_zero else G_amsterdam_cold_account_access);
-        (halt, gas) = check_execution_gas(gas, access_cost);
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+        if gas < access_cost then {
+            return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
         };
         k_account_mark_warm(beneficiary);
         let bal = k_get_balance(carried_address);
@@ -2478,10 +2480,10 @@ function execute_selfdestruct(
         let creates_account = nonzero_balance & beneficiary_empty;
         let execution_cost =
             if creates_account then access_cost + G_amsterdam_account_write else access_cost;
-        (halt, gas) = charge(gas, execution_cost);
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+        if gas < execution_cost then {
+            return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
         };
+        gas = gas_sub(gas, execution_cost);
         if creates_account then {
             (halt, gas, state_gas, state_spill) = charge_state_gas(
                 gas,
@@ -2502,24 +2504,24 @@ function execute_selfdestruct(
     } else {
         let bal = k_get_balance(carried_address);
         let warm = k_account_is_warm(beneficiary);
-        (halt, gas) = charge(gas, G_selfdestruct);
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+        if gas < G_selfdestruct then {
+            return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
         };
+        gas = gas_sub(gas, G_selfdestruct);
         if not_bool(warm) then {
-            (halt, gas) = charge(gas, G_cold_account)
-        };
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+            if gas < G_cold_account then {
+                return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+            };
+            gas = gas_sub(gas, G_cold_account)
         };
         k_account_mark_warm(beneficiary);
         let nonzero_balance = word_nonzero(bal);
         let beneficiary_empty = k_account_is_empty(beneficiary);
         if nonzero_balance & beneficiary_empty then {
-            (halt, gas) = charge(gas, G_newaccount)
-        };
-        if halt then {
-            return (gas, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+            if gas < G_newaccount then {
+                return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
+            };
+            gas = gas_sub(gas, G_newaccount)
         };
         let is_selfdestructed = k_is_selfdestructed(carried_address);
         let first_selfdestruct = not_bool(is_selfdestructed);

@@ -623,11 +623,10 @@ function process_amsterdam_auth(
             };
             let requires_account_write = not_bool(already_written);
             if requires_account_write then {
-                let (write_halt, write_gas) = charge(gas_after, G_amsterdam_account_write);
-                gas_after = write_gas;
-                if write_halt then {
-                    return (false, gas_after, state_gas_after, state_spill_after)
-                }
+                if gas_after < G_amsterdam_account_write then {
+                    return (false, GAS_ZERO, state_gas_after, state_spill_after)
+                };
+                gas_after = gas_sub(gas_after, G_amsterdam_account_write)
             };
             let not_delegated_before_tx = not_bool(delegated_before_tx);
             let delegation_set = authorization_tracker_delegation_set(authority);
@@ -1073,12 +1072,10 @@ function prepare_amsterdam_transaction_dispatch(
         if delegated then {
             let warm = k_account_is_warm(delegate);
             let access_cost = account_cost(warm);
-            let (access_halt, access_gas) = charge(gas_after, access_cost);
-            gas_after = access_gas;
-            if access_halt then {
+            if gas_after < access_cost then {
                 return (
                     struct { ready = false, delegated = false },
-                    gas_after,
+                    GAS_ZERO,
                     state_gas_after,
                     state_spill_after,
                     current_target,
@@ -1087,6 +1084,7 @@ function prepare_amsterdam_transaction_dispatch(
                     calldata,
                 )
             };
+            gas_after = gas_sub(gas_after, access_cost);
             k_account_mark_warm(delegate)
         };
         let code_address =
