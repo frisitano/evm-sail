@@ -207,7 +207,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint memory-regression-test python-lint python-tools-fmt-check python-tools-lint runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -218,6 +218,7 @@ help:
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
 	@echo "  make clear-z3-memo  - remove the persistent Sail/Z3 type-check cache"
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
+	@echo "  make memory-regression-test - run focused frame-memory regressions on both C backends"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
 	@echo "  make c-optimised-compdb - write and smoke-check root clangd metadata"
@@ -282,6 +283,9 @@ zisk-guest:
 
 eest-smoke:
 	@$(PYTHON) harness/run.py $(EEST_SMOKE) --limit 1 --quiet
+
+memory-regression-test:
+	SAIL="$(SAIL)" $(PYTHON) tools/test_memory_frames.py
 
 check-contracts:
 	@for f in $(SAIL_CONTRACTS); do $(SAIL) $(SAIL_Z3_FLAGS) "$$f"; done

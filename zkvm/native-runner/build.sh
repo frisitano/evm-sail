@@ -379,14 +379,14 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     object_name="${relative%.c}"
     object_name="${object_name//\//__}"
     object="$BUILD/model__${object_name}.o"
-    "$CC" "${CFLAGS[@]}" "${MODEL_CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+    "$CC" "${CFLAGS[@]}" ${MODEL_CFLAGS[@]+"${MODEL_CFLAGS[@]}"} -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
         "$MODEL_HEADER_FLAG" -c "$source" -o "$object"
     MODEL_OBJS+=("$object")
   done < "$OPTIMIZED_MODEL_MANIFEST"
   [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
 else
   object="$BUILD/zkvm_block.o"
-  "$CC" "${CFLAGS[@]}" "${MODEL_CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
+  "$CC" "${CFLAGS[@]}" ${MODEL_CFLAGS[@]+"${MODEL_CFLAGS[@]}"} -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
       "$MODEL_HEADER_FLAG" -c "$MODEL_SOURCE" -o "$object"
   MODEL_OBJS+=("$object")
 fi
