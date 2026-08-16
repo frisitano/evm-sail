@@ -84,6 +84,7 @@ C_OPT_QUALITY_RECORD := $(C_OPT_QUALITY_DIR)/record.json
 C_OPT_QUALITY_SUMMARY := $(C_OPT_QUALITY_DIR)/summary.md
 C_OPT_EVALUATION_PURPOSE ?= experiment
 C_OPT_SAIL_SOURCE_ARG = $(if $(strip $(SAIL_SOURCE)),--sail-source "$(SAIL_SOURCE)")
+C_OPT_SAIL_EFFECTIVE_BINARY_ARG = $(if $(strip $(SAIL_EFFECTIVE_BINARY)),--sail-effective-binary "$(SAIL_EFFECTIVE_BINARY)")
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
 C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
@@ -447,7 +448,7 @@ c-optimised-evaluator-test:
 # make every recorded blocking gate fatal.
 c-optimised-evaluate: c-optimised-compdb
 	$(PYTHON) tools/evaluate_optimised_c.py --sail $(SAIL) --clang $(CLANG) \
-		$(C_OPT_SAIL_SOURCE_ARG) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
 		--purpose $(C_OPT_EVALUATION_PURPOSE) --compdb $(C_OPT_COMPDB) \
 		--built-library $(C_OPT_GENERATED_DIR)/libevmsail.a \
 		--output $(C_OPT_QUALITY_RECORD) --summary $(C_OPT_QUALITY_SUMMARY) \

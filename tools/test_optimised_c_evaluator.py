@@ -10,6 +10,8 @@ from unittest.mock import patch
 from tools.evaluate_optimised_c import (
     SAMPLE_STRATA,
     SCHEMA_VERSION,
+    compiler_identity,
+    discover_effective_sail_executable,
     display_path,
     gate,
     intermediate_tuple_identifiers,
@@ -169,9 +171,7 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
             "tools/evaluate_optimised_c.py", maxsplit=1
         )[1]
         self.assertIn("--sail /review/compiler/bin/sail", evaluator_command)
-        self.assertIn(
-            '--sail-source "/review/compiler/source"', evaluator_command
-        )
+        self.assertIn('--sail-source "/review/compiler/source"', evaluator_command)
 
         without_source = subprocess.run(
             [*common, "SAIL_SOURCE="],
@@ -185,6 +185,60 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
             "tools/evaluate_optimised_c.py", maxsplit=1
         )[1]
         self.assertNotIn("--sail-source", evaluator_command)
+
+    def test_make_effective_binary_override_reaches_evaluator_command(self) -> None:
+        command = subprocess.run(
+            [
+                "make",
+                "--no-print-directory",
+                "-n",
+                "c-optimised-evaluate",
+                "SAIL=/review/compiler/sail",
+                "SAIL_SOURCE=/review/compiler/source",
+                "SAIL_EFFECTIVE_BINARY=/review/compiler/bin/sail",
+            ],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(command.returncode, 0, command.stderr)
+        evaluator_command = command.stdout.split(
+            "tools/evaluate_optimised_c.py", maxsplit=1
+        )[1]
+        self.assertIn(
+            '--sail-effective-binary "/review/compiler/bin/sail"',
+            evaluator_command,
+        )
+
+    def test_compiler_identity_tracks_rebuilt_binary_under_stable_launcher(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            source = Path(directory)
+            launcher = source / "sail"
+            effective = source / "_build/install/default/bin/sail"
+            effective.parent.mkdir(parents=True)
+            launcher.write_text(
+                '#!/bin/sh\nSAIL_DIR=$(dirname "$0")\n'
+                'exec "$SAIL_DIR/_build/install/default/bin/sail" "$@"\n'
+            )
+            launcher.chmod(0o755)
+            effective.write_bytes(b"compiled-codegen-v1")
+            effective.chmod(0o755)
+
+            resolved = discover_effective_sail_executable(launcher, source, None)
+            before = compiler_identity(launcher, resolved)
+            effective.write_bytes(b"compiled-codegen-v2")
+            after = compiler_identity(launcher, resolved)
+
+            self.assertEqual(before["launcher_sha256"], after["launcher_sha256"])
+            self.assertNotEqual(
+                before["effective_binary_sha256"],
+                after["effective_binary_sha256"],
+            )
+            self.assertEqual(before["binary_sha256"], before["effective_binary_sha256"])
+            self.assertNotEqual(before["binary_sha256"], after["binary_sha256"])
 
     def test_representative_sample_requires_a_real_anchor(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
@@ -253,7 +307,16 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
                 "evm_sail": {"commit": commit},
                 "sail": {"commit": commit},
             },
-            "compiler": {"binary_sha256": digest},
+            "compiler": {
+                "executable": "/compiler/sail",
+                "launcher_sha256": digest,
+                "effective_executable": "/compiler/_build/bin/sail",
+                "effective_binary_sha256": digest,
+                "binary_sha256": digest,
+                "reported_version": "Sail test",
+                "effective_reported_version": "Sail test",
+                "source_commit": commit,
+            },
             "extraction": {"manifest_sha256": digest},
             "artifacts": [],
             "samples": [],

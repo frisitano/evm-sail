@@ -137,6 +137,57 @@ def discover_sail_source(executable: Path, explicit: Path | None) -> Path:
     )
 
 
+def discover_effective_sail_executable(
+    launcher: Path, source: Path, explicit: Path | None
+) -> Path:
+    """Resolve the compiled executable behind a source-tree Sail launcher."""
+    if explicit is not None:
+        effective = explicit.expanduser().resolve()
+        if not effective.is_file() or not os.access(effective, os.X_OK):
+            raise ValueError(
+                f"Sail effective executable is not executable: {effective}"
+            )
+        return effective
+
+    with launcher.open("rb") as stream:
+        is_script = stream.read(2) == b"#!"
+    if not is_script:
+        return launcher
+
+    source_build = source / "_build/install/default/bin/sail"
+    launcher_text = launcher.read_text(errors="replace")
+    recognized_source_launcher = (
+        launcher.parent == source
+        and re.search(
+            r"\$(?:SAIL_DIR|\{SAIL_DIR\})/_build/install/default/bin/sail",
+            launcher_text,
+        )
+        is not None
+    )
+    if (
+        recognized_source_launcher
+        and source_build.is_file()
+        and os.access(source_build, os.X_OK)
+    ):
+        return source_build.resolve()
+    raise ValueError(
+        "cannot resolve the compiled Sail executable behind the launcher; "
+        "pass --sail-effective-binary"
+    )
+
+
+def compiler_identity(launcher: Path, effective: Path) -> dict[str, str]:
+    effective_hash = sha256(effective)
+    return {
+        "executable": str(launcher),
+        "launcher_sha256": sha256(launcher),
+        "effective_executable": str(effective),
+        "effective_binary_sha256": effective_hash,
+        # Retain the v1 field with corrected semantics for record consumers.
+        "binary_sha256": effective_hash,
+    }
+
+
 def strip_c_comments_and_literals(text: str) -> str:
     """Mask comments and literals while retaining code positions and newlines."""
     output: list[str] = []
@@ -345,7 +396,9 @@ def representative_sample(
 ) -> dict[str, str]:
     source = strip_c_comments_and_literals(path.read_text(errors="replace"))
     if re.search(rf"\b{re.escape(anchor_symbol)}\s*\(", source) is None:
-        raise ValueError(f"representative sample anchor is absent: {path}: {anchor_symbol}")
+        raise ValueError(
+            f"representative sample anchor is absent: {path}: {anchor_symbol}"
+        )
     return {
         "path": display_path(path),
         "sha256": sha256(path),
@@ -380,9 +433,7 @@ def gate(
     }
 
 
-def terminal_zero_metric_gate(
-    values: dict[str, int], manifest: Path
-) -> dict[str, Any]:
+def terminal_zero_metric_gate(values: dict[str, int], manifest: Path) -> dict[str, Any]:
     nonzero = {
         metric_id: values[metric_id]
         for metric_id in TERMINAL_ZERO_METRICS
@@ -494,8 +545,7 @@ def package_build_gate(
         command,
         "pass" if passed else "fail",
         "optimized package archive exists after a successful build",
-        [display_path(log_path)]
-        + ([display_path(built_library)] if passed else []),
+        [display_path(log_path)] + ([display_path(built_library)] if passed else []),
     )
     record["elapsed_seconds"] = round(elapsed, 3)
     return record, log_path
@@ -605,7 +655,9 @@ def validate_record(record: dict[str, Any]) -> None:
     if missing:
         raise ValueError(f"quality record is missing fields: {', '.join(missing)}")
     if record["schema_version"] != SCHEMA_VERSION:
-        raise ValueError(f"unsupported quality-record schema: {record['schema_version']}")
+        raise ValueError(
+            f"unsupported quality-record schema: {record['schema_version']}"
+        )
 
     environment = record["run"]["environment"]
     environment_fields = {
@@ -621,9 +673,47 @@ def validate_record(record: dict[str, Any]) -> None:
     for repository in record["repositories"].values():
         if re.fullmatch(r"[0-9a-f]{40}", repository["commit"]) is None:
             raise ValueError("quality record repository commit is not a full Git SHA")
-    for field in ("binary_sha256",):
+    compiler_fields = {
+        "executable",
+        "launcher_sha256",
+        "effective_executable",
+        "effective_binary_sha256",
+        "binary_sha256",
+        "reported_version",
+        "effective_reported_version",
+        "source_commit",
+    }
+    missing_compiler_fields = sorted(compiler_fields - record["compiler"].keys())
+    if missing_compiler_fields:
+        raise ValueError(
+            "quality record omits compiler identity fields: "
+            + ", ".join(missing_compiler_fields)
+        )
+    for field in ("launcher_sha256", "effective_binary_sha256", "binary_sha256"):
         if re.fullmatch(r"[0-9a-f]{64}", record["compiler"][field]) is None:
             raise ValueError(f"quality record compiler {field} is not SHA-256")
+    if (
+        record["compiler"]["binary_sha256"]
+        != record["compiler"]["effective_binary_sha256"]
+    ):
+        raise ValueError(
+            "quality record v1 binary hash is not the effective binary hash"
+        )
+    if record["compiler"]["source_commit"] != record["repositories"]["sail"]["commit"]:
+        raise ValueError(
+            "quality record compiler source commit does not match Sail repository"
+        )
+    for field in (
+        "executable",
+        "effective_executable",
+        "reported_version",
+        "effective_reported_version",
+    ):
+        if (
+            not isinstance(record["compiler"][field], str)
+            or not record["compiler"][field]
+        ):
+            raise ValueError(f"quality record compiler {field} is empty")
     if re.fullmatch(r"[0-9a-f]{64}", record["extraction"]["manifest_sha256"]) is None:
         raise ValueError("quality record manifest hash is not SHA-256")
 
@@ -679,7 +769,9 @@ def write_summary(path: Path, record: dict[str, Any]) -> None:
         "",
         f"- EVM Sail: `{record['repositories']['evm_sail']['commit']}`",
         f"- Sail compiler source: `{record['compiler']['source_commit']}`",
-        f"- Sail binary SHA-256: `{record['compiler']['binary_sha256']}`",
+        f"- Sail launcher SHA-256: `{record['compiler']['launcher_sha256']}`",
+        f"- Effective Sail binary: `{record['compiler']['effective_executable']}`",
+        f"- Effective Sail binary SHA-256: `{record['compiler']['effective_binary_sha256']}`",
         f"- Generated manifest SHA-256: `{record['extraction']['manifest_sha256']}`",
         "",
         "## Objective metrics",
@@ -710,6 +802,7 @@ def main() -> int:
     parser.add_argument("--operator", default=getpass.getuser())
     parser.add_argument("--sail", default=os.environ.get("SAIL", "sail"))
     parser.add_argument("--sail-source", type=Path)
+    parser.add_argument("--sail-effective-binary", type=Path)
     parser.add_argument("--clang", default=os.environ.get("CLANG", "clang"))
     parser.add_argument("--compdb", type=Path, default=ROOT / "compile_commands.json")
     parser.add_argument("--built-library", type=Path)
@@ -734,9 +827,19 @@ def main() -> int:
         evm_repository = git_repository(ROOT)
         sail_source = discover_sail_source(sail_executable, args.sail_source)
         sail_repository = git_repository(sail_source)
+        effective_sail_executable = discover_effective_sail_executable(
+            sail_executable, sail_source, args.sail_effective_binary
+        )
         version = run([str(sail_executable), "--version"])
         if version.returncode != 0:
             raise ValueError("cannot read Sail compiler version")
+        effective_version = run([str(effective_sail_executable), "--version"])
+        if effective_version.returncode != 0:
+            raise ValueError("cannot read effective Sail compiler version")
+        if version.stdout.strip() != effective_version.stdout.strip():
+            raise ValueError(
+                "Sail launcher and effective executable report different versions"
+            )
         metric_values = source_metrics(generated_sources)
         extraction_command = extraction_recipe(sail_executable)
         conformance, findings = conformance_gate(generated)
@@ -782,14 +885,10 @@ def main() -> int:
         artifact(args.compdb.resolve(), "compilation_database", "build tooling")
     )
     if build_log is not None:
-        artifacts.append(
-            artifact(build_log, "build_log", "optimized C package")
-        )
+        artifacts.append(artifact(build_log, "build_log", "optimized C package"))
     if build_gate["status"] == "pass" and built_library is not None:
         artifacts.append(
-            artifact(
-                built_library, "static_library", "optimized C package"
-            )
+            artifact(built_library, "static_library", "optimized C package")
         )
 
     samples = []
@@ -821,8 +920,14 @@ def main() -> int:
         "T0",
         [],
         "pass",
-        "both repository commits, compiler binary hash, and manifest hash are present",
-        [str(ROOT), str(sail_source), display_path(layout.generated_manifest)],
+        "both repository commits, launcher and effective compiler hashes, and manifest hash are present",
+        [
+            str(ROOT),
+            str(sail_source),
+            str(sail_executable),
+            str(effective_sail_executable),
+            display_path(layout.generated_manifest),
+        ],
     )
     metric_gate = gate(
         "objective_source_metrics",
@@ -878,10 +983,10 @@ def main() -> int:
         },
         "repositories": {"evm_sail": evm_repository, "sail": sail_repository},
         "compiler": {
-            "executable": str(sail_executable),
+            **compiler_identity(sail_executable, effective_sail_executable),
             "reported_version": version.stdout.strip(),
+            "effective_reported_version": effective_version.stdout.strip(),
             "source_commit": sail_repository["commit"],
-            "binary_sha256": sha256(sail_executable),
         },
         "extraction": {
             "profile": "optimised",
