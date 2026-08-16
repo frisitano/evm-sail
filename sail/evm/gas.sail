@@ -511,11 +511,11 @@ function mem_cost(words) = {
 
 /*! Computes the exact exclusive endpoint selected by one EVM memory operand.
     A zero-sized operand does not access memory, irrespective of its offset. */
-val memory_required_size : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 & 0 <= 'size & 'size < 2 ^ 256. (
+val memory_requested_height : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 & 0 <= 'size & 'size < 2 ^ 256. (
         int('start),
         int('size),
     ) -> memory_required_endpoint
-function memory_required_size(start, size) =
+function memory_requested_height(start, size) =
     if size == 0 then {
         0
     } else if start <= sizeof(memory_region_bound) then {
@@ -559,7 +559,7 @@ function memory_access(start, size) =
                      int('bounded_size)} = size;
             let access = struct {
                     range = memory_range(bounded_start, bounded_size),
-                    required_size = bounded_start + bounded_size,
+                    requested_height = bounded_start + bounded_size,
                 } :
                     MemoryAccessFields('bounded_start, 'bounded_size, 'bounded_start + 'bounded_size);
             access
@@ -575,14 +575,14 @@ function memory_access(start, size) =
     represent that fact in the cost result rather than with a numeric
     `2^64` sentinel that is not itself live gas. */
 val memory_expansion_gas_cost : forall 'required, memory_expansion_endpoint('required). (
-        EvmMemorySlice,
+        memory_height,
         int('required),
         gas,
     ) -> GasCharge
 
-function memory_expansion_gas_cost(mem, required_size, available) =
-    if required_size <= sizeof(memory_region_bound) then {
-        let materialized_size : memory_length = required_size;
+function memory_expansion_gas_cost(mem, requested_height, available) =
+    if requested_height <= sizeof(memory_region_bound) then {
+        let materialized_size : memory_length = requested_height;
         let new_words = memory_word_count(materialized_size);
         let old_size = memory_high_water(mem);
         let old_words = memory_word_count(old_size);
@@ -606,13 +606,6 @@ function memory_expansion_gas_cost(mem, required_size, available) =
     } else {
         GAS_CHARGE_UNAFFORDABLE
     }
-
-/*! Materializes the exact byte high-water mark after gas has been charged,
-    returning the updated memory cursor. */
-function expand_memory(mem : EvmMemorySlice, required_size : memory_length) -> EvmMemorySlice = {
-    let (expanded, _) = memory_expand_to(mem, required_size);
-    expanded
-}
 
 /*md
 ## The access costs

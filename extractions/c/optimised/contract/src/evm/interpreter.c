@@ -63,15 +63,13 @@ static inline void interpreter_load_cursor(const struct InterpreterFrameContext 
 }
 
 typedef struct
-    tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes
+    tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_uint_32_uint_32_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes
         FrameTransitionResult;
 
-static inline void apply_frame_transition_result(struct InterpreterFrameContext *frame,
-                                                 uint64_t *gas, uint64_t *state_gas_remaining,
-                                                 uint32_t *state_gas_spilled, __int128 *refund,
-                                                 StackPointer *sp, Bytes *memory,
-                                                 struct FrameStatus *status,
-                                                 FrameTransitionResult result)
+static inline void apply_frame_transition_result(
+    struct InterpreterFrameContext *frame, uint64_t *gas, uint64_t *state_gas_remaining,
+    uint32_t *state_gas_spilled, __int128 *refund, StackPointer *sp, uint32_t *memory_base,
+    uint32_t *memory_height, struct FrameStatus *status, FrameTransitionResult result)
 {
   frame->next_pc = result.tup0;
   *gas = result.tup1;
@@ -80,47 +78,51 @@ static inline void apply_frame_transition_result(struct InterpreterFrameContext 
   *refund = result.tup4;
   *status = result.tup5;
   *sp = result.tup6;
-  *memory = result.tup7;
-  frame->caller = result.tup8;
-  frame->address = result.tup9;
-  frame->code_address = result.tup10;
-  frame->value = result.tup11;
-  frame->state_gas_reservoir = result.tup12;
-  frame->is_static = result.tup13;
-  frame->depth = result.tup14;
-  frame->code = result.tup15;
-  frame->calldata = result.tup16;
-  frame->returndata = result.tup17;
+  *memory_base = result.tup7;
+  *memory_height = result.tup8;
+  frame->caller = result.tup9;
+  frame->address = result.tup10;
+  frame->code_address = result.tup11;
+  frame->value = result.tup12;
+  frame->state_gas_reservoir = result.tup13;
+  frame->is_static = result.tup14;
+  frame->depth = result.tup15;
+  frame->code = result.tup16;
+  frame->calldata = result.tup17;
+  frame->returndata = result.tup18;
 }
 
 __attribute__((noinline)) static void
 run_frame_entry_transition(struct InterpreterFrameContext *frame, uint64_t *gas,
                            uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
-                           __int128 *refund, StackPointer *sp, Bytes *memory, uint8_t opcode,
-                           struct FrameStatus *status)
+                           __int128 *refund, StackPointer *sp, uint32_t *memory_base,
+                           uint32_t *memory_height, uint8_t opcode, struct FrameStatus *status)
 {
   const bytes20 previous_address = frame->address;
   FrameTransitionResult result = run_frame_entry_encoded(
-      frame->next_pc, *gas, *state_gas_remaining, *state_gas_spilled, *refund, *sp, *memory,
-      frame->caller, frame->address, frame->code_address, frame->value, frame->state_gas_reservoir,
-      frame->is_static, frame->depth, frame->code, frame->calldata, frame->returndata, opcode);
+      frame->next_pc, *gas, *state_gas_remaining, *state_gas_spilled, *refund, *sp, *memory_base,
+      *memory_height, frame->caller, frame->address, frame->code_address, frame->value,
+      frame->state_gas_reservoir, frame->is_static, frame->depth, frame->code, frame->calldata,
+      frame->returndata, opcode);
   apply_frame_transition_result(frame, gas, state_gas_remaining, state_gas_spilled, refund, sp,
-                                memory, status, result);
+                                memory_base, memory_height, status, result);
   frame->account =
       refresh_account_execution_context(frame->account, previous_address, frame->address);
 }
 
-__attribute__((noinline)) static void resume_frame_transition(
-    struct InterpreterFrameContext *frame, const struct FrameContinuation *continuation,
-    Bytes output, uint64_t *gas, uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
-    __int128 *refund, StackPointer *sp, Bytes *memory, struct FrameStatus *status)
+__attribute__((noinline)) static void
+resume_frame_transition(struct InterpreterFrameContext *frame,
+                        const struct FrameContinuation *continuation, Bytes output, uint64_t *gas,
+                        uint64_t *state_gas_remaining, uint32_t *state_gas_spilled,
+                        __int128 *refund, StackPointer *sp, uint32_t *memory_base,
+                        uint32_t *memory_height, struct FrameStatus *status)
 {
   const bytes20 previous_address = frame->address;
   FrameTransitionResult result =
-      resume_frame(*continuation, output, *gas, *state_gas_remaining, *state_gas_spilled, *refund,
-                   *status, frame->state_gas_reservoir);
+      resume_frame(*continuation, output, *memory_base, *gas, *state_gas_remaining,
+                   *state_gas_spilled, *refund, *status, frame->state_gas_reservoir);
   apply_frame_transition_result(frame, gas, state_gas_remaining, state_gas_spilled, refund, sp,
-                                memory, status, result);
+                                memory_base, memory_height, status, result);
   frame->account =
       refresh_account_execution_context(frame->account, previous_address, frame->address);
 }
@@ -201,9 +203,10 @@ enum {
 
 struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes
 threaded_interpret(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill,
-                   __int128 initial_refund, StackPointer initial_sp, Bytes initial_memory,
-                   bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address,
-                   u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static,
+                   __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base,
+                   uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address,
+                   bytes20 initial_code_address, u256 initial_value,
+                   uint64_t initial_state_gas_reservoir, bool initial_is_static,
                    uint16_t initial_depth, struct CodeFields initial_code,
                    struct CalldataSlice initial_calldata, uint8_t fork, u256 blob_fee)
 {
@@ -355,7 +358,8 @@ threaded_interpret(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t in
   uint32_t state_gas_spilled = initial_state_spill;
   __int128 refund = initial_refund;
   StackPointer sp = initial_sp;
-  Bytes memory = initial_memory;
+  uint32_t memory_base = initial_memory_base;
+  uint32_t memory_height = initial_memory_height;
   struct InterpreterFrameContext frame = {
       .caller = initial_caller,
       .address = initial_address,
@@ -444,7 +448,7 @@ opcode_clz:
   REQUIRE_OPCODE_AVAILABLE(0x1e);
   EXECUTE_HANDLER(execute_clz(&gas, &sp));
 opcode_keccak256:
-  EXECUTE_HANDLER(execute_keccak256(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_keccak256(memory_base, &gas, &sp, &memory_height));
 opcode_address:
   EXECUTE_HANDLER(execute_address(frame.address, &gas, &sp));
 opcode_balance:
@@ -460,21 +464,21 @@ opcode_calldataload:
 opcode_calldatasize:
   EXECUTE_HANDLER(execute_calldatasize(frame.calldata, &gas, &sp));
 opcode_calldatacopy:
-  EXECUTE_HANDLER(execute_calldatacopy(frame.calldata, &gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_calldatacopy(frame.calldata, memory_base, &gas, &sp, &memory_height));
 opcode_codesize:
   EXECUTE_HANDLER(execute_codesize(frame.code, &gas, &sp));
 opcode_codecopy:
-  EXECUTE_HANDLER(execute_codecopy(frame.code, &gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_codecopy(frame.code, memory_base, &gas, &sp, &memory_height));
 opcode_gasprice:
   EXECUTE_HANDLER(execute_gasprice(&gas, &sp));
 opcode_extcodesize:
   EXECUTE_HANDLER(execute_extcodesize(&gas, &sp));
 opcode_extcodecopy:
-  EXECUTE_HANDLER(execute_extcodecopy(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_extcodecopy(memory_base, &gas, &sp, &memory_height));
 opcode_returndatasize:
   EXECUTE_HANDLER(execute_returndatasize(frame.returndata, &gas, &sp));
 opcode_returndatacopy:
-  EXECUTE_HANDLER(execute_returndatacopy(frame.returndata, &gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_returndatacopy(frame.returndata, memory_base, &gas, &sp, &memory_height));
 opcode_extcodehash:
   EXECUTE_HANDLER(execute_extcodehash(&gas, &sp));
 opcode_blockhash:
@@ -517,11 +521,11 @@ opcode_pop:
   sp.height--;
   NEXT_OPCODE();
 opcode_mload:
-  EXECUTE_HANDLER(execute_mload(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_mload(memory_base, &gas, &sp, &memory_height));
 opcode_mstore:
-  EXECUTE_HANDLER(execute_mstore(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_mstore(memory_base, &gas, &sp, &memory_height));
 opcode_mstore8:
-  EXECUTE_HANDLER(execute_mstore8(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_mstore8(memory_base, &gas, &sp, &memory_height));
 opcode_sload:
   EXECUTE_HANDLER(execute_sload(frame.account, &gas, &sp));
 opcode_sstore: {
@@ -549,7 +553,7 @@ opcode_pc: {
   FINISH_OPCODE(outcome);
 }
 opcode_msize:
-  EXECUTE_HANDLER(execute_msize(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_msize(&gas, &sp, &memory_height));
 opcode_gas:
   EXECUTE_HANDLER(execute_gas(&gas, &sp));
 opcode_jumpdest: {
@@ -564,7 +568,7 @@ opcode_tstore:
   EXECUTE_HANDLER(execute_tstore(frame.address, frame.is_static, &gas, &sp));
 opcode_mcopy:
   REQUIRE_OPCODE_AVAILABLE(0x5e);
-  EXECUTE_HANDLER(execute_mcopy(&gas, &sp, &memory));
+  EXECUTE_HANDLER(execute_mcopy(memory_base, &gas, &sp, &memory_height));
 
 opcode_push_family:
   if (opcode == 0x5f) {
@@ -631,8 +635,8 @@ opcode_swap_family: {
 }
 
 opcode_log_family: {
-  struct OpcodeOutcome outcome =
-      execute_log_encoded(frame.address, frame.is_static, &gas, &sp, &memory, opcode);
+  struct OpcodeOutcome outcome = execute_log_encoded(frame.address, frame.is_static, memory_base,
+                                                     opcode, &gas, &sp, &memory_height);
   FINISH_OPCODE(outcome);
 }
 
@@ -648,19 +652,19 @@ opcode_deep_stack_family: {
 opcode_frame_entry: {
   frame.next_pc = interpreter_cursor_pc(&frame, ip);
   run_frame_entry_transition(&frame, &gas, &state_gas_remaining, &state_gas_spilled, &refund, &sp,
-                             &memory, opcode, &status);
+                             &memory_base, &memory_height, opcode, &status);
   interpreter_load_cursor(&frame, &ip, &code_end);
   goto interpreter_continue;
 }
 
 opcode_return: {
-  status = execute_return(&gas, &sp, &memory);
+  status = execute_return(memory_base, &gas, &sp, &memory_height);
   goto opcode_done;
 }
 
 opcode_revert: {
-  status = execute_revert(frame.state_gas_reservoir, &gas, &state_gas_remaining, &state_gas_spilled,
-                          &sp, &memory);
+  status = execute_revert(frame.state_gas_reservoir, memory_base, &gas, &state_gas_remaining,
+                          &state_gas_spilled, &sp, &memory_height);
   goto opcode_done;
 }
 
@@ -727,7 +731,8 @@ interpreter_continue:
     }
 
     resume_frame_transition(&frame, continuation, output, &gas, &state_gas_remaining,
-                            &state_gas_spilled, &refund, &sp, &memory, &status);
+                            &state_gas_spilled, &refund, &sp, &memory_base, &memory_height,
+                            &status);
     interpreter_load_cursor(&frame, &ip, &code_end);
     goto interpreter_continue;
   }

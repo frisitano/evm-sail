@@ -63,7 +63,7 @@ function k_get_code_size(a : address) -> code_length = {
 
 /*! `EXTCODECOPY`: copies account code into frame memory, zero-padded
     past the end. */
-function k_code_copy(a : address, dst : memory_pointer, off : word, len : memory_length) -> unit = {
+function k_code_copy(a : address, dst : memory_base, off : word, len : memory_length) -> unit = {
     let code_key = k_code_key(a);
     let code = code_db_resolve(code_key);
     let bytes = code_bytes(code);

@@ -46,7 +46,7 @@ TERMINAL_ZERO_METRICS = (
 )
 SAMPLE_STRATA = (
     ("prelude.c", "primitive lowering", "word_sub_word_u256_uint8_t_to_u256"),
-    ("evm/gas.c", "arithmetic/protocol", "memory_required_size"),
+    ("evm/gas.c", "arithmetic/protocol", "memory_access"),
     ("evm/transaction.c", "state transition", "process_transaction"),
     ("lib/mpt/updates.c", "recursive/data-heavy", "witness_subtree"),
     ("lib/rlp/decoding.c", "parser/failure path", "rlp_decode_word"),

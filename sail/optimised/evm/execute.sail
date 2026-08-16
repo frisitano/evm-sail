@@ -63,7 +63,12 @@ val execute_sar : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
 val execute_clz : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_keccak256 : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_keccak256 : (memory_base, gas, StackPointer, memory_height) -> (
+        gas,
+        StackPointer,
+        memory_height,
+        OpcodeOutcome,
+    )
 $[c_inline]
 val execute_address : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
@@ -79,16 +84,21 @@ val execute_calldatasize : (CalldataSlice, gas, StackPointer) -> (gas, StackPoin
 $[c_inline]
 val execute_calldataload : (CalldataSlice, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_calldatacopy : (CalldataSlice, gas, StackPointer, EvmMemorySlice) -> (
+val execute_calldatacopy : (CalldataSlice, memory_base, gas, StackPointer, memory_height) -> (
         gas,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         OpcodeOutcome,
     )
 $[c_inline]
 val execute_codesize : (Code, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_codecopy : (Code, gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_codecopy : (Code, memory_base, gas, StackPointer, memory_height) -> (
+        gas,
+        StackPointer,
+        memory_height,
+        OpcodeOutcome,
+    )
 $[c_inline]
 val execute_balance : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
@@ -96,16 +106,21 @@ val execute_selfbalance : (address, gas, StackPointer) -> (gas, StackPointer, Op
 $[c_inline]
 val execute_extcodesize : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_extcodecopy : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_extcodecopy : (memory_base, gas, StackPointer, memory_height) -> (
+        gas,
+        StackPointer,
+        memory_height,
+        OpcodeOutcome,
+    )
 $[c_inline]
 val execute_extcodehash : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
 val execute_returndatasize : (OutputSlice, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_returndatacopy : (OutputSlice, gas, StackPointer, EvmMemorySlice) -> (
+val execute_returndatacopy : (OutputSlice, memory_base, gas, StackPointer, memory_height) -> (
         gas,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         OpcodeOutcome,
     )
 $[c_inline]
@@ -133,15 +148,25 @@ val execute_blobhash : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
 val execute_pop : (gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_mload : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_mload : (memory_base, gas, StackPointer, memory_height) -> (gas, StackPointer, memory_height, OpcodeOutcome)
 $[c_inline]
-val execute_mstore : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_mstore : (memory_base, gas, StackPointer, memory_height) -> (
+        gas,
+        StackPointer,
+        memory_height,
+        OpcodeOutcome,
+    )
 $[c_inline]
-val execute_mstore8 : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_mstore8 : (memory_base, gas, StackPointer, memory_height) -> (
+        gas,
+        StackPointer,
+        memory_height,
+        OpcodeOutcome,
+    )
 $[c_inline]
-val execute_msize : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_msize : (gas, StackPointer, memory_height) -> (gas, StackPointer, memory_height, OpcodeOutcome)
 $[c_inline]
-val execute_mcopy : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_mcopy : (memory_base, gas, StackPointer, memory_height) -> (gas, StackPointer, memory_height, OpcodeOutcome)
 $[c_inline]
 val execute_tload : (address, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
@@ -169,21 +194,21 @@ val execute_swapn : (gas, StackPointer, byte) -> (gas, StackPointer, OpcodeOutco
 $[c_inline]
 val execute_exchange : (gas, StackPointer, byte) -> (gas, StackPointer, OpcodeOutcome)
 $[c_inline]
-val execute_log : (address, bool, gas, StackPointer, EvmMemorySlice, log_topic_count) -> (
+val execute_log : (address, bool, memory_base, log_topic_count, gas, StackPointer, memory_height) -> (
         gas,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         OpcodeOutcome,
     )
 $[c_inline]
-val execute_return : (gas, StackPointer, EvmMemorySlice) -> (gas, StackPointer, EvmMemorySlice, FrameStatus)
+val execute_return : (memory_base, gas, StackPointer, memory_height) -> (gas, StackPointer, memory_height, FrameStatus)
 $[c_inline]
-val execute_revert : (state_gas, gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice) -> (
+val execute_revert : (state_gas, memory_base, gas, state_gas, state_gas_spill, StackPointer, memory_height) -> (
         gas,
         state_gas,
         state_gas_spill,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         FrameStatus,
     )
 $[c_inline]

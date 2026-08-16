@@ -92,8 +92,8 @@ static void append_storage(const AccountTrieView *account)
   uint32_t count = 0;
   for (uint32_t offset = 0; offset < account->storage_count; offset++) {
     StorageTrieView view;
-    if (storage_trie_binding_get(account->storage_begin + offset,
-                                 account->storage_generation, &view))
+    if (storage_trie_binding_get(account->storage_begin + offset, account->storage_generation,
+                                 &view))
       count++;
   }
   append_u32(count);
@@ -180,7 +180,7 @@ unsigned long guest_debug_dump(const unsigned char **out)
   append_u32(0);
 
   append_byte('M');
-  append_u32(state_available ? (uint32_t)hm_depth() : 0);
+  append_u32(0);
 
   append_byte('E');
   *out = dump_bytes;

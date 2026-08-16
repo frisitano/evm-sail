@@ -12,7 +12,7 @@ revert is a kernel snapshot, not saved here.
 Hot machine state flows through handler signatures instead of registers,
 mirroring the Yellow Paper's state-passing transition μ′ = Ξ(μ): the
 remaining gas (μ_g), the program counter (μ_pc), the operand-stack cursor
-(μ_s), and the frame-memory extent (μ_i) are carried by value from the
+(μ_s), and the frame-memory height (μ_i) are carried by value from the
 interpreter loop into each opcode handler and returned updated. No
 handler reads or writes these registers: the canonical loop supplies each
 step's arguments from the registers and assigns the returned state back,
@@ -194,7 +194,7 @@ function returndata_copy(returndata, dst, off, len) =
 
 /*! Copies `min(want, size)` returndata bytes — the `CALL`-family output
     write-back. */
-function returndata_copy_prefix(returndata : OutputSlice, dst : memory_pointer, want : memory_length) -> unit = {
+function returndata_copy_prefix(returndata : OutputSlice, dst : memory_base, want : memory_length) -> unit = {
     let wanted = want;
     let available = returndata_size(returndata);
     let copy_length : memory_length =
@@ -208,16 +208,16 @@ function returndata_copy_prefix(returndata : OutputSlice, dst : memory_pointer, 
 /*md
 ## The frame memory
 
-The EVM's view over frame memory, a region of the host interface. The
-active frame's established extent is the carried memory cursor
-[EvmMemorySlice][type-EvmMemorySlice]: its base and byte high-water mark
-flow through the memory-family handlers by value, with the
-[evm_memory][] register authoritative only at frame boundaries. Every
-access is guarded
+The EVM's view over frame memory, a region of the host interface. The active
+frame's exact byte high-water mark flows through memory-family handlers as the
+scalar [memory_height][type-memory_height], beside Sail's absolute arena
+[memory_base][type-memory_base]. The host owns the arena storage and
+returns pointer-bearing [EvmMemorySlice][type-EvmMemorySlice] values only when
+Sail requests a derived view. Every access is guarded
 by gas charging against the carried cursor: an unaffordable expansion sets
-the halt status before [memory_expand_to][] is reached, so a
+the halt status before [expand_memory][] is reached, so a
 post-out-of-gas write to a huge offset (for example, `MSTORE` at 2^32)
-cannot grow the backing buffer. Successful expansions return the raised
+cannot grow the backing buffer. Successful expansion raises the scalar
 high-water mark that `MSIZE` and memory-expansion gas read.
 */
 /*! Computes the returndata remaining after a validated source offset. */
@@ -229,91 +229,80 @@ val returndata_remaining : forall 'available 'offset,
 function returndata_remaining(available, offset) = available - offset
 
 /* ----------------------- frame memory (EVM view) ------------------------ */
-/* Each frame owns one absolute slice of the shared host arena. Relative EVM
- * offsets are represented by subslicing this value, so calldata captured
- * from a suspended parent and an immediate memory read have the same source
- * representation. The slice length is the exact highest accessed byte; gas
- * and `MSIZE` round that watermark to EVM words when required. */
-/*! Returns a carried cursor's exact byte high-water mark. */
-function memory_high_water(mem : EvmMemorySlice) -> memory_length = {
-    let memory = mem;
-    let length = memory.len;
-    length
-}
+/* Each frame carries an absolute base in the shared host arena and a
+ * relative established height. Relative EVM offsets are added to that base
+ * only at memory-access boundaries, so calldata captured from a suspended
+ * parent and an immediate memory read have the same source representation.
+ * Gas and `MSIZE` round the carried height to EVM words when required. */
+/*! Returns the carried frame's exact byte high-water mark. */
+function memory_high_water(height : memory_height) -> memory_length = height
 
-/*! Clears all frame-memory storage and resets the active range. */
-function memory_reset() -> EvmMemorySlice = {
-    mem_clear();
-    EMPTY_EVM_MEMORY_SLICE
-}
+/*! The empty EVM-memory high-water mark. */
+let MEMORY_HEIGHT_ZERO : memory_height = 0
 
-/*! Expands the carried frame memory to an already-charged size, returning
-    the updated cursor followed by the requested high-water-mark witness. */
-val memory_expand_to : forall 'required, source_valid_range(0, 'required). (EvmMemorySlice, int('required)) -> (
-        EvmMemorySlice,
-        EvmMemorySliceLength('required),
-    )
+/*! The top-level frame begins at the shared arena's semantic offset zero. */
+let MEMORY_BASE_ZERO : memory_base = 0
 
-/*! Materializes an already-charged memory high-water mark and returns both the
-    requested active prefix and the updated carried memory cursor. */
-function memory_expand_to(mem, new_size) = {
-    let memory = mem;
-    if memory.len < new_size then {
-        let expanded = mem_expand(new_size);
-        (expanded, expanded)
+/*! Converts a frame-relative coordinate to an absolute arena coordinate. */
+function memory_absolute(base : memory_base, relative : memory_length) -> memory_base =
+    if relative <= sizeof(memory_region_bound) - base then {
+        base + relative
     } else {
-        (mem, sub_slice(memory, 0, new_size))
+        fatal_error(ExecutionInvalid)
+    }
+
+/*! Restores the parent arena cursor from the current child cursor and the
+    parent's frame-scoped memory height. */
+function memory_parent_base(child_base : memory_base, parent_height : memory_height) -> memory_base =
+    if parent_height <= child_base then {
+        child_base - parent_height
+    } else {
+        fatal_error(ExecutionInvalid)
+    }
+
+/*! Materializes an already-charged memory high-water mark and returns its
+    updated scalar height. */
+function expand_memory(base : memory_base, height : memory_height, requested_height : memory_length) -> memory_height = {
+    let _ = mem_expand(base, height, requested_height);
+    if height < requested_height then {
+        requested_height
+    } else {
+        height
     }
 }
 
-/*! Returns an already-expanded memory range together with the updated
-    cursor. The successful expansion value retains the high-water
-    containment fact that would be lost by repacking the existential
-    cursor. */
-val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (EvmMemorySlice, int('off), int('len)) -> (
-        EvmMemorySlice,
-        EvmMemorySlice,
-    )
+/*! Returns an already-expanded memory range. */
+val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (
+        memory_base,
+        memory_height,
+        int('off),
+        int('len),
+    ) -> EvmMemorySlice
 
-function active_memory_slice(mem, off, len) =
+function active_memory_slice(base, mem, off, len) =
     if len == 0 then {
-        (mem, EMPTY_EVM_MEMORY_SLICE)
+        EMPTY_EVM_MEMORY_SLICE
     } else {
-        let (expanded, window) = memory_expand_to(mem, off + len);
-        (expanded, sub_slice(window, off, len))
+        let window = mem_expand(base, mem, off + len);
+        sub_slice(window, off, len)
     }
 
-/*! Returns expanded memory as executable initcode together with the
-    updated cursor, retaining the headroom established by the successful
-    memory-expansion range. */
-val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (EvmMemorySlice, int('off), int('len)) -> (
-        EvmMemorySlice,
-        CodeSlice,
-    )
+/*! Returns expanded executable initcode. */
+val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (
+        memory_base,
+        memory_height,
+        int('off),
+        int('len),
+    ) -> CodeSlice
 
-function memory_code_slice(mem, off, len) =
+function memory_code_slice(base, mem, off, len) =
     if len == 0 then {
-        (mem, EMPTY_CODE_SLICE)
+        EMPTY_CODE_SLICE
     } else {
-        let (expanded, window) = memory_expand_to(mem, off + len);
+        let window = mem_expand(base, mem, off + len);
         let initcode = sub_slice(window, off, len);
-        (expanded, code_db_intern_memory(initcode))
+        code_db_intern_memory(initcode)
     }
-
-/* The caller retains its parent cursor while entering a child. Passing that
- * cursor back on leave is the complete Sail-side memory-frame unwind; no
- * second size register exists. */
-/*! Enters an empty child-memory frame and returns its cursor. */
-function memory_frame_enter() -> EvmMemorySlice = {
-    let base : source_pointer = mem_frame_enter();
-    evm_memory_slice(base, 0)
-}
-
-/*! Releases child memory and restores the caller-supplied parent cursor. */
-function memory_frame_leave(parent : EvmMemorySlice) -> EvmMemorySlice = {
-    mem_frame_leave();
-    parent
-}
 
 /*! Captures parent execution state and enters child stack and memory frames.
     The caller has published its carried machine state to the frame
@@ -325,7 +314,8 @@ function suspend_frame(
     pc : code_pointer,
     gas_remaining : gas,
     stack_top : StackPointer,
-    evm_memory : EvmMemorySlice,
+    memory_base : memory_base,
+    memory_height : memory_height,
     state_gas_remaining : state_gas,
     state_gas_spilled : state_gas_spill,
     frame_refund : gas_refund,
@@ -334,11 +324,12 @@ function suspend_frame(
     frame_code : Code,
     calldata : CalldataSlice,
 ) -> (
-    (FrameCheckpoint, StackPointer, EvmMemorySlice)
+    (FrameCheckpoint, StackPointer, memory_base, memory_height)
 ) = {
     k_journal_checkpoint();
     let child_stack = operand_stack_push_empty_frame();
-    let child_memory = memory_frame_enter();
+    let child_memory_base = memory_absolute(memory_base, memory_height);
+    let child_memory_height = MEMORY_HEIGHT_ZERO;
     let checkpoint : FrameCheckpoint = struct {
             pc = pc,
             gas_remaining = gas_remaining,
@@ -350,74 +341,47 @@ function suspend_frame(
             message = message,
             code = frame_code,
             calldata = calldata,
-            memory = evm_memory,
+            memory_height = memory_height,
         };
-    (checkpoint, child_stack, child_memory)
-}
-
-/*! Restores a suspended parent after nested execution completes. */
-function restore_frame(checkpoint : FrameCheckpoint) -> (
-    (
-        code_pointer,
-        gas,
-        StackPointer,
-        EvmMemorySlice,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        Message,
-        Code,
-        CalldataSlice,
-    )
-) = {
-    operand_stack_pop_frame();
-    let memory = memory_frame_leave(checkpoint.memory);
-    (
-        checkpoint.pc,
-        checkpoint.gas_remaining,
-        checkpoint.stack_top,
-        memory,
-        checkpoint.state_gas_remaining,
-        checkpoint.state_gas_spilled,
-        checkpoint.refund,
-        checkpoint.status,
-        checkpoint.message,
-        checkpoint.code,
-        checkpoint.calldata,
-    )
+    (checkpoint, child_stack, child_memory_base, child_memory_height)
 }
 
 /*! Writes one memory byte and raises the high-water mark. */
-function mem_set_byte(off : memory_pointer, v : byte) -> unit =
-    mem_write_byte(off, v)
+function mem_set_byte(base : memory_base, off : memory_base, v : byte) -> unit = {
+    let absolute_offset = memory_absolute(base, off);
+    mem_write_byte(absolute_offset, v)
+}
 
 /*! `MLOAD`: the big-endian word at `off`. */
-function mem_load(off : memory_pointer) -> word =
-    mem_load_word(off)
+function mem_load(base : memory_base, off : memory_base) -> word = {
+    let absolute_offset = memory_absolute(base, off);
+    mem_load_word(absolute_offset)
+}
 
 /*! `MSTORE`: writes the big-endian word at `off` and raises the
     high-water mark. */
-function mem_store(off : memory_pointer, w : word) -> unit =
-    mem_store_word(off, w)
+function mem_store(base : memory_base, off : memory_base, w : word) -> unit = {
+    let absolute_offset = memory_absolute(base, off);
+    mem_store_word(absolute_offset, w)
+}
 
 /*! `MSTORE8`: writes the low byte of `w`. */
-function mem_store_byte(off : memory_pointer, w : word) -> unit = {
+function mem_store_byte(base : memory_base, off : memory_base, w : word) -> unit = {
     let value = word_low_byte(w);
-    mem_set_byte(off, value)
+    mem_set_byte(base, off, value)
 }
 
 /*! `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. */
-function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_length) -> unit =
+function mem_mcopy(base : memory_base, dst : memory_base, src : memory_base, len : memory_length) -> unit =
     if len != 0 then {
-        mem_move(dst, src, len)
+        let absolute_dst = memory_absolute(base, dst);
+        let absolute_src = memory_absolute(base, src);
+        mem_move(absolute_dst, absolute_src, len)
     }
 
-/*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
-    caller reads the addressed bytes and hashes that byte list. Returns
-    the updated memory cursor followed by the digest word. */
-function mem_keccak(mem : EvmMemorySlice, range : MemoryRange) -> (EvmMemorySlice, word) = {
-    let (expanded, bytes) = active_memory_slice(mem, range.off, range.len);
+/*! `KECCAK256` over the already-expanded memory range `[off, off+len)`. */
+function mem_keccak(base : memory_base, mem : memory_height, range : MemoryRange) -> word = {
+    let bytes = active_memory_slice(base, mem, range.off, range.len);
     let digest = keccak256(bytes);
-    (expanded, hash_to_word(digest))
+    hash_to_word(digest)
 }

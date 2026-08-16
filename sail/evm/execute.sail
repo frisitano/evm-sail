@@ -720,22 +720,23 @@ function execute_clz(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 
 /*! Implements `KECCAK256` over an expanded memory range. */
 function execute_keccak256(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 2, 1);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
@@ -745,15 +746,15 @@ function execute_keccak256(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, keccak_cost.cost);
-    let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
-    memory = expand_memory(memory, access.required_size);
-    let (memory, digest) = mem_keccak(memory, access.range);
+    memory = expand_memory(memory_base, memory, access.requested_height);
+    let digest = mem_keccak(memory_base, memory, access.range);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, digest);
     (gas, sp, memory, Continue())
@@ -935,22 +936,23 @@ function execute_calldataload(
 /*! Implements `CALLDATACOPY`. */
 function execute_calldatacopy(
     carried_calldata : CalldataSlice,
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -966,16 +968,17 @@ function execute_calldatacopy(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, copy_cost.cost);
-    let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(destination_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
-    slice_copy_word_offset(carried_calldata, range.off, source_word, range.len);
+    let destination = memory_absolute(memory_base, range.off);
+    slice_copy_word_offset(carried_calldata, destination, source_word, range.len);
     (gas, sp, memory, Continue())
 }
 
@@ -1009,22 +1012,23 @@ function execute_codesize(
 /*! Implements `CODECOPY`. */
 function execute_codecopy(
     carried_code : Code,
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1040,18 +1044,19 @@ function execute_codecopy(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, copy_cost.cost);
-    let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(destination_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
     let code = carried_code;
     let bytes = code_bytes(code);
-    slice_copy_word_offset(bytes, range.off, source_word, range.len);
+    let destination = memory_absolute(memory_base, range.off);
+    slice_copy_word_offset(bytes, destination, source_word, range.len);
     (gas, sp, memory, Continue())
 }
 
@@ -1137,22 +1142,23 @@ function execute_extcodesize(carried_gas : gas, carried_sp : StackPointer) -> (g
 
 /*! Implements `EXTCODECOPY`, including access and copy gas. */
 function execute_extcodecopy(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 4, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     let address_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let a = word_to_address(address_word);
@@ -1174,17 +1180,18 @@ function execute_extcodecopy(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, copy_cost.cost);
-    let required_size = memory_required_size(destination_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(destination_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(destination_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
     k_account_mark_warm(a);
-    k_code_copy(a, range.off, source_word, range.len);
+    let destination = memory_absolute(memory_base, range.off);
+    k_code_copy(a, destination, source_word, range.len);
     (gas, sp, memory, Continue())
 }
 
@@ -1245,22 +1252,23 @@ function execute_returndatasize(
 /*! Implements bounds-checked `RETURNDATACOPY`. */
 function execute_returndatacopy(
     carried_returndata : OutputSlice,
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1282,15 +1290,16 @@ function execute_returndatacopy(
                 return (GAS_ZERO, sp, memory, Failed(OutOfGas))
             };
             gas = gas_sub(gas, copy_cost.cost);
-            let required_size = memory_required_size(destination_word, length_word);
-            let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+            let requested_height = memory_requested_height(destination_word, length_word);
+            let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
             if not_bool(expansion_cost.affordable) then {
                 return (GAS_ZERO, sp, memory, Failed(OutOfGas))
             };
             gas = gas_sub(gas, expansion_cost.cost);
             let access = memory_access(destination_word, length_word);
-            memory = expand_memory(memory, access.required_size);
-            returndata_copy(carried_returndata, access.range.off, bounded_source_offset, bounded_length);
+            memory = expand_memory(memory_base, memory, access.requested_height);
+            let destination = memory_absolute(memory_base, access.range.off);
+            returndata_copy(carried_returndata, destination, bounded_source_offset, bounded_length);
             (gas, sp, memory, Continue())
         } else {
             (GAS_ZERO, sp, memory, Failed(InvalidOpcode))
@@ -1551,22 +1560,23 @@ function execute_pop(carried_gas : gas, carried_sp : StackPointer) -> (gas, Stac
 
 /*! Implements `MLOAD`. */
 function execute_mload(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 1, 1);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1574,15 +1584,15 @@ function execute_mload(
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let word_size = u256(32);
-    let required_size = memory_required_size(offset_word, word_size);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, word_size);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, word_size);
-    memory = expand_memory(memory, access.required_size);
-    let value = mem_load(access.range.off);
+    memory = expand_memory(memory_base, memory, access.requested_height);
+    let value = mem_load(memory_base, access.range.off);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, value);
     (gas, sp, memory, Continue())
@@ -1590,22 +1600,23 @@ function execute_mload(
 
 /*! Implements `MSTORE`. */
 function execute_mstore(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1615,36 +1626,37 @@ function execute_mstore(
     let v = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let word_size = u256(32);
-    let required_size = memory_required_size(offset_word, word_size);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, word_size);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, word_size);
-    memory = expand_memory(memory, access.required_size);
-    mem_store(access.range.off, v);
+    memory = expand_memory(memory_base, memory, access.requested_height);
+    mem_store(memory_base, access.range.off, v);
     (gas, sp, memory, Continue())
 }
 
 /*! Implements `MSTORE8`. */
 function execute_mstore8(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     if gas < G_verylow then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1653,15 +1665,15 @@ function execute_mstore8(
     sp = stack_top_retreat(sp, 1);
     let v = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    let required_size = memory_required_size(offset_word, WORD_ONE);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, WORD_ONE);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, WORD_ONE);
-    memory = expand_memory(memory, access.required_size);
-    mem_store_byte(access.range.off, v);
+    memory = expand_memory(memory_base, memory, access.requested_height);
+    mem_store_byte(memory_base, access.range.off, v);
     (gas, sp, memory, Continue())
 }
 
@@ -1669,48 +1681,49 @@ function execute_mstore8(
 function execute_msize(
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 0, 1);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var sp : StackPointer = carried_sp;
     if carried_gas < G_base then {
-        return (GAS_ZERO, sp, carried_memory, Failed(OutOfGas))
+        return (GAS_ZERO, sp, carried_memory_height, Failed(OutOfGas))
     };
     let gas : gas = carried_gas - G_base;
-    let high_water = memory_high_water(carried_memory);
+    let high_water = memory_high_water(carried_memory_height);
     let words = memory_word_count(high_water);
     let size = word_of_nat_byte_count(words * 32);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, size);
-    (gas, sp, carried_memory, Continue())
+    (gas, sp, carried_memory_height, Continue())
 }
 
 /*! Implements overlapping memory copy `MCOPY` (EIP-5656). */
 function execute_mcopy(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, 3, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
 
     /* EIP-5656 */
     if gas < G_verylow then {
@@ -1728,11 +1741,13 @@ function execute_mcopy(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, copy_cost.cost);
-    let destination_required = memory_required_size(destination_word, length_word);
-    let source_required = memory_required_size(source_word, length_word);
-    let required_size =
-        if destination_required < source_required then source_required else destination_required;
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let destination_requested_height = memory_requested_height(destination_word, length_word);
+    let source_requested_height = memory_requested_height(source_word, length_word);
+    let requested_height =
+        if destination_requested_height < source_requested_height
+        then source_requested_height
+        else destination_requested_height;
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
@@ -1740,9 +1755,11 @@ function execute_mcopy(
     let destination = memory_access(destination_word, length_word);
     let source = memory_access(source_word, length_word);
     let materialized_required_size =
-        if destination.required_size < source.required_size then source.required_size else destination.required_size;
-    memory = expand_memory(memory, materialized_required_size);
-    mem_mcopy(destination.range.off, source.range.off, destination.range.len);
+        if destination.requested_height < source.requested_height
+        then source.requested_height
+        else destination.requested_height;
+    memory = expand_memory(memory_base, memory, materialized_required_size);
+    mem_mcopy(memory_base, destination.range.off, source.range.off, destination.range.len);
     (gas, sp, memory, Continue())
 }
 
@@ -2256,24 +2273,25 @@ function execute_exchange(
 function execute_log(
     carried_address : address,
     carried_is_static : bool,
+    memory_base : memory_base,
+    n : log_topic_count,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
-    n : log_topic_count,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     let stack_status = guard_stack(carried_sp, n + 2, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, stack_status)
+        return (GAS_ZERO, carried_sp, carried_memory_height, stack_status)
     };
     var gas : gas = carried_gas;
     var status : OpcodeOutcome = Continue();
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     var topics : LogTopics = LogTopics0();
     (gas, status) = guard_static(gas, carried_is_static);
     if match status {
@@ -2292,16 +2310,16 @@ function execute_log(
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, log_cost.cost);
-    let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Failed(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
-    let (memory, data) = active_memory_slice(memory, range.off, range.len);
+    let data = active_memory_slice(memory_base, memory, range.off, range.len);
     let memory_slice = evm_memory_slice(data.bytes, data.len);
     let log_data = LogDataMemory(memory_slice);
     k_log(carried_address, topics, log_data);
@@ -2316,57 +2334,59 @@ function execute_stop() -> FrameStatus = {
 
 /*! Implements successful `RETURN`. */
 function execute_return(
+    memory_base : memory_base,
     carried_gas : gas,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_height : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, FrameStatus)
+    (gas, StackPointer, memory_height, FrameStatus)
 ) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if match stack_status {
         Failed(_) => true,
         _ => false,
     } then {
-        return (GAS_ZERO, carried_sp, carried_memory, opcode_frame_status(stack_status))
+        return (GAS_ZERO, carried_sp, carried_memory_height, opcode_frame_status(stack_status))
     };
     var gas : gas = carried_gas;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, sp, memory, Exceptional(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
-    let (memory, data) = active_memory_slice(memory, range.off, range.len);
+    let data = active_memory_slice(memory_base, memory, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltReturn(output);
     (gas, sp, memory, Halted(reason))
 }
 
 /*! Implements rollback-carrying `REVERT` (EIP-140). */
-val execute_revert : (state_gas, gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice) -> (
+val execute_revert : (state_gas, memory_base, gas, state_gas, state_gas_spill, StackPointer, memory_height) -> (
         gas,
         state_gas,
         state_gas_spill,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         FrameStatus,
     )
 function execute_revert(
     carried_state_gas_reservoir,
+    memory_base,
     carried_gas,
     carried_state_gas,
     carried_state_spill,
     carried_sp,
-    carried_memory,
+    carried_memory_height,
 ) = {
     let stack_status = guard_stack(carried_sp, 2, 0);
     if match stack_status {
@@ -2378,7 +2398,7 @@ function execute_revert(
             carried_state_gas,
             carried_state_spill,
             carried_sp,
-            carried_memory,
+            carried_memory_height,
             opcode_frame_status(stack_status),
         )
     };
@@ -2386,21 +2406,21 @@ function execute_revert(
     var state_gas : state_gas = carried_state_gas;
     var state_spill : state_gas_spill = carried_state_spill;
     var sp : StackPointer = carried_sp;
-    var memory : EvmMemorySlice = carried_memory;
+    var memory : memory_height = carried_memory_height;
 
     /* EIP-140 */
     let offset_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    let required_size = memory_required_size(offset_word, length_word);
-    let expansion_cost = memory_expansion_gas_cost(memory, required_size, gas);
+    let requested_height = memory_requested_height(offset_word, length_word);
+    let expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
     if not_bool(expansion_cost.affordable) then {
         return (GAS_ZERO, carried_state_gas, carried_state_spill, sp, memory, Exceptional(OutOfGas))
     };
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
-    memory = expand_memory(memory, access.required_size);
+    memory = expand_memory(memory_base, memory, access.requested_height);
     let range = access.range;
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
@@ -2409,7 +2429,7 @@ function execute_revert(
         state_gas = carried_state_gas_reservoir;
         state_spill = STATE_GAS_SPILL_ZERO
     };
-    let (memory, data) = active_memory_slice(memory, range.off, range.len);
+    let data = active_memory_slice(memory_base, memory, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltRevert(output);
     (gas, state_gas, state_spill, sp, memory, Halted(reason))

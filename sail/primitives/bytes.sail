@@ -85,10 +85,11 @@ type ScratchSliceAtLeast('minimum : Int) = {
 }
 
 $[c_repr { representation = external, name = Bytes }]
-/*! A range in the shared EVM-memory arena. Its coordinate is absolute within
-    the arena (an offset in the standard ABI and a stable pointer in the
-    optimized ABI), so a suspended parent's range remains valid while a child
-    frame is active. */
+/*! A borrowed range in the shared EVM-memory arena. Its coordinate is absolute
+    within the arena (an offset in the standard ABI and a stable pointer in the
+    optimized ABI), so calldata borrowed from a suspended parent remains valid
+    while a child frame is active. The machine carries only `memory_height`;
+    this pointer-bearing value exists at derived-view boundaries. */
 struct EvmMemorySliceFields('off : Int, 'len : Int), memory_region_valid_range('off, 'len) = {
     bytes : int('off),
     len : int('len),

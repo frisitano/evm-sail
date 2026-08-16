@@ -5,9 +5,8 @@
 #include "evmsail/prelude.h"
 #include <stdbool.h>
 #include <stdint.h>
-uint64_t evm_memory_expand(uint64_t len);
+uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t required);
 uint64_t mem_read_byte(uint64_t off);
-uint64_t hm_depth(void); /* call-frame depth */
 const uint8_t *evm_memory_base(void);
 uint64_t evm_memory_capacity(void);
 uint8_t *evm_memory_write_region(uint64_t off, uint64_t len);

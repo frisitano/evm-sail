@@ -565,13 +565,13 @@ struct FrameCheckpoint = {
     message : Message,
     code : Code,
     calldata : CalldataSlice,
-    memory : EvmMemorySlice,
+    memory_height : memory_height,
 }
 
 /*! The suspended parent information needed after a message call returns. */
 struct CallContinuation = {
     checkpoint : FrameCheckpoint,
-    return_offset : memory_pointer,
+    return_offset : memory_base,
     return_length : memory_length,
     /* Amsterdam NEW_ACCOUNT state gas paid for the child target. */
     new_account_charged : bool,

@@ -26,10 +26,10 @@ $[c_inline]
 val execute_swap_encoded : (opcode, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 
 $[c_inline]
-val execute_log_encoded : (address, bool, gas, StackPointer, EvmMemorySlice, opcode) -> (
+val execute_log_encoded : (address, bool, memory_base, opcode, gas, StackPointer, memory_height) -> (
         gas,
         StackPointer,
-        EvmMemorySlice,
+        memory_height,
         OpcodeOutcome,
     )
 
@@ -74,7 +74,8 @@ val threaded_interpret_host = impure { c: "threaded_interpret" } : (
         state_gas_spill,
         gas_refund,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -94,7 +95,8 @@ function interpret(
     initial_state_spill : state_gas_spill,
     initial_refund : gas_refund,
     initial_sp : StackPointer,
-    initial_memory : EvmMemorySlice,
+    initial_memory_base : memory_base,
+    initial_memory_height : memory_height,
     initial_caller : address,
     initial_address : address,
     initial_code_address : address,
@@ -117,7 +119,8 @@ function interpret(
         initial_state_spill,
         initial_refund,
         initial_sp,
-        initial_memory,
+        initial_memory_base,
+        initial_memory_height,
         initial_caller,
         initial_address,
         initial_code_address,

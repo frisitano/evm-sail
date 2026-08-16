@@ -103,7 +103,7 @@ val scratch_slice_load_n_word = impure { c: "scratch_slice_load_n_word" } : (
     into EVM memory at `dst`, zero-filling bytes past the slice end. */
 val stateless_input_copy_to_memory = impure { c: "stateless_input_copy_to_memory" } : (
         StatelessInputSlice,
-        memory_pointer,
+        memory_base,
         stateless_input_length,
         memory_length,
     ) -> unit
@@ -111,7 +111,7 @@ val stateless_input_copy_to_memory = impure { c: "stateless_input_copy_to_memory
     into EVM memory at `dst`, zero-filling bytes past the slice end. */
 val memory_slice_copy_to_memory = impure { c: "memory_slice_copy_to_memory" } : (
         EvmMemorySlice,
-        memory_pointer,
+        memory_base,
         memory_length,
         memory_length,
     ) -> unit
@@ -119,7 +119,7 @@ val memory_slice_copy_to_memory = impure { c: "memory_slice_copy_to_memory" } : 
     into EVM memory at `dst`, zero-filling bytes past the slice end. */
 val code_region_copy_to_memory = impure { c: "code_region_copy_to_memory" } : (
         CodeRegionSlice,
-        memory_pointer,
+        memory_base,
         code_length,
         memory_length,
     ) -> unit
@@ -127,7 +127,7 @@ val code_region_copy_to_memory = impure { c: "code_region_copy_to_memory" } : (
     into EVM memory at `dst`, zero-filling bytes past the slice end. */
 val output_slice_copy_to_memory = impure { c: "output_slice_copy_to_memory" } : (
         OutputSlice,
-        memory_pointer,
+        memory_base,
         output_length,
         memory_length,
     ) -> unit
@@ -535,7 +535,7 @@ overload slice_copy = {
     destination. */
 function stateless_input_slice_copy_word_offset(
     s : StatelessInputSlice,
-    dst : memory_pointer,
+    dst : memory_base,
     off : word,
     len : memory_length,
 ) -> (
@@ -550,14 +550,7 @@ function stateless_input_slice_copy_word_offset(
 /*! Copies `len` bytes at a 256-bit offset of an EVM memory span into EVM
     memory at `dst`; an offset at or past the slice end zero-fills the
     destination. */
-function memory_slice_copy_word_offset(
-    s : EvmMemorySlice,
-    dst : memory_pointer,
-    off : word,
-    len : memory_length,
-) -> (
-    unit
-) =
+function memory_slice_copy_word_offset(s : EvmMemorySlice, dst : memory_base, off : word, len : memory_length) -> unit =
     if off < s.len then {
         slice_copy(s, dst, off, len)
     } else {
@@ -567,14 +560,7 @@ function memory_slice_copy_word_offset(
 /*! Copies `len` bytes at a 256-bit offset of a code-region span into EVM
     memory at `dst`; an offset at or past the slice end zero-fills the
     destination. */
-function code_slice_copy_word_offset(
-    s : CodeRegionSlice,
-    dst : memory_pointer,
-    off : word,
-    len : memory_length,
-) -> (
-    unit
-) =
+function code_slice_copy_word_offset(s : CodeRegionSlice, dst : memory_base, off : word, len : memory_length) -> unit =
     if off < s.len then {
         slice_copy(s, dst, off, len)
     } else {
@@ -584,14 +570,7 @@ function code_slice_copy_word_offset(
 /*! Copies `len` bytes at a 256-bit offset of calldata from either provenance
     into EVM memory at `dst`; an offset at or past the slice end zero-fills
     the destination. */
-function calldata_slice_copy_word_offset(
-    s : CalldataSlice,
-    dst : memory_pointer,
-    off : word,
-    len : memory_length,
-) -> (
-    unit
-) =
+function calldata_slice_copy_word_offset(s : CalldataSlice, dst : memory_base, off : word, len : memory_length) -> unit =
     match s {
         InputCalldata(bytes) => stateless_input_slice_copy_word_offset(bytes, dst, off, len),
         MemoryCalldata(bytes) => memory_slice_copy_word_offset(bytes, dst, off, len),

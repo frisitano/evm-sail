@@ -159,15 +159,16 @@ function execute_swap_encoded(
 function execute_log_encoded(
     carried_address : address,
     carried_is_static : bool,
+    memory_base : memory_base,
+    opcode : opcode,
     execution_gas : gas,
     sp : StackPointer,
-    memory : EvmMemorySlice,
-    opcode : opcode,
+    memory : memory_height,
 ) -> (
-    (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+    (gas, StackPointer, memory_height, OpcodeOutcome)
 ) = {
     if 160 <= opcode & opcode <= 164 then {
-        execute_log(carried_address, carried_is_static, execution_gas, sp, memory, opcode - 160)
+        execute_log(carried_address, carried_is_static, memory_base, opcode - 160, execution_gas, sp, memory)
     } else {
         let (gas_after, status_after) = execute_invalid(execution_gas);
         (gas_after, sp, memory, status_after)
@@ -371,7 +372,8 @@ val run_call : (
         state_gas_spill,
         gas_refund,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -391,7 +393,8 @@ val run_call : (
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -411,7 +414,8 @@ val run_create : (
         state_gas_spill,
         gas_refund,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -431,7 +435,8 @@ val run_create : (
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -444,7 +449,17 @@ val run_create : (
         OutputSlice,
     )
 
-val resume_frame : (FrameContinuation, OutputSlice, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, state_gas) -> (
+val resume_frame : (
+        FrameContinuation,
+        OutputSlice,
+        memory_base,
+        gas,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        FrameStatus,
+        state_gas,
+    ) -> (
         code_pointer,
         gas,
         state_gas,
@@ -452,7 +467,8 @@ val resume_frame : (FrameContinuation, OutputSlice, gas, state_gas, state_gas_sp
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -490,7 +506,8 @@ function interpret(
     initial_state_spill : state_gas_spill,
     initial_refund : gas_refund,
     initial_sp : StackPointer,
-    initial_memory : EvmMemorySlice,
+    initial_memory_base : memory_base,
+    initial_memory_height : memory_height,
     initial_caller : address,
     initial_address : address,
     initial_code_address : address,
@@ -512,7 +529,8 @@ function interpret(
     var result : OutputSlice = EMPTY_OUTPUT_SLICE;
     var carried_pc : code_pointer = 0;
     var carried_sp : StackPointer = initial_sp;
-    var carried_memory : EvmMemorySlice = initial_memory;
+    var carried_memory_base : memory_base = initial_memory_base;
+    var carried_memory_height : memory_height = initial_memory_height;
     var carried_gas : gas = initial_gas;
     var carried_state_gas : state_gas = initial_state_gas;
     var carried_state_spill : state_gas_spill = initial_state_spill;
@@ -548,7 +566,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -566,7 +585,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -595,7 +615,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -613,7 +634,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -642,7 +664,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -660,7 +683,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -689,7 +713,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -707,7 +732,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -736,7 +762,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -754,7 +781,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -783,7 +811,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -801,7 +830,8 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -829,7 +859,7 @@ function interpret(
                             state_gas_spill,
                             gas_refund,
                             StackPointer,
-                            EvmMemorySlice,
+                            memory_height,
                             FrameStatus,
                         ) = match instruction {
                         STOP() => {
@@ -841,7 +871,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                                 status_after,
                             )
                         },
@@ -854,7 +884,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -867,7 +897,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -880,7 +910,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -893,7 +923,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -906,7 +936,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -919,7 +949,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -932,7 +962,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -945,7 +975,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -958,7 +988,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -971,7 +1001,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -984,7 +1014,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -997,7 +1027,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1010,7 +1040,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1023,7 +1053,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1036,7 +1066,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1049,7 +1079,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1062,7 +1092,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1075,7 +1105,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1088,7 +1118,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1101,7 +1131,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1114,7 +1144,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1127,7 +1157,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1140,7 +1170,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1153,7 +1183,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1166,7 +1196,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1179,15 +1209,16 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         KECCAK256() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_keccak256(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1213,7 +1244,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1226,7 +1257,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1239,7 +1270,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1256,7 +1287,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1273,7 +1304,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1290,7 +1321,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1307,16 +1338,17 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         CALLDATACOPY() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_calldatacopy(
                                 carried_calldata,
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1342,16 +1374,17 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         CODECOPY() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_codecopy(
                                 carried_code,
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1373,7 +1406,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1386,15 +1419,16 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         EXTCODECOPY() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_extcodecopy(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1420,16 +1454,17 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         RETURNDATACOPY() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_returndatacopy(
                                 carried_returndata,
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1451,7 +1486,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1464,7 +1499,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1477,7 +1512,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1490,7 +1525,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1503,7 +1538,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1516,7 +1551,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1529,7 +1564,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1542,7 +1577,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1555,7 +1590,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1572,7 +1607,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1585,7 +1620,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1598,7 +1633,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1615,7 +1650,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1628,15 +1663,16 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         MLOAD() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_mload(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1651,9 +1687,10 @@ function interpret(
                         },
                         MSTORE() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_mstore(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1668,9 +1705,10 @@ function interpret(
                         },
                         MSTORE8() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_mstore8(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1696,7 +1734,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1718,7 +1756,7 @@ function interpret(
                                 state_spill_after,
                                 refund_after,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1736,7 +1774,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1754,7 +1792,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1771,7 +1809,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1779,7 +1817,7 @@ function interpret(
                             let (gas_after, sp_after, memory_after, status_after) = execute_msize(
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1801,7 +1839,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1814,7 +1852,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1831,7 +1869,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1849,15 +1887,16 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
                         MCOPY() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_mcopy(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1879,7 +1918,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1892,7 +1931,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1905,7 +1944,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1918,7 +1957,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1931,7 +1970,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1948,7 +1987,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -1956,10 +1995,11 @@ function interpret(
                             let (gas_after, sp_after, memory_after, status_after) = execute_log(
                                 carried_address,
                                 carried_is_static,
+                                carried_memory_base,
+                                n,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
-                                n,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1980,9 +2020,10 @@ function interpret(
                         STATICCALL() => fatal_error(ExecutionInvalid),
                         RETURN() => {
                             let (gas_after, sp_after, memory_after, status_after) = execute_return(
+                                carried_memory_base,
                                 carried_gas,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -1998,11 +2039,12 @@ function interpret(
                         REVERT() => {
                             let (gas_after, state_gas_after, state_spill_after, sp_after, memory_after, status_after) = execute_revert(
                                 carried_state_gas_reservoir,
+                                carried_memory_base,
                                 carried_gas,
                                 carried_state_gas,
                                 carried_state_spill,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                             );
                             (
                                 carried_pc,
@@ -2024,7 +2066,7 @@ function interpret(
                                 carried_state_spill,
                                 carried_refund,
                                 carried_sp,
-                                carried_memory,
+                                carried_memory_height,
                                 opcode_frame_status(status_after),
                             )
                         },
@@ -2046,7 +2088,7 @@ function interpret(
                                 state_spill_after,
                                 refund_after,
                                 sp_after,
-                                carried_memory,
+                                carried_memory_height,
                                 status_after,
                             )
                         },
@@ -2058,7 +2100,7 @@ function interpret(
                         carried_state_spill,
                         carried_refund,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_height,
                         carried_status,
                     ) = match result {
                         (
@@ -2110,7 +2152,8 @@ function interpret(
                         carried_refund,
                         carried_status,
                         carried_sp,
-                        carried_memory,
+                        carried_memory_base,
+                        carried_memory_height,
                         carried_caller,
                         carried_address,
                         carried_code_address,
@@ -2124,6 +2167,7 @@ function interpret(
                     ) = resume_frame(
                         continuation,
                         output,
+                        carried_memory_base,
                         carried_gas,
                         carried_state_gas,
                         carried_state_spill,
@@ -2268,7 +2312,8 @@ function run_call(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -2289,7 +2334,8 @@ function run_call(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -2320,7 +2366,8 @@ function run_call(
                 carried_refund,
                 status_after,
                 carried_sp,
-                carried_memory,
+                carried_memory_base,
+                carried_memory_height,
                 carried_caller,
                 carried_address,
                 carried_code_address,
@@ -2340,7 +2387,7 @@ function run_call(
             var state_spill_after : state_gas_spill = carried_state_spill;
             var status_after : FrameStatus = Running();
             var sp_after : StackPointer = carried_sp;
-            var memory_after : EvmMemorySlice = carried_memory;
+            var memory_after : memory_height = carried_memory_height;
             var returndata_after : OutputSlice = carried_returndata;
             let parent_message : Message = struct {
                     caller = carried_caller,
@@ -2399,6 +2446,7 @@ function run_call(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -2423,11 +2471,11 @@ function run_call(
             /* Compute the mathematical endpoints before narrowing either host range.
                Optimized C saturates only its endpoint representation, to a charge
                which is greater than every representable live-gas value. */
-            let args_required = memory_required_size(args_off_word, args_len_word);
-            let ret_required = memory_required_size(ret_off_word, ret_len_word);
-            let required_size =
-                if args_required < ret_required then ret_required else args_required;
-            let expansion_cost = memory_expansion_gas_cost(memory_after, required_size, gas_after);
+            let args_requested_height = memory_requested_height(args_off_word, args_len_word);
+            let ret_requested_height = memory_requested_height(ret_off_word, ret_len_word);
+            let requested_height =
+                if args_requested_height < ret_requested_height then ret_requested_height else args_requested_height;
+            let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
             if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
@@ -2444,6 +2492,7 @@ function run_call(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -2482,6 +2531,7 @@ function run_call(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -2539,6 +2589,7 @@ function run_call(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -2589,6 +2640,7 @@ function run_call(
                             carried_refund,
                             status_after,
                             sp_after,
+                            carried_memory_base,
                             memory_after,
                             carried_caller,
                             carried_address,
@@ -2620,6 +2672,7 @@ function run_call(
                         carried_refund,
                         status_after,
                         sp_after,
+                        carried_memory_base,
                         memory_after,
                         carried_caller,
                         carried_address,
@@ -2652,6 +2705,7 @@ function run_call(
                         carried_refund,
                         status_after,
                         sp_after,
+                        carried_memory_base,
                         memory_after,
                         carried_caller,
                         carried_address,
@@ -2687,10 +2741,10 @@ function run_call(
             let args_access = memory_access(args_off_word, args_len_word);
             let ret_access = memory_access(ret_off_word, ret_len_word);
             let materialized_required_size =
-                if args_access.required_size < ret_access.required_size
-                then ret_access.required_size
-                else args_access.required_size;
-            let mem1 = expand_memory(memory_after, materialized_required_size);
+                if args_access.requested_height < ret_access.requested_height
+                then ret_access.requested_height
+                else args_access.requested_height;
+            let mem1 = expand_memory(carried_memory_base, memory_after, materialized_required_size);
             let args = args_access.range;
             let ret = ret_access.range;
             let child_gas : gas = conserved_gas_add(base_child, stipend);
@@ -2735,6 +2789,7 @@ function run_call(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -2755,7 +2810,7 @@ function run_call(
                        set is an ordinary code call. The precompile's input is the
                        child message's calldata: memory_after[args_off .. args_off+args_len).
                        Gas inspects the same memory source before execution. */
-                    let (mem2, input_memory) = active_memory_slice(mem1, args.off, args.len);
+                    let input_memory = active_memory_slice(carried_memory_base, mem1, args.off, args.len);
                     let input = MemoryCalldata(input_memory);
 
                     /* Gas is checked before execution: an unpayable/OOG precompile call
@@ -2772,12 +2827,13 @@ function run_call(
                             if semantics.transfers_value & value_nonzero then {
                                 k_transfer(caller, target, value)
                             };
-                            returndata_copy_prefix(returndata_after, ret.off, ret.len);
+                            let return_destination = memory_absolute(carried_memory_base, ret.off);
+                            returndata_copy_prefix(returndata_after, return_destination, ret.len);
                             let unused : gas = gas_sub(child_gas, used);
                             gas_after = refund_gas(gas_after, unused);
                             sp_after = stack_top_advance(sp_after, 1);
                             write_stack_word(sp_after, WORD_ONE);
-                            memory_after = mem2;
+                            memory_after = mem1;
                             (
                                 pc_after,
                                 gas_after,
@@ -2786,6 +2842,7 @@ function run_call(
                                 carried_refund,
                                 status_after,
                                 sp_after,
+                                carried_memory_base,
                                 memory_after,
                                 carried_caller,
                                 carried_address,
@@ -2810,7 +2867,7 @@ function run_call(
                             };
                             sp_after = stack_top_advance(sp_after, 1);
                             write_stack_word(sp_after, WORD_ZERO);
-                            memory_after = mem2;
+                            memory_after = mem1;
                             (
                                 pc_after,
                                 gas_after,
@@ -2819,6 +2876,7 @@ function run_call(
                                 carried_refund,
                                 status_after,
                                 sp_after,
+                                carried_memory_base,
                                 memory_after,
                                 carried_caller,
                                 carried_address,
@@ -2844,7 +2902,7 @@ function run_call(
                         };
                         sp_after = stack_top_advance(sp_after, 1);
                         write_stack_word(sp_after, WORD_ZERO);
-                        memory_after = mem2;
+                        memory_after = mem1;
                         (
                             pc_after,
                             gas_after,
@@ -2853,6 +2911,7 @@ function run_call(
                             carried_refund,
                             status_after,
                             sp_after,
+                            carried_memory_base,
                             memory_after,
                             carried_caller,
                             carried_address,
@@ -2887,16 +2946,17 @@ function run_call(
                         if semantics.inherits_caller_and_value then carried_value else value;
                     let child_static : bool =
                         if semantics.enters_static_context then true else carried_is_static;
-                    let (mem2, bytes) = active_memory_slice(mem1, args.off, args.len);
+                    let bytes = active_memory_slice(carried_memory_base, mem1, args.off, args.len);
                     let child_memory = evm_memory_slice(bytes.bytes, bytes.len);
                     let child_calldata = MemoryCalldata(child_memory);
                     let child_state_gas = state_gas_after;
                     let running = Running();
-                    let (checkpoint, child_stack, child_frame_memory) = suspend_frame(
+                    let (checkpoint, child_stack, child_memory_base, child_memory_height) = suspend_frame(
                         pc_after,
                         gas_after,
                         sp_after,
-                        mem2,
+                        carried_memory_base,
+                        mem1,
                         STATE_GAS_ZERO,
                         state_spill_after,
                         carried_refund,
@@ -2925,7 +2985,8 @@ function run_call(
                         GAS_REFUND_ZERO,
                         running,
                         child_stack,
-                        child_frame_memory,
+                        child_memory_base,
+                        child_memory_height,
                         child_caller,
                         child_addr,
                         target,
@@ -2982,7 +3043,8 @@ function run_create(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -3003,7 +3065,8 @@ function run_create(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -3034,7 +3097,8 @@ function run_create(
                 carried_refund,
                 status_after,
                 carried_sp,
-                carried_memory,
+                carried_memory_base,
+                carried_memory_height,
                 carried_caller,
                 carried_address,
                 carried_code_address,
@@ -3054,7 +3118,7 @@ function run_create(
             var state_spill_after : state_gas_spill = carried_state_spill;
             var status_after : FrameStatus = Running();
             var sp_after : StackPointer = carried_sp;
-            var memory_after : EvmMemorySlice = carried_memory;
+            var memory_after : memory_height = carried_memory_height;
             var returndata_after : OutputSlice = carried_returndata;
             let parent_message : Message = struct {
                     caller = carried_caller,
@@ -3104,6 +3168,7 @@ function run_create(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -3117,8 +3182,8 @@ function run_create(
                     returndata_after,
                 )
             };
-            let required_size = memory_required_size(off_word, len_word);
-            let expansion_cost = memory_expansion_gas_cost(memory_after, required_size, gas_after);
+            let requested_height = memory_requested_height(off_word, len_word);
+            let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
             if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
                 (state_gas_after, state_spill_after, status_after) = exceptional_state(
@@ -3135,6 +3200,7 @@ function run_create(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -3150,7 +3216,7 @@ function run_create(
             };
             gas_after = gas_sub(gas_after, expansion_cost.cost);
             let initcode_access = memory_access(off_word, len_word);
-            let mem1 = expand_memory(memory_after, initcode_access.required_size);
+            let mem1 = expand_memory(carried_memory_base, memory_after, initcode_access.requested_height);
             let initcode = initcode_access.range;
 
             /* Up-front charges: memory expansion over the initcode, the CREATE base
@@ -3175,6 +3241,7 @@ function run_create(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -3209,6 +3276,7 @@ function run_create(
                         carried_refund,
                         status_after,
                         sp_after,
+                        carried_memory_base,
                         memory_after,
                         carried_caller,
                         carried_address,
@@ -3243,6 +3311,7 @@ function run_create(
                         carried_refund,
                         status_after,
                         sp_after,
+                        carried_memory_base,
                         memory_after,
                         carried_caller,
                         carried_address,
@@ -3280,6 +3349,7 @@ function run_create(
                     carried_refund,
                     status_after,
                     sp_after,
+                    carried_memory_base,
                     memory_after,
                     carried_caller,
                     carried_address,
@@ -3296,11 +3366,9 @@ function run_create(
                 /* derive the new contract address: keccak(0xff, creator, salt,
                    keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
                 let nonce = k_get_nonce(creator);
-                var mem2 : EvmMemorySlice = mem1;
                 let new_addr : address =
                     if semantics.uses_salt then {
-                        let (hashed_mem, initcode_digest_word) = mem_keccak(mem1, initcode);
-                        mem2 = hashed_mem;
+                        let initcode_digest_word = mem_keccak(carried_memory_base, mem1, initcode);
                         let initcode_digest = word_to_hash(initcode_digest_word);
                         k_create2_addr(creator, salt, initcode_digest)
                     } else {
@@ -3341,7 +3409,7 @@ function run_create(
                         };
                     sp_after = stack_top_advance(sp_after, 1);
                     write_stack_word(sp_after, WORD_ZERO);
-                    memory_after = mem2;
+                    memory_after = mem1;
                     (
                         pc_after,
                         gas_after,
@@ -3350,6 +3418,7 @@ function run_create(
                         carried_refund,
                         status_after,
                         sp_after,
+                        carried_memory_base,
                         memory_after,
                         carried_caller,
                         carried_address,
@@ -3381,7 +3450,7 @@ function run_create(
                         state_gas_after = next_state_gas;
                         state_spill_after = next_state_spill;
                         if state_gas_halt then {
-                            memory_after = mem2;
+                            memory_after = mem1;
                             gas_after = GAS_ZERO;
                             (state_gas_after, state_spill_after, status_after) = exceptional_state(
                                 state_gas_after,
@@ -3397,6 +3466,7 @@ function run_create(
                                 carried_refund,
                                 status_after,
                                 sp_after,
+                                carried_memory_base,
                                 memory_after,
                                 carried_caller,
                                 carried_address,
@@ -3434,7 +3504,7 @@ function run_create(
                         };
                         sp_after = stack_top_advance(sp_after, 1);
                         write_stack_word(sp_after, WORD_ZERO);
-                        memory_after = mem2;
+                        memory_after = mem1;
                         (
                             pc_after,
                             gas_after,
@@ -3443,6 +3513,7 @@ function run_create(
                             carried_refund,
                             status_after,
                             sp_after,
+                            carried_memory_base,
                             memory_after,
                             carried_caller,
                             carried_address,
@@ -3459,16 +3530,17 @@ function run_create(
                         /* Freeze the initcode while parent memory is active, then
                            suspend the complete parent before mutating the new account.
                            The child frame has no calldata. */
-                        let (mem3, initcode_bytes) = memory_code_slice(mem2, initcode.off, initcode.len);
+                        let initcode_bytes = memory_code_slice(carried_memory_base, mem1, initcode.off, initcode.len);
                         let child_code_id = code_db_insert(initcode_bytes, profile.fork);
                         let child_code = code_db_resolve(child_code_id);
                         let child_state_gas = state_gas_after;
                         let running = Running();
-                        let (checkpoint, child_stack, child_frame_memory) = suspend_frame(
+                        let (checkpoint, child_stack, child_memory_base, child_memory_height) = suspend_frame(
                             pc_after,
                             gas_after,
                             sp_after,
-                            mem3,
+                            carried_memory_base,
+                            mem1,
                             STATE_GAS_ZERO,
                             state_spill_after,
                             carried_refund,
@@ -3497,7 +3569,8 @@ function run_create(
                             GAS_REFUND_ZERO,
                             running,
                             child_stack,
-                            child_frame_memory,
+                            child_memory_base,
+                            child_memory_height,
                             creator,
                             new_addr,
                             new_addr,
@@ -3520,6 +3593,7 @@ function run_create(
 function resume_call(
     continuation : CallContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
@@ -3534,7 +3608,8 @@ function resume_call(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -3549,35 +3624,25 @@ function resume_call(
 ) = {
     let checkpoint = continuation.checkpoint;
     let succeeded = frame_succeeded(child_status);
-    let (
-        parent_pc,
-        restored_gas,
-        restored_sp,
-        parent_memory,
-        restored_state_gas,
-        restored_state_spill,
-        restored_refund,
-        restored_status,
-        parent_message,
-        parent_code,
-        parent_calldata,
-    ) = restore_frame(checkpoint);
-    var parent_gas = refund_gas(restored_gas, child_gas);
-    var parent_state_gas : state_gas = restored_state_gas;
-    var parent_state_spill : state_gas_spill = restored_state_spill;
+    operand_stack_pop_frame();
+    let parent_memory_base = memory_parent_base(child_memory_base, checkpoint.memory_height);
+    var parent_gas = refund_gas(checkpoint.gas_remaining, child_gas);
+    var parent_state_gas : state_gas = checkpoint.state_gas_remaining;
+    var parent_state_spill : state_gas_spill = checkpoint.state_gas_spilled;
     (parent_state_gas, parent_state_spill) = return_child_state_gas(
         parent_state_gas,
         parent_state_spill,
         child_state_gas,
         child_state_spill,
     );
-    var parent_refund : gas_refund = restored_refund;
-    var parent_sp : StackPointer = restored_sp;
+    var parent_refund : gas_refund = checkpoint.refund;
+    var parent_sp : StackPointer = checkpoint.stack_top;
 
     /* Both RETURN and REVERT copy their output; exceptional halts carry the
      * empty slice. Successful effects remain, while every failure reverts to
      * the saved kernel checkpoint. */
-    returndata_copy_prefix(output, continuation.return_offset, continuation.return_length);
+    let return_destination = memory_absolute(parent_memory_base, continuation.return_offset);
+    returndata_copy_prefix(output, return_destination, continuation.return_length);
     if succeeded then {
         parent_refund = record_refund(parent_refund, child_refund);
         k_journal_commit();
@@ -3597,23 +3662,24 @@ function resume_call(
         write_stack_word(parent_sp, WORD_ZERO)
     };
     (
-        parent_pc,
+        checkpoint.pc,
         parent_gas,
         parent_state_gas,
         parent_state_spill,
         parent_refund,
-        restored_status,
+        checkpoint.status,
         parent_sp,
-        parent_memory,
-        parent_message.caller,
-        parent_message.address,
-        parent_message.code_address,
-        parent_message.value,
-        parent_message.state_gas_reservoir,
-        parent_message.is_static,
-        parent_message.depth,
-        parent_code,
-        parent_calldata,
+        parent_memory_base,
+        checkpoint.memory_height,
+        checkpoint.message.caller,
+        checkpoint.message.address,
+        checkpoint.message.code_address,
+        checkpoint.message.value,
+        checkpoint.message.state_gas_reservoir,
+        checkpoint.message.is_static,
+        checkpoint.message.depth,
+        checkpoint.code,
+        checkpoint.calldata,
         output,
     )
 }
@@ -3622,6 +3688,7 @@ function resume_call(
 function resume_create(
     continuation : CreateContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
@@ -3637,7 +3704,8 @@ function resume_create(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -3723,30 +3791,19 @@ function resume_create(
         }
     };
     let deploy_succeeds = initcode_succeeded & frame_succeeded(settled_child_status);
-    let (
-        parent_pc,
-        restored_gas,
-        restored_sp,
-        parent_memory,
-        restored_state_gas,
-        restored_state_spill,
-        restored_refund,
-        restored_status,
-        parent_message,
-        parent_code,
-        parent_calldata,
-    ) = restore_frame(checkpoint);
-    var parent_gas = refund_gas(restored_gas, settled_child_gas);
-    var parent_state_gas : state_gas = restored_state_gas;
-    var parent_state_spill : state_gas_spill = restored_state_spill;
+    operand_stack_pop_frame();
+    let parent_memory_base = memory_parent_base(child_memory_base, checkpoint.memory_height);
+    var parent_gas = refund_gas(checkpoint.gas_remaining, settled_child_gas);
+    var parent_state_gas : state_gas = checkpoint.state_gas_remaining;
+    var parent_state_spill : state_gas_spill = checkpoint.state_gas_spilled;
     (parent_state_gas, parent_state_spill) = return_child_state_gas(
         parent_state_gas,
         parent_state_spill,
         settled_child_state_gas,
         settled_child_state_spill,
     );
-    var parent_refund : gas_refund = restored_refund;
-    var parent_sp : StackPointer = restored_sp;
+    var parent_refund : gas_refund = checkpoint.refund;
+    var parent_sp : StackPointer = checkpoint.stack_top;
 
     if deploy_succeeds then {
         parent_refund = record_refund(parent_refund, child_refund);
@@ -3777,23 +3834,24 @@ function resume_create(
     let parent_returndata =
         if initcode_succeeded then returndata_clear() else output;
     (
-        parent_pc,
+        checkpoint.pc,
         parent_gas,
         parent_state_gas,
         parent_state_spill,
         parent_refund,
-        restored_status,
+        checkpoint.status,
         parent_sp,
-        parent_memory,
-        parent_message.caller,
-        parent_message.address,
-        parent_message.code_address,
-        parent_message.value,
-        parent_message.state_gas_reservoir,
-        parent_message.is_static,
-        parent_message.depth,
-        parent_code,
-        parent_calldata,
+        parent_memory_base,
+        checkpoint.memory_height,
+        checkpoint.message.caller,
+        checkpoint.message.address,
+        checkpoint.message.code_address,
+        checkpoint.message.value,
+        checkpoint.message.state_gas_reservoir,
+        checkpoint.message.is_static,
+        checkpoint.message.depth,
+        checkpoint.code,
+        checkpoint.calldata,
         parent_returndata,
     )
 }
@@ -3802,6 +3860,7 @@ function resume_create(
 function resume_frame(
     continuation : FrameContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
@@ -3817,7 +3876,8 @@ function resume_frame(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -3835,6 +3895,7 @@ function resume_frame(
         ResumeCall(call) => resume_call(
             call,
             output,
+            child_memory_base,
             child_gas,
             child_state_gas,
             child_state_spill,
@@ -3844,6 +3905,7 @@ function resume_frame(
         ResumeCreate(create) => resume_create(
             create,
             output,
+            child_memory_base,
             child_gas,
             child_state_gas,
             child_state_spill,
@@ -3863,7 +3925,8 @@ function run_frame_entry_encoded(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -3884,7 +3947,8 @@ function run_frame_entry_encoded(
         gas_refund,
         FrameStatus,
         StackPointer,
-        EvmMemorySlice,
+        memory_base,
+        memory_height,
         address,
         address,
         address,
@@ -3905,7 +3969,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -3925,7 +3990,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -3945,7 +4011,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -3965,7 +4032,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -3985,7 +4053,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -4005,7 +4074,8 @@ function run_frame_entry_encoded(
             carried_state_spill,
             carried_refund,
             carried_sp,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             carried_caller,
             carried_address,
             carried_code_address,
@@ -4033,7 +4103,8 @@ function run_frame_entry_encoded(
                 carried_refund,
                 status_after,
                 carried_sp,
-                carried_memory,
+                carried_memory_base,
+                carried_memory_height,
                 carried_caller,
                 carried_address,
                 carried_code_address,

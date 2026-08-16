@@ -965,12 +965,19 @@ function apply_transaction_upfront_effects(
 /*! Resets the user-space machine for the transaction's top-level frame,
     funding it with `gas_limit − intrinsic`. */
 function enter_transaction_frame(v : TxValidity) -> (
-    (gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice)
+    (gas, state_gas, state_gas_spill, gas_refund, StackPointer, memory_base, memory_height)
 ) = {
     let initial_gas = v.gas;
     let stack = stack_reset();
-    let memory = memory_reset();
-    (initial_gas.execution_remaining, initial_gas.state_remaining, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack, memory)
+    (
+        initial_gas.execution_remaining,
+        initial_gas.state_remaining,
+        STATE_GAS_SPILL_ZERO,
+        GAS_REFUND_ZERO,
+        stack,
+        MEMORY_BASE_ZERO,
+        MEMORY_HEIGHT_ZERO,
+    )
 }
 
 /*! The outcome of top-level dispatch preparation: whether the frame is
@@ -1116,7 +1123,8 @@ function run_create_transaction_frame(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_stack : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_code : Code,
     carried_calldata : CalldataSlice,
     state_gas_reservoir : state_gas,
@@ -1168,7 +1176,8 @@ function run_create_transaction_frame(
             state_spill_after,
             refund_after,
             carried_stack,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             sender,
             new_addr,
             new_addr,
@@ -1261,7 +1270,8 @@ function run_call_transaction_frame(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_stack : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_code_address : address,
     carried_code : Code,
     carried_calldata : CalldataSlice,
@@ -1348,7 +1358,8 @@ function run_call_transaction_frame(
             state_spill_after,
             refund_after,
             carried_stack,
-            carried_memory,
+            carried_memory_base,
+            carried_memory_height,
             sender,
             tx.recipient,
             code_address,
@@ -1372,9 +1383,15 @@ val run_legacy_transaction_frame : forall 'limit 'regular,
 function run_legacy_transaction_frame(tx, v) = {
     let initial_gas = v.gas;
     k_journal_checkpoint();
-    let (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) = enter_transaction_frame(
-        v,
-    );
+    let (
+        initial_execution_gas,
+        initial_state_gas,
+        initial_state_spill,
+        initial_refund,
+        initial_stack,
+        initial_memory_base,
+        initial_memory_height,
+    ) = enter_transaction_frame(v);
     let state_gas_reservoir = initial_state_gas;
     let (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) =
         if tx.is_create
@@ -1387,7 +1404,8 @@ function run_legacy_transaction_frame(tx, v) = {
             initial_state_spill,
             initial_refund,
             initial_stack,
-            initial_memory,
+            initial_memory_base,
+            initial_memory_height,
             EMPTY_CODE,
             EMPTY_CALLDATA,
             state_gas_reservoir,
@@ -1401,7 +1419,8 @@ function run_legacy_transaction_frame(tx, v) = {
             initial_state_spill,
             initial_refund,
             initial_stack,
-            initial_memory,
+            initial_memory_base,
+            initial_memory_height,
             tx.recipient,
             EMPTY_CODE,
             EMPTY_CALLDATA,
@@ -1436,9 +1455,15 @@ val run_amsterdam_transaction_frame : forall 'limit 'regular,
         PreparedAuthorizationList,
     ) -> TxFrameResultFields('limit, 'regular)
 function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
-    let (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) = enter_transaction_frame(
-        v,
-    );
+    let (
+        entered_gas,
+        entered_state_gas,
+        entered_state_spill,
+        entered_refund,
+        entered_stack,
+        entered_memory_base,
+        entered_memory,
+    ) = enter_transaction_frame(v);
     var gas_after : gas = entered_gas;
     var state_gas_after : state_gas = entered_state_gas;
     var state_spill_after : state_gas_spill = entered_state_spill;
@@ -1516,6 +1541,7 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
             state_spill_after,
             refund_after,
             entered_stack,
+            entered_memory_base,
             entered_memory,
             prepared_code,
             prepared_calldata,
@@ -1531,6 +1557,7 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
             state_spill_after,
             refund_after,
             entered_stack,
+            entered_memory_base,
             entered_memory,
             prepared_code_address,
             prepared_code,

@@ -26,15 +26,15 @@ static size_t g_in_len = 0;
 
 static void set_input(const uint8_t *p, size_t n)
 {
-    g_in = p;
-    g_in_len = n;
-    evmsail_input_reset();
+  g_in = p;
+  g_in_len = n;
+  evmsail_input_reset();
 }
 
 void read_input(const uint8_t **buf_ptr, size_t *buf_size)
 {
-    *buf_ptr = g_in;
-    *buf_size = g_in_len;
+  *buf_ptr = g_in;
+  *buf_size = g_in_len;
 }
 
 static unsigned char g_out[1u << 17];
@@ -42,10 +42,12 @@ static size_t g_out_len = 0;
 
 void write_output(const uint8_t *output, size_t size)
 {
-    size_t available = sizeof g_out - g_out_len;
-    if (size > available) size = available;
-    if (size != 0) memcpy(g_out + g_out_len, output, size);
-    g_out_len += size;
+  size_t available = sizeof g_out - g_out_len;
+  if (size > available)
+    size = available;
+  if (size != 0)
+    memcpy(g_out + g_out_len, output, size);
+  g_out_len += size;
 }
 
 /* --------------------------- state resets ------------------------------- */
@@ -60,49 +62,55 @@ extern unit warm_reset(uint64_t);            /* EIP-2929 warm sets */
 extern unit transient_storage_reset(unit u); /* EIP-1153 transient storage */
 extern unit logs_reset(unit);
 extern unit state_journal_reset(unit);
-extern unit nodedb_reset(unit);              /* hash-keyed witness node store */
-extern unit code_db_reset(unit);             /* content-addressed code store (missing-code tests) */
+extern unit nodedb_reset(unit);  /* hash-keyed witness node store */
+extern unit code_db_reset(unit); /* content-addressed code store (missing-code tests) */
 
 /* clear_memory: the C-side full world wipe that replaces k_world_reset. Zeroes
  * every piece of guest state that persists across in-process runs. */
 static void reset_world(void)
 {
-    fatal_error_reset();
-    /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
-    acct_db_reset(UNIT);
-    storage_db_reset(UNIT);
-    bal_reset(UNIT);
-    /* ephemeral per-frame/per-tx state (also cleared by k_tx_reset, but a
+  fatal_error_reset();
+  /* block-level overlays -- the pieces per-tx k_tx_reset does NOT clear */
+  acct_db_reset(UNIT);
+  storage_db_reset(UNIT);
+  bal_reset(UNIT);
+  /* ephemeral per-frame/per-tx state (also cleared by k_tx_reset, but a
      * zero-transaction block would otherwise inherit it) */
-    warm_reset(1);
-    transient_storage_reset(UNIT);
-    logs_reset(UNIT);
-    state_journal_reset(UNIT);
-    /* content-addressed witness stores -- cleared so a fixture that
+  warm_reset(1);
+  transient_storage_reset(UNIT);
+  logs_reset(UNIT);
+  state_journal_reset(UNIT);
+  /* content-addressed witness stores -- cleared so a fixture that
      * under-specifies its witness FAILS (valid=false) instead of borrowing a
      * stale node/code that an EARLIER fixture registered. The node DB alone is
      * not enough: the "codes_missing_*" negative tests need the code DB too. */
-    nodedb_reset(UNIT);
-    code_db_reset(UNIT);
-    frame_stack_reset(UNIT);
-    /* a Sail exception that propagated out of the previous run. Left set it would
+  nodedb_reset(UNIT);
+  code_db_reset(UNIT);
+  frame_stack_reset(UNIT);
+  /* a Sail exception that propagated out of the previous run. Left set it would
      * poison the next run: generated code short-circuits every call while
      * have_exception is true. */
-    have_exception = false;
+  have_exception = false;
 }
 
 void guest_reset(void)
 {
-    reset_world();
-    g_out_len = 0;
+  reset_world();
+  g_out_len = 0;
 }
 
 /* --------------------------- lifecycle + run ---------------------------- */
 extern void model_init(void);
 extern void model_fini(void);
 
-void guest_init(void) { model_init(); }
-void guest_fini(void) { model_fini(); }
+void guest_init(void)
+{
+  model_init();
+}
+void guest_fini(void)
+{
+  model_fini();
+}
 
 /* The spec backend has no optimized-invariant boundary, but still reports
  * native thread setup failures through the common harness ABI. */
@@ -110,11 +118,13 @@ static char last_error[1024];
 
 static void record_thread_error(const char *operation, int error)
 {
-    (void)snprintf(last_error, sizeof last_error, "%s failed: %s",
-                   operation, strerror(error));
+  (void)snprintf(last_error, sizeof last_error, "%s failed: %s", operation, strerror(error));
 }
 
-const char *guest_last_error(void) { return last_error; }
+const char *guest_last_error(void)
+{
+  return last_error;
+}
 
 /* Big stack: the guest recurses over multi-MB SSZ lists; the exe pins a 512 MB
  * main-thread stack (build.sh). In-process the ctypes caller's thread stack is
@@ -123,48 +133,48 @@ const char *guest_last_error(void) { return last_error; }
 
 static void *run_thread(void *unused)
 {
-    (void)unused;
-    (void)zmain(UNIT);
-    return NULL;
+  (void)unused;
+  (void)zmain(UNIT);
+  return NULL;
 }
 
-unsigned long guest_run(const unsigned char *in, unsigned long n,
-                        const unsigned char **out)
+unsigned long guest_run(const unsigned char *in, unsigned long n, const unsigned char **out)
 {
-    g_out_len = 0;
-    last_error[0] = '\0';
-    set_input(in, n);
+  g_out_len = 0;
+  last_error[0] = '\0';
+  set_input(in, n);
 
-    pthread_attr_t attr;
-    int error = pthread_attr_init(&attr);
-    if (error != 0) {
-        record_thread_error("pthread_attr_init", error);
-        *out = g_out;
-        return 0;
-    }
-
-    error = pthread_attr_setstacksize(&attr, GUEST_STACK_BYTES);
-    if (error != 0) {
-        record_thread_error("pthread_attr_setstacksize", error);
-        (void)pthread_attr_destroy(&attr);
-        *out = g_out;
-        return 0;
-    }
-
-    pthread_t t;
-    error = pthread_create(&t, &attr, run_thread, NULL);
-    (void)pthread_attr_destroy(&attr);
-    if (error != 0) {
-        record_thread_error("pthread_create", error);
-        *out = g_out;
-        return 0;
-    }
-
-    error = pthread_join(t, NULL);
-    if (error != 0) record_thread_error("pthread_join", error);
-
+  pthread_attr_t attr;
+  int error = pthread_attr_init(&attr);
+  if (error != 0) {
+    record_thread_error("pthread_attr_init", error);
     *out = g_out;
-    return (unsigned long)g_out_len;
+    return 0;
+  }
+
+  error = pthread_attr_setstacksize(&attr, GUEST_STACK_BYTES);
+  if (error != 0) {
+    record_thread_error("pthread_attr_setstacksize", error);
+    (void)pthread_attr_destroy(&attr);
+    *out = g_out;
+    return 0;
+  }
+
+  pthread_t t;
+  error = pthread_create(&t, &attr, run_thread, NULL);
+  (void)pthread_attr_destroy(&attr);
+  if (error != 0) {
+    record_thread_error("pthread_create", error);
+    *out = g_out;
+    return 0;
+  }
+
+  error = pthread_join(t, NULL);
+  if (error != 0)
+    record_thread_error("pthread_join", error);
+
+  *out = g_out;
+  return (unsigned long)g_out_len;
 }
 
 /* ------------------------- debug state dump ------------------------------ */
@@ -209,148 +219,165 @@ extern u256 storage_dump_slot(u256, uint64_t);
 extern u256 storage_dump_value(u256, uint64_t);
 extern uint64_t stack_top_height(uint64_t);
 extern u256 stack_slot_read(uint64_t, uint64_t);
-extern uint64_t hm_depth(unit);
 
 static unsigned char g_dump[1u << 22];
 static size_t g_dump_len;
 static char g_validation_location[513];
 
-static void d_byte(unsigned char b) { if (g_dump_len < sizeof g_dump) g_dump[g_dump_len++] = b; }
-static void d_u32(uint32_t v) { for (int i = 3; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-static void d_u64(uint64_t v) { for (int i = 7; i >= 0; i--) d_byte((unsigned char)(v >> (8 * i))); }
-static void d_word(u256 value) {
-    uint64_t words[4];
-    sail_word_to_be_words4(words, value);
-    for (int i = 0; i < 4; i++) {
-        uint64_t limb = words[i];
-        for (int j = 0; j < 8; j++) d_byte((unsigned char)(limb >> (56 - 8 * j)));
-    }
+static void d_byte(unsigned char b)
+{
+  if (g_dump_len < sizeof g_dump)
+    g_dump[g_dump_len++] = b;
+}
+static void d_u32(uint32_t v)
+{
+  for (int i = 3; i >= 0; i--)
+    d_byte((unsigned char)(v >> (8 * i)));
+}
+static void d_u64(uint64_t v)
+{
+  for (int i = 7; i >= 0; i--)
+    d_byte((unsigned char)(v >> (8 * i)));
+}
+static void d_word(u256 value)
+{
+  uint64_t words[4];
+  sail_word_to_be_words4(words, value);
+  for (int i = 0; i < 4; i++) {
+    uint64_t limb = words[i];
+    for (int j = 0; j < 8; j++)
+      d_byte((unsigned char)(limb >> (56 - 8 * j)));
+  }
 }
 
-static void d_address(fixed_bytes_20 value) {
-    uint8_t bytes[20];
-    evmsail_address_to_be_bytes(bytes, value);
-    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
+static void d_address(fixed_bytes_20 value)
+{
+  uint8_t bytes[20];
+  evmsail_address_to_be_bytes(bytes, value);
+  for (size_t i = 0; i < sizeof bytes; i++)
+    d_byte(bytes[i]);
 }
 
 static void d_hash(fixed_bytes_32 value)
 {
-    uint8_t bytes[32];
-    evmsail_hash_to_be_bytes(bytes, value);
-    for (size_t i = 0; i < sizeof bytes; i++) d_byte(bytes[i]);
+  uint8_t bytes[32];
+  evmsail_hash_to_be_bytes(bytes, value);
+  for (size_t i = 0; i < sizeof bytes; i++)
+    d_byte(bytes[i]);
 }
 
 static fixed_bytes_32 model_state_root(void)
 {
-    return zcompute_state_root(UNIT);
+  return zcompute_state_root(UNIT);
 }
 
 static fixed_bytes_32 model_account_storage_root(fixed_bytes_20 address)
 {
-    return zdebug_account_storage_root(address);
+  return zdebug_account_storage_root(address);
 }
 
 static void dispose_hash(fixed_bytes_32 *value)
 {
-    (void)value;
+  (void)value;
 }
 
 unsigned long guest_debug_dump(const unsigned char **out)
 {
-    g_dump_len = 0;
-    fixed_bytes_32 root = {0};
-    bool validation_failed = zvalidation_failure_present;
-    bool state_available = !have_exception;
-    const char *validation_loc =
-        validation_failed ? g_validation_location : "";
+  g_dump_len = 0;
+  fixed_bytes_32 root = {0};
+  bool validation_failed = zvalidation_failure_present;
+  bool state_available = !have_exception;
+  const char *validation_loc = validation_failed ? g_validation_location : "";
 
-    if (state_available) {
-        root = model_state_root();
-        state_available = !have_exception;
-    }
-    d_byte('G');
-    d_byte(state_available ? 1 : 0);
-    if (!state_available) {
-        for (int i = 0; i < 32; i++) d_byte(0);
-        /* The canonical model declares no exception variants, so a thrown
+  if (state_available) {
+    root = model_state_root();
+    state_available = !have_exception;
+  }
+  d_byte('G');
+  d_byte(state_available ? 1 : 0);
+  if (!state_available) {
+    for (int i = 0; i < 32; i++)
+      d_byte(0);
+    /* The canonical model declares no exception variants, so a thrown
          * exception carries no reason payload here; only the validator's
          * own failure record does. */
-        d_byte(validation_failed ? (unsigned char)zvalidation_failure_reason
-                                 : 0xff);
-        const char *loc =
-            (have_exception && throw_location && *throw_location)
-                ? *throw_location
-                : "";
-        size_t ln = 0;
-        while (loc[ln] && ln < 512) ln++;
-        d_byte((unsigned char)(ln >> 8));
-        d_byte((unsigned char)(ln & 0xff));
-        for (size_t i = 0; i < ln; i++) d_byte((unsigned char)loc[i]);
+    d_byte(validation_failed ? (unsigned char)zvalidation_failure_reason : 0xff);
+    const char *loc = (have_exception && throw_location && *throw_location) ? *throw_location : "";
+    size_t ln = 0;
+    while (loc[ln] && ln < 512)
+      ln++;
+    d_byte((unsigned char)(ln >> 8));
+    d_byte((unsigned char)(ln & 0xff));
+    for (size_t i = 0; i < ln; i++)
+      d_byte((unsigned char)loc[i]);
+  } else {
+    d_hash(root);
+  }
+  dispose_hash(&root);
+
+  d_byte('O');
+  d_u32((uint32_t)g_out_len);
+  for (size_t i = 0; i < g_out_len; i++)
+    d_byte(g_out[i]);
+
+  d_byte('V');
+  d_byte(zvalidation_failure_present ? 1 : 0);
+  if (zvalidation_failure_present) {
+    d_byte((unsigned char)zvalidation_failure_scope);
+    d_byte((unsigned char)zvalidation_failure_reason);
+    size_t ln = 0;
+    while (validation_loc[ln] && ln < 512)
+      ln++;
+    d_byte((unsigned char)(ln >> 8));
+    d_byte((unsigned char)(ln & 0xff));
+    for (size_t i = 0; i < ln; i++)
+      d_byte((unsigned char)validation_loc[i]);
+  }
+
+  d_byte('B');
+  d_byte(zvalidation_debug_gas_present ? 1 : 0);
+  if (zvalidation_debug_gas_present) {
+    d_u64(zvalidation_debug_header_gas_actual);
+    d_u64(zvalidation_debug_header_gas_expected);
+    d_u64(zvalidation_debug_execution_gas);
+    d_u64(zvalidation_debug_state_gas);
+  }
+
+  d_byte('A');
+  uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
+  d_u32((uint32_t)na);
+  for (uint64_t i = 0; i < na; i++) {
+    u256 hk = acct_dump_hkey(i);
+    d_word(hk); /* keccak(address) */
+    fixed_bytes_20 addr = acct_dump_address(i);
+    d_address(addr);
+    d_u64(acct_dump_nonce(i));
+    d_word(acct_dump_balance(i));
+    d_word(acct_dump_storage_root(i));
+    fixed_bytes_32 storage_root = model_account_storage_root(addr);
+    if (have_exception) {
+      for (int j = 0; j < 32; j++)
+        d_byte(0);
     } else {
-        d_hash(root);
+      d_hash(storage_root);
     }
-    dispose_hash(&root);
-
-    d_byte('O');
-    d_u32((uint32_t)g_out_len);
-    for (size_t i = 0; i < g_out_len; i++) d_byte(g_out[i]);
-
-    d_byte('V');
-    d_byte(zvalidation_failure_present ? 1 : 0);
-    if (zvalidation_failure_present) {
-        d_byte((unsigned char)zvalidation_failure_scope);
-        d_byte((unsigned char)zvalidation_failure_reason);
-        size_t ln = 0;
-        while (validation_loc[ln] && ln < 512) ln++;
-        d_byte((unsigned char)(ln >> 8));
-        d_byte((unsigned char)(ln & 0xff));
-        for (size_t i = 0; i < ln; i++)
-            d_byte((unsigned char)validation_loc[i]);
+    dispose_hash(&storage_root);
+    d_word(acct_dump_code_hash(i));
+    uint64_t ns = storage_dump_count(hk);
+    d_u32((uint32_t)ns);
+    for (uint64_t j = 0; j < ns; j++) {
+      d_word(storage_dump_slot(hk, j));
+      d_word(storage_dump_value(hk, j));
     }
+  }
 
-    d_byte('B');
-    d_byte(zvalidation_debug_gas_present ? 1 : 0);
-    if (zvalidation_debug_gas_present) {
-        d_u64(zvalidation_debug_header_gas_actual);
-        d_u64(zvalidation_debug_header_gas_expected);
-        d_u64(zvalidation_debug_execution_gas);
-        d_u64(zvalidation_debug_state_gas);
-    }
+  d_byte('S');
+  d_u32(0);
 
-    d_byte('A');
-    uint64_t na = state_available ? acct_dump_count(UNIT) : 0;
-    d_u32((uint32_t)na);
-    for (uint64_t i = 0; i < na; i++) {
-        u256 hk = acct_dump_hkey(i);
-        d_word(hk);                              /* keccak(address) */
-        fixed_bytes_20 addr = acct_dump_address(i);
-        d_address(addr);
-        d_u64(acct_dump_nonce(i));
-        d_word(acct_dump_balance(i));
-        d_word(acct_dump_storage_root(i));
-        fixed_bytes_32 storage_root = model_account_storage_root(addr);
-        if (have_exception) {
-            for (int j = 0; j < 32; j++) d_byte(0);
-        } else {
-            d_hash(storage_root);
-        }
-        dispose_hash(&storage_root);
-        d_word(acct_dump_code_hash(i));
-        uint64_t ns = storage_dump_count(hk);
-        d_u32((uint32_t)ns);
-        for (uint64_t j = 0; j < ns; j++) {
-            d_word(storage_dump_slot(hk, j));
-            d_word(storage_dump_value(hk, j));
-        }
-    }
+  d_byte('M');
+  d_u32(0);
 
-    d_byte('S');
-    d_u32(0);
-
-    d_byte('M');
-    d_u32(state_available ? (uint32_t)hm_depth(UNIT) : 0);
-
-    d_byte('E');
-    *out = g_dump;
-    return (unsigned long)g_dump_len;
+  d_byte('E');
+  *out = g_dump;
+  return (unsigned long)g_dump_len;
 }
