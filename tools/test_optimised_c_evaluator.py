@@ -17,6 +17,7 @@ from tools.evaluate_optimised_c import (
     representative_sample,
     source_metrics,
     strip_c_comments_and_literals,
+    terminal_zero_metric_gate,
     validate_record,
 )
 from tools.optimised_c_build import (
@@ -106,6 +107,32 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
                 "unpack_result_3_18",
             },
         )
+
+    def test_terminal_zero_metric_gate_fails_each_nonzero_metric(self) -> None:
+        metric_ids = (
+            "distinct_temporary_identifiers",
+            "distinct_result_identifiers",
+            "distinct_intermediate_tuple_identifiers",
+        )
+        for nonzero_metric in metric_ids:
+            with self.subTest(nonzero_metric=nonzero_metric):
+                values = {metric_id: 0 for metric_id in metric_ids}
+                values[nonzero_metric] = 1
+                record = terminal_zero_metric_gate(values, Path("sources.list"))
+                self.assertEqual(record["id"], "terminal_zero_identifier_metrics")
+                self.assertEqual(record["status"], "fail")
+
+    def test_terminal_zero_metric_gate_passes_only_all_zero(self) -> None:
+        record = terminal_zero_metric_gate(
+            {
+                "distinct_temporary_identifiers": 0,
+                "distinct_result_identifiers": 0,
+                "distinct_intermediate_tuple_identifiers": 0,
+            },
+            Path("sources.list"),
+        )
+        self.assertEqual(record["id"], "terminal_zero_identifier_metrics")
+        self.assertEqual(record["status"], "pass")
 
     def test_manifest_rejects_duplicates_and_parent_traversal(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:

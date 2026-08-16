@@ -38,6 +38,12 @@ BASELINE_METRICS = {
     "distinct_intermediate_tuple_identifiers": 310,
     "goto_keyword_tokens": 3,
 }
+
+TERMINAL_ZERO_METRICS = (
+    "distinct_temporary_identifiers",
+    "distinct_result_identifiers",
+    "distinct_intermediate_tuple_identifiers",
+)
 SAMPLE_STRATA = (
     ("prelude.c", "primitive lowering", "word_sub_word_u256_uint8_t_to_u256"),
     ("evm/gas.c", "arithmetic/protocol", "memory_required_size"),
@@ -372,6 +378,26 @@ def gate(
         "evidence": evidence,
         "skip_reason": skip_reason,
     }
+
+
+def terminal_zero_metric_gate(
+    values: dict[str, int], manifest: Path
+) -> dict[str, Any]:
+    nonzero = {
+        metric_id: values[metric_id]
+        for metric_id in TERMINAL_ZERO_METRICS
+        if values[metric_id] != 0
+    }
+    return gate(
+        "terminal_zero_identifier_metrics",
+        "readability",
+        "readability evaluator",
+        "T0",
+        [],
+        "fail" if nonzero else "pass",
+        "distinct temporary, result, and intermediate-tuple identifiers are each exactly zero",
+        [display_path(manifest)],
+    )
 
 
 def conformance_gate(generated: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -808,6 +834,9 @@ def main() -> int:
         "all fixed metric definitions produce values; metrics are descriptive",
         [display_path(layout.generated_manifest)],
     )
+    terminal_metric_gate = terminal_zero_metric_gate(
+        metric_values, layout.generated_manifest
+    )
     compdb_gate = gate(
         "compilation_database_smoke",
         "c_hygiene",
@@ -868,6 +897,7 @@ def main() -> int:
             provenance_gate,
             manifest_gate,
             metric_gate,
+            terminal_metric_gate,
             conformance,
             compdb_gate,
             build_gate,
