@@ -144,10 +144,10 @@ static void full_input_value(struct zStatelessInputSliceFields *out)
   stateless_input_value(out, 0, (uint64_t)private_input_size);
 }
 
-static void expanded_memory_value(struct zEvmMemorySliceFields *out, uint64_t pointer,
-                                  uint64_t established, uint64_t required)
+static void memory_view_value(struct zEvmMemorySliceFields *out, uint64_t pointer,
+                              uint64_t established, uint64_t required)
 {
-  memory_slice_value(out, evm_memory_expand(pointer, established, required), required);
+  memory_slice_value(out, evm_memory_view(pointer, established, required), required);
 }
 
 static void node_lookup_value(struct zStatelessInputSliceFields *out, fixed_bytes_32 hash)
@@ -166,10 +166,16 @@ struct zStatelessInputSliceFields stateless_input(unit u)
   return out;
 }
 
-struct zEvmMemorySliceFields mem_expand(uint64_t pointer, uint64_t established, uint64_t required)
+unit mem_expand(uint64_t pointer, uint64_t established, uint64_t required)
+{
+  (void)evm_memory_expand(pointer, established, required);
+  return UNIT;
+}
+
+struct zEvmMemorySliceFields mem_view(uint64_t pointer, uint64_t established, uint64_t required)
 {
   struct zEvmMemorySliceFields out;
-  expanded_memory_value(&out, pointer, established, required);
+  memory_view_value(&out, pointer, established, required);
   return out;
 }
 

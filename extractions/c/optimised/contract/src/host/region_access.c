@@ -84,10 +84,15 @@ Bytes stateless_input(void)
   return out;
 }
 
-Bytes mem_expand(uint32_t pointer, uint32_t established, uint32_t required)
+void mem_expand(uint32_t pointer, uint32_t established, uint32_t required)
+{
+  (void)evm_memory_expand(pointer, established, required);
+}
+
+Bytes mem_view(uint32_t pointer, uint32_t established, uint32_t required)
 {
   Bytes out;
-  const uint64_t base = evm_memory_expand(pointer, established, required);
+  const uint64_t base = evm_memory_view(pointer, established, required);
   out.bytes = required == 0 ? NULL : evm_memory_base() + base;
   out.len = required;
   return out;

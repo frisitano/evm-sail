@@ -38,30 +38,25 @@ void validate_execution_payload(struct StatelessInput input, struct StatelessInp
   }
   uint32_t expected_excess_blob_gas = expected_payload_excess_blob_gas(witness);
   bool result_2_131 = (bool)(profile.fork >= Cancun);
-  bool tmp_3_627 = (bool)(result_2_131 && (header.excess_blob_gas != expected_excess_blob_gas));
-  if (tmp_3_627) {
+  if (result_2_131 && (header.excess_blob_gas != expected_excess_blob_gas)) {
     fatal_error(InvalidExcessBlobGas);
   }
-  bool result_2_134 = (bool)(profile.fork >= Paris);
-  if (result_2_134) {
+  if (profile.fork >= Paris) {
     bytes32 transactions_root = transaction_trie_root_(block.body.transactions);
     bytes32 withdrawals_root;
-    bool result_2_143 = (bool)(profile.fork >= Shanghai);
-    if (result_2_143) {
+    if (profile.fork >= Shanghai) {
       withdrawals_root = withdrawals_trie_root_(block.body.withdrawals);
     } else {
       withdrawals_root = EMPTY_TRIE_ROOT;
     }
     bytes32 requests_hash;
-    bool result_2_141 = (bool)(profile.fork >= Prague);
-    if (result_2_141) {
+    if (profile.fork >= Prague) {
       requests_hash = execution_requests_hash_(input_ref);
     } else {
       requests_hash = ZERO_HASH;
     }
     bytes32 block_access_list_hash;
-    bool result_2_138 = (bool)(profile.fork >= Amsterdam);
-    if (result_2_138) {
+    if (profile.fork >= Amsterdam) {
       block_access_list_hash = host_keccak_stateless_input(block.body.block_access_list);
     } else {
       block_access_list_hash = ZERO_HASH;

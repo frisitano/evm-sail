@@ -28,12 +28,10 @@ void k_tx_reset(void)
 
 struct TransactionMergeSemantics transaction_merge_semantics(uint8_t fork)
 {
-  bool gteq_int_result_2_2051 = (bool)(fork >= Amsterdam);
-  if (gteq_int_result_2_2051) {
+  if (fork >= Amsterdam) {
     return ((struct TransactionMergeSemantics){.delete_only_created = true, .preserve_selfdestruct_balance = true});
   }
-  bool gteq_int_result_2_2052 = (bool)(fork >= Cancun);
-  if (gteq_int_result_2_2052) {
+  if (fork >= Cancun) {
     return ((struct TransactionMergeSemantics){.delete_only_created = true, .preserve_selfdestruct_balance = false});
   }
   return ((struct TransactionMergeSemantics){.delete_only_created = false, .preserve_selfdestruct_balance = false});

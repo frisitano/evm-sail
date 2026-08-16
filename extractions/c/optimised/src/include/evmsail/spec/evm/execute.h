@@ -44,19 +44,19 @@ struct tuple_uint_64_StackPointer_OpcodeOutcome {
   struct OpcodeOutcome tup2;
 };
 
-// struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome
-struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome {
+// struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome
+struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome {
   uint64_t tup0;
   StackPointer tup1;
-  Bytes tup2;
+  uint32_t tup2;
   struct OpcodeOutcome tup3;
 };
 
-// struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome
-struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome {
+// struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome
+struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome {
   uint8_t tup0;
   StackPointer tup1;
-  Bytes tup2;
+  uint32_t tup2;
   struct OpcodeOutcome tup3;
 };
 
@@ -78,21 +78,21 @@ struct tuple_uint_32_uint_64_StackPointer_OpcodeOutcome {
   struct OpcodeOutcome tup3;
 };
 
-// struct tuple_uint_64_StackPointer_Bytes_FrameStatus
-struct tuple_uint_64_StackPointer_Bytes_FrameStatus {
+// struct tuple_uint_64_StackPointer_uint_32_FrameStatus
+struct tuple_uint_64_StackPointer_uint_32_FrameStatus {
   uint64_t tup0;
   StackPointer tup1;
-  Bytes tup2;
+  uint32_t tup2;
   struct FrameStatus tup3;
 };
 
-// struct tuple_uint_64_uint_64_uint_32_StackPointer_Bytes_FrameStatus
-struct tuple_uint_64_uint_64_uint_32_StackPointer_Bytes_FrameStatus {
+// struct tuple_uint_64_uint_64_uint_32_StackPointer_uint_32_FrameStatus
+struct tuple_uint_64_uint_64_uint_32_StackPointer_uint_32_FrameStatus {
   uint64_t tup0;
   uint64_t tup1;
   uint32_t tup2;
   StackPointer tup3;
-  Bytes tup4;
+  uint32_t tup4;
   struct FrameStatus tup5;
 };
 
@@ -105,8 +105,6 @@ struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus {
   StackPointer tup4;
   struct FrameStatus tup5;
 };
-
-bool opcode_failed(struct OpcodeOutcome result);
 
 __attribute__((__always_inline__)) struct FrameStatus opcode_frame_status(struct OpcodeOutcome result);
 
@@ -170,7 +168,7 @@ __attribute__((__always_inline__)) struct OpcodeOutcome execute_sar(uint64_t *re
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_clz(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_keccak256(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_keccak256(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_address(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
@@ -186,11 +184,11 @@ __attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatasize(str
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_calldataload(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_codesize(struct CodeFields carried_code, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_balance(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
@@ -198,13 +196,13 @@ __attribute__((__always_inline__)) struct OpcodeOutcome execute_selfbalance(byte
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodecopy(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodecopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodehash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatasize(Bytes carried_returndata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_blockhash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
@@ -230,15 +228,15 @@ __attribute__((__always_inline__)) struct OpcodeOutcome execute_blobhash(uint64_
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_pop(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mload(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore8(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore8(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mcopy(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 struct AccountExecutionContext account_execution_context(bytes20 /* arg_0 */);
 
@@ -276,13 +274,13 @@ __attribute__((__always_inline__)) struct OpcodeOutcome execute_swapn(uint64_t *
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_exchange(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate);
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory, uint8_t n);
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static, uint32_t memory_base, uint8_t n, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 struct FrameStatus execute_stop(void);
 
-__attribute__((__always_inline__)) struct FrameStatus execute_return(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct FrameStatus execute_return(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
-__attribute__((__always_inline__)) struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, StackPointer *restrict carried_sp, Bytes *restrict carried_memory);
+__attribute__((__always_inline__)) struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint32_t memory_base, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_invalid(uint64_t *restrict carried_gas);
 

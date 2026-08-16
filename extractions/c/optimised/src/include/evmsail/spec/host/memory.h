@@ -11,11 +11,9 @@ extern "C" {
 
 void mem_write_byte(uint32_t /* arg_0 */, uint64_t /* arg_1 */);
 
-void mem_clear(void);
+void mem_expand(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */);
 
-void mem_frame_leave(void);
-
-Bytes mem_expand(uint32_t /* arg_0 */);
+Bytes mem_view(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */);
 
 void mem_move(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */);
 

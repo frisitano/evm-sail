@@ -17,7 +17,7 @@ interpreter loop into each opcode handler and returned updated. No
 handler reads or writes these registers: the canonical loop supplies each
 step's arguments from the registers and assigns the returned state back,
 while frame-boundary code — frame save/suspend ([suspend_frame][]),
-resume ([restore_frame][]), and the transaction wrapper — synchronizes
+resume ([resume_frame][]), and the transaction wrapper — synchronizes
 them explicitly. The optimized interpreter carries the same values in
 locals and touches the registers only at those frame boundaries.
 
@@ -260,11 +260,15 @@ function memory_parent_base(child_base : memory_base, parent_height : memory_hei
 /*! Materializes an already-charged memory high-water mark and returns its
     updated scalar height. */
 function expand_memory(base : memory_base, height : memory_height, requested_height : memory_length) -> memory_height = {
-    let _ = mem_expand(base, height, requested_height);
-    if height < requested_height then {
-        requested_height
+    if requested_height <= sizeof(memory_region_bound) - base then {
+        if height < requested_height then {
+            mem_expand(base, height, requested_height);
+            requested_height
+        } else {
+            height
+        }
     } else {
-        height
+        fatal_error(ExecutionInvalid)
     }
 }
 
@@ -279,9 +283,11 @@ val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (
 function active_memory_slice(base, mem, off, len) =
     if len == 0 then {
         EMPTY_EVM_MEMORY_SLICE
-    } else {
-        let window = mem_expand(base, mem, off + len);
+    } else if mem <= sizeof(memory_region_bound) - base & off + len <= mem then {
+        let window = mem_view(base, mem, off + len);
         sub_slice(window, off, len)
+    } else {
+        fatal_error(ExecutionInvalid)
     }
 
 /*! Returns expanded executable initcode. */
@@ -295,10 +301,12 @@ val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (
 function memory_code_slice(base, mem, off, len) =
     if len == 0 then {
         EMPTY_CODE_SLICE
-    } else {
-        let window = mem_expand(base, mem, off + len);
+    } else if mem <= sizeof(memory_region_bound) - base & off + len <= mem then {
+        let window = mem_view(base, mem, off + len);
         let initcode = sub_slice(window, off, len);
         code_db_intern_memory(initcode)
+    } else {
+        fatal_error(ExecutionInvalid)
     }
 
 /*! Captures parent execution state and enters child stack and memory frames.

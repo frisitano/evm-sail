@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame(bytes20 tgt, struct CalldataSlice input);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input, uint32_t memory_base);
 
 void system_call(bytes20 tgt, bytes32 input);
 

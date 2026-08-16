@@ -21,24 +21,35 @@ operation.
     This page documents the model's host interface — internal contracts
     of the executable specification, not protocol rules.
 */
-/*! The byte at absolute arena position `off`. */
-val mem_read_byte = impure { c: "mem_read_byte" } : memory_base -> byte
 /*! Writes one byte at absolute arena position `off` (`MSTORE8`). */
 val mem_write_byte = impure { c: "mem_write_byte" } : (memory_base, byte) -> unit
 
 /* range copies (CALLDATACOPY / CODECOPY / RETURNDATACOPY / MCOPY): endpoints
  * already live in host-interface regions, so copies never cross the
  * interface. */
-/*! Materializes an EVM-memory extent whose protocol gas has already been
-    charged. The host zeroes `[base + established, base + required)` and
-    returns the resulting absolute source slice. Failure to realize this
-    established precondition is a host implementation failure, not an EVM
-    out-of-gas result. */
-val mem_expand = impure { c: "mem_expand" } : forall 'required, 0 <= 'required & 'required <= memory_region_bound. (
-        memory_base,
-        memory_height,
-        int('required),
-    ) -> EvmMemorySliceLength('required)
+/*! Materializes a strictly larger EVM-memory extent whose protocol gas has
+    already been charged. The host zeroes exactly
+    `[base + established, base + required)`. Sail checks the real aggregate
+    arena bound before crossing this interface. */
+val mem_expand = impure { c: "mem_expand" } : forall 'base 'established 'required,
+                                                   memory_region_valid_range('base, 'required)
+                                                &  0
+                                                <= 'established
+                                                &  'established
+                                                <  'required. (int('base), int('established), int('required)) -> unit
+
+/*! Borrows an already-materialized prefix of one frame. The established
+    extent is carried explicitly so both backends dynamically reject a view
+    outside the frame even if a malformed caller reaches the FFI boundary. */
+val mem_view = impure { c: "mem_view" } : forall 'base 'established 'required,
+                                               memory_region_valid_range('base, 'established)
+                                            &  memory_region_valid_range('base, 'required)
+                                            &  0
+                                            <= 'required
+                                            &  'required
+                                            <= 'established. (int('base), int('established), int('required)) -> EvmMemorySliceLength(
+        'required,
+    )
 
 /*! Copies an absolute byte range within the shared arena; overlapping
     ranges behave as one atomic move (`MCOPY` and the destination side of

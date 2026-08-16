@@ -10,10 +10,7 @@ static bool eq_ExceptionKind(enum ExceptionKind op1, enum ExceptionKind op2);
 static bool eq_HaltKind(struct HaltKind op1, struct HaltKind op2);
 static bool eq_BoundedSszListRef(struct BoundedSszListRef op1, struct BoundedSszListRef op2);
 static bool eq_BoundedSszListCursor(struct BoundedSszListCursor op1, struct BoundedSszListCursor op2);
-static bool eq_CodeFields(struct CodeFields op1, struct CodeFields op2);
-static bool eq_CalldataSlice(struct CalldataSlice op1, struct CalldataSlice op2);
 static bool eq_FrameStatus(struct FrameStatus op1, struct FrameStatus op2);
-static bool eq_StackPointer(StackPointer op1, StackPointer op2);
 static bool eq_BlobScheduleFields(struct BlobScheduleFields op1, struct BlobScheduleFields op2);
 static bool eq_GasLimitsFields(struct GasLimitsFields op1, struct GasLimitsFields op2);
 static bool eq_ProtocolProfileFields(struct ProtocolProfileFields op1, struct ProtocolProfileFields op2);
@@ -41,7 +38,10 @@ static bool eq_BlockHeader(struct BlockHeader op1, struct BlockHeader op2);
 static bool eq_Block(struct Block op1, struct Block op2);
 static bool eq_TxFrameGasSnapshotFields(struct TxFrameGasSnapshotFields op1, struct TxFrameGasSnapshotFields op2);
 static bool eq_TransactionInitialGasFields(struct TransactionInitialGasFields op1, struct TransactionInitialGasFields op2);
+static bool eq_CalldataSlice(struct CalldataSlice op1, struct CalldataSlice op2);
+static bool eq_CodeFields(struct CodeFields op1, struct CodeFields op2);
 static bool eq_Message(struct Message op1, struct Message op2);
+static bool eq_StackPointer(StackPointer op1, StackPointer op2);
 static bool eq_FrameCheckpoint(struct FrameCheckpoint op1, struct FrameCheckpoint op2);
 static bool eq_CallContinuation(struct CallContinuation op1, struct CallContinuation op2);
 static bool eq_CreateContinuation(struct CreateContinuation op1, struct CreateContinuation op2);
@@ -1881,7 +1881,7 @@ static inline bool EQUAL(MemoryRangeFields)(struct MemoryRangeFields op1, struct
 }
 
 static inline bool EQUAL(MemoryAccessFields)(struct MemoryAccessFields op1, struct MemoryAccessFields op2) {
-  return (bool)(EQUAL(MemoryRangeFields)(op1.range, op2.range) && (op1.required_size == op2.required_size));
+  return (bool)(EQUAL(MemoryRangeFields)(op1.range, op2.range) && (op1.requested_height == op2.requested_height));
 }
 
 static inline bool EQUAL(GasCharge)(struct GasCharge op1, struct GasCharge op2) {
@@ -2076,10 +2076,6 @@ static inline enum DeepStackOperation UNDEFINED(DeepStackOperation)(void) { retu
 
 static inline bool EQUAL(CodeFields)(struct CodeFields op1, struct CodeFields op2) {
   return (bool)((op1.bytes == op2.bytes) && (op1.jumpdests == op2.jumpdests) && (op1.len == op2.len));
-}
-
-static inline bool EQUAL(tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes)(struct tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op1, struct tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(bytes20)(op1.tup10, op2.tup10) && EQUAL(u256)(op1.tup11, op2.tup11) && (op1.tup12 == op2.tup12) && EQUAL(bool)(op1.tup13, op2.tup13) && (op1.tup14 == op2.tup14) && EQUAL(CodeFields)(op1.tup15, op2.tup15) && EQUAL(CalldataSlice)(op1.tup16, op2.tup16) && EQUAL(Bytes)(op1.tup17, op2.tup17) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && (op1.tup4 == op2.tup4) && EQUAL(FrameStatus)(op1.tup5, op2.tup5) && EQUAL(StackPointer)(op1.tup6, op2.tup6) && EQUAL(Bytes)(op1.tup7, op2.tup7) && EQUAL(bytes20)(op1.tup8, op2.tup8) && EQUAL(bytes20)(op1.tup9, op2.tup9));
 }
 
 static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes)(struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op1, struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op2) {
@@ -2456,14 +2452,22 @@ static inline struct OpcodeOutcome Failed(enum ExceptionKind op) {
   return result;
 }
 
+static inline bool EQUAL(ExceptionalStateTransition)(struct ExceptionalStateTransition op1, struct ExceptionalStateTransition op2) {
+  return (bool)((op1.state_gas_remaining == op2.state_gas_remaining) && (op1.state_gas_spilled == op2.state_gas_spilled) && EQUAL(FrameStatus)(op1.status, op2.status));
+}
+
 static inline bool EQUAL(CreateKind)(enum CreateKind op1, enum CreateKind op2) {
   return (bool)(op1 == op2);
 }
 
 static inline enum CreateKind UNDEFINED(CreateKind)(void) { return CreateByNonce; }
 
+static inline bool EQUAL(FrameTransition)(struct FrameTransition op1, struct FrameTransition op2) {
+  return (bool)(EQUAL(CalldataSlice)(op1.calldata, op2.calldata) && EQUAL(CodeFields)(op1.code, op2.code) && (op1.gas_remaining == op2.gas_remaining) && (op1.memory_base == op2.memory_base) && (op1.memory_height == op2.memory_height) && EQUAL(Message)(op1.message, op2.message) && (op1.pc == op2.pc) && (op1.refund == op2.refund) && EQUAL(Bytes)(op1.returndata, op2.returndata) && EQUAL(StackPointer)(op1.stack_top, op2.stack_top) && (op1.state_gas_remaining == op2.state_gas_remaining) && (op1.state_gas_spilled == op2.state_gas_spilled) && EQUAL(FrameStatus)(op1.status, op2.status));
+}
+
 static inline bool EQUAL(FrameCheckpoint)(struct FrameCheckpoint op1, struct FrameCheckpoint op2) {
-  return (bool)(EQUAL(CalldataSlice)(op1.calldata, op2.calldata) && EQUAL(CodeFields)(op1.code, op2.code) && (op1.gas_remaining == op2.gas_remaining) && EQUAL(Bytes)(op1.memory, op2.memory) && EQUAL(Message)(op1.message, op2.message) && (op1.pc == op2.pc) && (op1.refund == op2.refund) && EQUAL(StackPointer)(op1.stack_top, op2.stack_top) && (op1.state_gas_remaining == op2.state_gas_remaining) && (op1.state_gas_spilled == op2.state_gas_spilled) && EQUAL(FrameStatus)(op1.status, op2.status));
+  return (bool)(EQUAL(CalldataSlice)(op1.calldata, op2.calldata) && EQUAL(CodeFields)(op1.code, op2.code) && (op1.gas_remaining == op2.gas_remaining) && (op1.memory_height == op2.memory_height) && EQUAL(Message)(op1.message, op2.message) && (op1.pc == op2.pc) && (op1.refund == op2.refund) && EQUAL(StackPointer)(op1.stack_top, op2.stack_top) && (op1.state_gas_remaining == op2.state_gas_remaining) && (op1.state_gas_spilled == op2.state_gas_spilled) && EQUAL(FrameStatus)(op1.status, op2.status));
 }
 
 static inline bool EQUAL(CreateContinuation)(struct CreateContinuation op1, struct CreateContinuation op2) {
@@ -2559,48 +2563,20 @@ static inline bool EQUAL(StackValidation)(enum StackValidation op1, enum StackVa
 
 static inline enum StackValidation UNDEFINED(StackValidation)(void) { return StackValid; }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_32)(struct tuple_uint_64_uint_64_uint_32 op1, struct tuple_uint_64_uint_64_uint_32 op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
-}
-
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_8)(struct tuple_uint_64_uint_64_uint_8 op1, struct tuple_uint_64_uint_64_uint_8 op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
-}
-
-static inline bool EQUAL(tuple_uint_64_uint_32_FrameStatus)(struct tuple_uint_64_uint_32_FrameStatus op1, struct tuple_uint_64_uint_32_FrameStatus op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(FrameStatus)(op1.tup2, op2.tup2));
-}
-
-static inline bool EQUAL(tuple_Bytes_Bytes)(struct tuple_Bytes_Bytes op1, struct tuple_Bytes_Bytes op2) {
-  return (bool)(EQUAL(Bytes)(op1.tup0, op2.tup0) && EQUAL(Bytes)(op1.tup1, op2.tup1));
-}
-
-static inline bool EQUAL(tuple_Bytes_Bytes_1)(struct tuple_Bytes_Bytes_1 op1, struct tuple_Bytes_Bytes_1 op2) {
-  return (bool)(EQUAL(Bytes)(op1.tup0, op2.tup0) && EQUAL(Bytes)(op1.tup1, op2.tup1));
-}
-
-static inline bool EQUAL(tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice)(struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice op1, struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(CalldataSlice)(op1.tup10, op2.tup10) && EQUAL(StackPointer)(op1.tup2, op2.tup2) && EQUAL(Bytes)(op1.tup3, op2.tup3) && (op1.tup4 == op2.tup4) && (op1.tup5 == op2.tup5) && (op1.tup6 == op2.tup6) && EQUAL(FrameStatus)(op1.tup7, op2.tup7) && EQUAL(Message)(op1.tup8, op2.tup8) && EQUAL(CodeFields)(op1.tup9, op2.tup9));
-}
-
-static inline bool EQUAL(tuple_u256_Bytes)(struct tuple_u256_Bytes op1, struct tuple_u256_Bytes op2) {
-  return (bool)(EQUAL(u256)(op1.tup0, op2.tup0) && EQUAL(Bytes)(op1.tup1, op2.tup1));
-}
-
-static inline bool EQUAL(tuple_FrameCheckpoint_StackPointer_Bytes)(struct tuple_FrameCheckpoint_StackPointer_Bytes op1, struct tuple_FrameCheckpoint_StackPointer_Bytes op2) {
-  return (bool)(EQUAL(FrameCheckpoint)(op1.tup0, op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && EQUAL(Bytes)(op1.tup2, op2.tup2));
+static inline bool EQUAL(tuple_FrameCheckpoint_StackPointer_uint_32_uint_32)(struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32 op1, struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32 op2) {
+  return (bool)(EQUAL(FrameCheckpoint)(op1.tup0, op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
 }
 
 static inline bool EQUAL(SstoreCosts)(struct SstoreCosts op1, struct SstoreCosts op2) {
   return (bool)((op1.execution == op2.execution) && (op1.refund == op2.refund) && (op1.state_charge == op2.state_charge) && (op1.state_credit == op2.state_credit));
 }
 
-static inline bool EQUAL(tuple_bool_uint_64)(struct tuple_bool_uint_64 op1, struct tuple_bool_uint_64 op2) {
-  return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1));
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_32)(struct tuple_uint_64_uint_64_uint_32 op1, struct tuple_uint_64_uint_64_uint_32 op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
 }
 
-static inline bool EQUAL(tuple_bool_uint_8)(struct tuple_bool_uint_8 op1, struct tuple_bool_uint_8 op2) {
-  return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1));
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_8)(struct tuple_uint_64_uint_64_uint_8 op1, struct tuple_uint_64_uint_64_uint_8 op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
 }
 
 static inline bool EQUAL(tuple_bool_uint_64_uint_64_uint_32)(struct tuple_bool_uint_64_uint_64_uint_32 op1, struct tuple_bool_uint_64_uint_64_uint_32 op2) {
@@ -2639,12 +2615,12 @@ static inline bool EQUAL(tuple_uint_64_StackPointer_OpcodeOutcome)(struct tuple_
   return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && EQUAL(OpcodeOutcome)(op1.tup2, op2.tup2));
 }
 
-static inline bool EQUAL(tuple_uint_64_StackPointer_Bytes_OpcodeOutcome)(struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome op1, struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome op2) {
-  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && EQUAL(Bytes)(op1.tup2, op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
+static inline bool EQUAL(tuple_uint_64_StackPointer_uint_32_OpcodeOutcome)(struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome op1, struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome op2) {
+  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
 }
 
-static inline bool EQUAL(tuple_uint_8_StackPointer_Bytes_OpcodeOutcome)(struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome op1, struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome op2) {
-  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && EQUAL(Bytes)(op1.tup2, op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
+static inline bool EQUAL(tuple_uint_8_StackPointer_uint_32_OpcodeOutcome)(struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome op1, struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome op2) {
+  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
 }
 
 static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_StackPointer_OpcodeOutcome)(struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_OpcodeOutcome op1, struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_OpcodeOutcome op2) {
@@ -2655,12 +2631,12 @@ static inline bool EQUAL(tuple_uint_32_uint_64_StackPointer_OpcodeOutcome)(struc
   return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(StackPointer)(op1.tup2, op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
 }
 
-static inline bool EQUAL(tuple_uint_64_StackPointer_Bytes_FrameStatus)(struct tuple_uint_64_StackPointer_Bytes_FrameStatus op1, struct tuple_uint_64_StackPointer_Bytes_FrameStatus op2) {
-  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && EQUAL(Bytes)(op1.tup2, op2.tup2) && EQUAL(FrameStatus)(op1.tup3, op2.tup3));
+static inline bool EQUAL(tuple_uint_64_StackPointer_uint_32_FrameStatus)(struct tuple_uint_64_StackPointer_uint_32_FrameStatus op1, struct tuple_uint_64_StackPointer_uint_32_FrameStatus op2) {
+  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(FrameStatus)(op1.tup3, op2.tup3));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_StackPointer_Bytes_FrameStatus)(struct tuple_uint_64_uint_64_uint_32_StackPointer_Bytes_FrameStatus op1, struct tuple_uint_64_uint_64_uint_32_StackPointer_Bytes_FrameStatus op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(StackPointer)(op1.tup3, op2.tup3) && EQUAL(Bytes)(op1.tup4, op2.tup4) && EQUAL(FrameStatus)(op1.tup5, op2.tup5));
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_StackPointer_uint_32_FrameStatus)(struct tuple_uint_64_uint_64_uint_32_StackPointer_uint_32_FrameStatus op1, struct tuple_uint_64_uint_64_uint_32_StackPointer_uint_32_FrameStatus op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(StackPointer)(op1.tup3, op2.tup3) && (op1.tup4 == op2.tup4) && EQUAL(FrameStatus)(op1.tup5, op2.tup5));
 }
 
 static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus)(struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus op1, struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus op2) {
@@ -2687,18 +2663,6 @@ static inline bool EQUAL(tuple_u256_StackPointer)(struct tuple_u256_StackPointer
   return (bool)(EQUAL(u256)(op1.tup0, op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_8_FrameStatus)(struct tuple_uint_64_uint_8_FrameStatus op1, struct tuple_uint_64_uint_8_FrameStatus op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(FrameStatus)(op1.tup2, op2.tup2));
-}
-
-static inline bool EQUAL(tuple_uint_8_uint_64_uint_64_uint_8_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes)(struct tuple_uint_8_uint_64_uint_64_uint_8_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op1, struct tuple_uint_8_uint_64_uint_64_uint_8_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(bytes20)(op1.tup10, op2.tup10) && EQUAL(u256)(op1.tup11, op2.tup11) && (op1.tup12 == op2.tup12) && EQUAL(bool)(op1.tup13, op2.tup13) && (op1.tup14 == op2.tup14) && EQUAL(CodeFields)(op1.tup15, op2.tup15) && EQUAL(CalldataSlice)(op1.tup16, op2.tup16) && EQUAL(Bytes)(op1.tup17, op2.tup17) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && (op1.tup4 == op2.tup4) && EQUAL(FrameStatus)(op1.tup5, op2.tup5) && EQUAL(StackPointer)(op1.tup6, op2.tup6) && EQUAL(Bytes)(op1.tup7, op2.tup7) && EQUAL(bytes20)(op1.tup8, op2.tup8) && EQUAL(bytes20)(op1.tup9, op2.tup9));
-}
-
-static inline bool EQUAL(tuple_uint_32_uint_8_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes)(struct tuple_uint_32_uint_8_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op1, struct tuple_uint_32_uint_8_uint_64_uint_32_int_128_FrameStatus_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && EQUAL(bytes20)(op1.tup10, op2.tup10) && EQUAL(u256)(op1.tup11, op2.tup11) && (op1.tup12 == op2.tup12) && EQUAL(bool)(op1.tup13, op2.tup13) && (op1.tup14 == op2.tup14) && EQUAL(CodeFields)(op1.tup15, op2.tup15) && EQUAL(CalldataSlice)(op1.tup16, op2.tup16) && EQUAL(Bytes)(op1.tup17, op2.tup17) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && (op1.tup4 == op2.tup4) && EQUAL(FrameStatus)(op1.tup5, op2.tup5) && EQUAL(StackPointer)(op1.tup6, op2.tup6) && EQUAL(Bytes)(op1.tup7, op2.tup7) && EQUAL(bytes20)(op1.tup8, op2.tup8) && EQUAL(bytes20)(op1.tup9, op2.tup9));
-}
-
 static inline bool EQUAL(TxUpfrontResult)(struct TxUpfrontResult op1, struct TxUpfrontResult op2) {
   return (bool)((op1.authorization_refund == op2.authorization_refund) && EQUAL(bool)(op1.create_target_prestate_empty, op2.create_target_prestate_empty));
 }
@@ -2715,15 +2679,23 @@ static inline bool EQUAL(IntrinsicGasCost)(struct IntrinsicGasCost op1, struct I
   return (bool)((op1.calldata_floor == op2.calldata_floor) && (op1.execution == op2.execution) && (op1.state == op2.state));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes)(struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes op1, struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && EQUAL(Bytes)(op1.tup5, op2.tup5));
+static inline bool EQUAL(tuple_bool_uint_8_uint_64_uint_32)(struct tuple_bool_uint_8_uint_64_uint_32 op1, struct tuple_bool_uint_8_uint_64_uint_32 op2) {
+  return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes)(struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes op1, struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && EQUAL(Bytes)(op1.tup5, op2.tup5));
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32)(struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 op1, struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && (op1.tup5 == op2.tup5) && (op1.tup6 == op2.tup6));
+}
+
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32)(struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32 op1, struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32 op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && (op1.tup5 == op2.tup5) && (op1.tup6 == op2.tup6));
 }
 
 static inline bool EQUAL(tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice)(struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op1, struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op2) {
+  return (bool)(EQUAL(TransactionPreparation)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(bytes20)(op1.tup4, op2.tup4) && EQUAL(bytes20)(op1.tup5, op2.tup5) && EQUAL(CodeFields)(op1.tup6, op2.tup6) && EQUAL(CalldataSlice)(op1.tup7, op2.tup7));
+}
+
+static inline bool EQUAL(tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice)(struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op1, struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op2) {
   return (bool)(EQUAL(TransactionPreparation)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(bytes20)(op1.tup4, op2.tup4) && EQUAL(bytes20)(op1.tup5, op2.tup5) && EQUAL(CodeFields)(op1.tup6, op2.tup6) && EQUAL(CalldataSlice)(op1.tup7, op2.tup7));
 }
 

@@ -69,8 +69,8 @@ u256 calldata_slice_load(struct CalldataSlice s, uint32_t off)
 u256 stateless_input_slice_load_word_offset(Bytes s, u256 off)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_4013 = (uint32_t)u256_to_u64(off);
-    return stateless_input_slice_load(s, tmp_3_4013);
+    uint32_t tmp_3_3751 = (uint32_t)u256_to_u64(off);
+    return stateless_input_slice_load(s, tmp_3_3751);
   }
   return ZERO_WORD;
 }
@@ -78,8 +78,8 @@ u256 stateless_input_slice_load_word_offset(Bytes s, u256 off)
 u256 memory_slice_load_word_offset(Bytes s, u256 off)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_4014 = (uint32_t)u256_to_u64(off);
-    return memory_slice_load(s, tmp_3_4014);
+    uint32_t tmp_3_3752 = (uint32_t)u256_to_u64(off);
+    return memory_slice_load(s, tmp_3_3752);
   }
   return ZERO_WORD;
 }
@@ -141,8 +141,8 @@ void output_slice_copy(Bytes s, uint32_t dst, uint32_t off, uint32_t len)
 void stateless_input_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_4015 = (uint32_t)u256_to_u64(off);
-    stateless_input_slice_copy(s, dst, tmp_3_4015, len);
+    uint32_t tmp_3_3753 = (uint32_t)u256_to_u64(off);
+    stateless_input_slice_copy(s, dst, tmp_3_3753, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);
@@ -151,8 +151,8 @@ void stateless_input_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uin
 void memory_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_4016 = (uint32_t)u256_to_u64(off);
-    memory_slice_copy(s, dst, tmp_3_4016, len);
+    uint32_t tmp_3_3754 = (uint32_t)u256_to_u64(off);
+    memory_slice_copy(s, dst, tmp_3_3754, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);
@@ -161,8 +161,8 @@ void memory_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len
 void code_slice_copy_word_offset(Bytes s, uint32_t dst, u256 off, uint32_t len)
 {
   if (u256_lt_u64(off, s.len)) {
-    uint32_t tmp_3_4017 = (uint32_t)u256_to_u64(off);
-    code_slice_copy(s, dst, tmp_3_4017, len);
+    uint32_t tmp_3_3755 = (uint32_t)u256_to_u64(off);
+    code_slice_copy(s, dst, tmp_3_3755, len);
     return;
   }
   stateless_input_copy_to_memory(EMPTY_STATELESS_INPUT_SLICE, dst, UINT32_C(0), len);

@@ -47,14 +47,12 @@ enum DeepStackOperation deep_stack_operation(uint8_t opcode)
 
 bool deep_stack_immediate_valid(uint64_t immediate)
 {
-  uint8_t tmp_3_3754 = (uint8_t)immediate;
-  return (bool)((tmp_3_3754 <= UINT8_C(90)) || (UINT8_C(128) <= tmp_3_3754));
+  return (bool)(((uint8_t)immediate <= UINT8_C(90)) || (UINT8_C(128) <= (uint8_t)immediate));
 }
 
 bool exchange_immediate_valid(uint64_t immediate)
 {
-  uint8_t tmp_3_3752 = (uint8_t)immediate;
-  return (bool)((tmp_3_3752 <= UINT8_C(81)) || (UINT8_C(128) <= tmp_3_3752));
+  return (bool)(((uint8_t)immediate <= UINT8_C(81)) || (UINT8_C(128) <= (uint8_t)immediate));
 }
 
 bool deep_stack_operation_immediate_valid(enum DeepStackOperation operation, uint64_t immediate)

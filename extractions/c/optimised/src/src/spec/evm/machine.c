@@ -4,6 +4,12 @@
 const uint16_t STACK_LIMIT = UINT16_C(1024);
 
 
+const uint32_t MEMORY_HEIGHT_ZERO = UINT32_C(0);
+
+
+const uint32_t MEMORY_BASE_ZERO = UINT32_C(0);
+
+
 __int128 validated_refund_add(__int128 left, __int128 right)
 {
   if ((!((left + right) < (-((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551416))) - 1))) && (!(((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551417))) < (left + right)))) {
@@ -35,43 +41,20 @@ uint64_t conserved_gas_add(uint64_t available, uint64_t credit)
   fatal_error(ExecutionInvalid);
 }
 
-struct tuple_uint_64_uint_64_uint_32 refill_frame_state_gas(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir)
-{
-  struct tuple_uint_64_uint_64_uint_32 result_8_731;
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  bool result_2_2044 = (bool)(execution_profile.protocol.fork >= Amsterdam);
-  if (result_2_2044) {
-    uint64_t refilled = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(g, state_gas_spilled);
-    struct tuple_uint_64_uint_64_uint_8 tmp_3_3355 = ((struct tuple_uint_64_uint_64_uint_8){.tup0 = refilled, .tup1 = state_gas_reservoir, .tup2 = STATE_GAS_SPILL_ZERO});
-    /* conversions */
-    result_8_731.tup0 = tmp_3_3355.tup0;
-    result_8_731.tup1 = tmp_3_3355.tup1;
-    result_8_731.tup2 = (uint32_t)tmp_3_3355.tup2;
-    /* end conversions */
-  } else {
-    result_8_731 = ((struct tuple_uint_64_uint_64_uint_32){.tup0 = g, .tup1 = state_gas_remaining, .tup2 = state_gas_spilled});
-  }
-  return result_8_731;
-}
-
 __int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining, uint32_t state_gas_spilled)
 {
   return (((__int128)state_gas_reservoir - (__int128)state_gas_remaining) + (__int128)state_gas_spilled);
 }
 
-__attribute__((__always_inline__)) struct FrameStatus exceptional_state(uint64_t *restrict state_gas_remaining, uint32_t *restrict state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k)
+__attribute__((__always_inline__)) struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
-  bool result_2_2039 = (bool)(execution_profile.protocol.fork >= Amsterdam);
-  if (result_2_2039) {
-    struct FrameStatus Exceptional_result_2_2040 = Exceptional(k);
-    (*state_gas_remaining) = state_gas_reservoir;
-    (*state_gas_spilled) = (uint32_t)STATE_GAS_SPILL_ZERO;
-    return Exceptional_result_2_2040;
-  } else {
-    struct FrameStatus Exceptional_result_2_2041 = Exceptional(k);
-    return Exceptional_result_2_2041;
+  if (execution_profile.protocol.fork >= Amsterdam) {
+    struct FrameStatus Exceptional_result_2_2021 = Exceptional(k);
+    return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = Exceptional_result_2_2021});
   }
+  struct FrameStatus Exceptional_result_2_2022 = Exceptional(k);
+  return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = Exceptional_result_2_2022});
 }
 
 __attribute__((__always_inline__)) uint16_t stack_height(StackPointer top)
@@ -121,101 +104,103 @@ uint32_t returndata_remaining(uint32_t available, uint32_t offset)
   return (available - offset);
 }
 
-uint32_t memory_high_water(Bytes mem)
+uint32_t memory_high_water(uint32_t height)
 {
-  return mem.len;
+  return height;
 }
 
-Bytes memory_reset(void)
+uint32_t memory_absolute(uint32_t base, uint32_t relative)
 {
-  mem_clear();
-  return EMPTY_EVM_MEMORY_SLICE;
-}
-
-struct tuple_Bytes_Bytes memory_expand_to(Bytes mem, uint32_t new_size)
-{
-  if (mem.len < new_size) {
-    Bytes expanded = mem_expand(new_size);
-    return ((struct tuple_Bytes_Bytes){.tup0 = expanded, .tup1 = expanded});
+  if (relative <= (UINT32_C(4294967295) - base)) {
+    return (relative + base);
   }
-  Bytes memory_sub_slice_result_2_2032 = memory_sub_slice_Bytes_uint8_t_uint32_t_to_Bytes(mem, UINT8_C(0), new_size);
-  return ((struct tuple_Bytes_Bytes){.tup0 = memory_sub_slice_result_2_2032, .tup1 = mem});
+  fatal_error(ExecutionInvalid);
 }
 
-struct tuple_Bytes_Bytes active_memory_slice(Bytes mem, uint32_t off, uint32_t len)
+uint32_t memory_parent_base(uint32_t child_base, uint32_t parent_height)
+{
+  if (parent_height <= child_base) {
+    return (child_base - parent_height);
+  }
+  fatal_error(ExecutionInvalid);
+}
+
+__attribute__((__always_inline__)) uint32_t expand_memory(uint32_t base, uint32_t height, uint32_t requested_height)
+{
+  if (requested_height <= (UINT32_C(4294967295) - base)) {
+    if (height < requested_height) {
+      mem_expand(base, height, requested_height);
+      return requested_height;
+    }
+    return height;
+  }
+  fatal_error(ExecutionInvalid);
+}
+
+Bytes active_memory_slice(uint32_t base, uint32_t mem, uint32_t off, uint32_t len)
 {
   if (len == UINT8_C(0)) {
-    return ((struct tuple_Bytes_Bytes){.tup0 = EMPTY_EVM_MEMORY_SLICE, .tup1 = mem});
+    return EMPTY_EVM_MEMORY_SLICE;
   }
-  struct tuple_Bytes_Bytes result_2_2028 = memory_expand_to(mem, (len + off));
-  Bytes memory_sub_slice_result_2_2029 = memory_sub_slice(result_2_2028.tup0, off, len);
-  return ((struct tuple_Bytes_Bytes){.tup0 = memory_sub_slice_result_2_2029, .tup1 = result_2_2028.tup1});
+  if ((mem <= (UINT32_C(4294967295) - base)) && ((len + off) <= mem)) {
+    Bytes window = mem_view(base, mem, (len + off));
+    return memory_sub_slice(window, off, len);
+  }
+  fatal_error(ExecutionInvalid);
 }
 
-struct tuple_Bytes_Bytes_1 memory_code_slice(Bytes mem, uint32_t off, uint32_t len)
+Bytes memory_code_slice(uint32_t base, uint32_t mem, uint32_t off, uint32_t len)
 {
   if (len == UINT8_C(0)) {
-    return ((struct tuple_Bytes_Bytes_1){.tup0 = EMPTY_CODE_SLICE, .tup1 = mem});
+    return EMPTY_CODE_SLICE;
   }
-  struct tuple_Bytes_Bytes result_2_2024 = memory_expand_to(mem, (len + off));
-  Bytes initcode = memory_sub_slice(result_2_2024.tup0, off, len);
-  Bytes code_db_intern_memory_result_2_2025 = code_db_intern_memory(initcode);
-  return ((struct tuple_Bytes_Bytes_1){.tup0 = code_db_intern_memory_result_2_2025, .tup1 = result_2_2024.tup1});
+  if ((mem <= (UINT32_C(4294967295) - base)) && ((len + off) <= mem)) {
+    Bytes window = mem_view(base, mem, (len + off));
+    Bytes initcode = memory_sub_slice(window, off, len);
+    return code_db_intern_memory(initcode);
+  }
+  fatal_error(ExecutionInvalid);
 }
 
-Bytes memory_frame_enter(void)
+void mem_set_byte(uint32_t base, uint32_t off, uint64_t v)
 {
-  return mem_frame_enter_slice();
+  uint32_t absolute_offset = memory_absolute(base, off);
+  mem_write_byte(absolute_offset, v);
 }
 
-Bytes memory_frame_leave(Bytes parent)
+u256 mem_load(uint32_t base, uint32_t off)
 {
-  mem_frame_leave();
-  return parent;
+  uint32_t absolute_offset = memory_absolute(base, off);
+  return mem_load_word(absolute_offset);
 }
 
-struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice restore_frame(struct FrameCheckpoint checkpoint)
+void mem_store(uint32_t base, uint32_t off, u256 w)
 {
-  operand_stack_pop_frame();
-  Bytes memory = memory_frame_leave(checkpoint.memory);
-  return ((struct tuple_uint_32_uint_64_StackPointer_Bytes_uint_64_uint_32_int_128_FrameStatus_Message_CodeFields_CalldataSlice){.tup0 = checkpoint.pc, .tup1 = checkpoint.gas_remaining, .tup2 = checkpoint.stack_top, .tup3 = memory, .tup4 = checkpoint.state_gas_remaining, .tup5 = checkpoint.state_gas_spilled, .tup6 = checkpoint.refund, .tup7 = checkpoint.status, .tup8 = checkpoint.message, .tup9 = checkpoint.code, .tup10 = checkpoint.calldata});
+  uint32_t absolute_offset = memory_absolute(base, off);
+  mem_store_word(absolute_offset, w);
 }
 
-void mem_set_byte(uint32_t off, uint64_t v)
-{
-  mem_write_byte(off, v);
-}
-
-u256 mem_load(uint32_t off)
-{
-  return mem_load_word(off);
-}
-
-void mem_store(uint32_t off, u256 w)
-{
-  mem_store_word(off, w);
-}
-
-void mem_store_byte(uint32_t off, u256 w)
+void mem_store_byte(uint32_t base, uint32_t off, u256 w)
 {
   uint64_t value = word_low_byte(w);
-  mem_set_byte(off, value);
+  mem_set_byte(base, off, value);
 }
 
-void mem_mcopy(uint32_t dst, uint32_t src, uint32_t len)
+void mem_mcopy(uint32_t base, uint32_t dst, uint32_t src, uint32_t len)
 {
   if (len != UINT8_C(0)) {
-    mem_move(dst, src, len);
+    uint32_t absolute_dst = memory_absolute(base, dst);
+    uint32_t absolute_src = memory_absolute(base, src);
+    mem_move(absolute_dst, absolute_src, len);
     return;
   }
 }
 
-struct tuple_u256_Bytes mem_keccak(Bytes mem, struct MemoryRangeFields range)
+u256 mem_keccak(uint32_t base, uint32_t mem, struct MemoryRangeFields range)
 {
-  struct tuple_Bytes_Bytes result_2_2008 = active_memory_slice(mem, range.off, range.len);
-  bytes32 digest = host_keccak_memory(result_2_2008.tup0);
-  u256 hash_to_word_result_2_2009 = hash_to_word(digest);
-  return ((struct tuple_u256_Bytes){.tup0 = hash_to_word_result_2_2009, .tup1 = result_2_2008.tup1});
+  Bytes bytes = active_memory_slice(base, mem, range.off, range.len);
+  bytes32 digest = host_keccak_memory(bytes);
+  return hash_to_word(digest);
 }
 
 uint64_t conserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t available, uint32_t credit)
@@ -236,12 +221,13 @@ __attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_u
   stack_slot_write_StackPointer_uint8_t_u256_to_unit(top, n, w);
 }
 
-struct tuple_FrameCheckpoint_StackPointer_Bytes suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, Bytes evm_memory, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata)
+struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32 suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata)
 {
   k_journal_checkpoint();
   StackPointer child_stack = operand_stack_push_empty_frame();
-  Bytes child_memory = memory_frame_enter();
-  return ((struct tuple_FrameCheckpoint_StackPointer_Bytes){.tup0 = ((struct FrameCheckpoint){.calldata = calldata, .code = frame_code, .gas_remaining = gas_remaining, .memory = evm_memory, .message = message, .pc = pc, .refund = frame_refund, .stack_top = stack_top, .state_gas_remaining = (uint64_t)state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = frame_status}), .tup1 = child_stack, .tup2 = child_memory});
+  uint32_t child_memory_base = memory_absolute(memory_base, memory_height);
+  uint32_t child_memory_height = MEMORY_HEIGHT_ZERO;
+  return ((struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32){.tup0 = ((struct FrameCheckpoint){.calldata = calldata, .code = frame_code, .gas_remaining = gas_remaining, .memory_height = memory_height, .message = message, .pc = pc, .refund = frame_refund, .stack_top = stack_top, .state_gas_remaining = (uint64_t)state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = frame_status}), .tup1 = child_stack, .tup2 = child_memory_base, .tup3 = child_memory_height});
 }
 
 __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs)
@@ -250,8 +236,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
-  if (result_2_2037) {
+  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
@@ -263,8 +248,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
-  if (result_2_2037) {
+  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
@@ -276,8 +260,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  bool result_2_2037 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
-  if (result_2_2037) {
+  if (STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
@@ -289,8 +272,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs)));
-  if (result_2_2037) {
+  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
@@ -299,8 +281,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
 __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs)
 {
   uint16_t height = stack_height(top);
-  bool result_2_2037 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
-  if (result_2_2037) {
+  if (STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;

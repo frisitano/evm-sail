@@ -10,7 +10,7 @@
 #include <stdint.h>
 bool evm_memory_configure_capacity(uint64_t capacity);
 uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t required);
-uint64_t mem_read_byte(uint64_t off);
+uint64_t evm_memory_view(uint64_t pointer, uint64_t established, uint64_t required);
 unit mem_write_byte(uint64_t off, uint64_t v);
 const uint8_t *evm_memory_region(uint64_t off, uint64_t len);
 const uint8_t *evm_memory_base(void);

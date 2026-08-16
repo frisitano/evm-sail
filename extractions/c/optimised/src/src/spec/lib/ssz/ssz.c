@@ -18,8 +18,7 @@ uint32_t ssz_u32_at(Bytes input, uint32_t offset)
 
 uint32_t ssz_u32_in_slice(Bytes input, uint32_t offset)
 {
-  bool tmp_3_3627 = (bool)((offset <= input.len) && (UINT8_C(4) <= ((int64_t)input.len - (int64_t)offset)));
-  if (tmp_3_3627) {
+  if ((offset <= input.len) && (UINT8_C(4) <= ((int64_t)input.len - (int64_t)offset))) {
     return ssz_u32_at(input, offset);
   }
   fatal_error(InvalidConfig);
@@ -47,15 +46,7 @@ uint64_t decode_ssz_uint(Bytes input, uint32_t offset)
   uint64_t byte6 = stateless_input_slice_byte(input, offset6);
   uint32_t offset7 = ssz_field_offset_uint32_t_uint8_t_to_uint32_t(offset, UINT8_C(7));
   uint64_t byte7 = stateless_input_slice_byte(input, offset7);
-  uint8_t tmp_3_3619 = (uint8_t)byte0;
-  uint8_t tmp_3_3620 = (uint8_t)byte1;
-  uint8_t tmp_3_3621 = (uint8_t)byte2;
-  uint8_t tmp_3_3622 = (uint8_t)byte3;
-  uint8_t tmp_3_3623 = (uint8_t)byte4;
-  uint8_t tmp_3_3624 = (uint8_t)byte5;
-  uint8_t tmp_3_3625 = (uint8_t)byte6;
-  uint8_t tmp_3_3626 = (uint8_t)byte7;
-  return ((UINT64_C(72057594037927936) * (uint64_t)tmp_3_3626) + ((UINT64_C(281474976710656) * (uint64_t)tmp_3_3625) + ((UINT64_C(1099511627776) * (uint64_t)tmp_3_3624) + ((UINT64_C(4294967296) * (uint64_t)tmp_3_3623) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)tmp_3_3622) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)tmp_3_3621) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)tmp_3_3620) + (uint32_t)(uint16_t)tmp_3_3619)))))));
+  return ((UINT64_C(72057594037927936) * (uint64_t)(uint8_t)byte7) + ((UINT64_C(281474976710656) * (uint64_t)(uint8_t)byte6) + ((UINT64_C(1099511627776) * (uint64_t)(uint8_t)byte5) + ((UINT64_C(4294967296) * (uint64_t)(uint8_t)byte4) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)(uint8_t)byte3) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)(uint8_t)byte2) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)(uint8_t)byte1) + (uint32_t)(uint16_t)(uint8_t)byte0)))))));
 }
 
 uint64_t decode_ssz_uint_Bytes_uint16_t_to_uint64_t(Bytes input, uint16_t offset)
@@ -75,15 +66,7 @@ uint64_t decode_ssz_uint_Bytes_uint16_t_to_uint64_t(Bytes input, uint16_t offset
   uint64_t byte6 = stateless_input_slice_byte(input, offset6);
   uint32_t offset7 = ssz_field_offset_uint16_t_uint8_t_to_uint32_t(offset, UINT8_C(7));
   uint64_t byte7 = stateless_input_slice_byte(input, offset7);
-  uint8_t tmp_3_3619 = (uint8_t)byte0;
-  uint8_t tmp_3_3620 = (uint8_t)byte1;
-  uint8_t tmp_3_3621 = (uint8_t)byte2;
-  uint8_t tmp_3_3622 = (uint8_t)byte3;
-  uint8_t tmp_3_3623 = (uint8_t)byte4;
-  uint8_t tmp_3_3624 = (uint8_t)byte5;
-  uint8_t tmp_3_3625 = (uint8_t)byte6;
-  uint8_t tmp_3_3626 = (uint8_t)byte7;
-  return ((UINT64_C(72057594037927936) * (uint64_t)tmp_3_3626) + ((UINT64_C(281474976710656) * (uint64_t)tmp_3_3625) + ((UINT64_C(1099511627776) * (uint64_t)tmp_3_3624) + ((UINT64_C(4294967296) * (uint64_t)tmp_3_3623) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)tmp_3_3622) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)tmp_3_3621) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)tmp_3_3620) + (uint32_t)(uint16_t)tmp_3_3619)))))));
+  return ((UINT64_C(72057594037927936) * (uint64_t)(uint8_t)byte7) + ((UINT64_C(281474976710656) * (uint64_t)(uint8_t)byte6) + ((UINT64_C(1099511627776) * (uint64_t)(uint8_t)byte5) + ((UINT64_C(4294967296) * (uint64_t)(uint8_t)byte4) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)(uint8_t)byte3) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)(uint8_t)byte2) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)(uint8_t)byte1) + (uint32_t)(uint16_t)(uint8_t)byte0)))))));
 }
 
 uint64_t decode_ssz_uint_Bytes_uint8_t_to_uint64_t(Bytes input, uint8_t offset)
@@ -103,15 +86,7 @@ uint64_t decode_ssz_uint_Bytes_uint8_t_to_uint64_t(Bytes input, uint8_t offset)
   uint64_t byte6 = stateless_input_slice_byte(input, offset6);
   uint32_t offset7 = ssz_field_offset_uint8_t_uint8_t_to_uint32_t(offset, UINT8_C(7));
   uint64_t byte7 = stateless_input_slice_byte(input, offset7);
-  uint8_t tmp_3_3619 = (uint8_t)byte0;
-  uint8_t tmp_3_3620 = (uint8_t)byte1;
-  uint8_t tmp_3_3621 = (uint8_t)byte2;
-  uint8_t tmp_3_3622 = (uint8_t)byte3;
-  uint8_t tmp_3_3623 = (uint8_t)byte4;
-  uint8_t tmp_3_3624 = (uint8_t)byte5;
-  uint8_t tmp_3_3625 = (uint8_t)byte6;
-  uint8_t tmp_3_3626 = (uint8_t)byte7;
-  return ((UINT64_C(72057594037927936) * (uint64_t)tmp_3_3626) + ((UINT64_C(281474976710656) * (uint64_t)tmp_3_3625) + ((UINT64_C(1099511627776) * (uint64_t)tmp_3_3624) + ((UINT64_C(4294967296) * (uint64_t)tmp_3_3623) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)tmp_3_3622) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)tmp_3_3621) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)tmp_3_3620) + (uint32_t)(uint16_t)tmp_3_3619)))))));
+  return ((UINT64_C(72057594037927936) * (uint64_t)(uint8_t)byte7) + ((UINT64_C(281474976710656) * (uint64_t)(uint8_t)byte6) + ((UINT64_C(1099511627776) * (uint64_t)(uint8_t)byte5) + ((UINT64_C(4294967296) * (uint64_t)(uint8_t)byte4) + (((uint64_t)UINT32_C(16777216) * (uint64_t)(uint32_t)(uint8_t)byte3) + (((uint64_t)UINT32_C(65536) * (uint64_t)(uint32_t)(uint8_t)byte2) + (uint64_t)(((uint32_t)UINT16_C(256) * (uint32_t)(uint16_t)(uint8_t)byte1) + (uint32_t)(uint16_t)(uint8_t)byte0)))))));
 }
 
 bytes20 ssz_addr(Bytes input, uint8_t offset)

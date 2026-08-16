@@ -32,7 +32,8 @@ const uint8_t *evmsail_output_ptr(uint64_t off, uint64_t len);
 void evmsail_input_reset(void);
 
 struct zStatelessInputSliceFields stateless_input(unit u);
-struct zEvmMemorySliceFields mem_expand(uint64_t pointer, uint64_t established, uint64_t required);
+unit mem_expand(uint64_t pointer, uint64_t established, uint64_t required);
+struct zEvmMemorySliceFields mem_view(uint64_t pointer, uint64_t established, uint64_t required);
 struct zStatelessInputSliceFields nodedb_lookup(fixed_bytes_32 hash);
 
 uint64_t stateless_input_byte_at(struct zStatelessInputSliceFields slice, uint64_t index);

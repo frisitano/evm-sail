@@ -10,8 +10,7 @@ void validate_executed_block(struct Block block, struct BlockExecutionResult res
     fatal_error(InvalidGasUsed);
   }
   bool result_2_108 = (bool)(profile.fork >= Cancun);
-  bool tmp_3_618 = (bool)(result_2_108 && (result.blob_gas_used != header.blob_gas_used));
-  if (tmp_3_618) {
+  if (result_2_108 && (result.blob_gas_used != header.blob_gas_used)) {
     fatal_error(InvalidBlobGasUsed);
   }
   bytes32 poststate = compute_state_root();
@@ -27,8 +26,7 @@ void validate_executed_block(struct Block block, struct BlockExecutionResult res
   if (!logs_bloom_matches) {
     fatal_error(InvalidLogsBloom);
   }
-  bool result_2_116 = (bool)(profile.fork >= Amsterdam);
-  if (result_2_116) {
+  if (profile.fork >= Amsterdam) {
     validate_block_access_list_(block.body.block_access_list, execution_profile.gas.block_limit);
     return;
   }
@@ -42,8 +40,7 @@ void verify_stateless_payload(struct StatelessInputRef input_ref)
   validate_execution_payload(input, input_ref, witness);
   struct Block block = input.payload.block;
   struct ExecutionProfileFields execution_profile = k_execution_profile;
-  bool result_2_90 = (bool)(execution_profile.protocol.fork >= Amsterdam);
-  if (result_2_90) {
+  if (execution_profile.protocol.fork >= Amsterdam) {
     initialize_block_access_list_state_(block.body.block_access_list, k_parent_state_root, block.body.transactions.count);
   }
   struct BlockExecutionResult result = execute_block_body(block.body, input_ref);

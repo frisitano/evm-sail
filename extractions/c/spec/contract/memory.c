@@ -54,17 +54,11 @@ static void arena_reserve(size_t need)
   arena_cap = ncap;
 }
 
-/* Absolute byte access. Sail establishes every accessed range first. */
-uint64_t mem_read_byte(uint64_t off)
-{
-  return off < arena_cap ? (uint64_t)arena[off] : 0;
-}
-
 /* Materialize [pointer + established, pointer + required). */
 uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t required)
 {
-  if (required < established || pointer > UINT64_MAX - required || pointer > SIZE_MAX ||
-      required > SIZE_MAX - (size_t)pointer)
+  if (required < established || pointer > UINT32_MAX || required > UINT32_MAX - pointer ||
+      pointer > SIZE_MAX || required > SIZE_MAX - (size_t)pointer)
     abort();
   size_t base = (size_t)pointer;
   size_t old_end = base + (size_t)established;
@@ -72,6 +66,15 @@ uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t requ
   arena_reserve(new_end);
   if (new_end > old_end)
     memset(arena + old_end, 0, new_end - old_end);
+  return pointer;
+}
+
+/* Resolve an already-established frame prefix without growing or clearing it. */
+uint64_t evm_memory_view(uint64_t pointer, uint64_t established, uint64_t required)
+{
+  if (required > established || pointer > UINT32_MAX || established > UINT32_MAX - pointer ||
+      pointer > arena_cap || established > arena_cap - (size_t)pointer)
+    abort();
   return pointer;
 }
 

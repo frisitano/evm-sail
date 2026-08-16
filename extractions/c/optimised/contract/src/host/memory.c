@@ -32,12 +32,6 @@ static uint8_t *absolute_region(uint64_t off, uint64_t len)
   return len == 0 ? NULL : arena + off;
 }
 
-/* Absolute byte access. Sail establishes every accessed range first. */
-uint64_t mem_read_byte(uint64_t off)
-{
-  return (uint64_t)*absolute_region(off, 1);
-}
-
 /* Materialize [pointer + established, pointer + required). */
 uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t required)
 {
@@ -47,6 +41,16 @@ uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t requ
   }
   if (required > established) {
     memset(arena + pointer + established, 0, (size_t)(required - established));
+  }
+  return pointer;
+}
+
+/* Resolve an already-established frame prefix without growing or clearing it. */
+uint64_t evm_memory_view(uint64_t pointer, uint64_t established, uint64_t required)
+{
+  if (required > established || pointer > GUEST_EVM_MEMORY_BYTES ||
+      established > GUEST_EVM_MEMORY_BYTES - pointer) {
+    GUEST_ABORT();
   }
   return pointer;
 }

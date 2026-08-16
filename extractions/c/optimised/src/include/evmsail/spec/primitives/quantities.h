@@ -21,7 +21,7 @@ struct MemoryRangeFields {
 // struct MemoryAccessFields
 struct MemoryAccessFields {
   struct MemoryRangeFields range;
-  uint32_t required_size;
+  uint32_t requested_height;
 };
 
 bool neq_anything_EPrecompileId__(enum PrecompileId x, enum PrecompileId y);

@@ -73,8 +73,8 @@ void index_witness_nodes_(struct BoundedSszListRef nodes);
 
 void index_witness_codes_(struct BoundedSszListRef codes);
 
-void create_letbind_274(void);
-void kill_letbind_274(void);
+void create_letbind_276(void);
+void kill_letbind_276(void);
 
 
 uint8_t next_parent_header_field(uint8_t index);

@@ -17,6 +17,20 @@ struct SstoreCosts {
   uint32_t state_credit;
 };
 
+// struct tuple_uint_64_uint_64_uint_32
+struct tuple_uint_64_uint_64_uint_32 {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint32_t tup2;
+};
+
+// struct tuple_uint_64_uint_64_uint_8
+struct tuple_uint_64_uint_64_uint_8 {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint8_t tup2;
+};
+
 #ifndef SAIL_FIXED_VECTOR_VECTOR_128_UINT_16_DEFINED
 #define SAIL_FIXED_VECTOR_VECTOR_128_UINT_16_DEFINED
 typedef struct vector_128_uint_16 {
@@ -24,18 +38,6 @@ typedef struct vector_128_uint_16 {
   uint16_t data[128];
 } vector_128_uint_16;
 #endif
-
-// struct tuple_bool_uint_64
-struct tuple_bool_uint_64 {
-  bool tup0;
-  uint64_t tup1;
-};
-
-// struct tuple_bool_uint_8
-struct tuple_bool_uint_8 {
-  bool tup0;
-  uint8_t tup1;
-};
 
 // struct tuple_bool_uint_64_uint_64_uint_32
 struct tuple_bool_uint_64_uint_64_uint_32 {
@@ -77,11 +79,9 @@ uint64_t gas_sub(uint64_t left, uint64_t right);
 
 __attribute__((__always_inline__)) u256 memory_word_count_word(u256 byte_len);
 
-__attribute__((__always_inline__)) uint64_t memory_required_size(u256 start, u256 size);
+__attribute__((__always_inline__)) uint64_t memory_requested_height(u256 start, u256 size);
 
 __attribute__((__always_inline__)) struct MemoryAccessFields memory_access(u256 start, u256 size);
-
-__attribute__((__always_inline__)) Bytes expand_memory(Bytes mem, uint32_t required_size);
 
 uint16_t account_cost(bool warm);
 
@@ -117,13 +117,15 @@ struct SstoreCosts amsterdam_sstore_costs(u256 original, u256 current, u256 new_
 
 struct SstoreCosts sstore_costs(u256 original, u256 current, u256 new_value, bool cold);
 
-struct tuple_bool_uint_64 charge_word_scaled_gas(uint64_t g, uint16_t per_unit, u256 units);
+struct GasCharge word_scaled_gas_cost(uint16_t per_unit, u256 units, uint64_t available);
 
-struct tuple_bool_uint_64 charge_memory_word_gas(uint64_t g, uint16_t base, uint16_t per_word, u256 size);
+struct GasCharge memory_word_gas_cost(uint16_t base, uint16_t per_word, u256 size, uint64_t available);
 
-struct tuple_bool_uint_64 charge_keccak_gas(uint64_t g, u256 size);
+struct GasCharge keccak_gas_cost(u256 size, uint64_t available);
 
-struct tuple_bool_uint_64 charge_copy_gas(uint64_t g, u256 size);
+struct GasCharge copy_gas_cost(u256 size, uint64_t available);
+
+struct GasCharge log_gas_cost(uint8_t num_topics, u256 size, uint64_t available);
 
 uint64_t exp_gas(u256 exponent);
 
@@ -135,45 +137,13 @@ uint32_t block_blob_gas_add_uint8_t_uint32_t_uint32_t_to_uint32_t(uint8_t maximu
 
 struct GasCharge bls_msm_gas(vector_128_uint_16 table, uint16_t base, uint16_t maxd, uint32_t k, uint64_t available);
 
-__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t amount);
-
-__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
-
-__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
-
-__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_uint64_t_uint8_t_to_struct_tuple_bool_uint_64(uint64_t g, uint8_t amount);
-
-struct tuple_bool_uint_64 charge_copy_gas_uint64_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, u256 size);
-
-struct tuple_bool_uint_64_uint_64_uint_32 charge_deployment_state_gas(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
-
-struct tuple_bool_uint_64 charge_log_gas(uint64_t g, uint8_t num_topics, u256 size);
-
-__attribute__((__always_inline__)) struct tuple_bool_uint_64 charge_memory_expansion(uint64_t g, Bytes mem, uint64_t required_size);
-
-struct tuple_bool_uint_64 charge_memory_word_gas_uint64_t_uint16_t_uint16_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t base, uint16_t per_word, u256 size);
-
-struct tuple_bool_uint_64 charge_memory_word_gas_uint64_t_uint16_t_uint8_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint16_t base, uint8_t per_word, u256 size);
-
 struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
 
 struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
 
 struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
 
-struct tuple_bool_uint_64 charge_word_scaled_gas_uint64_t_uint8_t_u256_to_struct_tuple_bool_uint_64(uint64_t g, uint8_t per_unit, u256 units);
-
-struct tuple_bool_uint_64 charge_word_scaled_gas_uint64_t_uint8_t_u256_to_struct_tuple_bool_uint_64_variant_2(uint64_t g, uint8_t per_unit, u256 units);
-
-struct tuple_bool_uint_64 check_execution_gas_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(uint64_t g, uint32_t amount);
-
-struct tuple_bool_uint_64 check_execution_gas_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(uint64_t g, uint64_t amount);
-
-struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
-
-struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount);
-
-struct tuple_bool_uint_64_uint_64_uint_32 debit_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount);
+struct GasCharge copy_gas_cost_u256_uint64_t_to_struct_GasCharge(u256 size, uint64_t available);
 
 bool deployed_code_size_allowed(uint32_t size);
 
@@ -182,6 +152,10 @@ struct GasCharge fixed_precompile_gas_uint16_t_uint64_t_to_struct_GasCharge(uint
 struct GasCharge fixed_precompile_gas_uint32_t_uint64_t_to_struct_GasCharge(uint32_t cost, uint64_t available);
 
 struct GasCharge fixed_precompile_gas_uint8_t_uint64_t_to_struct_GasCharge(uint8_t cost, uint64_t available);
+
+uint64_t gas_sub_uint64_t_uint16_t_to_uint64_t(uint64_t left, uint16_t right);
+
+uint64_t gas_sub_uint64_t_uint32_t_to_uint64_t(uint64_t left, uint32_t right);
 
 bool initcode_size_allowed(uint32_t size);
 
@@ -197,15 +171,21 @@ __attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_
 
 __attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(u256 start, u256 size);
 
-__attribute__((__always_inline__)) uint64_t memory_required_size_u256_u256_to_uint64_t(u256 start, u256 size);
+__attribute__((__always_inline__)) struct GasCharge memory_expansion_gas_cost(uint32_t mem, uint64_t requested_height, uint64_t available);
 
-__attribute__((__always_inline__)) uint64_t memory_required_size_u256_u256_to_uint64_t_variant_2(u256 start, u256 size);
+__attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to_uint64_t(u256 start, u256 size);
+
+__attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to_uint64_t_variant_2(u256 start, u256 size);
 
 uint16_t memory_word_count_uint32_t_to_uint16_t(uint32_t byte_len);
 
 uint32_t memory_word_count_uint32_t_to_uint32_t(uint32_t byte_len);
 
 __attribute__((__always_inline__)) u256 memory_word_count_word_u256_to_u256(u256 byte_len);
+
+struct GasCharge memory_word_gas_cost_uint16_t_uint16_t_u256_uint64_t_to_struct_GasCharge(uint16_t base, uint16_t per_word, u256 size, uint64_t available);
+
+struct GasCharge memory_word_gas_cost_uint16_t_uint8_t_u256_uint64_t_to_struct_GasCharge(uint16_t base, uint8_t per_word, u256 size, uint64_t available);
 
 u256 pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(struct CalldataSlice input, uint8_t start, uint8_t byte_count);
 
@@ -220,6 +200,8 @@ uint32_t state_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(uint32_t lef
 uint32_t state_gas_spill_add_uint32_t_uint32_t_to_uint32_t(uint32_t left, uint32_t right);
 
 uint32_t state_gas_spill_room_uint32_t_to_uint32_t(uint32_t left);
+
+struct GasCharge word_scaled_gas_cost_uint8_t_u256_uint64_t_to_struct_GasCharge(uint8_t per_unit, u256 units, uint64_t available);
 
 extern const uint16_t G_zero;
 

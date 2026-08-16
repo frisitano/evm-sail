@@ -74,15 +74,39 @@ struct OpcodeOutcome {
   } variants;
 };
 
+// struct ExceptionalStateTransition
+struct ExceptionalStateTransition {
+  uint64_t state_gas_remaining;
+  uint32_t state_gas_spilled;
+  struct FrameStatus status;
+};
+
 // enum CreateKind
 enum CreateKind { CreateByNonce, CreateBySalt };
+
+// struct FrameTransition
+struct FrameTransition {
+  struct CalldataSlice calldata;
+  struct CodeFields code;
+  uint64_t gas_remaining;
+  uint32_t memory_base;
+  uint32_t memory_height;
+  struct Message message;
+  uint32_t pc;
+  __int128 refund;
+  Bytes returndata;
+  StackPointer stack_top;
+  uint64_t state_gas_remaining;
+  uint32_t state_gas_spilled;
+  struct FrameStatus status;
+};
 
 // struct FrameCheckpoint
 struct FrameCheckpoint {
   struct CalldataSlice calldata;
   struct CodeFields code;
   uint64_t gas_remaining;
-  Bytes memory;
+  uint32_t memory_height;
   struct Message message;
   uint32_t pc;
   __int128 refund;

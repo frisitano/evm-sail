@@ -52,9 +52,9 @@ void k_log(bytes20 a, struct LogTopics topics, struct LogData data)
 
 struct LogSeriesRef read_logs(void)
 {
-  uint64_t logs_tx_start_result_2_2121 = logs_tx_start();
-  uint64_t logs_tx_count_result_2_2122 = logs_tx_count();
-  return ((struct LogSeriesRef){.count = logs_tx_count_result_2_2122, .start = logs_tx_start_result_2_2121});
+  uint64_t logs_tx_start_result_2_2100 = logs_tx_start();
+  uint64_t logs_tx_count_result_2_2101 = logs_tx_count();
+  return ((struct LogSeriesRef){.count = logs_tx_count_result_2_2101, .start = logs_tx_start_result_2_2100});
 }
 
 Bytes read_log_data(uint64_t index)
@@ -66,15 +66,15 @@ void k_emit_transfer_log(bytes20 src, bytes20 dst, u256 v)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   bool value_is_zero = eq_u256(v, WORD_ZERO);
-  bool result_2_2119 = (bool)(execution_profile.protocol.fork < Amsterdam);
-  if (result_2_2119 || (value_is_zero || eq_bytes20(src, dst))) {
+  bool result_2_2098 = (bool)(execution_profile.protocol.fork < Amsterdam);
+  if (result_2_2098 || (value_is_zero || eq_bytes20(src, dst))) {
     return;
   }
   u256 source = address_to_word(src);
   u256 destination = address_to_word(dst);
   struct LogTopics topics;
-  struct tuple_u256_u256_u256 tmp_3_3397 = ((struct tuple_u256_u256_u256){.tup0 = EIP7708_TRANSFER_TOPIC, .tup1 = source, .tup2 = destination});
-  topics = LogTopics3(tmp_3_3397);
+  struct tuple_u256_u256_u256 tmp_3_3138 = ((struct tuple_u256_u256_u256){.tup0 = EIP7708_TRANSFER_TOPIC, .tup1 = source, .tup2 = destination});
+  topics = LogTopics3(tmp_3_3138);
   struct LogData data = LogDataWord(v);
   k_log(EIP7708_SYSTEM_ADDRESS, topics, data);
 }
