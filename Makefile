@@ -82,6 +82,8 @@ C_OPT_COMPDB        := compile_commands.json
 C_OPT_QUALITY_DIR   := build/extraction-quality
 C_OPT_QUALITY_RECORD := $(C_OPT_QUALITY_DIR)/record.json
 C_OPT_QUALITY_SUMMARY := $(C_OPT_QUALITY_DIR)/summary.md
+C_OPT_PROVENANCE_STATE := $(C_OPT_BUILD_DIR)/compiler-provenance.pre.json
+C_OPT_PROVENANCE_STAMP := $(C_OPT_GENERATED_DIR)/extraction-provenance.json
 C_OPT_EVALUATION_PURPOSE ?= experiment
 C_OPT_SAIL_SOURCE_ARG = $(if $(strip $(SAIL_SOURCE)),--sail-source "$(SAIL_SOURCE)")
 C_OPT_SAIL_EFFECTIVE_BINARY_ARG = $(if $(strip $(SAIL_EFFECTIVE_BINARY)),--sail-effective-binary "$(SAIL_EFFECTIVE_BINARY)")
@@ -407,7 +409,10 @@ publish-c-extraction: extract-c-spec extract-c-optimised
 extract-c-optimised: check-optimized-ffi
 	rm -rf $(C_OPT_GENERATED_DIR)
 	mkdir -p $(C_OPT_GENERATED_DIR)
-	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
+	$(PYTHON) tools/run_optimised_c_extraction.py run --sail $(SAIL) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--state $(C_OPT_PROVENANCE_STATE) --cwd $(CURDIR) -- \
+		$(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
 		--c-optimized-model --c-package $(C_OPT_PACKAGE) \
 		--c-output-dir $(C_OPT_GENERATED_DIR) \
 		--c-optimized-source-root sail \
@@ -424,6 +429,11 @@ extract-c-optimised: check-optimized-ffi
 	test -s $(C_OPT_GENERATED_MANIFEST)
 	test -s $(C_OPT_PACKAGE_MANIFEST)
 	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
+	$(PYTHON) tools/run_optimised_c_extraction.py finalize --sail $(SAIL) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--state $(C_OPT_PROVENANCE_STATE) --generated $(C_OPT_GENERATED_DIR) \
+		--output $(C_OPT_PROVENANCE_STAMP)
+	test -s $(C_OPT_PROVENANCE_STAMP)
 
 build-c-optimised: extract-c-optimised
 	$(MAKE) --no-print-directory -C $(C_OPT_GENERATED_DIR) CC="$(CC)"
@@ -449,6 +459,7 @@ c-optimised-evaluator-test:
 c-optimised-evaluate: c-optimised-compdb
 	$(PYTHON) tools/evaluate_optimised_c.py --sail $(SAIL) --clang $(CLANG) \
 		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--provenance-stamp $(C_OPT_PROVENANCE_STAMP) \
 		--purpose $(C_OPT_EVALUATION_PURPOSE) --compdb $(C_OPT_COMPDB) \
 		--built-library $(C_OPT_GENERATED_DIR)/libevmsail.a \
 		--output $(C_OPT_QUALITY_RECORD) --summary $(C_OPT_QUALITY_SUMMARY) \
