@@ -562,6 +562,15 @@ struct FrameTransition = {
     returndata : OutputSlice,
 }
 
+/*! State installed when an executing frame enters an exceptional halt.
+    Keeping the normalized Amsterdam state-gas values together prevents the
+    transition from being represented as an anonymous positional tuple. */
+struct ExceptionalStateTransition = {
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+    status : FrameStatus,
+}
+
 /*! Lightweight result of one opcode handler. */
 union OpcodeOutcome = {
     /*! Continue executing the active frame. */

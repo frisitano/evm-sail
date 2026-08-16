@@ -702,8 +702,12 @@ exceptional_out_of_gas:
 opcode_done:
   if (status.kind == Kind_Exceptional) {
     gas = 0;
-    status = exceptional_state(&state_gas_remaining, &state_gas_spilled, frame.state_gas_reservoir,
-                               status.variants.Exceptional);
+    struct ExceptionalStateTransition exceptional =
+        exceptional_state(state_gas_remaining, state_gas_spilled, frame.state_gas_reservoir,
+                          status.variants.Exceptional);
+    state_gas_remaining = exceptional.state_gas_remaining;
+    state_gas_spilled = exceptional.state_gas_spilled;
+    status = exceptional.status;
   }
 
 interpreter_continue:

@@ -59,11 +59,7 @@ $[c_inline]
 val opcode_frame_status : OpcodeOutcome -> FrameStatus
 
 $[c_inline]
-val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> (
-        state_gas,
-        state_gas_spill,
-        FrameStatus,
-    )
+val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> ExceptionalStateTransition
 
 /* The optimized build refines only the interpreter control-flow boundary.
  * Opcode semantics, frame entry, and frame resumption remain generated from

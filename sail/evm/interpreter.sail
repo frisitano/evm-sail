@@ -2047,12 +2047,15 @@ function interpret(
                             memory_after,
                             Exceptional(kind),
                         ) => {
-                            let (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                            let exceptional = exceptional_state(
                                 state_gas_after,
                                 state_spill_after,
                                 carried_state_gas_reservoir,
                                 kind,
                             );
+                            let state_gas_after = exceptional.state_gas_remaining;
+                            let state_spill_after = exceptional.state_gas_spilled;
+                            let status_after = exceptional.status;
                             (
                                 pc_after,
                                 GAS_ZERO,
@@ -2265,12 +2268,15 @@ function run_call(
     let stack_status = guard_stack(carried_sp, stack_inputs, 1);
     match stack_status {
         Failed(halt_kind) => {
-            let (state_gas_after, state_spill_after, status_after) = exceptional_state(
+            let exceptional = exceptional_state(
                 carried_state_gas,
                 carried_state_spill,
                 carried_state_gas_reservoir,
                 halt_kind,
             );
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
             struct {
                 pc = carried_pc,
                 gas_remaining = GAS_ZERO,
@@ -2348,12 +2354,15 @@ function run_call(
                (CALLCODE has no static guard in the spec; the others force value = 0). */
             if semantics.transfers_value & value_nonzero & carried_is_static then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     WriteProtection,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -2388,12 +2397,15 @@ function run_call(
             let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
             if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -2421,12 +2433,15 @@ function run_call(
             let static_base : gas_cost = target_cost + transfer_cost;
             if gas_after < static_base then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -2473,12 +2488,15 @@ function run_call(
             let additional_cost : gas_cost = delegation_cost + create_cost;
             if gas_after < additional_cost then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -2518,12 +2536,15 @@ function run_call(
                     state_spill_after = next_state_spill;
                     if state_gas_halt then {
                         gas_after = GAS_ZERO;
-                        (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                        let exceptional = exceptional_state(
                             state_gas_after,
                             state_spill_after,
                             carried_state_gas_reservoir,
                             OutOfGas,
                         );
+                        state_gas_after = exceptional.state_gas_remaining;
+                        state_spill_after = exceptional.state_gas_spilled;
+                        status_after = exceptional.status;
                         return struct {
                             pc = pc_after,
                             gas_remaining = gas_after,
@@ -2544,12 +2565,15 @@ function run_call(
                 base_child = call_gas_cap_word(gas_after, gas_request);
                 if gas_after < base_child then {
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    let exceptional = exceptional_state(
                         state_gas_after,
                         state_spill_after,
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
                     return struct {
                         pc = pc_after,
                         gas_remaining = gas_after,
@@ -2571,12 +2595,15 @@ function run_call(
                 base_child = call_gas_cap_word(gas_after, gas_request);
                 if gas_after < base_child then {
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    let exceptional = exceptional_state(
                         state_gas_after,
                         state_spill_after,
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
                     return struct {
                         pc = pc_after,
                         gas_remaining = gas_after,
@@ -2916,12 +2943,15 @@ function run_create(
     let stack_status = guard_stack(carried_sp, stack_inputs, 1);
     match stack_status {
         Failed(halt_kind) => {
-            let (state_gas_after, state_spill_after, status_after) = exceptional_state(
+            let exceptional = exceptional_state(
                 carried_state_gas,
                 carried_state_spill,
                 carried_state_gas_reservoir,
                 halt_kind,
             );
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
             struct {
                 pc = carried_pc,
                 gas_remaining = GAS_ZERO,
@@ -2990,12 +3020,15 @@ function run_create(
                remaining gas), checked before any charge or child frame. */
             if carried_is_static then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     WriteProtection,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -3016,12 +3049,15 @@ function run_create(
             let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
             if not_bool(expansion_cost.affordable) then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -3051,12 +3087,15 @@ function run_create(
             if gas_after < access_cost then {
                 memory_after = mem1;
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 return struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -3080,12 +3119,15 @@ function run_create(
                 if not_bool(initcode_cost.affordable) then {
                     memory_after = mem1;
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    let exceptional = exceptional_state(
                         state_gas_after,
                         state_spill_after,
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
                     return struct {
                         pc = pc_after,
                         gas_remaining = gas_after,
@@ -3109,12 +3151,15 @@ function run_create(
                 if not_bool(hashing_cost.affordable) then {
                     memory_after = mem1;
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    let exceptional = exceptional_state(
                         state_gas_after,
                         state_spill_after,
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
                     return struct {
                         pc = pc_after,
                         gas_remaining = gas_after,
@@ -3141,12 +3186,15 @@ function run_create(
             if invalid_initcode_size then {
                 memory_after = mem1;
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                let exceptional = exceptional_state(
                     state_gas_after,
                     state_spill_after,
                     carried_state_gas_reservoir,
                     InitCodeTooLarge,
                 );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
                 struct {
                     pc = pc_after,
                     gas_remaining = gas_after,
@@ -3246,12 +3294,15 @@ function run_create(
                         if state_gas_halt then {
                             memory_after = mem1;
                             gas_after = GAS_ZERO;
-                            (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                            let exceptional = exceptional_state(
                                 state_gas_after,
                                 state_spill_after,
                                 carried_state_gas_reservoir,
                                 OutOfGas,
                             );
+                            state_gas_after = exceptional.state_gas_remaining;
+                            state_spill_after = exceptional.state_gas_spilled;
+                            status_after = exceptional.status;
                             return struct {
                                 pc = pc_after,
                                 gas_remaining = gas_after,
@@ -3484,12 +3535,15 @@ function resume_create(
              * exceptional creation path. Neither rule is active on
              * Frontier/Homestead in a way that reaches this branch. */
             settled_child_gas = GAS_ZERO;
-            (settled_child_state_gas, settled_child_state_spill, settled_child_status) = exceptional_state(
+            let exceptional = exceptional_state(
                 settled_child_state_gas,
                 settled_child_state_spill,
                 child_state_gas_reservoir,
                 OutOfGas,
-            )
+            );
+            settled_child_state_gas = exceptional.state_gas_remaining;
+            settled_child_state_spill = exceptional.state_gas_spilled;
+            settled_child_status = exceptional.status
         } else {
             let deployment_charge = code_deployment_execution_cost(deployed_length, settled_child_gas);
             if deployment_charge.affordable then {
@@ -3505,12 +3559,15 @@ function resume_create(
                 );
                 if deployment_halt then {
                     settled_child_gas = GAS_ZERO;
-                    (settled_child_state_gas, settled_child_state_spill, settled_child_status) = exceptional_state(
+                    let exceptional = exceptional_state(
                         settled_child_state_gas,
                         settled_child_state_spill,
                         child_state_gas_reservoir,
                         OutOfGas,
-                    )
+                    );
+                    settled_child_state_gas = exceptional.state_gas_remaining;
+                    settled_child_state_spill = exceptional.state_gas_spilled;
+                    settled_child_status = exceptional.status
                 }
             } else if profile.fork < Homestead then {
                 /* Frontier consumed the remaining child gas but kept the
@@ -3520,12 +3577,15 @@ function resume_create(
                 frontier_empty_deposit = true
             } else {
                 settled_child_gas = GAS_ZERO;
-                (settled_child_state_gas, settled_child_state_spill, settled_child_status) = exceptional_state(
+                let exceptional = exceptional_state(
                     settled_child_state_gas,
                     settled_child_state_spill,
                     child_state_gas_reservoir,
                     OutOfGas,
-                )
+                );
+                settled_child_state_gas = exceptional.state_gas_remaining;
+                settled_child_state_spill = exceptional.state_gas_spilled;
+                settled_child_status = exceptional.status
             }
         }
     };
@@ -3782,12 +3842,15 @@ function run_frame_entry_encoded(
             StaticCall,
         ),
         _ => {
-            let (state_gas_after, state_spill_after, status_after) = exceptional_state(
+            let exceptional = exceptional_state(
                 carried_state_gas,
                 carried_state_spill,
                 carried_state_gas_reservoir,
                 InvalidOpcode,
             );
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
             struct {
                 pc = carried_pc,
                 gas_remaining = GAS_ZERO,

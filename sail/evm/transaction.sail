@@ -1148,12 +1148,10 @@ function run_create_transaction_frame(
     let occupied = k_account_occupied(new_addr);
     if occupied then {
         gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) = exceptional_state(
-            state_gas_after,
-            state_spill_after,
-            state_gas_reservoir,
-            AddressCollision,
-        )
+        let exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, AddressCollision);
+        state_gas_after = exceptional.state_gas_remaining;
+        state_spill_after = exceptional.state_gas_spilled;
+        status_after = exceptional.status
     } else {
         k_mark_created(new_addr); /* EIP-6780: created this tx */
         k_clear_storage(new_addr);
@@ -1216,12 +1214,15 @@ function run_create_transaction_frame(
                     );
                     if deployment_halt then {
                         gas_after = GAS_ZERO;
-                        (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                        let exceptional = exceptional_state(
                             state_gas_after,
                             state_spill_after,
                             state_gas_reservoir,
                             OutOfGas,
-                        )
+                        );
+                        state_gas_after = exceptional.state_gas_remaining;
+                        state_spill_after = exceptional.state_gas_spilled;
+                        status_after = exceptional.status
                     };
                     let deployment_succeeded = frame_succeeded(status_after);
                     if deployment_succeeded then {
@@ -1235,21 +1236,22 @@ function run_create_transaction_frame(
                     k_deploy_code(new_addr, EMPTY_CODE_SLICE)
                 } else {
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    let exceptional = exceptional_state(
                         state_gas_after,
                         state_spill_after,
                         state_gas_reservoir,
                         OutOfGas,
-                    )
+                    );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status
                 }
             } else {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
-                    state_gas_after,
-                    state_spill_after,
-                    state_gas_reservoir,
-                    OutOfGas,
-                )
+                let exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas);
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status
             } /* failed deploy */
         }
     };
@@ -1318,21 +1320,17 @@ function run_call_transaction_frame(
                 status_after = Halted(halt_reason)
             } else {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) = exceptional_state(
-                    state_gas_after,
-                    state_spill_after,
-                    state_gas_reservoir,
-                    OutOfGas,
-                )
+                let exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas);
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status
             }
         } else {
             gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) = exceptional_state(
-                state_gas_after,
-                state_spill_after,
-                state_gas_reservoir,
-                OutOfGas,
-            )
+            let exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas);
+            state_gas_after = exceptional.state_gas_remaining;
+            state_spill_after = exceptional.state_gas_spilled;
+            status_after = exceptional.status
         }
     } else {
         if profile.fork < Amsterdam then {

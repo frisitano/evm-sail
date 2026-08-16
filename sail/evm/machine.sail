@@ -104,25 +104,22 @@ function frame_state_gas_used(
 /*! Constructs an exceptional frame status while normalizing state gas.
     The exception producer is responsible for returning zero execution gas.
     Amsterdam restores the frame's state-gas reservoir and clears its spill. */
-val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> {'next_spill,
-                                                                                      0
-                                                                                   <= 'next_spill
-                                                                                   &  'next_spill
-                                                                                   <= 2 ^ 24
-                                                                                   &  'next_spill
-                                                                                   <= transaction_execution_gas_limit_value.
-                                                                                   (
-                                                                                       state_gas,
-                                                                                       int('next_spill),
-                                                                                       FrameStatus,
-                                                                                   )}
+val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> ExceptionalStateTransition
 function exceptional_state(state_gas_remaining, state_gas_spilled, state_gas_reservoir, k) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     if profile.fork >= Amsterdam then {
-        (state_gas_reservoir, STATE_GAS_SPILL_ZERO, Exceptional(k))
+        struct {
+            state_gas_remaining = state_gas_reservoir,
+            state_gas_spilled = STATE_GAS_SPILL_ZERO,
+            status = Exceptional(k),
+        }
     } else {
-        (state_gas_remaining, state_gas_spilled, Exceptional(k))
+        struct {
+            state_gas_remaining = state_gas_remaining,
+            state_gas_spilled = state_gas_spilled,
+            status = Exceptional(k),
+        }
     }
 }
 
