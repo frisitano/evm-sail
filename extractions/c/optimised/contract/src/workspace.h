@@ -37,9 +37,13 @@ GUEST_NORETURN void guest_finish(void);
  * checks its live length before writing and fails closed when the workspace is
  * exhausted. The backing storage is never heap-allocated, resized, or freed.
  *
- * Sixteen MiB of EVM memory is above the expansion affordable by the protocol
- * transaction gas limit. The other byte regions are deliberately separate so
- * a large encoding cannot consume memory owned by execution or guest output.
+ * Sixteen MiB is above the expansion affordable by the protocol transaction
+ * gas limit for one frame. The arena retains every suspended parent's extent,
+ * however, and there is not yet a proof that the sum across nested live frames
+ * fits this reservation. Exhaustion fails closed; the aggregate capacity is an
+ * explicit correctness risk rather than an established protocol invariant.
+ * The other byte regions are deliberately separate so a large encoding cannot
+ * consume memory owned by execution or guest output.
  */
 enum {
   GUEST_WORKSPACE_BYTES = 256U * 1024U * 1024U,

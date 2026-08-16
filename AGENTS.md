@@ -208,8 +208,11 @@ duplicating instructions elsewhere.
   `SszStatelessInput` (`ssz_builder.py`, under the execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
   EELS reference. State-test cases are executed through the in-process EELS
-  t8n, which builds a fully VALID single-tx block input AND the reference
-  `run_stateless_guest` output bytes; fixtures that already carry
+  t8n, which builds a fully VALID single-tx block input and invokes
+  `run_stateless_guest`. The pinned EELS schema's three request lists are
+  extended with the two known-empty v0.6.2 builder lists; the adapter
+  recomputes only the request root and preserves the reference guest's
+  validation verdict. Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is

@@ -7,9 +7,11 @@ SSZ SszStatelessInput (ssz_builder.py, under the execution-specs venv) and fed
 to main.sail's full-block validator, gated BYTE-EXACT against the EELS
 reference. Two input
 sources, auto-detected per fixture file:
-  - state tests: ssz_builder executes the case through the
-    in-process EELS t8n, producing a fully VALID single-tx block input AND the
-    reference guest's expected SszStatelessValidationResult bytes;
+  - state tests: ssz_builder executes the case through the in-process EELS t8n
+    and reference guest. The pinned EELS schema's three request lists are
+    extended with the two known-empty v0.6.2 builder lists; only the request
+    root is recomputed, while the reference guest supplies the validation
+    verdict;
   - blockchain/stateless fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
 Four execution vehicles: the native in-process ctypes lib (default), the
@@ -355,7 +357,8 @@ def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
-    mode. Pass criterion: the guest's output bytes EQUAL the reference's.
+    mode and narrow v0.6.2 request-schema adapter. Pass criterion: the guest's
+    output bytes EQUAL the adapted reference output.
     Backend: native in-process ctypes, the generated Python extraction,
     executable Lean extraction, the real RISC-V ELF on Spike, or the production
     ZisK ELF on ziskemu."""

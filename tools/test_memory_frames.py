@@ -19,6 +19,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "harness" / "run.py"
+COMPAT_TEST = ROOT / "tools" / "test_v062_compat.py"
+EELS_REVISION = "3f2859dc162243997f9f460fea5451a7ce7011b5"
+DEFAULT_EELS_ROOT = ROOT.parents[2] / "execution-specs" / ".worktrees" / "evm-sail-v062"
+DEFAULT_EELS_PY = ROOT.parents[2] / "execution-specs" / ".venv" / "bin" / "python3"
 
 SENDER = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 SECRET_KEY = "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
@@ -28,6 +32,7 @@ SUCCESS_CHILD = 0x3000000000000000000000000000000000000000
 REVERTING_CHILD = 0x4000000000000000000000000000000000000000
 SIBLING_CHECK = 0x5000000000000000000000000000000000000000
 EMPTY_TARGET = 0x6000000000000000000000000000000000000000
+CREATE_TARGET = 0x7000000000000000000000000000000000000000
 
 
 def push(value: int, width: int | None = None) -> bytes:
@@ -64,6 +69,18 @@ def call(address: int, input_offset: int = 0, input_size: int = 0) -> bytes:
     )
 
 
+def create(value: int, initcode_offset: int, initcode_size: int) -> bytes:
+    # CREATE pops value, initcode offset, then initcode size.
+    return b"".join(
+        (
+            push(initcode_size),
+            push(initcode_offset),
+            push(value),
+            b"\xf0",
+        )
+    )
+
+
 def store_boolean(slot: int) -> bytes:
     """Store the Boolean already on top of the stack in ``slot``."""
     return push(slot) + b"\x55"
@@ -86,6 +103,21 @@ def lower_access_code() -> bytes:
             call(EMPTY_TARGET, input_offset=0, input_size=0x20),
             b"\x50",
             b"\x00",  # STOP
+        )
+    )
+
+
+def lower_create_code() -> bytes:
+    """Grow high, then execute initcode from the established low prefix."""
+    initcode = b"\x5f\x5f\xf3"  # PUSH0; PUSH0; RETURN (empty runtime code)
+    return b"".join(
+        (
+            mstore8(0x100, 0xAA),
+            *(mstore8(offset, byte) for offset, byte in enumerate(initcode)),
+            create(0, 0, len(initcode)),
+            b"\x15\x15",  # ISZERO twice: one exactly when CREATE succeeded
+            store_boolean(0),
+            b"\x00",
         )
     )
 
@@ -183,6 +215,7 @@ def fixture_case(target: int, code_accounts: dict[int, bytes]) -> dict[str, obje
 
 def build_fixture() -> dict[str, object]:
     lower_accounts = {LOWER: lower_access_code()}
+    create_accounts = {CREATE_TARGET: lower_create_code()}
     frame_accounts = {
         PARENT: parent_code(),
         SUCCESS_CHILD: mstore8(0, 0xBB) + b"\x00",
@@ -191,21 +224,46 @@ def build_fixture() -> dict[str, object]:
     }
     return {
         "memory/lower-access-after-growth": fixture_case(LOWER, lower_accounts),
+        "memory/lower-create-initcode-after-growth": fixture_case(
+            CREATE_TARGET, create_accounts
+        ),
         "memory/nested-frames-and-resume": fixture_case(PARENT, frame_accounts),
     }
 
 
 def harness_environment() -> dict[str, str]:
     environment = os.environ.copy()
-    if "EXECSPECS_ROOT" in environment or "EXECSPECS_PY" in environment:
-        return environment
-    for parent in ROOT.parents:
-        candidate = parent / "execution-specs"
-        interpreter = candidate / ".venv" / "bin" / "python3"
-        if interpreter.exists():
-            environment["EXECSPECS_ROOT"] = str(candidate)
-            environment["EXECSPECS_PY"] = str(interpreter)
-            return environment
+    root = Path(environment.get("EXECSPECS_ROOT", DEFAULT_EELS_ROOT)).resolve()
+    # Preserve the venv's python symlink: resolving it selects the underlying
+    # base interpreter and drops the venv site-packages.
+    interpreter = Path(
+        os.path.abspath(environment.get("EXECSPECS_PY", DEFAULT_EELS_PY))
+    )
+    if not interpreter.is_file() or not (root / "src").is_dir():
+        raise RuntimeError(
+            "memory regressions require the compatible execution-specs checkout; "
+            f"expected {root} with interpreter {interpreter}. Set EXECSPECS_ROOT "
+            "and EXECSPECS_PY to a checkout at revision " + EELS_REVISION
+        )
+    try:
+        revision = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeError(
+            f"cannot verify execution-specs provenance at {root}"
+        ) from error
+    if revision != EELS_REVISION:
+        raise RuntimeError(
+            f"incompatible execution-specs revision at {root}: got {revision}, "
+            f"expected {EELS_REVISION}. Set EXECSPECS_ROOT and EXECSPECS_PY "
+            "to the pinned v0.6.2-compatible checkout"
+        )
+    environment["EXECSPECS_ROOT"] = str(root)
+    environment["EXECSPECS_PY"] = str(interpreter)
     return environment
 
 
@@ -225,6 +283,12 @@ def main() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     builds = args.build or ["standard", "optimized"]
     environment = harness_environment()
+    subprocess.run(
+        [environment["EXECSPECS_PY"], str(COMPAT_TEST)],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+    )
     with tempfile.TemporaryDirectory(
         prefix="memory-frames.", dir=temp_root
     ) as directory:

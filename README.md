@@ -201,7 +201,10 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
              whole-operation refinements
 harness/     the EEST harness: run.py drives main.sail in-process and gates its
              canonical output byte-exactly against EELS; state tests are first
-             materialized as valid stateless blocks by the in-process t8n
+             materialized as valid stateless blocks by the in-process t8n,
+             then adapted only by appending the two known-empty v0.6.2 request
+             lists and recomputing their root; the EELS guest supplies the
+             independent validation verdict
 extractions/ one directory per target, each with contract/ (the axiom or ABI
              layer) and src/ (the committed generated output):
                c/spec/       GMP-backed reference model
