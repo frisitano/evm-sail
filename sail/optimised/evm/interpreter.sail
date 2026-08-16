@@ -1,6 +1,7 @@
 /* Attribute-only refinements keep raw-byte decoding and fork deployment in
  * the canonical specification while exposing their bodies to the threaded
  * interpreter's fork-gated destination labels. */
+
 $[c_inline]
 val opcode_available : (opcode, Fork) -> bool
 
@@ -11,13 +12,12 @@ $[c_inline]
 val decode_deep_immediate : (Code, code_scan_position, DeepStackOperation) -> (code_pointer, byte)
 
 $[c_inline]
-val execute_push_encoded : (
-    Code,
-    opcode,
-    code_scan_position,
-    gas,
-    StackPointer,
-) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
+val execute_push_encoded : (Code, opcode, code_scan_position, gas, StackPointer) -> (
+        code_pointer,
+        gas,
+        StackPointer,
+        OpcodeOutcome,
+    )
 
 $[c_inline]
 val execute_dup_encoded : (opcode, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
@@ -26,23 +26,20 @@ $[c_inline]
 val execute_swap_encoded : (opcode, gas, StackPointer) -> (gas, StackPointer, OpcodeOutcome)
 
 $[c_inline]
-val execute_log_encoded : (
-    address,
-    bool,
-    gas,
-    StackPointer,
-    EvmMemorySlice,
-    opcode,
-) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome)
+val execute_log_encoded : (address, bool, gas, StackPointer, EvmMemorySlice, opcode) -> (
+        gas,
+        StackPointer,
+        EvmMemorySlice,
+        OpcodeOutcome,
+    )
 
 $[c_inline]
-val execute_deep_stack_encoded : (
-    Code,
-    opcode,
-    code_scan_position,
-    gas,
-    StackPointer,
-) -> (code_pointer, gas, StackPointer, OpcodeOutcome)
+val execute_deep_stack_encoded : (Code, opcode, code_scan_position, gas, StackPointer) -> (
+        code_pointer,
+        gas,
+        StackPointer,
+        OpcodeOutcome,
+    )
 
 /* The stack arities remain small compile-time selectors used inside the
  * canonical frame-entry operations. */
@@ -62,35 +59,34 @@ $[c_inline]
 val opcode_frame_status : OpcodeOutcome -> FrameStatus
 
 $[c_inline]
-val exceptional_state : (
-    state_gas,
-    state_gas_spill,
-    state_gas,
-    ExceptionKind,
-) -> (state_gas, state_gas_spill, FrameStatus)
+val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> (
+        state_gas,
+        state_gas_spill,
+        FrameStatus,
+    )
 
 /* The optimized build refines only the interpreter control-flow boundary.
  * Opcode semantics, frame entry, and frame resumption remain generated from
  * the canonical Sail bodies and are called by the threaded C dispatcher. */
 val threaded_interpret_host = impure { c: "threaded_interpret" } : (
-    gas,
-    state_gas,
-    state_gas_spill,
-    gas_refund,
-    StackPointer,
-    EvmMemorySlice,
-    address,
-    address,
-    address,
-    word,
-    state_gas,
-    bool,
-    frame_depth,
-    Code,
-    CalldataSlice,
-    Fork,
-    word,
-) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+        gas,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        StackPointer,
+        EvmMemorySlice,
+        address,
+        address,
+        address,
+        word,
+        state_gas,
+        bool,
+        frame_depth,
+        Code,
+        CalldataSlice,
+        Fork,
+        word,
+    ) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 
 function interpret(
     initial_gas : gas,
@@ -108,16 +104,13 @@ function interpret(
     initial_depth : frame_depth,
     initial_code : Code,
     initial_calldata : CalldataSlice,
-) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice) = {
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let fork = profile.fork;
-    let blob_fee = blob_base_fee(
-        fork,
-        profile.blob_schedule,
-        profile.excess_blob_gas_limit,
-        k_header.excess_blob_gas,
-    );
+    let blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas);
     threaded_interpret_host(
         initial_gas,
         initial_state_gas,

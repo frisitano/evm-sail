@@ -70,11 +70,13 @@ function stack_slot_write(top : StackPointer, index : stack_index, value : word)
 function stack_slot_write_next(top : StackPointer, value : word) -> unit =
     stack_slot_write_next_host(top.storage, value)
 
+/*! Advances a stack cursor by `count` slots and refreshes its semantic height. */
 function stack_top_advance(top : StackPointer, count : stack_slot_count) -> StackPointer = {
     let storage = stack_top_advance_host(top.storage, count);
     struct { storage = storage, height = stack_top_height_host(storage) }
 }
 
+/*! Retreats a stack cursor by `count` slots and refreshes its semantic height. */
 function stack_top_retreat(top : StackPointer, count : stack_slot_count) -> StackPointer = {
     let storage = stack_top_retreat_host(top.storage, count);
     struct { storage = storage, height = stack_top_height_host(storage) }

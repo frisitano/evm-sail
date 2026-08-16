@@ -69,12 +69,13 @@ function run_system_call_frame(
     (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
     k_journal_checkpoint();
+    let stack_top = stack_reset();
     interpret(
         SYSTEM_CALL_GAS_LIMIT,
         STATE_GAS_ZERO,
         STATE_GAS_SPILL_ZERO,
         GAS_REFUND_ZERO,
-        stack_reset(),
+        stack_top,
         EMPTY_EVM_MEMORY_SLICE,
         SYSTEM_ADDRESS,
         tgt,

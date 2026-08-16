@@ -583,7 +583,7 @@ function process_amsterdam_auth(
     carried_state_gas : state_gas,
     carried_state_spill : state_gas_spill,
 ) -> (
-    bool, gas, state_gas, state_gas_spill
+    (bool, gas, state_gas, state_gas_spill)
 ) = {
     var gas_after : gas = carried_gas;
     var state_gas_after : state_gas = carried_state_gas;
@@ -608,8 +608,12 @@ function process_amsterdam_auth(
             let account_exists = k_account_exists(authority);
             let account_missing = not_bool(account_exists);
             if account_missing then {
-                let (state_gas_halt, next_gas, next_state_gas, next_state_spill) =
-                    charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account);
+                let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
+                    gas_after,
+                    state_gas_after,
+                    state_spill_after,
+                    G_amsterdam_state_new_account,
+                );
                 gas_after = next_gas;
                 state_gas_after = next_state_gas;
                 state_spill_after = next_state_spill;
@@ -660,17 +664,39 @@ function process_amsterdam_auth(
 /*! Applies Amsterdam authorizations in wire order, stopping immediately when
     one of their execution-gas or state-gas charges exhausts the transaction. */
 val process_amsterdam_auth_cursor : (
-    PreparedAuthorizationList, prepared_authorization_count, address, address, bool,
-    gas, state_gas, state_gas_spill,
-) -> (bool, gas, state_gas, state_gas_spill)
-function process_amsterdam_auth_cursor(authorizations, count, sender, current_target, transfers_value, gas, state_gas, state_spill) =
+        PreparedAuthorizationList,
+        prepared_authorization_count,
+        address,
+        address,
+        bool,
+        gas,
+        state_gas,
+        state_gas_spill,
+    ) -> (bool, gas, state_gas, state_gas_spill)
+function process_amsterdam_auth_cursor(
+    authorizations,
+    count,
+    sender,
+    current_target,
+    transfers_value,
+    gas,
+    state_gas,
+    state_spill,
+) =
     if count == 0 then {
         (true, gas, state_gas, state_spill)
     } else {
         let authorization = prepared_authorization_head(authorizations);
         let remaining = prepared_authorization_tail(authorizations, count);
-        let (processed, gas_after, state_gas_after, state_spill_after) =
-            process_amsterdam_auth(authorization, sender, current_target, transfers_value, gas, state_gas, state_spill);
+        let (processed, gas_after, state_gas_after, state_spill_after) = process_amsterdam_auth(
+            authorization,
+            sender,
+            current_target,
+            transfers_value,
+            gas,
+            state_gas,
+            state_spill,
+        );
         if processed then {
             process_amsterdam_auth_cursor(
                 remaining,
@@ -939,18 +965,13 @@ function apply_transaction_upfront_effects(
 
 /*! Resets the user-space machine for the transaction's top-level frame,
     funding it with `gas_limit − intrinsic`. */
-function enter_transaction_frame(v : TxValidity) -> (gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice) = {
+function enter_transaction_frame(v : TxValidity) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice)
+) = {
     let initial_gas = v.gas;
     let stack = stack_reset();
     let memory = memory_reset();
-    (
-        initial_gas.execution_remaining,
-        initial_gas.state_remaining,
-        STATE_GAS_SPILL_ZERO,
-        GAS_REFUND_ZERO,
-        stack,
-        memory,
-    )
+    (initial_gas.execution_remaining, initial_gas.state_remaining, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack, memory)
 }
 
 /*! The outcome of top-level dispatch preparation: whether the frame is
@@ -973,7 +994,7 @@ function prepare_amsterdam_transaction_dispatch(
     carried_state_gas : state_gas,
     carried_state_spill : state_gas_spill,
 ) -> (
-    TransactionPreparation, gas, state_gas, state_gas_spill, address, address, Code, CalldataSlice
+    (TransactionPreparation, gas, state_gas, state_gas_spill, address, address, Code, CalldataSlice)
 ) = {
     var gas_after : gas = carried_gas;
     var state_gas_after : state_gas = carried_state_gas;
@@ -985,16 +1006,25 @@ function prepare_amsterdam_transaction_dispatch(
 
     if tx.is_create then {
         if upfront.create_target_prestate_empty then {
-            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) =
-                charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account);
+            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
+                gas_after,
+                state_gas_after,
+                state_spill_after,
+                G_amsterdam_state_new_account,
+            );
             gas_after = next_gas;
             state_gas_after = next_state_gas;
             state_spill_after = next_state_spill;
             if state_gas_halt then {
                 return (
                     struct { ready = false, delegated = false },
-                    gas_after, state_gas_after, state_spill_after,
-                    current_target, current_target, EMPTY_CODE, EMPTY_CALLDATA,
+                    gas_after,
+                    state_gas_after,
+                    state_spill_after,
+                    current_target,
+                    current_target,
+                    EMPTY_CODE,
+                    EMPTY_CALLDATA,
                 )
             }
         };
@@ -1003,24 +1033,38 @@ function prepare_amsterdam_transaction_dispatch(
         let code = code_db_resolve(code_id);
         (
             struct { ready = true, delegated = false },
-            gas_after, state_gas_after, state_spill_after,
-            current_target, current_target, code, EMPTY_CALLDATA,
+            gas_after,
+            state_gas_after,
+            state_spill_after,
+            current_target,
+            current_target,
+            code,
+            EMPTY_CALLDATA,
         )
     } else {
         let calldata = InputCalldata(tx.input_src);
         let transfers_value = word_nonzero(tx.value);
         let recipient_empty = k_account_is_empty(tx.recipient);
         if transfers_value & recipient_empty then {
-            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) =
-                charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account);
+            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
+                gas_after,
+                state_gas_after,
+                state_spill_after,
+                G_amsterdam_state_new_account,
+            );
             gas_after = next_gas;
             state_gas_after = next_state_gas;
             state_spill_after = next_state_spill;
             if state_gas_halt then {
                 return (
                     struct { ready = false, delegated = false },
-                    gas_after, state_gas_after, state_spill_after,
-                    current_target, current_target, EMPTY_CODE, calldata,
+                    gas_after,
+                    state_gas_after,
+                    state_spill_after,
+                    current_target,
+                    current_target,
+                    EMPTY_CODE,
+                    calldata,
                 )
             }
         };
@@ -1034,18 +1078,29 @@ function prepare_amsterdam_transaction_dispatch(
             if access_halt then {
                 return (
                     struct { ready = false, delegated = false },
-                    gas_after, state_gas_after, state_spill_after,
-                    current_target, current_target, EMPTY_CODE, calldata,
+                    gas_after,
+                    state_gas_after,
+                    state_spill_after,
+                    current_target,
+                    current_target,
+                    EMPTY_CODE,
+                    calldata,
                 )
             };
             k_account_mark_warm(delegate)
         };
-        let code_address = if delegated then delegate else current_target;
+        let code_address =
+            if delegated then delegate else current_target;
         let code = executable_code(tx.recipient, delegated, delegate);
         (
             struct { ready = true, delegated = delegated },
-            gas_after, state_gas_after, state_spill_after,
-            current_target, code_address, code, calldata,
+            gas_after,
+            state_gas_after,
+            state_spill_after,
+            current_target,
+            code_address,
+            code,
+            calldata,
         )
     }
 }
@@ -1067,7 +1122,9 @@ function run_create_transaction_frame(
     carried_code : Code,
     carried_calldata : CalldataSlice,
     state_gas_reservoir : state_gas,
-) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice) = {
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let new_addr = k_create_addr(sender, nonce_before);
@@ -1085,8 +1142,12 @@ function run_create_transaction_frame(
     let occupied = k_account_occupied(new_addr);
     if occupied then {
         gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, AddressCollision)
+        (state_gas_after, state_spill_after, status_after) = exceptional_state(
+            state_gas_after,
+            state_spill_after,
+            state_gas_reservoir,
+            AddressCollision,
+        )
     } else {
         k_mark_created(new_addr); /* EIP-6780: created this tx */
         k_clear_storage(new_addr);
@@ -1139,15 +1200,23 @@ function run_create_transaction_frame(
                     let execution_deposit = deployment_charge.cost;
                     gas_after = gas_sub(gas_after, execution_deposit);
                     let state_deposit = code_deployment_state_cost(dep_len);
-                    let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) =
-                        charge_deployment_state_gas(gas_after, state_gas_after, state_spill_after, state_deposit);
+                    let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(
+                        gas_after,
+                        state_gas_after,
+                        state_spill_after,
+                        state_deposit,
+                    );
                     gas_after = deployment_gas;
                     state_gas_after = deployment_state_gas;
                     state_spill_after = deployment_state_spill;
                     if deployment_halt then {
                         gas_after = GAS_ZERO;
-                        (state_gas_after, state_spill_after, status_after) =
-                            exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas)
+                        (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                            state_gas_after,
+                            state_spill_after,
+                            state_gas_reservoir,
+                            OutOfGas,
+                        )
                     };
                     let deployment_succeeded = frame_succeeded(status_after);
                     if deployment_succeeded then {
@@ -1161,13 +1230,21 @@ function run_create_transaction_frame(
                     k_deploy_code(new_addr, EMPTY_CODE_SLICE)
                 } else {
                     gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) =
-                        exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas)
+                    (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                        state_gas_after,
+                        state_spill_after,
+                        state_gas_reservoir,
+                        OutOfGas,
+                    )
                 }
             } else {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) =
-                    exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas)
+                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    state_gas_reservoir,
+                    OutOfGas,
+                )
             } /* failed deploy */
         }
     };
@@ -1193,7 +1270,9 @@ function run_call_transaction_frame(
     carried_code : Code,
     carried_calldata : CalldataSlice,
     state_gas_reservoir : state_gas,
-) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice) = {
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     var gas_after : gas = carried_gas;
@@ -1229,16 +1308,25 @@ function run_call_transaction_frame(
             if result.success then {
                 gas_after = gas_sub(gas_after, used);
                 output_after = result.output;
-                status_after = Halted(HaltReturn(result.output))
+                let halt_reason = HaltReturn(result.output);
+                status_after = Halted(halt_reason)
             } else {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) =
-                    exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas)
+                (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    state_gas_reservoir,
+                    OutOfGas,
+                )
             }
         } else {
             gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, OutOfGas)
+            (state_gas_after, state_spill_after, status_after) = exceptional_state(
+                state_gas_after,
+                state_spill_after,
+                state_gas_reservoir,
+                OutOfGas,
+            )
         }
     } else {
         if profile.fork < Amsterdam then {
@@ -1288,23 +1376,41 @@ val run_legacy_transaction_frame : forall 'limit 'regular,
 function run_legacy_transaction_frame(tx, v) = {
     let initial_gas = v.gas;
     k_journal_checkpoint();
-    let (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) =
-        enter_transaction_frame(v);
+    let (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) = enter_transaction_frame(
+        v,
+    );
     let state_gas_reservoir = initial_state_gas;
     let (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) =
-        if tx.is_create then {
-            run_create_transaction_frame(
-                tx, v.sender, v.nonce_before,
-                initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund,
-                initial_stack, initial_memory, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir,
-            )
-        } else {
-            run_call_transaction_frame(
-                tx, v.sender, false,
-                initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund,
-                initial_stack, initial_memory, tx.recipient, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir,
-            )
-        };
+        if tx.is_create
+        then run_create_transaction_frame(
+            tx,
+            v.sender,
+            v.nonce_before,
+            initial_execution_gas,
+            initial_state_gas,
+            initial_state_spill,
+            initial_refund,
+            initial_stack,
+            initial_memory,
+            EMPTY_CODE,
+            EMPTY_CALLDATA,
+            state_gas_reservoir,
+        )
+        else run_call_transaction_frame(
+            tx,
+            v.sender,
+            false,
+            initial_execution_gas,
+            initial_state_gas,
+            initial_state_spill,
+            initial_refund,
+            initial_stack,
+            initial_memory,
+            tx.recipient,
+            EMPTY_CODE,
+            EMPTY_CALLDATA,
+            state_gas_reservoir,
+        );
 
     let success = frame_succeeded(status_after);
     let failed = not_bool(success);
@@ -1334,8 +1440,9 @@ val run_amsterdam_transaction_frame : forall 'limit 'regular,
         PreparedAuthorizationList,
     ) -> TxFrameResultFields('limit, 'regular)
 function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
-    let (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) =
-        enter_transaction_frame(v);
+    let (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) = enter_transaction_frame(
+        v,
+    );
     var gas_after : gas = entered_gas;
     var state_gas_after : state_gas = entered_state_gas;
     var state_spill_after : state_gas_spill = entered_state_spill;
@@ -1372,8 +1479,14 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
         authorization_state_gas = frame_state_gas_used(preparation_reservoir, state_gas_after, state_spill_after);
         execution_reservoir = state_gas_after;
         state_spill_after = STATE_GAS_SPILL_ZERO;
-        let (preparation, prepared_gas, prepared_state_gas, prepared_state_spill, _, code_address, code, calldata) =
-            prepare_amsterdam_transaction_dispatch(tx, v, upfront, gas_after, state_gas_after, state_spill_after);
+        let (preparation, prepared_gas, prepared_state_gas, prepared_state_spill, _, code_address, code, calldata) = prepare_amsterdam_transaction_dispatch(
+            tx,
+            v,
+            upfront,
+            gas_after,
+            state_gas_after,
+            state_spill_after,
+        );
         gas_after = prepared_gas;
         state_gas_after = prepared_state_gas;
         state_spill_after = prepared_state_spill;
@@ -1398,19 +1511,36 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
 
     k_journal_checkpoint();
     if tx.is_create then {
-        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after) =
-            run_create_transaction_frame(
-                tx, v.sender, v.nonce_before,
-                gas_after, state_gas_after, state_spill_after, refund_after,
-                entered_stack, entered_memory, prepared_code, prepared_calldata, execution_reservoir,
-            )
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after) = run_create_transaction_frame(
+            tx,
+            v.sender,
+            v.nonce_before,
+            gas_after,
+            state_gas_after,
+            state_spill_after,
+            refund_after,
+            entered_stack,
+            entered_memory,
+            prepared_code,
+            prepared_calldata,
+            execution_reservoir,
+        )
     } else {
-        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after) =
-            run_call_transaction_frame(
-                tx, v.sender, delegated,
-                gas_after, state_gas_after, state_spill_after, refund_after,
-                entered_stack, entered_memory, prepared_code_address, prepared_code, prepared_calldata, execution_reservoir,
-            )
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after) = run_call_transaction_frame(
+            tx,
+            v.sender,
+            delegated,
+            gas_after,
+            state_gas_after,
+            state_spill_after,
+            refund_after,
+            entered_stack,
+            entered_memory,
+            prepared_code_address,
+            prepared_code,
+            prepared_calldata,
+            execution_reservoir,
+        )
     };
 
     let success = frame_succeeded(status_after);
@@ -1424,7 +1554,8 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
     /* Authorization writes live in the preparation scope and survive an EVM
        execution failure once preparation itself has completed. */
     k_journal_commit();
-    let state_delta = authorization_state_gas + frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after);
+    let state_delta = authorization_state_gas +
+            frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after);
     struct {
         success = success,
         gas = tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta),

@@ -148,8 +148,8 @@ StorageId get_storage_id(StorageId begin, uint32_t change_count, uint32_t count,
 StorageId storage_resolve_slot(StorageId begin, uint32_t change_count, uint32_t count, u256 slot);
 bool storage_id_is_warm(StorageId storage_id);
 void storage_id_mark_warm(StorageId storage_id);
-void storage_update_by_id(AccountId account_id, StorageGeneration generation,
-                          StorageId storage_id, u256 value, u256 original);
+void storage_update_by_id(AccountId account_id, StorageGeneration generation, StorageId storage_id,
+                          u256 value, u256 original);
 uint32_t storage_id_count(void);
 const u256 *storage_id_slot(StorageId id);
 void storage_schema_account_begin(AccountId id);

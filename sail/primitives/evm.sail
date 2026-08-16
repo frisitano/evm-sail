@@ -544,7 +544,9 @@ struct Message = {
 
 /*! Lightweight result of one opcode handler. */
 union OpcodeOutcome = {
+    /*! Continue executing the active frame. */
     Continue : unit,
+    /*! Stop the active opcode path with the given exceptional halt. */
     Failed : ExceptionKind,
 }
 

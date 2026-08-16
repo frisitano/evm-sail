@@ -21,6 +21,7 @@ function execute_block_transactions(
     var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
     var tx0_to : address = ZERO_ADDRESS;
+
     /* The optimized receipt store resets its own C arena here and ignores the
        returned start pointer at root time.  The profile overlay computes the
        receipts root in `verify_stateless_payload`, outside the `execute_block`
@@ -102,6 +103,7 @@ function execute_block_transactions(
     let retained = log_store_index_add(logs_tx_start(), logs_tx_count());
     let logs_count : log_store_index =
         if logs_start <= retained then retained - logs_start else 0;
+
     /* Placeholder: the profile overlay defers the receipts-trie reduction to
        `verify_stateless_payload`, where it runs under the `receipts_root`
        phase scope as a sibling of `execute_block` (matching the aligned

@@ -168,8 +168,10 @@ static u256 region_load_word(const uint8_t *source, uint64_t len, uint64_t index
 
 /* Sail slice_load_n wrappers call only under index < s.len with
  * 0 <= 'n <= 32 (sail/host/region_access.sail). */
-static inline __attribute__((__always_inline__)) u256
-region_load_n_word(const uint8_t *source, uint64_t len, uint64_t index, uint64_t requested)
+static inline __attribute__((__always_inline__)) u256 region_load_n_word(const uint8_t *source,
+                                                                         uint64_t len,
+                                                                         uint64_t index,
+                                                                         uint64_t requested)
 {
   uint64_t count = len - index;
   if (count > requested) {

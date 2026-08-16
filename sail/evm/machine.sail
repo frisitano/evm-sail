@@ -102,7 +102,13 @@ function refill_frame_state_gas(g, state_gas_remaining, state_gas_spilled, state
 }
 
 /*! Computes the signed state gas consumed by the current frame. */
-function frame_state_gas_used(state_gas_reservoir : state_gas, state_gas_remaining : state_gas, state_gas_spilled : state_gas_spill) -> frame_state_gas_delta = {
+function frame_state_gas_used(
+    state_gas_reservoir : state_gas,
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+) -> (
+    frame_state_gas_delta
+) = {
     let entry = state_gas_reservoir;
     let remaining = state_gas_remaining;
     let spilled = state_gas_spilled;
@@ -112,19 +118,26 @@ function frame_state_gas_used(state_gas_reservoir : state_gas, state_gas_remaini
 /*! Constructs an exceptional frame status while normalizing state gas.
     The exception producer is responsible for returning zero execution gas.
     Amsterdam restores the frame's state-gas reservoir and clears its spill. */
-val exceptional_state :
-    (state_gas, state_gas_spill, state_gas, ExceptionKind) -> {'next_spill,
-           0 <= 'next_spill
-        &  'next_spill <= 2 ^ 24
-        &  'next_spill <= transaction_execution_gas_limit_value.
-        (state_gas, int('next_spill), FrameStatus)}
+val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -> {'next_spill,
+                                                                                      0
+                                                                                   <= 'next_spill
+                                                                                   &  'next_spill
+                                                                                   <= 2 ^ 24
+                                                                                   &  'next_spill
+                                                                                   <= transaction_execution_gas_limit_value.
+                                                                                   (
+                                                                                       state_gas,
+                                                                                       int('next_spill),
+                                                                                       FrameStatus,
+                                                                                   )}
 function exceptional_state(state_gas_remaining, state_gas_spilled, state_gas_reservoir, k) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    if profile.fork >= Amsterdam then
+    if profile.fork >= Amsterdam then {
         (state_gas_reservoir, STATE_GAS_SPILL_ZERO, Exceptional(k))
-    else
+    } else {
         (state_gas_remaining, state_gas_spilled, Exceptional(k))
+    }
 }
 
 /*! The stack height below a carried cursor. */
@@ -135,18 +148,20 @@ function stack_height(top : StackPointer) -> operand_stack_height = stack_top_he
     required stack height (delta) and `outputs` is the height it contributes
     after consuming those inputs (alpha). This is the single stack-bounds
     guard: handler bodies consume and produce operands unchecked behind it. */
-enum StackValidation = {
-    StackValid,
-    StackUnderflowFailure,
-    StackOverflowFailure,
-}
+enum StackValidation = { StackValid, StackUnderflowFailure, StackOverflowFailure }
 
 val validate_stack : (StackPointer, operand_stack_height, operand_stack_height) -> StackValidation
+/*! Classifies the carried cursor against one instruction's input and output
+    stack requirements. */
 function validate_stack(top, inputs, outputs) = {
     let height = stack_height(top);
-    if height < inputs then StackUnderflowFailure
-    else if STACK_LIMIT < height - inputs + outputs then StackOverflowFailure
-    else StackValid
+    if height < inputs then {
+        StackUnderflowFailure
+    } else if STACK_LIMIT < height - inputs + outputs then {
+        StackOverflowFailure
+    } else {
+        StackValid
+    }
 }
 
 /*! Reads the `n=0` slot under a validated cursor. */
@@ -258,6 +273,8 @@ val memory_expand_to : forall 'required, source_valid_range(0, 'required). (EvmM
         EvmMemorySlice,
     )
 
+/*! Materializes an already-charged memory high-water mark and returns both the
+    requested active prefix and the updated carried memory cursor. */
 function memory_expand_to(mem, new_size) = {
     let memory = mem;
     if memory.len < new_size then {
@@ -334,28 +351,44 @@ function suspend_frame(
     message : Message,
     frame_code : Code,
     calldata : CalldataSlice,
-) -> (FrameCheckpoint, StackPointer, EvmMemorySlice) = {
+) -> (
+    (FrameCheckpoint, StackPointer, EvmMemorySlice)
+) = {
     k_journal_checkpoint();
     let child_stack = operand_stack_push_empty_frame();
     let child_memory = memory_frame_enter();
     let checkpoint : FrameCheckpoint = struct {
-        pc = pc,
-        gas_remaining = gas_remaining,
-        stack_top = stack_top,
-        state_gas_remaining = state_gas_remaining,
-        state_gas_spilled = state_gas_spilled,
-        refund = frame_refund,
-        status = frame_status,
-        message = message,
-        code = frame_code,
-        calldata = calldata,
-        memory = evm_memory,
-    };
+            pc = pc,
+            gas_remaining = gas_remaining,
+            stack_top = stack_top,
+            state_gas_remaining = state_gas_remaining,
+            state_gas_spilled = state_gas_spilled,
+            refund = frame_refund,
+            status = frame_status,
+            message = message,
+            code = frame_code,
+            calldata = calldata,
+            memory = evm_memory,
+        };
     (checkpoint, child_stack, child_memory)
 }
 
 /*! Restores a suspended parent after nested execution completes. */
-function restore_frame(checkpoint : FrameCheckpoint) -> (code_pointer, gas, StackPointer, EvmMemorySlice, state_gas, state_gas_spill, gas_refund, FrameStatus, Message, Code, CalldataSlice) = {
+function restore_frame(checkpoint : FrameCheckpoint) -> (
+    (
+        code_pointer,
+        gas,
+        StackPointer,
+        EvmMemorySlice,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        FrameStatus,
+        Message,
+        Code,
+        CalldataSlice,
+    )
+) = {
     operand_stack_pop_frame();
     let memory = memory_frame_leave(checkpoint.memory);
     (
