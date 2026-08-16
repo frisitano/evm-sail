@@ -62,34 +62,30 @@ static inline void interpreter_load_cursor(const struct InterpreterFrameContext 
   *code_end = code_bytes + frame->code.len;
 }
 
-typedef struct
-    tuple_uint_32_uint_64_uint_64_uint_32_int_128_FrameStatus_StackPointer_uint_32_uint_32_bytes20_bytes20_bytes20_u256_uint_64_bool_uint_16_CodeFields_CalldataSlice_Bytes
-        FrameTransitionResult;
-
 static inline void apply_frame_transition_result(
     struct InterpreterFrameContext *frame, uint64_t *gas, uint64_t *state_gas_remaining,
     uint32_t *state_gas_spilled, __int128 *refund, StackPointer *sp, uint32_t *memory_base,
-    uint32_t *memory_height, struct FrameStatus *status, FrameTransitionResult result)
+    uint32_t *memory_height, struct FrameStatus *status, struct FrameTransition transition)
 {
-  frame->next_pc = result.tup0;
-  *gas = result.tup1;
-  *state_gas_remaining = result.tup2;
-  *state_gas_spilled = result.tup3;
-  *refund = result.tup4;
-  *status = result.tup5;
-  *sp = result.tup6;
-  *memory_base = result.tup7;
-  *memory_height = result.tup8;
-  frame->caller = result.tup9;
-  frame->address = result.tup10;
-  frame->code_address = result.tup11;
-  frame->value = result.tup12;
-  frame->state_gas_reservoir = result.tup13;
-  frame->is_static = result.tup14;
-  frame->depth = result.tup15;
-  frame->code = result.tup16;
-  frame->calldata = result.tup17;
-  frame->returndata = result.tup18;
+  frame->next_pc = transition.pc;
+  *gas = transition.gas_remaining;
+  *state_gas_remaining = transition.state_gas_remaining;
+  *state_gas_spilled = transition.state_gas_spilled;
+  *refund = transition.refund;
+  *status = transition.status;
+  *sp = transition.stack_top;
+  *memory_base = transition.memory_base;
+  *memory_height = transition.memory_height;
+  frame->caller = transition.message.caller;
+  frame->address = transition.message.address;
+  frame->code_address = transition.message.code_address;
+  frame->value = transition.message.value;
+  frame->state_gas_reservoir = transition.message.state_gas_reservoir;
+  frame->is_static = transition.message.is_static;
+  frame->depth = transition.message.depth;
+  frame->code = transition.code;
+  frame->calldata = transition.calldata;
+  frame->returndata = transition.returndata;
 }
 
 __attribute__((noinline)) static void
@@ -99,13 +95,13 @@ run_frame_entry_transition(struct InterpreterFrameContext *frame, uint64_t *gas,
                            uint32_t *memory_height, uint8_t opcode, struct FrameStatus *status)
 {
   const bytes20 previous_address = frame->address;
-  FrameTransitionResult result = run_frame_entry_encoded(
+  struct FrameTransition transition = run_frame_entry_encoded(
       frame->next_pc, *gas, *state_gas_remaining, *state_gas_spilled, *refund, *sp, *memory_base,
       *memory_height, frame->caller, frame->address, frame->code_address, frame->value,
       frame->state_gas_reservoir, frame->is_static, frame->depth, frame->code, frame->calldata,
       frame->returndata, opcode);
   apply_frame_transition_result(frame, gas, state_gas_remaining, state_gas_spilled, refund, sp,
-                                memory_base, memory_height, status, result);
+                                memory_base, memory_height, status, transition);
   frame->account =
       refresh_account_execution_context(frame->account, previous_address, frame->address);
 }
@@ -118,11 +114,11 @@ resume_frame_transition(struct InterpreterFrameContext *frame,
                         uint32_t *memory_height, struct FrameStatus *status)
 {
   const bytes20 previous_address = frame->address;
-  FrameTransitionResult result =
+  struct FrameTransition transition =
       resume_frame(*continuation, output, *memory_base, *gas, *state_gas_remaining,
                    *state_gas_spilled, *refund, *status, frame->state_gas_reservoir);
   apply_frame_transition_result(frame, gas, state_gas_remaining, state_gas_spilled, refund, sp,
-                                memory_base, memory_height, status, result);
+                                memory_base, memory_height, status, transition);
   frame->account =
       refresh_account_execution_context(frame->account, previous_address, frame->address);
 }

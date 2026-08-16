@@ -385,27 +385,7 @@ val run_call : (
         CalldataSlice,
         OutputSlice,
         CallKind,
-    ) -> (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    ) -> FrameTransition
 
 val run_create : (
         code_pointer,
@@ -427,27 +407,7 @@ val run_create : (
         CalldataSlice,
         OutputSlice,
         CreateKind,
-    ) -> (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    ) -> FrameTransition
 
 val resume_frame : (
         FrameContinuation,
@@ -459,27 +419,7 @@ val resume_frame : (
         gas_refund,
         FrameStatus,
         state_gas,
-    ) -> (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    ) -> FrameTransition
 
 /*! Returns the active frame's halt output. */
 function frame_output(frame_status : FrameStatus) -> OutputSlice =
@@ -558,27 +498,7 @@ function interpret(
             match instruction {
                 opcode_CREATE() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_create(
+                    let transition = run_create(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -599,6 +519,25 @@ function interpret(
                         carried_returndata,
                         CreateByNonce,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -607,27 +546,7 @@ function interpret(
                 },
                 CREATE2() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_create(
+                    let transition = run_create(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -648,6 +567,25 @@ function interpret(
                         carried_returndata,
                         CreateBySalt,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -656,27 +594,7 @@ function interpret(
                 },
                 CALL() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_call(
+                    let transition = run_call(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -697,6 +615,25 @@ function interpret(
                         carried_returndata,
                         Call,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -705,27 +642,7 @@ function interpret(
                 },
                 CALLCODE() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_call(
+                    let transition = run_call(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -746,6 +663,25 @@ function interpret(
                         carried_returndata,
                         CallCode,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -754,27 +690,7 @@ function interpret(
                 },
                 DELEGATECALL() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_call(
+                    let transition = run_call(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -795,6 +711,25 @@ function interpret(
                         carried_returndata,
                         DelegateCall,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -803,27 +738,7 @@ function interpret(
                 },
                 STATICCALL() => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = run_call(
+                    let transition = run_call(
                         carried_pc,
                         carried_gas,
                         carried_state_gas,
@@ -844,6 +759,25 @@ function interpret(
                         carried_returndata,
                         StaticCall,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -2144,27 +2078,7 @@ function interpret(
                 },
                 continuation => {
                     let previous_address = carried_address;
-                    (
-                        carried_pc,
-                        carried_gas,
-                        carried_state_gas,
-                        carried_state_spill,
-                        carried_refund,
-                        carried_status,
-                        carried_sp,
-                        carried_memory_base,
-                        carried_memory_height,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        carried_returndata,
-                    ) = resume_frame(
+                    let transition = resume_frame(
                         continuation,
                         output,
                         carried_memory_base,
@@ -2175,6 +2089,25 @@ function interpret(
                         carried_status,
                         carried_state_gas_reservoir,
                     );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
                     carried_account_context = refresh_account_execution_context(
                         carried_account_context,
                         previous_address,
@@ -2326,27 +2259,7 @@ function run_call(
     carried_returndata : OutputSlice,
     kind : CallKind,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) = {
     let stack_inputs = call_stack_inputs(kind);
     let stack_status = guard_stack(carried_sp, stack_inputs, 1);
@@ -2358,27 +2271,30 @@ function run_call(
                 carried_state_gas_reservoir,
                 halt_kind,
             );
-            (
-                carried_pc,
-                GAS_ZERO,
-                state_gas_after,
-                state_spill_after,
-                carried_refund,
-                status_after,
-                carried_sp,
-                carried_memory_base,
-                carried_memory_height,
-                carried_caller,
-                carried_address,
-                carried_code_address,
-                carried_value,
-                carried_state_gas_reservoir,
-                carried_is_static,
-                carried_depth,
-                carried_code,
-                carried_calldata,
-                carried_returndata,
-            )
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
         Continue() => {
             let pc_after : code_pointer = carried_pc;
@@ -2438,27 +2354,21 @@ function run_call(
                     carried_state_gas_reservoir,
                     WriteProtection,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
 
             /* EIP-2929 access: inspect warmth without mutating state, then mark the
@@ -2484,27 +2394,21 @@ function run_call(
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             gas_after = gas_sub(gas_after, expansion_cost.cost);
 
@@ -2523,27 +2427,21 @@ function run_call(
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             gas_after = gas_sub(gas_after, static_base);
 
@@ -2581,27 +2479,21 @@ function run_call(
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             gas_after = gas_sub(gas_after, additional_cost);
             let stipend : gas =
@@ -2632,27 +2524,21 @@ function run_call(
                             carried_state_gas_reservoir,
                             OutOfGas,
                         );
-                        return (
-                            pc_after,
-                            gas_after,
-                            state_gas_after,
-                            state_spill_after,
-                            carried_refund,
-                            status_after,
-                            sp_after,
-                            carried_memory_base,
-                            memory_after,
-                            carried_caller,
-                            carried_address,
-                            carried_code_address,
-                            carried_value,
-                            carried_state_gas_reservoir,
-                            carried_is_static,
-                            carried_depth,
-                            carried_code,
-                            carried_calldata,
-                            returndata_after,
-                        )
+                        return struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
                     }
                 };
                 base_child = call_gas_cap_word(gas_after, gas_request);
@@ -2664,27 +2550,21 @@ function run_call(
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
-                    return (
-                        pc_after,
-                        gas_after,
-                        state_gas_after,
-                        state_spill_after,
-                        carried_refund,
-                        status_after,
-                        sp_after,
-                        carried_memory_base,
-                        memory_after,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        returndata_after,
-                    )
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
                 };
                 gas_after = gas_sub(gas_after, base_child)
             } else {
@@ -2697,27 +2577,21 @@ function run_call(
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
-                    return (
-                        pc_after,
-                        gas_after,
-                        state_gas_after,
-                        state_spill_after,
-                        carried_refund,
-                        status_after,
-                        sp_after,
-                        carried_memory_base,
-                        memory_after,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        returndata_after,
-                    )
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
                 };
                 gas_after = gas_sub(gas_after, base_child)
             };
@@ -2781,27 +2655,21 @@ function run_call(
                 sp_after = stack_top_advance(sp_after, 1);
                 write_stack_word(sp_after, WORD_ZERO);
                 memory_after = mem1;
-                (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             } else {
                 let selected_precompile = precompile_id_for_address(target);
                 if selected_precompile != NotPrecompile then {
@@ -2834,27 +2702,21 @@ function run_call(
                             sp_after = stack_top_advance(sp_after, 1);
                             write_stack_word(sp_after, WORD_ONE);
                             memory_after = mem1;
-                            (
-                                pc_after,
-                                gas_after,
-                                state_gas_after,
-                                state_spill_after,
-                                carried_refund,
-                                status_after,
-                                sp_after,
-                                carried_memory_base,
-                                memory_after,
-                                carried_caller,
-                                carried_address,
-                                carried_code_address,
-                                carried_value,
-                                carried_state_gas_reservoir,
-                                carried_is_static,
-                                carried_depth,
-                                carried_code,
-                                carried_calldata,
-                                returndata_after,
-                            )
+                            struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
                         } else {
                             returndata_after = returndata_clear();
                             if new_account_charged then {
@@ -2868,27 +2730,21 @@ function run_call(
                             sp_after = stack_top_advance(sp_after, 1);
                             write_stack_word(sp_after, WORD_ZERO);
                             memory_after = mem1;
-                            (
-                                pc_after,
-                                gas_after,
-                                state_gas_after,
-                                state_spill_after,
-                                carried_refund,
-                                status_after,
-                                sp_after,
-                                carried_memory_base,
-                                memory_after,
-                                carried_caller,
-                                carried_address,
-                                carried_code_address,
-                                carried_value,
-                                carried_state_gas_reservoir,
-                                carried_is_static,
-                                carried_depth,
-                                carried_code,
-                                carried_calldata,
-                                returndata_after,
-                            )
+                            struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
                         }
                     } else {
                         returndata_after = returndata_clear();
@@ -2903,27 +2759,21 @@ function run_call(
                         sp_after = stack_top_advance(sp_after, 1);
                         write_stack_word(sp_after, WORD_ZERO);
                         memory_after = mem1;
-                        (
-                            pc_after,
-                            gas_after,
-                            state_gas_after,
-                            state_spill_after,
-                            carried_refund,
-                            status_after,
-                            sp_after,
-                            carried_memory_base,
-                            memory_after,
-                            carried_caller,
-                            carried_address,
-                            carried_code_address,
-                            carried_value,
-                            carried_state_gas_reservoir,
-                            carried_is_static,
-                            carried_depth,
-                            carried_code,
-                            carried_calldata,
-                            returndata_after,
-                        )
+                        struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
                     }
                 } else {
                     /* CODE call. Snapshot the world (so a reverting child can be rolled
@@ -2977,27 +2827,30 @@ function run_call(
                         k_transfer(caller, target, value)
                     };
                     let child_returndata = returndata_clear();
-                    (
-                        0,
-                        child_gas,
-                        child_state_gas,
-                        STATE_GAS_SPILL_ZERO,
-                        GAS_REFUND_ZERO,
-                        running,
-                        child_stack,
-                        child_memory_base,
-                        child_memory_height,
-                        child_caller,
-                        child_addr,
-                        target,
-                        child_value,
-                        child_state_gas,
-                        child_static,
-                        child_depth,
-                        child_code,
-                        child_calldata,
-                        child_returndata,
-                    )
+                    struct {
+                        pc = 0,
+                        gas_remaining = child_gas,
+                        state_gas_remaining = child_state_gas,
+                        state_gas_spilled = STATE_GAS_SPILL_ZERO,
+                        refund = GAS_REFUND_ZERO,
+                        status = running,
+                        stack_top = child_stack,
+                        memory_base = child_memory_base,
+                        memory_height = child_memory_height,
+                        message =
+                            struct {
+                                caller = child_caller,
+                                address = child_addr,
+                                code_address = target,
+                                value = child_value,
+                                state_gas_reservoir = child_state_gas,
+                                is_static = child_static,
+                                depth = child_depth,
+                            },
+                        code = child_code,
+                        calldata = child_calldata,
+                        returndata = child_returndata,
+                    }
                 }
             }
         },
@@ -3057,27 +2910,7 @@ function run_create(
     carried_returndata : OutputSlice,
     kind : CreateKind,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) = {
     let stack_inputs = create_stack_inputs(kind);
     let stack_status = guard_stack(carried_sp, stack_inputs, 1);
@@ -3089,27 +2922,30 @@ function run_create(
                 carried_state_gas_reservoir,
                 halt_kind,
             );
-            (
-                carried_pc,
-                GAS_ZERO,
-                state_gas_after,
-                state_spill_after,
-                carried_refund,
-                status_after,
-                carried_sp,
-                carried_memory_base,
-                carried_memory_height,
-                carried_caller,
-                carried_address,
-                carried_code_address,
-                carried_value,
-                carried_state_gas_reservoir,
-                carried_is_static,
-                carried_depth,
-                carried_code,
-                carried_calldata,
-                carried_returndata,
-            )
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
         Continue() => {
             let pc_after : code_pointer = carried_pc;
@@ -3160,27 +2996,21 @@ function run_create(
                     carried_state_gas_reservoir,
                     WriteProtection,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             let requested_height = memory_requested_height(off_word, len_word);
             let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
@@ -3192,27 +3022,21 @@ function run_create(
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             gas_after = gas_sub(gas_after, expansion_cost.cost);
             let initcode_access = memory_access(off_word, len_word);
@@ -3233,27 +3057,21 @@ function run_create(
                     carried_state_gas_reservoir,
                     OutOfGas,
                 );
-                return (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             };
             gas_after = gas_sub(gas_after, access_cost);
             let initcode_word_count = memory_word_count_word(len_word);
@@ -3268,27 +3086,21 @@ function run_create(
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
-                    return (
-                        pc_after,
-                        gas_after,
-                        state_gas_after,
-                        state_spill_after,
-                        carried_refund,
-                        status_after,
-                        sp_after,
-                        carried_memory_base,
-                        memory_after,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        returndata_after,
-                    )
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
                 };
                 gas_after = gas_sub(gas_after, initcode_cost.cost)
             };
@@ -3303,27 +3115,21 @@ function run_create(
                         carried_state_gas_reservoir,
                         OutOfGas,
                     );
-                    return (
-                        pc_after,
-                        gas_after,
-                        state_gas_after,
-                        state_spill_after,
-                        carried_refund,
-                        status_after,
-                        sp_after,
-                        carried_memory_base,
-                        memory_after,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        returndata_after,
-                    )
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
                 };
                 gas_after = gas_sub(gas_after, hashing_cost.cost)
             };
@@ -3341,27 +3147,21 @@ function run_create(
                     carried_state_gas_reservoir,
                     InitCodeTooLarge,
                 );
-                (
-                    pc_after,
-                    gas_after,
-                    state_gas_after,
-                    state_spill_after,
-                    carried_refund,
-                    status_after,
-                    sp_after,
-                    carried_memory_base,
-                    memory_after,
-                    carried_caller,
-                    carried_address,
-                    carried_code_address,
-                    carried_value,
-                    carried_state_gas_reservoir,
-                    carried_is_static,
-                    carried_depth,
-                    carried_code,
-                    carried_calldata,
-                    returndata_after,
-                )
+                struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
             } else {
                 /* derive the new contract address: keccak(0xff, creator, salt,
                    keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
@@ -3410,27 +3210,21 @@ function run_create(
                     sp_after = stack_top_advance(sp_after, 1);
                     write_stack_word(sp_after, WORD_ZERO);
                     memory_after = mem1;
-                    (
-                        pc_after,
-                        gas_after,
-                        state_gas_after,
-                        state_spill_after,
-                        carried_refund,
-                        status_after,
-                        sp_after,
-                        carried_memory_base,
-                        memory_after,
-                        carried_caller,
-                        carried_address,
-                        carried_code_address,
-                        carried_value,
-                        carried_state_gas_reservoir,
-                        carried_is_static,
-                        carried_depth,
-                        carried_code,
-                        carried_calldata,
-                        returndata_after,
-                    )
+                    struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
                 } else {
                     /* warm the new address and bump the creator nonce BEFORE the child
                      * snapshot: both persist even if the initcode reverts (the
@@ -3458,27 +3252,21 @@ function run_create(
                                 carried_state_gas_reservoir,
                                 OutOfGas,
                             );
-                            return (
-                                pc_after,
-                                gas_after,
-                                state_gas_after,
-                                state_spill_after,
-                                carried_refund,
-                                status_after,
-                                sp_after,
-                                carried_memory_base,
-                                memory_after,
-                                carried_caller,
-                                carried_address,
-                                carried_code_address,
-                                carried_value,
-                                carried_state_gas_reservoir,
-                                carried_is_static,
-                                carried_depth,
-                                carried_code,
-                                carried_calldata,
-                                returndata_after,
-                            )
+                            return struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
                         }
                     };
                     if profile.fork >= Amsterdam then {
@@ -3505,27 +3293,21 @@ function run_create(
                         sp_after = stack_top_advance(sp_after, 1);
                         write_stack_word(sp_after, WORD_ZERO);
                         memory_after = mem1;
-                        (
-                            pc_after,
-                            gas_after,
-                            state_gas_after,
-                            state_spill_after,
-                            carried_refund,
-                            status_after,
-                            sp_after,
-                            carried_memory_base,
-                            memory_after,
-                            carried_caller,
-                            carried_address,
-                            carried_code_address,
-                            carried_value,
-                            carried_state_gas_reservoir,
-                            carried_is_static,
-                            carried_depth,
-                            carried_code,
-                            carried_calldata,
-                            returndata_after,
-                        )
+                        struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
                     } else {
                         /* Freeze the initcode while parent memory is active, then
                            suspend the complete parent before mutating the new account.
@@ -3561,27 +3343,30 @@ function run_create(
                         k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
                         k_transfer(creator, new_addr, value);
                         let child_returndata = returndata_clear();
-                        (
-                            0,
-                            child_gas,
-                            child_state_gas,
-                            STATE_GAS_SPILL_ZERO,
-                            GAS_REFUND_ZERO,
-                            running,
-                            child_stack,
-                            child_memory_base,
-                            child_memory_height,
-                            creator,
-                            new_addr,
-                            new_addr,
-                            value,
-                            child_state_gas,
-                            carried_is_static,
-                            child_depth,
-                            child_code,
-                            EMPTY_CALLDATA,
-                            child_returndata,
-                        )
+                        struct {
+                            pc = 0,
+                            gas_remaining = child_gas,
+                            state_gas_remaining = child_state_gas,
+                            state_gas_spilled = STATE_GAS_SPILL_ZERO,
+                            refund = GAS_REFUND_ZERO,
+                            status = running,
+                            stack_top = child_stack,
+                            memory_base = child_memory_base,
+                            memory_height = child_memory_height,
+                            message =
+                                struct {
+                                    caller = creator,
+                                    address = new_addr,
+                                    code_address = new_addr,
+                                    value = value,
+                                    state_gas_reservoir = child_state_gas,
+                                    is_static = carried_is_static,
+                                    depth = child_depth,
+                                },
+                            code = child_code,
+                            calldata = EMPTY_CALLDATA,
+                            returndata = child_returndata,
+                        }
                     }
                 }
             }
@@ -3600,27 +3385,7 @@ function resume_call(
     child_refund : gas_refund,
     child_status : FrameStatus,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) = {
     let checkpoint = continuation.checkpoint;
     let succeeded = frame_succeeded(child_status);
@@ -3661,27 +3426,21 @@ function resume_call(
         parent_sp = stack_top_advance(parent_sp, 1);
         write_stack_word(parent_sp, WORD_ZERO)
     };
-    (
-        checkpoint.pc,
-        parent_gas,
-        parent_state_gas,
-        parent_state_spill,
-        parent_refund,
-        checkpoint.status,
-        parent_sp,
-        parent_memory_base,
-        checkpoint.memory_height,
-        checkpoint.message.caller,
-        checkpoint.message.address,
-        checkpoint.message.code_address,
-        checkpoint.message.value,
-        checkpoint.message.state_gas_reservoir,
-        checkpoint.message.is_static,
-        checkpoint.message.depth,
-        checkpoint.code,
-        checkpoint.calldata,
-        output,
-    )
+    struct {
+        pc = checkpoint.pc,
+        gas_remaining = parent_gas,
+        state_gas_remaining = parent_state_gas,
+        state_gas_spilled = parent_state_spill,
+        refund = parent_refund,
+        status = checkpoint.status,
+        stack_top = parent_sp,
+        memory_base = parent_memory_base,
+        memory_height = checkpoint.memory_height,
+        message = checkpoint.message,
+        code = checkpoint.code,
+        calldata = checkpoint.calldata,
+        returndata = output,
+    }
 }
 
 /*! Restores a create parent and either deploys or rolls back the child. */
@@ -3696,27 +3455,7 @@ function resume_create(
     child_status : FrameStatus,
     child_state_gas_reservoir : state_gas,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
@@ -3833,27 +3572,21 @@ function resume_create(
      * remains visible to RETURNDATA opcodes in the parent. */
     let parent_returndata =
         if initcode_succeeded then returndata_clear() else output;
-    (
-        checkpoint.pc,
-        parent_gas,
-        parent_state_gas,
-        parent_state_spill,
-        parent_refund,
-        checkpoint.status,
-        parent_sp,
-        parent_memory_base,
-        checkpoint.memory_height,
-        checkpoint.message.caller,
-        checkpoint.message.address,
-        checkpoint.message.code_address,
-        checkpoint.message.value,
-        checkpoint.message.state_gas_reservoir,
-        checkpoint.message.is_static,
-        checkpoint.message.depth,
-        checkpoint.code,
-        checkpoint.calldata,
-        parent_returndata,
-    )
+    struct {
+        pc = checkpoint.pc,
+        gas_remaining = parent_gas,
+        state_gas_remaining = parent_state_gas,
+        state_gas_spilled = parent_state_spill,
+        refund = parent_refund,
+        status = checkpoint.status,
+        stack_top = parent_sp,
+        memory_base = parent_memory_base,
+        memory_height = checkpoint.memory_height,
+        message = checkpoint.message,
+        code = checkpoint.code,
+        calldata = checkpoint.calldata,
+        returndata = parent_returndata,
+    }
 }
 
 /*! Applies the pending operation for one completed child frame. */
@@ -3868,27 +3601,7 @@ function resume_frame(
     child_status : FrameStatus,
     child_state_gas_reservoir : state_gas,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) =
     match continuation {
         Empty() => fatal_error(ExecutionInvalid),
@@ -3939,27 +3652,7 @@ function run_frame_entry_encoded(
     carried_returndata : OutputSlice,
     opcode : opcode,
 ) -> (
-    (
-        code_pointer,
-        gas,
-        state_gas,
-        state_gas_spill,
-        gas_refund,
-        FrameStatus,
-        StackPointer,
-        memory_base,
-        memory_height,
-        address,
-        address,
-        address,
-        word,
-        state_gas,
-        bool,
-        frame_depth,
-        Code,
-        CalldataSlice,
-        OutputSlice,
-    )
+    FrameTransition
 ) = {
     match opcode {
         240 => run_create(
@@ -4095,27 +3788,30 @@ function run_frame_entry_encoded(
                 carried_state_gas_reservoir,
                 InvalidOpcode,
             );
-            (
-                carried_pc,
-                GAS_ZERO,
-                state_gas_after,
-                state_spill_after,
-                carried_refund,
-                status_after,
-                carried_sp,
-                carried_memory_base,
-                carried_memory_height,
-                carried_caller,
-                carried_address,
-                carried_code_address,
-                carried_value,
-                carried_state_gas_reservoir,
-                carried_is_static,
-                carried_depth,
-                carried_code,
-                carried_calldata,
-                carried_returndata,
-            )
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
     }
 }

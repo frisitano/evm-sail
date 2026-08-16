@@ -167,9 +167,11 @@ duplicating instructions elsewhere.
   same state. `EvmInterpreterState` does not contain decoded instructions.
   The canonical loop threads the aggregate between steps and publishes its
   four machine fields only at frame boundaries; `run_call`/`run_create`
-  publish the parent immediately before `suspend_frame` and return either the
-  updated parent or freshly installed child state. `FrameCheckpoint` continues
-  to save/restore all four fields. `StackPointer` carries an abstract storage
+  publish the parent immediately before `suspend_frame` and return a named
+  `FrameTransition` containing either the updated parent or freshly installed
+  child context. The optimized loop immediately unpacks that cold-boundary
+  record into its hot locals. `FrameCheckpoint` continues to save/restore all
+  four fields. `StackPointer` carries an abstract storage
   coordinate together with its semantic operand-stack height. The spec backend
   represents the coordinate as a frame-local row index; the optimized backend
   refines it to `{ u256 *storage, uint16_t height }`, so the threaded interpreter

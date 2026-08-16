@@ -542,6 +542,26 @@ struct Message = {
     depth : frame_depth,
 }
 
+/*! The complete carried state installed after entering or resuming a frame.
+    Named fields replace the former positional 19-tuple at this cold semantic
+    boundary; the optimized interpreter immediately unpacks the record into
+    its hot scalar locals. */
+struct FrameTransition = {
+    pc : code_pointer,
+    gas_remaining : gas,
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+    refund : gas_refund,
+    status : FrameStatus,
+    stack_top : StackPointer,
+    memory_base : memory_base,
+    memory_height : memory_height,
+    message : Message,
+    code : Code,
+    calldata : CalldataSlice,
+    returndata : OutputSlice,
+}
+
 /*! Lightweight result of one opcode handler. */
 union OpcodeOutcome = {
     /*! Continue executing the active frame. */
