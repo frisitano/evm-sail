@@ -610,7 +610,7 @@ function memory_expansion_gas_cost(mem, required_size, available) =
 /*! Materializes the exact byte high-water mark after gas has been charged,
     returning the updated memory cursor. */
 function expand_memory(mem : EvmMemorySlice, required_size : memory_length) -> EvmMemorySlice = {
-    let (_, expanded) = memory_expand_to(mem, required_size);
+    let (expanded, _) = memory_expand_to(mem, required_size);
     expanded
 }
 

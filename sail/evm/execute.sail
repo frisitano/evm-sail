@@ -753,7 +753,7 @@ function execute_keccak256(
     gas = gas_sub(gas, expansion_cost.cost);
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
-    let (digest, memory) = mem_keccak(memory, access.range);
+    let (memory, digest) = mem_keccak(memory, access.range);
     sp = stack_top_advance(sp, 1);
     write_stack_word(sp, digest);
     (gas, sp, memory, Continue())
@@ -2301,7 +2301,7 @@ function execute_log(
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
-    let (data, memory) = active_memory_slice(memory, range.off, range.len);
+    let (memory, data) = active_memory_slice(memory, range.off, range.len);
     let memory_slice = evm_memory_slice(data.bytes, data.len);
     let log_data = LogDataMemory(memory_slice);
     k_log(carried_address, topics, log_data);
@@ -2345,7 +2345,7 @@ function execute_return(
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
-    let (data, memory) = active_memory_slice(memory, range.off, range.len);
+    let (memory, data) = active_memory_slice(memory, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltReturn(output);
     (gas, sp, memory, Halted(reason))
@@ -2409,7 +2409,7 @@ function execute_revert(
         state_gas = carried_state_gas_reservoir;
         state_spill = STATE_GAS_SPILL_ZERO
     };
-    let (data, memory) = active_memory_slice(memory, range.off, range.len);
+    let (memory, data) = active_memory_slice(memory, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltRevert(output);
     (gas, state_gas, state_spill, sp, memory, Halted(reason))

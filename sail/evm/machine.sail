@@ -248,15 +248,10 @@ function memory_reset() -> EvmMemorySlice = {
 }
 
 /*! Expands the carried frame memory to an already-charged size, returning
-    the resulting high-water-mark witness and the updated cursor. */
-/* TODO: Refactor memory_expand_to, active_memory_slice, and memory_code_slice
- * together to return the updated carried memory before the derived view. That
- * would align this family with the (state..., result) handler convention. Do
- * not reorder one helper alone: the view and state currently share the same C
- * representation, so every caller must change with the semantic interface. */
+    the updated cursor followed by the requested high-water-mark witness. */
 val memory_expand_to : forall 'required, source_valid_range(0, 'required). (EvmMemorySlice, int('required)) -> (
-        EvmMemorySliceLength('required),
         EvmMemorySlice,
+        EvmMemorySliceLength('required),
     )
 
 /*! Materializes an already-charged memory high-water mark and returns both the
@@ -267,7 +262,7 @@ function memory_expand_to(mem, new_size) = {
         let expanded = mem_expand(new_size);
         (expanded, expanded)
     } else {
-        (sub_slice(memory, 0, new_size), mem)
+        (mem, sub_slice(memory, 0, new_size))
     }
 }
 
@@ -282,38 +277,39 @@ val active_memory_slice : forall 'off 'len, memory_valid_range('off, 'len). (Evm
 
 function active_memory_slice(mem, off, len) =
     if len == 0 then {
-        (EMPTY_EVM_MEMORY_SLICE, mem)
+        (mem, EMPTY_EVM_MEMORY_SLICE)
     } else {
-        let (window, expanded) = memory_expand_to(mem, off + len);
-        (sub_slice(window, off, len), expanded)
+        let (expanded, window) = memory_expand_to(mem, off + len);
+        (expanded, sub_slice(window, off, len))
     }
 
 /*! Returns expanded memory as executable initcode together with the
     updated cursor, retaining the headroom established by the successful
     memory-expansion range. */
 val memory_code_slice : forall 'off 'len, memory_valid_range('off, 'len). (EvmMemorySlice, int('off), int('len)) -> (
-        CodeSlice,
         EvmMemorySlice,
+        CodeSlice,
     )
 
 function memory_code_slice(mem, off, len) =
     if len == 0 then {
-        (EMPTY_CODE_SLICE, mem)
+        (mem, EMPTY_CODE_SLICE)
     } else {
-        let (window, expanded) = memory_expand_to(mem, off + len);
+        let (expanded, window) = memory_expand_to(mem, off + len);
         let initcode = sub_slice(window, off, len);
-        (code_db_intern_memory(initcode), expanded)
+        (expanded, code_db_intern_memory(initcode))
     }
 
-/* Entering a child returns the saved parent pointer. Restoring that value is
- * the complete Sail-side memory-frame unwind; no second size register exists. */
-/*! Saves the parent range and enters an empty child-memory frame. */
+/* The caller retains its parent cursor while entering a child. Passing that
+ * cursor back on leave is the complete Sail-side memory-frame unwind; no
+ * second size register exists. */
+/*! Enters an empty child-memory frame and returns its cursor. */
 function memory_frame_enter() -> EvmMemorySlice = {
     let base : source_pointer = mem_frame_enter();
     evm_memory_slice(base, 0)
 }
 
-/*! Releases child memory and restores the saved parent range. */
+/*! Releases child memory and restores the caller-supplied parent cursor. */
 function memory_frame_leave(parent : EvmMemorySlice) -> EvmMemorySlice = {
     mem_frame_leave();
     parent
@@ -419,9 +415,9 @@ function mem_mcopy(dst : memory_pointer, src : memory_pointer, len : memory_leng
 
 /*! `KECCAK256` over the memory range `[off, off+len)`: semantically, the
     caller reads the addressed bytes and hashes that byte list. Returns
-    the digest word and the updated memory cursor. */
-function mem_keccak(mem : EvmMemorySlice, range : MemoryRange) -> (word, EvmMemorySlice) = {
-    let (bytes, expanded) = active_memory_slice(mem, range.off, range.len);
+    the updated memory cursor followed by the digest word. */
+function mem_keccak(mem : EvmMemorySlice, range : MemoryRange) -> (EvmMemorySlice, word) = {
+    let (expanded, bytes) = active_memory_slice(mem, range.off, range.len);
     let digest = keccak256(bytes);
-    (hash_to_word(digest), expanded)
+    (expanded, hash_to_word(digest))
 }

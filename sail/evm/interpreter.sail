@@ -2755,7 +2755,7 @@ function run_call(
                        set is an ordinary code call. The precompile's input is the
                        child message's calldata: memory_after[args_off .. args_off+args_len).
                        Gas inspects the same memory source before execution. */
-                    let (input_memory, mem2) = active_memory_slice(mem1, args.off, args.len);
+                    let (mem2, input_memory) = active_memory_slice(mem1, args.off, args.len);
                     let input = MemoryCalldata(input_memory);
 
                     /* Gas is checked before execution: an unpayable/OOG precompile call
@@ -2887,7 +2887,7 @@ function run_call(
                         if semantics.inherits_caller_and_value then carried_value else value;
                     let child_static : bool =
                         if semantics.enters_static_context then true else carried_is_static;
-                    let (bytes, mem2) = active_memory_slice(mem1, args.off, args.len);
+                    let (mem2, bytes) = active_memory_slice(mem1, args.off, args.len);
                     let child_memory = evm_memory_slice(bytes.bytes, bytes.len);
                     let child_calldata = MemoryCalldata(child_memory);
                     let child_state_gas = state_gas_after;
@@ -3299,7 +3299,7 @@ function run_create(
                 var mem2 : EvmMemorySlice = mem1;
                 let new_addr : address =
                     if semantics.uses_salt then {
-                        let (initcode_digest_word, hashed_mem) = mem_keccak(mem1, initcode);
+                        let (hashed_mem, initcode_digest_word) = mem_keccak(mem1, initcode);
                         mem2 = hashed_mem;
                         let initcode_digest = word_to_hash(initcode_digest_word);
                         k_create2_addr(creator, salt, initcode_digest)
@@ -3459,7 +3459,7 @@ function run_create(
                         /* Freeze the initcode while parent memory is active, then
                            suspend the complete parent before mutating the new account.
                            The child frame has no calldata. */
-                        let (initcode_bytes, mem3) = memory_code_slice(mem2, initcode.off, initcode.len);
+                        let (mem3, initcode_bytes) = memory_code_slice(mem2, initcode.off, initcode.len);
                         let child_code_id = code_db_insert(initcode_bytes, profile.fork);
                         let child_code = code_db_resolve(child_code_id);
                         let child_state_gas = state_gas_after;

@@ -41,15 +41,15 @@ function system_call(tgt : address, input : hash) -> unit = {
 
     let initial_memory = memory_reset();
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-    let (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len);
+    let (expanded_memory, _) = memory_expand_to(initial_memory, input_range.len);
     let input_word = hash_to_word(input);
     mem_store_word(input_range.off, input_word);
-    let (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
-    let parent_memory = memory_frame_enter();
+    let (accessed_memory, input_slice) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
+    let _ = memory_frame_enter();
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
     let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, code, frame_input);
-    let _ = memory_frame_leave(parent_memory);
+    let _ = memory_frame_leave(accessed_memory);
     let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
     if failed then {
