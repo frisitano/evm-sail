@@ -1198,15 +1198,13 @@ function run_create_transaction_frame(
                     let execution_deposit = deployment_charge.cost;
                     gas_after = gas_sub(gas_after, execution_deposit);
                     let state_deposit = code_deployment_state_cost(dep_len);
-                    let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(
+                    var deployment_halt : bool = false;
+                    (deployment_halt, gas_after, state_gas_after, state_spill_after) = charge_state_gas(
                         gas_after,
                         state_gas_after,
                         state_spill_after,
                         state_deposit,
                     );
-                    gas_after = deployment_gas;
-                    state_gas_after = deployment_state_gas;
-                    state_spill_after = deployment_state_spill;
                     if deployment_halt then {
                         gas_after = GAS_ZERO;
                         (state_gas_after, state_spill_after, status_after) = exceptional_state(

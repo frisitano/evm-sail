@@ -2402,7 +2402,13 @@ function execute_revert(
     let access = memory_access(offset_word, length_word);
     memory = expand_memory(memory, access.required_size);
     let range = access.range;
-    (gas, state_gas, state_spill) = refill_frame_state_gas(gas, state_gas, state_spill, carried_state_gas_reservoir);
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    if profile.fork >= Amsterdam then {
+        gas = conserved_gas_add(gas, state_spill);
+        state_gas = carried_state_gas_reservoir;
+        state_spill = STATE_GAS_SPILL_ZERO
+    };
     let (data, memory) = active_memory_slice(memory, range.off, range.len);
     let output = freeze_output(data);
     let reason = HaltRevert(output);

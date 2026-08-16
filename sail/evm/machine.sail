@@ -87,20 +87,6 @@ function conserved_gas_add(available, credit) =
         fatal_error(ExecutionInvalid)
     }
 
-/*! Returns any Amsterdam state-gas spill to the carried execution gas and
-    restores the frame's state-gas reservoir. */
-val refill_frame_state_gas : (gas, state_gas, state_gas_spill, state_gas) -> (gas, state_gas, state_gas_spill)
-function refill_frame_state_gas(g, state_gas_remaining, state_gas_spilled, state_gas_reservoir) = {
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    if profile.fork >= Amsterdam then {
-        let refilled = conserved_gas_add(g, state_gas_spilled);
-        (refilled, state_gas_reservoir, STATE_GAS_SPILL_ZERO)
-    } else {
-        (g, state_gas_remaining, state_gas_spilled)
-    }
-}
-
 /*! Computes the signed state gas consumed by the current frame. */
 function frame_state_gas_used(
     state_gas_reservoir : state_gas,

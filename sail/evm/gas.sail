@@ -366,34 +366,9 @@ function state_gas_spill_add(left, right) =
         fatal_error(ExecutionInvalid)
     }
 
-/*! Debits Amsterdam state gas from the frame reservoir first and spills the
-    remainder into the carried execution gas. Returns true when the two
-    pools cannot cover the charge. */
-val debit_state_gas : forall 'amount, 0 <= 'amount. (gas, state_gas, state_gas_spill, int('amount)) -> (
-        bool,
-        gas,
-        state_gas,
-        state_gas_spill,
-    )
-function debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
-    if amount == 0 then {
-        return (true, g, state_gas_remaining, state_gas_spilled)
-    };
-    let state_left = state_gas_remaining;
-    if amount <= state_left then {
-        (true, g, state_left - amount, state_gas_spilled)
-    } else {
-        let remainder = amount - state_left;
-        if remainder <= g then {
-            let spilled = state_gas_spilled;
-            (true, g - remainder, STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
-        } else {
-            (false, g, state_gas_remaining, state_gas_spilled)
-        }
-    }
-}
-
-/*! Charges state gas while an opcode frame is running. */
+/*! Charges Amsterdam state gas from the frame reservoir first and spills the
+    remainder into the carried execution gas. Returns true when the two pools
+    cannot cover the charge. */
 val charge_state_gas : forall 'amount, 0 <= 'amount. (gas, state_gas, state_gas_spill, int('amount)) -> (
         bool,
         gas,
@@ -401,38 +376,20 @@ val charge_state_gas : forall 'amount, 0 <= 'amount. (gas, state_gas, state_gas_
         state_gas_spill,
     )
 function charge_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
-    let (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(
-        g,
-        state_gas_remaining,
-        state_gas_spilled,
-        amount,
-    );
-    if debited then {
-        (false, debited_gas, state_gas_remaining, state_gas_spilled)
+    if amount == 0 then {
+        return (false, g, state_gas_remaining, state_gas_spilled)
+    };
+    let state_left = state_gas_remaining;
+    if amount <= state_left then {
+        (false, g, state_left - amount, state_gas_spilled)
     } else {
-        (true, debited_gas, state_gas_remaining, state_gas_spilled)
-    }
-}
-
-/*! Charges state gas for code returned by already-halted successful initcode.
-    This is the create-message post-execution hook, not another opcode step. */
-val charge_deployment_state_gas : forall 'amount, 0 <= 'amount. (gas, state_gas, state_gas_spill, int('amount)) -> (
-        bool,
-        gas,
-        state_gas,
-        state_gas_spill,
-    )
-function charge_deployment_state_gas(g, state_gas_remaining, state_gas_spilled, amount) = {
-    let (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(
-        g,
-        state_gas_remaining,
-        state_gas_spilled,
-        amount,
-    );
-    if debited then {
-        (false, debited_gas, state_gas_remaining, state_gas_spilled)
-    } else {
-        (true, debited_gas, state_gas_remaining, state_gas_spilled)
+        let remainder = amount - state_left;
+        if remainder <= g then {
+            let spilled = state_gas_spilled;
+            (false, g - remainder, STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
+        } else {
+            (true, g, state_gas_remaining, state_gas_spilled)
+        }
     }
 }
 

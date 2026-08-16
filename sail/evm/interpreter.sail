@@ -3689,15 +3689,13 @@ function resume_create(
                 let execution_deposit = deployment_charge.cost;
                 settled_child_gas = gas_sub(settled_child_gas, execution_deposit);
                 let state_deposit = code_deployment_state_cost(deployed_length);
-                let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(
+                var deployment_halt : bool = false;
+                (deployment_halt, settled_child_gas, settled_child_state_gas, settled_child_state_spill) = charge_state_gas(
                     settled_child_gas,
                     settled_child_state_gas,
                     settled_child_state_spill,
                     state_deposit,
                 );
-                settled_child_gas = deployment_gas;
-                settled_child_state_gas = deployment_state_gas;
-                settled_child_state_spill = deployment_state_spill;
                 if deployment_halt then {
                     settled_child_gas = GAS_ZERO;
                     (settled_child_state_gas, settled_child_state_spill, settled_child_status) = exceptional_state(
