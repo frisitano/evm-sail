@@ -848,7 +848,9 @@ function modexp_gas(input : CalldataSlice, available : gas) -> GasCharge = {
         if ml < bl then bl else ml;
     let whole_words = maxlen / 8;
     let partial_word_bytes = tmod_nat(maxlen, 8);
-    let words = whole_words + (if partial_word_bytes == 0 then 0 else 1);
+    let trailing_word =
+        if partial_word_bytes == 0 then 0 else 1;
+    let words = whole_words + trailing_word;
 
     /* For EIP-2565, floor(product / 3) is affordable exactly when product is
      * at most 3*available+2. Bounding each factor by this threshold before
@@ -1415,9 +1417,15 @@ function legacy_sstore_costs(original : word, current : word, new_value : word, 
              * the one transition delta directly avoids treating these
              * mutually related components as independent accumulators. */
             let clear_delta =
-                if original_is_zero
-                then 0
-                else (if current_is_zero then 0 - clear_refund else 0) + (if new_value_is_zero then clear_refund else 0);
+                if original_is_zero then {
+                    0
+                } else {
+                    let withdrawn_clear_refund =
+                        if current_is_zero then 0 - clear_refund else 0;
+                    let awarded_clear_refund =
+                        if new_value_is_zero then clear_refund else 0;
+                    withdrawn_clear_refund + awarded_clear_refund
+                };
             let reset_delta =
                 if original == new_value
                 then if original_is_zero then G_sset - G_warm_access else G_sreset - G_warm_access

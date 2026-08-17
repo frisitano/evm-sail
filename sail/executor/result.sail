@@ -10,7 +10,9 @@ let RESULT_METADATA_LENGTH : int(5) = 5
 /*! Writes the request root and validation metadata prefix. */
 function write_prefix(root : hash, success : bool) -> unit = {
     scratch_push_b256(root, WORD_BYTE_LENGTH);
-    scratch_push_byte(if success then 0x01 else 0x00);
+    let success_byte : byte =
+        if success then 0x01 else 0x00;
+    scratch_push_byte(success_byte);
     scratch_push_byte(0x25);
     scratch_push_byte(0x00);
     scratch_push_byte(0x00);

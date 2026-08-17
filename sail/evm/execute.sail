@@ -2495,7 +2495,9 @@ function execute_selfdestruct(
     let halt_status = Halted(halt_reason);
     if fork >= Amsterdam then {
         let warm = k_account_is_warm(beneficiary);
-        let access_cost = 0 + G_selfdestruct + (if warm then G_zero else G_amsterdam_cold_account_access);
+        let cold_access_cost =
+            if warm then G_zero else G_amsterdam_cold_account_access;
+        let access_cost = G_selfdestruct + cold_access_cost;
         if gas < access_cost then {
             return (GAS_ZERO, state_gas, state_spill, refund, sp, Exceptional(OutOfGas))
         };

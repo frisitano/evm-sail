@@ -242,7 +242,8 @@ function run_modexp(input : CalldataSlice) -> PrecompileResult = {
         let bounded_base : range(0, 2097152) = base_len;
         let bounded_exponent : range(0, 2097152) = exponent_len;
         let bounded_modulus : range(0, 2097152) = modulus_len;
-        let input_end : range(96, 96 + 3 * 2097152) = 96 + bounded_base + bounded_exponent + bounded_modulus;
+        let exponent_end : range(96, 96 + 2 * 2097152) = 96 + bounded_base + bounded_exponent;
+        let input_end : range(96, 96 + 3 * 2097152) = exponent_end + bounded_modulus;
         if ACCELERATOR_INPUT_MAX < input_end then {
             precompile_failure()
         } else {

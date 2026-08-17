@@ -9,10 +9,13 @@
 function validated_word_product(value, factor) = {
     if word_is_zero(value) | word_is_zero(factor) then {
         WORD_ZERO
-    } else if word_ule(value, word_div(WORD_ALL_ONES, factor)) then {
-        word_mul(value, factor)
     } else {
-        fatal_error(ExecutionInvalid)
+        let product_fits = word_ule(value, word_div(WORD_ALL_ONES, factor));
+        if product_fits then {
+            word_mul(value, factor)
+        } else {
+            fatal_error(ExecutionInvalid)
+        }
     }
 }
 
@@ -49,14 +52,12 @@ function transaction_costs(
         };
     let execution_cap = validated_word_product(tx.max_fee, gas_limit);
     let blob_cap = validated_word_product(tx.max_blob_fee, blob_gas);
+    let value_fits = word_ule(tx.value, word_sub(WORD_ALL_ONES, execution_cap));
     let execution_and_value : word =
-        if word_ule(tx.value, word_sub(WORD_ALL_ONES, execution_cap))
-        then word_add(execution_cap, tx.value)
-        else fatal_error(ExecutionInvalid);
+        if value_fits then word_add(execution_cap, tx.value) else fatal_error(ExecutionInvalid);
+    let blob_cap_fits = word_ule(blob_cap, word_sub(WORD_ALL_ONES, execution_and_value));
     let upfront : word =
-        if word_ule(blob_cap, word_sub(WORD_ALL_ONES, execution_and_value))
-        then word_add(execution_and_value, blob_cap)
-        else fatal_error(ExecutionInvalid);
+        if blob_cap_fits then word_add(execution_and_value, blob_cap) else fatal_error(ExecutionInvalid);
     struct {
         intrinsic_execution = intrinsic.execution,
         intrinsic_state = intrinsic.state,

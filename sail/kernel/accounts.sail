@@ -142,7 +142,9 @@ function k_account_occupied(a : address) -> bool = {
     let acc = k_aload(a);
     let info = acc.info;
     let anchored_storage = not_bool(acc.storage_cleared) & (info.storage_root != EMPTY_TRIE_ROOT);
-    if (info.code_hash != KECCAK_EMPTY) | (info.nonce != 0) | anchored_storage then {
+    let has_code = info.code_hash != KECCAK_EMPTY;
+    let has_nonce = info.nonce != 0;
+    if has_code | has_nonce | anchored_storage then {
         true
     } else {
         storage_has_writes(a)

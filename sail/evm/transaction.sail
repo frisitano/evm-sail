@@ -631,7 +631,8 @@ function process_amsterdam_auth(
             let not_delegated_before_tx = not_bool(delegated_before_tx);
             let delegation_set = authorization_tracker_delegation_set(authority);
             let delegation_not_set = not_bool(delegation_set);
-            if (au.address != ZERO_ADDRESS) & not_delegated_before_tx & delegation_not_set then {
+            let creates_delegation = au.address != ZERO_ADDRESS;
+            if creates_delegation & not_delegated_before_tx & delegation_not_set then {
                 let (auth_state_gas_halt, auth_gas, auth_state_gas, auth_state_spill) = charge_state_gas(
                     gas_after,
                     state_gas_after,
@@ -654,7 +655,7 @@ function process_amsterdam_auth(
             k_bump_nonce(authority);
             let unseen = not_bool(seen);
             let originally_delegated = unseen & currently_delegated;
-            authorization_tracker_commit(authority, originally_delegated, au.address != ZERO_ADDRESS)
+            authorization_tracker_commit(authority, originally_delegated, creates_delegation)
         }
     };
     (true, gas_after, state_gas_after, state_spill_after)
@@ -906,7 +907,8 @@ function check_transaction_validity(tx, allowance) = {
     if tx_semantics.set_code & (authorizations.count == 0) then {
         fatal_error(ExecutionInvalid)
     };
-    if (tx_semantics.signature == TypedSignature) & (tx.chain_id != k_chain_id) then {
+    let typed_signature = tx_semantics.signature == TypedSignature;
+    if typed_signature & (tx.chain_id != k_chain_id) then {
         fatal_error(ExecutionInvalid)
     };
     if nonce_before == sizeof(account_nonce_bound) then {
@@ -1433,10 +1435,12 @@ function run_legacy_transaction_frame(tx, v) = {
         k_journal_commit()
     };
     let state_delta = frame_state_gas_used(state_gas_reservoir, state_gas_after, state_spill_after);
+    let retained_refund =
+        if success then refund_after else GAS_REFUND_ZERO;
     struct {
         success = success,
         gas = tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta),
-        refund = if success then refund_after else GAS_REFUND_ZERO,
+        refund = retained_refund,
     }
 }
 
@@ -1577,10 +1581,12 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
     k_journal_commit();
     let state_delta = authorization_state_gas +
             frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after);
+    let retained_refund =
+        if success then refund_after else GAS_REFUND_ZERO;
     struct {
         success = success,
         gas = tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta),
-        refund = if success then refund_after else GAS_REFUND_ZERO,
+        refund = retained_refund,
     }
 }
 
