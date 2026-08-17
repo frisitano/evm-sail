@@ -25,6 +25,7 @@ from tools.evaluate_optimised_c import (
     load_extraction_provenance_stamp,
     package_build_gate,
     representative_sample,
+    result_identifiers,
     resolve_compiler_provenance,
     source_metrics,
     strip_c_comments_and_literals,
@@ -87,6 +88,24 @@ class OptimisedCEvaluatorTests(unittest.TestCase):
                     "goto_keyword_tokens": 1,
                 },
             )
+
+    def test_result_metric_catches_semantic_prefix_without_comments_or_literals(self) -> None:
+        source = (
+            "struct OpcodeOutcome Continue_result_2_1752 = Continue(UNIT);\n"
+            "struct LogTopics LogTopics0_result_2_1745 = LogTopics0(UNIT);\n"
+            "uint64_t result_value = 0;\n"
+            "uint64_t domain_result = 0;\n"
+            'const char *hidden = "Failed_result_2_1753 result_hidden";\n'
+            "// Exceptional_result_2_1999\n"
+        )
+        self.assertEqual(
+            result_identifiers(source),
+            {
+                "Continue_result_2_1752",
+                "LogTopics0_result_2_1745",
+                "result_value",
+            },
+        )
 
     def test_intermediate_tuple_metric_excludes_semantic_tuple_abi(self) -> None:
         source = (

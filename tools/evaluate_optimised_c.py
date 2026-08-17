@@ -468,6 +468,17 @@ def intermediate_tuple_identifiers(text: str) -> set[str]:
     return identifiers
 
 
+def result_identifiers(text: str) -> set[str]:
+    """Find generated result names before or after semantic-name recovery."""
+    code = strip_c_comments_and_literals(text)
+    return set(
+        re.findall(
+            r"\b(?:result_[A-Za-z0-9_]+|[A-Za-z_][A-Za-z0-9_]*_result_[0-9]+_[0-9]+)\b",
+            code,
+        )
+    )
+
+
 def source_metrics(sources: list[Path]) -> dict[str, int]:
     physical = 0
     nonblank = 0
@@ -482,7 +493,7 @@ def source_metrics(sources: list[Path]) -> dict[str, int]:
         nonblank += sum(bool(line.strip()) for line in lines)
         code = strip_c_comments_and_literals(text)
         temporaries.update(re.findall(r"\b(?:z?tmp)_[A-Za-z0-9_]+\b", code))
-        results.update(re.findall(r"\bresult_[A-Za-z0-9_]+\b", code))
+        results.update(result_identifiers(text))
         intermediate_tuples.update(intermediate_tuple_identifiers(text))
         gotos += len(re.findall(r"\bgoto\b", code))
     return {
@@ -502,7 +513,10 @@ def metric_records(values: dict[str, int]) -> list[dict[str, Any]]:
         "generated_physical_lines": "physical lines across manifest generated sources",
         "generated_nonblank_lines": "nonblank lines across manifest generated sources",
         "distinct_temporary_identifiers": r"distinct tokens matching (?:z?tmp)_[A-Za-z0-9_]+",
-        "distinct_result_identifiers": r"distinct tokens matching result_[A-Za-z0-9_]+",
+        "distinct_result_identifiers": (
+            "distinct tokens matching result_* or a generated "
+            "*_result_<phase>_<serial> suffix"
+        ),
         "distinct_intermediate_tuple_identifiers": (
             "distinct function-local struct tuple_* declarations whose identifier "
             "carries Sail's generated _<phase>_<serial> suffix"
