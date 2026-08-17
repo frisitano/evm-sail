@@ -107,9 +107,9 @@ function copied_result(data : CalldataSlice) -> PrecompileResult = {
 
 /*! A 32-byte `0`/`1` result word (pairing checks). */
 function boolean_result(value : bool) -> PrecompileResult = {
-    let result_word =
+    let encoded_word =
         if value then WORD_ONE else WORD_ZERO;
-    let output = output_buffer_word(result_word);
+    let output = output_buffer_word(encoded_word);
     precompile_success(output)
 }
 

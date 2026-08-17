@@ -721,8 +721,8 @@ function alu_byte(i : word, x : word) -> word = {
         let index : range(0, 31) = i;
         let shift : word_bit_count = (31 - index) * 8;
         let shifted = word_shift_right(x, shift);
-        let result_byte = word_low_byte(shifted);
-        unsigned(result_byte)
+        let low_byte = word_low_byte(shifted);
+        unsigned(low_byte)
     } else {
         WORD_ZERO
     }
