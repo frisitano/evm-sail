@@ -197,7 +197,7 @@ enum {
     FINISH_OPCODE(outcome);                                                                        \
   } while (0)
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes
+struct InterpreterCompletion
 threaded_interpret(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill,
                    __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base,
                    uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address,
@@ -720,13 +720,13 @@ interpreter_continue:
     Bytes output = frame_output(status);
     const struct FrameContinuation *continuation = frame_stack_pop_borrowed();
     if (continuation == NULL) {
-      return (struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes){
-          .tup0 = gas,
-          .tup1 = state_gas_remaining,
-          .tup2 = state_gas_spilled,
-          .tup3 = refund,
-          .tup4 = status,
-          .tup5 = output,
+      return (struct InterpreterCompletion){
+          .gas_remaining = gas,
+          .state_gas_remaining = state_gas_remaining,
+          .state_gas_spilled = state_gas_spilled,
+          .refund = refund,
+          .status = status,
+          .output = output,
       };
     }
 

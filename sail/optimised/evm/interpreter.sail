@@ -64,6 +64,15 @@ val exceptional_state : (state_gas, state_gas_spill, state_gas, ExceptionKind) -
 /* The optimized build refines only the interpreter control-flow boundary.
  * Opcode semantics, frame entry, and frame resumption remain generated from
  * the canonical Sail bodies and are called by the threaded C dispatcher. */
+struct InterpreterCompletion = {
+    gas_remaining : gas,
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+    refund : gas_refund,
+    status : FrameStatus,
+    output : OutputSlice,
+}
+
 val threaded_interpret_host = impure { c: "threaded_interpret" } : (
         gas,
         state_gas,
@@ -83,7 +92,7 @@ val threaded_interpret_host = impure { c: "threaded_interpret" } : (
         CalldataSlice,
         Fork,
         word,
-    ) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+    ) -> InterpreterCompletion
 
 function interpret(
     initial_gas : gas,
@@ -109,7 +118,7 @@ function interpret(
     let profile = execution_profile.protocol;
     let fork = profile.fork;
     let blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas);
-    threaded_interpret_host(
+    let completion = threaded_interpret_host(
         initial_gas,
         initial_state_gas,
         initial_state_spill,
@@ -128,5 +137,13 @@ function interpret(
         initial_calldata,
         fork,
         blob_fee,
+    );
+    (
+        completion.gas_remaining,
+        completion.state_gas_remaining,
+        completion.state_gas_spilled,
+        completion.refund,
+        completion.status,
+        completion.output,
     )
 }
