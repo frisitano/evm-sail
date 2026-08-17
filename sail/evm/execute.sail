@@ -1282,7 +1282,6 @@ function execute_returndatacopy(
     let (available as 'available) = returndata_size(carried_returndata);
     if source_word <= available then {
         let remaining = returndata_remaining(available, source_word);
-        let bounded_source_offset : source_pointer = source_word;
         if length_word <= remaining then {
             let bounded_length : memory_length = length_word;
             let copy_cost = copy_gas_cost(length_word, gas);
@@ -1299,6 +1298,7 @@ function execute_returndatacopy(
             let access = memory_access(destination_word, length_word);
             memory = expand_memory(memory_base, memory, access.requested_height);
             let destination = memory_absolute(memory_base, access.range.off);
+            let bounded_source_offset : source_pointer = source_word;
             returndata_copy(carried_returndata, destination, bounded_source_offset, bounded_length);
             (gas, sp, memory, Continue())
         } else {
