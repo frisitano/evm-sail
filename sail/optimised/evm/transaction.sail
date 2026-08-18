@@ -10,7 +10,8 @@ function validated_word_product(value, factor) = {
     if word_is_zero(value) | word_is_zero(factor) then {
         WORD_ZERO
     } else {
-        let product_fits = word_ule(value, word_div(WORD_ALL_ONES, factor));
+        let maximum_value = word_div(WORD_ALL_ONES, factor);
+        let product_fits = word_ule(value, maximum_value);
         if product_fits then {
             word_mul(value, factor)
         } else {
@@ -52,10 +53,12 @@ function transaction_costs(
         };
     let execution_cap = validated_word_product(tx.max_fee, gas_limit);
     let blob_cap = validated_word_product(tx.max_blob_fee, blob_gas);
-    let value_fits = word_ule(tx.value, word_sub(WORD_ALL_ONES, execution_cap));
+    let maximum_value = word_sub(WORD_ALL_ONES, execution_cap);
+    let value_fits = word_ule(tx.value, maximum_value);
     let execution_and_value : word =
         if value_fits then word_add(execution_cap, tx.value) else fatal_error(ExecutionInvalid);
-    let blob_cap_fits = word_ule(blob_cap, word_sub(WORD_ALL_ONES, execution_and_value));
+    let maximum_blob_cap = word_sub(WORD_ALL_ONES, execution_and_value);
+    let blob_cap_fits = word_ule(blob_cap, maximum_blob_cap);
     let upfront : word =
         if blob_cap_fits then word_add(execution_and_value, blob_cap) else fatal_error(ExecutionInvalid);
     struct {

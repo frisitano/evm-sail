@@ -166,7 +166,9 @@ function intrinsic_gas(tx : Transaction) -> IntrinsicGasCost = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     if profile.fork < Amsterdam then {
-        struct { execution = legacy_intrinsic_gas(tx), state = 0, calldata_floor = legacy_calldata_floor(tx.input_src) }
+        let execution = legacy_intrinsic_gas(tx);
+        let calldata_floor = legacy_calldata_floor(tx.input_src);
+        struct { execution = execution, state = 0, calldata_floor = calldata_floor }
     } else {
         let input = tx.input_src;
         let recipient = amsterdam_recipient_execution_cost(tx);
@@ -1304,8 +1306,11 @@ function run_call_transaction_frame(
         k_transfer(sender, tx.recipient, tx.value)
     };
     let selected_precompile = precompile_id_for_address(tx.recipient);
-    let direct_recipient = not_bool(delegated);
-    if direct_recipient & (selected_precompile != NotPrecompile) then {
+    var direct_precompile : bool = false;
+    if not_bool(delegated) then {
+        direct_precompile = selected_precompile != NotPrecompile
+    };
+    if direct_precompile then {
         /* tx directly to a precompile: run it as the top-level frame, gas-checked
            FIRST (an OOG precompile must not execute). Failure or OOG is an
            exceptional halt (all gas consumed, value transfer reverted). */
@@ -1579,8 +1584,8 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
     /* Authorization writes live in the preparation scope and survive an EVM
        execution failure once preparation itself has completed. */
     k_journal_commit();
-    let state_delta = authorization_state_gas +
-            frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after);
+    let execution_state_delta = frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after);
+    let state_delta = authorization_state_gas + execution_state_delta;
     let retained_refund =
         if success then refund_after else GAS_REFUND_ZERO;
     struct {

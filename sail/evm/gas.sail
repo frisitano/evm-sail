@@ -528,7 +528,8 @@ function memory_requested_height(start, size) =
                     {'bounded_size,
                      'bounded_size == 'size & 0 < 'bounded_size & 'bounded_size <= memory_region_bound - 'bounded_start.
                      int('bounded_size)} = size;
-            bounded_start + bounded_size
+            let requested_height : memory_required_endpoint = bounded_start + bounded_size;
+            requested_height
         } else {
             sizeof(memory_region_bound + 1)
         }
@@ -557,10 +558,9 @@ function memory_access(start, size) =
                     {'bounded_size,
                      'bounded_size == 'size & 0 < 'bounded_size & 'bounded_size <= memory_region_bound - 'bounded_start.
                      int('bounded_size)} = size;
-            let access = struct {
-                    range = memory_range(bounded_start, bounded_size),
-                    requested_height = bounded_start + bounded_size,
-                } :
+            let range = memory_range(bounded_start, bounded_size);
+            let requested_height = bounded_start + bounded_size;
+            let access = struct { range = range, requested_height = requested_height } :
                     MemoryAccessFields('bounded_start, 'bounded_size, 'bounded_start + 'bounded_size);
             access
         } else {
@@ -945,7 +945,8 @@ function modexp_gas(input : CalldataSlice, available : gas) -> GasCharge = {
                     16 * bounded_extra + high_bits
                 } else {
                     let pre_osaka_limit = 3 * available + 2;
-                    let extra_limit : modexp_pre_osaka_extra = pre_osaka_limit / 8;
+                    var extra_limit : modexp_pre_osaka_extra = 0;
+                    extra_limit = pre_osaka_limit / 8;
                     let extra_unaffordable = extra > extra_limit;
                     let bounded_extra : modexp_pre_osaka_extra =
                         if extra_unaffordable then extra_limit else extra;
@@ -1566,7 +1567,8 @@ function log_gas_cost(num_topics : log_topic_count, size : word, available : gas
 /*! `EXP`: base plus `G_expbyte` per significant exponent byte
     (EIP-160). */
 function exp_gas(exponent : word) -> gas_cost = {
-    G_expbyte * word_byte_length(exponent) + G_exp
+    let exponent_bytes = word_byte_length(exponent);
+    G_expbyte * exponent_bytes + G_exp
 }
 
 /*! The EIP-3860 charge for transaction-backed initcode, retaining the SSZ

@@ -774,19 +774,27 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         if (index != 0) | is_last then {
             let fields = rlp_node_cursor(header);
             let decoded = decode_parent_header_fields(fields, 0, EMPTY_PARENT_HEADER_FIELDS);
-            let parent_missing = not_bool(decoded.have_parent);
-            if (index != 0) & (parent_missing | (decoded.parent_hash != state.previous_hash)) then {
-                result.valid = false
+            if index != 0 then {
+                if not_bool(decoded.have_parent) then {
+                    result.valid = false
+                } else if decoded.parent_hash != state.previous_hash then {
+                    result.valid = false
+                }
             };
             if is_last then {
                 result.parent_state_root = decoded.state_root;
                 result.parent_base_fee_per_gas = decoded.base_fee;
                 result.parent_blob_gas_used = decoded.blob_gas_used;
                 result.parent_excess_blob_gas = decoded.excess_blob_gas;
-                result.parent_fields_valid =
-                      decoded.have_state
-                    & ((profile.fork < Cancun) | decoded.have_base_fee)
-                    & ((profile.fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
+                result.parent_fields_valid = decoded.have_state;
+                if profile.fork >= Cancun then {
+                    if not_bool(decoded.have_base_fee) then {
+                        result.parent_fields_valid = false
+                    };
+                    if decoded.have_blob_gas != decoded.have_excess_blob_gas then {
+                        result.parent_fields_valid = false
+                    }
+                }
             }
         };
         let current_hash = keccak256(header);

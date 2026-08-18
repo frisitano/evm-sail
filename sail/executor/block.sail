@@ -247,8 +247,7 @@ function apply_withdrawals(withdrawals : WithdrawalListRef) -> unit = {
         let (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE);
         rest = tail;
         let withdrawal = decode_withdrawal(withdrawal_ref);
-        let amount = word_of_withdrawal_amount(withdrawal.amount);
-        let amount_in_wei = alu_mul(amount, 1000000000);
+        let amount_in_wei = withdrawal.amount * 1000000000;
         k_add_balance(withdrawal.address, amount_in_wei)
     }
 }

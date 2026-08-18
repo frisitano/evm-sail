@@ -501,8 +501,10 @@ function word_abs(value : word) -> word = {
 /*! Signed (two's-complement) 256-bit less-than: sign bits decide when they
     differ, otherwise the unsigned order applies. */
 function word_slt(a : word, b : word) -> bool = {
-    let a_neg = word_bit(a, 255) == bitone;
-    let b_neg = word_bit(b, 255) == bitone;
+    let a_sign = word_bit(a, 255);
+    let b_sign = word_bit(b, 255);
+    let a_neg = a_sign == bitone;
+    let b_neg = b_sign == bitone;
     if a_neg then {
         if b_neg then {
             word_ult(a, b)

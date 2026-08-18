@@ -202,16 +202,34 @@ function authenticate_deposit_request(data : LogDataSlice, expected : StatelessI
     let expected_amount_length : word = u256(8);
     let expected_signature_length : word = u256(96);
     let expected_index_length : word = u256(8);
-    if   (pubkey_head != expected_pubkey_head)
-       | (withdrawal_credentials_head != expected_withdrawal_credentials_head)
-       | (amount_head != expected_amount_head)
-       | (signature_head != expected_signature_head)
-       | (index_head != expected_index_head)
-       | (pubkey_length != expected_pubkey_length)
-       | (withdrawal_credentials_length != expected_withdrawal_credentials_length)
-       | (amount_length != expected_amount_length)
-       | (signature_length != expected_signature_length)
-       | (index_length != expected_index_length) then {
+    if pubkey_head != expected_pubkey_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if withdrawal_credentials_head != expected_withdrawal_credentials_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if amount_head != expected_amount_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if signature_head != expected_signature_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if index_head != expected_index_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if pubkey_length != expected_pubkey_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if withdrawal_credentials_length != expected_withdrawal_credentials_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if amount_length != expected_amount_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if signature_length != expected_signature_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if index_length != expected_index_length then {
         fatal_error(InvalidExecutionRequests)
     };
     if DEPOSIT_REQUEST_LENGTH <= expected.len then {

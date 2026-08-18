@@ -41,12 +41,10 @@ val execute_deep_stack_encoded : (Code, opcode, code_scan_position, gas, StackPo
         OpcodeOutcome,
     )
 
-/* The stack arities remain small compile-time selectors used inside the
- * canonical frame-entry operations. */
-$[c_inline]
+/* Keep the stack-arity selectors as named operations in generated C.  The C
+ * compiler can inline them after their branch-local values have been formed. */
 val call_stack_inputs : CallKind -> operand_stack_height
 
-$[c_inline]
 val create_stack_inputs : CreateKind -> operand_stack_height
 
 /* Frame entry and resumption are deliberately ordinary generated Sail calls.

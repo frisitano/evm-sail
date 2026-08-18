@@ -8,13 +8,11 @@ val mem_cost : forall 'words, memory_cost_input('words). int('words) -> {'cost,
                                                                          memory_cost_relation('words, 'cost).
                                                                          int('cost)}
 
-$[c_inline]
 val memory_requested_height : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 & 0 <= 'size & 'size < 2 ^ 256. (
         int('start),
         int('size),
     ) -> memory_required_endpoint
 
-$[c_inline]
 val memory_access : forall 'start 'size, 0 <= 'start & 'start < 2 ^ 256 & 0 <= 'size & 'size < 2 ^ 256. (
         int('start),
         int('size),

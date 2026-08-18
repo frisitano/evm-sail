@@ -3280,7 +3280,10 @@ function run_create(
                      * process_create_message). */
                     let child_depth : frame_depth = current_depth + 1;
                     k_account_mark_warm(new_addr);
-                    let new_account_charged = (profile.fork >= Amsterdam) & k_account_is_empty(new_addr);
+                    var new_account_charged : bool = false;
+                    if profile.fork >= Amsterdam then {
+                        new_account_charged = k_account_is_empty(new_addr)
+                    };
                     if new_account_charged then {
                         let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
                             gas_after,
@@ -3589,7 +3592,10 @@ function resume_create(
             }
         }
     };
-    let deploy_succeeds = initcode_succeeded & frame_succeeded(settled_child_status);
+    var deploy_succeeds : bool = false;
+    if initcode_succeeded then {
+        deploy_succeeds = frame_succeeded(settled_child_status)
+    };
     operand_stack_pop_frame();
     let parent_memory_base = memory_parent_base(child_memory_base, checkpoint.memory_height);
     var parent_gas = refund_gas(checkpoint.gas_remaining, settled_child_gas);

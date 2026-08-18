@@ -119,11 +119,10 @@ function updates_subtree(
         if not_bool(update_matches_prefix) then {
             fatal_error(WitnessDeficient)
         };
-        let subtree : TrieItem = match update.change {
-            TrieDelete() => trie_empty_subtree(),
-            TriePut(value) => trie_scratch_leaf(update.key, value),
-        };
-        (subtree, next)
+        match update.change {
+            TrieDelete() => (trie_empty_subtree(), next),
+            TriePut(value) => (trie_scratch_leaf(update.key, value), next),
+        }
     } else {
         let next_cursor : trie_path_cursor = cursor + 1;
         var children = trie_children_empty();
@@ -193,11 +192,10 @@ function overlay_leaf_subtree(
             if not_bool(update_matches_key) then {
                 fatal_error(WitnessDeficient)
             };
-            let subtree : TrieItem = match update.change {
-                TrieDelete() => trie_empty_subtree(),
-                TriePut(updated) => trie_scratch_leaf(key, updated),
-            };
-            (subtree, next)
+            match update.change {
+                TrieDelete() => (trie_empty_subtree(), next),
+                TriePut(updated) => (trie_scratch_leaf(key, updated), next),
+            }
         } else {
             (trie_input_leaf(key, value), updates)
         }
@@ -381,9 +379,10 @@ function witness_subtree(node, prefix, updates, cursor) = {
                         let child_path = path_single(nib);
                         let child_prefix = path_concat(prefix, child_path);
                         let childref = children[i];
-                        let present : bool = match childref {
-                            EmptyRef() => false,
-                            _ => true,
+                        var present : bool = false;
+                        match childref {
+                            EmptyRef() => (),
+                            _ => present = true,
                         };
                         let update_pending = update_under_current_prefix(remaining);
                         let update_here =

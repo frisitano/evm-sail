@@ -1279,7 +1279,7 @@ function execute_returndatacopy(
     sp = stack_top_retreat(sp, 1);
     let length_word = read_stack_word(sp);
     sp = stack_top_retreat(sp, 1);
-    let (available as 'available) = returndata_size(carried_returndata);
+    let available = returndata_size(carried_returndata);
     if source_word <= available then {
         let remaining = returndata_remaining(available, source_word);
         if length_word <= remaining then {
