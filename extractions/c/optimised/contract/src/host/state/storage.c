@@ -268,8 +268,8 @@ void storage_load_view(StorageGeneration generation, StorageId storage_id, Stora
 /* Write the active generation directly. Sail supplies the transaction-start
  * original from the preceding semantic SLOAD. Rollback records only fields
  * whose values actually change. */
-void storage_update_by_id(AccountId account_id, StorageGeneration generation,
-                          StorageId storage_id, u256 v, u256 orig)
+void storage_update_by_id(AccountId account_id, StorageGeneration generation, StorageId storage_id,
+                          u256 v, u256 orig)
 {
   account_transaction_touch(account_id);
   if (storage_id == STORAGE_NO_ROW) {

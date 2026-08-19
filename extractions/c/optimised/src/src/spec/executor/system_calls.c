@@ -85,35 +85,42 @@ const uint8_t DEPOSIT_REQUEST_SIGNATURE = UINT8_C(88);
 const uint8_t DEPOSIT_REQUEST_INDEX = UINT8_C(184);
 
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame(bytes20 tgt, struct CalldataSlice input)
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input, uint32_t memory_base)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
   k_journal_checkpoint();
-  bytes32 code_hash = k_code_key(tgt);
-  struct CodeFields code = code_db_resolve(code_hash);
-  StackPointer stack_reset_result_2_283 = stack_reset();
-  return interpret_uint32_t_uint8_t_uint8_t___int128_StackPointer_Bytes_bytes20_bytes20_bytes20_u256_uint8_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(execution_profile.gas.system_regular_limit, execution_profile.gas.system_state_limit, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_reset_result_2_283, EMPTY_EVM_MEMORY_SLICE, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, execution_profile.gas.system_state_limit, false, UINT8_C(0), code, input);
+  StackPointer stack_top = stack_reset();
+  return interpret_uint32_t_uint8_t_uint8_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint8_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(SYSTEM_CALL_GAS_LIMIT, STATE_GAS_ZERO, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_top, memory_base, MEMORY_HEIGHT_ZERO, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, STATE_GAS_ZERO, false, UINT8_C(0), code, input);
 }
 
 void system_call(bytes20 tgt, bytes32 input)
 {
   bytes32 code_hash = k_code_key(tgt);
-  bool eq_anything_result_2_270 = eq_bytes32(code_hash, KECCAK_EMPTY);
-  if (eq_anything_result_2_270) {
+  if (eq_bytes32(code_hash, KECCAK_EMPTY)) {
     return;
   }
-  Bytes initial_memory = memory_reset();
+  struct CodeFields code = code_db_resolve(code_hash);
+  uint32_t initial_memory_base = MEMORY_BASE_ZERO;
+  uint32_t initial_memory_height = MEMORY_HEIGHT_ZERO;
   struct MemoryRangeFields input_range = memory_range_uint8_t_uint8_t_to_struct_MemoryRangeFields(UINT8_C(0), SYSTEM_CALL_INPUT_LENGTH);
-  struct tuple_Bytes_Bytes result_2_272 = memory_expand_to(initial_memory, input_range.len);
+  uint32_t expanded_memory;
+  if (input_range.len <= (UINT32_C(4294967295) - initial_memory_base)) {
+    if (initial_memory_height < input_range.len) {
+      mem_expand(initial_memory_base, initial_memory_height, input_range.len);
+      expanded_memory = input_range.len;
+    } else {
+      expanded_memory = initial_memory_height;
+    }
+  } else {
+    fatal_error(ExecutionInvalid);
+  }
   u256 input_word = hash_to_word(input);
-  mem_store_word(input_range.off, input_word);
-  struct tuple_Bytes_Bytes result_2_276 = active_memory_slice(result_2_272.tup1, input_range.off, input_range.len);
-  Bytes parent_memory = memory_frame_enter();
-  Bytes memory_input = evm_memory_slice(result_2_276.tup0.bytes, result_2_276.tup0.len);
+  mem_store(initial_memory_base, input_range.off, input_word);
+  Bytes input_slice = active_memory_slice(initial_memory_base, expanded_memory, input_range.off, input_range.len);
+  uint32_t child_memory_base = memory_absolute(initial_memory_base, expanded_memory);
+  Bytes memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
   struct CalldataSlice frame_input = MemoryCalldata(memory_input);
-  struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame_result_2_277 = run_system_call_frame(tgt, frame_input);
-  memory_frame_leave(parent_memory);
-  bool succeeded = frame_succeeded(run_system_call_frame_result_2_277.tup4);
+  struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame_result_2_269 = run_system_call_frame(tgt, code, frame_input, child_memory_base);
+  bool succeeded = frame_succeeded(run_system_call_frame_result_2_269.tup4);
   if (succeeded) {
     k_journal_commit();
   } else {
@@ -125,24 +132,20 @@ void system_call(bytes20 tgt, bytes32 input)
 Bytes system_call_checked(bytes20 tgt)
 {
   bytes32 code_hash = k_code_key(tgt);
-  bool eq_anything_result_2_264 = eq_bytes32(code_hash, KECCAK_EMPTY);
-  if (eq_anything_result_2_264) {
+  if (eq_bytes32(code_hash, KECCAK_EMPTY)) {
     fatal_error(ExecutionInvalid);
   }
-  memory_reset();
-  Bytes parent_memory = memory_frame_enter();
-  struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame_result_2_266 = run_system_call_frame(tgt, EMPTY_CALLDATA);
-  bool succeeded = frame_succeeded(run_system_call_frame_result_2_266.tup4);
+  struct CodeFields code = code_db_resolve(code_hash);
+  struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_system_call_frame_result_2_265 = run_system_call_frame(tgt, code, EMPTY_CALLDATA, MEMORY_BASE_ZERO);
+  bool succeeded = frame_succeeded(run_system_call_frame_result_2_265.tup4);
   if (succeeded) {
-    uint32_t start = scratch_reserve(run_system_call_frame_result_2_266.tup5.len);
-    output_scratch_push_slice(run_system_call_frame_result_2_266.tup5);
+    uint32_t start = scratch_reserve(run_system_call_frame_result_2_265.tup5.len);
+    output_scratch_push_slice(run_system_call_frame_result_2_265.tup5);
     Bytes result = scratch_finish(start);
-    memory_frame_leave(parent_memory);
     k_journal_commit();
     k_tx_merge();
     return result;
   }
-  memory_frame_leave(parent_memory);
   k_journal_revert();
   k_tx_merge();
   fatal_error(ExecutionInvalid);
@@ -166,8 +169,7 @@ bool deposit_log_matches(uint64_t index)
 Bytes authenticate_deposit_request(Bytes data, Bytes expected)
 {
   Bytes data_1_1;
-  bool result_2_261 = (bool)(data.len == DEPOSIT_EVENT_DATA_LENGTH);
-  if (result_2_261) {
+  if (data.len == DEPOSIT_EVENT_DATA_LENGTH) {
     data_1_1 = data;
   } else {
     fatal_error(InvalidExecutionRequests);
@@ -182,54 +184,53 @@ Bytes authenticate_deposit_request(Bytes data, Bytes expected)
   u256 amount_length = log_data_slice_load_Bytes_uint16_t_to_u256(data_1_1, DEPOSIT_AMOUNT_LENGTH_WORD);
   u256 signature_length = log_data_slice_load_Bytes_uint16_t_to_u256(data_1_1, DEPOSIT_SIGNATURE_LENGTH_WORD);
   u256 index_length = log_data_slice_load_Bytes_uint16_t_to_u256(data_1_1, DEPOSIT_INDEX_LENGTH_WORD);
-  bool tmp_3_694;
+  bool tmp_3_696;
   if (!u256_eq_u64(pubkey_head, UINT8_C(160))) {
-    tmp_3_694 = true;
+    tmp_3_696 = true;
   } else {
-    bool tmp_3_693;
+    bool tmp_3_695;
     if (!u256_eq_u64(withdrawal_credentials_head, UINT16_C(256))) {
-      tmp_3_693 = true;
+      tmp_3_695 = true;
     } else {
-      bool tmp_3_692;
+      bool tmp_3_694;
       if (!u256_eq_u64(amount_head, UINT16_C(320))) {
-        tmp_3_692 = true;
+        tmp_3_694 = true;
       } else {
-        bool tmp_3_691;
+        bool tmp_3_693;
         if (!u256_eq_u64(signature_head, UINT16_C(384))) {
-          tmp_3_691 = true;
+          tmp_3_693 = true;
         } else {
-          bool tmp_3_690;
+          bool tmp_3_692;
           if (!u256_eq_u64(index_head, UINT16_C(512))) {
-            tmp_3_690 = true;
+            tmp_3_692 = true;
           } else {
-            bool tmp_3_689;
+            bool tmp_3_691;
             if (!u256_eq_u64(pubkey_length, UINT8_C(48))) {
-              tmp_3_689 = true;
+              tmp_3_691 = true;
             } else {
-              bool tmp_3_688;
+              bool tmp_3_690;
               if (!u256_eq_u64(withdrawal_credentials_length, UINT8_C(32))) {
-                tmp_3_688 = true;
+                tmp_3_690 = true;
               } else {
-                bool tmp_3_687 = (bool)((!u256_eq_u64(amount_length, UINT8_C(8))) || ((!u256_eq_u64(signature_length, UINT8_C(96))) || (!u256_eq_u64(index_length, UINT8_C(8)))));
-                tmp_3_688 = tmp_3_687;
+                bool tmp_3_689 = (bool)((!u256_eq_u64(amount_length, UINT8_C(8))) || ((!u256_eq_u64(signature_length, UINT8_C(96))) || (!u256_eq_u64(index_length, UINT8_C(8)))));
+                tmp_3_690 = tmp_3_689;
               }
-              tmp_3_689 = tmp_3_688;
+              tmp_3_691 = tmp_3_690;
             }
-            tmp_3_690 = tmp_3_689;
+            tmp_3_692 = tmp_3_691;
           }
-          tmp_3_691 = tmp_3_690;
+          tmp_3_693 = tmp_3_692;
         }
-        tmp_3_692 = tmp_3_691;
+        tmp_3_694 = tmp_3_693;
       }
-      tmp_3_693 = tmp_3_692;
+      tmp_3_695 = tmp_3_694;
     }
-    tmp_3_694 = tmp_3_693;
+    tmp_3_696 = tmp_3_695;
   }
-  if (tmp_3_694) {
+  if (tmp_3_696) {
     fatal_error(InvalidExecutionRequests);
   }
-  bool result_2_258 = (bool)(DEPOSIT_REQUEST_LENGTH <= expected.len);
-  if (result_2_258) {
+  if (DEPOSIT_REQUEST_LENGTH <= expected.len) {
     Bytes log_pubkey = log_data_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(data_1_1, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH);
     Bytes expected_pubkey = stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(expected, DEPOSIT_REQUEST_PUBKEY, DEPOSIT_PUBKEY_LENGTH);
     bool pubkey_matches = log_input_slices_equal(log_pubkey, expected_pubkey);
@@ -284,8 +285,7 @@ void validate_execution_requests(struct StatelessInputRef input_ref)
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   validate_request_stream(WITHDRAWAL_REQUEST_ADDR, input_ref.withdrawal_requests);
   validate_request_stream(CONSOLIDATION_REQUEST_ADDR, input_ref.consolidation_requests);
-  bool result_2_238 = (bool)(execution_profile.protocol.fork >= Amsterdam);
-  if (result_2_238) {
+  if (execution_profile.protocol.fork >= Amsterdam) {
     validate_request_stream(BUILDER_DEPOSIT_REQUEST_ADDR, input_ref.builder_deposit_requests);
     validate_request_stream(BUILDER_EXIT_REQUEST_ADDR, input_ref.builder_exit_requests);
     return;

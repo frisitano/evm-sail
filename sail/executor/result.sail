@@ -8,9 +8,11 @@ request, the validation verdict, and the echoed chain configuration.
 let RESULT_METADATA_LENGTH : int(5) = 5
 
 /*! Writes the request root and validation metadata prefix. */
-function result_prefix(root : hash, success : bool) -> unit = {
+function write_prefix(root : hash, success : bool) -> unit = {
     scratch_push_b256(root, WORD_BYTE_LENGTH);
-    scratch_push_byte(if success then 0x01 else 0x00);
+    let success_byte : byte =
+        if success then 0x01 else 0x00;
+    scratch_push_byte(success_byte);
     scratch_push_byte(0x25);
     scratch_push_byte(0x00);
     scratch_push_byte(0x00);
@@ -22,7 +24,7 @@ function commit_validation_result(root : hash, success : bool, chain_config : St
     let fixed_length = WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH;
     let output_length = scratch_length_add(fixed_length, chain_config.len);
     let start = scratch_reserve(output_length);
-    result_prefix(root, success);
+    write_prefix(root, success);
     scratch_push_slice(chain_config);
     let output = scratch_finish(start);
     let written = public_output_write(output);
@@ -51,7 +53,7 @@ function write_invalid_result() -> unit = {
     let fixed_length = WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH;
     let output_length = scratch_length_add(fixed_length, chain_config.len);
     let output_start = scratch_reserve(output_length);
-    result_prefix(ZERO_HASH, false);
+    write_prefix(ZERO_HASH, false);
     scratch_push_slice(chain_config);
     let output = scratch_finish(output_start);
     let written = public_output_write(output);

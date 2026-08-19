@@ -107,8 +107,8 @@ struct tuple_TrieUpdate_bool {
   bool tup1;
 };
 
-void create_letbind_206(void);
-void kill_letbind_206(void);
+void create_letbind_208(void);
+void kill_letbind_208(void);
 
 
 bytes32 trie_subtree_root(struct TrieItem subtree);

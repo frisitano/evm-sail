@@ -1,6 +1,7 @@
 /* Native-word-pointer refinement of the canonical operand-stack host surface.
  * Every operation receives the complete cursor so generated C never converts
  * its `u256 *` storage field through an integer carrier. */
+
 val stack_reset_host = impure { c: "stack_reset" } : unit -> StackPointer
 val operand_stack_push_empty_frame_host = impure { c: "operand_stack_push_empty_frame" } : unit -> StackPointer
 val operand_stack_pop_frame = impure { c: "operand_stack_pop_frame" } : unit -> unit

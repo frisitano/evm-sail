@@ -161,15 +161,17 @@ duplicating instructions elsewhere.
   instruction data such as PUSH values/widths, DUP/SWAP indices, LOG topic
   counts, and CALL/CREATE family selectors remain explicit parameters. Handler
   bodies update `pc`, `sp`, `evm_memory`, and `gas_remaining` directly on that
-  state. `charge` remains `(gas, cost) -> (bool, gas)`, while each handler
-  writes the returned gas into its state before returning. `validate_stack`
+  state. Gas helpers compute semantic costs, while each handler checks
+  affordability and debits its carried gas directly. `validate_stack`
   runs before opcode dispatch and writes exceptional-halt gas back into the
   same state. `EvmInterpreterState` does not contain decoded instructions.
   The canonical loop threads the aggregate between steps and publishes its
   four machine fields only at frame boundaries; `run_call`/`run_create`
-  publish the parent immediately before `suspend_frame` and return either the
-  updated parent or freshly installed child state. `FrameCheckpoint` continues
-  to save/restore all four fields. `StackPointer` carries an abstract storage
+  publish the parent immediately before `suspend_frame` and return a named
+  `FrameTransition` containing either the updated parent or freshly installed
+  child context. The optimized loop immediately unpacks that cold-boundary
+  record into its hot locals. `FrameCheckpoint` continues to save/restore all
+  four fields. `StackPointer` carries an abstract storage
   coordinate together with its semantic operand-stack height. The spec backend
   represents the coordinate as a frame-local row index; the optimized backend
   refines it to `{ u256 *storage, uint16_t height }`, so the threaded interpreter
@@ -207,8 +209,11 @@ duplicating instructions elsewhere.
   execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
   EELS reference. State-test cases are executed through the in-process EELS
-  t8n, which builds a fully VALID single-tx block input AND the reference
-  `run_stateless_guest` output bytes; fixtures that already carry
+  t8n, which builds a fully VALID single-tx block input and invokes
+  `run_stateless_guest`. The pinned EELS schema's three request lists are
+  extended with the two known-empty v0.6.2 builder lists; the adapter
+  recomputes only the request root and preserves the reference guest's
+  validation verdict. Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is

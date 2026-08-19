@@ -65,17 +65,20 @@ function run_system_call_frame(
     tgt : address,
     code : Code,
     input : CalldataSlice,
+    memory_base : memory_base,
 ) -> (
     (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
     k_journal_checkpoint();
+    let stack_top = stack_reset();
     interpret(
         SYSTEM_CALL_GAS_LIMIT,
         STATE_GAS_ZERO,
         STATE_GAS_SPILL_ZERO,
         GAS_REFUND_ZERO,
-        stack_reset(),
-        EMPTY_EVM_MEMORY_SLICE,
+        stack_top,
+        memory_base,
+        MEMORY_HEIGHT_ZERO,
         SYSTEM_ADDRESS,
         tgt,
         tgt,
@@ -98,19 +101,19 @@ function system_call(tgt : address, input : hash) -> unit = {
     };
     let code = code_db_resolve(code_hash);
 
-    /* Freeze the word in a parent memory frame. The system call executes
-     * above that frame, so its own memory writes cannot mutate calldata. */
-    let initial_memory = memory_reset();
+    /* Freeze the word below the system-call frame, so the child's memory
+     * writes cannot mutate its calldata. */
+    let initial_memory_base = MEMORY_BASE_ZERO;
+    let initial_memory_height = MEMORY_HEIGHT_ZERO;
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-    let (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len);
+    let expanded_memory = expand_memory(initial_memory_base, initial_memory_height, input_range.len);
     let input_word = hash_to_word(input);
-    mem_store_word(input_range.off, input_word);
-    let (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
-    let parent_memory = memory_frame_enter();
+    mem_store(initial_memory_base, input_range.off, input_word);
+    let input_slice = active_memory_slice(initial_memory_base, expanded_memory, input_range.off, input_range.len);
+    let child_memory_base = memory_absolute(initial_memory_base, expanded_memory);
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
-    let (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input);
-    let _ = memory_frame_leave(parent_memory);
+    let (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input, child_memory_base);
     let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
     if failed then {
@@ -140,20 +143,16 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
         fatal_error(ExecutionInvalid)
     } else {
         let code = code_db_resolve(code_hash);
-        let _ = memory_reset();
-        let parent_memory = memory_frame_enter();
-        let (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA);
+        let (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA, MEMORY_BASE_ZERO);
         let succeeded = frame_succeeded(status);
         if succeeded then {
             let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
-            let _ = memory_frame_leave(parent_memory);
             k_journal_commit();
             k_tx_merge(); /* system call is a top-level boundary: merge its storage */
             result
         } else {
-            let _ = memory_frame_leave(parent_memory);
             k_journal_revert();
             k_tx_merge();
             fatal_error(ExecutionInvalid)
@@ -203,16 +202,34 @@ function authenticate_deposit_request(data : LogDataSlice, expected : StatelessI
     let expected_amount_length : word = u256(8);
     let expected_signature_length : word = u256(96);
     let expected_index_length : word = u256(8);
-    if   (pubkey_head != expected_pubkey_head)
-       | (withdrawal_credentials_head != expected_withdrawal_credentials_head)
-       | (amount_head != expected_amount_head)
-       | (signature_head != expected_signature_head)
-       | (index_head != expected_index_head)
-       | (pubkey_length != expected_pubkey_length)
-       | (withdrawal_credentials_length != expected_withdrawal_credentials_length)
-       | (amount_length != expected_amount_length)
-       | (signature_length != expected_signature_length)
-       | (index_length != expected_index_length) then {
+    if pubkey_head != expected_pubkey_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if withdrawal_credentials_head != expected_withdrawal_credentials_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if amount_head != expected_amount_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if signature_head != expected_signature_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if index_head != expected_index_head then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if pubkey_length != expected_pubkey_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if withdrawal_credentials_length != expected_withdrawal_credentials_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if amount_length != expected_amount_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if signature_length != expected_signature_length then {
+        fatal_error(InvalidExecutionRequests)
+    };
+    if index_length != expected_index_length then {
         fatal_error(InvalidExecutionRequests)
     };
     if DEPOSIT_REQUEST_LENGTH <= expected.len then {

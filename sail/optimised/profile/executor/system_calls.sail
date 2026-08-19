@@ -6,11 +6,12 @@ function profiled_run_system_call_frame(
     tgt : address,
     code : Code,
     input : CalldataSlice,
+    memory_base : memory_base,
 ) -> (
     (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
 ) = {
     cycle_scope_start(50);
-    let result = run_system_call_frame(tgt, code, input);
+    let result = run_system_call_frame(tgt, code, input, memory_base);
     cycle_scope_end(50);
     result
 }
@@ -39,17 +40,17 @@ function system_call(tgt : address, input : hash) -> unit = {
     };
     let code = code_db_resolve(code_hash);
 
-    let initial_memory = memory_reset();
+    let initial_memory_base = MEMORY_BASE_ZERO;
+    let initial_memory_height = MEMORY_HEIGHT_ZERO;
     let input_range : MemoryRange = memory_range(0, SYSTEM_CALL_INPUT_LENGTH);
-    let (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len);
+    let expanded_memory = expand_memory(initial_memory_base, initial_memory_height, input_range.len);
     let input_word = hash_to_word(input);
-    mem_store_word(input_range.off, input_word);
-    let (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len);
-    let parent_memory = memory_frame_enter();
+    mem_store(initial_memory_base, input_range.off, input_word);
+    let input_slice = active_memory_slice(initial_memory_base, expanded_memory, input_range.off, input_range.len);
+    let child_memory_base = memory_absolute(initial_memory_base, expanded_memory);
     let memory_input = evm_memory_slice(input_slice.bytes, input_slice.len);
     let frame_input = MemoryCalldata(memory_input);
-    let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, code, frame_input);
-    let _ = memory_frame_leave(parent_memory);
+    let (_, _, _, _, status, _) = profiled_run_system_call_frame(tgt, code, frame_input, child_memory_base);
     let succeeded = frame_succeeded(status);
     let failed = not_bool(succeeded);
     if failed then {
@@ -66,20 +67,16 @@ function system_call_checked(tgt : address) -> ScratchSlice = {
         fatal_error(ExecutionInvalid)
     } else {
         let code = code_db_resolve(code_hash);
-        let _ = memory_reset();
-        let parent_memory = memory_frame_enter();
-        let (_, _, _, _, status, output) = profiled_run_system_call_frame(tgt, code, EMPTY_CALLDATA);
+        let (_, _, _, _, status, output) = profiled_run_system_call_frame(tgt, code, EMPTY_CALLDATA, MEMORY_BASE_ZERO);
         let succeeded = frame_succeeded(status);
         if succeeded then {
             let start = scratch_reserve(output.len);
             scratch_push_slice(output);
             let result = scratch_finish(start);
-            let _ = memory_frame_leave(parent_memory);
             k_journal_commit();
             profiled_system_call_merge();
             result
         } else {
-            let _ = memory_frame_leave(parent_memory);
             k_journal_revert();
             profiled_system_call_merge();
             fatal_error(ExecutionInvalid)

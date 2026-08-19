@@ -489,9 +489,13 @@ type journal_cursor = range(0, default_host_region_bound)
 type storage_generation = range(0, default_host_region_bound)
 
 /*! An absolute byte position in the shared EVM-memory arena. */
-type memory_pointer = range(0, memory_region_bound)
+type memory_base = range(0, memory_region_bound)
 /*! A materialized length or allocation size in the EVM-memory arena. */
 type memory_length = range(0, memory_region_bound)
+/*! The active EVM frame's exact relative byte high-water mark. It is carried
+    beside the frame's absolute `memory_base`; the host retains no hidden
+    frame coordinate or lifecycle state. */
+type memory_height = memory_length
 
 /*! Largest possible initial/live gas value from the SSZ-backed block-gas
     domain. Fork and header limits may make this ceiling smaller; this union
@@ -566,7 +570,7 @@ type MemoryRange = {
 struct MemoryAccessFields('off : Int, 'len : Int, 'required : Int),
     memory_access_relation('off, 'len, 'required) = {
     range : MemoryRangeFields('off, 'len),
-    required_size : int('required),
+    requested_height : int('required),
 }
 
 /*! A memory operand retaining its range/endpoint relationship existentially. */
@@ -587,7 +591,7 @@ function memory_range(off, len) = struct { off = off, len = len }
 let EMPTY_MEMORY_RANGE : MemoryRangeFields(0, 0) = memory_range(0, 0)
 
 /*! The canonical inactive memory operand. */
-let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) = struct { range = EMPTY_MEMORY_RANGE, required_size = 0 }
+let EMPTY_MEMORY_ACCESS : MemoryAccessFields(0, 0, 0) = struct { range = EMPTY_MEMORY_RANGE, requested_height = 0 }
 
 /*! An absolute byte position in the code arena. */
 type code_pointer = range(0, code_region_bound)

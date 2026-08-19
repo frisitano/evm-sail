@@ -774,19 +774,27 @@ function index_witness_header_cursor(state : WitnessHeaderIndex) -> WitnessHeade
         if (index != 0) | is_last then {
             let fields = rlp_node_cursor(header);
             let decoded = decode_parent_header_fields(fields, 0, EMPTY_PARENT_HEADER_FIELDS);
-            let parent_missing = not_bool(decoded.have_parent);
-            if (index != 0) & (parent_missing | (decoded.parent_hash != state.previous_hash)) then {
-                result.valid = false
+            if index != 0 then {
+                if not_bool(decoded.have_parent) then {
+                    result.valid = false
+                } else if decoded.parent_hash != state.previous_hash then {
+                    result.valid = false
+                }
             };
             if is_last then {
                 result.parent_state_root = decoded.state_root;
                 result.parent_base_fee_per_gas = decoded.base_fee;
                 result.parent_blob_gas_used = decoded.blob_gas_used;
                 result.parent_excess_blob_gas = decoded.excess_blob_gas;
-                result.parent_fields_valid =
-                      decoded.have_state
-                    & ((profile.fork < Cancun) | decoded.have_base_fee)
-                    & ((profile.fork < Cancun) | (decoded.have_blob_gas == decoded.have_excess_blob_gas))
+                result.parent_fields_valid = decoded.have_state;
+                if profile.fork >= Cancun then {
+                    if not_bool(decoded.have_base_fee) then {
+                        result.parent_fields_valid = false
+                    };
+                    if decoded.have_blob_gas != decoded.have_excess_blob_gas then {
+                        result.parent_fields_valid = false
+                    }
+                }
             }
         };
         let current_hash = keccak256(header);
@@ -880,22 +888,34 @@ function decode_block_header_ssz(input_ref : StatelessInputRef) -> BlockHeader =
     let gas_used_value = decode_ssz_uint(payload, PL_GAS_USED);
     let prev_randao_hash = ssz_bytes32(payload, PL_PREV_RANDAO);
     let prev_randao = hash_to_word(prev_randao_hash);
+    let number = decode_ssz_uint(payload, PL_BLOCK_NUMBER);
+    let timestamp = decode_ssz_uint(payload, PL_TIMESTAMP);
+    let base_fee = ssz_u256(payload, PL_BASE_FEE);
+    let blob_gas_used = decode_payload_blob_gas_used(payload, input_ref.protocol);
+    let excess_blob_gas = decode_payload_excess_blob_gas(payload, input_ref.protocol);
+    let state_root = ssz_bytes32(payload, PL_STATE_ROOT);
+    let receipts_root = ssz_bytes32(payload, PL_RECEIPTS_ROOT);
+    let logs_bloom = sub_slice(payload, PL_LOGS_BLOOM, 256);
+    let fee_recipient = ssz_addr(payload, PL_FEE_RECIPIENT);
+    let parent_hash = ssz_bytes32(payload, 0);
+    let parent_beacon_block_root = ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT);
+    let slot_number = decode_ssz_uint(payload, PL_SLOT_NUMBER);
     struct {
-        number = decode_ssz_uint(payload, PL_BLOCK_NUMBER),
-        timestamp = decode_ssz_uint(payload, PL_TIMESTAMP),
+        number = number,
+        timestamp = timestamp,
         gas_limit = gas_limit_value,
         gas_used = gas_used_value,
         prev_randao = prev_randao,
-        base_fee = ssz_u256(payload, PL_BASE_FEE),
-        blob_gas_used = decode_payload_blob_gas_used(payload, input_ref.protocol),
-        excess_blob_gas = decode_payload_excess_blob_gas(payload, input_ref.protocol),
-        state_root = ssz_bytes32(payload, PL_STATE_ROOT),
-        receipts_root = ssz_bytes32(payload, PL_RECEIPTS_ROOT),
-        logs_bloom = sub_slice(payload, PL_LOGS_BLOOM, 256),
-        fee_recipient = ssz_addr(payload, PL_FEE_RECIPIENT),
-        parent_hash = ssz_bytes32(payload, 0),
-        parent_beacon_block_root = ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT),
-        slot_number = decode_ssz_uint(payload, PL_SLOT_NUMBER),
+        base_fee = base_fee,
+        blob_gas_used = blob_gas_used,
+        excess_blob_gas = excess_blob_gas,
+        state_root = state_root,
+        receipts_root = receipts_root,
+        logs_bloom = logs_bloom,
+        fee_recipient = fee_recipient,
+        parent_hash = parent_hash,
+        parent_beacon_block_root = parent_beacon_block_root,
+        slot_number = slot_number,
         extra_data = input_ref.extra_data,
     }
 }

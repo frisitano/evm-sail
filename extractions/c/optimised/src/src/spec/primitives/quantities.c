@@ -9,8 +9,8 @@ struct MemoryAccessFields EMPTY_MEMORY_ACCESS;
 
 bool neq_anything_EPrecompileId__(enum PrecompileId x, enum PrecompileId y)
 {
-  bool eq_anything_result_2_2778 = eq_PrecompileId(y, x);
-  return (bool)(!eq_anything_result_2_2778);
+  bool eq_anything_result_2_2757 = eq_PrecompileId(y, x);
+  return (bool)(!eq_anything_result_2_2757);
 }
 
 uint64_t word_of_account_nonce(uint64_t value)
@@ -65,7 +65,7 @@ void create_letbind_8(void) {
   struct MemoryAccessFields let_value_3_12;
   struct MemoryAccessFields tmp_3_11;
   tmp_3_11.range = EMPTY_MEMORY_RANGE;
-  tmp_3_11.required_size = UINT32_C(0);
+  tmp_3_11.requested_height = UINT32_C(0);
   let_value_3_12 = tmp_3_11;
   EMPTY_MEMORY_ACCESS = let_value_3_12;
 }

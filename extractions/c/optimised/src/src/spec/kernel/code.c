@@ -3,8 +3,8 @@
 
 bytes32 k_code_key(bytes20 a)
 {
-  struct Account k_aload_result_2_2075 = k_aload_(a);
-  return k_aload_result_2_2075.info.code_hash;
+  struct Account k_aload_result_2_2054 = k_aload_(a);
+  return k_aload_result_2_2054.info.code_hash;
 }
 
 bytes32 k_get_codehash(bytes20 a)
@@ -21,9 +21,9 @@ void k_deploy_code(bytes20 a, Bytes code)
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   struct Account cur = k_aload_(a);
   bytes32 h = code_db_insert(code, execution_profile.protocol.fork);
-  struct AccountInfo tmp_3_3377 = cur.info;
-  tmp_3_3377.code_hash = h;
-  store_account_info_(a, cur, tmp_3_3377);
+  struct AccountInfo tmp_3_3118 = cur.info;
+  tmp_3_3118.code_hash = h;
+  store_account_info_(a, cur, tmp_3_3118);
 }
 
 void k_set_delegation(bytes20 a, bytes20 target)
@@ -33,17 +33,17 @@ void k_set_delegation(bytes20 a, bytes20 target)
   Bytes code_region = code_region_from_delegation(target);
   Bytes code = validated_code_slice(code_region);
   bytes32 h = code_db_insert(code, execution_profile.protocol.fork);
-  struct AccountInfo tmp_3_3376 = cur.info;
-  tmp_3_3376.code_hash = h;
-  store_account_info_(a, cur, tmp_3_3376);
+  struct AccountInfo tmp_3_3117 = cur.info;
+  tmp_3_3117.code_hash = h;
+  store_account_info_(a, cur, tmp_3_3117);
 }
 
 void k_clear_code(bytes20 a)
 {
   struct Account cur = k_aload_(a);
-  struct AccountInfo tmp_3_3375 = cur.info;
-  tmp_3_3375.code_hash = KECCAK_EMPTY;
-  store_account_info_(a, cur, tmp_3_3375);
+  struct AccountInfo tmp_3_3116 = cur.info;
+  tmp_3_3116.code_hash = KECCAK_EMPTY;
+  store_account_info_(a, cur, tmp_3_3116);
 }
 
 struct tuple_bool_bytes20 k_deleg_target(bytes20 a)

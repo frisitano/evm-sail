@@ -170,8 +170,8 @@ void bal_note_account_touch(AccountId account_id)
   bal_account_activate(account_id);
 }
 
-void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id,
-                             StorageId storage_id, const u256 value)
+void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id, StorageId storage_id,
+                             const u256 value)
 {
   bal_account_activate(account_id);
   bal_storage_activate(account_id, storage_id);

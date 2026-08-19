@@ -24,6 +24,7 @@ module = [
   "evm.*",
   "execution_testing.*",
   "pytest",
+  "remerkleable.*",
 ]
 ignore_missing_imports = true
 
@@ -33,12 +34,15 @@ module = [
   "devtools.harness.guest",
   "devtools.harness.prestate_mpt",
   "devtools.harness.ssz_builder",
+  "devtools.harness.v062_compat",
+  "devtools.harness.v062_compat_probe",
 ]
 # These boundary modules adapt dynamic ctypes and EELS runtime objects;
 # strict checking remains enabled for the package, while their external calls
 # cannot expose useful static signatures.
 disallow_untyped_calls = false
 disallow_untyped_defs = false
+disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
 module = "devtools.harness.consumer"

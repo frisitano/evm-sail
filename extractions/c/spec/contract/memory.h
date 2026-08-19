@@ -9,13 +9,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 bool evm_memory_configure_capacity(uint64_t capacity);
-unit     mem_clear(const unit u);        /* clear to one empty frame (per tx)   */
-uint64_t mem_frame_enter(const unit u);
-unit mem_frame_leave(const unit u); /* leave sub-call: restore parent */
-uint64_t evm_memory_expand(uint64_t len);
-uint64_t mem_read_byte(uint64_t off);
+uint64_t evm_memory_expand(uint64_t pointer, uint64_t established, uint64_t required);
+uint64_t evm_memory_view(uint64_t pointer, uint64_t established, uint64_t required);
 unit mem_write_byte(uint64_t off, uint64_t v);
-uint64_t hm_depth(const unit u); /* call-frame depth */
 const uint8_t *evm_memory_region(uint64_t off, uint64_t len);
 const uint8_t *evm_memory_base(void);
 uint64_t evm_memory_capacity(void);
