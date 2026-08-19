@@ -21,7 +21,7 @@ p256 = { version = "0.13", default-features = false, features = ["ecdsa", "arith
 aurora-engine-modexp = "1.2"  # modexp (0x05) -- the crate revm uses
 ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }   # bn254 (0x06-08), as revm
 ark-ec = { version = "0.5", default-features = false }
-ark-ff = { version = "0.5", default-features = false }
+ark-ff = { version = "0.6", default-features = false }
 c-kzg = "2.1"      # KZG point evaluation (0x0a, EIP-4844) -- embedded mainnet trusted setup, as revm
 blst = "0.3"       # BLS12-381 (EIP-2537) -- the implementation c-kzg + revm use
 
