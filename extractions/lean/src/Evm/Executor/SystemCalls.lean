@@ -11,6 +11,7 @@ import Evm.Primitives.Fork
 import Evm.Primitives.System
 import Evm.Primitives.Tx
 import Evm.Host.Code
+import Evm.Host.Stack
 import Evm.Kernel.Environment
 import Evm.Kernel.Logs
 import Evm.Kernel.Code
@@ -46,10 +47,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -141,33 +144,26 @@ abbrev DEPOSIT_REQUEST_SIGNATURE : Nat := 88
 
 abbrev DEPOSIT_REQUEST_INDEX : Nat := 184
 
-/-- Enters a top-level protocol system-call frame. The caller has already
-made a fresh memory frame and, for a word input, frozen the
-parent-memory span that `input` references. -/
-def enter_system_call_frame (tgt : (Vector (BitVec 8) 20)) (input : CalldataSlice) : SailM Unit := do
-  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
-    readReg k_execution_profile
-  let gas_limits := execution_profile.gas
+/-- Runs a top-level protocol system-call frame. The caller has already
+resolved `code`, made a fresh memory frame and, for a word input, frozen
+the parent-memory span that `input` references. -/
+/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0 ≤
+  code_dependentWitness0 ∧
+  0 ≤ code_dependentWitness1 ∧
+  (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
+def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (input : CalldataSlice) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
+  fun (code_dependentWitness0 : Nat) =>
+  (Sigma fun (code_dependentWitness1 : Nat) =>
+  (OutputSliceFields code_dependentWitness0 code_dependentWitness1)))) := do
+  let code_dependentWitness0 := (code).1
+  let code_dependentWitness1 := ((code).2).1
+  let code := ((code).2).2
   (k_journal_checkpoint ())
-  writeReg pc 0
-  writeReg call_depth 0
-  writeReg gas_remaining gas_limits.system_regular_limit
-  writeReg state_gas_remaining gas_limits.system_state_limit
-  writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
-  writeReg frame_refund GAS_REFUND_ZERO
-  writeReg stack_top (← (stack_reset ()))
-  (returndata_clear ())
-  writeReg frame_status (Running ())
-  writeReg calldata input
-  writeReg message { caller := SYSTEM_ADDRESS,
-                     address := tgt,
-                     code_address := tgt,
-                     value := ZERO_WORD,
-                     state_gas_reservoir := gas_limits.system_state_limit,
-                     is_static := false,
-                     depth := 0 }
-  let code_hash ← do (k_code_key tgt)
-  writeReg frame_code (← (code_db_resolve code_hash))
+  (interpret SYSTEM_CALL_GAS_LIMIT STATE_GAS_ZERO STATE_GAS_SPILL_ZERO GAS_REFUND_ZERO
+    (← (stack_reset ())) ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩ SYSTEM_ADDRESS tgt tgt ZERO_WORD
+    STATE_GAS_ZERO false 0 ⟨_, ⟨_, code⟩⟩ input)
 
 /-- Issues one unchecked block-start system call: a 30M-gas frame from
 `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
@@ -178,31 +174,26 @@ def system_call (tgt : (Vector (BitVec 8) 20)) (input : (Vector (BitVec 8) 32)) 
   then (pure ())
   else
     (do
-      (memory_reset ())
+      let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_hash)
+      let ⟨_, ⟨_, initial_memory⟩⟩ ← do (memory_reset ())
       let input_range : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len))) :=
         ((⟨_, ⟨_, (memory_range 0 SYSTEM_CALL_INPUT_LENGTH)⟩⟩ : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len))))
       let (_, expanded_memory) ← do
-        (do
-            let dependentArg0 := (← readReg evm_memory)
-            (memory_expand_to dependentArg0 ((input_range).2).2.len))
-      writeReg evm_memory expanded_memory
+        (memory_expand_to ⟨_, ⟨_, initial_memory⟩⟩ ((input_range).2).2.len)
       let input_word := (hash_to_word input)
       (mem_store_word ((input_range).2).2.off input_word)
       let (input_slice, accessed_memory) ← do
-        (do
-            let dependentArg0 := (← readReg evm_memory)
-            (active_memory_slice dependentArg0 ((input_range).2).2.off ((input_range).2).2.len))
-      writeReg evm_memory accessed_memory
+        (active_memory_slice expanded_memory ((input_range).2).2.off ((input_range).2).2.len)
       let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
       let memory_input := (evm_memory_slice ((input_slice).2).2.bytes ((input_slice).2).2.len)
       let frame_input := (MemoryCalldata ⟨_, ⟨_, memory_input⟩⟩)
-      (enter_system_call_frame tgt frame_input)
-      let ⟨_, ⟨_, _⟩⟩ ← do (interpret ())
-      (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
-      let succeeded ← do (frame_succeeded ())
+      let (_, _, _, _, status, _) ← do
+        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ frame_input)
+      let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
+      let succeeded := (frame_succeeded status)
       let failed := (! succeeded)
       if (failed : Bool)
       then (k_journal_revert ())
@@ -221,18 +212,19 @@ def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off
       (fatal_error ExecutionInvalid))
   else
     (do
-      (memory_reset ())
+      let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_hash)
+      let ⟨_, ⟨_, _⟩⟩ ← do (memory_reset ())
       let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
-      (enter_system_call_frame tgt EMPTY_CALLDATA)
-      let ⟨_, ⟨_, output⟩⟩ ← do (interpret ())
-      let succeeded ← do (frame_succeeded ())
+      let (_, _, _, _, status, output) ← do
+        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ EMPTY_CALLDATA)
+      let succeeded := (frame_succeeded status)
       if _sailIf1 : (succeeded : Bool) = true
       then
         (do
-          let start ← do (scratch_reserve output.len)
-          (output_scratch_push_slice ⟨_, ⟨_, output⟩⟩)
+          let start ← do (scratch_reserve ((output).2).2.len)
+          (output_scratch_push_slice output)
           let ⟨_, ⟨_, result⟩⟩ ← do (scratch_finish start)
-          (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
+          let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
           (k_journal_commit ())
           (k_tx_merge ())
           (pure ((⟨_, ⟨_, result⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -240,7 +232,7 @@ def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off
             (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))
       else
         (do
-          (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
+          let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
           (k_journal_revert ())
           (k_tx_merge ())
           (fatal_error ExecutionInvalid)))

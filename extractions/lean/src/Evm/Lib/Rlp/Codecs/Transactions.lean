@@ -37,10 +37,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -195,9 +197,9 @@ abbrev BLOB_HASH_LENGTH : Nat := 32
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex551343_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex608449_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex551343_ ∧ k_ex551343_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex608449_ ∧ k_ex608449_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -323,15 +325,16 @@ def decode_authorization (tuple : (RlpFieldRef k_source_off k_source_len k_conte
   let address_word ← do (rlp_decode_word addr_f)
   let auth_addr := (word_to_address address_word)
   let signing_hash ← do (auth_signing_hash chain_id auth_addr auth_nonce)
-  let (ok, authority) ← (( do
+  let recovered ← (( do
     match y with
     | .RlpOk false => (ecrecover_addr signing_hash 0 r s)
     | .RlpOk true => (ecrecover_addr signing_hash 1 r s)
-    | .RlpInvalidValue () => (pure (false, ZERO_ADDRESS)) ) : SailM (Bool × (Vector (BitVec 8) 20))
-    )
-  (pure { valid_sig := (ok && ((word_ult ZERO_WORD r) && ((word_ult r SECP_N_FULL) && ((word_ult
+    | .RlpInvalidValue () =>
+      (pure { success := false,
+              address := ZERO_ADDRESS }) ) : SailM AddressResult )
+  (pure { valid_sig := (recovered.success && ((word_ult ZERO_WORD r) && ((word_ult r SECP_N_FULL) && ((word_ult
                       ZERO_WORD s) && ((word_ule s SECP_N_HALF) && (auth_nonce != ((2 ^i 64) - 1))))))),
-          authority := authority,
+          authority := recovered.address,
           address := auth_addr,
           nonce := auth_nonce,
           chain_id := chain_id })

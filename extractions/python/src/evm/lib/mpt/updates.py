@@ -62,7 +62,6 @@ from evm.lib.mpt.codec import (
     merge_ext_node,
     merge_ext_ref,
 )
-from evm.lib import state_trie
 
 class TrieChange:
     pass
@@ -118,6 +117,8 @@ class TrieUpdateCursor:
     relation: TrieUpdateRelation
 
 def trie_updates_begin(source: TrieUpdateSource) -> TrieUpdateCursor:
+    from evm.lib import state_trie
+
     first = state_trie.trie_update_source_next(source)
     if first.available:
         relation = UpdateUnderPrefix(first.update.key)
@@ -133,6 +134,8 @@ def updates_empty(updates: TrieUpdateCursor) -> bool:
             return False
 
 def trie_updates_pop(updates: TrieUpdateCursor) -> tuple[TrieUpdate, TrieUpdateCursor]:
+    from evm.lib import state_trie
+
     match updates.relation:
         case UpdateSourceExhausted(_):
             return fatal_error(FatalError.WitnessDeficient)

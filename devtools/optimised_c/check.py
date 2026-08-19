@@ -5,12 +5,19 @@ from __future__ import annotations
 
 import argparse
 import re
+import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
+from devtools.build_support import BuildSupportError
 from devtools.paths import REPO_ROOT
+from devtools.toolchains import SHA_RE, load_toolchains
 
 ROOT = REPO_ROOT
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
+DEFAULT_TOOLCHAINS = ROOT / "config/toolchains.toml"
+DEFAULT_WAIVERS = ROOT / "config/optimised-c-conformance-waivers.toml"
 
 SCALAR_DECLARATION = re.compile(
     r"^(?P<indent>\s+)(?:bool|u?int(?:8|16|32|64)_t|u128|u256|u320|"
@@ -32,6 +39,88 @@ FUNCTION_START = re.compile(r"^u256 stateless_input_slice_load\(Bytes s, uint32_
 FATAL_MATCH_FAILURE = re.compile(r"fatal_error\([^;]+\);\s*sail_match_failure\(", re.MULTILINE)
 
 
+@dataclass(frozen=True, order=True)
+class WaiverKey:
+    rule: str
+    path: str
+    name: str
+
+
+@dataclass(frozen=True)
+class ScalarFinding:
+    key: WaiverKey
+    message: str
+
+
+WAIVABLE_RULES = frozenset(
+    {
+        "adjacent-scalar-initializer",
+        "immediate-scalar-return",
+    }
+)
+
+
+def load_waivers(path: Path, toolchains_path: Path) -> set[WaiverKey]:
+    data = cast(dict[str, object], tomllib.loads(path.read_text(encoding="utf-8")))
+    if data.get("schema_version") != 1:
+        raise BuildSupportError(f"{path}: unsupported conformance-waiver schema")
+
+    revision = data.get("compiler_revision")
+    if not isinstance(revision, str) or not SHA_RE.fullmatch(revision):
+        raise BuildSupportError(f"{path}: compiler_revision must be a full Git SHA")
+    toolchains = load_toolchains(toolchains_path)
+    sail = toolchains.get("sail")
+    assert isinstance(sail, dict)
+    pinned_revision = sail["commit"]
+    if revision != pinned_revision:
+        raise BuildSupportError(
+            f"{path}: compiler_revision {revision} does not match pinned Sail "
+            f"revision {pinned_revision}"
+        )
+
+    entries = data.get("waiver")
+    if not isinstance(entries, list):
+        raise BuildSupportError(f"{path}: waiver must be an array of tables")
+    waivers: set[WaiverKey] = set()
+    for index, raw_entry in enumerate(entries, 1):
+        if not isinstance(raw_entry, dict):
+            raise BuildSupportError(f"{path}: waiver {index} must be a table")
+        if set(raw_entry) != {"rule", "path", "name"}:
+            raise BuildSupportError(
+                f"{path}: waiver {index} must contain only rule, path, and name"
+            )
+        rule = raw_entry["rule"]
+        source_path = raw_entry["path"]
+        name = raw_entry["name"]
+        if not isinstance(rule, str) or rule not in WAIVABLE_RULES:
+            raise BuildSupportError(f"{path}: waiver {index} has unknown rule {rule!r}")
+        if not isinstance(source_path, str):
+            raise BuildSupportError(f"{path}: waiver {index} path must be a string")
+        parsed_path = Path(source_path)
+        if (
+            parsed_path.is_absolute()
+            or ".." in parsed_path.parts
+            or not source_path.startswith("src/spec/")
+        ):
+            raise BuildSupportError(f"{path}: waiver {index} path must be beneath src/spec")
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise BuildSupportError(f"{path}: waiver {index} name is not a C identifier")
+        key = WaiverKey(rule, source_path, name)
+        if key in waivers:
+            raise BuildSupportError(f"{path}: duplicate waiver {key}")
+        waivers.add(key)
+    return waivers
+
+
+def reconcile_waivers(
+    findings: list[ScalarFinding], waivers: set[WaiverKey]
+) -> tuple[list[ScalarFinding], list[WaiverKey], int]:
+    observed_keys = {finding.key for finding in findings}
+    unwaived = [finding for finding in findings if finding.key not in waivers]
+    stale = sorted(waivers - observed_keys)
+    return unwaived, stale, len(observed_keys & waivers)
+
+
 def source_files(generated: Path) -> list[Path]:
     source_root = generated / "src/spec"
     manifest = source_root / "sources.list"
@@ -50,9 +139,9 @@ def source_files(generated: Path) -> list[Path]:
     return paths
 
 
-def adjacent_split_initializers(path: Path, text: str) -> list[str]:
+def adjacent_split_initializers(path: Path, text: str) -> list[ScalarFinding]:
     lines = text.splitlines()
-    errors: list[str] = []
+    findings: list[ScalarFinding] = []
     for index, line in enumerate(lines):
         match = SCALAR_DECLARATION.match(line)
         if match is None:
@@ -67,16 +156,19 @@ def adjacent_split_initializers(path: Path, text: str) -> list[str]:
             lines[following],
         )
         if assignment:
-            errors.append(
-                f"{path}:{index + 1}: adjacent scalar declaration and assignment "
-                f"for {match.group('name')}"
+            name = match.group("name")
+            findings.append(
+                ScalarFinding(
+                    WaiverKey("adjacent-scalar-initializer", path.as_posix(), name),
+                    f"{path}:{index + 1}: adjacent scalar declaration and assignment for {name}",
+                )
             )
-    return errors
+    return findings
 
 
-def immediate_scalar_return_temporaries(path: Path, text: str) -> list[str]:
+def immediate_scalar_return_temporaries(path: Path, text: str) -> list[ScalarFinding]:
     lines = text.splitlines()
-    errors: list[str] = []
+    findings: list[ScalarFinding] = []
     for index, line in enumerate(lines[:-1]):
         match = SCALAR_INITIALIZER.match(line)
         if match is None:
@@ -92,11 +184,15 @@ def immediate_scalar_return_temporaries(path: Path, text: str) -> list[str]:
             lines[following],
         )
         if returned:
-            errors.append(
-                f"{path}:{index + 1}: scalar {match.group('name')} is initialized "
-                "only to be returned immediately"
+            name = match.group("name")
+            findings.append(
+                ScalarFinding(
+                    WaiverKey("immediate-scalar-return", path.as_posix(), name),
+                    f"{path}:{index + 1}: scalar {name} is initialized only to be "
+                    "returned immediately",
+                )
             )
-    return errors
+    return findings
 
 
 def function_body(lines: list[str], start: re.Pattern[str]) -> str | None:
@@ -121,22 +217,27 @@ def main() -> int:
         default=DEFAULT_GENERATED,
         help="optimized generated-C package directory",
     )
+    parser.add_argument("--toolchains", type=Path, default=DEFAULT_TOOLCHAINS)
+    parser.add_argument("--waivers", type=Path, default=DEFAULT_WAIVERS)
     args = parser.parse_args()
     generated = args.generated.resolve()
 
     try:
         sources = source_files(generated)
-    except ValueError as error:
+        waivers = load_waivers(args.waivers, args.toolchains)
+    except (BuildSupportError, OSError, ValueError, tomllib.TOMLDecodeError) as error:
         print(f"optimized C conformance: {error}")
         return 1
 
     errors: list[str] = []
+    scalar_findings: list[ScalarFinding] = []
     texts: dict[Path, str] = {}
     for path in sources:
         text = path.read_text(errors="replace")
         texts[path] = text
-        errors.extend(adjacent_split_initializers(path, text))
-        errors.extend(immediate_scalar_return_temporaries(path, text))
+        relative_path = path.relative_to(generated)
+        scalar_findings.extend(adjacent_split_initializers(relative_path, text))
+        scalar_findings.extend(immediate_scalar_return_temporaries(relative_path, text))
         if FATAL_MATCH_FAILURE.search(text):
             errors.append(f"{path}: fatal_error retains an unreachable Sail exit bridge")
         for legacy_exception_state in ("have_exception", "current_exception"):
@@ -148,6 +249,10 @@ def main() -> int:
             gas_definition = GAS_DEFINITION.match(line)
             if gas_definition and gas_definition.group("qualifier") is None:
                 errors.append(f"{path}:{number}: literal gas storage is not const: {line.strip()}")
+
+    unwaived_findings, stale_waivers, waived_count = reconcile_waivers(scalar_findings, waivers)
+    errors.extend(finding.message for finding in unwaived_findings)
+    errors.extend(f"stale optimized C conformance waiver: {waiver}" for waiver in stale_waivers)
 
     include_root = generated / "include"
     headers = list(include_root.rglob("*.h"))
@@ -203,7 +308,7 @@ def main() -> int:
     print(
         "optimized C conformance: clean "
         f"({len(sources)} translation units; initialized locals, direct returns, "
-        "const gas ABI, named fixed types)"
+        f"const gas ABI, named fixed types; {waived_count} exact compiler findings waived)"
     )
     return 0
 

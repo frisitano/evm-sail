@@ -27,12 +27,17 @@ def copy_header_tree(source: Path, destination: Path) -> None:
         shutil.copy2(header, target)
 
 
-def package(generated: Path, ffi_root: Path) -> None:
+def package(generated: Path, ffi_root: Path, *, excluded_ffi_sources: tuple[str, ...] = ()) -> None:
     generated = generated.resolve()
     ffi_root = ffi_root.resolve()
     generated_manifest = generated / "src/spec/sources.list"
     generated_entries = manifest_entries(generated_manifest)
-    ffi_entries = manifest_entries(ffi_root / "optimised/contract/sources.list")
+    all_ffi_entries = manifest_entries(ffi_root / "optimised/contract/sources.list")
+    excluded = set(excluded_ffi_sources)
+    unknown = sorted(excluded - set(all_ffi_entries))
+    if unknown:
+        raise ValueError(f"excluded FFI source is not in the manifest: {', '.join(unknown)}")
+    ffi_entries = [entry for entry in all_ffi_entries if entry not in excluded]
 
     for entry in generated_entries:
         if not (generated / "src/spec" / entry).is_file():
@@ -72,7 +77,10 @@ def package(generated: Path, ffi_root: Path) -> None:
     if staged_ffi.exists():
         shutil.rmtree(staged_ffi)
     shutil.copytree(ffi_root / "optimised/contract/src", staged_ffi)
-    shutil.copy2(ffi_root / "optimised/contract/sources.list", staged_ffi / "sources.list")
+    (staged_ffi / "sources.list").write_text(
+        "# Ordered optimized FFI sources, relative to this directory.\n"
+        + "".join(f"{entry}\n" for entry in ffi_entries)
+    )
 
     combined = generated / "src/sources.list"
     combined.write_text(
@@ -83,7 +91,12 @@ def package(generated: Path, ffi_root: Path) -> None:
         + "".join(f"runtime/{entry}\n" for entry in RUNTIME_SOURCES)
     )
     shutil.copy2(ROOT / "LICENSE", generated / "LICENSE")
-    (generated / "Makefile").write_text(package_makefile())
+    package_sources = tuple(
+        [f"spec/{entry}" for entry in generated_entries]
+        + [f"ffi/{entry}" for entry in ffi_entries]
+        + [f"runtime/{entry}" for entry in RUNTIME_SOURCES]
+    )
+    (generated / "Makefile").write_text(package_makefile(package_sources))
     (generated / "PACKAGE.md").write_text(
         "# Optimized evm-sail C package\n\n"
         "This directory is the self-contained production source package for "
@@ -101,9 +114,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("generated", nargs="?", type=Path, default=DEFAULT_GENERATED)
     parser.add_argument("--ffi-root", type=Path, default=ROOT / "extractions/c")
+    parser.add_argument("--exclude-ffi-source", action="append", default=[])
     args = parser.parse_args()
     try:
-        package(args.generated, args.ffi_root)
+        package(
+            args.generated,
+            args.ffi_root,
+            excluded_ffi_sources=tuple(args.exclude_ffi_source),
+        )
     except (OSError, ValueError) as error:
         print(f"optimized C package: {error}")
         return 2

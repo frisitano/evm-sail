@@ -15,6 +15,7 @@ from .._runtime import (
     UintEnum,
     Unsigned,
 )
+from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -115,7 +116,10 @@ class stack_index(Unsigned):
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
 
-StackTop: TypeAlias = Annotated[Bits, BitWidth(64)]
+@dataclass(slots=True)
+class StackPointer:
+    storage: Annotated[Bits, BitWidth(64)]
+    height: operand_stack_height
 
 class stack_slot_count(Unsigned):
     LOWER = 0
@@ -349,7 +353,7 @@ def word_of_nat_byte_count(value: int) -> word:
         return word(u256(value))
     else:
         if not (False):
-            raise SailError("sail/primitives/quantities.sail:607.20-607.21")
+            raise SailError("sail/primitives/quantities.sail:611.20-611.21")
         raise SailExit(None)
 
 def word_of_source_byte_count(value: int) -> word:

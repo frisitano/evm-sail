@@ -10,6 +10,7 @@ Open Scope string.
 Open Scope bool.
 Open Scope Z.
 
+
 Definition e_div (n m : Z) : Z := Z.sgn m * Z.div n (Z.abs m).
 Definition e_modulo (n m : Z) : Z := Z.modulo n (Z.abs m).
 
@@ -842,7 +843,41 @@ Instance dummy_stack_index : Inhabited (stack_index) := {
 Definition stack_index_valid (x : stack_index) : Prop :=
 0 <= x.(stack_index_value) /\ x.(stack_index_value) <= 1023.
 
-Definition StackTop : Type := bits 64.
+Record StackPointer := {
+  StackPointer_storage : bits 64;
+  StackPointer_height : operand_stack_height;
+}.
+Arguments StackPointer : clear implicits.
+#[export]
+Instance Decidable_eq_StackPointer : EqDecision StackPointer.
+   intros [x0 x1].
+   intros [y0 y1].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_StackPointer : Countable StackPointer.
+refine {|
+  encode x := encode (StackPointer_storage x, StackPointer_height x);
+  decode x := '(x0, x1) ← decode x;
+              mret (Build_StackPointer x0 x1)
+|}.
+abstract (
+  intros [x0 x1];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'StackPointer_storage' := e ]}" :=
+  match r with Build_StackPointer _ (_ as f1) => Build_StackPointer e f1 end (at level 1).
+Notation "{[ r 'with' 'StackPointer_height' := e ]}" :=
+  match r with Build_StackPointer (_ as f0) _ => Build_StackPointer f0 e end (at level 1).
+#[export]
+Instance dummy_StackPointer : Inhabited (StackPointer) := {
+  inhabitant := {| StackPointer_storage := inhabitant; StackPointer_height := inhabitant
+|} }.
+
 
 Record stack_slot_count := { stack_slot_count_value : Z; }.
 Arguments stack_slot_count : clear implicits.
@@ -2258,16 +2293,116 @@ Definition code_length_valid (x : code_length) : Prop :=
 Definition code_valid_length (len : Z) : bool := (0 <=? len) && ((len + 32) <=? code_region_bound).
 #[export] Hint Unfold code_valid_length : sail.
 
+Record code_scan_position := { code_scan_position_value : Z; }.
+Arguments code_scan_position : clear implicits.
+#[export]
+Instance Decidable_eq_code_scan_position : EqDecision code_scan_position.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_code_scan_position : Countable code_scan_position.
+refine {|
+  encode x := encode (code_scan_position_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_code_scan_position x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'code_scan_position_value' := e ]}" :=
+  {| code_scan_position_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_code_scan_position : Inhabited (code_scan_position) := {
+  inhabitant := {| code_scan_position_value := inhabitant
+|} }.
+
+
+Definition code_scan_position_valid (x : code_scan_position) : Prop :=
+0 <= x.(code_scan_position_value) /\ x.(code_scan_position_value) <= (2 ^ 32 - 1 - 32).
+
 Definition block_gas_limit_bound : Z := (2 ^ 64 - 1).
 #[export] Hint Unfold block_gas_limit_bound : sail.
 
 Definition block_access_list_item_gas : Z := 2000.
 #[export] Hint Unfold block_access_list_item_gas : sail.
 
-Definition gas_typ : Type := Z.
+Record gas_typ := { gas_value : Z; }.
+Arguments gas_typ : clear implicits.
+#[export]
+Instance Decidable_eq_gas_typ : EqDecision gas_typ.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_gas_typ : Countable gas_typ.
+refine {|
+  encode x := encode (gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_gas_typ x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition live_gas_valid (value : Z) : bool := 0 <=? value.
+Notation "{[ r 'with' 'gas_value' := e ]}" := {| gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_gas_typ : Inhabited (gas_typ) := { inhabitant := {| gas_value := inhabitant |} }.
+
+
+Definition gas_typ_valid (x : gas_typ) : Prop :=
+0 <= x.(gas_value) /\ x.(gas_value) <= (2 ^ 64 - 1).
+
+Definition live_gas_valid (value : Z) : bool := (0 <=? value) && (value <=? (2 ^ 64 - 1)).
 #[export] Hint Unfold live_gas_valid : sail.
+
+Definition gas_credit (available : Z) : Type := Z.
+
+Definition state_gas_spill_credit (available : Z) : Type := Z.
+
+Record state_gas_typ := { state_gas_value : Z; }.
+Arguments state_gas_typ : clear implicits.
+#[export]
+Instance Decidable_eq_state_gas_typ : EqDecision state_gas_typ.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_state_gas_typ : Countable state_gas_typ.
+refine {|
+  encode x := encode (state_gas_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_state_gas_typ x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'state_gas_value' := e ]}" :=
+  {| state_gas_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_state_gas_typ : Inhabited (state_gas_typ) := {
+  inhabitant := {| state_gas_value := inhabitant
+|} }.
+
+
+Definition state_gas_typ_valid (x : state_gas_typ) : Prop :=
+0 <= x.(state_gas_value) /\ x.(state_gas_value) <= (2 ^ 64 - 1).
+
+Definition state_gas_credit (available : Z) : Type := Z.
 
 Record transaction_gas := { transaction_gas_value : Z; }.
 Arguments transaction_gas : clear implicits.
@@ -2302,7 +2437,37 @@ Instance dummy_transaction_gas : Inhabited (transaction_gas) := {
 Definition transaction_gas_valid (x : transaction_gas) : Prop :=
 0 <= x.(transaction_gas_value) /\ x.(transaction_gas_value) <= (2 ^ 64 - 1).
 
-Definition gas_cost : Type := Z.
+Record gas_cost := { gas_cost_value : Z; }.
+Arguments gas_cost : clear implicits.
+#[export]
+Instance Decidable_eq_gas_cost : EqDecision gas_cost.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_gas_cost : Countable gas_cost.
+refine {|
+  encode x := encode (gas_cost_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_gas_cost x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'gas_cost_value' := e ]}" :=
+  {| gas_cost_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_gas_cost : Inhabited (gas_cost) := { inhabitant := {| gas_cost_value := inhabitant
+|} }.
+
+
+Definition gas_cost_valid (x : gas_cost) : Prop :=
+0 <= x.(gas_cost_value) /\ x.(gas_cost_value) <= (2 ^ 64 - 1).
 
 Definition memory_required_endpoint : Type := Z.
 
@@ -2344,23 +2509,302 @@ Instance dummy_GasCharge : Inhabited (GasCharge) := {
 |} }.
 
 
-Definition modexp_factor : Type := Z.
+Record modexp_factor := { modexp_factor_value : Z; }.
+Arguments modexp_factor : clear implicits.
+#[export]
+Instance Decidable_eq_modexp_factor : EqDecision modexp_factor.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_modexp_factor : Countable modexp_factor.
+refine {|
+  encode x := encode (modexp_factor_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_modexp_factor x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition modexp_product : Type := Z.
+Notation "{[ r 'with' 'modexp_factor_value' := e ]}" :=
+  {| modexp_factor_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_modexp_factor : Inhabited (modexp_factor) := {
+  inhabitant := {| modexp_factor_value := inhabitant
+|} }.
 
-Definition modexp_osaka_extra : Type := Z.
 
-Definition modexp_pre_osaka_extra : Type := Z.
+Definition modexp_factor_valid (x : modexp_factor) : Prop :=
+0 <= x.(modexp_factor_value) /\ x.(modexp_factor_value) <= (3 * (2 ^ 64 - 1) + 257).
 
-Definition bls_msm_coefficient : Type := Z.
+Record modexp_product := { modexp_product_value : Z; }.
+Arguments modexp_product : clear implicits.
+#[export]
+Instance Decidable_eq_modexp_product : EqDecision modexp_product.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_modexp_product : Countable modexp_product.
+refine {|
+  encode x := encode (modexp_product_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_modexp_product x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition bls_msm_product : Type := Z.
+Notation "{[ r 'with' 'modexp_product_value' := e ]}" :=
+  {| modexp_product_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_modexp_product : Inhabited (modexp_product) := {
+  inhabitant := {| modexp_product_value := inhabitant
+|} }.
 
-Definition bls_msm_tail_product : Type := Z.
 
-Definition linear_gas_variable_product : Type := Z.
+Definition modexp_product_valid (x : modexp_product) : Prop :=
+0 <= x.(modexp_product_value) /\ x.(modexp_product_value) <= ((3 * (2 ^ 64 - 1) + 257) * (3 * (2 ^ 64 - 1) + 257)).
 
-Definition linear_gas_product : Type := Z.
+Record modexp_osaka_extra := { modexp_osaka_extra_value : Z; }.
+Arguments modexp_osaka_extra : clear implicits.
+#[export]
+Instance Decidable_eq_modexp_osaka_extra : EqDecision modexp_osaka_extra.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_modexp_osaka_extra : Countable modexp_osaka_extra.
+refine {|
+  encode x := encode (modexp_osaka_extra_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_modexp_osaka_extra x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'modexp_osaka_extra_value' := e ]}" :=
+  {| modexp_osaka_extra_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_modexp_osaka_extra : Inhabited (modexp_osaka_extra) := {
+  inhabitant := {| modexp_osaka_extra_value := inhabitant
+|} }.
+
+
+Definition modexp_osaka_extra_valid (x : modexp_osaka_extra) : Prop :=
+0 <= x.(modexp_osaka_extra_value) /\ x.(modexp_osaka_extra_value) <= (e_div (2 ^ 64 - 1) 16).
+
+Record modexp_pre_osaka_extra := { modexp_pre_osaka_extra_value : Z; }.
+Arguments modexp_pre_osaka_extra : clear implicits.
+#[export]
+Instance Decidable_eq_modexp_pre_osaka_extra : EqDecision modexp_pre_osaka_extra.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_modexp_pre_osaka_extra : Countable modexp_pre_osaka_extra.
+refine {|
+  encode x := encode (modexp_pre_osaka_extra_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_modexp_pre_osaka_extra x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'modexp_pre_osaka_extra_value' := e ]}" :=
+  {| modexp_pre_osaka_extra_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_modexp_pre_osaka_extra : Inhabited (modexp_pre_osaka_extra) := {
+  inhabitant := {| modexp_pre_osaka_extra_value := inhabitant
+|} }.
+
+
+Definition modexp_pre_osaka_extra_valid (x : modexp_pre_osaka_extra) : Prop :=
+0 <= x.(modexp_pre_osaka_extra_value) /\ x.(modexp_pre_osaka_extra_value) <= (e_div (3 * (2 ^ 64 - 1) + 2) 8).
+
+Record bls_msm_coefficient := { bls_msm_coefficient_value : Z; }.
+Arguments bls_msm_coefficient : clear implicits.
+#[export]
+Instance Decidable_eq_bls_msm_coefficient : EqDecision bls_msm_coefficient.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bls_msm_coefficient : Countable bls_msm_coefficient.
+refine {|
+  encode x := encode (bls_msm_coefficient_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bls_msm_coefficient x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bls_msm_coefficient_value' := e ]}" :=
+  {| bls_msm_coefficient_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bls_msm_coefficient : Inhabited (bls_msm_coefficient) := {
+  inhabitant := {| bls_msm_coefficient_value := inhabitant
+|} }.
+
+
+Definition bls_msm_coefficient_valid (x : bls_msm_coefficient) : Prop :=
+0 <= x.(bls_msm_coefficient_value) /\ x.(bls_msm_coefficient_value) <= (45000 * (2 ^ 16 - 1)).
+
+Record bls_msm_product := { bls_msm_product_value : Z; }.
+Arguments bls_msm_product : clear implicits.
+#[export]
+Instance Decidable_eq_bls_msm_product : EqDecision bls_msm_product.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bls_msm_product : Countable bls_msm_product.
+refine {|
+  encode x := encode (bls_msm_product_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bls_msm_product x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bls_msm_product_value' := e ]}" :=
+  {| bls_msm_product_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bls_msm_product : Inhabited (bls_msm_product) := {
+  inhabitant := {| bls_msm_product_value := inhabitant
+|} }.
+
+
+Definition bls_msm_product_valid (x : bls_msm_product) : Prop :=
+0 <= x.(bls_msm_product_value) /\ x.(bls_msm_product_value) <= (45000 * (2 ^ 16 - 1) * (2 ^ 64 - 1)).
+
+Record bls_msm_tail_product := { bls_msm_tail_product_value : Z; }.
+Arguments bls_msm_tail_product : clear implicits.
+#[export]
+Instance Decidable_eq_bls_msm_tail_product : EqDecision bls_msm_tail_product.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_bls_msm_tail_product : Countable bls_msm_tail_product.
+refine {|
+  encode x := encode (bls_msm_tail_product_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_bls_msm_tail_product x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'bls_msm_tail_product_value' := e ]}" :=
+  {| bls_msm_tail_product_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_bls_msm_tail_product : Inhabited (bls_msm_tail_product) := {
+  inhabitant := {| bls_msm_tail_product_value := inhabitant
+|} }.
+
+
+Definition bls_msm_tail_product_valid (x : bls_msm_tail_product) : Prop :=
+0 <= x.(bls_msm_tail_product_value) /\ x.(bls_msm_tail_product_value) <= (45000 * (2 ^ 16 - 1) * 999).
+
+Record linear_gas_variable_product := { linear_gas_variable_product_value : Z; }.
+Arguments linear_gas_variable_product : clear implicits.
+#[export]
+Instance Decidable_eq_linear_gas_variable_product : EqDecision linear_gas_variable_product.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_linear_gas_variable_product : Countable linear_gas_variable_product.
+refine {|
+  encode x := encode (linear_gas_variable_product_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_linear_gas_variable_product x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'linear_gas_variable_product_value' := e ]}" :=
+  {| linear_gas_variable_product_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_linear_gas_variable_product : Inhabited (linear_gas_variable_product) := {
+  inhabitant := {| linear_gas_variable_product_value := inhabitant
+|} }.
+
+
+Definition linear_gas_variable_product_valid (x : linear_gas_variable_product) : Prop :=
+0 <= x.(linear_gas_variable_product_value) /\ x.(linear_gas_variable_product_value) <= (45000 * (2 ^ 64 - 1)).
+
+Record linear_gas_product := { linear_gas_product_value : Z; }.
+Arguments linear_gas_product : clear implicits.
+#[export]
+Instance Decidable_eq_linear_gas_product : EqDecision linear_gas_product.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_linear_gas_product : Countable linear_gas_product.
+refine {|
+  encode x := encode (linear_gas_product_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_linear_gas_product x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'linear_gas_product_value' := e ]}" :=
+  {| linear_gas_product_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_linear_gas_product : Inhabited (linear_gas_product) := {
+  inhabitant := {| linear_gas_product_value := inhabitant
+|} }.
+
+
+Definition linear_gas_product_valid (x : linear_gas_product) : Prop :=
+0 <= x.(linear_gas_product_value) /\ x.(linear_gas_product_value) <= (45000 * 2 ^ 64).
 
 Definition transaction_execution_gas_limit_value : Z := (2 ^ 24).
 #[export] Hint Unfold transaction_execution_gas_limit_value : sail.
@@ -2602,13 +3046,173 @@ Instance dummy_gas_refund : Inhabited (gas_refund) := {
 Definition gas_refund_valid (x : gas_refund) : Prop :=
 ((- (199 * (2 ^ 64 - 1)))) <= x.(gas_refund_value) /\ x.(gas_refund_value) <= (199 * (2 ^ 64 - 1)).
 
-Definition frame_state_gas_delta : Type := Z.
+Definition amsterdam_storage_clear_refund : Z := 12480.
+#[export] Hint Unfold amsterdam_storage_clear_refund : sail.
 
-Definition state_gas_delta : Type := Z.
+Record gas_refund_delta := { gas_refund_delta_value : Z; }.
+Arguments gas_refund_delta : clear implicits.
+#[export]
+Instance Decidable_eq_gas_refund_delta : EqDecision gas_refund_delta.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_gas_refund_delta : Countable gas_refund_delta.
+refine {|
+  encode x := encode (gas_refund_delta_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_gas_refund_delta x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
 
-Definition transaction_state_gas_delta : Type := Z.
+Notation "{[ r 'with' 'gas_refund_delta_value' := e ]}" :=
+  {| gas_refund_delta_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_gas_refund_delta : Inhabited (gas_refund_delta) := {
+  inhabitant := {| gas_refund_delta_value := inhabitant
+|} }.
 
-Definition transaction_state_gas_used : Type := Z.
+
+Definition gas_refund_delta_valid (x : gas_refund_delta) : Prop :=
+((- 12480)) <= x.(gas_refund_delta_value) /\ x.(gas_refund_delta_value) <= 12480.
+
+Record frame_state_gas_delta := { frame_state_gas_delta_value : Z; }.
+Arguments frame_state_gas_delta : clear implicits.
+#[export]
+Instance Decidable_eq_frame_state_gas_delta : EqDecision frame_state_gas_delta.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_frame_state_gas_delta : Countable frame_state_gas_delta.
+refine {|
+  encode x := encode (frame_state_gas_delta_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_frame_state_gas_delta x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'frame_state_gas_delta_value' := e ]}" :=
+  {| frame_state_gas_delta_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_frame_state_gas_delta : Inhabited (frame_state_gas_delta) := {
+  inhabitant := {| frame_state_gas_delta_value := inhabitant
+|} }.
+
+
+Definition frame_state_gas_delta_valid (x : frame_state_gas_delta) : Prop :=
+((- (2 ^ 64 - 1))) <= x.(frame_state_gas_delta_value) /\ x.(frame_state_gas_delta_value) <= (2 ^ 64 - 1 + 2 ^ 24).
+
+Record state_gas_delta := { state_gas_delta_value : Z; }.
+Arguments state_gas_delta : clear implicits.
+#[export]
+Instance Decidable_eq_state_gas_delta : EqDecision state_gas_delta.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_state_gas_delta : Countable state_gas_delta.
+refine {|
+  encode x := encode (state_gas_delta_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_state_gas_delta x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'state_gas_delta_value' := e ]}" :=
+  {| state_gas_delta_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_state_gas_delta : Inhabited (state_gas_delta) := {
+  inhabitant := {| state_gas_delta_value := inhabitant
+|} }.
+
+
+Definition state_gas_delta_valid (x : state_gas_delta) : Prop :=
+((- (2 * (2 ^ 64 - 1)))) <= x.(state_gas_delta_value) /\ x.(state_gas_delta_value) <= (2 * (2 ^ 64 - 1 + 2 ^ 24)).
+
+Record transaction_state_gas_delta := { transaction_state_gas_delta_value : Z; }.
+Arguments transaction_state_gas_delta : clear implicits.
+#[export]
+Instance Decidable_eq_transaction_state_gas_delta : EqDecision transaction_state_gas_delta.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_transaction_state_gas_delta : Countable transaction_state_gas_delta.
+refine {|
+  encode x := encode (transaction_state_gas_delta_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_transaction_state_gas_delta x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'transaction_state_gas_delta_value' := e ]}" :=
+  {| transaction_state_gas_delta_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_transaction_state_gas_delta : Inhabited (transaction_state_gas_delta) := {
+  inhabitant := {| transaction_state_gas_delta_value := inhabitant
+|} }.
+
+
+Definition transaction_state_gas_delta_valid (x : transaction_state_gas_delta) : Prop :=
+((- (2 * (2 ^ 64 - 1)))) <= x.(transaction_state_gas_delta_value) /\ x.(transaction_state_gas_delta_value) <= (3 * (2 ^ 64 - 1) + 2 * 2 ^ 24).
+
+Record transaction_state_gas_used := { transaction_state_gas_used_value : Z; }.
+Arguments transaction_state_gas_used : clear implicits.
+#[export]
+Instance Decidable_eq_transaction_state_gas_used : EqDecision transaction_state_gas_used.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_transaction_state_gas_used : Countable transaction_state_gas_used.
+refine {|
+  encode x := encode (transaction_state_gas_used_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_transaction_state_gas_used x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'transaction_state_gas_used_value' := e ]}" :=
+  {| transaction_state_gas_used_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_transaction_state_gas_used : Inhabited (transaction_state_gas_used) := {
+  inhabitant := {| transaction_state_gas_used_value := inhabitant
+|} }.
+
+
+Definition transaction_state_gas_used_valid (x : transaction_state_gas_used) : Prop :=
+0 <= x.(transaction_state_gas_used_value) /\ x.(transaction_state_gas_used_value) <= (3 * (2 ^ 64 - 1) + 2 * 2 ^ 24).
 
 Definition pre_london_refund_divisor : Z := 2.
 #[export] Hint Unfold pre_london_refund_divisor : sail.
@@ -6909,7 +7513,7 @@ Record Message := {
   Message_code_address : address_typ;
   Message_address : address_typ;
   Message_value : word;
-  Message_state_gas_reservoir : gas_typ;
+  Message_state_gas_reservoir : state_gas_typ;
   Message_is_static : bool;
   Message_depth : frame_depth;
 }.
@@ -6974,16 +7578,47 @@ Instance dummy_Message : Inhabited (Message) := {
 |} }.
 
 
+Inductive OpcodeOutcome :=
+| Continue : unit -> OpcodeOutcome
+| Failed : ExceptionKind -> OpcodeOutcome.
+Arguments OpcodeOutcome : clear implicits.
+
+Definition sail_OpcodeOutcome_encode (x : OpcodeOutcome) := match x with
+  | Continue x' => encode (0, encode x')
+  | Failed x' => encode (1, encode x') end.
+Definition sail_OpcodeOutcome_decode x : option OpcodeOutcome := match decode x with
+  | Some (0, x') => Continue <$> decode x'
+  | Some (1, x') => Failed <$> decode x'
+  | _ => None end.
+Lemma sail_OpcodeOutcome_decode_encode : forall (x : OpcodeOutcome), sail_OpcodeOutcome_decode
+  (sail_OpcodeOutcome_encode x)  = Some x.
+Proof.
+  unfold sail_OpcodeOutcome_decode, sail_OpcodeOutcome_encode;
+  intros [x|x]; rewrite !decode_encode; reflexivity.
+Qed.
+
+#[export]
+Instance Decidable_eq_OpcodeOutcome : EqDecision OpcodeOutcome := decode_encode_eq_dec
+  sail_OpcodeOutcome_encode sail_OpcodeOutcome_decode sail_OpcodeOutcome_decode_encode .
+
+#[export]
+Instance Countable_OpcodeOutcome : Countable OpcodeOutcome := {|
+  encode := sail_OpcodeOutcome_encode;
+  decode := sail_OpcodeOutcome_decode;
+  decode_encode := sail_OpcodeOutcome_decode_encode
+|}.
+#[export]
+Instance dummy_OpcodeOutcome : Inhabited (OpcodeOutcome) := { inhabitant := Continue inhabitant }.
+
 Record FrameCheckpoint := {
   FrameCheckpoint_pc : code_pointer;
   FrameCheckpoint_gas_remaining : gas_typ;
-  FrameCheckpoint_stack_top : StackTop;
-  FrameCheckpoint_state_gas_remaining : gas_typ;
+  FrameCheckpoint_stack_top : StackPointer;
+  FrameCheckpoint_state_gas_remaining : state_gas_typ;
   FrameCheckpoint_state_gas_spilled : state_gas_spill;
   FrameCheckpoint_refund : gas_refund;
   FrameCheckpoint_status : FrameStatus;
   FrameCheckpoint_message : Message;
-  FrameCheckpoint_call_depth : frame_depth;
   FrameCheckpoint_code : Code;
   FrameCheckpoint_calldata : CalldataSlice;
   FrameCheckpoint_memory : EvmMemorySlice;
@@ -6991,8 +7626,8 @@ Record FrameCheckpoint := {
 Arguments FrameCheckpoint : clear implicits.
 #[export]
 Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
-   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11].
-   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11].
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10].
   cmp_record_field x0 y0.
   cmp_record_field x1 y1.
   cmp_record_field x2 y2.
@@ -7004,58 +7639,54 @@ Instance Decidable_eq_FrameCheckpoint : EqDecision FrameCheckpoint.
   cmp_record_field x8 y8.
   cmp_record_field x9 y9.
   cmp_record_field x10 y10.
-  cmp_record_field x11 y11.
 left; subst; reflexivity.
 Defined.
 #[export]
 Instance Countable_FrameCheckpoint : Countable FrameCheckpoint.
 refine {|
-  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_stack_top x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_call_depth x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
-  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11) ← decode x;
-              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11)
+  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_stack_top x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) ← decode x;
+              mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10)
 |}.
 abstract (
-  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11];
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10];
   rewrite decode_encode;
   reflexivity).
 Defined.
 
 Notation "{[ r 'with' 'FrameCheckpoint_pc' := e ]}" :=
-  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_stack_top' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_remaining' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_state_gas_spilled' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_refund' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_status' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_message' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 end (at level 1).
-Notation "{[ r 'with' 'FrameCheckpoint_call_depth' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_code' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_calldata' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 end (at level 1).
 Notation "{[ r 'with' 'FrameCheckpoint_memory' := e ]}" :=
-  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ =>
-    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e end (at level 1).
+  match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ =>
+    Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e end (at level 1).
 #[export]
 Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
   inhabitant := {|
@@ -7067,7 +7698,6 @@ Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
     FrameCheckpoint_refund := inhabitant;
     FrameCheckpoint_status := inhabitant;
     FrameCheckpoint_message := inhabitant;
-    FrameCheckpoint_call_depth := inhabitant;
     FrameCheckpoint_code := inhabitant;
     FrameCheckpoint_calldata := inhabitant;
     FrameCheckpoint_memory := inhabitant
@@ -8584,6 +9214,60 @@ Instance dummy_TransactionMergeSemantics : Inhabited (TransactionMergeSemantics)
 |} }.
 
 
+Inductive StackValidation := StackValid | StackUnderflowFailure | StackOverflowFailure.
+Definition num_of_StackValidation (arg_ : StackValidation) : Z :=
+   match arg_ with | StackValid => 0 | StackUnderflowFailure => 1 | StackOverflowFailure => 2 end.
+
+Definition StackValidation_of_num (arg_ : Z) (*(0 <=? arg_) && (arg_ <=? 2)*) : StackValidation :=
+   let l__0 := arg_ in
+   if Z.eqb (l__0) (0) then StackValid
+   else if Z.eqb (l__0) (1) then StackUnderflowFailure
+   else StackOverflowFailure.
+
+Lemma StackValidation_num_of_roundtrip (x : StackValidation) : StackValidation_of_num (num_of_StackValidation x) = x.
+  destruct x; reflexivity.
+Qed.
+Lemma num_of_StackValidation_injective (x y : StackValidation) : num_of_StackValidation x = num_of_StackValidation y -> x = y.
+  intro.
+  rewrite <- (StackValidation_num_of_roundtrip x).
+  rewrite <- (StackValidation_num_of_roundtrip y).
+  congruence.
+Qed.
+Definition StackValidation_eq_dec (x y : StackValidation) : {x = y} + {x <> y}.
+  refine (match Z.eq_dec (num_of_StackValidation x) (num_of_StackValidation y) with
+  | left e => left (num_of_StackValidation_injective x y e)
+  | right ne => right _
+  end).
+  congruence.
+Defined.
+Definition StackValidation_beq (x y : StackValidation) : bool :=
+  Z.eqb (num_of_StackValidation x) (num_of_StackValidation y).
+Lemma StackValidation_beq_iff x y : StackValidation_beq x y = true <-> x = y.
+  unfold StackValidation_beq.
+  rewrite Z.eqb_eq.
+  split; [apply num_of_StackValidation_injective | congruence].
+Qed.
+Lemma StackValidation_beq_refl x : StackValidation_beq x x = true.
+apply StackValidation_beq_iff; reflexivity.
+Qed.
+#[export]
+Instance Decidable_eq_StackValidation : EqDecision StackValidation := StackValidation_eq_dec.
+#[export]
+Instance Countable_StackValidation : Countable StackValidation.
+refine {|
+  encode x := encode (num_of_StackValidation x);
+  decode x := z ← decode x; mret (StackValidation_of_num z);
+|}.
+abstract (
+  intro s; rewrite decode_encode;
+  simpl;
+  rewrite StackValidation_num_of_roundtrip;
+  reflexivity).
+Defined.
+#[export]
+Instance dummy_StackValidation : Inhabited StackValidation := { inhabitant := StackValid }.
+
+
 Definition memory_word_count_relation (byte_len : Z) (words : Z) : bool :=
   (0 <=? byte_len) &&
     ((words =? (e_div (byte_len + 31) 32)) &&
@@ -8971,21 +9655,21 @@ Instance Countable_ast : Countable ast := {|
 #[export]
 Instance dummy_ast : Inhabited (ast) := { inhabitant := STOP inhabitant }.
 
-Record CreateSemantics := { CreateSemantics_uses_salt : bool; }.
-Arguments CreateSemantics : clear implicits.
+Record AccountId := { AccountId_value : Z; }.
+Arguments AccountId : clear implicits.
 #[export]
-Instance Decidable_eq_CreateSemantics : EqDecision CreateSemantics.
+Instance Decidable_eq_AccountId : EqDecision AccountId.
    intros [x0].
    intros [y0].
   cmp_record_field x0 y0.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_CreateSemantics : Countable CreateSemantics.
+Instance Countable_AccountId : Countable AccountId.
 refine {|
-  encode x := encode (CreateSemantics_uses_salt x);
+  encode x := encode (AccountId_value x);
   decode x := '(x0) ← decode x;
-              mret (Build_CreateSemantics x0)
+              mret (Build_AccountId x0)
 |}.
 abstract (
   intros [x0];
@@ -8993,13 +9677,176 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'CreateSemantics_uses_salt' := e ]}" :=
-  {| CreateSemantics_uses_salt := e |} (at level 1, only parsing).
+Notation "{[ r 'with' 'AccountId_value' := e ]}" :=
+  {| AccountId_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_CreateSemantics : Inhabited (CreateSemantics) := {
-  inhabitant := {| CreateSemantics_uses_salt := inhabitant
+Instance dummy_AccountId : Inhabited (AccountId) := { inhabitant := {| AccountId_value := inhabitant
 |} }.
 
+
+Definition AccountId_valid (x : AccountId) : Prop :=
+0 <= x.(AccountId_value) /\ x.(AccountId_value) <= (2 ^ 32 - 1).
+
+Record StorageId := { StorageId_value : Z; }.
+Arguments StorageId : clear implicits.
+#[export]
+Instance Decidable_eq_StorageId : EqDecision StorageId.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_StorageId : Countable StorageId.
+refine {|
+  encode x := encode (StorageId_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_StorageId x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'StorageId_value' := e ]}" :=
+  {| StorageId_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_StorageId : Inhabited (StorageId) := { inhabitant := {| StorageId_value := inhabitant
+|} }.
+
+
+Definition StorageId_valid (x : StorageId) : Prop :=
+0 <= x.(StorageId_value) /\ x.(StorageId_value) <= (2 ^ 32 - 1).
+
+Record StorageCount := { StorageCount_value : Z; }.
+Arguments StorageCount : clear implicits.
+#[export]
+Instance Decidable_eq_StorageCount : EqDecision StorageCount.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_StorageCount : Countable StorageCount.
+refine {|
+  encode x := encode (StorageCount_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_StorageCount x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'StorageCount_value' := e ]}" :=
+  {| StorageCount_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_StorageCount : Inhabited (StorageCount) := {
+  inhabitant := {| StorageCount_value := inhabitant
+|} }.
+
+
+Definition StorageCount_valid (x : StorageCount) : Prop :=
+0 <= x.(StorageCount_value) /\ x.(StorageCount_value) <= (2 ^ 32 - 1).
+
+Record StorageGeneration := { StorageGeneration_value : Z; }.
+Arguments StorageGeneration : clear implicits.
+#[export]
+Instance Decidable_eq_StorageGeneration : EqDecision StorageGeneration.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_StorageGeneration : Countable StorageGeneration.
+refine {|
+  encode x := encode (StorageGeneration_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_StorageGeneration x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'StorageGeneration_value' := e ]}" :=
+  {| StorageGeneration_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_StorageGeneration : Inhabited (StorageGeneration) := {
+  inhabitant := {| StorageGeneration_value := inhabitant
+|} }.
+
+
+Definition StorageGeneration_valid (x : StorageGeneration) : Prop :=
+0 <= x.(StorageGeneration_value) /\ x.(StorageGeneration_value) <= (2 ^ 32 - 1).
+
+Record AccountExecutionContext := { AccountExecutionContext_address : address_typ; }.
+Arguments AccountExecutionContext : clear implicits.
+#[export]
+Instance Decidable_eq_AccountExecutionContext : EqDecision AccountExecutionContext.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_AccountExecutionContext : Countable AccountExecutionContext.
+refine {|
+  encode x := encode (AccountExecutionContext_address x);
+  decode x := '(x0) ← decode x;
+              mret (Build_AccountExecutionContext x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'AccountExecutionContext_address' := e ]}" :=
+  {| AccountExecutionContext_address := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_AccountExecutionContext : Inhabited (AccountExecutionContext) := {
+  inhabitant := {| AccountExecutionContext_address := inhabitant
+|} }.
+
+
+Record call_tree_steps := { call_tree_steps_value : Z; }.
+Arguments call_tree_steps : clear implicits.
+#[export]
+Instance Decidable_eq_call_tree_steps : EqDecision call_tree_steps.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_call_tree_steps : Countable call_tree_steps.
+refine {|
+  encode x := encode (call_tree_steps_value x);
+  decode x := '(x0) ← decode x;
+              mret (Build_call_tree_steps x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'call_tree_steps_value' := e ]}" :=
+  {| call_tree_steps_value := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_call_tree_steps : Inhabited (call_tree_steps) := {
+  inhabitant := {| call_tree_steps_value := inhabitant
+|} }.
+
+
+Definition call_tree_steps_valid (x : call_tree_steps) : Prop :=
+0 <= x.(call_tree_steps_value) /\ x.(call_tree_steps_value) <= (3 * (2 * (2 ^ 64 - 1)) + 2).
 
 Record CallSemantics := {
   CallSemantics_takes_value : bool;
@@ -9056,6 +9903,36 @@ Instance dummy_CallSemantics : Inhabited (CallSemantics) := {
     CallSemantics_uses_target_address := inhabitant;
     CallSemantics_inherits_caller_and_value := inhabitant;
     CallSemantics_enters_static_context := inhabitant
+|} }.
+
+
+Record CreateSemantics := { CreateSemantics_uses_salt : bool; }.
+Arguments CreateSemantics : clear implicits.
+#[export]
+Instance Decidable_eq_CreateSemantics : EqDecision CreateSemantics.
+   intros [x0].
+   intros [y0].
+  cmp_record_field x0 y0.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_CreateSemantics : Countable CreateSemantics.
+refine {|
+  encode x := encode (CreateSemantics_uses_salt x);
+  decode x := '(x0) ← decode x;
+              mret (Build_CreateSemantics x0)
+|}.
+abstract (
+  intros [x0];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'CreateSemantics_uses_salt' := e ]}" :=
+  {| CreateSemantics_uses_salt := e |} (at level 1, only parsing).
+#[export]
+Instance dummy_CreateSemantics : Inhabited (CreateSemantics) := {
+  inhabitant := {| CreateSemantics_uses_salt := inhabitant
 |} }.
 
 
@@ -10896,171 +11773,6 @@ Instance Countable_register_BlockHeader : Countable register_BlockHeader. refine
   reflexivity.
 Defined.
 
-Variant register_CalldataSlice :=
-  | calldata
-.
-
-Definition num_of_register_CalldataSlice (r : register_CalldataSlice) : Z :=
-  match r with
-  | calldata => 0
-  end.
-Definition register_CalldataSlice_of_num (i : Z) : register_CalldataSlice :=
-  match i with
-  | 0 => calldata
-  | _ => calldata
-  end.
-Lemma register_CalldataSlice_num_of_roundtrip (x : register_CalldataSlice) : register_CalldataSlice_of_num (num_of_register_CalldataSlice x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_CalldataSlice_injective (x y : register_CalldataSlice) : num_of_register_CalldataSlice x = num_of_register_CalldataSlice y -> x = y.
-  intro.
-  rewrite <- (register_CalldataSlice_num_of_roundtrip x).
-  rewrite <- (register_CalldataSlice_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_CalldataSlice_eq_dec (x y : register_CalldataSlice) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_CalldataSlice x) (num_of_register_CalldataSlice y) with
-  | left e => left (num_of_register_CalldataSlice_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_CalldataSlice_beq (x y : register_CalldataSlice) : bool :=
-  Z.eqb (num_of_register_CalldataSlice x) (num_of_register_CalldataSlice y).
-Lemma register_CalldataSlice_beq_iff x y : register_CalldataSlice_beq x y = true <-> x = y.
-  unfold register_CalldataSlice_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_CalldataSlice_injective | congruence].
-Qed.
-Lemma register_CalldataSlice_beq_refl x : register_CalldataSlice_beq x x = true.
-apply register_CalldataSlice_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_CalldataSlice_beq_iff : register_beq_iffs.
-Hint Rewrite register_CalldataSlice_beq_refl : register_beq_refls.
-Definition register_CalldataSlice_list : list (string * register_CalldataSlice) := [
-  ("calldata", calldata)
-].
-
-Instance Decidable_eq_register_CalldataSlice : EqDecision register_CalldataSlice := register_CalldataSlice_eq_dec.
-Instance Countable_register_CalldataSlice : Countable register_CalldataSlice. refine {|
-  encode x := encode (num_of_register_CalldataSlice x);
-  decode x := register_CalldataSlice_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_CalldataSlice_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_Code :=
-  | frame_code
-.
-
-Definition num_of_register_Code (r : register_Code) : Z :=
-  match r with
-  | frame_code => 0
-  end.
-Definition register_Code_of_num (i : Z) : register_Code :=
-  match i with
-  | 0 => frame_code
-  | _ => frame_code
-  end.
-Lemma register_Code_num_of_roundtrip (x : register_Code) : register_Code_of_num (num_of_register_Code x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_Code_injective (x y : register_Code) : num_of_register_Code x = num_of_register_Code y -> x = y.
-  intro.
-  rewrite <- (register_Code_num_of_roundtrip x).
-  rewrite <- (register_Code_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_Code_eq_dec (x y : register_Code) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_Code x) (num_of_register_Code y) with
-  | left e => left (num_of_register_Code_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_Code_beq (x y : register_Code) : bool :=
-  Z.eqb (num_of_register_Code x) (num_of_register_Code y).
-Lemma register_Code_beq_iff x y : register_Code_beq x y = true <-> x = y.
-  unfold register_Code_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_Code_injective | congruence].
-Qed.
-Lemma register_Code_beq_refl x : register_Code_beq x x = true.
-apply register_Code_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_Code_beq_iff : register_beq_iffs.
-Hint Rewrite register_Code_beq_refl : register_beq_refls.
-Definition register_Code_list : list (string * register_Code) := [
-  ("frame_code", frame_code)
-].
-
-Instance Decidable_eq_register_Code : EqDecision register_Code := register_Code_eq_dec.
-Instance Countable_register_Code : Countable register_Code. refine {|
-  encode x := encode (num_of_register_Code x);
-  decode x := register_Code_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_Code_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_EvmMemorySlice :=
-  | evm_memory
-.
-
-Definition num_of_register_EvmMemorySlice (r : register_EvmMemorySlice) : Z :=
-  match r with
-  | evm_memory => 0
-  end.
-Definition register_EvmMemorySlice_of_num (i : Z) : register_EvmMemorySlice :=
-  match i with
-  | 0 => evm_memory
-  | _ => evm_memory
-  end.
-Lemma register_EvmMemorySlice_num_of_roundtrip (x : register_EvmMemorySlice) : register_EvmMemorySlice_of_num (num_of_register_EvmMemorySlice x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_EvmMemorySlice_injective (x y : register_EvmMemorySlice) : num_of_register_EvmMemorySlice x = num_of_register_EvmMemorySlice y -> x = y.
-  intro.
-  rewrite <- (register_EvmMemorySlice_num_of_roundtrip x).
-  rewrite <- (register_EvmMemorySlice_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_EvmMemorySlice_eq_dec (x y : register_EvmMemorySlice) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_EvmMemorySlice x) (num_of_register_EvmMemorySlice y) with
-  | left e => left (num_of_register_EvmMemorySlice_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_EvmMemorySlice_beq (x y : register_EvmMemorySlice) : bool :=
-  Z.eqb (num_of_register_EvmMemorySlice x) (num_of_register_EvmMemorySlice y).
-Lemma register_EvmMemorySlice_beq_iff x y : register_EvmMemorySlice_beq x y = true <-> x = y.
-  unfold register_EvmMemorySlice_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_EvmMemorySlice_injective | congruence].
-Qed.
-Lemma register_EvmMemorySlice_beq_refl x : register_EvmMemorySlice_beq x x = true.
-apply register_EvmMemorySlice_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_EvmMemorySlice_beq_iff : register_beq_iffs.
-Hint Rewrite register_EvmMemorySlice_beq_refl : register_beq_refls.
-Definition register_EvmMemorySlice_list : list (string * register_EvmMemorySlice) := [
-  ("evm_memory", evm_memory)
-].
-
-Instance Decidable_eq_register_EvmMemorySlice : EqDecision register_EvmMemorySlice := register_EvmMemorySlice_eq_dec.
-Instance Countable_register_EvmMemorySlice : Countable register_EvmMemorySlice. refine {|
-  encode x := encode (num_of_register_EvmMemorySlice x);
-  decode x := register_EvmMemorySlice_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_EvmMemorySlice_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 Variant register_ExecutionProfile :=
   | k_execution_profile
 .
@@ -11116,171 +11828,6 @@ Instance Countable_register_ExecutionProfile : Countable register_ExecutionProfi
   reflexivity.
 Defined.
 
-Variant register_FrameStatus :=
-  | frame_status
-.
-
-Definition num_of_register_FrameStatus (r : register_FrameStatus) : Z :=
-  match r with
-  | frame_status => 0
-  end.
-Definition register_FrameStatus_of_num (i : Z) : register_FrameStatus :=
-  match i with
-  | 0 => frame_status
-  | _ => frame_status
-  end.
-Lemma register_FrameStatus_num_of_roundtrip (x : register_FrameStatus) : register_FrameStatus_of_num (num_of_register_FrameStatus x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_FrameStatus_injective (x y : register_FrameStatus) : num_of_register_FrameStatus x = num_of_register_FrameStatus y -> x = y.
-  intro.
-  rewrite <- (register_FrameStatus_num_of_roundtrip x).
-  rewrite <- (register_FrameStatus_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_FrameStatus_eq_dec (x y : register_FrameStatus) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_FrameStatus x) (num_of_register_FrameStatus y) with
-  | left e => left (num_of_register_FrameStatus_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_FrameStatus_beq (x y : register_FrameStatus) : bool :=
-  Z.eqb (num_of_register_FrameStatus x) (num_of_register_FrameStatus y).
-Lemma register_FrameStatus_beq_iff x y : register_FrameStatus_beq x y = true <-> x = y.
-  unfold register_FrameStatus_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_FrameStatus_injective | congruence].
-Qed.
-Lemma register_FrameStatus_beq_refl x : register_FrameStatus_beq x x = true.
-apply register_FrameStatus_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_FrameStatus_beq_iff : register_beq_iffs.
-Hint Rewrite register_FrameStatus_beq_refl : register_beq_refls.
-Definition register_FrameStatus_list : list (string * register_FrameStatus) := [
-  ("frame_status", frame_status)
-].
-
-Instance Decidable_eq_register_FrameStatus : EqDecision register_FrameStatus := register_FrameStatus_eq_dec.
-Instance Countable_register_FrameStatus : Countable register_FrameStatus. refine {|
-  encode x := encode (num_of_register_FrameStatus x);
-  decode x := register_FrameStatus_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_FrameStatus_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_Message :=
-  | message
-.
-
-Definition num_of_register_Message (r : register_Message) : Z :=
-  match r with
-  | message => 0
-  end.
-Definition register_Message_of_num (i : Z) : register_Message :=
-  match i with
-  | 0 => message
-  | _ => message
-  end.
-Lemma register_Message_num_of_roundtrip (x : register_Message) : register_Message_of_num (num_of_register_Message x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_Message_injective (x y : register_Message) : num_of_register_Message x = num_of_register_Message y -> x = y.
-  intro.
-  rewrite <- (register_Message_num_of_roundtrip x).
-  rewrite <- (register_Message_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_Message_eq_dec (x y : register_Message) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_Message x) (num_of_register_Message y) with
-  | left e => left (num_of_register_Message_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_Message_beq (x y : register_Message) : bool :=
-  Z.eqb (num_of_register_Message x) (num_of_register_Message y).
-Lemma register_Message_beq_iff x y : register_Message_beq x y = true <-> x = y.
-  unfold register_Message_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_Message_injective | congruence].
-Qed.
-Lemma register_Message_beq_refl x : register_Message_beq x x = true.
-apply register_Message_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_Message_beq_iff : register_beq_iffs.
-Hint Rewrite register_Message_beq_refl : register_beq_refls.
-Definition register_Message_list : list (string * register_Message) := [
-  ("message", message)
-].
-
-Instance Decidable_eq_register_Message : EqDecision register_Message := register_Message_eq_dec.
-Instance Countable_register_Message : Countable register_Message. refine {|
-  encode x := encode (num_of_register_Message x);
-  decode x := register_Message_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_Message_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_OutputSlice :=
-  | returndata
-.
-
-Definition num_of_register_OutputSlice (r : register_OutputSlice) : Z :=
-  match r with
-  | returndata => 0
-  end.
-Definition register_OutputSlice_of_num (i : Z) : register_OutputSlice :=
-  match i with
-  | 0 => returndata
-  | _ => returndata
-  end.
-Lemma register_OutputSlice_num_of_roundtrip (x : register_OutputSlice) : register_OutputSlice_of_num (num_of_register_OutputSlice x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_OutputSlice_injective (x y : register_OutputSlice) : num_of_register_OutputSlice x = num_of_register_OutputSlice y -> x = y.
-  intro.
-  rewrite <- (register_OutputSlice_num_of_roundtrip x).
-  rewrite <- (register_OutputSlice_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_OutputSlice_eq_dec (x y : register_OutputSlice) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_OutputSlice x) (num_of_register_OutputSlice y) with
-  | left e => left (num_of_register_OutputSlice_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_OutputSlice_beq (x y : register_OutputSlice) : bool :=
-  Z.eqb (num_of_register_OutputSlice x) (num_of_register_OutputSlice y).
-Lemma register_OutputSlice_beq_iff x y : register_OutputSlice_beq x y = true <-> x = y.
-  unfold register_OutputSlice_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_OutputSlice_injective | congruence].
-Qed.
-Lemma register_OutputSlice_beq_refl x : register_OutputSlice_beq x x = true.
-apply register_OutputSlice_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_OutputSlice_beq_iff : register_beq_iffs.
-Hint Rewrite register_OutputSlice_beq_refl : register_beq_refls.
-Definition register_OutputSlice_list : list (string * register_OutputSlice) := [
-  ("returndata", returndata)
-].
-
-Instance Decidable_eq_register_OutputSlice : EqDecision register_OutputSlice := register_OutputSlice_eq_dec.
-Instance Countable_register_OutputSlice : Countable register_OutputSlice. refine {|
-  encode x := encode (num_of_register_OutputSlice x);
-  decode x := register_OutputSlice_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_OutputSlice_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 Variant register_ScratchSlice :=
   | scratch_arena
 .
@@ -11333,61 +11880,6 @@ Instance Countable_register_ScratchSlice : Countable register_ScratchSlice. refi
 |}.
   intro s; rewrite decode_encode; simpl.
   rewrite register_ScratchSlice_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_StackTop :=
-  | stack_top
-.
-
-Definition num_of_register_StackTop (r : register_StackTop) : Z :=
-  match r with
-  | stack_top => 0
-  end.
-Definition register_StackTop_of_num (i : Z) : register_StackTop :=
-  match i with
-  | 0 => stack_top
-  | _ => stack_top
-  end.
-Lemma register_StackTop_num_of_roundtrip (x : register_StackTop) : register_StackTop_of_num (num_of_register_StackTop x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_StackTop_injective (x y : register_StackTop) : num_of_register_StackTop x = num_of_register_StackTop y -> x = y.
-  intro.
-  rewrite <- (register_StackTop_num_of_roundtrip x).
-  rewrite <- (register_StackTop_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_StackTop_eq_dec (x y : register_StackTop) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_StackTop x) (num_of_register_StackTop y) with
-  | left e => left (num_of_register_StackTop_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_StackTop_beq (x y : register_StackTop) : bool :=
-  Z.eqb (num_of_register_StackTop x) (num_of_register_StackTop y).
-Lemma register_StackTop_beq_iff x y : register_StackTop_beq x y = true <-> x = y.
-  unfold register_StackTop_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_StackTop_injective | congruence].
-Qed.
-Lemma register_StackTop_beq_refl x : register_StackTop_beq x x = true.
-apply register_StackTop_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_StackTop_beq_iff : register_beq_iffs.
-Hint Rewrite register_StackTop_beq_refl : register_beq_refls.
-Definition register_StackTop_list : list (string * register_StackTop) := [
-  ("stack_top", stack_top)
-].
-
-Instance Decidable_eq_register_StackTop : EqDecision register_StackTop := register_StackTop_eq_dec.
-Instance Countable_register_StackTop : Countable register_StackTop. refine {|
-  encode x := encode (num_of_register_StackTop x);
-  decode x := register_StackTop_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_StackTop_num_of_roundtrip.
   reflexivity.
 Defined.
 
@@ -11611,230 +12103,6 @@ Instance Countable_register_chain_identifier : Countable register_chain_identifi
   reflexivity.
 Defined.
 
-Variant register_code_pointer :=
-  | pc
-.
-
-Definition num_of_register_code_pointer (r : register_code_pointer) : Z :=
-  match r with
-  | pc => 0
-  end.
-Definition register_code_pointer_of_num (i : Z) : register_code_pointer :=
-  match i with
-  | 0 => pc
-  | _ => pc
-  end.
-Lemma register_code_pointer_num_of_roundtrip (x : register_code_pointer) : register_code_pointer_of_num (num_of_register_code_pointer x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_code_pointer_injective (x y : register_code_pointer) : num_of_register_code_pointer x = num_of_register_code_pointer y -> x = y.
-  intro.
-  rewrite <- (register_code_pointer_num_of_roundtrip x).
-  rewrite <- (register_code_pointer_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_code_pointer_eq_dec (x y : register_code_pointer) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_code_pointer x) (num_of_register_code_pointer y) with
-  | left e => left (num_of_register_code_pointer_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_code_pointer_beq (x y : register_code_pointer) : bool :=
-  Z.eqb (num_of_register_code_pointer x) (num_of_register_code_pointer y).
-Lemma register_code_pointer_beq_iff x y : register_code_pointer_beq x y = true <-> x = y.
-  unfold register_code_pointer_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_code_pointer_injective | congruence].
-Qed.
-Lemma register_code_pointer_beq_refl x : register_code_pointer_beq x x = true.
-apply register_code_pointer_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_code_pointer_beq_iff : register_beq_iffs.
-Hint Rewrite register_code_pointer_beq_refl : register_beq_refls.
-Definition register_code_pointer_list : list (string * register_code_pointer) := [
-  ("pc", pc)
-].
-
-Instance Decidable_eq_register_code_pointer : EqDecision register_code_pointer := register_code_pointer_eq_dec.
-Instance Countable_register_code_pointer : Countable register_code_pointer. refine {|
-  encode x := encode (num_of_register_code_pointer x);
-  decode x := register_code_pointer_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_code_pointer_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_frame_depth :=
-  | call_depth
-.
-
-Definition num_of_register_frame_depth (r : register_frame_depth) : Z :=
-  match r with
-  | call_depth => 0
-  end.
-Definition register_frame_depth_of_num (i : Z) : register_frame_depth :=
-  match i with
-  | 0 => call_depth
-  | _ => call_depth
-  end.
-Lemma register_frame_depth_num_of_roundtrip (x : register_frame_depth) : register_frame_depth_of_num (num_of_register_frame_depth x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_frame_depth_injective (x y : register_frame_depth) : num_of_register_frame_depth x = num_of_register_frame_depth y -> x = y.
-  intro.
-  rewrite <- (register_frame_depth_num_of_roundtrip x).
-  rewrite <- (register_frame_depth_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_frame_depth_eq_dec (x y : register_frame_depth) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_frame_depth x) (num_of_register_frame_depth y) with
-  | left e => left (num_of_register_frame_depth_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_frame_depth_beq (x y : register_frame_depth) : bool :=
-  Z.eqb (num_of_register_frame_depth x) (num_of_register_frame_depth y).
-Lemma register_frame_depth_beq_iff x y : register_frame_depth_beq x y = true <-> x = y.
-  unfold register_frame_depth_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_frame_depth_injective | congruence].
-Qed.
-Lemma register_frame_depth_beq_refl x : register_frame_depth_beq x x = true.
-apply register_frame_depth_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_frame_depth_beq_iff : register_beq_iffs.
-Hint Rewrite register_frame_depth_beq_refl : register_beq_refls.
-Definition register_frame_depth_list : list (string * register_frame_depth) := [
-  ("call_depth", call_depth)
-].
-
-Instance Decidable_eq_register_frame_depth : EqDecision register_frame_depth := register_frame_depth_eq_dec.
-Instance Countable_register_frame_depth : Countable register_frame_depth. refine {|
-  encode x := encode (num_of_register_frame_depth x);
-  decode x := register_frame_depth_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_frame_depth_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_gas :=
-  | gas_remaining
-  | state_gas_remaining
-.
-
-Definition num_of_register_gas (r : register_gas) : Z :=
-  match r with
-  | gas_remaining => 0
-  | state_gas_remaining => 1
-  end.
-Definition register_gas_of_num (i : Z) : register_gas :=
-  match i with
-  | 0 => gas_remaining
-  | 1 => state_gas_remaining
-  | _ => gas_remaining
-  end.
-Lemma register_gas_num_of_roundtrip (x : register_gas) : register_gas_of_num (num_of_register_gas x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_gas_injective (x y : register_gas) : num_of_register_gas x = num_of_register_gas y -> x = y.
-  intro.
-  rewrite <- (register_gas_num_of_roundtrip x).
-  rewrite <- (register_gas_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_gas_eq_dec (x y : register_gas) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_gas x) (num_of_register_gas y) with
-  | left e => left (num_of_register_gas_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_gas_beq (x y : register_gas) : bool :=
-  Z.eqb (num_of_register_gas x) (num_of_register_gas y).
-Lemma register_gas_beq_iff x y : register_gas_beq x y = true <-> x = y.
-  unfold register_gas_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_gas_injective | congruence].
-Qed.
-Lemma register_gas_beq_refl x : register_gas_beq x x = true.
-apply register_gas_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_gas_beq_iff : register_beq_iffs.
-Hint Rewrite register_gas_beq_refl : register_beq_refls.
-Definition register_gas_list : list (string * register_gas) := [
-  ("gas_remaining", gas_remaining);
-  ("state_gas_remaining", state_gas_remaining)
-].
-
-Instance Decidable_eq_register_gas : EqDecision register_gas := register_gas_eq_dec.
-Instance Countable_register_gas : Countable register_gas. refine {|
-  encode x := encode (num_of_register_gas x);
-  decode x := register_gas_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_gas_num_of_roundtrip.
-  reflexivity.
-Defined.
-
-Variant register_gas_refund :=
-  | frame_refund
-.
-
-Definition num_of_register_gas_refund (r : register_gas_refund) : Z :=
-  match r with
-  | frame_refund => 0
-  end.
-Definition register_gas_refund_of_num (i : Z) : register_gas_refund :=
-  match i with
-  | 0 => frame_refund
-  | _ => frame_refund
-  end.
-Lemma register_gas_refund_num_of_roundtrip (x : register_gas_refund) : register_gas_refund_of_num (num_of_register_gas_refund x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_gas_refund_injective (x y : register_gas_refund) : num_of_register_gas_refund x = num_of_register_gas_refund y -> x = y.
-  intro.
-  rewrite <- (register_gas_refund_num_of_roundtrip x).
-  rewrite <- (register_gas_refund_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_gas_refund_eq_dec (x y : register_gas_refund) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_gas_refund x) (num_of_register_gas_refund y) with
-  | left e => left (num_of_register_gas_refund_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_gas_refund_beq (x y : register_gas_refund) : bool :=
-  Z.eqb (num_of_register_gas_refund x) (num_of_register_gas_refund y).
-Lemma register_gas_refund_beq_iff x y : register_gas_refund_beq x y = true <-> x = y.
-  unfold register_gas_refund_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_gas_refund_injective | congruence].
-Qed.
-Lemma register_gas_refund_beq_refl x : register_gas_refund_beq x x = true.
-apply register_gas_refund_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_gas_refund_beq_iff : register_beq_iffs.
-Hint Rewrite register_gas_refund_beq_refl : register_beq_refls.
-Definition register_gas_refund_list : list (string * register_gas_refund) := [
-  ("frame_refund", frame_refund)
-].
-
-Instance Decidable_eq_register_gas_refund : EqDecision register_gas_refund := register_gas_refund_eq_dec.
-Instance Countable_register_gas_refund : Countable register_gas_refund. refine {|
-  encode x := encode (num_of_register_gas_refund x);
-  decode x := register_gas_refund_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_gas_refund_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 Variant register_hash :=
   | k_parent_state_root
 .
@@ -11890,154 +12158,51 @@ Instance Countable_register_hash : Countable register_hash. refine {|
   reflexivity.
 Defined.
 
-Variant register_state_gas_spill :=
-  | state_gas_spilled
-.
-
-Definition num_of_register_state_gas_spill (r : register_state_gas_spill) : Z :=
-  match r with
-  | state_gas_spilled => 0
-  end.
-Definition register_state_gas_spill_of_num (i : Z) : register_state_gas_spill :=
-  match i with
-  | 0 => state_gas_spilled
-  | _ => state_gas_spilled
-  end.
-Lemma register_state_gas_spill_num_of_roundtrip (x : register_state_gas_spill) : register_state_gas_spill_of_num (num_of_register_state_gas_spill x) = x.
-  destruct x; reflexivity.
-Qed.
-Lemma num_of_register_state_gas_spill_injective (x y : register_state_gas_spill) : num_of_register_state_gas_spill x = num_of_register_state_gas_spill y -> x = y.
-  intro.
-  rewrite <- (register_state_gas_spill_num_of_roundtrip x).
-  rewrite <- (register_state_gas_spill_num_of_roundtrip y).
-  congruence.
-Qed.
-Definition register_state_gas_spill_eq_dec (x y : register_state_gas_spill) : {x = y} + {x <> y}.
-  refine (match Z.eq_dec (num_of_register_state_gas_spill x) (num_of_register_state_gas_spill y) with
-  | left e => left (num_of_register_state_gas_spill_injective x y e)
-  | right ne => right _
-  end).
-  congruence.
-Defined.
-Definition register_state_gas_spill_beq (x y : register_state_gas_spill) : bool :=
-  Z.eqb (num_of_register_state_gas_spill x) (num_of_register_state_gas_spill y).
-Lemma register_state_gas_spill_beq_iff x y : register_state_gas_spill_beq x y = true <-> x = y.
-  unfold register_state_gas_spill_beq.
-  rewrite Z.eqb_eq.
-  split; [apply num_of_register_state_gas_spill_injective | congruence].
-Qed.
-Lemma register_state_gas_spill_beq_refl x : register_state_gas_spill_beq x x = true.
-apply register_state_gas_spill_beq_iff; reflexivity.
-Qed.
-Hint Rewrite register_state_gas_spill_beq_iff : register_beq_iffs.
-Hint Rewrite register_state_gas_spill_beq_refl : register_beq_refls.
-Definition register_state_gas_spill_list : list (string * register_state_gas_spill) := [
-  ("state_gas_spilled", state_gas_spilled)
-].
-
-Instance Decidable_eq_register_state_gas_spill : EqDecision register_state_gas_spill := register_state_gas_spill_eq_dec.
-Instance Countable_register_state_gas_spill : Countable register_state_gas_spill. refine {|
-  encode x := encode (num_of_register_state_gas_spill x);
-  decode x := register_state_gas_spill_of_num <$> decode x
-|}.
-  intro s; rewrite decode_encode; simpl.
-  rewrite register_state_gas_spill_num_of_roundtrip.
-  reflexivity.
-Defined.
-
 
 Variant register : Type :=
   | R_BlockHeader :> register_BlockHeader -> register
-  | R_CalldataSlice :> register_CalldataSlice -> register
-  | R_Code :> register_Code -> register
-  | R_EvmMemorySlice :> register_EvmMemorySlice -> register
   | R_ExecutionProfile :> register_ExecutionProfile -> register
-  | R_FrameStatus :> register_FrameStatus -> register
-  | R_Message :> register_Message -> register
-  | R_OutputSlice :> register_OutputSlice -> register
   | R_ScratchSlice :> register_ScratchSlice -> register
-  | R_StackTop :> register_StackTop -> register
   | R_TxEnv :> register_TxEnv -> register
   | R_ancestor_hash_count :> register_ancestor_hash_count -> register
   | R_block_access_index :> register_block_access_index -> register
   | R_chain_identifier :> register_chain_identifier -> register
-  | R_code_pointer :> register_code_pointer -> register
-  | R_frame_depth :> register_frame_depth -> register
-  | R_gas :> register_gas -> register
-  | R_gas_refund :> register_gas_refund -> register
   | R_hash :> register_hash -> register
-  | R_state_gas_spill :> register_state_gas_spill -> register
 .
 
 Definition type_of_register (r : register) : Type :=
   match r with
   | R_BlockHeader _ => BlockHeader
-  | R_CalldataSlice _ => CalldataSlice
-  | R_Code _ => Code
-  | R_EvmMemorySlice _ => EvmMemorySlice
   | R_ExecutionProfile _ => ExecutionProfile
-  | R_FrameStatus _ => FrameStatus
-  | R_Message _ => Message
-  | R_OutputSlice _ => OutputSlice
   | R_ScratchSlice _ => ScratchSlice
-  | R_StackTop _ => StackTop
   | R_TxEnv _ => TxEnv
   | R_ancestor_hash_count _ => ancestor_hash_count
   | R_block_access_index _ => block_access_index
   | R_chain_identifier _ => chain_identifier
-  | R_code_pointer _ => code_pointer
-  | R_frame_depth _ => frame_depth
-  | R_gas _ => gas_typ
-  | R_gas_refund _ => gas_refund
   | R_hash _ => hash
-  | R_state_gas_spill _ => state_gas_spill
   end.
 
   Definition register_encode (r : register) : positive :=
     match r with
     | R_BlockHeader r => encode (0, encode r)
-    | R_CalldataSlice r => encode (1, encode r)
-    | R_Code r => encode (2, encode r)
-    | R_EvmMemorySlice r => encode (3, encode r)
-    | R_ExecutionProfile r => encode (4, encode r)
-    | R_FrameStatus r => encode (5, encode r)
-    | R_Message r => encode (6, encode r)
-    | R_OutputSlice r => encode (7, encode r)
-    | R_ScratchSlice r => encode (8, encode r)
-    | R_StackTop r => encode (9, encode r)
-    | R_TxEnv r => encode (10, encode r)
-    | R_ancestor_hash_count r => encode (11, encode r)
-    | R_block_access_index r => encode (12, encode r)
-    | R_chain_identifier r => encode (13, encode r)
-    | R_code_pointer r => encode (14, encode r)
-    | R_frame_depth r => encode (15, encode r)
-    | R_gas r => encode (16, encode r)
-    | R_gas_refund r => encode (17, encode r)
-    | R_hash r => encode (18, encode r)
-    | R_state_gas_spill r => encode (19, encode r)
+    | R_ExecutionProfile r => encode (1, encode r)
+    | R_ScratchSlice r => encode (2, encode r)
+    | R_TxEnv r => encode (3, encode r)
+    | R_ancestor_hash_count r => encode (4, encode r)
+    | R_block_access_index r => encode (5, encode r)
+    | R_chain_identifier r => encode (6, encode r)
+    | R_hash r => encode (7, encode r)
     end.
   Definition register_decode (x : positive) : option register :=
     match decode x with
     | Some (0, y) => r ← decode y; mret (R_BlockHeader r)
-    | Some (1, y) => r ← decode y; mret (R_CalldataSlice r)
-    | Some (2, y) => r ← decode y; mret (R_Code r)
-    | Some (3, y) => r ← decode y; mret (R_EvmMemorySlice r)
-    | Some (4, y) => r ← decode y; mret (R_ExecutionProfile r)
-    | Some (5, y) => r ← decode y; mret (R_FrameStatus r)
-    | Some (6, y) => r ← decode y; mret (R_Message r)
-    | Some (7, y) => r ← decode y; mret (R_OutputSlice r)
-    | Some (8, y) => r ← decode y; mret (R_ScratchSlice r)
-    | Some (9, y) => r ← decode y; mret (R_StackTop r)
-    | Some (10, y) => r ← decode y; mret (R_TxEnv r)
-    | Some (11, y) => r ← decode y; mret (R_ancestor_hash_count r)
-    | Some (12, y) => r ← decode y; mret (R_block_access_index r)
-    | Some (13, y) => r ← decode y; mret (R_chain_identifier r)
-    | Some (14, y) => r ← decode y; mret (R_code_pointer r)
-    | Some (15, y) => r ← decode y; mret (R_frame_depth r)
-    | Some (16, y) => r ← decode y; mret (R_gas r)
-    | Some (17, y) => r ← decode y; mret (R_gas_refund r)
-    | Some (18, y) => r ← decode y; mret (R_hash r)
-    | Some (19, y) => r ← decode y; mret (R_state_gas_spill r)
+    | Some (1, y) => r ← decode y; mret (R_ExecutionProfile r)
+    | Some (2, y) => r ← decode y; mret (R_ScratchSlice r)
+    | Some (3, y) => r ← decode y; mret (R_TxEnv r)
+    | Some (4, y) => r ← decode y; mret (R_ancestor_hash_count r)
+    | Some (5, y) => r ← decode y; mret (R_block_access_index r)
+    | Some (6, y) => r ← decode y; mret (R_chain_identifier r)
+    | Some (7, y) => r ← decode y; mret (R_hash r)
     | _ => None
     end.
   Lemma register_decode_encode r : register_decode (register_encode r) = Some r.
@@ -12072,25 +12237,13 @@ Definition register_transport {P : Type -> Type} {r r' : register} : r = r' -> P
 refine (
   match r, r' with
   | R_BlockHeader r, R_BlockHeader r' => fun _ x => x
-  | R_CalldataSlice r, R_CalldataSlice r' => fun _ x => x
-  | R_Code r, R_Code r' => fun _ x => x
-  | R_EvmMemorySlice r, R_EvmMemorySlice r' => fun _ x => x
   | R_ExecutionProfile r, R_ExecutionProfile r' => fun _ x => x
-  | R_FrameStatus r, R_FrameStatus r' => fun _ x => x
-  | R_Message r, R_Message r' => fun _ x => x
-  | R_OutputSlice r, R_OutputSlice r' => fun _ x => x
   | R_ScratchSlice r, R_ScratchSlice r' => fun _ x => x
-  | R_StackTop r, R_StackTop r' => fun _ x => x
   | R_TxEnv r, R_TxEnv r' => fun _ x => x
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun _ x => x
   | R_block_access_index r, R_block_access_index r' => fun _ x => x
   | R_chain_identifier r, R_chain_identifier r' => fun _ x => x
-  | R_code_pointer r, R_code_pointer r' => fun _ x => x
-  | R_frame_depth r, R_frame_depth r' => fun _ x => x
-  | R_gas r, R_gas r' => fun _ x => x
-  | R_gas_refund r, R_gas_refund r' => fun _ x => x
   | R_hash r, R_hash r' => fun _ x => x
-  | R_state_gas_spill r, R_state_gas_spill r' => fun _ x => x
   | _, _ => fun e _ => _
   end
 ).
@@ -12109,25 +12262,13 @@ Qed.
 Definition register_beq (r r' : register) : bool :=
   match r, r' with
   | R_BlockHeader r, R_BlockHeader r' => register_BlockHeader_beq r r'
-  | R_CalldataSlice r, R_CalldataSlice r' => register_CalldataSlice_beq r r'
-  | R_Code r, R_Code r' => register_Code_beq r r'
-  | R_EvmMemorySlice r, R_EvmMemorySlice r' => register_EvmMemorySlice_beq r r'
   | R_ExecutionProfile r, R_ExecutionProfile r' => register_ExecutionProfile_beq r r'
-  | R_FrameStatus r, R_FrameStatus r' => register_FrameStatus_beq r r'
-  | R_Message r, R_Message r' => register_Message_beq r r'
-  | R_OutputSlice r, R_OutputSlice r' => register_OutputSlice_beq r r'
   | R_ScratchSlice r, R_ScratchSlice r' => register_ScratchSlice_beq r r'
-  | R_StackTop r, R_StackTop r' => register_StackTop_beq r r'
   | R_TxEnv r, R_TxEnv r' => register_TxEnv_beq r r'
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => register_ancestor_hash_count_beq r r'
   | R_block_access_index r, R_block_access_index r' => register_block_access_index_beq r r'
   | R_chain_identifier r, R_chain_identifier r' => register_chain_identifier_beq r r'
-  | R_code_pointer r, R_code_pointer r' => register_code_pointer_beq r r'
-  | R_frame_depth r, R_frame_depth r' => register_frame_depth_beq r r'
-  | R_gas r, R_gas r' => register_gas_beq r r'
-  | R_gas_refund r, R_gas_refund r' => register_gas_refund_beq r r'
   | R_hash r, R_hash r' => register_hash_beq r r'
-  | R_state_gas_spill r, R_state_gas_spill r' => register_state_gas_spill_beq r r'
   | _, _ => false
   end.
 
@@ -12138,49 +12279,25 @@ Qed.
 Definition register_eq_cast (P : Type -> Type) (r r' : register) : P (type_of_register r) -> option (P (type_of_register r')) :=
   match r, r' with
   | R_BlockHeader r, R_BlockHeader r' => fun p => if register_BlockHeader_beq r r' then Some p else None
-  | R_CalldataSlice r, R_CalldataSlice r' => fun p => if register_CalldataSlice_beq r r' then Some p else None
-  | R_Code r, R_Code r' => fun p => if register_Code_beq r r' then Some p else None
-  | R_EvmMemorySlice r, R_EvmMemorySlice r' => fun p => if register_EvmMemorySlice_beq r r' then Some p else None
   | R_ExecutionProfile r, R_ExecutionProfile r' => fun p => if register_ExecutionProfile_beq r r' then Some p else None
-  | R_FrameStatus r, R_FrameStatus r' => fun p => if register_FrameStatus_beq r r' then Some p else None
-  | R_Message r, R_Message r' => fun p => if register_Message_beq r r' then Some p else None
-  | R_OutputSlice r, R_OutputSlice r' => fun p => if register_OutputSlice_beq r r' then Some p else None
   | R_ScratchSlice r, R_ScratchSlice r' => fun p => if register_ScratchSlice_beq r r' then Some p else None
-  | R_StackTop r, R_StackTop r' => fun p => if register_StackTop_beq r r' then Some p else None
   | R_TxEnv r, R_TxEnv r' => fun p => if register_TxEnv_beq r r' then Some p else None
   | R_ancestor_hash_count r, R_ancestor_hash_count r' => fun p => if register_ancestor_hash_count_beq r r' then Some p else None
   | R_block_access_index r, R_block_access_index r' => fun p => if register_block_access_index_beq r r' then Some p else None
   | R_chain_identifier r, R_chain_identifier r' => fun p => if register_chain_identifier_beq r r' then Some p else None
-  | R_code_pointer r, R_code_pointer r' => fun p => if register_code_pointer_beq r r' then Some p else None
-  | R_frame_depth r, R_frame_depth r' => fun p => if register_frame_depth_beq r r' then Some p else None
-  | R_gas r, R_gas r' => fun p => if register_gas_beq r r' then Some p else None
-  | R_gas_refund r, R_gas_refund r' => fun p => if register_gas_refund_beq r r' then Some p else None
   | R_hash r, R_hash r' => fun p => if register_hash_beq r r' then Some p else None
-  | R_state_gas_spill r, R_state_gas_spill r' => fun p => if register_state_gas_spill_beq r r' then Some p else None
   | _, _ => fun _ => None
   end.
 
 Definition register_list : list (string * register) := List.concat [
   List.map (fun '(s, r) => (s, R_BlockHeader r)) register_BlockHeader_list;
-  List.map (fun '(s, r) => (s, R_CalldataSlice r)) register_CalldataSlice_list;
-  List.map (fun '(s, r) => (s, R_Code r)) register_Code_list;
-  List.map (fun '(s, r) => (s, R_EvmMemorySlice r)) register_EvmMemorySlice_list;
   List.map (fun '(s, r) => (s, R_ExecutionProfile r)) register_ExecutionProfile_list;
-  List.map (fun '(s, r) => (s, R_FrameStatus r)) register_FrameStatus_list;
-  List.map (fun '(s, r) => (s, R_Message r)) register_Message_list;
-  List.map (fun '(s, r) => (s, R_OutputSlice r)) register_OutputSlice_list;
   List.map (fun '(s, r) => (s, R_ScratchSlice r)) register_ScratchSlice_list;
-  List.map (fun '(s, r) => (s, R_StackTop r)) register_StackTop_list;
   List.map (fun '(s, r) => (s, R_TxEnv r)) register_TxEnv_list;
   List.map (fun '(s, r) => (s, R_ancestor_hash_count r)) register_ancestor_hash_count_list;
   List.map (fun '(s, r) => (s, R_block_access_index r)) register_block_access_index_list;
   List.map (fun '(s, r) => (s, R_chain_identifier r)) register_chain_identifier_list;
-  List.map (fun '(s, r) => (s, R_code_pointer r)) register_code_pointer_list;
-  List.map (fun '(s, r) => (s, R_frame_depth r)) register_frame_depth_list;
-  List.map (fun '(s, r) => (s, R_gas r)) register_gas_list;
-  List.map (fun '(s, r) => (s, R_gas_refund r)) register_gas_refund_list;
-  List.map (fun '(s, r) => (s, R_hash r)) register_hash_list;
-  List.map (fun '(s, r) => (s, R_state_gas_spill r)) register_state_gas_spill_list
+  List.map (fun '(s, r) => (s, R_hash r)) register_hash_list
 ].
 
 Definition string_of_register (r : register) : string :=
@@ -12216,94 +12333,46 @@ Qed.
 #[export] Instance Decidable_eq_register_values `(r : register) : EqDecision (type_of_register r) | 100 :=
 match r with
   | R_BlockHeader _ => _
-  | R_CalldataSlice _ => _
-  | R_Code _ => _
-  | R_EvmMemorySlice _ => _
   | R_ExecutionProfile _ => _
-  | R_FrameStatus _ => _
-  | R_Message _ => _
-  | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
-  | R_StackTop _ => _
   | R_TxEnv _ => _
   | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
   | R_chain_identifier _ => _
-  | R_code_pointer _ => _
-  | R_frame_depth _ => _
-  | R_gas _ => _
-  | R_gas_refund _ => _
   | R_hash _ => _
-  | R_state_gas_spill _ => _
 end.
 #[export] Instance Inhabited_register_values `(r : register) : Inhabited (type_of_register r) | 100 :=
   match r with
   | R_BlockHeader _ => _
-  | R_CalldataSlice _ => _
-  | R_Code _ => _
-  | R_EvmMemorySlice _ => _
   | R_ExecutionProfile _ => _
-  | R_FrameStatus _ => _
-  | R_Message _ => _
-  | R_OutputSlice _ => _
   | R_ScratchSlice _ => _
-  | R_StackTop _ => _
   | R_TxEnv _ => _
   | R_ancestor_hash_count _ => _
   | R_block_access_index _ => _
   | R_chain_identifier _ => _
-  | R_code_pointer _ => _
-  | R_frame_depth _ => _
-  | R_gas _ => _
-  | R_gas_refund _ => _
   | R_hash _ => _
-  | R_state_gas_spill _ => _
 end.
 #[export] Instance Countable_register_values `(r : register) : Countable (type_of_register r) | 100.
 refine {|
   encode := match r with
   | R_BlockHeader _ => encode
-  | R_CalldataSlice _ => encode
-  | R_Code _ => encode
-  | R_EvmMemorySlice _ => encode
   | R_ExecutionProfile _ => encode
-  | R_FrameStatus _ => encode
-  | R_Message _ => encode
-  | R_OutputSlice _ => encode
   | R_ScratchSlice _ => encode
-  | R_StackTop _ => encode
   | R_TxEnv _ => encode
   | R_ancestor_hash_count _ => encode
   | R_block_access_index _ => encode
   | R_chain_identifier _ => encode
-  | R_code_pointer _ => encode
-  | R_frame_depth _ => encode
-  | R_gas _ => encode
-  | R_gas_refund _ => encode
   | R_hash _ => encode
-  | R_state_gas_spill _ => encode
   end;
   decode := match r with
   | R_BlockHeader _ => decode
-  | R_CalldataSlice _ => decode
-  | R_Code _ => decode
-  | R_EvmMemorySlice _ => decode
   | R_ExecutionProfile _ => decode
-  | R_FrameStatus _ => decode
-  | R_Message _ => decode
-  | R_OutputSlice _ => decode
   | R_ScratchSlice _ => decode
-  | R_StackTop _ => decode
   | R_TxEnv _ => decode
   | R_ancestor_hash_count _ => decode
   | R_block_access_index _ => decode
   | R_chain_identifier _ => decode
-  | R_code_pointer _ => decode
-  | R_frame_depth _ => decode
-  | R_gas _ => decode
-  | R_gas_refund _ => decode
   | R_hash _ => decode
-  | R_state_gas_spill _ => decode
   end;
 |}.
 abstract (destruct r; apply decode_encode).
@@ -12313,41 +12382,13 @@ Definition k_header_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_header" k_header (fun x => x) (fun x => x).
 Instance dummy_register_BlockHeader : Inhabited (register_ref _) := populate k_header_ref.
 
-Definition calldata_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "calldata" calldata (fun x => x) (fun x => x).
-Instance dummy_register_CalldataSlice : Inhabited (register_ref _) := populate calldata_ref.
-
-Definition frame_code_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "frame_code" frame_code (fun x => x) (fun x => x).
-Instance dummy_register_Code : Inhabited (register_ref _) := populate frame_code_ref.
-
-Definition evm_memory_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "evm_memory" evm_memory (fun x => x) (fun x => x).
-Instance dummy_register_EvmMemorySlice : Inhabited (register_ref _) := populate evm_memory_ref.
-
 Definition k_execution_profile_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_execution_profile" k_execution_profile (fun x => x) (fun x => x).
 Instance dummy_register_ExecutionProfile : Inhabited (register_ref _) := populate k_execution_profile_ref.
 
-Definition frame_status_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "frame_status" frame_status (fun x => x) (fun x => x).
-Instance dummy_register_FrameStatus : Inhabited (register_ref _) := populate frame_status_ref.
-
-Definition message_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "message" message (fun x => x) (fun x => x).
-Instance dummy_register_Message : Inhabited (register_ref _) := populate message_ref.
-
-Definition returndata_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "returndata" returndata (fun x => x) (fun x => x).
-Instance dummy_register_OutputSlice : Inhabited (register_ref _) := populate returndata_ref.
-
 Definition scratch_arena_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "scratch_arena" scratch_arena (fun x => x) (fun x => x).
 Instance dummy_register_ScratchSlice : Inhabited (register_ref _) := populate scratch_arena_ref.
-
-Definition stack_top_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "stack_top" stack_top (fun x => x) (fun x => x).
-Instance dummy_register_StackTop : Inhabited (register_ref _) := populate stack_top_ref.
 
 Definition k_tx_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_tx" k_tx (fun x => x) (fun x => x).
@@ -12365,150 +12406,48 @@ Definition k_chain_id_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_chain_id" k_chain_id (fun x => x) (fun x => x).
 Instance dummy_register_chain_identifier : Inhabited (register_ref _) := populate k_chain_id_ref.
 
-Definition pc_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "pc" pc (fun x => x) (fun x => x).
-Instance dummy_register_code_pointer : Inhabited (register_ref _) := populate pc_ref.
-
-Definition call_depth_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "call_depth" call_depth (fun x => x) (fun x => x).
-Instance dummy_register_frame_depth : Inhabited (register_ref _) := populate call_depth_ref.
-
-Definition gas_remaining_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "gas_remaining" gas_remaining (fun x => x) (fun x => x).
-Definition state_gas_remaining_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "state_gas_remaining" state_gas_remaining (fun x => x) (fun x => x).
-Instance dummy_register_gas : Inhabited (register_ref _) := populate gas_remaining_ref.
-
-Definition frame_refund_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "frame_refund" frame_refund (fun x => x) (fun x => x).
-Instance dummy_register_gas_refund : Inhabited (register_ref _) := populate frame_refund_ref.
-
 Definition k_parent_state_root_ref : register_ref _ :=
   Build_register_ref register type_of_register _ "k_parent_state_root" k_parent_state_root (fun x => x) (fun x => x).
 Instance dummy_register_hash : Inhabited (register_ref _) := populate k_parent_state_root_ref.
-
-Definition state_gas_spilled_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "state_gas_spilled" state_gas_spilled (fun x => x) (fun x => x).
-Instance dummy_register_state_gas_spill : Inhabited (register_ref _) := populate state_gas_spilled_ref.
 
 
 (* Definitions to support the lifting to the sequential monad *)
 Record regstate := {
   BlockHeader_s : register_BlockHeader -> BlockHeader;
-  CalldataSlice_s : register_CalldataSlice -> CalldataSlice;
-  Code_s : register_Code -> Code;
-  EvmMemorySlice_s : register_EvmMemorySlice -> EvmMemorySlice;
   ExecutionProfile_s : register_ExecutionProfile -> ExecutionProfile;
-  FrameStatus_s : register_FrameStatus -> FrameStatus;
-  Message_s : register_Message -> Message;
-  OutputSlice_s : register_OutputSlice -> OutputSlice;
   ScratchSlice_s : register_ScratchSlice -> ScratchSlice;
-  StackTop_s : register_StackTop -> StackTop;
   TxEnv_s : register_TxEnv -> TxEnv;
   ancestor_hash_count_s : register_ancestor_hash_count -> ancestor_hash_count;
   block_access_index_s : register_block_access_index -> block_access_index;
   chain_identifier_s : register_chain_identifier -> chain_identifier;
-  code_pointer_s : register_code_pointer -> code_pointer;
-  frame_depth_s : register_frame_depth -> frame_depth;
-  gas_s : register_gas -> gas_typ;
-  gas_refund_s : register_gas_refund -> gas_refund;
   hash_s : register_hash -> hash;
-  state_gas_spill_s : register_state_gas_spill -> state_gas_spill;
 }.
 Notation "{[ r 'with' 'BlockHeader_s' := e ]}" :=
-  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'CalldataSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'Code_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'EvmMemorySlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
+    Build_regstate e f1 f2 f3 f4 f5 f6 f7 end (at level 1).
 Notation "{[ r 'with' 'ExecutionProfile_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'FrameStatus_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'Message_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'OutputSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
+    Build_regstate f0 e f2 f3 f4 f5 f6 f7 end (at level 1).
 Notation "{[ r 'with' 'ScratchSlice_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'StackTop_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
+    Build_regstate f0 f1 e f3 f4 f5 f6 f7 end (at level 1).
 Notation "{[ r 'with' 'TxEnv_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) =>
+    Build_regstate f0 f1 f2 e f4 f5 f6 f7 end (at level 1).
 Notation "{[ r 'with' 'ancestor_hash_count_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) =>
+    Build_regstate f0 f1 f2 f3 e f5 f6 f7 end (at level 1).
 Notation "{[ r 'with' 'block_access_index_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) =>
+    Build_regstate f0 f1 f2 f3 f4 e f6 f7 end (at level 1).
 Notation "{[ r 'with' 'chain_identifier_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'code_pointer_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'frame_depth_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'gas_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18 f19
-      end (at level 1).
-Notation "{[ r 'with' 'gas_refund_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18 f19
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) =>
+    Build_regstate f0 f1 f2 f3 f4 f5 e f7 end (at level 1).
 Notation "{[ r 'with' 'hash_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ (_ as f19) =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e f19
-      end (at level 1).
-Notation "{[ r 'with' 'state_gas_spill_s' := e ]}" :=
-  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) _ =>
-    Build_regstate f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 e
-      end (at level 1).
+  match r with Build_regstate (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ =>
+    Build_regstate f0 f1 f2 f3 f4 f5 f6 e end (at level 1).
 
 Definition init_regstate : regstate := Build_regstate
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
-  inhabitant
   inhabitant
   inhabitant
   inhabitant
@@ -12522,49 +12461,25 @@ Definition init_regstate : regstate := Build_regstate
 Definition register_lookup (reg : register) (rs : regstate) : type_of_register reg :=
   match reg with
   | R_BlockHeader r => rs.(BlockHeader_s) r
-  | R_CalldataSlice r => rs.(CalldataSlice_s) r
-  | R_Code r => rs.(Code_s) r
-  | R_EvmMemorySlice r => rs.(EvmMemorySlice_s) r
   | R_ExecutionProfile r => rs.(ExecutionProfile_s) r
-  | R_FrameStatus r => rs.(FrameStatus_s) r
-  | R_Message r => rs.(Message_s) r
-  | R_OutputSlice r => rs.(OutputSlice_s) r
   | R_ScratchSlice r => rs.(ScratchSlice_s) r
-  | R_StackTop r => rs.(StackTop_s) r
   | R_TxEnv r => rs.(TxEnv_s) r
   | R_ancestor_hash_count r => rs.(ancestor_hash_count_s) r
   | R_block_access_index r => rs.(block_access_index_s) r
   | R_chain_identifier r => rs.(chain_identifier_s) r
-  | R_code_pointer r => rs.(code_pointer_s) r
-  | R_frame_depth r => rs.(frame_depth_s) r
-  | R_gas r => rs.(gas_s) r
-  | R_gas_refund r => rs.(gas_refund_s) r
   | R_hash r => rs.(hash_s) r
-  | R_state_gas_spill r => rs.(state_gas_spill_s) r
   end.
 
 Definition register_set (reg : register) : type_of_register reg -> regstate -> regstate :=
   match reg with
   | R_BlockHeader r => fun v rs => {[ rs with BlockHeader_s := fun r' => if register_BlockHeader_beq r' r then v else rs.(BlockHeader_s) r' ]}
-  | R_CalldataSlice r => fun v rs => {[ rs with CalldataSlice_s := fun r' => if register_CalldataSlice_beq r' r then v else rs.(CalldataSlice_s) r' ]}
-  | R_Code r => fun v rs => {[ rs with Code_s := fun r' => if register_Code_beq r' r then v else rs.(Code_s) r' ]}
-  | R_EvmMemorySlice r => fun v rs => {[ rs with EvmMemorySlice_s := fun r' => if register_EvmMemorySlice_beq r' r then v else rs.(EvmMemorySlice_s) r' ]}
   | R_ExecutionProfile r => fun v rs => {[ rs with ExecutionProfile_s := fun r' => if register_ExecutionProfile_beq r' r then v else rs.(ExecutionProfile_s) r' ]}
-  | R_FrameStatus r => fun v rs => {[ rs with FrameStatus_s := fun r' => if register_FrameStatus_beq r' r then v else rs.(FrameStatus_s) r' ]}
-  | R_Message r => fun v rs => {[ rs with Message_s := fun r' => if register_Message_beq r' r then v else rs.(Message_s) r' ]}
-  | R_OutputSlice r => fun v rs => {[ rs with OutputSlice_s := fun r' => if register_OutputSlice_beq r' r then v else rs.(OutputSlice_s) r' ]}
   | R_ScratchSlice r => fun v rs => {[ rs with ScratchSlice_s := fun r' => if register_ScratchSlice_beq r' r then v else rs.(ScratchSlice_s) r' ]}
-  | R_StackTop r => fun v rs => {[ rs with StackTop_s := fun r' => if register_StackTop_beq r' r then v else rs.(StackTop_s) r' ]}
   | R_TxEnv r => fun v rs => {[ rs with TxEnv_s := fun r' => if register_TxEnv_beq r' r then v else rs.(TxEnv_s) r' ]}
   | R_ancestor_hash_count r => fun v rs => {[ rs with ancestor_hash_count_s := fun r' => if register_ancestor_hash_count_beq r' r then v else rs.(ancestor_hash_count_s) r' ]}
   | R_block_access_index r => fun v rs => {[ rs with block_access_index_s := fun r' => if register_block_access_index_beq r' r then v else rs.(block_access_index_s) r' ]}
   | R_chain_identifier r => fun v rs => {[ rs with chain_identifier_s := fun r' => if register_chain_identifier_beq r' r then v else rs.(chain_identifier_s) r' ]}
-  | R_code_pointer r => fun v rs => {[ rs with code_pointer_s := fun r' => if register_code_pointer_beq r' r then v else rs.(code_pointer_s) r' ]}
-  | R_frame_depth r => fun v rs => {[ rs with frame_depth_s := fun r' => if register_frame_depth_beq r' r then v else rs.(frame_depth_s) r' ]}
-  | R_gas r => fun v rs => {[ rs with gas_s := fun r' => if register_gas_beq r' r then v else rs.(gas_s) r' ]}
-  | R_gas_refund r => fun v rs => {[ rs with gas_refund_s := fun r' => if register_gas_refund_beq r' r then v else rs.(gas_refund_s) r' ]}
   | R_hash r => fun v rs => {[ rs with hash_s := fun r' => if register_hash_beq r' r then v else rs.(hash_s) r' ]}
-  | R_state_gas_spill r => fun v rs => {[ rs with state_gas_spill_s := fun r' => if register_state_gas_spill_beq r' r then v else rs.(state_gas_spill_s) r' ]}
   end.
 
 Lemma register_lookup_set (r : register) regs v: register_lookup r (register_set r v regs) = v.

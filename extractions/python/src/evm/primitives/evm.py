@@ -18,7 +18,7 @@ from evm.prelude import (
     ZERO_ADDRESS,
 )
 from evm.primitives.quantities import (
-    StackTop,
+    StackPointer,
     account_nonce,
     code_pointer,
     frame_depth,
@@ -28,13 +28,15 @@ from evm.primitives.quantities import (
 from evm.primitives.gas import (
     gas,
     gas_refund,
+    state_gas,
     state_gas_spill,
-    GAS_ZERO,
+    STATE_GAS_ZERO,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
     EvmMemorySlice,
 )
+from evm.exceptions import ExceptionKind
 from evm.evm.halt import FrameStatus
 from evm.primitives.code import Code
 from evm.primitives.tx import BlobHashesFields
@@ -262,21 +264,31 @@ class Message:
     code_address: _Message_address_type
     address: _Message_address_type
     value: word
-    state_gas_reservoir: gas
+    state_gas_reservoir: state_gas
     is_static: bool
     depth: frame_depth
+
+class OpcodeOutcome:
+    pass
+
+@dataclass(frozen=True, slots=True)
+class Continue(OpcodeOutcome):
+    value: None = None
+
+@dataclass(frozen=True, slots=True)
+class Failed(OpcodeOutcome):
+    value: ExceptionKind
 
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class FrameCheckpoint:
     pc: code_pointer
     gas_remaining: gas
-    stack_top: StackTop
-    state_gas_remaining: gas
+    stack_top: StackPointer
+    state_gas_remaining: state_gas
     state_gas_spilled: state_gas_spill
     refund: gas_refund
     status: FrameStatus
     message: Message
-    call_depth: frame_depth
     code: Code
     calldata: CalldataSlice
     memory: EvmMemorySlice
@@ -316,4 +328,4 @@ class ResumeCall(FrameContinuation):
 class ResumeCreate(FrameContinuation):
     value: CreateContinuation
 
-DEFAULT_MESSAGE: Message = Message(caller=address(ZERO_ADDRESS), address=address(ZERO_ADDRESS), code_address=address(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=gas(GAS_ZERO), is_static=False, depth=frame_depth(0))
+DEFAULT_MESSAGE: Message = Message(caller=address(ZERO_ADDRESS), address=address(ZERO_ADDRESS), code_address=address(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=state_gas(STATE_GAS_ZERO), is_static=False, depth=frame_depth(0))

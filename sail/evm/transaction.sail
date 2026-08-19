@@ -537,7 +537,7 @@ function process_auth(au : Authorization) -> authorization_item_refund = {
 /*! Adds one authorization refund to the transaction-wide accumulator. The
     decoded authorization count proves this guard unreachable in valid input;
     spelling it at the narrowing boundary keeps proof extraction independent
-    of the Coq backend's treatment of existential range indices. */
+    of the Rocq backend's treatment of existential range indices. */
 function authorization_refund_add(
     item : authorization_item_refund,
     accumulated : authorization_refund,

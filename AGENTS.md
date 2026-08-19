@@ -70,7 +70,7 @@ duplicating instructions elsewhere.
   `host/output.sail` guest output, `host/state.sail` / `host/environment.sail` /
   `host/memory.sail` world state, block environment, and buffers,
   `host/nodes.sail` trie node DB; see
-  `extractions/coq/contract/ExternBoundary.v`). These `c:`-bound vals are the TRUE
+  `extractions/rocq/contract/ExternBoundary.v`). These `c:`-bound vals are the TRUE
   axioms (crypto core, I/O oracle, mutable host stores) -- extraction targets
   see them as bodyless parameters; executables link their C definitions from
   `extractions/c/`. The C backends are split completely: `extractions/c/spec/contract/` owns the generated
@@ -116,7 +116,7 @@ duplicating instructions elsewhere.
   `extractions/c/optimised/contract/src/lib/htr.c` is a narrower optimized-C refinement: the
   `sail/optimised/lib/htr.sail` override replaces the complete
   `htr_new_payload_request` operation with one pure C call that consumes the
-  validated `StatelessInputRef` slices directly. Spec C and Lean/Coq
+  validated `StatelessInputRef` slices directly. Spec C and Lean/Rocq
   extraction retain the explicit equations in `sail/lib/htr.sail`, so this
   optimization is not a proof axiom. The optimized implementation currently
   stages 32-byte leaves and 64-byte hash pairs locally. A raw-pointer input
@@ -220,7 +220,7 @@ duplicating instructions elsewhere.
   `devtools/benchmarks/zisk-guests/` is the stable machine-local home for the optimized EVM
   Sail, reth, and ethrex comparison ELFs. The binaries are ignored by Git;
   `devtools/benchmarks/stage_zisk_guests.sh` refreshes them and their checksums,
-  and `python3 -m devtools.benchmarks.zisk` uses these three guests by default.
+  and `uv run --frozen python -m devtools.benchmarks.zisk` uses these three guests by default.
   `--debug` invokes the
   native-only `guest_debug_dump` after a failure; it is not linked into the
   real guest. `--profile` enables optional cycle-scope markers.
@@ -252,6 +252,12 @@ recursive and trie-shaped:
   available.
 
 ## Build And Lint
+
+Repository tooling requires Python 3.12.x exactly. `pyproject.toml` is the
+single version and dependency declaration, and `uv.lock` fixes the complete
+environment. Run tools through `uv run --frozen`; uv installs its managed
+Python automatically. Do not add compatibility branches for other Python
+minor versions.
 
 Every model check, extraction target, and executable build uses the same
 custom Sail compiler: `sail` on `PATH`, overridable with `SAIL=`. That compiler
@@ -299,7 +305,7 @@ C-backend concerns: the base specification never carries C-representation or
 optimized-exception annotations, while `sail/optimised/` may refine a semantic
 type to an optimized-only C representation. In particular, canonical 20-byte
 addresses and 32-byte digests retain byte-index semantics in Sail but use
-`fixed_bytes_u64_lanes` in optimized C. Lean/Coq extraction retains the
+`fixed_bytes_u64_lanes` in optimized C. Lean/Rocq extraction retains the
 ordinary semantic types without loading the C-only splice. Targets use the
 installed `sail` on `PATH` and honour `SAIL=` for a different build (a
 worktree, a bisect, a compiler under test). Upstream Sail is not supported
@@ -355,23 +361,24 @@ evidence.
 Run one native embedded fixture from the repository root:
 
 ```sh
-rtk python3 -m devtools.harness.cli --limit 1 --quiet \
+rtk uv run --frozen python -m devtools.harness.cli --build optimized --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 Run the complete retained corpus with parallel native workers:
 
 ```sh
-rtk python3 -m devtools.harness.cli --jobs 8 --quiet zkvm/.fixtures/current-v062-full
+rtk uv run --frozen python -m devtools.harness.cli --build optimized --jobs 8 --quiet \
+  zkvm/.fixtures/current-v062-full
 ```
 
 The same fixture can drive the real RISC-V guest on Spike or the production
 ZisK guest:
 
 ```sh
-rtk python3 -m devtools.harness.cli --spike --limit 1 --quiet \
+rtk uv run --frozen python -m devtools.harness.cli --spike --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-rtk env ZISKEMU=/path/to/matching/ziskemu python3 -m devtools.harness.cli --zisk --limit 1 --quiet \
+rtk env ZISKEMU=/path/to/matching/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 

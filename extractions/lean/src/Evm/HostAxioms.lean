@@ -1843,19 +1843,19 @@ private def writeListAt
       (values ++ List.replicate (position + 1 - values.length) default)
       position value
 
-/-- The reference reading of the opaque `StackTop` cursor token is the frame
-height (the spec C ABI's choice): slot `index` below cursor `top` addresses
-position `top - 1 - index` of the active frame's bottom-indexed word list. -/
-private def stackSlotPosition (top : StackTop) (index : stack_index) : Nat :=
+/-- The reference reading of the opaque host cursor is the frame height (the
+spec C ABI's choice): slot `index` below cursor `top` addresses position
+`top - 1 - index` of the active frame's bottom-indexed word list. -/
+private def stackSlotPosition (top : BitVec 64) (index : stack_index) : Nat :=
   top.toNat - 1 - index
 
-def stack_reset (_ : Unit) : SailM StackTop := do
+def stack_reset_host (_ : Unit) : SailM (BitVec 64) := do
   modify fun state => { state with stackFrames := [[]] }
-  pure 0
+  pure (BitVec.ofNat 64 0)
 
-def operand_stack_push_empty_frame (_ : Unit) : SailM StackTop := do
+def operand_stack_push_empty_frame_host (_ : Unit) : SailM (BitVec 64) := do
   modify fun state => { state with stackFrames := [] :: state.stackFrames }
-  pure 0
+  pure (BitVec.ofNat 64 0)
 
 def operand_stack_pop_frame (_ : Unit) : SailM Unit :=
   modify fun state =>
@@ -1865,24 +1865,30 @@ def operand_stack_pop_frame (_ : Unit) : SailM Unit :=
         | _ :: parent :: rest => parent :: rest
         | frames => frames }
 
-def stack_top_height (top : StackTop) : SailM operand_stack_height :=
+def stack_top_height_host (top : BitVec 64) : SailM operand_stack_height :=
   pure top.toNat
 
-def stack_slot_read (top : StackTop) (index : stack_index) : SailM word := do
+def stack_slot_read_host (top : BitVec 64) (index : stack_index) : SailM word := do
   pure ((currentStack (← get)).getD (stackSlotPosition top index) default)
 
-def stack_slot_write
-    (top : StackTop) (index : stack_index) (value : word) : SailM Unit :=
+def stack_slot_write_host
+    (top : BitVec 64) (index : stack_index) (value : word) : SailM Unit :=
   modify fun state =>
     replaceCurrentStack state
       (writeListAt (currentStack state) (stackSlotPosition top index) value)
 
-def stack_top_advance
-    (top : StackTop) (count : stack_slot_count) : SailM StackTop :=
+def stack_slot_write_next_host
+    (top : BitVec 64) (value : word) : SailM Unit :=
+  modify fun state =>
+    replaceCurrentStack state
+      (writeListAt (currentStack state) top.toNat value)
+
+def stack_top_advance_host
+    (top : BitVec 64) (count : stack_slot_count) : SailM (BitVec 64) :=
   pure (top + BitVec.ofNat 64 count)
 
-def stack_top_retreat
-    (top : StackTop) (count : stack_slot_count) : SailM StackTop :=
+def stack_top_retreat_host
+    (top : BitVec 64) (count : stack_slot_count) : SailM (BitVec 64) :=
   pure (top - BitVec.ofNat 64 count)
 
 def frame_stack_reset (_ : Unit) : SailM Unit :=

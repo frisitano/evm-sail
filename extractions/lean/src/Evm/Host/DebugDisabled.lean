@@ -28,10 +28,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -77,7 +79,7 @@ def validation_debug_capture_block_gas (_actual : Nat) (_expected : Nat) (_execu
 
 /-- Records the failing validation stage and reason for host
 inspection; a later record overwrites an earlier one. -/
-/- Type quantifiers: k_ex553942_ : Nat, 0 ≤ k_ex553942_ ∧ k_ex553942_ ≤ 255 -/
+/- Type quantifiers: k_ex611368_ : Nat, 0 ≤ k_ex611368_ ∧ k_ex611368_ ≤ 255 -/
 def validation_debug_record (_stage : Nat) (_reason : FatalError) : Unit :=
   ()
 

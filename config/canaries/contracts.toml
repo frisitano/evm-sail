@@ -1,0 +1,136 @@
+schema_version = 1
+
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record InputOracle"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record OutputTraceContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record CryptoContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record MemoryStackContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "continuation_stack_lifo_contract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record PersistentWorld"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record TransactionSnapshot"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Inductive StateJournalEntry"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition split_at_open_checkpoint"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition journal_commit"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition reference_journal_revert"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition journal_step_recorded"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition reference_read_storage_original"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition world_delta_describes"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record WorldStateContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "world_journal_denotes"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition reference_world_state_contract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Definition world_state_boundary"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record RegionAccessContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record ScratchArenaContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record AcceleratorContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record AncestorHashContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record CodeStoreContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Inductive BalIterEntry"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record BalRecorderContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record AuthorizationTrackerContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record WitnessDbContract"
+[[required]]
+path = "extractions/rocq/contract/ExternBoundary.v"
+pattern = "Record GuestExternContract"
+
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^structure PersistentWorld where"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^structure TransactionSnapshot where"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def frame_stack_reset "
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def frame_stack_push "
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def frame_stack_pop "
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def referenceReadStorageOriginal"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def worldDeltaDescribes"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def splitAtOpenCheckpoint"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "journalDenotes"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def referenceWorldStateContract"
+[[required]]
+path = "extractions/lean/contract/HostAxioms.lean"
+pattern = "^def worldStateBoundary"
+[[required]]
+path = "extractions/lean/contract/Specialization.lean"
+pattern = ".+"
+
+[[required]]
+path = "extractions/python/contract/HostContract.py"
+pattern = "^class HostState:"
+[[required]]
+path = "extractions/python/contract/HostContract.py"
+pattern = "^class AcceleratorContract:"
+[[required]]
+path = "extractions/python/contract/HostContract.py"
+pattern = "^def state_journal_checkpoint\\("
+[[required]]
+path = "extractions/python/contract/HostContract.py"
+pattern = "^def state_journal_revert\\("

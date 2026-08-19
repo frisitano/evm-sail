@@ -1,0 +1,29 @@
+schema_version = 1
+
+[[required]]
+path = "evm.v"
+pattern = "Definition process_transaction"
+[[required]]
+path = "evm.v"
+pattern = "Definition compute_state_root "
+[[required]]
+path = "evm.v"
+pattern = "Definition trie_root "
+[[required]]
+path = "evm.v"
+pattern = "Definition decode_stateless_input_ref"
+[[required]]
+path = "evm.v"
+pattern = "Definition main"
+[[required]]
+path = "evm.v"
+pattern = "Axiom frame_stack_reset "
+[[required]]
+path = "evm.v"
+pattern = "Axiom frame_stack_push "
+[[required]]
+path = "evm.v"
+pattern = "Axiom frame_stack_pop "
+[[required]]
+path = "evm_types.v"
+pattern = ".+"

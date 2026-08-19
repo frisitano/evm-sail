@@ -14,6 +14,7 @@ import Evm.Host.Code
 import Evm.Lib.Rlp.Decoding
 import Evm.Lib.Tx
 import Evm.Lib.Rlp.Codecs.Transactions
+import Evm.Host.Stack
 import Evm.Kernel.Environment
 import Evm.Kernel.Storage
 import Evm.Kernel.Logs
@@ -24,7 +25,6 @@ import Evm.Kernel.Lifecycle
 import Evm.Evm.Machine
 import Evm.Evm.Gas
 import Evm.Evm.Precompiles
-import Evm.Evm.Execute
 import Evm.Evm.Interpreter
 
 set_option maxHeartbeats 1_000_000_000
@@ -55,10 +55,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -145,9 +147,9 @@ abbrev AMSTERDAM_AUTH_BASE : Nat := 7816
 abbrev AMSTERDAM_CALLDATA_FLOOR_BYTE : Nat := 64
 
 def undefined_IntrinsicGasCost (_ : Unit) : SailM IntrinsicGasCost := do
-  (pure { execution := ← (undefined_nat ()),
-          state := ← (undefined_nat ()),
-          calldata_floor := ← (undefined_nat ()) })
+  (pure { execution := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          state := ← (undefined_range 0 ((2 ^i 64) - 1)),
+          calldata_floor := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
 /-- Reclassifies transaction initcode as executable after re-establishing the
 enclosing SSZ transaction-envelope bound. This bound is structural and is
@@ -315,7 +317,7 @@ def transaction_upfront_cost (max_fee : Nat) (gas_limit : Nat) (value : Nat) (ma
 
 /-- Computes transaction costs as mathematical naturals, narrowing only the
 externally observable word-valued results. -/
-/- Type quantifiers: k_ex553122_ : Nat, k_ex553121_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
+/- Type quantifiers: k_ex610491_ : Nat, k_ex610490_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
   : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7 : Nat, profile_dependentWitness6
   : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4 : Nat, profile_dependentWitness3
   : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1 : Nat, profile_dependentWitness0
@@ -400,8 +402,8 @@ externally observable word-valued results. -/
   profile_dependentWitness6 = (2 ^ 64 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
   profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553121_ ∧
-  k_ex553121_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex553122_ ∧ k_ex553122_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
+  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex610490_ ∧
+  k_ex610490_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610491_ ∧ k_ex610491_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
 def transaction_costs (profile : (Sigma fun (k_fork : Nat) =>
   (Sigma fun (k_target : Nat) =>
   (Sigma fun (k_maximum : Nat) =>
@@ -435,8 +437,7 @@ def transaction_costs (profile : (Sigma fun (k_fork : Nat) =>
     else
       (do
         let blob_price ← do
-          (blob_base_fee
-            ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+          (blob_base_fee profile.fork profile.blob_schedule profile.excess_blob_gas_limit
             excess_blob_gas)
         if ((blob_price ≤b tx.max_blob_fee) : Bool)
         then (pure (transaction_blob_fee blob_price blob_gas))
@@ -464,7 +465,8 @@ def validated_word_product (value : Nat) (factor : Nat) : SailM Nat := do
 /- Type quantifiers: state_delta : Int, k_limit : Nat, k_regular : Nat, k_intrinsic_execution : Nat, k_intrinsic_state
   : Nat, k_calldata_floor : Nat, k_initial_execution : Nat, k_initial_state : Nat, execution : Nat, state
   : Nat, (transaction_initial_gas_relation k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_initial_execution k_initial_state)
-  ∧ (live_gas_valid execution) ∧ (live_gas_valid state) -/
+  ∧ (live_gas_valid execution) ∧ (live_gas_valid state), ((- (2 * (2 ^ 64 - 1)))) ≤
+  state_delta ∧ state_delta ≤ (2 * (2 ^ 64 - 1 + 2 ^ 24)) -/
 def tx_frame_gas_snapshot (initial : (TransactionInitialGasFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_initial_execution k_initial_state)) (execution : Nat) (state : Nat) (state_delta : Int) : SailM (Sigma
   fun (k_syn_calldata_floor : Nat) =>
   (Sigma fun (k_remaining : Nat) =>
@@ -665,9 +667,9 @@ def process_auth (au : Authorization) : SailM Nat := do
 /-- Adds one authorization refund to the transaction-wide accumulator. The
 decoded authorization count proves this guard unreachable in valid input;
 spelling it at the narrowing boundary keeps proof extraction independent
-of the Coq backend's treatment of existential range indices. -/
-/- Type quantifiers: k_ex553190_ : Nat, k_ex553189_ : Nat, 0 ≤ k_ex553189_ ∧
-  k_ex553189_ ≤ 12500, 0 ≤ k_ex553190_ ∧ k_ex553190_ ≤ (12500 * 2 ^ 30) -/
+of the Rocq backend's treatment of existential range indices. -/
+/- Type quantifiers: k_ex610559_ : Nat, k_ex610558_ : Nat, 0 ≤ k_ex610558_ ∧
+  k_ex610558_ ≤ 12500, 0 ≤ k_ex610559_ ∧ k_ex610559_ ≤ (12500 * 2 ^ 30) -/
 def authorization_refund_add (item : Nat) (accumulated : Nat) : SailM Nat := do
   let bound := (12500 *i (2 ^i 30))
   if ((accumulated ≤b (bound - item)) : Bool)
@@ -712,82 +714,109 @@ def process_auth_list (authorizations : PreparedAuthorizationList) : SailM Nat :
 execution-gas and state-gas components. Tuple-local signature and chain
 checks precede all authority-state reads; a valid tuple warms its authority
 before checking code and nonce, as required by EIP-7702. -/
-/- Type quantifiers: k_ex553195_ : Bool -/
-def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) : SailM Bool := SailME.run do
+/- Type quantifiers: k_ex610567_ : Nat, k_ex610566_ : Nat, k_ex610565_ : Nat, k_ex610564_ : Bool, 0
+  ≤ k_ex610565_ ∧ k_ex610565_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610566_ ∧
+  k_ex610566_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610567_ ∧ k_ex610567_ ≤ (2 ^ 24) -/
+def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) : SailM (Bool × Nat × Nat × Nat) := SailME.run do
+  let gas_after : Nat := carried_gas
+  let state_gas_after : Nat := carried_state_gas
+  let state_spill_after : Nat := carried_state_spill
   let authority := au.authority
   let chain_id_is_zero := (word_is_zero au.chain_id)
   let expected_chain_id ← do (pure (word_of_chain_identifier (← readReg k_chain_id)))
   let chain_id_matches := (au.chain_id == expected_chain_id)
-  if ((au.valid_sig && (chain_id_is_zero || chain_id_matches)) : Bool)
-  then
-    (do
-      (k_account_mark_warm authority)
-      let (currently_delegated, _) ← do (k_deleg_target authority)
-      let code_key ← do (k_code_key authority)
-      let nonce ← do (k_get_nonce authority)
-      if ((((code_key == KECCAK_EMPTY) || currently_delegated) && ((nonce == au.nonce) : Bool)) : Bool)
-      then
-        (do
-          let seen ← do (authorization_tracker_seen authority)
-          let delegated_before_tx ← do
-            if (seen : Bool)
-            then (authorization_tracker_originally_delegated authority)
-            else (pure currently_delegated)
-          let already_written :=
-            (seen || ((authority == sender) || (transfers_value && (authority == current_target))))
-          let account_exists ← do (k_account_exists authority)
-          let account_missing := (! account_exists)
-          if (account_missing : Bool)
+  let (gas_after, state_gas_after, state_spill_after) ← (( do
+    if ((au.valid_sig && (chain_id_is_zero || chain_id_matches)) : Bool)
+    then
+      (do
+        (k_account_mark_warm authority)
+        let (currently_delegated, _) ← do (k_deleg_target authority)
+        let code_key ← do (k_code_key authority)
+        let nonce ← do (k_get_nonce authority)
+        let (gas_after, state_gas_after, state_spill_after) ← (( do
+          if ((((code_key == KECCAK_EMPTY) || currently_delegated) && ((nonce == au.nonce) : Bool)) : Bool)
           then
             (do
-              let (state_gas_affordable, state_gas) ← do
-                (charge_state_gas (← readReg gas_remaining) G_amsterdam_state_new_account)
-              writeReg gas_remaining state_gas
-              let state_gas_out_of_gas := (! state_gas_affordable)
-              if (state_gas_out_of_gas : Bool)
-              then SailME.throw (false : Bool)
-              else (pure ()))
-          else (pure ())
-          let requires_account_write := (! already_written)
-          if (requires_account_write : Bool)
-          then
-            (do
-              let (write_affordable, write_gas) ← do
-                (charge (← readReg gas_remaining) G_amsterdam_account_write)
-              writeReg gas_remaining write_gas
-              let write_out_of_gas := (! write_affordable)
-              if (write_out_of_gas : Bool)
-              then SailME.throw (false : Bool)
-              else (pure ()))
-          else (pure ())
-          let not_delegated_before_tx := (! delegated_before_tx)
-          let delegation_set ← do (authorization_tracker_delegation_set authority)
-          let delegation_not_set := (! delegation_set)
-          if (((bne au.address ZERO_ADDRESS) && (not_delegated_before_tx && delegation_not_set)) : Bool)
-          then
-            (do
-              let (auth_state_gas_affordable, auth_state_gas) ← do
-                (charge_state_gas (← readReg gas_remaining) G_amsterdam_state_auth_base)
-              writeReg gas_remaining auth_state_gas
-              let auth_state_gas_out_of_gas := (! auth_state_gas_affordable)
-              if (auth_state_gas_out_of_gas : Bool)
-              then SailME.throw (false : Bool)
-              else (pure ()))
-          else (pure ())
-          if ((au.address == ZERO_ADDRESS) : Bool)
-          then (k_clear_code authority)
-          else (k_set_delegation authority au.address)
-          (k_bump_nonce authority)
-          let unseen := (! seen)
-          let originally_delegated := (unseen && currently_delegated)
-          (authorization_tracker_commit authority originally_delegated (bne au.address ZERO_ADDRESS)))
-      else (pure ()))
-  else (pure ())
-  (pure true)
+              let seen ← do (authorization_tracker_seen authority)
+              let delegated_before_tx ← do
+                if (seen : Bool)
+                then (authorization_tracker_originally_delegated authority)
+                else (pure currently_delegated)
+              let already_written :=
+                (seen || ((authority == sender) || (transfers_value && (authority == current_target))))
+              let account_exists ← do (k_account_exists authority)
+              let account_missing := (! account_exists)
+              let (gas_after, state_gas_after, state_spill_after) ← (( do
+                if (account_missing : Bool)
+                then
+                  (do
+                    let (state_gas_halt, next_gas, next_state_gas, next_state_spill) ← do
+                      (charge_state_gas gas_after state_gas_after state_spill_after
+                        G_amsterdam_state_new_account)
+                    let gas_after : Nat := next_gas
+                    let state_gas_after : Nat := next_state_gas
+                    let state_spill_after : Nat := next_state_spill
+                    if (state_gas_halt : Bool)
+                    then
+                      SailME.throw ((false, gas_after, state_gas_after, state_spill_after) : (Bool × Nat × Nat × Nat))
+                    else (pure ())
+                    (pure (gas_after, state_gas_after, state_spill_after)))
+                else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+                (Bool × Nat × Nat × Nat) (Nat × Nat × Nat) )
+              let requires_account_write := (! already_written)
+              let gas_after ← (( do
+                if (requires_account_write : Bool)
+                then
+                  (do
+                    let (write_halt, write_gas) := (charge gas_after G_amsterdam_account_write)
+                    let gas_after : Nat := write_gas
+                    if (write_halt : Bool)
+                    then
+                      SailME.throw ((false, gas_after, state_gas_after, state_spill_after) : (Bool × Nat × Nat × Nat))
+                    else (pure ())
+                    (pure gas_after))
+                else (pure gas_after) ) : SailME (Bool × Nat × Nat × Nat) Nat )
+              let not_delegated_before_tx := (! delegated_before_tx)
+              let delegation_set ← do (authorization_tracker_delegation_set authority)
+              let delegation_not_set := (! delegation_set)
+              let (gas_after, state_gas_after, state_spill_after) ← (( do
+                if (((bne au.address ZERO_ADDRESS) && (not_delegated_before_tx && delegation_not_set)) : Bool)
+                then
+                  (do
+                    let (auth_state_gas_halt, auth_gas, auth_state_gas, auth_state_spill) ← do
+                      (charge_state_gas gas_after state_gas_after state_spill_after
+                        G_amsterdam_state_auth_base)
+                    let gas_after : Nat := auth_gas
+                    let state_gas_after : Nat := auth_state_gas
+                    let state_spill_after : Nat := auth_state_spill
+                    if (auth_state_gas_halt : Bool)
+                    then
+                      SailME.throw ((false, gas_after, state_gas_after, state_spill_after) : (Bool × Nat × Nat × Nat))
+                    else (pure ())
+                    (pure (gas_after, state_gas_after, state_spill_after)))
+                else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+                (Bool × Nat × Nat × Nat) (Nat × Nat × Nat) )
+              if ((au.address == ZERO_ADDRESS) : Bool)
+              then (k_clear_code authority)
+              else (k_set_delegation authority au.address)
+              (k_bump_nonce authority)
+              let unseen := (! seen)
+              let originally_delegated := (unseen && currently_delegated)
+              (authorization_tracker_commit authority originally_delegated
+                (bne au.address ZERO_ADDRESS))
+              (pure (gas_after, state_gas_after, state_spill_after)))
+          else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+          (Bool × Nat × Nat × Nat) (Nat × Nat × Nat) )
+        (pure (gas_after, state_gas_after, state_spill_after)))
+    else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+    (Bool × Nat × Nat × Nat) (Nat × Nat × Nat) )
+  (pure (true, gas_after, state_gas_after, state_spill_after))
 
-/- Type quantifiers: _reclimit : Nat, k_ex553197_ : Bool, count : Nat, 0 ≤ count ∧
-  count ≤ ((2 ^ 24) / 7816), 0 ≤ _reclimit -/
-def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (_reclimit : Nat) : SailM Bool := do
+/- Type quantifiers: _reclimit : Nat, state_spill : Nat, state_gas : Nat, gas : Nat, k_ex610569_ :
+  Bool, count : Nat, 0 ≤ count ∧ count ≤ ((2 ^ 24) / 7816), 0 ≤ gas ∧ gas ≤ (2 ^ 64 - 1), 0
+  ≤ state_gas ∧ state_gas ≤ (2 ^ 64 - 1), 0 ≤ state_spill ∧ state_spill ≤ (2 ^ 24), 0
+  ≤ _reclimit -/
+def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (gas : Nat) (state_gas : Nat) (state_spill : Nat) (_reclimit : Nat) : SailM (Bool × Nat × Nat × Nat) := do
   match _reclimit with
   | 0 =>
     (do
@@ -796,29 +825,32 @@ def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationLi
   | _reclimit_pred + 1 =>
     (do
       if ((count == 0) : Bool)
-      then (pure true)
+      then (pure (true, gas, state_gas, state_spill))
       else
         (do
           let authorization ← do (prepared_authorization_head authorizations)
           let remaining ← do (prepared_authorization_tail authorizations count)
-          let processed ← do
-            (process_amsterdam_auth authorization sender current_target transfers_value)
+          let (processed, gas_after, state_gas_after, state_spill_after) ← do
+            (process_amsterdam_auth authorization sender current_target transfers_value gas
+              state_gas state_spill)
           if (processed : Bool)
           then
             (_rec_process_amsterdam_auth_cursor remaining (count - 1) sender current_target
-              transfers_value _reclimit_pred)
-          else (pure false)))
+              transfers_value gas_after state_gas_after state_spill_after _reclimit_pred)
+          else (pure (false, gas_after, state_gas_after, state_spill_after))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: k_ex553200_ : Bool, count : Nat, 0 ≤ count ∧ count ≤ ((2 ^ 24) / 7816) -/
-def process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) : SailM Bool := do
+/- Type quantifiers: state_spill : Nat, state_gas : Nat, gas : Nat, k_ex610575_ : Bool, count : Nat, 0
+  ≤ count ∧ count ≤ ((2 ^ 24) / 7816), 0 ≤ gas ∧ gas ≤ (2 ^ 64 - 1), 0 ≤ state_gas ∧
+  state_gas ≤ (2 ^ 64 - 1), 0 ≤ state_spill ∧ state_spill ≤ (2 ^ 24) -/
+def process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (gas : Nat) (state_gas : Nat) (state_spill : Nat) : SailM (Bool × Nat × Nat × Nat) := do
   let _measure := (count : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
   else
     (_rec_process_amsterdam_auth_cursor authorizations count sender current_target transfers_value
-      (_measure + 1))
+      gas state_gas state_spill (_measure + 1))
 
 /- Type quantifiers: _reclimit : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
   ≤ _reclimit -/
@@ -923,9 +955,9 @@ EIP-2930 transactions carry a single `gas_price`, passed as
 `(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
 an invalid sub-base-fee price (rejected later by validity) never
 underflows. -/
-/- Type quantifiers: k_ex553259_ : Nat, k_ex553258_ : Nat, k_ex553257_ : Nat, 0 ≤ k_ex553257_ ∧
-  k_ex553257_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex553258_ ∧ k_ex553258_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex553259_ ∧ k_ex553259_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex610637_ : Nat, k_ex610636_ : Nat, k_ex610635_ : Nat, 0 ≤ k_ex610635_ ∧
+  k_ex610635_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex610636_ ∧ k_ex610636_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex610637_ ∧ k_ex610637_ ≤ (2 ^ 256 - 1) -/
 def eff_gas_price_for (base_fee : Nat) (max_fee : Nat) (max_priority_fee : Nat) : (Nat × Nat) :=
   let max_fee_below_base := (word_ule max_fee base_fee)
   let price : Nat :=
@@ -1149,7 +1181,8 @@ def enter_transaction_frame (v : (Sigma fun (k_limit : Nat) =>
   (Sigma fun (k_calldata_floor : Nat) =>
   (Sigma fun (k_execution : Nat) =>
   (Sigma fun (k_state : Nat) =>
-  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))) : SailM Unit := do
+  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))) : SailM (Nat × Nat × Nat × Int × StackPointer × (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) := do
   let v_dependentWitness0 := (v).1
   let v_dependentWitness1 := ((v).2).1
   let v_dependentWitness2 := (((v).2).2).1
@@ -1159,25 +1192,11 @@ def enter_transaction_frame (v : (Sigma fun (k_limit : Nat) =>
   let v_dependentWitness6 := (((((((v).2).2).2).2).2).2).1
   let v := (((((((v).2).2).2).2).2).2).2
   let initial_gas := v.gas
-  writeReg pc 0
-  writeReg call_depth 0
-  writeReg gas_remaining initial_gas.execution_remaining
-  writeReg state_gas_remaining initial_gas.state_remaining
-  writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
-  writeReg message { caller := ZERO_ADDRESS,
-                     address := ZERO_ADDRESS,
-                     code_address := ZERO_ADDRESS,
-                     value := ZERO_WORD,
-                     state_gas_reservoir := ← readReg state_gas_remaining,
-                     is_static := false,
-                     depth := 0 }
-  writeReg stack_top (← (stack_reset ()))
-  (memory_reset ())
-  (returndata_clear ())
-  writeReg calldata EMPTY_CALLDATA
-  writeReg frame_code ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩
-  writeReg frame_refund GAS_REFUND_ZERO
-  writeReg frame_status (Running ())
+  let stack ← do (stack_reset ())
+  let ⟨_, ⟨_, memory⟩⟩ ← do (memory_reset ())
+  (pure ((initial_gas.execution_remaining : Nat), (initial_gas.state_remaining : Nat), (STATE_GAS_SPILL_ZERO : Nat), (GAS_REFUND_ZERO : Int), (stack : StackPointer), ((⟨_, ⟨_, memory⟩⟩ : (Sigma
+    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : (Sigma
+    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))))))
 
 def undefined_TransactionPreparation (_ : Unit) : SailM TransactionPreparation := do
   (pure { ready := ← (undefined_bool ()),
@@ -1187,10 +1206,10 @@ def undefined_TransactionPreparation (_ : Unit) : SailM TransactionPreparation :
 the code selected for execution. This phase deliberately performs no
 revertible account mutation: its state-gas charges are therefore refilled
 if the subsequently dispatched frame fails. -/
-/- Type quantifiers: v_dependentWitness6 : Nat, v_dependentWitness5 : Nat, v_dependentWitness4 : Nat, v_dependentWitness3
-  : Nat, v_dependentWitness2 : Nat, v_dependentWitness1 : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0
-  : Nat, tx_dependentWitness0 = 0 ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤
-  v_dependentWitness2 ∧
+/- Type quantifiers: k_ex610724_ : Nat, k_ex610723_ : Nat, k_ex610722_ : Nat, v_dependentWitness6 :
+  Nat, v_dependentWitness5 : Nat, v_dependentWitness4 : Nat, v_dependentWitness3 : Nat, v_dependentWitness2
+  : Nat, v_dependentWitness1 : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0
+  = 0 ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ v_dependentWitness2 ∧
   0 ≤ v_dependentWitness3 ∧
   0 ≤ v_dependentWitness4 ∧
   v_dependentWitness2 ≤ v_dependentWitness1 ∧
@@ -1200,7 +1219,9 @@ if the subsequently dispatched frame fails. -/
   0 ≤ v_dependentWitness5 ∧
   0 ≤ v_dependentWitness6 ∧
   (v_dependentWitness5 + v_dependentWitness6 + v_dependentWitness2 + v_dependentWitness3) =
-  v_dependentWitness0 ∧ v_dependentWitness5 ≤ (v_dependentWitness1 - v_dependentWitness2) -/
+  v_dependentWitness0 ∧ v_dependentWitness5 ≤ (v_dependentWitness1 - v_dependentWitness2), 0 ≤
+  k_ex610722_ ∧ k_ex610722_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610723_ ∧ k_ex610723_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex610724_ ∧ k_ex610724_ ≤ (2 ^ 24) -/
 def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (v : (Sigma fun (k_limit : Nat) =>
   (Sigma fun (k_regular : Nat) =>
@@ -1209,7 +1230,8 @@ def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat)
   (Sigma fun (k_calldata_floor : Nat) =>
   (Sigma fun (k_execution : Nat) =>
   (Sigma fun (k_state : Nat) =>
-  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))) (upfront : TxUpfrontResult) : SailM TransactionPreparation := SailME.run do
+  (TxValidityFields k_limit k_regular k_intrinsic_execution k_intrinsic_state k_calldata_floor k_execution k_state))))))))) (upfront : TxUpfrontResult) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) : SailM (TransactionPreparation × Nat × Nat × Nat × (Vector (BitVec 8) 20) × (Vector (BitVec 8) 20) × (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × CalldataSlice) := SailME.run do
   let tx_dependentWitness0 := (tx).1
   let tx := (tx).2
   let v_dependentWitness0 := (v).1
@@ -1220,6 +1242,9 @@ def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat)
   let v_dependentWitness5 := ((((((v).2).2).2).2).2).1
   let v_dependentWitness6 := (((((((v).2).2).2).2).2).2).1
   let v := (((((((v).2).2).2).2).2).2).2
+  let gas_after : Nat := carried_gas
+  let state_gas_after : Nat := carried_state_gas
+  let state_spill_after : Nat := carried_state_spill
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
@@ -1227,172 +1252,387 @@ def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat)
     if (tx.is_create : Bool)
     then (k_create_addr v.sender v.nonce_before)
     else (pure tx.recipient)
-  writeReg message { caller := v.sender,
-                     address := current_target,
-                     code_address := current_target,
-                     value := tx.value,
-                     state_gas_reservoir := ← readReg state_gas_remaining,
-                     is_static := false,
-                     depth := 0 }
-  if (tx.is_create : Bool)
+  if _sailIf0 : (tx.is_create : Bool) = true
   then
     (do
-      if (upfront.create_target_prestate_empty : Bool)
-      then
-        (do
-          let (state_gas_affordable, state_gas) ← do
-            (charge_state_gas (← readReg gas_remaining) G_amsterdam_state_new_account)
-          writeReg gas_remaining state_gas
-          let state_gas_out_of_gas := (! state_gas_affordable)
-          if (state_gas_out_of_gas : Bool)
-          then
-            SailME.throw ({ ready := false,
-                            delegated := false } : TransactionPreparation)
-          else (pure ()))
-      else (pure ())
+      let (gas_after, state_gas_after, state_spill_after) ← (( do
+        if (upfront.create_target_prestate_empty : Bool)
+        then
+          (do
+            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) ← do
+              (charge_state_gas gas_after state_gas_after state_spill_after
+                G_amsterdam_state_new_account)
+            let gas_after : Nat := next_gas
+            let state_gas_after : Nat := next_state_gas
+            let state_spill_after : Nat := next_state_spill
+            if (state_gas_halt : Bool)
+            then
+              SailME.throw (({ ready := false,
+                               delegated := false } : TransactionPreparation), (gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (current_target : (Vector (BitVec 8) 20)), (current_target : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (EMPTY_CALLDATA : CalldataSlice))
+            else (pure ())
+            (pure (gas_after, state_gas_after, state_spill_after)))
+        else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+        (TransactionPreparation × Nat × Nat × Nat × (Vector (BitVec 8) 20) × (Vector (BitVec 8) 20) × (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × CalldataSlice)
+        (Nat × Nat × Nat) )
       let ⟨_, ⟨_, initcode⟩⟩ ← do (transaction_initcode_slice tx.input_src)
       let code_id ← do (code_db_insert ⟨_, ⟨_, initcode⟩⟩ profile.fork)
-      writeReg frame_code (← (code_db_resolve code_id))
-      (pure { ready := true,
-              delegated := false }))
+      let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_id)
+      (pure (({ ready := true,
+                delegated := false } : TransactionPreparation), (gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (current_target : (Vector (BitVec 8) 20)), (current_target : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, code⟩⟩ : (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun
+        (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (EMPTY_CALLDATA : CalldataSlice))))
   else
     (do
-      writeReg calldata (InputCalldata tx.input_src)
+      let calldata := (InputCalldata tx.input_src)
       let transfers_value := (word_nonzero tx.value)
       let recipient_empty ← do (k_account_is_empty tx.recipient)
-      if ((transfers_value && recipient_empty) : Bool)
-      then
-        (do
-          let (state_gas_affordable, state_gas) ← do
-            (charge_state_gas (← readReg gas_remaining) G_amsterdam_state_new_account)
-          writeReg gas_remaining state_gas
-          let state_gas_out_of_gas := (! state_gas_affordable)
-          if (state_gas_out_of_gas : Bool)
-          then
-            SailME.throw ({ ready := false,
-                            delegated := false } : TransactionPreparation)
-          else (pure ()))
-      else (pure ())
+      let (gas_after, state_gas_after, state_spill_after) ← (( do
+        if ((transfers_value && recipient_empty) : Bool)
+        then
+          (do
+            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) ← do
+              (charge_state_gas gas_after state_gas_after state_spill_after
+                G_amsterdam_state_new_account)
+            let gas_after : Nat := next_gas
+            let state_gas_after : Nat := next_state_gas
+            let state_spill_after : Nat := next_state_spill
+            if (state_gas_halt : Bool)
+            then
+              SailME.throw (({ ready := false,
+                               delegated := false } : TransactionPreparation), (gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (current_target : (Vector (BitVec 8) 20)), (current_target : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (calldata : CalldataSlice))
+            else (pure ())
+            (pure (gas_after, state_gas_after, state_spill_after)))
+        else (pure (gas_after, state_gas_after, state_spill_after)) ) : SailME
+        (TransactionPreparation × Nat × Nat × Nat × (Vector (BitVec 8) 20) × (Vector (BitVec 8) 20) × (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × CalldataSlice)
+        (Nat × Nat × Nat) )
       let (delegated, delegate) ← do (k_deleg_target tx.recipient)
-      if (delegated : Bool)
-      then
-        (do
-          let warm ← do (k_account_is_warm delegate)
-          let access_cost ← do (account_cost warm)
-          let (access_affordable, access_gas) ← do
-            (charge (← readReg gas_remaining) access_cost)
-          writeReg gas_remaining access_gas
-          let access_out_of_gas := (! access_affordable)
-          if (access_out_of_gas : Bool)
-          then
-            SailME.throw ({ ready := false,
-                            delegated := false } : TransactionPreparation)
-          else (k_account_mark_warm delegate))
-      else (pure ())
-      if (delegated : Bool)
-      then writeReg message { (← readReg message) with code_address := delegate }
-      else (pure ())
-      writeReg frame_code (← (executable_code tx.recipient delegated delegate))
-      (pure { ready := true,
-              delegated := delegated }))
+      let gas_after ← (( do
+        if (delegated : Bool)
+        then
+          (do
+            let warm ← do (k_account_is_warm delegate)
+            let access_cost ← do (account_cost warm)
+            let (access_halt, access_gas) := (charge gas_after access_cost)
+            let gas_after : Nat := access_gas
+            if (access_halt : Bool)
+            then
+              SailME.throw (({ ready := false,
+                               delegated := false } : TransactionPreparation), (gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (current_target : (Vector (BitVec 8) 20)), (current_target : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma
+                fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (calldata : CalldataSlice))
+            else (k_account_mark_warm delegate)
+            (pure gas_after))
+        else (pure gas_after) ) : SailME
+        (TransactionPreparation × Nat × Nat × Nat × (Vector (BitVec 8) 20) × (Vector (BitVec 8) 20) × (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × CalldataSlice)
+        Nat )
+      let code_address :=
+        if (delegated : Bool)
+        then delegate
+        else current_target
+      let ⟨_, ⟨_, code⟩⟩ ← do (executable_code tx.recipient delegated delegate)
+      (pure (({ ready := true,
+                delegated := delegated } : TransactionPreparation), (gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (current_target : (Vector (BitVec 8) 20)), (code_address : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, code⟩⟩ : (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun
+        (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (calldata : CalldataSlice))))
 
 /-- Runs a create transaction's top-level frame: derives the new address
 from `(sender, nonce_before)`, fails outright on an address collision
 (all gas consumed, no initcode runs — EIP-684/EIP-7610), and
 otherwise deploys via the initcode path. -/
-/- Type quantifiers: k_ex553342_ : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex553342_ ∧
-  k_ex553342_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex610748_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+  : Nat, carried_memory_dependentWitness1 : Nat, carried_memory_dependentWitness0 : Nat, k_ex610739_
+  : Int, k_ex610738_ : Nat, k_ex610737_ : Nat, k_ex610736_ : Nat, k_ex610735_ : Nat, tx_dependentWitness0
+  : Nat, tx_dependentWitness0 = 0 ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤
+  k_ex610735_ ∧ k_ex610735_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610736_ ∧ k_ex610736_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex610737_ ∧ k_ex610737_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610738_ ∧ k_ex610738_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex610739_ ∧ k_ex610739_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ carried_memory_dependentWitness0
+  ∧
+  0 ≤ carried_memory_dependentWitness1 ∧
+  (carried_memory_dependentWitness0 + carried_memory_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
+  carried_code_dependentWitness0 ∧
+  0 ≤ carried_code_dependentWitness1 ∧
+  (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
+  ≤ k_ex610748_ ∧ k_ex610748_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
-  (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (nonce_before : Nat) : SailM Unit := do
+  (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (nonce_before : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) (carried_refund : Int) (carried_stack : StackPointer) (carried_memory : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (carried_code : (Sigma
+  fun (carried_memory_dependentWitness0 : Nat) =>
+  (Sigma fun (carried_memory_dependentWitness1 : Nat) =>
+  (CodeFields carried_memory_dependentWitness0 carried_memory_dependentWitness1)))) (carried_calldata : CalldataSlice) (state_gas_reservoir : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
+  fun (carried_code_dependentWitness0 : Nat) =>
+  (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+  (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) := do
   let tx_dependentWitness0 := (tx).1
   let tx := (tx).2
+  let carried_memory_dependentWitness0 := (carried_memory).1
+  let carried_memory_dependentWitness1 := ((carried_memory).2).1
+  let carried_memory := ((carried_memory).2).2
+  let carried_code_dependentWitness0 := (carried_code).1
+  let carried_code_dependentWitness1 := ((carried_code).2).1
+  let carried_code := ((carried_code).2).2
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
   let new_addr ← do (k_create_addr sender nonce_before)
+  let gas_after : Nat := carried_gas
+  let state_gas_after : Nat := carried_state_gas
+  let state_spill_after : Nat := carried_state_spill
+  let refund_after : Int := carried_refund
+  let status_after : FrameStatus := (Running ())
+  let output_after : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+    ((⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+    fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
   (k_account_mark_warm new_addr)
   let occupied ← do (k_account_occupied new_addr)
-  if (occupied : Bool)
-  then writeReg gas_remaining (← (exc_halt (← readReg gas_remaining) AddressCollision))
-  else
-    (do
-      (k_mark_created new_addr)
-      (k_clear_storage new_addr)
-      (k_bump_nonce new_addr)
-      let transfers_value := (word_nonzero tx.value)
-      if (transfers_value : Bool)
-      then (k_transfer sender new_addr tx.value)
-      else (pure ())
-      if ((profile.fork <b Amsterdam) : Bool)
-      then
-        (do
-          writeReg message { caller := sender,
-                             address := new_addr,
-                             code_address := new_addr,
-                             value := tx.value,
-                             state_gas_reservoir := ← readReg state_gas_remaining,
-                             is_static := false,
-                             depth := 0 }
-          let ⟨_, ⟨_, initcode⟩⟩ ← do (transaction_initcode_slice tx.input_src)
-          let code_id ← do (code_db_insert ⟨_, ⟨_, initcode⟩⟩ profile.fork)
-          writeReg frame_code (← (code_db_resolve code_id)))
-      else (pure ())
-      let ⟨_, ⟨_, deployed_code⟩⟩ ← do (interpret ())
-      let initcode_succeeded ← do (frame_succeeded ())
-      if (initcode_succeeded : Bool)
-      then
-        (do
-          let dep_len := deployed_code.len
-          let deployed_length := dep_len
-          let valid_deployed_size ← do (deployed_code_size_allowed deployed_length)
-          let valid_prefix ← do
-            if (((profile.fork <b London) || (deployed_length == 0)) : Bool)
-            then (pure true)
-            else
-              (do
-                let first_byte ← do (output_byte ⟨_, ⟨_, deployed_code⟩⟩ 0)
-                (pure (first_byte != 0xEF#8)))
-          if ((valid_deployed_size && valid_prefix) : Bool)
+  let (gas_after, output_after, refund_after, state_gas_after, state_spill_after, status_after) ← (( do
+    if _sailIf0 : (occupied : Bool) = true
+    then
+      (do
+        let gas_after : Nat := GAS_ZERO
+        let (tup__0, tup__1, tup__2) ← do
+          (exceptional_state state_gas_after state_spill_after state_gas_reservoir AddressCollision)
+        let state_gas_after : Nat := tup__0
+        let state_spill_after : Nat := tup__1
+        let status_after : FrameStatus := tup__2
+        (pure ((gas_after : Nat), (output_after : (Sigma fun (carried_code_dependentWitness0 : Nat)
+          =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (refund_after : Int), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+    else
+      (do
+        (k_mark_created new_addr)
+        (k_clear_storage new_addr)
+        (k_bump_nonce new_addr)
+        let transfers_value := (word_nonzero tx.value)
+        if (transfers_value : Bool)
+        then (k_transfer sender new_addr tx.value)
+        else (pure ())
+        let frame_code : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+          ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma fun
+          (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+        let frame_calldata : CalldataSlice := carried_calldata
+        let (frame_calldata, frame_code) ← (( do
+          if _sailIf1 : ((profile.fork <b Amsterdam) : Bool) = true
           then
             (do
-              let deployment_charge ← do
-                (code_deployment_execution_cost dep_len (← readReg gas_remaining))
-              if (deployment_charge.affordable : Bool)
-              then
-                (do
-                  let execution_deposit := deployment_charge.cost
-                  writeReg gas_remaining (gas_sub (← readReg gas_remaining) execution_deposit)
-                  let state_deposit ← do (code_deployment_state_cost dep_len)
-                  let (_, deployment_gas) ← do
-                    (charge_deployment_state_gas (← readReg gas_remaining) state_deposit)
-                  writeReg gas_remaining deployment_gas
-                  let deployment_succeeded ← do (frame_succeeded ())
-                  if (deployment_succeeded : Bool)
-                  then
-                    (do
-                      let ⟨_, ⟨_, stored_code⟩⟩ ← do
-                        (code_db_intern_output ⟨_, ⟨_, deployed_code⟩⟩)
-                      (k_deploy_code new_addr ⟨_, ⟨_, stored_code⟩⟩))
-                  else (pure ()))
-              else writeReg gas_remaining (← (exc_halt (← readReg gas_remaining) OutOfGas)))
-          else writeReg gas_remaining (← (exc_halt (← readReg gas_remaining) OutOfGas)))
-      else (pure ()))
+              let ⟨_, ⟨_, initcode⟩⟩ ← do (transaction_initcode_slice tx.input_src)
+              let code_id ← do (code_db_insert ⟨_, ⟨_, initcode⟩⟩ profile.fork)
+              let ⟨_, ⟨_, frame_code⟩⟩ ← (code_db_resolve code_id)
+              let frame_calldata : CalldataSlice := EMPTY_CALLDATA
+              (pure ((frame_calldata : CalldataSlice), ((⟨_, ⟨_, frame_code⟩⟩ : (Sigma fun
+                (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+                fun (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))))))
+          else
+            (pure ((frame_calldata : CalldataSlice), (frame_code : (Sigma fun
+              (carried_code_dependentWitness0 : Nat) =>
+              (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+              (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))))) ) :
+          SailM
+          (CalldataSlice × (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) )
+        let (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) ← do
+          (interpret gas_after state_gas_after state_spill_after refund_after carried_stack
+            ⟨_, ⟨_, carried_memory⟩⟩ sender new_addr new_addr tx.value state_gas_reservoir
+            false 0 frame_code frame_calldata)
+        let gas_after : Nat := tup__0
+        let state_gas_after : Nat := tup__1
+        let state_spill_after : Nat := tup__2
+        let refund_after : Int := tup__3
+        let status_after : FrameStatus := tup__4
+        let output_after : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+          (tup__5 : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+        (pure ())
+        let initcode_succeeded := (frame_succeeded status_after)
+        let (gas_after, state_gas_after, state_spill_after, status_after) ← (( do
+          if (initcode_succeeded : Bool)
+          then
+            (do
+              let ⟨_, ⟨_, deployed_output⟩⟩ := output_after
+              let dep_len := deployed_output.len
+              let deployed_length := dep_len
+              let valid_deployed_size ← do (deployed_code_size_allowed deployed_length)
+              let valid_prefix ← do
+                if (((profile.fork <b London) || (deployed_length == 0)) : Bool)
+                then (pure true)
+                else
+                  (do
+                    let first_byte ← do (output_byte ⟨_, ⟨_, deployed_output⟩⟩ 0)
+                    (pure (first_byte != 0xEF#8)))
+              let (gas_after, state_gas_after, state_spill_after, status_after) ← (( do
+                if ((valid_deployed_size && valid_prefix) : Bool)
+                then
+                  (do
+                    let deployment_charge ← do (code_deployment_execution_cost dep_len gas_after)
+                    let (gas_after, state_gas_after, state_spill_after, status_after) ← (( do
+                      if (deployment_charge.affordable : Bool)
+                      then
+                        (do
+                          let execution_deposit := deployment_charge.cost
+                          let gas_after : Nat := (gas_sub gas_after execution_deposit)
+                          let state_deposit ← do (code_deployment_state_cost dep_len)
+                          let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) ← do
+                            (charge_deployment_state_gas gas_after state_gas_after state_spill_after
+                              state_deposit)
+                          let gas_after : Nat := deployment_gas
+                          let state_gas_after : Nat := deployment_state_gas
+                          let state_spill_after : Nat := deployment_state_spill
+                          let (gas_after, state_gas_after, state_spill_after, status_after) ← (( do
+                            if (deployment_halt : Bool)
+                            then
+                              (do
+                                let gas_after : Nat := GAS_ZERO
+                                let (tup__0, tup__1, tup__2) ← do
+                                  (exceptional_state state_gas_after state_spill_after
+                                    state_gas_reservoir OutOfGas)
+                                let state_gas_after : Nat := tup__0
+                                let state_spill_after : Nat := tup__1
+                                let status_after : FrameStatus := tup__2
+                                (pure (gas_after, state_gas_after, state_spill_after, status_after)))
+                            else
+                              (pure (gas_after, state_gas_after, state_spill_after, status_after)) )
+                            : SailM (Nat × Nat × Nat × FrameStatus) )
+                          let deployment_succeeded := (frame_succeeded status_after)
+                          if (deployment_succeeded : Bool)
+                          then
+                            (do
+                              let ⟨_, ⟨_, stored_code⟩⟩ ← do
+                                (code_db_intern_output ⟨_, ⟨_, deployed_output⟩⟩)
+                              (k_deploy_code new_addr ⟨_, ⟨_, stored_code⟩⟩))
+                          else (pure ())
+                          (pure (gas_after, state_gas_after, state_spill_after, status_after)))
+                      else
+                        (do
+                          let gas_after : Nat := GAS_ZERO
+                          let (tup__0, tup__1, tup__2) ← do
+                            (exceptional_state state_gas_after state_spill_after state_gas_reservoir
+                              OutOfGas)
+                          let state_gas_after : Nat := tup__0
+                          let state_spill_after : Nat := tup__1
+                          let status_after : FrameStatus := tup__2
+                          (pure (gas_after, state_gas_after, state_spill_after, status_after))) ) :
+                      SailM (Nat × Nat × Nat × FrameStatus) )
+                    (pure (gas_after, state_gas_after, state_spill_after, status_after)))
+                else
+                  (do
+                    let gas_after : Nat := GAS_ZERO
+                    let (tup__0, tup__1, tup__2) ← do
+                      (exceptional_state state_gas_after state_spill_after state_gas_reservoir
+                        OutOfGas)
+                    let state_gas_after : Nat := tup__0
+                    let state_spill_after : Nat := tup__1
+                    let status_after : FrameStatus := tup__2
+                    (pure (gas_after, state_gas_after, state_spill_after, status_after))) ) : SailM
+                (Nat × Nat × Nat × FrameStatus) )
+              (pure (gas_after, state_gas_after, state_spill_after, status_after)))
+          else (pure (gas_after, state_gas_after, state_spill_after, status_after)) ) : SailM
+          (Nat × Nat × Nat × FrameStatus) )
+        (pure ((gas_after : Nat), (output_after : (Sigma fun (carried_code_dependentWitness0 : Nat)
+          =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (refund_after : Int), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+    ) : SailM
+    (Nat × (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) × Int × Nat × Nat × FrameStatus)
+    )
+  (pure ((gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (refund_after : Int), (status_after : FrameStatus), (output_after : (Sigma
+    fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))))
 
 /-- Runs a call transaction's top-level frame: transfers value, then either
 runs a direct recipient precompile or interprets the selected code. At
 Amsterdam the preparation phase has already resolved and charged a
 recipient delegation; a delegated recipient never dispatches a precompile
 directly. -/
-/- Type quantifiers: k_ex553346_ : Bool, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9 -/
+/- Type quantifiers: k_ex610772_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+  : Nat, carried_memory_dependentWitness1 : Nat, carried_memory_dependentWitness0 : Nat, k_ex610763_
+  : Int, k_ex610762_ : Nat, k_ex610761_ : Nat, k_ex610760_ : Nat, k_ex610759_ : Bool, tx_dependentWitness0
+  : Nat, tx_dependentWitness0 = 0 ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤
+  k_ex610760_ ∧ k_ex610760_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex610761_ ∧ k_ex610761_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex610762_ ∧ k_ex610762_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex610763_ ∧
+  k_ex610763_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ carried_memory_dependentWitness0 ∧
+  0 ≤ carried_memory_dependentWitness1 ∧
+  (carried_memory_dependentWitness0 + carried_memory_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
+  carried_code_dependentWitness0 ∧
+  0 ≤ carried_code_dependentWitness1 ∧
+  (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
+  ≤ k_ex610772_ ∧ k_ex610772_ ≤ (2 ^ 64 - 1) -/
 def run_call_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
-  (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (delegated : Bool) : SailM Unit := do
+  (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (delegated : Bool) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) (carried_refund : Int) (carried_stack : StackPointer) (carried_memory : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (carried_code_address : (Vector (BitVec 8) 20)) (carried_code : (Sigma
+  fun (carried_memory_dependentWitness0 : Nat) =>
+  (Sigma fun (carried_memory_dependentWitness1 : Nat) =>
+  (CodeFields carried_memory_dependentWitness0 carried_memory_dependentWitness1)))) (carried_calldata : CalldataSlice) (state_gas_reservoir : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
+  fun (carried_code_dependentWitness0 : Nat) =>
+  (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+  (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) := do
   let tx_dependentWitness0 := (tx).1
   let tx := (tx).2
+  let carried_memory_dependentWitness0 := (carried_memory).1
+  let carried_memory_dependentWitness1 := ((carried_memory).2).1
+  let carried_memory := ((carried_memory).2).2
+  let carried_code_dependentWitness0 := (carried_code).1
+  let carried_code_dependentWitness1 := ((carried_code).2).1
+  let carried_code := ((carried_code).2).2
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
+  let gas_after : Nat := carried_gas
+  let state_gas_after : Nat := carried_state_gas
+  let state_spill_after : Nat := carried_state_spill
+  let refund_after : Int := carried_refund
+  let status_after : FrameStatus := (Running ())
+  let output_after : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+    ((⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+    fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+  let code_address : (Vector (BitVec 8) 20) := carried_code_address
+  let frame_code : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+    ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma fun
+    (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+  let frame_calldata : CalldataSlice := carried_calldata
   let _ ← do (k_aload tx.recipient)
   let transfers_value := (word_nonzero tx.value)
   if (transfers_value : Bool)
@@ -1400,55 +1640,159 @@ def run_call_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   else (pure ())
   let selected_precompile ← do (precompile_id_for_address tx.recipient)
   let direct_recipient := (! delegated)
-  if ((direct_recipient && (bne selected_precompile NotPrecompile)) : Bool)
-  then
-    (do
-      let ⟨_, ⟨_, input_src⟩⟩ : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) :=
-        ((⟨_, ⟨_, ((tx.input_src).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : (Sigma fun
-        (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))))
-      let precompile_input := (InputCalldata ⟨_, ⟨_, input_src⟩⟩)
-      let precompile_charge ← do
-        (precompile_gas selected_precompile precompile_input (← readReg gas_remaining))
-      if (precompile_charge.affordable : Bool)
-      then
-        (do
-          let used := precompile_charge.cost
-          let result ← do (run_precompile_slice selected_precompile precompile_input)
-          if (result.success : Bool)
+  let (gas_after, output_after, refund_after, state_gas_after, state_spill_after, status_after) ← (( do
+    if _sailIf0 : ((direct_recipient && (bne selected_precompile NotPrecompile)) : Bool) = true
+    then
+      (do
+        let ⟨_, ⟨_, input_src⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+          ((⟨_, ⟨_, ((tx.input_src).2).2⟩⟩ : (Sigma fun
+          (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+          fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+        let precompile_input := (InputCalldata ⟨_, ⟨_, input_src⟩⟩)
+        let precompile_charge ← do (precompile_gas selected_precompile precompile_input gas_after)
+        let (gas_after, output_after, state_gas_after, state_spill_after, status_after) ← (( do
+          if _sailIf1 : (precompile_charge.affordable : Bool) = true
           then
             (do
-              writeReg gas_remaining (gas_sub (← readReg gas_remaining) used)
-              let halt := (HaltReturn result.output)
-              writeReg frame_status (Halted halt))
-          else writeReg gas_remaining (← (exc_halt (← readReg gas_remaining) OutOfGas)))
-      else writeReg gas_remaining (← (exc_halt (← readReg gas_remaining) OutOfGas)))
-  else
-    (do
-      if ((profile.fork <b Amsterdam) : Bool)
-      then
-        (do
-          writeReg calldata (InputCalldata tx.input_src)
-          writeReg message { caller := sender,
-                             address := tx.recipient,
-                             code_address := tx.recipient,
-                             value := tx.value,
-                             state_gas_reservoir := ← readReg state_gas_remaining,
-                             is_static := false,
-                             depth := 0 }
-          let (tx_deleg, tx_dtgt) ← do (k_deleg_target tx.recipient)
-          if (tx_deleg : Bool)
+              let used := precompile_charge.cost
+              let result ← do (run_precompile_slice selected_precompile precompile_input)
+              let (gas_after, output_after, state_gas_after, state_spill_after, status_after) ← (( do
+                if _sailIf2 : (result.success : Bool) = true
+                then
+                  (let gas_after : Nat := (gas_sub gas_after used)
+                  let ⟨_, ⟨_, output_after⟩⟩ : (Sigma fun
+                    (carried_code_dependentWitness0 : Nat) =>
+                    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+                    (result.output : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+                    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+                  let status_after : FrameStatus := (Halted (HaltReturn result.output))
+                  (pure ((gas_after : Nat), ((⟨_, ⟨_, output_after⟩⟩ : (Sigma fun
+                    (carried_code_dependentWitness0 : Nat) =>
+                    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+                    fun (carried_code_dependentWitness0 : Nat) =>
+                    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+                else
+                  (do
+                    let gas_after : Nat := GAS_ZERO
+                    let (tup__0, tup__1, tup__2) ← do
+                      (exceptional_state state_gas_after state_spill_after state_gas_reservoir
+                        OutOfGas)
+                    let state_gas_after : Nat := tup__0
+                    let state_spill_after : Nat := tup__1
+                    let status_after : FrameStatus := tup__2
+                    (pure ((gas_after : Nat), (output_after : (Sigma fun
+                      (carried_code_dependentWitness0 : Nat) =>
+                      (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                      (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+                ) : SailM
+                (Nat × (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) × Nat × Nat × FrameStatus)
+                )
+              (pure ((gas_after : Nat), (output_after : (Sigma fun
+                (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+          else
+            (do
+              let gas_after : Nat := GAS_ZERO
+              let (tup__0, tup__1, tup__2) ← do
+                (exceptional_state state_gas_after state_spill_after state_gas_reservoir OutOfGas)
+              let state_gas_after : Nat := tup__0
+              let state_spill_after : Nat := tup__1
+              let status_after : FrameStatus := tup__2
+              (pure ((gas_after : Nat), (output_after : (Sigma fun
+                (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+          ) : SailM
+          (Nat × (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) × Nat × Nat × FrameStatus)
+          )
+        (pure ((gas_after : Nat), (output_after : (Sigma fun (carried_code_dependentWitness0 : Nat)
+          =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (refund_after : Int), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+    else
+      (do
+        let (code_address, frame_calldata, frame_code) ← (( do
+          if _sailIf1 : ((profile.fork <b Amsterdam) : Bool) = true
           then
             (do
-              (k_account_mark_warm tx_dtgt)
-              let _ ← do (k_aload tx_dtgt)
-              (pure ()))
-          else (pure ())
-          writeReg frame_code (← (executable_code tx.recipient tx_deleg tx_dtgt)))
-      else (pure ())
-      let ⟨_, ⟨_, _⟩⟩ ← do (interpret ())
-      (pure ()))
+              let frame_calldata : CalldataSlice := (InputCalldata tx.input_src)
+              let code_address : (Vector (BitVec 8) 20) := tx.recipient
+              let (tx_deleg, tx_dtgt) ← do (k_deleg_target tx.recipient)
+              if (tx_deleg : Bool)
+              then
+                (do
+                  (k_account_mark_warm tx_dtgt)
+                  let _ ← do (k_aload tx_dtgt)
+                  (pure ()))
+              else (pure ())
+              let code_address : (Vector (BitVec 8) 20) :=
+                if (tx_deleg : Bool)
+                then tx_dtgt
+                else code_address
+              let ⟨_, ⟨_, frame_code⟩⟩ ← (executable_code tx.recipient tx_deleg tx_dtgt)
+              (pure ((code_address : (Vector (BitVec 8) 20)), (frame_calldata : CalldataSlice), ((⟨_, ⟨_, frame_code⟩⟩ : (Sigma
+                fun (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+                fun (carried_code_dependentWitness0 : Nat) =>
+                (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+                (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))))))
+          else
+            (pure ((code_address : (Vector (BitVec 8) 20)), (frame_calldata : CalldataSlice), (frame_code : (Sigma
+              fun (carried_code_dependentWitness0 : Nat) =>
+              (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+              (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))))) ) :
+          SailM
+          ((Vector (BitVec 8) 20) × CalldataSlice × (Sigma fun
+          (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (CodeFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) )
+        let (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) ← do
+          (interpret gas_after state_gas_after state_spill_after refund_after carried_stack
+            ⟨_, ⟨_, carried_memory⟩⟩ sender tx.recipient code_address tx.value
+            state_gas_reservoir false 0 frame_code frame_calldata)
+        let gas_after : Nat := tup__0
+        let state_gas_after : Nat := tup__1
+        let state_spill_after : Nat := tup__2
+        let refund_after : Int := tup__3
+        let status_after : FrameStatus := tup__4
+        let ⟨_, ⟨_, output_after⟩⟩ : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) :=
+          (tup__5 : (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))
+        (pure ((gas_after : Nat), ((⟨_, ⟨_, output_after⟩⟩ : (Sigma fun
+          (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))) : (Sigma
+          fun (carried_code_dependentWitness0 : Nat) =>
+          (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+          (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1)))), (refund_after : Int), (state_gas_after : Nat), (state_spill_after : Nat), (status_after : FrameStatus))))
+    ) : SailM
+    (Nat × (Sigma fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))) × Int × Nat × Nat × FrameStatus)
+    )
+  (pure ((gas_after : Nat), (state_gas_after : Nat), (state_spill_after : Nat), (refund_after : Int), (status_after : FrameStatus), (output_after : (Sigma
+    fun (carried_code_dependentWitness0 : Nat) =>
+    (Sigma fun (carried_code_dependentWitness1 : Nat) =>
+    (OutputSliceFields carried_code_dependentWitness0 carried_code_dependentWitness1))))))
 
 /- Type quantifiers: v_dependentWitness4 : Nat, v_dependentWitness3 : Nat, v_dependentWitness2 : Nat, v_dependentWitness1
   : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0 : Nat, k_limit : Nat, k_regular : Nat, 0
@@ -1481,24 +1825,35 @@ def run_legacy_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   let v := (((((v).2).2).2).2).2
   let initial_gas := v.gas
   (k_journal_checkpoint ())
-  (enter_transaction_frame ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩)
-  if (tx.is_create : Bool)
-  then (run_create_transaction_frame ⟨_, tx⟩ v.sender v.nonce_before)
-  else (run_call_transaction_frame ⟨_, tx⟩ v.sender false)
-  let success ← do (frame_succeeded ())
+  let (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) ← do
+    (enter_transaction_frame ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩)
+  let state_gas_reservoir := initial_state_gas
+  let (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) ← do
+    if _sailIf0 : (tx.is_create : Bool) = true
+    then
+      (do
+        (run_create_transaction_frame ⟨_, tx⟩ v.sender v.nonce_before initial_execution_gas
+          initial_state_gas initial_state_spill initial_refund initial_stack initial_memory
+          ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ EMPTY_CALLDATA state_gas_reservoir))
+    else
+      (do
+        (run_call_transaction_frame ⟨_, tx⟩ v.sender false initial_execution_gas
+          initial_state_gas initial_state_spill initial_refund initial_stack initial_memory
+          tx.recipient ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ EMPTY_CALLDATA state_gas_reservoir))
+  let success := (frame_succeeded status_after)
   let failed := (! success)
   if (failed : Bool)
   then (k_journal_revert ())
   else (k_journal_commit ())
-  let state_delta ← do (frame_state_gas_used ())
+  let state_delta := (frame_state_gas_used state_gas_reservoir state_gas_after state_spill_after)
   (pure { success := success,
           gas := ← do
-              let publicField ← (tx_frame_gas_snapshot initial_gas (← readReg gas_remaining)
-                (← readReg state_gas_remaining) state_delta)
+              let publicField ← (tx_frame_gas_snapshot initial_gas gas_after state_gas_after
+                state_delta)
               pure (⟨_, ⟨_, ⟨_, (((publicField).2).2).2⟩⟩⟩),
-          refund := ← if (success : Bool)
-            then readReg frame_refund
-            else (pure GAS_REFUND_ZERO) })
+          refund := if (success : Bool)
+            then refund_after
+            else GAS_REFUND_ZERO })
 
 /- Type quantifiers: v_dependentWitness4 : Nat, v_dependentWitness3 : Nat, v_dependentWitness2 : Nat, v_dependentWitness1
   : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0 : Nat, k_limit : Nat, k_regular : Nat, 0
@@ -1529,71 +1884,146 @@ def run_amsterdam_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   let v_dependentWitness3 := ((((v).2).2).2).1
   let v_dependentWitness4 := (((((v).2).2).2).2).1
   let v := (((((v).2).2).2).2).2
-  (enter_transaction_frame ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩)
+  let (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) ← do
+    (enter_transaction_frame ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩)
+  let gas_after : Nat := entered_gas
+  let state_gas_after : Nat := entered_state_gas
+  let state_spill_after : Nat := entered_state_spill
+  let refund_after : Int := entered_refund
+  let status_after : FrameStatus := (Running ())
+  let output_after : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))) :=
+    ((⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))
   let initial_gas := v.gas
   (k_journal_checkpoint ())
-  let preparation_reservoir ← do readReg state_gas_remaining
+  let preparation_reservoir := state_gas_after
   let current_target ← do
     if (tx.is_create : Bool)
     then (k_create_addr v.sender v.nonce_before)
     else (pure tx.recipient)
   (authorization_tracker_reset authorizations.count)
   let transfers_value := (word_nonzero tx.value)
-  let preparation_ready ← do
+  let preparation_ready : Bool := false
+  let (tup__0, tup__1, tup__2, tup__3) ← do
     (process_amsterdam_auth_cursor authorizations authorizations.count v.sender current_target
-      transfers_value)
+      transfers_value gas_after state_gas_after state_spill_after)
+  let preparation_ready : Bool := tup__0
+  let gas_after : Nat := tup__1
+  let state_gas_after : Nat := tup__2
+  let state_spill_after : Nat := tup__3
+  (pure ())
   let authorization_state_gas : Int := FRAME_STATE_GAS_DELTA_ZERO
   let delegated : Bool := false
-  let (authorization_state_gas, delegated, preparation_ready) ← (( do
-    if (preparation_ready : Bool)
+  let execution_reservoir : Nat := state_gas_after
+  let prepared_code_address : (Vector (BitVec 8) 20) := current_target
+  let prepared_code : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) :=
+    ((⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))))
+  let prepared_calldata : CalldataSlice := EMPTY_CALLDATA
+  let (authorization_state_gas, delegated, execution_reservoir, gas_after, preparation_ready, prepared_calldata, prepared_code, prepared_code_address, state_gas_after, state_spill_after) ← (( do
+    if _sailIf0 : (preparation_ready : Bool) = true
     then
       (do
-        let authorization_state_gas ← (frame_state_gas_used ())
-        writeReg message { (← readReg message) with state_gas_reservoir := ← readReg state_gas_remaining }
-        writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
-        let preparation ← do
+        let authorization_state_gas : Int :=
+          (frame_state_gas_used preparation_reservoir state_gas_after state_spill_after)
+        let execution_reservoir : Nat := state_gas_after
+        let state_spill_after : Nat := STATE_GAS_SPILL_ZERO
+        let (preparation, prepared_gas, prepared_state_gas, prepared_state_spill, _, code_address, code, calldata) ← do
           (prepare_amsterdam_transaction_dispatch ⟨_, tx⟩
-            ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩ upfront)
+            ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, v⟩⟩⟩⟩⟩⟩⟩ upfront gas_after
+            state_gas_after state_spill_after)
+        let gas_after : Nat := prepared_gas
+        let state_gas_after : Nat := prepared_state_gas
+        let state_spill_after : Nat := prepared_state_spill
         let preparation_ready : Bool := preparation.ready
         let delegated : Bool := preparation.delegated
-        (pure (authorization_state_gas, delegated, preparation_ready)))
-    else (pure (authorization_state_gas, delegated, preparation_ready)) ) : SailM
-    (Int × Bool × Bool) )
+        let prepared_code_address : (Vector (BitVec 8) 20) := code_address
+        let ⟨_, ⟨_, prepared_code⟩⟩ : (Sigma fun (k_off : Nat) =>
+          (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) :=
+          (code : (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))))
+        let prepared_calldata : CalldataSlice := calldata
+        (pure ((authorization_state_gas : Int), (delegated : Bool), (execution_reservoir : Nat), (gas_after : Nat), (preparation_ready : Bool), (prepared_calldata : CalldataSlice), ((⟨_, ⟨_, prepared_code⟩⟩ : (Sigma
+          fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun
+          (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (prepared_code_address : (Vector (BitVec 8) 20)), (state_gas_after : Nat), (state_spill_after : Nat))))
+    else
+      (pure ((authorization_state_gas : Int), (delegated : Bool), (execution_reservoir : Nat), (gas_after : Nat), (preparation_ready : Bool), (prepared_calldata : CalldataSlice), (prepared_code : (Sigma
+        fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (prepared_code_address : (Vector (BitVec 8) 20)), (state_gas_after : Nat), (state_spill_after : Nat)))
+    ) : SailM
+    (Int × Bool × Nat × Nat × Bool × CalldataSlice × (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × (Vector (BitVec 8) 20) × Nat × Nat)
+    )
   let preparation_failed := (! preparation_ready)
   if (preparation_failed : Bool)
   then
     (do
       (k_journal_revert ())
-      writeReg message { (← readReg message) with state_gas_reservoir := preparation_reservoir }
-      writeReg state_gas_remaining preparation_reservoir
-      writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
+      let state_gas_after : Nat := preparation_reservoir
+      let state_spill_after : Nat := STATE_GAS_SPILL_ZERO
       (pure { success := false,
               gas := ← do
-                  let publicField ← (tx_frame_gas_snapshot initial_gas (← readReg gas_remaining)
-                    (← readReg state_gas_remaining) FRAME_STATE_GAS_DELTA_ZERO)
+                  let publicField ← (tx_frame_gas_snapshot initial_gas GAS_ZERO STATE_GAS_ZERO
+                    FRAME_STATE_GAS_DELTA_ZERO)
                   pure (⟨_, ⟨_, ⟨_, (((publicField).2).2).2⟩⟩⟩),
               refund := GAS_REFUND_ZERO }))
   else
     (do
       (k_journal_checkpoint ())
-      if (tx.is_create : Bool)
-      then (run_create_transaction_frame ⟨_, tx⟩ v.sender v.nonce_before)
-      else (run_call_transaction_frame ⟨_, tx⟩ v.sender delegated)
-      let success ← do (frame_succeeded ())
+      let (gas_after, refund_after, state_gas_after, state_spill_after, status_after) ← (( do
+        if (tx.is_create : Bool)
+        then
+          (do
+            let (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) ← do
+              (run_create_transaction_frame ⟨_, tx⟩ v.sender v.nonce_before gas_after
+                state_gas_after state_spill_after refund_after entered_stack entered_memory
+                prepared_code prepared_calldata execution_reservoir)
+            let gas_after : Nat := tup__0
+            let state_gas_after : Nat := tup__1
+            let state_spill_after : Nat := tup__2
+            let refund_after : Int := tup__3
+            let status_after : FrameStatus := tup__4
+            let ⟨_, ⟨_, output_after⟩⟩ : (Sigma fun (k_off : Nat) =>
+              (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))) :=
+              (tup__5 : (Sigma fun (k_off : Nat) =>
+              (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))
+            (pure (gas_after, refund_after, state_gas_after, state_spill_after, status_after)))
+        else
+          (do
+            let (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) ← do
+              (run_call_transaction_frame ⟨_, tx⟩ v.sender delegated gas_after state_gas_after
+                state_spill_after refund_after entered_stack entered_memory prepared_code_address
+                prepared_code prepared_calldata execution_reservoir)
+            let gas_after : Nat := tup__0
+            let state_gas_after : Nat := tup__1
+            let state_spill_after : Nat := tup__2
+            let refund_after : Int := tup__3
+            let status_after : FrameStatus := tup__4
+            let ⟨_, ⟨_, output_after⟩⟩ : (Sigma fun (k_off : Nat) =>
+              (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))) :=
+              (tup__5 : (Sigma fun (k_off : Nat) =>
+              (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))
+            (pure (gas_after, refund_after, state_gas_after, state_spill_after, status_after))) ) :
+        SailM (Nat × Int × Nat × Nat × FrameStatus) )
+      let success := (frame_succeeded status_after)
       let failed := (! success)
       if (failed : Bool)
       then (k_journal_revert ())
       else (k_journal_commit ())
       (k_journal_commit ())
-      let state_delta ← do (pure (authorization_state_gas +i (← (frame_state_gas_used ()))))
+      let state_delta :=
+        (authorization_state_gas +i (frame_state_gas_used execution_reservoir state_gas_after
+            state_spill_after))
       (pure { success := success,
               gas := ← do
-                  let publicField ← (tx_frame_gas_snapshot initial_gas (← readReg gas_remaining)
-                    (← readReg state_gas_remaining) state_delta)
+                  let publicField ← (tx_frame_gas_snapshot initial_gas gas_after state_gas_after
+                    state_delta)
                   pure (⟨_, ⟨_, ⟨_, (((publicField).2).2).2⟩⟩⟩),
-              refund := ← if (success : Bool)
-                then readReg frame_refund
-                else (pure GAS_REFUND_ZERO) }))
+              refund := if (success : Bool)
+                then refund_after
+                else GAS_REFUND_ZERO }))
 
 /- Type quantifiers: v_dependentWitness4 : Nat, v_dependentWitness3 : Nat, v_dependentWitness2 : Nat, v_dependentWitness1
   : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0 : Nat, k_limit : Nat, k_regular : Nat, 0

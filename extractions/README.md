@@ -5,13 +5,13 @@ by the native and zkVM executables.
 
 - `contracts/` records the semantic obligations at the impure host boundary
   and contains the small Sail relations used to check that boundary.
-- `coq/` generates the complete model and the small contract relations with
-  Sail's Coq backend.
+- `rocq/` generates the complete model and the small contract relations with
+  Sail's `--coq` backend under the prover's current Rocq name.
 - `lean/` generates and compiles the complete model with Sail's Lean 4 backend.
 - `python/` contains a complete executable, source-aligned `evm` package, a
   narrow EVM adapter, and a smoke test for the numeric boundary.
 
-Generated Coq, Lean, and Python sources are written below their backend
+Generated Rocq, Lean, and Python sources are written below their backend
 directories and are kept in version control. Generated C is an ephemeral build
 artifact under `build/c-spec/` or `build/c-optimised/`; it is compile-checked
 but not retained as a readable mirror. Lean's compiled `.lake/build/` output
@@ -38,7 +38,7 @@ remain backend choices, not specification behavior.
 rtk make check-contracts
 rtk make c-spec
 rtk make c-optimised
-rtk make extract-coq
+rtk make extract-rocq
 rtk make extract-lean
 rtk make extract-python
 rtk make python-lint
@@ -97,7 +97,7 @@ source names, external handwritten host-slice types, and the ordered modules in
 representations. Its generated package stays under the ignored build tree,
 separate from `ffi/optimized/`. Its translation units mirror paths below
 `sail/` and are consumed through the compiler-written `src/spec/sources.list`;
-this does not split the semantic `evm` project module. Coq and Lean use the compiler's standard proof
+this does not split the semantic `evm` project module. Rocq and Lean use the compiler's standard proof
 backends and do not load the C-only overrides, so semantic quantity types
 remain visible in the proof models: byte and protocol quantities, gas, gas
 costs, and gas constants are distinct wrappers over natural numbers, while gas

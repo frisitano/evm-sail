@@ -130,11 +130,22 @@ def _make_words(words: tuple[str, ...]) -> str:
     return " ".join(word.replace('"', '\\"') for word in words)
 
 
-def package_makefile() -> str:
+def _make_source_word(word: str) -> str:
+    """Escape a source path for a simply-expanded GNU Make assignment."""
+
+    return word.replace("$", "$$").replace("#", r"\#").replace(" ", r"\ ")
+
+
+def package_makefile(sources: tuple[str, ...] | None = None) -> str:
     """Render the relocatable package build from the shared flag constants."""
     default_cflags = _make_words(PACKAGE_DEFAULT_CFLAGS)
     model_cppflags = _make_words(MODEL_DEFINES)
     model_cflags = _make_words(MODEL_CFLAGS)
+    source_assignment = (
+        " ".join(_make_source_word(source) for source in sources)
+        if sources is not None
+        else "$(shell sed -e '/^[[:space:]]*\\#/d' -e '/^[[:space:]]*$$/d' src/sources.list)"
+    )
     return f"""\
 .DEFAULT_GOAL := all
 
@@ -143,7 +154,7 @@ AR ?= ar
 CFLAGS ?= {default_cflags}
 CPPFLAGS ?=
 
-SOURCES := $(shell sed -e '/^[[:space:]]*\\#/d' -e '/^[[:space:]]*$$/d' src/sources.list)
+SOURCES := {source_assignment}
 OBJECTS := $(patsubst %.c,build/%.o,$(SOURCES))
 MODEL_CPPFLAGS := {model_cppflags}
 MODEL_CFLAGS := {model_cflags}

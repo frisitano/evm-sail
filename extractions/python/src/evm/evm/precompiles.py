@@ -226,9 +226,9 @@ def run_ecrecover(input: CalldataSlice) -> PrecompileResult:
         message_hash = word_to_hash(message_word)
         r = calldata_slice_load(input, PRECOMPILE_DOUBLE_WORD_OFFSET)
         s = calldata_slice_load(input, ECRECOVER_S_OFFSET)
-        (recovered, address_) = ecrecover_addr(message_hash, parity, r, s)
-        if recovered:
-            address_word = address_to_word(address_)
+        recovered = ecrecover_addr(message_hash, parity, r, s)
+        if recovered.success:
+            address_word = address_to_word(recovered.address)
             output = output_buffer_word(address_word)
             return precompile_success(output)
         else:

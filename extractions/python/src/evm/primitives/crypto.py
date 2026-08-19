@@ -15,7 +15,7 @@ from evm.HostContract import (
     stateless_input_sha256 as _host_stateless_input_sha256,
 )
 from evm.prelude import (
-    address,
+    AddressResult,
     hash,
     word,
     word_from_bits,
@@ -46,9 +46,8 @@ def calldata_sha256(input: CalldataSlice) -> hash:
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def ecrecover_addr(h: hash, yparity: y_parity, r: word, s: word) -> tuple[bool, address]:
-    recovered = _host_host_ecrecover(h, yparity, r, s)
-    return (recovered.success, recovered.address)
+def ecrecover_addr(h: hash, yparity: y_parity, r: word, s: word) -> AddressResult:
+    return _host_host_ecrecover(h, yparity, r, s)
 
 KECCAK_EMPTY: hash = Bytes32(hash_from_bits(Bits(256, 0b1100010111010010010001100000000110000110111101110010001100111100100100100111111001111101101100101101110011000111000000111100000011100101000000001011011001010011110010101000001000100111001110110111101111111010110110000000010001011101100001011010010001110000)))
 

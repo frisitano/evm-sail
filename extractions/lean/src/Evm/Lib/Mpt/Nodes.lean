@@ -32,10 +32,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -119,8 +121,8 @@ def inline_node_hash (node : InlineNode) : SailM (Vector (BitVec 8) 32) := do
   (pure digest)
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex553484_ : Nat, k_ex553483_ : Nat, 0 ≤ k_ex553483_ ∧ k_ex553483_ ≤ 529, 0
-  ≤ k_ex553484_ ∧ k_ex553484_ ≤ 33 -/
+/- Type quantifiers: k_ex610910_ : Nat, k_ex610909_ : Nat, 0 ≤ k_ex610909_ ∧ k_ex610909_ ≤ 529, 0
+  ≤ k_ex610910_ ∧ k_ex610910_ ≤ 33 -/
 def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))

@@ -926,7 +926,7 @@ Definition apply_inverse
   | JournalFrameCommitted => state
   end.
 
-(* The Coq image of the backwards frame-marker scan: walking the journal
+(* The Rocq image of the backwards frame-marker scan: walking the journal
    newest-first, a JournalFrameCommitted marker closes one earlier
    checkpoint; the innermost open JournalFrameCheckpointed marker splits the
    stream.  The suffix (everything newer than the marker, committed child

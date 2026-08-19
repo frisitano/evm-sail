@@ -21,6 +21,11 @@ the fork this repository builds with, carrying bound-driven C specialization,
 the splice mechanism, and proof-aware narrowing policies. Upstream Sail is not
 a supported substitute; the installed `sail` on `PATH` (override with `SAIL=`) resolves it.
 
+Repository tooling requires Python 3.12.x exactly. `pyproject.toml` is the
+single Python and dependency declaration, and `uv.lock` fixes the environment.
+Use `uv run --frozen ...`; uv downloads and uses its managed Python
+automatically. Other Python minor versions are not supported.
+
 Objectives:
 
 - **Complete & objective.** The specification is complete — it defines the EVM,
@@ -28,7 +33,7 @@ Objectives:
   objective: the semantics are fixed by executable code, not by a
   natural-language description, and the conformance suite runs against the same
   model you reason about.
-- **One artifact, many backends.** Sail definitions export to Coq,
+- **One artifact, many backends.** Sail definitions export to Rocq,
   Isabelle/HOL, HOL4 and Lean, generate SMT obligations, and compile to C — so
   the *same* model that passes the conformance suite is the one you reason
   about. Nothing is lost between a paper spec and an implementation.
@@ -207,7 +212,7 @@ extractions/ one directory per target, each with contract/ (the axiom or ABI
              layer) and src/ (the committed generated output):
                c/spec/       GMP-backed reference model
                c/optimised/  specialized fixed-layout model (the zkEVM guest)
-               lean/, coq/   proof-assistant developments
+               lean/, rocq/  proof-assistant developments
                python/       executable Python rendering
 zkvm/        RISC-V zkVM guest targets (Spike and the optimised ZisK stateless
              block validation)
@@ -235,7 +240,7 @@ deliberately so — a stale or upstream compiler produces a wrong model rather
 than an error, so an absent one fails loudly instead. The compiler
 supports the standard Sail backends plus spliceable type definitions and
 bound-driven native C representations. Those extensions affect only optimized
-C lowering; Lean and Coq use the same compiler without the C-only splice and
+C lowering; Lean and Rocq use the same compiler without the C-only splice and
 therefore retain the model's ordinary semantic types. Upstream Sail is not a
 supported fallback for checks or proof extraction.
 
@@ -248,7 +253,7 @@ make lint                                   # sail --all-warnings + source hygie
 make fmt-check                              # verify sail --fmt formatting
 make c-spec                                 # generate + compile-check specification C
 make c-optimised                            # generate + compile-check optimized C
-make extract-coq                            # generate the complete Coq model
+make extract-rocq                           # stage and validate the complete Rocq model
 make extract-lean                           # generate and compile the Lean model
 make extract                                # run maintained proof extractions
 ```
@@ -281,9 +286,10 @@ Run the conformance suite against the workspace-local
 `tests-zkevm@v0.6.2` corpus:
 
 ```sh
-python3 -m devtools.harness.cli --rebuild --limit 1 --quiet \
+uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-python3 -m devtools.harness.cli --jobs 12 --quiet zkvm/.fixtures/current-v062-full
+uv run --frozen python -m devtools.harness.cli --build optimized --jobs 12 --quiet \
+  zkvm/.fixtures/current-v062-full
 ```
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
@@ -295,7 +301,7 @@ version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
 binary is not at `~/.zisk/bin/ziskemu`:
 
 ```sh
-ZISKEMU=/path/to/ziskemu python3 -m devtools.harness.cli --zisk --limit 1 --quiet \
+ZISKEMU=/path/to/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 

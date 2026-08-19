@@ -39,7 +39,16 @@ OPTIMIZED_GENERATED="$BUILD/generated"
 rm -rf "$OPTIMIZED_GENERATED"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
+OPTIMIZED_MODEL_MANIFEST_CANONICAL="$BUILD/generated-model-sources.list"
+OPTIMIZED_FFI_MANIFEST_CANONICAL="$BUILD/optimized-ffi-sources.list"
+OPTIMIZED_SPLICE_MANIFEST_CANONICAL="$BUILD/optimized-splices.list"
+PROFILE_SPLICE_MANIFEST_CANONICAL="$BUILD/profile-splices.list"
 mkdir -p "$BUILD"
+
+canonicalize_manifest() {
+  ( cd "$ROOT" && uv run --frozen python -m devtools.build_support canonicalize-manifest \
+    --root "$1" --output "$3" "$2" ) >/dev/null
+}
 
 SAIL="${SAIL:-sail}"
 export SAIL
@@ -101,6 +110,8 @@ case "$EVM_GENERATED_INTERP" in
   *) echo "error: EVM_GENERATED_INTERP must be off or on" >&2; exit 2 ;;
 esac
 if [ "$EVM_BUILD_MODE" = optimized ]; then
+  canonicalize_manifest "$C_OPTIMISED_DIR" "$C_OPTIMISED_MANIFEST" \
+    "$OPTIMIZED_SPLICE_MANIFEST_CANONICAL"
   EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-on}"
 else
   EVM_INLINE_ATTR="${EVM_INLINE_ATTR:-off}"
@@ -339,12 +350,14 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
       continue
     fi
     SAIL_CMD+=(--splice "$C_OPTIMISED_DIR/$relative")
-  done < "$C_OPTIMISED_MANIFEST"
+  done < "$OPTIMIZED_SPLICE_MANIFEST_CANONICAL"
   if [ "$EVM_PROFILE" = on ]; then
+    canonicalize_manifest "$C_PROFILE_DIR" "$C_PROFILE_MANIFEST" \
+      "$PROFILE_SPLICE_MANIFEST_CANONICAL"
     while IFS= read -r relative || [ -n "$relative" ]; do
       [ -z "$relative" ] && continue
       SAIL_CMD+=(--splice "$C_PROFILE_DIR/$relative")
-    done < "$C_PROFILE_MANIFEST"
+    done < "$PROFILE_SPLICE_MANIFEST_CANONICAL"
   fi
 fi
 SAIL_CMD+=(
@@ -356,12 +369,16 @@ if [ "$EVM_BUILD_MODE" = standard ]; then
 fi
 ( cd "$ROOT" && "${SAIL_CMD[@]}" )
 if [ "$EVM_BUILD_MODE" = optimized ]; then
-  ( cd "$ROOT" && python3 -m devtools.optimised_c.package "$OPTIMIZED_GENERATED" )
+  package_args=()
   if [ "$EVM_GENERATED_INTERP" = on ]; then
-    grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
-      > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"
-    mv "$OPTIMIZED_STAGED_FFI/sources.list.tmp" "$OPTIMIZED_STAGED_FFI/sources.list"
+    package_args+=(--exclude-ffi-source evm/interpreter.c)
   fi
+  ( cd "$ROOT" && uv run --frozen python -m devtools.optimised_c.package \
+    "$OPTIMIZED_GENERATED" ${package_args[@]+"${package_args[@]}"} )
+  canonicalize_manifest "$OPTIMIZED_GENERATED/src/spec" \
+    "$OPTIMIZED_MODEL_MANIFEST" "$OPTIMIZED_MODEL_MANIFEST_CANONICAL"
+  canonicalize_manifest "$OPTIMIZED_STAGED_FFI" \
+    "$OPTIMIZED_STAGED_FFI/sources.list" "$OPTIMIZED_FFI_MANIFEST_CANONICAL"
 fi
 
 # NOTE: the toolchain's sail.h (-I"$SAIL_LIB") #includes <gmp.h>. In optimized
@@ -382,7 +399,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
     "$CC" "${CFLAGS[@]}" "${MODEL_CFLAGS[@]}" -I"$BUILD" -I"$RUNTIME_DIR" -I"$SAIL_LIB" -I"$RT" "${MODEL_C_INCLUDE_FLAGS[@]}" -I"$FFI_ROOT" \
         "$MODEL_HEADER_FLAG" -c "$source" -o "$object"
     MODEL_OBJS+=("$object")
-  done < "$OPTIMIZED_MODEL_MANIFEST"
+  done < "$OPTIMIZED_MODEL_MANIFEST_CANONICAL"
   [ "${#MODEL_OBJS[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
 else
   object="$BUILD/zkvm_block.o"
@@ -406,7 +423,7 @@ if [ "$EVM_BUILD_MODE" = optimized ]; then
         "$MODEL_HEADER_FLAG" \
         -c "$source" -o "$object"
     MODEL_BACKEND_OBJS+=("$object")
-  done < "$OPTIMIZED_STAGED_FFI/sources.list"
+  done < "$OPTIMIZED_FFI_MANIFEST_CANONICAL"
 else
   backend_sources=(
     "$MODEL_STATE_SOURCE:model_state"

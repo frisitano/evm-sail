@@ -5,13 +5,13 @@ from __future__ import annotations
 from .._runtime import (
     BitWidth,
     Bits,
+    Bytes20,
     SailMatchFailure,
     SailReturn,
-    Uint,
+    Unsigned,
     sail_ediv_int,
 )
-from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Annotated
 from evm.HostContract import (
     frame_stack_pop as _host_frame_stack_pop,
@@ -31,22 +31,29 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     PrecompileId,
+    StackPointer,
     ancestor_index,
     code_length,
+    code_scan_position,
     frame_depth,
     memory_length,
     memory_pointer,
+    stack_slot_count,
     word_byte_count,
 )
 from evm.primitives.gas import (
     gas,
-    transaction_state_gas_used,
+    gas_refund,
+    state_gas,
+    state_gas_spill,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
+    STATE_GAS_ZERO,
     GAS_CONSTANT_ZERO,
     GAS_REFUND_ZERO,
 )
 from evm.primitives.bytes import (
+    CalldataSlice,
     EvmMemorySlice,
     MemoryCalldata,
     OutputSlice,
@@ -61,6 +68,7 @@ from evm.exceptions import (
 )
 from evm.evm.halt import (
     Exceptional,
+    FrameStatus,
     HaltReturn,
     HaltRevert,
     Halted,
@@ -81,6 +89,7 @@ from evm.host.region_access import (
     code_slice_load_n,
 )
 from evm.primitives.fork import (
+    Fork,
     Homestead,
     London,
     Shanghai,
@@ -91,11 +100,14 @@ from evm.primitives.fork import (
 from evm.primitives.evm import (
     CallContinuation,
     CallKind,
+    Continue,
     CreateContinuation,
     CreateKind,
     Empty,
+    Failed,
     FrameContinuation,
     Message,
+    OpcodeOutcome,
     ResumeCall,
     ResumeCreate,
 )
@@ -103,6 +115,10 @@ from evm.host.code import (
     code_db_insert,
     code_db_intern_output,
     code_db_resolve,
+)
+from evm.host.stack import (
+    stack_top_advance,
+    stack_top_retreat,
 )
 from evm.kernel.environment import (
     k_create_addr,
@@ -135,11 +151,10 @@ from evm.kernel.lifecycle import (
 from evm.evm.machine import (
     record_refund,
     conserved_gas_add,
-    exc_halt,
-    push_word,
-    pop,
+    exceptional_state,
+    read_stack_word,
+    write_stack_word,
     is_running,
-    calldata_install,
     returndata_clear,
     returndata_size,
     returndata_copy_prefix,
@@ -150,6 +165,7 @@ from evm.evm.machine import (
     mem_keccak,
 )
 from evm.evm.gas import (
+    blob_base_fee,
     deployed_code_size_allowed,
     initcode_size_allowed,
     charge,
@@ -162,7 +178,7 @@ from evm.evm.gas import (
     memory_word_count_word,
     memory_required_size,
     memory_access,
-    memory_expansion_cost,
+    charge_memory_expansion,
     expand_memory,
     account_cost,
     call_value_cost,
@@ -273,217 +289,368 @@ from evm.evm.instructions import (
     ast,
     opcode_CREATE,
 )
+from evm.evm.execute import (
+    opcode_frame_status,
+    guard_stack,
+    execute_add,
+    execute_mul,
+    execute_sub,
+    execute_div,
+    execute_sdiv,
+    execute_mod,
+    execute_smod,
+    execute_addmod,
+    execute_mulmod,
+    execute_exp,
+    execute_signextend,
+    execute_lt,
+    execute_gt,
+    execute_slt,
+    execute_sgt,
+    execute_eq,
+    execute_iszero,
+    execute_and,
+    execute_or,
+    execute_xor,
+    execute_not,
+    execute_byte,
+    execute_shl,
+    execute_shr,
+    execute_sar,
+    execute_clz,
+    execute_keccak256,
+    execute_address,
+    execute_origin,
+    execute_caller,
+    execute_callvalue,
+    execute_gasprice,
+    execute_calldatasize,
+    execute_calldataload,
+    execute_calldatacopy,
+    execute_codesize,
+    execute_codecopy,
+    execute_balance,
+    execute_selfbalance,
+    execute_extcodesize,
+    execute_extcodecopy,
+    execute_extcodehash,
+    execute_returndatasize,
+    execute_returndatacopy,
+    execute_blockhash,
+    execute_coinbase,
+    execute_timestamp,
+    execute_number,
+    execute_slotnum,
+    execute_prevrandao,
+    execute_gaslimit,
+    execute_chainid,
+    execute_basefee,
+    execute_blobbasefee,
+    execute_blobhash,
+    execute_pop,
+    execute_mload,
+    execute_mstore,
+    execute_mstore8,
+    execute_msize,
+    execute_mcopy,
+    account_execution_context,
+    refresh_account_execution_context,
+    execute_sload,
+    execute_sstore,
+    execute_tload,
+    execute_tstore,
+    execute_jump,
+    execute_jumpi,
+    execute_pc,
+    execute_gas,
+    execute_jumpdest,
+    execute_push,
+    execute_dup,
+    execute_swap,
+    execute_dupn,
+    execute_swapn,
+    execute_exchange,
+    execute_log,
+    execute_stop,
+    execute_return,
+    execute_revert,
+    execute_invalid,
+    execute_selfdestruct,
+)
 from evm.kernel import environment
-from evm.evm import machine
-from evm.evm import execute as evm_execute
 
 def read_push(code: CodeSlice, offset: code_length, n: word_byte_count) -> word:
     return word(code_slice_load_n(code, offset, n))
 
-def decode_simple(opcode_: ancestor_index) -> ast:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    if (((128 <= int(opcode_))) & ((int(opcode_) <= 143))):
-        return DUP((int(opcode_) - 127))
-    else:
-        if (((144 <= int(opcode_))) & ((int(opcode_) <= 159))):
-            return SWAP((int(opcode_) - 143))
-        else:
-            if (((160 <= int(opcode_))) & ((int(opcode_) <= 164))):
-                return LOG((int(opcode_) - 160))
-            else:
-                match opcode_:
-                    case 0:
-                        return STOP(None)
-                    case 1:
-                        return ADD(None)
-                    case 2:
-                        return MUL(None)
-                    case 3:
-                        return SUB(None)
-                    case 4:
-                        return DIV(None)
-                    case 5:
-                        return SDIV(None)
-                    case 6:
-                        return MOD(None)
-                    case 7:
-                        return SMOD(None)
-                    case 8:
-                        return ADDMOD(None)
-                    case 9:
-                        return MULMOD(None)
-                    case 10:
-                        return EXP(None)
-                    case 11:
-                        return SIGNEXTEND(None)
-                    case 16:
-                        return LT(None)
-                    case 17:
-                        return GT(None)
-                    case 18:
-                        return SLT(None)
-                    case 19:
-                        return SGT(None)
-                    case 20:
-                        return EQ(None)
-                    case 21:
-                        return ISZERO(None)
-                    case 22:
-                        return AND(None)
-                    case 23:
-                        return OR(None)
-                    case 24:
-                        return XOR(None)
-                    case 25:
-                        return NOT(None)
-                    case 26:
-                        return BYTE(None)
-                    case 27:
-                        return SHL(None)
-                    case 28:
-                        return SHR(None)
-                    case 29:
-                        return SAR(None)
-                    case 30:
-                        if (int(profile.fork) >= int(Osaka)):
-                            return CLZ(None)
-                        else:
-                            return INVALID(None)
-                    case 32:
-                        return KECCAK256(None)
-                    case 48:
-                        return ADDRESS(None)
-                    case 49:
-                        return BALANCE(None)
-                    case 50:
-                        return ORIGIN(None)
-                    case 51:
-                        return CALLER(None)
-                    case 52:
-                        return CALLVALUE(None)
-                    case 53:
-                        return CALLDATALOAD(None)
-                    case 54:
-                        return CALLDATASIZE(None)
-                    case 55:
-                        return CALLDATACOPY(None)
-                    case 56:
-                        return CODESIZE(None)
-                    case 57:
-                        return CODECOPY(None)
-                    case 58:
-                        return GASPRICE(None)
-                    case 59:
-                        return EXTCODESIZE(None)
-                    case 60:
-                        return EXTCODECOPY(None)
-                    case 61:
-                        return RETURNDATASIZE(None)
-                    case 62:
-                        return RETURNDATACOPY(None)
-                    case 63:
-                        return EXTCODEHASH(None)
-                    case 64:
-                        return BLOCKHASH(None)
-                    case 65:
-                        return COINBASE(None)
-                    case 66:
-                        return TIMESTAMP(None)
-                    case 67:
-                        return NUMBER(None)
-                    case 68:
-                        return PREVRANDAO(None)
-                    case 69:
-                        return GASLIMIT(None)
-                    case 70:
-                        return CHAINID(None)
-                    case 71:
-                        return SELFBALANCE(None)
-                    case 72:
-                        if (int(profile.fork) >= int(London)):
-                            return BASEFEE(None)
-                        else:
-                            return INVALID(None)
-                    case 73:
-                        if (int(profile.fork) >= int(Cancun)):
-                            return BLOBHASH(None)
-                        else:
-                            return INVALID(None)
-                    case 74:
-                        if (int(profile.fork) >= int(Cancun)):
-                            return BLOBBASEFEE(None)
-                        else:
-                            return INVALID(None)
-                    case 75:
-                        if (int(profile.fork) >= int(Amsterdam)):
-                            return SLOTNUM(None)
-                        else:
-                            return INVALID(None)
-                    case 80:
-                        return POP(None)
-                    case 81:
-                        return MLOAD(None)
-                    case 82:
-                        return MSTORE(None)
-                    case 83:
-                        return MSTORE8(None)
-                    case 84:
-                        return SLOAD(None)
-                    case 85:
-                        return SSTORE(None)
-                    case 86:
-                        return JUMP(None)
-                    case 87:
-                        return JUMPI(None)
-                    case 88:
-                        return PC(None)
-                    case 89:
-                        return MSIZE(None)
-                    case 90:
-                        return GAS(None)
-                    case 91:
-                        return JUMPDEST(None)
-                    case 92:
-                        if (int(profile.fork) >= int(Cancun)):
-                            return TLOAD(None)
-                        else:
-                            return INVALID(None)
-                    case 93:
-                        if (int(profile.fork) >= int(Cancun)):
-                            return TSTORE(None)
-                        else:
-                            return INVALID(None)
-                    case 94:
-                        if (int(profile.fork) >= int(Cancun)):
-                            return MCOPY(None)
-                        else:
-                            return INVALID(None)
-                    case 240:
-                        return opcode_CREATE(None)
-                    case 241:
-                        return CALL(None)
-                    case 242:
-                        return CALLCODE(None)
-                    case 243:
-                        return RETURN(None)
-                    case 244:
-                        return DELEGATECALL(None)
-                    case 245:
-                        return CREATE2(None)
-                    case 250:
-                        return STATICCALL(None)
-                    case 253:
-                        return REVERT(None)
-                    case 255:
-                        return SELFDESTRUCT(None)
-                    case _:
-                        return INVALID(None)
+def opcode_available(opcode_: ancestor_index, fork: Fork) -> bool:
+    match opcode_:
+        case 30:
+            return (int(fork) >= int(Osaka))
+        case 72:
+            return (int(fork) >= int(London))
+        case 73:
+            return (int(fork) >= int(Cancun))
+        case 74:
+            return (int(fork) >= int(Cancun))
+        case 75:
+            return (int(fork) >= int(Amsterdam))
+        case 92:
+            return (int(fork) >= int(Cancun))
+        case 93:
+            return (int(fork) >= int(Cancun))
+        case 94:
+            return (int(fork) >= int(Cancun))
+        case 95:
+            return (int(fork) >= int(Shanghai))
+        case 230:
+            return (int(fork) >= int(Amsterdam))
+        case 231:
+            return (int(fork) >= int(Amsterdam))
+        case 232:
+            return (int(fork) >= int(Amsterdam))
+        case _:
+            return True
 
-def fetch(current: code_length) -> tuple[code_length, ast]:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    analyzed = machine.frame_code
+def decode_push_immediate(frame_code: Code, immediate_offset: code_scan_position, width: word_byte_count) -> tuple[code_length, word]:
+    value = read_push(code_bytes(frame_code), immediate_offset, width)
+    return ((int(immediate_offset) + int(width)), value)
+
+def decode_deep_immediate(frame_code: Code, immediate_offset: code_scan_position, operation: DeepStackOperation) -> tuple[code_length, Annotated[Bits, BitWidth(8)]]:
+    immediate = code_slice_byte(code_bytes(frame_code), immediate_offset)
+    if deep_stack_operation_immediate_valid(operation, immediate):
+        next_pc = (int(immediate_offset) + 1)
+    else:
+        next_pc = immediate_offset
+    return (next_pc, immediate)
+
+def execute_push_encoded(frame_code: Code, opcode_: ancestor_index, immediate_offset: code_scan_position, execution_gas: gas, sp: StackPointer) -> tuple[code_length, gas, StackPointer, OpcodeOutcome]:
+    if (((95 <= int(opcode_))) & ((int(opcode_) <= 127))):
+        width = (int(opcode_) - 95)
+        (next_pc, value) = decode_push_immediate(frame_code, immediate_offset, width)
+        (gas_after, sp_after, status_after) = execute_push(execution_gas, sp, width, value)
+        return (next_pc, gas_after, sp_after, status_after)
+    else:
+        (gas_after, status_after) = execute_invalid(execution_gas)
+        return (immediate_offset, gas_after, sp, status_after)
+
+def execute_dup_encoded(opcode_: ancestor_index, execution_gas: gas, sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
+    if (((128 <= int(opcode_))) & ((int(opcode_) <= 143))):
+        return execute_dup(execution_gas, sp, (int(opcode_) - 127))
+    else:
+        (gas_after, status_after) = execute_invalid(execution_gas)
+        return (gas_after, sp, status_after)
+
+def execute_swap_encoded(opcode_: ancestor_index, execution_gas: gas, sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
+    if (((144 <= int(opcode_))) & ((int(opcode_) <= 159))):
+        return execute_swap(execution_gas, sp, (int(opcode_) - 143))
+    else:
+        (gas_after, status_after) = execute_invalid(execution_gas)
+        return (gas_after, sp, status_after)
+
+def execute_log_encoded(carried_address: address, carried_is_static: bool, execution_gas: gas, sp: StackPointer, memory: EvmMemorySlice, opcode_: ancestor_index) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+    if (((160 <= int(opcode_))) & ((int(opcode_) <= 164))):
+        return execute_log(carried_address, carried_is_static, execution_gas, sp, memory, (int(opcode_) - 160))
+    else:
+        (gas_after, status_after) = execute_invalid(execution_gas)
+        return (gas_after, sp, memory, status_after)
+
+def execute_deep_stack_encoded(frame_code: Code, opcode_: ancestor_index, immediate_offset: code_scan_position, execution_gas: gas, sp: StackPointer) -> tuple[code_length, gas, StackPointer, OpcodeOutcome]:
+    operation = deep_stack_operation(opcode_)
+    (next_pc, immediate) = decode_deep_immediate(frame_code, immediate_offset, operation)
+    match operation:
+        case DeepStackOperation.DeepStackDuplicate:
+            result = execute_dupn(execution_gas, sp, immediate)
+        case DeepStackOperation.DeepStackSwap:
+            result = execute_swapn(execution_gas, sp, immediate)
+        case DeepStackOperation.DeepStackExchange:
+            result = execute_exchange(execution_gas, sp, immediate)
+        case DeepStackOperation.NotDeepStackOperation:
+            (gas_after, status_after) = execute_invalid(execution_gas)
+            result = (gas_after, sp, status_after)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+    (gas_after, sp_after, status_after) = result
+    return (next_pc, gas_after, sp_after, status_after)
+
+def decode_simple(opcode_: ancestor_index, fork: Fork) -> ast:
+    if (not (opcode_available(opcode_, fork))):
+        return INVALID(None)
+    else:
+        if (((128 <= int(opcode_))) & ((int(opcode_) <= 143))):
+            return DUP((int(opcode_) - 127))
+        else:
+            if (((144 <= int(opcode_))) & ((int(opcode_) <= 159))):
+                return SWAP((int(opcode_) - 143))
+            else:
+                if (((160 <= int(opcode_))) & ((int(opcode_) <= 164))):
+                    return LOG((int(opcode_) - 160))
+                else:
+                    match opcode_:
+                        case 0:
+                            return STOP(None)
+                        case 1:
+                            return ADD(None)
+                        case 2:
+                            return MUL(None)
+                        case 3:
+                            return SUB(None)
+                        case 4:
+                            return DIV(None)
+                        case 5:
+                            return SDIV(None)
+                        case 6:
+                            return MOD(None)
+                        case 7:
+                            return SMOD(None)
+                        case 8:
+                            return ADDMOD(None)
+                        case 9:
+                            return MULMOD(None)
+                        case 10:
+                            return EXP(None)
+                        case 11:
+                            return SIGNEXTEND(None)
+                        case 16:
+                            return LT(None)
+                        case 17:
+                            return GT(None)
+                        case 18:
+                            return SLT(None)
+                        case 19:
+                            return SGT(None)
+                        case 20:
+                            return EQ(None)
+                        case 21:
+                            return ISZERO(None)
+                        case 22:
+                            return AND(None)
+                        case 23:
+                            return OR(None)
+                        case 24:
+                            return XOR(None)
+                        case 25:
+                            return NOT(None)
+                        case 26:
+                            return BYTE(None)
+                        case 27:
+                            return SHL(None)
+                        case 28:
+                            return SHR(None)
+                        case 29:
+                            return SAR(None)
+                        case 30:
+                            return CLZ(None)
+                        case 32:
+                            return KECCAK256(None)
+                        case 48:
+                            return ADDRESS(None)
+                        case 49:
+                            return BALANCE(None)
+                        case 50:
+                            return ORIGIN(None)
+                        case 51:
+                            return CALLER(None)
+                        case 52:
+                            return CALLVALUE(None)
+                        case 53:
+                            return CALLDATALOAD(None)
+                        case 54:
+                            return CALLDATASIZE(None)
+                        case 55:
+                            return CALLDATACOPY(None)
+                        case 56:
+                            return CODESIZE(None)
+                        case 57:
+                            return CODECOPY(None)
+                        case 58:
+                            return GASPRICE(None)
+                        case 59:
+                            return EXTCODESIZE(None)
+                        case 60:
+                            return EXTCODECOPY(None)
+                        case 61:
+                            return RETURNDATASIZE(None)
+                        case 62:
+                            return RETURNDATACOPY(None)
+                        case 63:
+                            return EXTCODEHASH(None)
+                        case 64:
+                            return BLOCKHASH(None)
+                        case 65:
+                            return COINBASE(None)
+                        case 66:
+                            return TIMESTAMP(None)
+                        case 67:
+                            return NUMBER(None)
+                        case 68:
+                            return PREVRANDAO(None)
+                        case 69:
+                            return GASLIMIT(None)
+                        case 70:
+                            return CHAINID(None)
+                        case 71:
+                            return SELFBALANCE(None)
+                        case 72:
+                            return BASEFEE(None)
+                        case 73:
+                            return BLOBHASH(None)
+                        case 74:
+                            return BLOBBASEFEE(None)
+                        case 75:
+                            return SLOTNUM(None)
+                        case 80:
+                            return POP(None)
+                        case 81:
+                            return MLOAD(None)
+                        case 82:
+                            return MSTORE(None)
+                        case 83:
+                            return MSTORE8(None)
+                        case 84:
+                            return SLOAD(None)
+                        case 85:
+                            return SSTORE(None)
+                        case 86:
+                            return JUMP(None)
+                        case 87:
+                            return JUMPI(None)
+                        case 88:
+                            return PC(None)
+                        case 89:
+                            return MSIZE(None)
+                        case 90:
+                            return GAS(None)
+                        case 91:
+                            return JUMPDEST(None)
+                        case 92:
+                            return TLOAD(None)
+                        case 93:
+                            return TSTORE(None)
+                        case 94:
+                            return MCOPY(None)
+                        case 240:
+                            return opcode_CREATE(None)
+                        case 241:
+                            return CALL(None)
+                        case 242:
+                            return CALLCODE(None)
+                        case 243:
+                            return RETURN(None)
+                        case 244:
+                            return DELEGATECALL(None)
+                        case 245:
+                            return CREATE2(None)
+                        case 250:
+                            return STATICCALL(None)
+                        case 253:
+                            return REVERT(None)
+                        case 255:
+                            return SELFDESTRUCT(None)
+                        case _:
+                            return INVALID(None)
+
+def fetch(frame_code: Code, current: code_length, fork: Fork) -> tuple[code_length, ast]:
+    analyzed = frame_code
     code = code_bytes(analyzed)
     code_length_ = code.len
     past_end = (not ((int(current) < int(code_length_))))
@@ -493,45 +660,36 @@ def fetch(current: code_length) -> tuple[code_length, ast]:
         opcode_byte = code_slice_byte(code, current)
         opcode_ = int(opcode_byte)
         immediate_offset = (int(current) + 1)
-        if ((((opcode_) == (95))) & ((int(profile.fork) < int(Shanghai)))):
+        if (not (opcode_available(opcode_, fork))):
             decoded = (immediate_offset, INVALID(None))
         else:
             if (((95 <= int(opcode_))) & ((int(opcode_) <= 127))):
                 size = (int(opcode_) - 95)
-                value = read_push(code, immediate_offset, size)
-                after_immediate = (int((int(current) + 1)) + int(size))
+                (after_immediate, value) = decode_push_immediate(frame_code, immediate_offset, size)
                 decoded = (after_immediate, PUSH((size, value)))
             else:
-                if (int(profile.fork) >= int(Amsterdam)):
-                    deep_operation = deep_stack_operation(opcode_)
-                    match deep_operation:
-                        case DeepStackOperation.NotDeepStackOperation:
-                            decoded = (immediate_offset, decode_simple(opcode_))
-                        case operation:
-                            immediate = code_slice_byte(code, immediate_offset)
-                            immediate_valid = deep_stack_operation_immediate_valid(operation, immediate)
-                            if immediate_valid:
-                                after_instruction = (int(current) + 2)
-                            else:
-                                after_instruction = (int(current) + 1)
-                            match operation:
-                                case DeepStackOperation.DeepStackDuplicate:
-                                    instruction = DUPN(immediate)
-                                case DeepStackOperation.DeepStackSwap:
-                                    instruction = SWAPN(immediate)
-                                case DeepStackOperation.DeepStackExchange:
-                                    instruction = EXCHANGE(immediate)
-                                case DeepStackOperation.NotDeepStackOperation:
-                                    instruction = decode_simple(opcode_)
-                                case _:
-                                    raise SailMatchFailure("no Sail match clause applied")
-                            decoded = (after_instruction, instruction)
-                else:
-                    decoded = (immediate_offset, decode_simple(opcode_))
+                deep_operation = deep_stack_operation(opcode_)
+                match deep_operation:
+                    case DeepStackOperation.NotDeepStackOperation:
+                        decoded = (immediate_offset, decode_simple(opcode_, fork))
+                    case operation:
+                        (after_instruction, immediate) = decode_deep_immediate(frame_code, immediate_offset, operation)
+                        match operation:
+                            case DeepStackOperation.DeepStackDuplicate:
+                                instruction = DUPN(immediate)
+                            case DeepStackOperation.DeepStackSwap:
+                                instruction = SWAPN(immediate)
+                            case DeepStackOperation.DeepStackExchange:
+                                instruction = EXCHANGE(immediate)
+                            case DeepStackOperation.NotDeepStackOperation:
+                                instruction = decode_simple(opcode_, fork)
+                            case _:
+                                raise SailMatchFailure("no Sail match clause applied")
+                        decoded = (after_instruction, instruction)
         return decoded
 
-def frame_output() -> OutputSlice:
-    match machine.frame_status:
+def frame_output(frame_status: FrameStatus) -> OutputSlice:
+    match frame_status:
         case Halted(HaltReturn(output)):
             return output
         case Halted(HaltRevert(output)):
@@ -539,39 +697,497 @@ def frame_output() -> OutputSlice:
         case _:
             return EMPTY_OUTPUT_SLICE
 
-def interpret() -> OutputSlice:
+class call_tree_steps(Unsigned):
+    LOWER = 0
+    UPPER = 110680464442257309692
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+def interpret(initial_gas: gas, initial_state_gas: state_gas, initial_state_spill: state_gas_spill, initial_refund: gas_refund, initial_sp: StackPointer, initial_memory: EvmMemorySlice, initial_caller: address, initial_address: address, initial_code_address: address, initial_value: word, initial_state_gas_reservoir: state_gas, initial_is_static: bool, initial_depth: stack_slot_count, initial_code: Code, initial_calldata: CalldataSlice) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
+    execution_profile = environment.k_execution_profile
+    profile = execution_profile.protocol
+    fork = profile.fork
+    blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, environment.k_header.excess_blob_gas)
     _host_frame_stack_reset()
     interpreting = True
     result = EMPTY_OUTPUT_SLICE
-    initial_execution_gas = machine.gas_remaining
-    initial_state_gas = machine.state_gas_remaining
-    initial_call_tree_gas = (int(initial_execution_gas) + int(initial_state_gas))
+    carried_pc = 0
+    carried_sp = initial_sp
+    carried_memory = initial_memory
+    carried_gas = initial_gas
+    carried_state_gas = initial_state_gas
+    carried_state_spill = initial_state_spill
+    carried_refund = initial_refund
+    carried_status = Running(None)
+    carried_caller = initial_caller
+    carried_address = initial_address
+    carried_account_context = account_execution_context(initial_address)
+    carried_code_address = initial_code_address
+    carried_value = initial_value
+    carried_state_gas_reservoir = initial_state_gas_reservoir
+    carried_is_static = initial_is_static
+    carried_depth = initial_depth
+    carried_code = initial_code
+    carried_calldata = initial_calldata
+    carried_returndata = EMPTY_OUTPUT_SLICE
+    initial_call_tree_gas = (int(initial_gas) + int(initial_state_gas))
     call_tree_steps_remaining = (int((3 * int(initial_call_tree_gas))) + 2)
     while True:
         if not (interpreting):
             break
-        running = is_running()
-        if running:
-            (fetched_pc, instruction) = fetch(machine.pc)
-            (next_pc, next_top, next_mem, next_gas) = evm_execute.execute(instruction, fetched_pc, machine.stack_top, machine.evm_memory, machine.gas_remaining)
-            machine.pc = next_pc
-            machine.stack_top = next_top
-            machine.evm_memory = next_mem
-            machine.gas_remaining = next_gas
+        if is_running(carried_status):
+            (fetched_pc, instruction) = fetch(carried_code, carried_pc, fork)
+            carried_pc = fetched_pc
+            match instruction:
+                case opcode_CREATE(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CreateKind.CreateByNonce)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case CREATE2(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CreateKind.CreateBySalt)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case CALL(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.Call)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case CALLCODE(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.CallCode)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case DELEGATECALL(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.DelegateCall)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case STATICCALL(None):
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.StaticCall)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                case _:
+                    match instruction:
+                        case STOP(None):
+                            status_after = execute_stop()
+                            result = (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, status_after)
+                        case ADD(None):
+                            (gas_after, sp_after, status_after) = execute_add(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MUL(None):
+                            (gas_after, sp_after, status_after) = execute_mul(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SUB(None):
+                            (gas_after, sp_after, status_after) = execute_sub(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case DIV(None):
+                            (gas_after, sp_after, status_after) = execute_div(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SDIV(None):
+                            (gas_after, sp_after, status_after) = execute_sdiv(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MOD(None):
+                            (gas_after, sp_after, status_after) = execute_mod(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SMOD(None):
+                            (gas_after, sp_after, status_after) = execute_smod(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case ADDMOD(None):
+                            (gas_after, sp_after, status_after) = execute_addmod(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MULMOD(None):
+                            (gas_after, sp_after, status_after) = execute_mulmod(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case EXP(None):
+                            (gas_after, sp_after, status_after) = execute_exp(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SIGNEXTEND(None):
+                            (gas_after, sp_after, status_after) = execute_signextend(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case LT(None):
+                            (gas_after, sp_after, status_after) = execute_lt(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case GT(None):
+                            (gas_after, sp_after, status_after) = execute_gt(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SLT(None):
+                            (gas_after, sp_after, status_after) = execute_slt(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SGT(None):
+                            (gas_after, sp_after, status_after) = execute_sgt(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case EQ(None):
+                            (gas_after, sp_after, status_after) = execute_eq(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case ISZERO(None):
+                            (gas_after, sp_after, status_after) = execute_iszero(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case AND(None):
+                            (gas_after, sp_after, status_after) = execute_and(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case OR(None):
+                            (gas_after, sp_after, status_after) = execute_or(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case XOR(None):
+                            (gas_after, sp_after, status_after) = execute_xor(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case NOT(None):
+                            (gas_after, sp_after, status_after) = execute_not(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BYTE(None):
+                            (gas_after, sp_after, status_after) = execute_byte(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SHL(None):
+                            (gas_after, sp_after, status_after) = execute_shl(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SHR(None):
+                            (gas_after, sp_after, status_after) = execute_shr(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SAR(None):
+                            (gas_after, sp_after, status_after) = execute_sar(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CLZ(None):
+                            (gas_after, sp_after, status_after) = execute_clz(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case KECCAK256(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_keccak256(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case ADDRESS(None):
+                            (gas_after, sp_after, status_after) = execute_address(carried_address, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BALANCE(None):
+                            (gas_after, sp_after, status_after) = execute_balance(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case ORIGIN(None):
+                            (gas_after, sp_after, status_after) = execute_origin(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CALLER(None):
+                            (gas_after, sp_after, status_after) = execute_caller(carried_caller, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CALLVALUE(None):
+                            (gas_after, sp_after, status_after) = execute_callvalue(carried_value, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CALLDATALOAD(None):
+                            (gas_after, sp_after, status_after) = execute_calldataload(carried_calldata, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CALLDATASIZE(None):
+                            (gas_after, sp_after, status_after) = execute_calldatasize(carried_calldata, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CALLDATACOPY(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_calldatacopy(carried_calldata, carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case CODESIZE(None):
+                            (gas_after, sp_after, status_after) = execute_codesize(carried_code, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CODECOPY(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_codecopy(carried_code, carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case GASPRICE(None):
+                            (gas_after, sp_after, status_after) = execute_gasprice(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case EXTCODESIZE(None):
+                            (gas_after, sp_after, status_after) = execute_extcodesize(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case EXTCODECOPY(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_extcodecopy(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case RETURNDATASIZE(None):
+                            (gas_after, sp_after, status_after) = execute_returndatasize(carried_returndata, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case RETURNDATACOPY(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_returndatacopy(carried_returndata, carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case EXTCODEHASH(None):
+                            (gas_after, sp_after, status_after) = execute_extcodehash(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BLOCKHASH(None):
+                            (gas_after, sp_after, status_after) = execute_blockhash(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case COINBASE(None):
+                            (gas_after, sp_after, status_after) = execute_coinbase(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case TIMESTAMP(None):
+                            (gas_after, sp_after, status_after) = execute_timestamp(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case NUMBER(None):
+                            (gas_after, sp_after, status_after) = execute_number(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SLOTNUM(None):
+                            (gas_after, sp_after, status_after) = execute_slotnum(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case PREVRANDAO(None):
+                            (gas_after, sp_after, status_after) = execute_prevrandao(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case GASLIMIT(None):
+                            (gas_after, sp_after, status_after) = execute_gaslimit(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case CHAINID(None):
+                            (gas_after, sp_after, status_after) = execute_chainid(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SELFBALANCE(None):
+                            (gas_after, sp_after, status_after) = execute_selfbalance(carried_address, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BASEFEE(None):
+                            (gas_after, sp_after, status_after) = execute_basefee(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BLOBHASH(None):
+                            (gas_after, sp_after, status_after) = execute_blobhash(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case BLOBBASEFEE(None):
+                            (gas_after, sp_after, status_after) = execute_blobbasefee(blob_fee, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case POP(None):
+                            (gas_after, sp_after, status_after) = execute_pop(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MLOAD(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_mload(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case MSTORE(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_mstore(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case MSTORE8(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_mstore8(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case SLOAD(None):
+                            (gas_after, sp_after, status_after) = execute_sload(carried_account_context, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SSTORE(None):
+                            (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) = execute_sstore(carried_account_context, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp)
+                            result = (carried_pc, gas_after, state_gas_after, state_spill_after, refund_after, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case JUMP(None):
+                            (pc_after, gas_after, sp_after, status_after) = execute_jump(carried_code, carried_pc, carried_gas, carried_sp)
+                            result = (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case JUMPI(None):
+                            (pc_after, gas_after, sp_after, status_after) = execute_jumpi(carried_code, carried_pc, carried_gas, carried_sp)
+                            result = (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case PC(None):
+                            (pc_after, gas_after, sp_after, status_after) = execute_pc(carried_pc, carried_gas, carried_sp)
+                            result = (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MSIZE(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_msize(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case GAS(None):
+                            (gas_after, sp_after, status_after) = execute_gas(carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case JUMPDEST(None):
+                            (gas_after, status_after) = execute_jumpdest(carried_gas)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, opcode_frame_status(status_after))
+                        case TLOAD(None):
+                            (gas_after, sp_after, status_after) = execute_tload(carried_address, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case TSTORE(None):
+                            (gas_after, sp_after, status_after) = execute_tstore(carried_address, carried_is_static, carried_gas, carried_sp)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case MCOPY(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_mcopy(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case PUSH((n, value)):
+                            (gas_after, sp_after, status_after) = execute_push(carried_gas, carried_sp, n, value)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case DUP(n):
+                            (gas_after, sp_after, status_after) = execute_dup(carried_gas, carried_sp, n)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SWAP(n):
+                            (gas_after, sp_after, status_after) = execute_swap(carried_gas, carried_sp, n)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case DUPN(immediate):
+                            (gas_after, sp_after, status_after) = execute_dupn(carried_gas, carried_sp, immediate)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case SWAPN(immediate):
+                            (gas_after, sp_after, status_after) = execute_swapn(carried_gas, carried_sp, immediate)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case EXCHANGE(immediate):
+                            (gas_after, sp_after, status_after) = execute_exchange(carried_gas, carried_sp, immediate)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
+                        case LOG(n):
+                            (gas_after, sp_after, memory_after, status_after) = execute_log(carried_address, carried_is_static, carried_gas, carried_sp, carried_memory, n)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
+                        case opcode_CREATE(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case CREATE2(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case CALL(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case CALLCODE(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case DELEGATECALL(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case STATICCALL(None):
+                            result = fatal_error(FatalError.ExecutionInvalid)
+                        case RETURN(None):
+                            (gas_after, sp_after, memory_after, status_after) = execute_return(carried_gas, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, status_after)
+                        case REVERT(None):
+                            (gas_after, state_gas_after, state_spill_after, sp_after, memory_after, status_after) = execute_revert(carried_state_gas_reservoir, carried_gas, carried_state_gas, carried_state_spill, carried_sp, carried_memory)
+                            result = (carried_pc, gas_after, state_gas_after, state_spill_after, carried_refund, sp_after, memory_after, status_after)
+                        case INVALID(None):
+                            (gas_after, status_after) = execute_invalid(carried_gas)
+                            result = (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, opcode_frame_status(status_after))
+                        case SELFDESTRUCT(None):
+                            (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) = execute_selfdestruct(carried_address, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp)
+                            result = (carried_pc, gas_after, state_gas_after, state_spill_after, refund_after, sp_after, carried_memory, status_after)
+                        case _:
+                            raise SailMatchFailure("no Sail match clause applied")
+                    match result:
+                        case (pc_after, _, state_gas_after, state_spill_after, refund_after, sp_after, memory_after, Exceptional(kind)):
+                            (state_gas_after, state_spill_after, status_after) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, kind)
+                            _sail_value_0 = (pc_after, GAS_ZERO, state_gas_after, state_spill_after, refund_after, sp_after, memory_after, status_after)
+                        case _:
+                            _sail_value_0 = result
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7) = _sail_value_0
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_sp = tup__5
+                    carried_memory = tup__6
+                    carried_status = tup__7
         else:
-            output = frame_output()
+            output = frame_output(carried_status)
             continuation = _host_frame_stack_pop()
             match continuation:
                 case Empty(None):
                     result = output
                     interpreting = False
                 case continuation:
-                    resume_frame(continuation, output)
-        call_tree_steps_remaining = (int(call_tree_steps_remaining) - 1)
-    return result
+                    previous_address = carried_address
+                    (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7, tup__8, tup__9, tup__10, tup__11, tup__12, tup__13, tup__14, tup__15, tup__16, tup__17) = resume_frame(continuation, output, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_state_gas_reservoir)
+                    carried_pc = tup__0
+                    carried_gas = tup__1
+                    carried_state_gas = tup__2
+                    carried_state_spill = tup__3
+                    carried_refund = tup__4
+                    carried_status = tup__5
+                    carried_sp = tup__6
+                    carried_memory = tup__7
+                    carried_caller = Bytes20(tup__8)
+                    carried_address = Bytes20(tup__9)
+                    carried_code_address = Bytes20(tup__10)
+                    carried_value = tup__11
+                    carried_state_gas_reservoir = tup__12
+                    carried_is_static = tup__13
+                    carried_depth = tup__14
+                    carried_code = tup__15
+                    carried_calldata = tup__16
+                    carried_returndata = tup__17
+                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+        remaining_steps = call_tree_steps_remaining
+        if ((remaining_steps) == (0)):
+            _sail_assigned_value_1 = 0
+        else:
+            _sail_assigned_value_1 = (int(remaining_steps) - 1)
+        call_tree_steps_remaining = call_tree_steps(_sail_assigned_value_1)
+    return (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, result)
 
-def frame_succeeded() -> bool:
-    match machine.frame_status:
+def frame_succeeded(frame_status: FrameStatus) -> bool:
+    match frame_status:
         case Halted(HaltRevert(_)):
             return False
         case Halted(_):
@@ -617,201 +1233,271 @@ def call_semantics(kind: CallKind) -> CallSemantics:
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def run_call(kind: CallKind, pc_in: code_length, top: Annotated[Bits, BitWidth(64)], mem: EvmMemorySlice, g: transaction_state_gas_used) -> tuple[code_length, Annotated[Bits, BitWidth(64)], EvmMemorySlice, transaction_state_gas_used]:
+def call_stack_inputs(kind: CallKind) -> stack_slot_count:
+    match kind:
+        case CallKind.Call:
+            return stack_slot_count(7)
+        case CallKind.CallCode:
+            return stack_slot_count(7)
+        case CallKind.DelegateCall:
+            return stack_slot_count(6)
+        case CallKind.StaticCall:
+            return stack_slot_count(6)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+def run_call(carried_pc: code_length, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_sp: StackPointer, carried_memory: EvmMemorySlice, carried_caller: address, carried_address: address, carried_code_address: address, carried_value: word, carried_state_gas_reservoir: state_gas, carried_is_static: bool, carried_depth: stack_slot_count, carried_code: Code, carried_calldata: CalldataSlice, carried_returndata: OutputSlice, kind: CallKind) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
     try:
-        semantics = call_semantics(kind)
-        execution_profile = environment.k_execution_profile
-        profile = execution_profile.protocol
-        current_depth = machine.call_depth
-        caller = evm_execute.self_addr()
-        (gas_request, top1) = pop(top)
-        (target_word, top2) = pop(top1)
-        target = word_to_address(target_word)
-        if semantics.takes_value:
-            (value, top3) = pop(top2)
-        else:
-            (value, top3) = (WORD_ZERO, top2)
-        value_nonzero = word_nonzero(value)
-        (args_off_word, top4) = pop(top3)
-        (args_len_word, top5) = pop(top4)
-        (ret_off_word, top6) = pop(top5)
-        (ret_len_word, top7) = pop(top6)
-        if ((semantics.transfers_value) & (((value_nonzero) & (machine.message.is_static)))):
-            raise SailReturn((pc_in, top7, mem, exc_halt(g, ExceptionKind.WriteProtection)))
-        warm = k_account_is_warm(target)
-        target_cost = account_cost(warm)
-        if value_nonzero:
-            transfer_cost = call_value_cost()
-        else:
-            transfer_cost = GAS_CONSTANT_ZERO
-        args_required = memory_required_size(args_off_word, args_len_word)
-        ret_required = memory_required_size(ret_off_word, ret_len_word)
-        if (int(args_required) < int(ret_required)):
-            required_size = ret_required
-        else:
-            required_size = args_required
-        expansion_cost = memory_expansion_cost(mem, required_size)
-        (expansion_affordable, g1) = charge(g, expansion_cost)
-        expansion_out_of_gas = (not (expansion_affordable))
-        if expansion_out_of_gas:
-            raise SailReturn((pc_in, top7, mem, g1))
-        static_base = (int(target_cost) + int(transfer_cost))
-        (static_base_affordable, g2) = charge(g1, static_base)
-        static_base_out_of_gas = (not (static_base_affordable))
-        if static_base_out_of_gas:
-            raise SailReturn((pc_in, top7, mem, g2))
-        k_account_mark_warm(target)
-        (tg_deleg, tg_target) = k_deleg_target(target)
-        if tg_deleg:
-            dw = k_account_is_warm(tg_target)
-            delegation_cost = account_cost(dw)
-        else:
-            delegation_cost = GAS_CONSTANT_ZERO
-        target_empty = k_account_is_empty(target)
-        new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (((value_nonzero) & (((semantics.transfers_value) & (target_empty))))))
-        if (((int(profile.fork) < int(Amsterdam))) & (((value_nonzero) & (((semantics.transfers_value) & (target_empty)))))):
-            create_cost = G_newaccount
-        else:
-            create_cost = GAS_CONSTANT_ZERO
-        additional_cost = (int(delegation_cost) + int(create_cost))
-        (additional_cost_affordable, g3) = charge(g2, additional_cost)
-        additional_cost_out_of_gas = (not (additional_cost_affordable))
-        if additional_cost_out_of_gas:
-            raise SailReturn((pc_in, top7, mem, g3))
-        if value_nonzero:
-            stipend = G_callstipend
-        else:
-            stipend = GAS_ZERO
-        g4 = g3
-        base_child = GAS_ZERO
-        if (int(profile.fork) >= int(Amsterdam)):
-            if new_account_charged:
-                (state_gas_affordable, state_gas) = charge_state_gas(g3, G_amsterdam_state_new_account)
-                g4 = state_gas
-                state_gas_out_of_gas = (not (state_gas_affordable))
-                if state_gas_out_of_gas:
-                    raise SailReturn((pc_in, top7, mem, state_gas))
-            base_child = Uint(call_gas_cap_word(g4, gas_request))
-            (child_gas_affordable, child_charged_gas) = charge(g4, base_child)
-            g4 = child_charged_gas
-            child_out_of_gas = (not (child_gas_affordable))
-            if child_out_of_gas:
-                raise SailReturn((pc_in, top7, mem, child_charged_gas))
-        else:
-            base_child = Uint(call_gas_cap_word(g4, gas_request))
-            (child_gas_affordable, child_charged_gas) = charge(g4, base_child)
-            g4 = child_charged_gas
-            child_out_of_gas = (not (child_gas_affordable))
-            if child_out_of_gas:
-                raise SailReturn((pc_in, top7, mem, child_charged_gas))
-        if tg_deleg:
-            k_account_mark_warm(tg_target)
-        if tg_deleg:
-            delegate_key = k_code_key(tg_target)
-            code_db_resolve(delegate_key)
-            k_aload(tg_target)
-        args_access = memory_access(args_off_word, args_len_word)
-        ret_access = memory_access(ret_off_word, ret_len_word)
-        if (int(args_access.required_size) < int(ret_access.required_size)):
-            materialized_required_size = ret_access.required_size
-        else:
-            materialized_required_size = args_access.required_size
-        mem1 = expand_memory(mem, materialized_required_size)
-        args = args_access.range
-        ret = ret_access.range
-        child_gas = conserved_gas_add(base_child, stipend)
-        k_aload(target)
-        if ((semantics.takes_value) & (value_nonzero)):
-            caller_balance = k_get_balance(caller)
-            transfer_affordable = word_ule(value, caller_balance)
-            insufficient_balance = (not (transfer_affordable))
-        else:
-            insufficient_balance = False
-        depth_limit = 1024
-        if ((insufficient_balance) | (((current_depth) == (depth_limit)))):
-            returndata_clear()
-            g5 = refund_gas(g4, child_gas)
-            if new_account_charged:
-                g6 = credit_state_gas_refund(g5, G_amsterdam_state_new_account)
-            else:
-                g6 = g5
-            return (pc_in, push_word(top7, WORD_ZERO), mem1, g6)
-        else:
-            selected_precompile = precompile_id_for_address(target)
-            if ((selected_precompile) != (PrecompileId.NotPrecompile)):
-                (input_memory, mem2) = active_memory_slice(mem1, args.off, args.len)
-                input = MemoryCalldata(input_memory)
-                precompile_charge = precompile_gas(selected_precompile, input, child_gas)
-                if precompile_charge.affordable:
-                    used = precompile_charge.cost
-                    result = run_precompile_slice(selected_precompile, input)
-                    if result.success:
-                        machine.returndata = result.output
+        match guard_stack(carried_sp, call_stack_inputs(kind), 1):
+            case Failed(halt_kind):
+                (state_gas_after, state_spill_after, status_after) = exceptional_state(carried_state_gas, carried_state_spill, carried_state_gas_reservoir, halt_kind)
+                return (carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata)
+            case Continue(None):
+                pc_after = carried_pc
+                gas_after = carried_gas
+                state_gas_after = carried_state_gas
+                state_spill_after = carried_state_spill
+                status_after = Running(None)
+                sp_after = carried_sp
+                memory_after = carried_memory
+                returndata_after = carried_returndata
+                parent_message = Message(caller=address(carried_caller), address=address(carried_address), code_address=address(carried_code_address), value=word(carried_value), state_gas_reservoir=state_gas(carried_state_gas_reservoir), is_static=carried_is_static, depth=frame_depth(carried_depth))
+                semantics = call_semantics(kind)
+                execution_profile = environment.k_execution_profile
+                profile = execution_profile.protocol
+                current_depth = carried_depth
+                caller = carried_address
+                gas_request = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                target_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                target = word_to_address(target_word)
+                if semantics.takes_value:
+                    value = read_stack_word(sp_after)
+                    (value, next_sp) = (value, stack_top_retreat(sp_after, 1))
+                else:
+                    (value, next_sp) = (WORD_ZERO, sp_after)
+                sp_after = next_sp
+                value_nonzero = word_nonzero(value)
+                args_off_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                args_len_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                ret_off_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                ret_len_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                if ((semantics.transfers_value) & (((value_nonzero) & (carried_is_static)))):
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.WriteProtection)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                warm = k_account_is_warm(target)
+                target_cost = account_cost(warm)
+                if value_nonzero:
+                    transfer_cost = call_value_cost()
+                else:
+                    transfer_cost = GAS_CONSTANT_ZERO
+                args_required = memory_required_size(args_off_word, args_len_word)
+                ret_required = memory_required_size(ret_off_word, ret_len_word)
+                if (int(args_required) < int(ret_required)):
+                    required_size = ret_required
+                else:
+                    required_size = args_required
+                (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size)
+                gas_after = gas_after_expansion
+                if expansion_halt:
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                static_base = (int(target_cost) + int(transfer_cost))
+                (static_base_halt, gas_after_static_base) = charge(gas_after, static_base)
+                gas_after = gas_after_static_base
+                if static_base_halt:
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                k_account_mark_warm(target)
+                (tg_deleg, tg_target) = k_deleg_target(target)
+                if tg_deleg:
+                    dw = k_account_is_warm(tg_target)
+                    delegation_cost = account_cost(dw)
+                else:
+                    delegation_cost = GAS_CONSTANT_ZERO
+                target_empty = k_account_is_empty(target)
+                new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (((value_nonzero) & (((semantics.transfers_value) & (target_empty))))))
+                if (((int(profile.fork) < int(Amsterdam))) & (((value_nonzero) & (((semantics.transfers_value) & (target_empty)))))):
+                    create_cost = G_newaccount
+                else:
+                    create_cost = GAS_CONSTANT_ZERO
+                additional_cost = (int(delegation_cost) + int(create_cost))
+                (additional_cost_halt, gas_after_additional_cost) = charge(gas_after, additional_cost)
+                gas_after = gas_after_additional_cost
+                if additional_cost_halt:
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                if value_nonzero:
+                    stipend = G_callstipend
+                else:
+                    stipend = GAS_ZERO
+                base_child = GAS_ZERO
+                if (int(profile.fork) >= int(Amsterdam)):
+                    if new_account_charged:
+                        (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                        gas_after = next_gas
+                        state_gas_after = next_state_gas
+                        state_spill_after = next_state_spill
+                        if state_gas_halt:
+                            gas_after = GAS_ZERO
+                            (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                            state_gas_after = tup__0
+                            state_spill_after = tup__1
+                            status_after = tup__2
+                            raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                    base_child = gas(call_gas_cap_word(gas_after, gas_request))
+                    (child_gas_halt, child_charged_gas) = charge(gas_after, base_child)
+                    gas_after = child_charged_gas
+                    if child_gas_halt:
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
+                        raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                else:
+                    base_child = gas(call_gas_cap_word(gas_after, gas_request))
+                    (child_gas_halt, child_charged_gas) = charge(gas_after, base_child)
+                    gas_after = child_charged_gas
+                    if child_gas_halt:
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
+                        raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                if tg_deleg:
+                    k_account_mark_warm(tg_target)
+                if tg_deleg:
+                    delegate_key = k_code_key(tg_target)
+                    code_db_resolve(delegate_key)
+                    k_aload(tg_target)
+                args_access = memory_access(args_off_word, args_len_word)
+                ret_access = memory_access(ret_off_word, ret_len_word)
+                if (int(args_access.required_size) < int(ret_access.required_size)):
+                    materialized_required_size = ret_access.required_size
+                else:
+                    materialized_required_size = args_access.required_size
+                mem1 = expand_memory(memory_after, materialized_required_size)
+                args = args_access.range
+                ret = ret_access.range
+                child_gas = conserved_gas_add(base_child, stipend)
+                k_aload(target)
+                if ((semantics.takes_value) & (value_nonzero)):
+                    caller_balance = k_get_balance(caller)
+                    transfer_affordable = word_ule(value, caller_balance)
+                    insufficient_balance = (not (transfer_affordable))
+                else:
+                    insufficient_balance = False
+                depth_limit = 1024
+                if ((insufficient_balance) | (((current_depth) == (depth_limit)))):
+                    returndata_after = returndata_clear()
+                    gas_after = gas(refund_gas(gas_after, child_gas))
+                    if new_account_charged:
+                        (tup__0, tup__1, tup__2) = credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                        gas_after = tup__0
+                        state_gas_after = tup__1
+                        state_spill_after = tup__2
+                    sp_after = stack_top_advance(sp_after, 1)
+                    write_stack_word(sp_after, WORD_ZERO)
+                    memory_after = mem1
+                    return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                else:
+                    selected_precompile = precompile_id_for_address(target)
+                    if ((selected_precompile) != (PrecompileId.NotPrecompile)):
+                        (input_memory, mem2) = active_memory_slice(mem1, args.off, args.len)
+                        input = MemoryCalldata(input_memory)
+                        precompile_charge = precompile_gas(selected_precompile, input, child_gas)
+                        if precompile_charge.affordable:
+                            used = precompile_charge.cost
+                            result = run_precompile_slice(selected_precompile, input)
+                            if result.success:
+                                returndata_after = result.output
+                                if ((semantics.transfers_value) & (value_nonzero)):
+                                    k_transfer(caller, target, value)
+                                returndata_copy_prefix(returndata_after, ret.off, ret.len)
+                                unused = gas_sub(child_gas, used)
+                                gas_after = gas(refund_gas(gas_after, unused))
+                                sp_after = stack_top_advance(sp_after, 1)
+                                write_stack_word(sp_after, WORD_ONE)
+                                memory_after = mem2
+                                return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                            else:
+                                returndata_after = returndata_clear()
+                                if new_account_charged:
+                                    (tup__0, tup__1, tup__2) = credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                                    gas_after = tup__0
+                                    state_gas_after = tup__1
+                                    state_spill_after = tup__2
+                                sp_after = stack_top_advance(sp_after, 1)
+                                write_stack_word(sp_after, WORD_ZERO)
+                                memory_after = mem2
+                                return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                        else:
+                            returndata_after = returndata_clear()
+                            if new_account_charged:
+                                (tup__0, tup__1, tup__2) = credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                                gas_after = tup__0
+                                state_gas_after = tup__1
+                                state_spill_after = tup__2
+                            sp_after = stack_top_advance(sp_after, 1)
+                            write_stack_word(sp_after, WORD_ZERO)
+                            memory_after = mem2
+                            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                    else:
+                        child_depth = (int(current_depth) + 1)
+                        child_code = executable_code(target, tg_deleg, tg_target)
+                        if semantics.uses_target_address:
+                            child_addr = target
+                        else:
+                            child_addr = caller
+                        if semantics.inherits_caller_and_value:
+                            child_caller = carried_caller
+                        else:
+                            child_caller = caller
+                        if semantics.inherits_caller_and_value:
+                            child_value = carried_value
+                        else:
+                            child_value = value
+                        if semantics.enters_static_context:
+                            child_static = True
+                        else:
+                            child_static = carried_is_static
+                        (bytes, mem2) = active_memory_slice(mem1, args.off, args.len)
+                        child_memory = evm_memory_slice(bytes.bytes, bytes.len)
+                        child_calldata = MemoryCalldata(child_memory)
+                        child_state_gas = state_gas_after
+                        (checkpoint, child_stack, child_frame_memory) = suspend_frame(pc_after, gas_after, sp_after, mem2, STATE_GAS_ZERO, state_spill_after, carried_refund, Running(None), parent_message, carried_code, carried_calldata)
+                        call_continuation = CallContinuation(checkpoint=checkpoint, return_offset=memory_pointer(ret.off), return_length=memory_length(ret.len), new_account_charged=new_account_charged)
+                        continuation = ResumeCall(call_continuation)
+                        _host_frame_stack_push(continuation)
                         if ((semantics.transfers_value) & (value_nonzero)):
                             k_transfer(caller, target, value)
-                        returndata_copy_prefix(ret.off, ret.len)
-                        unused = gas_sub(child_gas, used)
-                        g5 = refund_gas(g4, unused)
-                        return (pc_in, push_word(top7, WORD_ONE), mem2, g5)
-                    else:
-                        returndata_clear()
-                        if new_account_charged:
-                            g5 = credit_state_gas_refund(g4, G_amsterdam_state_new_account)
-                        else:
-                            g5 = g4
-                        return (pc_in, push_word(top7, WORD_ZERO), mem2, g5)
-                else:
-                    returndata_clear()
-                    if new_account_charged:
-                        g5 = credit_state_gas_refund(g4, G_amsterdam_state_new_account)
-                    else:
-                        g5 = g4
-                    return (pc_in, push_word(top7, WORD_ZERO), mem2, g5)
-            else:
-                child_depth = (int(current_depth) + 1)
-                child_code = executable_code(target, tg_deleg, tg_target)
-                if semantics.uses_target_address:
-                    child_addr = target
-                else:
-                    child_addr = caller
-                if semantics.inherits_caller_and_value:
-                    child_caller = machine.message.caller
-                else:
-                    child_caller = caller
-                if semantics.inherits_caller_and_value:
-                    child_value = machine.message.value
-                else:
-                    child_value = value
-                if semantics.enters_static_context:
-                    child_static = True
-                else:
-                    child_static = machine.message.is_static
-                (bytes, mem2) = active_memory_slice(mem1, args.off, args.len)
-                child_memory = evm_memory_slice(bytes.bytes, bytes.len)
-                child_calldata = MemoryCalldata(child_memory)
-                child_state_gas = machine.state_gas_remaining
-                machine.pc = pc_in
-                machine.gas_remaining = Uint(g4)
-                machine.stack_top = top7
-                machine.evm_memory = mem2
-                checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=gas(GAS_ZERO))
-                call_continuation = CallContinuation(checkpoint=checkpoint, return_offset=memory_pointer(ret.off), return_length=memory_length(ret.len), new_account_charged=new_account_charged)
-                continuation = ResumeCall(call_continuation)
-                _host_frame_stack_push(continuation)
-                if ((semantics.transfers_value) & (value_nonzero)):
-                    k_transfer(caller, target, value)
-                machine.message = Message(caller=address(child_caller), address=address(child_addr), code_address=address(target), value=word(child_value), state_gas_reservoir=gas(child_state_gas), is_static=child_static, depth=frame_depth(child_depth))
-                calldata_install(child_calldata)
-                machine.pc = 0
-                machine.gas_remaining = child_gas
-                machine.state_gas_remaining = child_state_gas
-                machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-                machine.frame_status = Running(None)
-                returndata_clear()
-                machine.frame_code = child_code
-                machine.call_depth = child_depth
-                machine.frame_refund = GAS_REFUND_ZERO
-                return (0, machine.stack_top, machine.evm_memory, child_gas)
+                        child_returndata = returndata_clear()
+                        return (0, child_gas, child_state_gas, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, Running(None), child_stack, child_frame_memory, child_caller, child_addr, target, child_value, child_state_gas, child_static, child_depth, child_code, child_calldata, child_returndata)
+            case _:
+                raise SailMatchFailure("no Sail match clause applied")
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -828,235 +1514,342 @@ def create_semantics(kind: CreateKind) -> CreateSemantics:
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def run_create(kind: CreateKind, pc_in: code_length, top: Annotated[Bits, BitWidth(64)], mem: EvmMemorySlice, g: transaction_state_gas_used) -> tuple[code_length, Annotated[Bits, BitWidth(64)], EvmMemorySlice, transaction_state_gas_used]:
+def create_stack_inputs(kind: CreateKind) -> stack_slot_count:
+    match kind:
+        case CreateKind.CreateByNonce:
+            return stack_slot_count(3)
+        case CreateKind.CreateBySalt:
+            return stack_slot_count(4)
+        case _:
+            raise SailMatchFailure("no Sail match clause applied")
+
+def run_create(carried_pc: code_length, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_sp: StackPointer, carried_memory: EvmMemorySlice, carried_caller: address, carried_address: address, carried_code_address: address, carried_value: word, carried_state_gas_reservoir: state_gas, carried_is_static: bool, carried_depth: stack_slot_count, carried_code: Code, carried_calldata: CalldataSlice, carried_returndata: OutputSlice, kind: CreateKind) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
     try:
-        semantics = create_semantics(kind)
-        execution_profile = environment.k_execution_profile
-        profile = execution_profile.protocol
-        current_depth = machine.call_depth
-        creator = evm_execute.self_addr()
-        (value, top1) = pop(top)
-        (off_word, top2) = pop(top1)
-        (len_word, top3) = pop(top2)
-        if semantics.uses_salt:
-            (salt, top4) = pop(top3)
-        else:
-            (salt, top4) = (WORD_ZERO, top3)
-        (static_violation, g0) = evm_execute.guard_static(g)
-        if static_violation:
-            raise SailReturn((pc_in, top4, mem, g0))
-        required_size = memory_required_size(off_word, len_word)
-        expansion_cost = memory_expansion_cost(mem, required_size)
-        (expansion_affordable, g1) = charge(g0, expansion_cost)
-        expansion_out_of_gas = (not (expansion_affordable))
-        if expansion_out_of_gas:
-            raise SailReturn((pc_in, top4, mem, g1))
-        initcode_access = memory_access(off_word, len_word)
-        mem1 = expand_memory(mem, initcode_access.required_size)
-        initcode = initcode_access.range
-        access_cost = create_access_cost()
-        (access_affordable, g2) = charge(g1, access_cost)
-        access_out_of_gas = (not (access_affordable))
-        if access_out_of_gas:
-            raise SailReturn((pc_in, top4, mem1, g2))
-        g3 = g2
-        initcode_word_count = memory_word_count_word(len_word)
-        if (int(profile.fork) >= int(Shanghai)):
-            (initcode_charge_affordable, initcode_gas) = charge_word_scaled_gas(g3, G_initcode_word, initcode_word_count)
-            g3 = initcode_gas
-            initcode_charge_out_of_gas = (not (initcode_charge_affordable))
-            if initcode_charge_out_of_gas:
-                raise SailReturn((pc_in, top4, mem1, initcode_gas))
-        if semantics.uses_salt:
-            (hashing_affordable, hashing_gas) = charge_word_scaled_gas(g3, G_keccak_word, initcode_word_count)
-            g3 = hashing_gas
-            hashing_out_of_gas = (not (hashing_affordable))
-            if hashing_out_of_gas:
-                raise SailReturn((pc_in, top4, mem1, hashing_gas))
-        valid_initcode_size = initcode_size_allowed(initcode.len)
-        invalid_initcode_size = (not (valid_initcode_size))
-        if invalid_initcode_size:
-            return (pc_in, top4, mem1, exc_halt(g3, ExceptionKind.InitCodeTooLarge))
-        else:
-            nonce = k_get_nonce(creator)
-            mem2 = mem1
-            if semantics.uses_salt:
-                (initcode_digest_word, hashed_mem) = mem_keccak(mem1, initcode)
-                mem2 = hashed_mem
-                initcode_digest = word_to_hash(initcode_digest_word)
-                new_addr = k_create2_addr(creator, salt, initcode_digest)
-            else:
-                new_addr = k_create_addr(creator, nonce)
-            g4 = g3
-            child_gas = GAS_ZERO
-            if (int(profile.fork) < int(Amsterdam)):
-                avail = g4
-                retained_gas = sail_ediv_int(avail, 64)
-                child_gas = Uint(gas_sub(avail, retained_gas))
-                g4 = retained_gas
-            if machine.message.is_static:
-                raise SailReturn((pc_in, top4, mem2, exc_halt(g4, ExceptionKind.WriteProtection)))
-            creator_balance = k_get_balance(creator)
-            endowment_affordable = word_ule(value, creator_balance)
-            insufficient_balance = (not (endowment_affordable))
-            nonce_limit = (int((1 << 64)) - 1)
-            depth_limit = 1024
-            if ((insufficient_balance) | (((((nonce) == (nonce_limit))) | (((current_depth) == (depth_limit)))))):
-                returndata_clear()
-                if (int(profile.fork) < int(Amsterdam)):
-                    g5 = refund_gas(g4, child_gas)
+        match guard_stack(carried_sp, create_stack_inputs(kind), 1):
+            case Failed(halt_kind):
+                (state_gas_after, state_spill_after, status_after) = exceptional_state(carried_state_gas, carried_state_spill, carried_state_gas_reservoir, halt_kind)
+                return (carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata)
+            case Continue(None):
+                pc_after = carried_pc
+                gas_after = carried_gas
+                state_gas_after = carried_state_gas
+                state_spill_after = carried_state_spill
+                status_after = Running(None)
+                sp_after = carried_sp
+                memory_after = carried_memory
+                returndata_after = carried_returndata
+                parent_message = Message(caller=address(carried_caller), address=address(carried_address), code_address=address(carried_code_address), value=word(carried_value), state_gas_reservoir=state_gas(carried_state_gas_reservoir), is_static=carried_is_static, depth=frame_depth(carried_depth))
+                semantics = create_semantics(kind)
+                execution_profile = environment.k_execution_profile
+                profile = execution_profile.protocol
+                current_depth = carried_depth
+                creator = carried_address
+                value = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                off_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                len_word = read_stack_word(sp_after)
+                sp_after = stack_top_retreat(sp_after, 1)
+                if semantics.uses_salt:
+                    salt = read_stack_word(sp_after)
+                    (salt, next_sp) = (salt, stack_top_retreat(sp_after, 1))
                 else:
-                    g5 = g4
-                return (pc_in, push_word(top4, WORD_ZERO), mem2, g5)
-            else:
-                child_depth = (int(current_depth) + 1)
-                k_account_mark_warm(new_addr)
-                new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (k_account_is_empty(new_addr)))
-                if new_account_charged:
-                    (state_gas_affordable, state_gas) = charge_state_gas(g4, G_amsterdam_state_new_account)
-                    g4 = state_gas
-                    state_gas_out_of_gas = (not (state_gas_affordable))
-                    if state_gas_out_of_gas:
-                        raise SailReturn((pc_in, top4, mem2, state_gas))
-                if (int(profile.fork) >= int(Amsterdam)):
-                    avail = g4
-                    retained_gas = sail_ediv_int(avail, 64)
-                    child_gas = Uint(gas_sub(avail, retained_gas))
-                    g4 = retained_gas
-                occupied = k_account_occupied(new_addr)
-                returndata_clear()
-                k_bump_nonce(creator)
-                if occupied:
-                    if new_account_charged:
-                        g5 = credit_state_gas_refund(g4, G_amsterdam_state_new_account)
+                    (salt, next_sp) = (WORD_ZERO, sp_after)
+                sp_after = next_sp
+                if carried_is_static:
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.WriteProtection)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                required_size = memory_required_size(off_word, len_word)
+                (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size)
+                gas_after = gas_after_expansion
+                if expansion_halt:
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                initcode_access = memory_access(off_word, len_word)
+                mem1 = expand_memory(memory_after, initcode_access.required_size)
+                initcode = initcode_access.range
+                access_cost = create_access_cost()
+                (access_halt, gas_after_access) = charge(gas_after, access_cost)
+                gas_after = gas_after_access
+                if access_halt:
+                    memory_after = mem1
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                initcode_word_count = memory_word_count_word(len_word)
+                if (int(profile.fork) >= int(Shanghai)):
+                    (initcode_charge_halt, initcode_gas) = charge_word_scaled_gas(gas_after, G_initcode_word, initcode_word_count)
+                    gas_after = initcode_gas
+                    if initcode_charge_halt:
+                        memory_after = mem1
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
+                        raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                if semantics.uses_salt:
+                    (hashing_halt, hashing_gas) = charge_word_scaled_gas(gas_after, G_keccak_word, initcode_word_count)
+                    gas_after = hashing_gas
+                    if hashing_halt:
+                        memory_after = mem1
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
+                        raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                valid_initcode_size = initcode_size_allowed(initcode.len)
+                invalid_initcode_size = (not (valid_initcode_size))
+                if invalid_initcode_size:
+                    memory_after = mem1
+                    gas_after = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.InitCodeTooLarge)
+                    state_gas_after = tup__0
+                    state_spill_after = tup__1
+                    status_after = tup__2
+                    return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                else:
+                    nonce = k_get_nonce(creator)
+                    mem2 = mem1
+                    if semantics.uses_salt:
+                        (initcode_digest_word, hashed_mem) = mem_keccak(mem1, initcode)
+                        mem2 = hashed_mem
+                        initcode_digest = word_to_hash(initcode_digest_word)
+                        new_addr = k_create2_addr(creator, salt, initcode_digest)
                     else:
-                        g5 = g4
-                    return (pc_in, push_word(top4, WORD_ZERO), mem2, g5)
-                else:
-                    (initcode_bytes, mem3) = memory_code_slice(mem2, initcode.off, initcode.len)
-                    child_code_id = code_db_insert(initcode_bytes, profile.fork)
-                    child_code = code_db_resolve(child_code_id)
-                    child_state_gas = machine.state_gas_remaining
-                    machine.pc = pc_in
-                    machine.gas_remaining = Uint(g4)
-                    machine.stack_top = top4
-                    machine.evm_memory = mem3
-                    checkpoint = replace(deepcopy(suspend_frame()), state_gas_remaining=gas(GAS_ZERO))
-                    create_continuation = CreateContinuation(checkpoint=checkpoint, address=address(new_addr), new_account_charged=new_account_charged)
-                    continuation = ResumeCreate(create_continuation)
-                    _host_frame_stack_push(continuation)
-                    k_mark_created(new_addr)
-                    k_clear_storage(new_addr)
-                    k_bump_nonce(new_addr)
-                    k_transfer(creator, new_addr, value)
-                    machine.message = Message(caller=address(creator), address=address(new_addr), code_address=address(new_addr), value=word(value), state_gas_reservoir=gas(child_state_gas), is_static=checkpoint.message.is_static, depth=frame_depth(child_depth))
-                    calldata_install(EMPTY_CALLDATA)
-                    machine.pc = 0
-                    machine.gas_remaining = Uint(child_gas)
-                    machine.state_gas_remaining = child_state_gas
-                    machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-                    machine.frame_status = Running(None)
-                    returndata_clear()
-                    machine.frame_code = child_code
-                    machine.call_depth = child_depth
-                    machine.frame_refund = GAS_REFUND_ZERO
-                    return (0, machine.stack_top, machine.evm_memory, child_gas)
+                        new_addr = k_create_addr(creator, nonce)
+                    child_gas = GAS_ZERO
+                    if (int(profile.fork) < int(Amsterdam)):
+                        avail = gas_after
+                        retained_gas = sail_ediv_int(avail, 64)
+                        child_gas = gas(gas_sub(avail, retained_gas))
+                        gas_after = retained_gas
+                    creator_balance = k_get_balance(creator)
+                    endowment_affordable = word_ule(value, creator_balance)
+                    insufficient_balance = (not (endowment_affordable))
+                    nonce_limit = (int((1 << 64)) - 1)
+                    depth_limit = 1024
+                    if ((insufficient_balance) | (((((nonce) == (nonce_limit))) | (((current_depth) == (depth_limit)))))):
+                        returndata_after = returndata_clear()
+                        if (int(profile.fork) < int(Amsterdam)):
+                            _sail_assigned_value_2 = refund_gas(gas_after, child_gas)
+                        else:
+                            _sail_assigned_value_2 = gas_after
+                        gas_after = gas(_sail_assigned_value_2)
+                        sp_after = stack_top_advance(sp_after, 1)
+                        write_stack_word(sp_after, WORD_ZERO)
+                        memory_after = mem2
+                        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                    else:
+                        child_depth = (int(current_depth) + 1)
+                        k_account_mark_warm(new_addr)
+                        new_account_charged = (((int(profile.fork) >= int(Amsterdam))) & (k_account_is_empty(new_addr)))
+                        if new_account_charged:
+                            (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                            gas_after = next_gas
+                            state_gas_after = next_state_gas
+                            state_spill_after = next_state_spill
+                            if state_gas_halt:
+                                memory_after = mem2
+                                gas_after = GAS_ZERO
+                                (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, ExceptionKind.OutOfGas)
+                                state_gas_after = tup__0
+                                state_spill_after = tup__1
+                                status_after = tup__2
+                                raise SailReturn((pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after))
+                        if (int(profile.fork) >= int(Amsterdam)):
+                            avail = gas_after
+                            retained_gas = sail_ediv_int(avail, 64)
+                            child_gas = gas(gas_sub(avail, retained_gas))
+                            gas_after = retained_gas
+                        occupied = k_account_occupied(new_addr)
+                        returndata_after = returndata_clear()
+                        k_bump_nonce(creator)
+                        if occupied:
+                            if new_account_charged:
+                                (tup__0, tup__1, tup__2) = credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                                gas_after = tup__0
+                                state_gas_after = tup__1
+                                state_spill_after = tup__2
+                            sp_after = stack_top_advance(sp_after, 1)
+                            write_stack_word(sp_after, WORD_ZERO)
+                            memory_after = mem2
+                            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, returndata_after)
+                        else:
+                            (initcode_bytes, mem3) = memory_code_slice(mem2, initcode.off, initcode.len)
+                            child_code_id = code_db_insert(initcode_bytes, profile.fork)
+                            child_code = code_db_resolve(child_code_id)
+                            child_state_gas = state_gas_after
+                            (checkpoint, child_stack, child_frame_memory) = suspend_frame(pc_after, gas_after, sp_after, mem3, STATE_GAS_ZERO, state_spill_after, carried_refund, Running(None), parent_message, carried_code, carried_calldata)
+                            create_continuation = CreateContinuation(checkpoint=checkpoint, address=address(new_addr), new_account_charged=new_account_charged)
+                            continuation = ResumeCreate(create_continuation)
+                            _host_frame_stack_push(continuation)
+                            k_mark_created(new_addr)
+                            k_clear_storage(new_addr)
+                            k_bump_nonce(new_addr)
+                            k_transfer(creator, new_addr, value)
+                            child_returndata = returndata_clear()
+                            return (0, child_gas, child_state_gas, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, Running(None), child_stack, child_frame_memory, creator, new_addr, new_addr, value, child_state_gas, carried_is_static, child_depth, child_code, EMPTY_CALLDATA, child_returndata)
+            case _:
+                raise SailMatchFailure("no Sail match clause applied")
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def resume_call(continuation: CallContinuation, output: OutputSlice) -> None:
-    machine.returndata = output
+def resume_call(continuation: CallContinuation, output: OutputSlice, child_gas: gas, child_state_gas: state_gas, child_state_spill: state_gas_spill, child_refund: gas_refund, child_status: FrameStatus) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
     checkpoint = continuation.checkpoint
-    succeeded = frame_succeeded()
-    child_left = machine.gas_remaining
-    child_state_left = machine.state_gas_remaining
-    child_state_spill = machine.state_gas_spilled
-    child_refund = machine.frame_refund
-    restore_frame(checkpoint)
-    machine.gas_remaining = Uint(refund_gas(machine.gas_remaining, child_left))
-    return_child_state_gas(child_state_left, child_state_spill)
-    returndata_copy_prefix(continuation.return_offset, continuation.return_length)
+    succeeded = frame_succeeded(child_status)
+    (parent_pc, restored_gas, restored_sp, parent_memory, restored_state_gas, restored_state_spill, restored_refund, restored_status, parent_message, parent_code, parent_calldata) = restore_frame(checkpoint)
+    parent_gas = refund_gas(restored_gas, child_gas)
+    parent_state_gas = restored_state_gas
+    parent_state_spill = restored_state_spill
+    (tup__0, tup__1) = return_child_state_gas(parent_state_gas, parent_state_spill, child_state_gas, child_state_spill)
+    parent_state_gas = tup__0
+    parent_state_spill = tup__1
+    parent_refund = restored_refund
+    parent_sp = restored_sp
+    returndata_copy_prefix(output, continuation.return_offset, continuation.return_length)
     if succeeded:
-        record_refund(child_refund)
+        parent_refund = record_refund(parent_refund, child_refund)
         k_journal_commit()
-        machine.stack_top = push_word(machine.stack_top, WORD_ONE)
-        return None
+        parent_sp = stack_top_advance(parent_sp, 1)
+        write_stack_word(parent_sp, WORD_ONE)
     else:
         k_journal_revert()
         if continuation.new_account_charged:
-            machine.gas_remaining = Uint(credit_state_gas_refund(machine.gas_remaining, G_amsterdam_state_new_account))
-        machine.stack_top = push_word(machine.stack_top, WORD_ZERO)
-        return None
+            (tup__0, tup__1, tup__2) = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account)
+            parent_gas = tup__0
+            parent_state_gas = tup__1
+            parent_state_spill = tup__2
+        parent_sp = stack_top_advance(parent_sp, 1)
+        write_stack_word(parent_sp, WORD_ZERO)
+    return (parent_pc, parent_gas, parent_state_gas, parent_state_spill, parent_refund, restored_status, parent_sp, parent_memory, parent_message.caller, parent_message.address, parent_message.code_address, parent_message.value, parent_message.state_gas_reservoir, parent_message.is_static, parent_message.depth, parent_code, parent_calldata, output)
 
-def resume_create(continuation: CreateContinuation, output: OutputSlice) -> None:
+def resume_create(continuation: CreateContinuation, output: OutputSlice, child_gas: gas, child_state_gas: state_gas, child_state_spill: state_gas_spill, child_refund: gas_refund, child_status: FrameStatus, child_state_gas_reservoir: state_gas) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    machine.returndata = output
     checkpoint = continuation.checkpoint
-    initcode_succeeded = frame_succeeded()
-    deployed_length = returndata_size()
+    initcode_succeeded = frame_succeeded(child_status)
+    deployed_length = returndata_size(output)
     deployed_size = deployed_length
     frontier_empty_deposit = False
+    settled_child_gas = child_gas
+    settled_child_state_gas = child_state_gas
+    settled_child_state_spill = child_state_spill
+    settled_child_status = child_status
     if initcode_succeeded:
         deployed_size_allowed = deployed_code_size_allowed(deployed_size)
         invalid_deployed_size = (not (deployed_size_allowed))
         if ((deployed_size) != (0)):
-            first_byte = output_byte(machine.returndata, 0)
+            first_byte = output_byte(output, 0)
             prohibited_prefix = ((first_byte) == (Bits(8, 0b11101111)))
         else:
             prohibited_prefix = False
         if ((invalid_deployed_size) | ((((int(profile.fork) >= int(London))) & (prohibited_prefix)))):
-            machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
+            settled_child_gas = GAS_ZERO
+            (tup__0, tup__1, tup__2) = exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, ExceptionKind.OutOfGas)
+            settled_child_state_gas = tup__0
+            settled_child_state_spill = tup__1
+            settled_child_status = tup__2
         else:
-            deployment_charge = code_deployment_execution_cost(deployed_length, machine.gas_remaining)
+            deployment_charge = code_deployment_execution_cost(deployed_length, settled_child_gas)
             if deployment_charge.affordable:
                 execution_deposit = deployment_charge.cost
-                machine.gas_remaining = Uint(gas_sub(machine.gas_remaining, execution_deposit))
+                settled_child_gas = gas(gas_sub(settled_child_gas, execution_deposit))
                 state_deposit = code_deployment_state_cost(deployed_length)
-                (_, deployment_gas) = charge_deployment_state_gas(machine.gas_remaining, state_deposit)
-                machine.gas_remaining = deployment_gas
+                (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(settled_child_gas, settled_child_state_gas, settled_child_state_spill, state_deposit)
+                settled_child_gas = deployment_gas
+                settled_child_state_gas = deployment_state_gas
+                settled_child_state_spill = deployment_state_spill
+                if deployment_halt:
+                    settled_child_gas = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    settled_child_state_gas = tup__0
+                    settled_child_state_spill = tup__1
+                    settled_child_status = tup__2
             else:
                 if (int(profile.fork) < int(Homestead)):
-                    machine.gas_remaining = GAS_ZERO
+                    settled_child_gas = GAS_ZERO
                     frontier_empty_deposit = True
                 else:
-                    machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
-    deploy_succeeds = ((initcode_succeeded) & (frame_succeeded()))
-    child_left = machine.gas_remaining
-    child_state_left = machine.state_gas_remaining
-    child_state_spill = machine.state_gas_spilled
-    child_refund = machine.frame_refund
-    restore_frame(checkpoint)
-    machine.gas_remaining = Uint(refund_gas(machine.gas_remaining, child_left))
-    return_child_state_gas(child_state_left, child_state_spill)
+                    settled_child_gas = GAS_ZERO
+                    (tup__0, tup__1, tup__2) = exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, ExceptionKind.OutOfGas)
+                    settled_child_state_gas = tup__0
+                    settled_child_state_spill = tup__1
+                    settled_child_status = tup__2
+    deploy_succeeds = ((initcode_succeeded) & (frame_succeeded(settled_child_status)))
+    (parent_pc, restored_gas, restored_sp, parent_memory, restored_state_gas, restored_state_spill, restored_refund, restored_status, parent_message, parent_code, parent_calldata) = restore_frame(checkpoint)
+    parent_gas = refund_gas(restored_gas, settled_child_gas)
+    parent_state_gas = restored_state_gas
+    parent_state_spill = restored_state_spill
+    (tup__0, tup__1) = return_child_state_gas(parent_state_gas, parent_state_spill, settled_child_state_gas, settled_child_state_spill)
+    parent_state_gas = tup__0
+    parent_state_spill = tup__1
+    parent_refund = restored_refund
+    parent_sp = restored_sp
     if deploy_succeeds:
-        record_refund(child_refund)
+        parent_refund = record_refund(parent_refund, child_refund)
         if frontier_empty_deposit:
             deployed_bytes = EMPTY_OUTPUT_SLICE
         else:
-            deployed_bytes = machine.returndata
+            deployed_bytes = output
         deployed_code = code_db_intern_output(deployed_bytes)
         k_deploy_code(continuation.address, deployed_code)
         k_journal_commit()
         deployed_address = address_to_word(continuation.address)
-        machine.stack_top = push_word(machine.stack_top, deployed_address)
+        parent_sp = stack_top_advance(parent_sp, 1)
+        write_stack_word(parent_sp, deployed_address)
     else:
         k_journal_revert()
         if continuation.new_account_charged:
-            machine.gas_remaining = Uint(credit_state_gas_refund(machine.gas_remaining, G_amsterdam_state_new_account))
-        machine.stack_top = push_word(machine.stack_top, WORD_ZERO)
+            (tup__0, tup__1, tup__2) = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account)
+            parent_gas = tup__0
+            parent_state_gas = tup__1
+            parent_state_spill = tup__2
+        parent_sp = stack_top_advance(parent_sp, 1)
+        write_stack_word(parent_sp, WORD_ZERO)
     if initcode_succeeded:
-        return returndata_clear()
+        parent_returndata = returndata_clear()
     else:
-        return None
+        parent_returndata = output
+    return (parent_pc, parent_gas, parent_state_gas, parent_state_spill, parent_refund, restored_status, parent_sp, parent_memory, parent_message.caller, parent_message.address, parent_message.code_address, parent_message.value, parent_message.state_gas_reservoir, parent_message.is_static, parent_message.depth, parent_code, parent_calldata, parent_returndata)
 
-def resume_frame(continuation: FrameContinuation, output: OutputSlice) -> None:
+def resume_frame(continuation: FrameContinuation, output: OutputSlice, child_gas: gas, child_state_gas: state_gas, child_state_spill: state_gas_spill, child_refund: gas_refund, child_status: FrameStatus, child_state_gas_reservoir: state_gas) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
     match continuation:
         case Empty(None):
             return fatal_error(FatalError.ExecutionInvalid)
         case ResumeCall(call):
-            return resume_call(call, output)
+            return resume_call(call, output, child_gas, child_state_gas, child_state_spill, child_refund, child_status)
         case ResumeCreate(create):
-            return resume_create(create, output)
+            return resume_create(create, output, child_gas, child_state_gas, child_state_spill, child_refund, child_status, child_state_gas_reservoir)
         case _:
             raise SailMatchFailure("no Sail match clause applied")
+
+def run_frame_entry_encoded(carried_pc: code_length, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_sp: StackPointer, carried_memory: EvmMemorySlice, carried_caller: address, carried_address: address, carried_code_address: address, carried_value: word, carried_state_gas_reservoir: state_gas, carried_is_static: bool, carried_depth: stack_slot_count, carried_code: Code, carried_calldata: CalldataSlice, carried_returndata: OutputSlice, opcode_: ancestor_index) -> tuple[code_length, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice, address, address, address, word, state_gas, bool, stack_slot_count, Code, CalldataSlice, OutputSlice]:
+    match opcode_:
+        case 240:
+            return run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CreateKind.CreateByNonce)
+        case 241:
+            return run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.Call)
+        case 242:
+            return run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.CallCode)
+        case 244:
+            return run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.DelegateCall)
+        case 245:
+            return run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CreateKind.CreateBySalt)
+        case 250:
+            return run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata, CallKind.StaticCall)
+        case _:
+            (state_gas_after, state_spill_after, status_after) = exceptional_state(carried_state_gas, carried_state_spill, carried_state_gas_reservoir, ExceptionKind.InvalidOpcode)
+            return (carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after, carried_sp, carried_memory, carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth, carried_code, carried_calldata, carried_returndata)

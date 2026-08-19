@@ -28,10 +28,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -107,10 +109,9 @@ def SECP_N_HALF : word :=
 
 /-- Recovers the signer address from `(h, y_parity, r, s)`, returning
 recovery success and the recovered address (used by EIP-7702). -/
-/- Type quantifiers: k_ex548875_ : Nat, k_ex548874_ : Nat, k_ex548873_ : Nat, 0 ≤ k_ex548873_ ∧
-  k_ex548873_ ≤ 1, 0 ≤ k_ex548874_ ∧ k_ex548874_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex548875_ ∧
-  k_ex548875_ ≤ (2 ^ 256 - 1) -/
-def ecrecover_addr (h : (Vector (BitVec 8) 32)) (yparity : Nat) (r : Nat) (s : Nat) : SailM (Bool × (Vector (BitVec 8) 20)) := do
-  let recovered ← do (host_ecrecover h yparity r s)
-  (pure (recovered.success, recovered.address))
+/- Type quantifiers: k_ex605981_ : Nat, k_ex605980_ : Nat, k_ex605979_ : Nat, 0 ≤ k_ex605979_ ∧
+  k_ex605979_ ≤ 1, 0 ≤ k_ex605980_ ∧ k_ex605980_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex605981_ ∧
+  k_ex605981_ ≤ (2 ^ 256 - 1) -/
+def ecrecover_addr (h : (Vector (BitVec 8) 32)) (yparity : Nat) (r : Nat) (s : Nat) : SailM AddressResult := do
+  (host_ecrecover h yparity r s)
 

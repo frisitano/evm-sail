@@ -14,7 +14,7 @@ from ethereum_types.bytes import Bytes20, Bytes32
 import adapter
 import evm
 import evm.HostContract as host_contract
-from evm.evm import machine
+from evm.kernel import environment
 from evm.host.state import BalAccount, BalAccountEnd, BalEmpty, BalStorageChange
 from evm.primitives.account import StorageKey, StorageTxCleared, StorageTxMiss
 
@@ -189,12 +189,12 @@ def main() -> None:
 
     zero_word = evm.ZERO_WORD
     previous_host_state = host_contract.get_state()
-    machine.pc = 7
-    assert evm.pc == 7
+    environment.k_chain_id = 7
+    assert evm.k_chain_id == 7
     evm.reset()
     assert host_contract.get_state() is not previous_host_state
-    assert machine.pc == 0
-    assert evm.pc == 0
+    assert environment.k_chain_id == 1
+    assert evm.k_chain_id == 1
     assert evm.ZERO_WORD is zero_word
     assert type(zero_word) is evm.U256
 
@@ -211,20 +211,20 @@ def main() -> None:
         host_contract.mem_frame_leave()
         assert host_contract.mem_load_word(0) == 0x1234
 
-        parent_top = host_contract.stack_reset()
-        parent_top = host_contract.stack_top_advance(parent_top, 1)
-        host_contract.stack_slot_write(parent_top, 0, 7)
-        child_top = host_contract.operand_stack_push_empty_frame()
-        assert host_contract.stack_top_height(child_top) == 0
-        child_top = host_contract.stack_top_advance(child_top, 1)
-        host_contract.stack_slot_write(child_top, 0, 11)
-        assert host_contract.stack_top_height(child_top) == 1
-        assert host_contract.stack_slot_read(child_top, 0) == 11
-        child_top = host_contract.stack_top_retreat(child_top, 1)
+        parent_top = host_contract.stack_reset_host()
+        host_contract.stack_slot_write_next_host(parent_top, 7)
+        parent_top = host_contract.stack_top_advance_host(parent_top, 1)
+        child_top = host_contract.operand_stack_push_empty_frame_host()
+        assert host_contract.stack_top_height_host(child_top) == 0
+        host_contract.stack_slot_write_next_host(child_top, 11)
+        child_top = host_contract.stack_top_advance_host(child_top, 1)
+        assert host_contract.stack_top_height_host(child_top) == 1
+        assert host_contract.stack_slot_read_host(child_top, 0) == 11
+        child_top = host_contract.stack_top_retreat_host(child_top, 1)
         host_contract.operand_stack_pop_frame()
-        assert host_contract.stack_top_height(parent_top) == 1
-        assert host_contract.stack_slot_read(parent_top, 0) == 7
-        host_contract.stack_top_retreat(parent_top, 1)
+        assert host_contract.stack_top_height_host(parent_top) == 1
+        assert host_contract.stack_slot_read_host(parent_top, 0) == 7
+        host_contract.stack_top_retreat_host(parent_top, 1)
 
         isolated_host_state.stateless_input_bytes = b"\x05\x06\x07"
         input_slice = host_contract.stateless_input()

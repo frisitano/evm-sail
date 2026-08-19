@@ -24,6 +24,7 @@ name: book
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -37,17 +38,19 @@ concurrency:
 
 jobs:
   build-book:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+        with:
+          cache-dependency-glob: |
+            uv.lock
+            mkdocstrings-sail/uv.lock
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
 
       # The book needs sail_lsp too: step 3 builds the semantic index with it.
       - name: Set up the custom Sail compiler and sail-lsp
@@ -59,7 +62,7 @@ jobs:
         run: make docs-site
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: book/site
 
@@ -68,7 +71,7 @@ jobs:
     # build check without touching the published site.
     if: github.ref == 'refs/heads/main'
     needs: build-book
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
@@ -78,4 +81,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

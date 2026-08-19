@@ -13,7 +13,8 @@ import re
 import shlex
 import shutil
 import subprocess
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -309,14 +310,14 @@ def gate(
 
 def conformance_gate(generated: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     command = [
-        "python3",
+        sys.executable,
         "-m",
         "devtools.optimised_c.check",
         display_path(generated),
     ]
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     result = run(command)
-    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    elapsed = (datetime.now(UTC) - started).total_seconds()
     output_lines = result.stdout.splitlines()
     finding_lines = [
         line for line in output_lines if line and not line.startswith("optimized C conformance:")
@@ -386,9 +387,9 @@ def package_build_gate(
         display_path(generated),
         f"CC={clang}",
     ]
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     result = run(command)
-    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    elapsed = (datetime.now(UTC) - started).total_seconds()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(result.stdout)
     passed = result.returncode == 0 and built_library.is_file()
@@ -632,7 +633,7 @@ def main() -> int:
         return 2
     sail_executable = Path(sail_executable_name).resolve()
     generated = args.generated.resolve()
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     try:
         layout = compilation_layout(generated, editable_ffi=True)
@@ -650,9 +651,9 @@ def main() -> int:
         expected_compdb, generated_count = database_entries(
             generated, clang=clang, sail=str(sail_executable)
         )
-        check_started = datetime.now(timezone.utc)
+        check_started = datetime.now(UTC)
         check_database(args.compdb.resolve(), expected_compdb, generated_count)
-        check_elapsed = (datetime.now(timezone.utc) - check_started).total_seconds()
+        check_elapsed = (datetime.now(UTC) - check_started).total_seconds()
         built_library = args.built_library.resolve() if args.built_library is not None else None
         build_gate, build_log = package_build_gate(
             generated,
@@ -732,7 +733,7 @@ def main() -> int:
         "build tooling",
         "T1",
         [
-            "python3",
+            sys.executable,
             "-m",
             "devtools.optimised_c.compdb",
             "--sail",
@@ -749,7 +750,7 @@ def main() -> int:
         [display_path(args.compdb)],
     )
     compdb_gate["elapsed_seconds"] = round(check_elapsed, 3)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{evm_repository['commit'][:12]}"
     record = {
         "schema_version": SCHEMA_VERSION,

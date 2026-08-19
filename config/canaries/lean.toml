@@ -1,0 +1,42 @@
+schema_version = 1
+
+[[required]]
+path = "lakefile.toml"
+pattern = ".+"
+[[required]]
+path = "lean-toolchain"
+pattern = ".+"
+[[required]]
+path = "Evm.lean"
+pattern = "^def main "
+[[required]]
+glob = "Evm/**/*.lean"
+pattern = "^def process_transaction "
+[[required]]
+glob = "Evm/**/*.lean"
+pattern = "^def compute_state_root "
+[[required]]
+glob = "Evm/**/*.lean"
+pattern = "^def trie_root "
+[[required]]
+glob = "Evm/**/*.lean"
+pattern = "^def decode_stateless_input_ref "
+[[required]]
+path = "Evm/HostAxioms.lean"
+pattern = "^def frame_stack_reset "
+[[required]]
+path = "Evm/HostAxioms.lean"
+pattern = "^def frame_stack_push "
+[[required]]
+path = "Evm/HostAxioms.lean"
+pattern = "^def frame_stack_pop "
+[[required]]
+path = "Evm/HostAxioms.lean"
+pattern = "^def referenceWorldStateContract"
+[[required]]
+path = "Evm/HostAxioms.lean"
+pattern = "^def worldStateBoundary"
+
+[[forbidden]]
+glob = "**/*.lean"
+pattern = "noncomputable (section|def)|^[ \\t]*partial def"

@@ -6,7 +6,7 @@ from .._runtime import (
     BitWidth,
     Bits,
     Uint,
-    sail_tmod_int,
+    UintEnum,
 )
 from typing import Annotated
 from evm.HostContract import (
@@ -21,37 +21,27 @@ from evm.HostContract import (
     mem_write_byte as _host_mem_write_byte,
     memory_keccak256 as _host_memory_keccak256,
     operand_stack_pop_frame as _host_operand_stack_pop_frame,
-    operand_stack_push_empty_frame as _host_operand_stack_push_empty_frame,
-    stack_slot_read as _host_stack_slot_read,
-    stack_slot_write as _host_stack_slot_write,
-    stack_top_advance as _host_stack_top_advance,
-    stack_top_height as _host_stack_top_height,
-    stack_top_retreat as _host_stack_top_retreat,
 )
 from evm.prelude import (
     word,
-    u256,
     hash_to_word,
     word_low_byte,
 )
 from evm.primitives.quantities import (
     MemoryRange,
-    StackTop,
+    StackPointer,
     code_length,
     code_pointer,
-    frame_depth,
     stack_index,
     stack_slot_count,
 )
 from evm.primitives.gas import (
+    frame_state_gas_delta,
     gas,
     gas_refund,
+    state_gas,
     state_gas_spill,
-    transaction_state_gas_delta,
-    transaction_state_gas_used,
     STATE_GAS_SPILL_ZERO,
-    GAS_ZERO,
-    GAS_REFUND_ZERO,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
@@ -59,11 +49,11 @@ from evm.primitives.bytes import (
     EvmMemorySlice,
     EvmMemorySliceFields,
     OutputSlice,
+    OutputSliceFields,
     evm_memory_slice,
     memory_sub_slice,
     EMPTY_EVM_MEMORY_SLICE,
     EMPTY_OUTPUT_SLICE,
-    EMPTY_CALLDATA,
 )
 from evm.exceptions import (
     ExceptionKind,
@@ -78,16 +68,20 @@ from evm.evm.halt import (
 from evm.primitives.code import (
     Code,
     EMPTY_CODE_SLICE,
-    EMPTY_CODE,
 )
 from evm.host.region_access import output_slice_copy
 from evm.primitives.fork import Amsterdam
 from evm.primitives.evm import (
     FrameCheckpoint,
     Message,
-    DEFAULT_MESSAGE,
 )
 from evm.host.code import code_db_intern_memory
+from evm.host.stack import (
+    operand_stack_push_empty_frame,
+    stack_top_height,
+    stack_slot_read,
+    stack_slot_write,
+)
 from evm.kernel.lifecycle import k_journal_checkpoint
 from evm.kernel import environment
 
@@ -98,108 +92,98 @@ def validated_refund_add(left: int, right: int) -> gas_refund:
     else:
         return fatal_error(FatalError.ExecutionInvalid)
 
-def record_refund(delta: int) -> None:
-    global frame_refund
-    frame_refund = validated_refund_add(frame_refund, delta)
-    return None
+def record_refund(refund: gas_refund, delta: int) -> gas_refund:
+    return validated_refund_add(refund, delta)
 
-def frame_code_len() -> code_length:
+def frame_code_len(frame_code: Code) -> code_length:
     code = frame_code
     length = code.len
     return code_length(length)
 
-def frame_jumpdest_valid(dest: int) -> bool:
+def frame_jumpdest_valid(frame_code: Code, dest: int) -> bool:
     code = frame_code
     length = code.len
     return _host_jumpdest_ref_contains(code.jumpdests, length, dest)
 
-def conserved_gas_add(left: int, right: int) -> transaction_state_gas_used:
-    return Uint((int(left) + int(right)))
+def conserved_gas_add(available: gas, credit: gas) -> gas:
+    if (int(credit) <= int((int((int((1 << 64)) - 1)) - int(available)))):
+        return gas((int(available) + int(credit)))
+    else:
+        return gas(fatal_error(FatalError.ExecutionInvalid))
 
-def refill_frame_state_gas(g: transaction_state_gas_used) -> transaction_state_gas_used:
-    global state_gas_remaining, state_gas_spilled
+def refill_frame_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill]:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) >= int(Amsterdam)):
         refilled = conserved_gas_add(g, state_gas_spilled)
-        state_gas_remaining = Uint(message.state_gas_reservoir)
-        state_gas_spilled = STATE_GAS_SPILL_ZERO
-        return Uint(refilled)
+        return (refilled, state_gas_reservoir, STATE_GAS_SPILL_ZERO)
     else:
-        return Uint(g)
+        return (g, state_gas_remaining, state_gas_spilled)
 
-def frame_state_gas_used() -> transaction_state_gas_delta:
-    entry = message.state_gas_reservoir
+def frame_state_gas_used(state_gas_reservoir: state_gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill) -> frame_state_gas_delta:
+    entry = state_gas_reservoir
     remaining = state_gas_remaining
     spilled = state_gas_spilled
     return (int((int(entry) - int(remaining))) + int(spilled))
 
-def exc_halt(g: transaction_state_gas_used, k: ExceptionKind) -> transaction_state_gas_used:
-    global frame_status
-    refill_frame_state_gas(g)
-    frame_status = Exceptional(k)
-    return Uint(GAS_ZERO)
+def exceptional_state(state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, state_gas_reservoir: state_gas, k: ExceptionKind) -> tuple[state_gas, int, FrameStatus]:
+    execution_profile = environment.k_execution_profile
+    profile = execution_profile.protocol
+    if (int(profile.fork) >= int(Amsterdam)):
+        return (state_gas_reservoir, STATE_GAS_SPILL_ZERO, Exceptional(k))
+    else:
+        return (state_gas_remaining, state_gas_spilled, Exceptional(k))
 
-def stack_height(top: Annotated[Bits, BitWidth(64)]) -> stack_slot_count:
-    return stack_slot_count(_host_stack_top_height(top))
+def stack_height(top: StackPointer) -> stack_slot_count:
+    return stack_slot_count(stack_top_height(top))
 
-def validate_stack(g: transaction_state_gas_used, top: Annotated[Bits, BitWidth(64)], inputs: stack_slot_count, outputs: stack_slot_count) -> tuple[bool, transaction_state_gas_used]:
+class StackValidation(UintEnum):
+    StackValid = Uint(0)
+    StackUnderflowFailure = Uint(1)
+    StackOverflowFailure = Uint(2)
+
+def validate_stack(top: StackPointer, inputs: stack_slot_count, outputs: stack_slot_count) -> StackValidation:
     height = stack_height(top)
     if (int(height) < int(inputs)):
-        return (False, exc_halt(g, ExceptionKind.StackUnderflow))
+        return StackValidation.StackUnderflowFailure
     else:
         if (int(STACK_LIMIT) < int((int((int(height) - int(inputs))) + int(outputs)))):
-            return (False, exc_halt(g, ExceptionKind.StackOverflow))
+            return StackValidation.StackOverflowFailure
         else:
-            return (True, g)
+            return StackValidation.StackValid
 
-def peek(top: Annotated[Bits, BitWidth(64)], n: stack_index) -> word:
-    return word(_host_stack_slot_read(top, n))
+def read_stack_word(sp: StackPointer) -> word:
+    return word(stack_slot_read(sp, 0))
 
-def push_word(top: Annotated[Bits, BitWidth(64)], w: word) -> Annotated[Bits, BitWidth(64)]:
-    pushed = _host_stack_top_advance(top, 1)
-    _host_stack_slot_write(pushed, 0, w)
-    return pushed
+def write_stack_word(sp: StackPointer, value: word) -> None:
+    return stack_slot_write(sp, 0, value)
 
-def push_gas(top: Annotated[Bits, BitWidth(64)], value: transaction_state_gas_used) -> Annotated[Bits, BitWidth(64)]:
-    reduced = sail_tmod_int(value, (1 << 256))
-    gas_word = u256(reduced)
-    return push_word(top, gas_word)
+def stack_set(top: StackPointer, n: stack_index, w: word) -> None:
+    return stack_slot_write(top, n, w)
 
-def pop(top: Annotated[Bits, BitWidth(64)]) -> tuple[word, Annotated[Bits, BitWidth(64)]]:
-    value = _host_stack_slot_read(top, 0)
-    return (value, _host_stack_top_retreat(top, 1))
-
-def stack_set(top: Annotated[Bits, BitWidth(64)], n: stack_index, w: word) -> None:
-    return _host_stack_slot_write(top, n, w)
-
-def is_running() -> bool:
+def is_running(frame_status: FrameStatus) -> bool:
     match frame_status:
         case Running(None):
             return True
         case _:
             return False
 
-def calldata_install(data: CalldataSlice) -> None:
-    global calldata
-    calldata = data
-    return None
+def calldata_install(data: CalldataSlice) -> CalldataSlice:
+    return data
 
-def returndata_clear() -> None:
-    global returndata
-    returndata = EMPTY_OUTPUT_SLICE
-    return None
+def returndata_clear() -> OutputSlice:
+    return EMPTY_OUTPUT_SLICE
 
-def returndata_size() -> code_length:
+def returndata_size(returndata: OutputSlice) -> code_length:
     data = returndata
     return code_length(data.len)
 
-def returndata_copy(dst: int, off: int, sail_len: int) -> None:
+def returndata_copy(returndata: OutputSliceFields, dst: int, off: int, sail_len: int) -> None:
     return output_slice_copy(returndata, dst, off, sail_len)
 
-def returndata_copy_prefix(dst: code_length, want: code_length) -> None:
+def returndata_copy_prefix(returndata: OutputSlice, dst: code_length, want: code_length) -> None:
     wanted = want
-    available = returndata_size()
+    available = returndata_size(returndata)
     if (int(wanted) < int(available)):
         copy_length = wanted
     else:
@@ -209,33 +193,14 @@ def returndata_copy_prefix(dst: code_length, want: code_length) -> None:
 def returndata_remaining(available: int, offset: int) -> Uint:
     return Uint((int(available) - int(offset)))
 
-def validated_returndata_copy(g: transaction_state_gas_used, dst: code_length, source_offset: int, length: int) -> transaction_state_gas_used:
-    available = returndata_size()
-    if (int(source_offset) <= int(available)):
-        remaining = returndata_remaining(available, source_offset)
-        bounded_source_offset = source_offset
-        if (int(length) <= int(remaining)):
-            bounded_length = length
-            returndata_copy(dst, bounded_source_offset, bounded_length)
-            return Uint(g)
-        else:
-            return Uint(exc_halt(g, ExceptionKind.InvalidOpcode))
-    else:
-        return Uint(exc_halt(g, ExceptionKind.InvalidOpcode))
-
-def returndata_copy_words(g: transaction_state_gas_used, dst: code_length, source_offset: word, length: word) -> transaction_state_gas_used:
-    return Uint(validated_returndata_copy(g, dst, source_offset, length))
-
 def memory_high_water(mem: EvmMemorySlice) -> code_length:
     memory = mem
     length = memory.len
     return code_length(length)
 
-def memory_reset() -> None:
-    global evm_memory
+def memory_reset() -> EvmMemorySlice:
     _host_mem_clear()
-    evm_memory = EMPTY_EVM_MEMORY_SLICE
-    return None
+    return EMPTY_EVM_MEMORY_SLICE
 
 def memory_expand_to(mem: EvmMemorySlice, new_size: int) -> tuple[EvmMemorySliceFields, EvmMemorySlice]:
     memory = mem
@@ -261,52 +226,24 @@ def memory_code_slice(mem: EvmMemorySliceFields, off: int, sail_len: int) -> tup
         return (code_db_intern_memory(initcode), expanded)
 
 def memory_frame_enter() -> EvmMemorySlice:
-    global evm_memory
-    parent = evm_memory
     base = _host_mem_frame_enter()
-    evm_memory = evm_memory_slice(base, 0)
+    return evm_memory_slice(base, 0)
+
+def memory_frame_leave(parent: EvmMemorySlice) -> EvmMemorySlice:
+    _host_mem_frame_leave()
     return parent
 
-def memory_frame_leave(parent: EvmMemorySlice) -> None:
-    global evm_memory
-    _host_mem_frame_leave()
-    evm_memory = parent
-    return None
-
-def suspend_frame() -> FrameCheckpoint:
-    global stack_top
+def suspend_frame(pc: code_length, gas_remaining: gas, stack_top: StackPointer, evm_memory: EvmMemorySlice, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, frame_refund: gas_refund, frame_status: FrameStatus, message: Message, frame_code: Code, calldata: CalldataSlice) -> tuple[FrameCheckpoint, StackPointer, EvmMemorySlice]:
     k_journal_checkpoint()
-    saved_pc = pc
-    saved_gas = gas_remaining
-    saved_stack = stack_top
-    saved_state_gas = state_gas_remaining
-    saved_state_spill = state_gas_spilled
-    saved_refund = frame_refund
-    saved_status = frame_status
-    saved_message = message
-    saved_depth = call_depth
-    saved_code = frame_code
-    saved_calldata = calldata
-    stack_top = _host_operand_stack_push_empty_frame()
-    saved_memory = memory_frame_enter()
-    return FrameCheckpoint(pc=code_pointer(saved_pc), gas_remaining=gas(saved_gas), stack_top=saved_stack, state_gas_remaining=gas(saved_state_gas), state_gas_spilled=state_gas_spill(saved_state_spill), refund=saved_refund, status=saved_status, message=saved_message, call_depth=frame_depth(saved_depth), code=saved_code, calldata=saved_calldata, memory=saved_memory)
+    child_stack = operand_stack_push_empty_frame()
+    child_memory = memory_frame_enter()
+    checkpoint = FrameCheckpoint(pc=code_pointer(pc), gas_remaining=gas(gas_remaining), stack_top=stack_top, state_gas_remaining=state_gas(state_gas_remaining), state_gas_spilled=state_gas_spill(state_gas_spilled), refund=frame_refund, status=frame_status, message=message, code=frame_code, calldata=calldata, memory=evm_memory)
+    return (checkpoint, child_stack, child_memory)
 
-def restore_frame(checkpoint: FrameCheckpoint) -> None:
-    global call_depth, calldata, frame_code, frame_refund, frame_status, gas_remaining, message, pc, stack_top, state_gas_remaining, state_gas_spilled
+def restore_frame(checkpoint: FrameCheckpoint) -> tuple[code_length, gas, StackPointer, EvmMemorySlice, state_gas, state_gas_spill, gas_refund, FrameStatus, Message, Code, CalldataSlice]:
     _host_operand_stack_pop_frame()
-    memory_frame_leave(checkpoint.memory)
-    pc = code_length(checkpoint.pc)
-    gas_remaining = Uint(checkpoint.gas_remaining)
-    stack_top = checkpoint.stack_top
-    state_gas_remaining = Uint(checkpoint.state_gas_remaining)
-    state_gas_spilled = state_gas_spill(checkpoint.state_gas_spilled)
-    frame_refund = checkpoint.refund
-    frame_status = checkpoint.status
-    message = checkpoint.message
-    call_depth = stack_slot_count(checkpoint.call_depth)
-    frame_code = checkpoint.code
-    calldata = checkpoint.calldata
-    return None
+    memory = memory_frame_leave(checkpoint.memory)
+    return (checkpoint.pc, checkpoint.gas_remaining, checkpoint.stack_top, memory, checkpoint.state_gas_remaining, checkpoint.state_gas_spilled, checkpoint.refund, checkpoint.status, checkpoint.message, checkpoint.code, checkpoint.calldata)
 
 def mem_set_byte(off: code_length, v: Annotated[Bits, BitWidth(8)]) -> None:
     return _host_mem_write_byte(off, v)
@@ -332,47 +269,4 @@ def mem_keccak(mem: EvmMemorySlice, sail_range_: MemoryRange) -> tuple[word, Evm
     digest = _host_memory_keccak256(bytes)
     return (hash_to_word(digest), expanded)
 
-pc: code_pointer = 0
-
-gas_remaining: gas = GAS_ZERO
-
-stack_top: StackTop = Bits(64, 0b0000000000000000000000000000000000000000000000000000000000000000)
-
-state_gas_remaining: gas = GAS_ZERO
-
-state_gas_spilled: state_gas_spill = STATE_GAS_SPILL_ZERO
-
-frame_refund: gas_refund = GAS_REFUND_ZERO
-
-frame_status: FrameStatus = Running(None)
-
-message: Message = DEFAULT_MESSAGE
-
-call_depth: frame_depth = 0
-
-frame_code: Code = EMPTY_CODE
-
 STACK_LIMIT: int = 1024
-
-calldata: CalldataSlice = EMPTY_CALLDATA
-
-returndata: OutputSlice = EMPTY_OUTPUT_SLICE
-
-evm_memory: EvmMemorySlice = EMPTY_EVM_MEMORY_SLICE
-
-def _reset_registers() -> None:
-    global pc, gas_remaining, stack_top, state_gas_remaining, state_gas_spilled, frame_refund, frame_status, message, call_depth, frame_code, calldata, returndata, evm_memory
-    pc = 0
-    gas_remaining = GAS_ZERO
-    stack_top = Bits(64, 0b0000000000000000000000000000000000000000000000000000000000000000)
-    state_gas_remaining = GAS_ZERO
-    state_gas_spilled = STATE_GAS_SPILL_ZERO
-    frame_refund = GAS_REFUND_ZERO
-    frame_status = Running(None)
-    message = DEFAULT_MESSAGE
-    call_depth = 0
-    frame_code = EMPTY_CODE
-    calldata = EMPTY_CALLDATA
-    returndata = EMPTY_OUTPUT_SLICE
-    evm_memory = EMPTY_EVM_MEMORY_SLICE
-    return None

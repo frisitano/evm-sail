@@ -1,4 +1,5 @@
 # Sail / C build artifacts
+/build/
 build_run_block
 build_run_block.c
 build_run_block.h
@@ -18,21 +19,19 @@ zkvm/build-zisk/
 devtools/harness/.rtcache/
 
 # Generated C compile checks
-/build/c-spec/
-/build/c-optimised/
-/build/extraction-quality/
 /compile_commands.json
 
 # theorem-prover build artifacts (generated sources and manifests are tracked)
 **/.lake/
-/extractions/coq/**/*.aux
-/extractions/coq/**/*.glob
-/extractions/coq/**/*.vo
-/extractions/coq/**/*.vok
-/extractions/coq/**/*.vos
+/extractions/rocq/**/*.aux
+/extractions/rocq/**/*.glob
+/extractions/rocq/**/*.vo
+/extractions/rocq/**/*.vok
+/extractions/rocq/**/*.vos
 
 # python
 **/__pycache__/
+/.venv/
 /.venv-docs/
 
 # Workspace-local tests-zkevm@v0.6.2 conformance corpus.

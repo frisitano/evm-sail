@@ -6,8 +6,8 @@ import Evm.Exceptions
 import Evm.Primitives.Code
 import Evm.Host.RegionAccess
 import Evm.Primitives.Fork
-import Evm.Primitives.Evm
 import Evm.Host.Code
+import Evm.Host.Stack
 import Evm.Kernel.Environment
 import Evm.Kernel.Lifecycle
 
@@ -39,10 +39,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -98,192 +100,200 @@ def validated_refund_add (left : Int) (right : Int) : SailM Int := do
   then (pure total)
   else (fatal_error ExecutionInvalid)
 
-/- Type quantifiers: delta : Int, ((- gas_refund_bound)) ≤ delta ∧ delta ≤ gas_refund_bound -/
-def record_refund (delta : Int) : SailM Unit := do
-  writeReg frame_refund (← (validated_refund_add (← readReg frame_refund) delta))
+/- Type quantifiers: refund : Int, delta : Int, ((- gas_refund_bound)) ≤ delta ∧
+  delta ≤ gas_refund_bound, ((- (199 * (2 ^ 64 - 1)))) ≤ refund ∧
+  refund ≤ (199 * (2 ^ 64 - 1)) -/
+def record_refund (refund : Int) (delta : Int) : SailM Int := do
+  (validated_refund_add refund delta)
 
 /-- The frame code length in bytes (`CODESIZE`). -/
-def frame_code_len (_ : Unit) : SailM Nat := do
-  let ⟨_, ⟨_, code⟩⟩ ← do readReg frame_code
+/- Type quantifiers: frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0 : Nat, 0 ≤
+  frame_code_dependentWitness0 ∧
+  0 ≤ frame_code_dependentWitness1 ∧
+  (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
+def frame_code_len (frame_code : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : Nat :=
+  let frame_code_dependentWitness0 := (frame_code).1
+  let frame_code_dependentWitness1 := ((frame_code).2).1
+  let frame_code := ((frame_code).2).2
+  let code := frame_code
   let length := code.len
-  (pure length)
+  length
 
-/- Type quantifiers: dest : Nat, (source_valid_length dest) -/
-def frame_jumpdest_valid (dest : Nat) : SailM Bool := do
-  let ⟨_, ⟨_, code⟩⟩ ← do readReg frame_code
+/- Type quantifiers: frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0 : Nat, dest :
+  Nat, (source_valid_length dest), 0 ≤ frame_code_dependentWitness0 ∧
+  0 ≤ frame_code_dependentWitness1 ∧
+  (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
+def frame_jumpdest_valid (frame_code : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (dest : Nat) : SailM Bool := do
+  let frame_code_dependentWitness0 := (frame_code).1
+  let frame_code_dependentWitness1 := ((frame_code).2).1
+  let frame_code := ((frame_code).2).2
+  let code := frame_code
   let length := code.len
   (jumpdest_ref_contains code.jumpdests length dest)
 
 /-- The 1024-element operand-stack limit (YP §9.1). -/
 def STACK_LIMIT : operand_stack_height := 1024
 
-/- Type quantifiers: left : Nat, right : Nat, (live_gas_valid left) ∧ (live_gas_valid right) -/
-def conserved_gas_add (left : Nat) (right : Nat) : Nat :=
-  (left + right)
+/- Type quantifiers: credit : Nat, available : Nat, 0 ≤ available ∧ available ≤ (2 ^ 64 - 1), 0
+  ≤ credit ∧ credit ≤ (2 ^ 64 - 1) -/
+def conserved_gas_add (available : Nat) (credit : Nat) : SailM Nat := do
+  if ((credit ≤b (((2 ^i 64) - 1) - available)) : Bool)
+  then (pure (available + credit))
+  else (fatal_error ExecutionInvalid)
 
-/-- Returns any Amsterdam state-gas spill to the carried execution gas and
-restores the frame's state-gas reservoir. -/
-/- Type quantifiers: g : Nat, 0 ≤ g -/
-def refill_frame_state_gas (g : Nat) : SailM Nat := do
+/- Type quantifiers: state_gas_reservoir : Nat, state_gas_spilled : Nat, state_gas_remaining : Nat, g
+  : Nat, 0 ≤ g ∧ g ≤ (2 ^ 64 - 1), 0 ≤ state_gas_remaining ∧
+  state_gas_remaining ≤ (2 ^ 64 - 1), 0 ≤ state_gas_spilled ∧ state_gas_spilled ≤ (2 ^ 24), 0
+  ≤ state_gas_reservoir ∧ state_gas_reservoir ≤ (2 ^ 64 - 1) -/
+def refill_frame_state_gas (g : Nat) (state_gas_remaining : Nat) (state_gas_spilled : Nat) (state_gas_reservoir : Nat) : SailM (Nat × Nat × Nat) := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
   if ((profile.fork ≥b Amsterdam) : Bool)
   then
     (do
-      let refilled ← do (pure (conserved_gas_add g (← readReg state_gas_spilled)))
-      writeReg state_gas_remaining (← readReg message).state_gas_reservoir
-      writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
-      (pure refilled))
-  else (pure g)
+      let refilled ← do (conserved_gas_add g state_gas_spilled)
+      (pure (refilled, state_gas_reservoir, STATE_GAS_SPILL_ZERO)))
+  else (pure (g, state_gas_remaining, state_gas_spilled))
 
 /-- Computes the signed state gas consumed by the current frame. -/
-def frame_state_gas_used (_ : Unit) : SailM Int := do
-  let entry ← do (pure (← readReg message).state_gas_reservoir)
-  let remaining ← do readReg state_gas_remaining
-  let spilled ← do readReg state_gas_spilled
-  (pure ((entry -i remaining) +i spilled))
+/- Type quantifiers: k_ex609130_ : Nat, k_ex609129_ : Nat, k_ex609128_ : Nat, 0 ≤ k_ex609128_ ∧
+  k_ex609128_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex609129_ ∧ k_ex609129_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex609130_ ∧ k_ex609130_ ≤ (2 ^ 24) -/
+def frame_state_gas_used (state_gas_reservoir : Nat) (state_gas_remaining : Nat) (state_gas_spilled : Nat) : Int :=
+  let entry := state_gas_reservoir
+  let remaining := state_gas_remaining
+  let spilled := state_gas_spilled
+  ((entry -i remaining) +i spilled)
 
-/-- Enters the exceptional halting state (YP §9.4.2), consuming all
-remaining execution gas after consolidating the frame's state gas.
-Takes the carried gas, performs the state-gas refill against it in the
-canonical read-then-zero order, and returns the frame's zeroed gas. -/
-/- Type quantifiers: k_ex552005_ : Nat, 0 ≤ k_ex552005_ -/
-def exc_halt (g : Nat) (k : ExceptionKind) : SailM Nat := do
-  let _ ← do (refill_frame_state_gas g)
-  writeReg frame_status (Exceptional k)
-  (pure GAS_ZERO)
+/- Type quantifiers: state_gas_reservoir : Nat, state_gas_spilled : Nat, state_gas_remaining : Nat, 0
+  ≤ state_gas_remaining ∧ state_gas_remaining ≤ (2 ^ 64 - 1), 0 ≤ state_gas_spilled ∧
+  state_gas_spilled ≤ (2 ^ 24), 0 ≤ state_gas_reservoir ∧ state_gas_reservoir ≤ (2 ^ 64 - 1) -/
+def exceptional_state (state_gas_remaining : Nat) (state_gas_spilled : Nat) (state_gas_reservoir : Nat) (k : ExceptionKind) : SailM (Nat × Nat × FrameStatus) := do
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  if ((profile.fork ≥b Amsterdam) : Bool)
+  then (pure (state_gas_reservoir, STATE_GAS_SPILL_ZERO, (Exceptional k)))
+  else (pure (state_gas_remaining, state_gas_spilled, (Exceptional k)))
 
 /-- The stack height below a carried cursor. -/
-def stack_height (top : (BitVec 64)) : SailM Nat := do
+def stack_height (top : StackPointer) : Nat :=
   (stack_top_height top)
 
-/-- Checks the Yellow Paper stack precondition for one instruction before it
-charges gas or performs side effects. `inputs` is the instruction's
-required stack height (delta) and `outputs` is the height it contributes
-after consuming those inputs (alpha). This is the single stack-bounds
-guard: handler bodies consume and produce operands unchecked behind it. -/
-/- Type quantifiers: k_ex552008_ : Nat, k_ex552007_ : Nat, k_ex552006_ : Nat, 0 ≤ k_ex552006_, 0
-  ≤ k_ex552007_ ∧ k_ex552007_ ≤ 1024, 0 ≤ k_ex552008_ ∧ k_ex552008_ ≤ 1024 -/
-def validate_stack (g : Nat) (top : (BitVec 64)) (inputs : Nat) (outputs : Nat) : SailM (Bool × Nat) := do
-  let height ← do (stack_height top)
+def undefined_StackValidation (_ : Unit) : SailM StackValidation := do
+  (internal_pick [StackValid, StackUnderflowFailure, StackOverflowFailure])
+
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
+def StackValidation_of_num (arg_ : Nat) : StackValidation :=
+  match arg_ with
+  | 0 => StackValid
+  | 1 => StackUnderflowFailure
+  | _ => StackOverflowFailure
+
+def num_of_StackValidation (arg_ : StackValidation) : Nat :=
+  match arg_ with
+  | .StackValid => 0
+  | .StackUnderflowFailure => 1
+  | .StackOverflowFailure => 2
+
+/- Type quantifiers: outputs : Nat, inputs : Nat, 0 ≤ inputs ∧ inputs ≤ 1024, 0 ≤ outputs
+  ∧ outputs ≤ 1024 -/
+def validate_stack (top : StackPointer) (inputs : Nat) (outputs : Nat) : StackValidation :=
+  let height := (stack_height top)
   if ((height <b inputs) : Bool)
-  then (pure (false, (← (exc_halt g StackUnderflow))))
+  then StackUnderflowFailure
   else
-    (do
-      if ((STACK_LIMIT <b ((height - inputs) + outputs)) : Bool)
-      then (pure (false, (← (exc_halt g StackOverflow))))
-      else (pure (true, g)))
+    (if ((STACK_LIMIT <b ((height - inputs) + outputs)) : Bool)
+    then StackOverflowFailure
+    else StackValid)
 
-/-- The `n`-th-from-top operand (`n = 0` is the top), below a validated
-cursor. -/
-/- Type quantifiers: k_ex552009_ : Nat, 0 ≤ k_ex552009_ ∧ k_ex552009_ ≤ 1023 -/
-def peek (top : (BitVec 64)) (n : Nat) : SailM Nat := do
-  (stack_slot_read top n)
+/-- Reads the `n=0` slot under a validated cursor. -/
+def read_stack_word (sp : StackPointer) : SailM Nat := do
+  (stack_slot_read sp 0)
 
-/-- Pushes a word below a validated cursor and returns the new cursor. -/
-/- Type quantifiers: k_ex552010_ : Nat, 0 ≤ k_ex552010_ ∧ k_ex552010_ ≤ (2 ^ 256 - 1) -/
-def push_word (top : (BitVec 64)) (w : Nat) : SailM (BitVec 64) := do
-  let pushed ← do (stack_top_advance top 1)
-  (stack_slot_write pushed 0 w)
-  (pure pushed)
-
-/-- Pushes the mathematical live-gas quantity as an EVM word. Transaction
-validation establishes that every reachable value is below the word
-modulus; the total canonical definition retains modular behavior outside
-that invariant. -/
-/- Type quantifiers: k_ex552011_ : Nat, 0 ≤ k_ex552011_ -/
-def push_gas (top : (BitVec 64)) (value : Nat) : SailM (BitVec 64) := do
-  let reduced := (Nat.mod value (2 ^i 256))
-  let gas_word := (u256 reduced)
-  (push_word top gas_word)
-
-/-- Pops the top word below a validated cursor, returning the word and the
-new cursor. -/
-def pop (top : (BitVec 64)) : SailM (Nat × (BitVec 64)) := do
-  let value ← do (stack_slot_read top 0)
-  (pure (value, (← (stack_top_retreat top 1))))
+/-- Writes the `n=0` slot under a validated cursor. -/
+/- Type quantifiers: k_ex609136_ : Nat, 0 ≤ k_ex609136_ ∧ k_ex609136_ ≤ (2 ^ 256 - 1) -/
+def write_stack_word (sp : StackPointer) (value : Nat) : SailM Unit := do
+  (stack_slot_write sp 0 value)
 
 /-- Overwrites the `n`-th-from-top operand (`SWAP`); the cursor is
 unchanged. -/
-/- Type quantifiers: k_ex552013_ : Nat, k_ex552012_ : Nat, 0 ≤ k_ex552012_ ∧
-  k_ex552012_ ≤ 1023, 0 ≤ k_ex552013_ ∧ k_ex552013_ ≤ (2 ^ 256 - 1) -/
-def stack_set (top : (BitVec 64)) (n : Nat) (w : Nat) : SailM Unit := do
+/- Type quantifiers: k_ex609138_ : Nat, k_ex609137_ : Nat, 0 ≤ k_ex609137_ ∧
+  k_ex609137_ ≤ 1023, 0 ≤ k_ex609138_ ∧ k_ex609138_ ≤ (2 ^ 256 - 1) -/
+def stack_set (top : StackPointer) (n : Nat) (w : Nat) : SailM Unit := do
   (stack_slot_write top n w)
 
 /-- Whether the frame is still running. -/
-def is_running (_ : Unit) : SailM Bool := do
-  match (← readReg frame_status) with
-  | .Running () => (pure true)
-  | _ => (pure false)
+def is_running (frame_status : FrameStatus) : Bool :=
+  match frame_status with
+  | .Running () => true
+  | _ => false
 
 /-- Installs the frame's calldata reference. -/
-def calldata_install (data : CalldataSlice) : SailM Unit := do
-  writeReg calldata data
+def calldata_install (data : CalldataSlice) : CalldataSlice :=
+  data
 
 /-- Clears the returndata buffer (a new sub-call begins). -/
-def returndata_clear (_ : Unit) : SailM Unit := do
-  writeReg returndata ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩
+def returndata_clear (_ : Unit) : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))) :=
+  ((⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))))
 
 /-- `RETURNDATASIZE`. -/
-def returndata_size (_ : Unit) : SailM Nat := do
-  let ⟨_, ⟨_, data⟩⟩ ← do readReg returndata
-  (pure data.len)
+/- Type quantifiers: returndata_dependentWitness1 : Nat, returndata_dependentWitness0 : Nat, 0 ≤
+  returndata_dependentWitness0 ∧
+  0 ≤ returndata_dependentWitness1 ∧
+  (returndata_dependentWitness0 + returndata_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def returndata_size (returndata : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : Nat :=
+  let returndata_dependentWitness0 := (returndata).1
+  let returndata_dependentWitness1 := ((returndata).2).1
+  let returndata := ((returndata).2).2
+  let data := returndata
+  data.len
 
-/- Type quantifiers: dst : Nat, off : Nat, len : Nat, (host_valid_access dst) ∧
-  (source_valid_length off) ∧ (host_valid_access len) -/
-def returndata_copy (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
-  (do
-      let dependentArg0 := (← readReg returndata)
-      (output_slice_copy dependentArg0 dst off len))
+/- Type quantifiers: returndata_dependentWitness1 : Nat, returndata_dependentWitness0 : Nat, dst :
+  Nat, off : Nat, len : Nat, (host_valid_access dst) ∧
+  (source_valid_length off) ∧ (host_valid_access len), 0 ≤ returndata_dependentWitness0 ∧
+  0 ≤ returndata_dependentWitness1 ∧
+  (returndata_dependentWitness0 + returndata_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def returndata_copy (returndata : (Sigma fun (k_syn_off : Nat) =>
+  (Sigma fun (k_syn_len : Nat) => (OutputSliceFields k_syn_off k_syn_len)))) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
+  let returndata_dependentWitness0 := (returndata).1
+  let returndata_dependentWitness1 := ((returndata).2).1
+  let returndata := ((returndata).2).2
+  (output_slice_copy ⟨_, ⟨_, returndata⟩⟩ dst off len)
 
 /-- Copies `min(want, size)` returndata bytes — the `CALL`-family output
 write-back. -/
-/- Type quantifiers: k_ex552030_ : Nat, k_ex552029_ : Nat, 0 ≤ k_ex552029_ ∧
-  k_ex552029_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552030_ ∧ k_ex552030_ ≤ (2 ^ 32 - 1) -/
-def returndata_copy_prefix (dst : Nat) (want : Nat) : SailM Unit := do
+/- Type quantifiers: k_ex609175_ : Nat, k_ex609174_ : Nat, returndata_dependentWitness1 : Nat, returndata_dependentWitness0
+  : Nat, 0 ≤ returndata_dependentWitness0 ∧
+  0 ≤ returndata_dependentWitness1 ∧
+  (returndata_dependentWitness0 + returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex609174_
+  ∧ k_ex609174_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex609175_ ∧ k_ex609175_ ≤ (2 ^ 32 - 1) -/
+def returndata_copy_prefix (returndata : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (dst : Nat) (want : Nat) : SailM Unit := do
+  let returndata_dependentWitness0 := (returndata).1
+  let returndata_dependentWitness1 := ((returndata).2).1
+  let returndata := ((returndata).2).2
   let wanted := want
-  let available ← do (returndata_size ())
+  let available := (returndata_size ⟨_, ⟨_, returndata⟩⟩)
   let copy_length : Nat :=
     if ((wanted <b available) : Bool)
     then wanted
     else available
-  (do
-      let dependentArg0 := (← readReg returndata)
-      (output_slice_copy dependentArg0 dst 0 copy_length))
+  (output_slice_copy ⟨_, ⟨_, returndata⟩⟩ dst 0 copy_length)
 
 /- Type quantifiers: available : Nat, offset : Nat, (source_valid_length available) ∧
   0 ≤ offset ∧ offset ≤ available -/
 def returndata_remaining (available : Nat) (offset : Nat) : Nat :=
   (available - offset)
-
-/-- Copies a returndata range after validating its word-sized offset and
-length, entering an exceptional halt on the carried gas when the source
-range is out of bounds. -/
-/- Type quantifiers: dst : Nat, g : Nat, source_offset : Nat, length : Nat, 0 ≤ source_offset ∧
-  source_offset < (2 ^ 256) ∧ 0 ≤ length ∧ length < (2 ^ 256), 0 ≤ g, 0 ≤ dst ∧
-  dst ≤ (2 ^ 32 - 1) -/
-def validated_returndata_copy (g : Nat) (dst : Nat) (source_offset : Nat) (length : Nat) : SailM Nat := do
-  let available ← do (returndata_size ())
-  if ((source_offset ≤b available) : Bool)
-  then
-    (do
-      let remaining := (returndata_remaining available source_offset)
-      let bounded_source_offset : Nat := source_offset
-      if ((length ≤b remaining) : Bool)
-      then
-        (do
-          let bounded_length : Nat := length
-          (returndata_copy dst bounded_source_offset bounded_length)
-          (pure g))
-      else (exc_halt g InvalidOpcode))
-  else (exc_halt g InvalidOpcode)
-
-/- Type quantifiers: k_ex552041_ : Nat, k_ex552040_ : Nat, k_ex552039_ : Nat, k_ex552038_ : Nat, 0
-  ≤ k_ex552038_, 0 ≤ k_ex552039_ ∧ k_ex552039_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552040_ ∧
-  k_ex552040_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex552041_ ∧ k_ex552041_ ≤ (2 ^ 256 - 1) -/
-def returndata_copy_words (g : Nat) (dst : Nat) (source_offset : Nat) (length : Nat) : SailM Nat := do
-  (validated_returndata_copy g dst source_offset length)
 
 /-- Returns a carried cursor's exact byte high-water mark. -/
 /- Type quantifiers: mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, 0 ≤
@@ -299,9 +309,12 @@ def memory_high_water (mem : (Sigma fun (k_off : Nat) =>
   length
 
 /-- Clears all frame-memory storage and resets the active range. -/
-def memory_reset (_ : Unit) : SailM Unit := do
+def memory_reset (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))) := do
   (mem_clear ())
-  writeReg evm_memory ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩
+  (pure ((⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))))
 
 /- Type quantifiers: mem_dependentWitness1 : Nat, mem_dependentWitness0 : Nat, new_size : Nat, (source_valid_range 0 new_size), 0
   ≤ mem_dependentWitness0 ∧
@@ -433,10 +446,8 @@ def memory_code_slice (mem : (Sigma fun (k_syn_off : Nat) =>
 /-- Saves the parent range and enters an empty child-memory frame. -/
 def memory_frame_enter (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))) := do
-  let ⟨_, ⟨_, parent⟩⟩ ← do readReg evm_memory
   let base ← (( do (mem_frame_enter ()) ) : SailM Nat )
-  writeReg evm_memory ⟨_, ⟨_, (evm_memory_slice base 0)⟩⟩
-  (pure ((⟨_, ⟨_, parent⟩⟩ : (Sigma fun (k_off : Nat) =>
+  (pure ((⟨_, ⟨_, (evm_memory_slice base 0)⟩⟩ : (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))))
 
@@ -446,12 +457,20 @@ def memory_frame_enter (_ : Unit) : SailM (Sigma fun (k_off : Nat) =>
   0 ≤ parent_dependentWitness1 ∧
   (parent_dependentWitness0 + parent_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def memory_frame_leave (parent : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : SailM Unit := do
+  (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : SailM (Sigma fun
+  (parent_dependentWitness0 : Nat) =>
+  (Sigma fun (parent_dependentWitness1 : Nat) =>
+  (EvmMemorySliceFields parent_dependentWitness0 parent_dependentWitness1))) := do
   let parent_dependentWitness0 := (parent).1
   let parent_dependentWitness1 := ((parent).2).1
   let parent := ((parent).2).2
   (mem_frame_leave ())
-  writeReg evm_memory ⟨_, ⟨_, parent⟩⟩
+  (pure ((⟨_, ⟨_, parent⟩⟩ : (Sigma fun (parent_dependentWitness0 : Nat) =>
+    (Sigma fun (parent_dependentWitness1 : Nat) =>
+    (EvmMemorySliceFields parent_dependentWitness0 parent_dependentWitness1)))) : (Sigma fun
+    (parent_dependentWitness0 : Nat) =>
+    (Sigma fun (parent_dependentWitness1 : Nat) =>
+    (EvmMemorySliceFields parent_dependentWitness0 parent_dependentWitness1)))))
 
 /-- Captures parent execution state and enters child stack and memory frames.
 The caller has published its carried machine state to the frame
@@ -459,52 +478,67 @@ registers: this checkpoint reads them at the one authoritative
 boundary. The host operand-frame cursor mirrors `call_depth`: push the
 empty child operand stack before installing the child's semantic depth,
 and pop it before restoring the parent's semantic depth. -/
-def suspend_frame (_ : Unit) : SailM FrameCheckpoint := do
+/- Type quantifiers: frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0 : Nat, k_ex609274_
+  : Int, k_ex609273_ : Nat, k_ex609272_ : Nat, evm_memory_dependentWitness1 : Nat, evm_memory_dependentWitness0
+  : Nat, k_ex609267_ : Nat, k_ex609266_ : Nat, 0 ≤ k_ex609266_ ∧ k_ex609266_ ≤ (2 ^ 32 - 1), 0
+  ≤ k_ex609267_ ∧ k_ex609267_ ≤ (2 ^ 64 - 1), 0 ≤ evm_memory_dependentWitness0 ∧
+  0 ≤ evm_memory_dependentWitness1 ∧
+  (evm_memory_dependentWitness0 + evm_memory_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex609272_
+  ∧ k_ex609272_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex609273_ ∧ k_ex609273_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex609274_ ∧ k_ex609274_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ frame_code_dependentWitness0 ∧
+  0 ≤ frame_code_dependentWitness1 ∧
+  (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
+def suspend_frame (pc : Nat) (gas_remaining : Nat) (stack_top : StackPointer) (evm_memory : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (state_gas_remaining : Nat) (state_gas_spilled : Nat) (frame_refund : Int) (frame_status : FrameStatus) (message : Message) (frame_code : (Sigma
+  fun (evm_memory_dependentWitness0 : Nat) =>
+  (Sigma fun (evm_memory_dependentWitness1 : Nat) =>
+  (CodeFields evm_memory_dependentWitness0 evm_memory_dependentWitness1)))) (calldata : CalldataSlice) : SailM (FrameCheckpoint × StackPointer × (Sigma
+  fun (frame_code_dependentWitness0 : Nat) =>
+  (Sigma fun (frame_code_dependentWitness1 : Nat) =>
+  (EvmMemorySliceFields frame_code_dependentWitness0 frame_code_dependentWitness1)))) := do
+  let evm_memory_dependentWitness0 := (evm_memory).1
+  let evm_memory_dependentWitness1 := ((evm_memory).2).1
+  let evm_memory := ((evm_memory).2).2
+  let frame_code_dependentWitness0 := (frame_code).1
+  let frame_code_dependentWitness1 := ((frame_code).2).1
+  let frame_code := ((frame_code).2).2
   (k_journal_checkpoint ())
-  let saved_pc ← do readReg pc
-  let saved_gas ← do readReg gas_remaining
-  let saved_stack ← do readReg stack_top
-  let saved_state_gas ← do readReg state_gas_remaining
-  let saved_state_spill ← do readReg state_gas_spilled
-  let saved_refund ← do readReg frame_refund
-  let saved_status ← do readReg frame_status
-  let saved_message ← do readReg message
-  let saved_depth ← do readReg call_depth
-  let ⟨_, ⟨_, saved_code⟩⟩ ← do readReg frame_code
-  let saved_calldata ← do readReg calldata
-  writeReg stack_top (← (operand_stack_push_empty_frame ()))
-  let ⟨_, ⟨_, saved_memory⟩⟩ ← do (memory_frame_enter ())
-  (pure { pc := saved_pc,
-          gas_remaining := saved_gas,
-          stack_top := saved_stack,
-          state_gas_remaining := saved_state_gas,
-          state_gas_spilled := saved_state_spill,
-          refund := saved_refund,
-          status := saved_status,
-          message := saved_message,
-          call_depth := saved_depth,
-          code := ⟨_, ⟨_, saved_code⟩⟩,
-          calldata := saved_calldata,
-          memory := ⟨_, ⟨_, saved_memory⟩⟩ })
+  let child_stack ← do (operand_stack_push_empty_frame ())
+  let ⟨_, ⟨_, child_memory⟩⟩ ← do (memory_frame_enter ())
+  let checkpoint : FrameCheckpoint :=
+    { pc := pc,
+      gas_remaining := gas_remaining,
+      stack_top := stack_top,
+      state_gas_remaining := state_gas_remaining,
+      state_gas_spilled := state_gas_spilled,
+      refund := frame_refund,
+      status := frame_status,
+      message := message,
+      code := ⟨_, ⟨_, frame_code⟩⟩,
+      calldata := calldata,
+      memory := ⟨_, ⟨_, evm_memory⟩⟩ }
+  (pure ((checkpoint : FrameCheckpoint), (child_stack : StackPointer), ((⟨_, ⟨_, child_memory⟩⟩ : (Sigma
+    fun (frame_code_dependentWitness0 : Nat) =>
+    (Sigma fun (frame_code_dependentWitness1 : Nat) =>
+    (EvmMemorySliceFields frame_code_dependentWitness0 frame_code_dependentWitness1)))) : (Sigma fun
+    (frame_code_dependentWitness0 : Nat) =>
+    (Sigma fun (frame_code_dependentWitness1 : Nat) =>
+    (EvmMemorySliceFields frame_code_dependentWitness0 frame_code_dependentWitness1))))))
 
 /-- Restores a suspended parent after nested execution completes. -/
-def restore_frame (checkpoint : FrameCheckpoint) : SailM Unit := do
+def restore_frame (checkpoint : FrameCheckpoint) : SailM (Nat × Nat × StackPointer × (Sigma fun
+  (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len))) × Nat × Nat × Int × FrameStatus × Message × (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) × CalldataSlice) := do
   (operand_stack_pop_frame ())
-  (memory_frame_leave checkpoint.memory)
-  writeReg pc checkpoint.pc
-  writeReg gas_remaining checkpoint.gas_remaining
-  writeReg stack_top checkpoint.stack_top
-  writeReg state_gas_remaining checkpoint.state_gas_remaining
-  writeReg state_gas_spilled checkpoint.state_gas_spilled
-  writeReg frame_refund checkpoint.refund
-  writeReg frame_status checkpoint.status
-  writeReg message checkpoint.message
-  writeReg call_depth checkpoint.call_depth
-  writeReg frame_code checkpoint.code
-  writeReg calldata checkpoint.calldata
+  let ⟨_, ⟨_, memory⟩⟩ ← do (memory_frame_leave checkpoint.memory)
+  (pure ((checkpoint.pc : Nat), (checkpoint.gas_remaining : Nat), (checkpoint.stack_top : StackPointer), ((⟨_, ⟨_, memory⟩⟩ : (Sigma
+    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) : (Sigma
+    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))), (checkpoint.state_gas_remaining : Nat), (checkpoint.state_gas_spilled : Nat), (checkpoint.refund : Int), (checkpoint.status : FrameStatus), (checkpoint.message : Message), (checkpoint.code : (Sigma
+    fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))), (checkpoint.calldata : CalldataSlice)))
 
 /-- Writes one memory byte and raises the high-water mark. -/
-/- Type quantifiers: k_ex552116_ : Nat, 0 ≤ k_ex552116_ ∧ k_ex552116_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex609284_ : Nat, 0 ≤ k_ex609284_ ∧ k_ex609284_ ≤ (2 ^ 32 - 1) -/
 def mem_set_byte (off : Nat) (v : (BitVec 8)) : SailM Unit := do
   (mem_write_byte off v)
 
@@ -515,22 +549,22 @@ def mem_load (off : Nat) : SailM Nat := do
 
 /-- `MSTORE`: writes the big-endian word at `off` and raises the
 high-water mark. -/
-/- Type quantifiers: k_ex552119_ : Nat, k_ex552118_ : Nat, 0 ≤ k_ex552118_ ∧
-  k_ex552118_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552119_ ∧ k_ex552119_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex609287_ : Nat, k_ex609286_ : Nat, 0 ≤ k_ex609286_ ∧
+  k_ex609286_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex609287_ ∧ k_ex609287_ ≤ (2 ^ 256 - 1) -/
 def mem_store (off : Nat) (w : Nat) : SailM Unit := do
   (mem_store_word off w)
 
 /-- `MSTORE8`: writes the low byte of `w`. -/
-/- Type quantifiers: k_ex552121_ : Nat, k_ex552120_ : Nat, 0 ≤ k_ex552120_ ∧
-  k_ex552120_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552121_ ∧ k_ex552121_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex609289_ : Nat, k_ex609288_ : Nat, 0 ≤ k_ex609288_ ∧
+  k_ex609288_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex609289_ ∧ k_ex609289_ ≤ (2 ^ 256 - 1) -/
 def mem_store_byte (off : Nat) (w : Nat) : SailM Unit := do
   let value := (word_low_byte w)
   (mem_set_byte off value)
 
 /-- `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. -/
-/- Type quantifiers: k_ex552124_ : Nat, k_ex552123_ : Nat, k_ex552122_ : Nat, 0 ≤ k_ex552122_ ∧
-  k_ex552122_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552123_ ∧ k_ex552123_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex552124_ ∧ k_ex552124_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex609292_ : Nat, k_ex609291_ : Nat, k_ex609290_ : Nat, 0 ≤ k_ex609290_ ∧
+  k_ex609290_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex609291_ ∧ k_ex609291_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex609292_ ∧ k_ex609292_ ≤ (2 ^ 32 - 1) -/
 def mem_mcopy (dst : Nat) (src : Nat) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then (mem_move dst src len)

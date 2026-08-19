@@ -1298,7 +1298,7 @@
       view.status.classList.add("evmsail-perf-status--error");
       view.status.textContent =
         "No generated profile dataset is available in this documentation build. " +
-        "Generate it with python3 -m devtools.benchmarks.zisk --profile sdk --dashboard-dir … " +
+        "Generate it with uv run --frozen python -m devtools.benchmarks.zisk --profile sdk --dashboard-dir … " +
         `(${error.message}).`;
       return;
     }

@@ -19,6 +19,7 @@ from evm.HostContract import (
 )
 from evm._sail.vector import neq_bits
 from evm.prelude import (
+    AddressResult,
     address,
     hash,
     word,
@@ -236,14 +237,14 @@ def decode_authorization(sail_tuple: RlpFieldRef) -> Authorization:
     signing_hash = auth_signing_hash(chain_id, auth_addr, auth_nonce)
     match y:
         case RlpOk(False):
-            (ok, authority) = ecrecover_addr(signing_hash, 0, r, s)
+            recovered = ecrecover_addr(signing_hash, 0, r, s)
         case RlpOk(True):
-            (ok, authority) = ecrecover_addr(signing_hash, 1, r, s)
+            recovered = ecrecover_addr(signing_hash, 1, r, s)
         case RlpInvalidValue(None):
-            (ok, authority) = (False, ZERO_ADDRESS)
+            recovered = AddressResult(success=False, address=address(ZERO_ADDRESS))
         case _:
             raise SailMatchFailure("no Sail match clause applied")
-    return Authorization(valid_sig=((ok) & (((word_ult(ZERO_WORD, r)) & (((word_ult(r, SECP_N_FULL)) & (((word_ult(ZERO_WORD, s)) & (((word_ule(s, SECP_N_HALF)) & (((auth_nonce) != ((int((1 << 64)) - 1))))))))))))), authority=address(authority), address=address(auth_addr), nonce=account_nonce(auth_nonce), chain_id=word(chain_id))
+    return Authorization(valid_sig=((recovered.success) & (((word_ult(ZERO_WORD, r)) & (((word_ult(r, SECP_N_FULL)) & (((word_ult(ZERO_WORD, s)) & (((word_ule(s, SECP_N_HALF)) & (((auth_nonce) != ((int((1 << 64)) - 1))))))))))))), authority=address(recovered.address), address=address(auth_addr), nonce=account_nonce(auth_nonce), chain_id=word(chain_id))
 
 def prepare_authorization_entries(cursor: RlpCursor, count: prepared_authorization_count) -> list[Authorization]:
     if ((count) == (0)):

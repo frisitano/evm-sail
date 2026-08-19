@@ -28,7 +28,7 @@
 #   make clean          remove build artifacts
 #
 # Requires this repository's custom rems-project Sail compiler, used for
-# checks plus the C, Coq, and Lean backends. It defaults to `sail` on PATH;
+# checks plus the C, Rocq, and Lean backends. It defaults to `sail` on PATH;
 # override with `make SAIL=/path/to/sail`. Upstream Sail is not a supported
 # fallback -- it produces a wrong model rather than an error. See README.md.
 #
@@ -38,36 +38,43 @@
 
 SAIL ?= sail
 SAIL_SOURCE ?=
+TOOLCHAIN_CONFIG ?= config/toolchains.toml
 Z3_MEMO_PATH ?= $(abspath sail_smt_cache)
 SAIL_Z3_FLAGS := --memo-z3 --memo-z3-path $(Z3_MEMO_PATH)
 LAKE ?= lake
-COQC ?= opam exec -- rocq c
-PYTHON ?= python3
+ROCQ ?= opam exec -- rocq
+ROCQ_FLAGS ?= -q -quiet
 CLANG_TIDY ?= clang-tidy
 CLANG_FORMAT ?= clang-format
 CLANG ?= clang
 LINT_JOBS ?= 8
 LINT_PROFILE ?= comprehensive
+C_OPT_LINT_BASELINE ?= config/optimised-c-lint-baseline.json
+C_OPT_CONFORMANCE_WAIVERS ?= config/optimised-c-conformance-waivers.toml
 UV ?= uv
+PYTHON_PROJECT ?= $(UV) run --frozen
+PYTHON ?= $(PYTHON_PROJECT) python
+PYTHON_RUFF ?= $(PYTHON_PROJECT) ruff
+PYTHON_MYPY ?= $(PYTHON_PROJECT) mypy
+PYTHON_PYTEST ?= $(PYTHON_PROJECT) pytest
+PYTHON_CONFIG ?= $(PYTHON)
+PYTHON_EVM ?= $(PYTHON)
 GMP_CFLAGS ?= $(shell pkg-config --cflags gmp 2>/dev/null)
 DOCS_VENV ?= .venv-docs
 DOCS_VENV_ABS := $(abspath $(DOCS_VENV))
 DOCS_BIN := $(DOCS_VENV_ABS)/bin
 DOCS_ENV_STAMP := $(DOCS_VENV_ABS)/.evm-sail-docs-ready
-RUFF_VERSION ?= 0.15.22
-MYPY_VERSION ?= 1.18.2
-PYTEST_VERSION ?= 8.4.2
-ETHEREUM_TYPES_VERSION ?= 0.4.1
-PYDANTIC_VERSION ?= 2.12.5
-PYCRYPTODOME_VERSION ?= 3.23.0
-PYTHON_RUFF ?= $(UV) run --no-project --with ruff==$(RUFF_VERSION) ruff
-PYTHON_MYPY ?= $(UV) run --no-project --with mypy==$(MYPY_VERSION) mypy
-PYTHON_PYTEST ?= $(UV) run --no-project --with pytest==$(PYTEST_VERSION) pytest
-PYTHON_EVM ?= $(UV) run --no-project --with ethereum-types==$(ETHEREUM_TYPES_VERSION) --with pydantic==$(PYDANTIC_VERSION) --with pycryptodome==$(PYCRYPTODOME_VERSION) python
-
 PROJECT             := sail/evm.sail_project
 MODEL               := $(PROJECT) evm
+GENERATED_ROOT       ?= build/generated
 EEST_CORPUS         ?= zkvm/.fixtures/current-v062-full
+EEST_CORPUS_CACHE   ?= $(abspath .agent-tmp/corpus-cache)
+EEST_CORPUS_MANIFEST := config/corpora/tests-zkevm.toml
+CONTRACT_CANARIES    := config/canaries/contracts.toml
+PUBLIC_TARGETS       := config/public-targets.toml
+ROCQ_CANARIES        := config/canaries/rocq.toml
+LEAN_CANARIES        := config/canaries/lean.toml
+PYTHON_CANARIES      := config/canaries/python.toml
 EEST_SMOKE          := $(EEST_CORPUS)/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 C_SPEC_BUILD_DIR    := build/c-spec
 C_SPEC_MODEL        := $(C_SPEC_BUILD_DIR)/evm
@@ -91,16 +98,22 @@ C_OPT_QUALITY_SUMMARY := $(C_OPT_QUALITY_DIR)/summary.md
 C_OPT_EVALUATION_PURPOSE ?= experiment
 C_OPT_SAIL_SOURCE_ARG = $(if $(strip $(SAIL_SOURCE)),--sail-source "$(SAIL_SOURCE)")
 C_OPTIMISED_DIR     := sail/optimised
-C_OPTIMISED_SPLICES := $(addprefix $(C_OPTIMISED_DIR)/,$(shell sed '/^$$/d' $(C_OPTIMISED_DIR)/manifest))
-C_OPTIMISED_SPLICE_FLAGS := $(foreach splice,$(C_OPTIMISED_SPLICES),--splice $(splice))
-COQ_DIR             := extractions/coq
-COQ_MODEL_DIR       := $(COQ_DIR)/src
-COQ_PROOFS_DIR      := $(COQ_DIR)/proofs
+C_OPTIMISED_SPLICE_FLAGS = $(shell $(PYTHON_CONFIG) -m devtools.build_support manifest-words \
+	--root $(C_OPTIMISED_DIR) --prefix=--splice $(C_OPTIMISED_DIR)/manifest)
+ROCQ_DIR            := extractions/rocq
+ROCQ_COMMITTED_MODEL_DIR := $(ROCQ_DIR)/src
+ROCQ_STAGE_DIR      := $(GENERATED_ROOT)/rocq
+ROCQ_MODEL_DIR      := $(ROCQ_STAGE_DIR)/src
+ROCQ_PROOFS_DIR     := $(ROCQ_DIR)/proofs
 LEAN_DIR            := extractions/lean
-LEAN_MODEL_DIR      := $(LEAN_DIR)/src
+LEAN_COMMITTED_MODEL_DIR := $(LEAN_DIR)/src
+LEAN_STAGE_DIR      := $(GENERATED_ROOT)/lean
+LEAN_MODEL_DIR      := $(LEAN_STAGE_DIR)/src
 LEAN_PROOFS_DIR     := $(LEAN_DIR)/proofs
 PYTHON_DIR          := extractions/python
-PYTHON_SRC_ROOT     := $(PYTHON_DIR)/src
+PYTHON_COMMITTED_SRC_ROOT := $(PYTHON_DIR)/src
+PYTHON_STAGE_DIR    := $(GENERATED_ROOT)/python
+PYTHON_SRC_ROOT     := $(PYTHON_STAGE_DIR)/src
 PYTHON_PACKAGE      := $(PYTHON_SRC_ROOT)/evm
 PYTHON_MODEL        := $(PYTHON_PACKAGE)/__init__.py
 PYTHON_HOST_CONTRACT := extractions/python/contract/HostContract.py
@@ -127,11 +140,11 @@ LEAN_SPECIALIZATION := extractions/lean/contract/Specialization.lean
 # override both together when pointing at a checkout elsewhere. The library is
 # an ordinary Lake package rather than part of the compiler's share tree, so
 # the target provisions it on first use at the revision the backend expects.
-LEAN_SAIL_LIB       ?= $(abspath $(LEAN_MODEL_DIR)/.lake/packages/Sail)
+LEAN_SAIL_LIB       ?= $(abspath build/deps/lean-sail)
 LEAN_SAIL_LIB_REQUIRE ?= .lake/packages/Sail
 LEAN_SAIL_LIB_GIT   ?= https://github.com/rems-project/lean-sail
-LEAN_SAIL_LIB_REV   ?= v4
-COQ_SEMANTIC_FLAGS  := --coq-semantic-range-types --coq-undef-axioms
+LEAN_SAIL_LIB_REV   ?= $(shell $(PYTHON_CONFIG) -m devtools.toolchains --manifest $(TOOLCHAIN_CONFIG) lean_sail_commit)
+ROCQ_SEMANTIC_FLAGS := --coq-semantic-range-types --coq-undef-axioms
 C_SPEC_HEADERS      := sail_failure.h exceptions.h region_access.h hash.h precompiles.h output.h \
                        scratch.h memory.h transient_storage.h stack.h frame_stack.h \
                        code_db.h kernel_state.h trie_node_db.h state_db.h
@@ -192,7 +205,7 @@ C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve decode_stateless_input_ref \
                         $(C_OPT_OPCODE_HANDLER_PRESERVE_FLAGS)
 SAIL_CONTRACTS      :=
-EXTERN_CONTRACT     := extractions/coq/contract/ExternBoundary.v
+EXTERN_CONTRACT     := extractions/rocq/contract/ExternBoundary.v
 # Installed Sail Python plugins are discovered automatically. Set this to the
 # in-tree sail_plugin_python.cmxs path when validating an uninstalled build.
 SAIL_PYTHON_PLUGIN  ?=
@@ -213,7 +226,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised build-coq build-lean build-python all c-optimised c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo coq-contracts-check docs-env docs-site eest-smoke extract extract-coq extract-lean extract-python ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-check python-tools-fixture-smoke python-tools-fmt-check python-tools-format python-tools-format-check python-tools-lint python-tools-test python-tools-typecheck runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised generate-rocq validate-rocq drift-rocq extract-rocq build-rocq-interface build-rocq publish-rocq generate-lean validate-lean drift-lean extract-lean build-lean publish-lean generate-python validate-python drift-python extract-python build-python publish-python all c-optimised c-optimised-format-generated c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-public-targets check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo rocq-contracts-check docs-env docs-site eest-provision eest-verify eest-smoke verify-corpus verify-rocq verify-lean verify-python verify-c-spec verify-c-optimised verify-fast verify-docs extract ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-check python-tools-fixture-smoke python-tools-fmt-check python-tools-format python-tools-format-check python-tools-lint python-tools-test python-tools-typecheck runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -235,17 +248,21 @@ help:
 	@echo "  make c-optimised-clang-format - require generated and FFI C to match .clang-format"
 	@echo "  make sail-readability-lint-report - inventory typed-Sail and common-Jib cleanup findings"
 	@echo "  make check-optimized-ffi - enforce the allocation-free optimized C boundary"
-	@echo "  make extract-coq    - generate and validate the complete Coq model"
+	@echo "  make extract-rocq   - stage and validate the complete Rocq model"
+	@echo "  make build-rocq     - compile the staged Rocq model"
+	@echo "  make publish-rocq   - publish validated staged Rocq sources"
 	@echo "  make extract-lean   - generate and compile the complete Lean model"
 	@echo "  make lean-harness   - build the executable Lean fixture-harness library"
 	@echo "  make docs-env       - create/update the repo-local uv documentation environment"
 	@echo "  make extract-python - generate and smoke-test the complete Python model"
-	@echo "  make python-lint    - lint generated Python with Ruff $(RUFF_VERSION)"
+	@echo "  make python-lint    - lint generated Python with the locked Ruff version"
 	@echo "  make python-tools-check - run all handwritten Python quality gates"
 	@echo "  make python-tools-format - format handwritten Python with Ruff"
 	@echo "  make python-tools-fixture-smoke - run one embedded v0.6.2 fixture"
 	@echo "  make ffi-clang-format-check - require handwritten FFI C to match .clang-format"
-	@echo "  make coq-contracts-check - compile the hand-maintained Coq extern contract"
+	@echo "  make rocq-contracts-check - compile the hand-maintained Rocq extern contract"
+	@echo "  make eest-provision - provision and authenticate the pinned EEST corpus"
+	@echo "  make verify-corpus  - run the complete corpus on the optimized native model"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -254,17 +271,13 @@ help:
 check:
 	$(SAIL) $(SAIL_Z3_FLAGS) $(MODEL)
 
-# Two checks (each recipe is a single-line shell command; Make 3.81 has no
-# .ONESHELL). (1) Sail's ordinary warnings and typed readability diagnostics
-# type-check every reachable definition and gate source-actionable hygiene.
-# Post-Jib findings remain an inventory because they describe compiler-created
-# structure rather than source defects. (2) banner-box alignment: inside a
-# /* ===...=== */ box, every comment line must be the same width as the divider,
-# so the closing */ columns line up.
+# Preserve Sail's complete output and exit status in a bounded log, then run
+# the tested multi-error banner-box checker over repository Sail sources.
 lint:
-	@o=$$($(SAIL) $(SAIL_Z3_FLAGS) --all-warnings --lint-readability $(MODEL) 2>&1); if printf '%s\n' "$$o" | grep -qiE "warning|error"; then printf '%s\n' "$$o" | grep -iE "warning|error" | head -20; echo "lint: FAILED (Sail warnings or readability findings)"; exit 1; fi; \
-	awk 'function ck(){if(n&&d)for(i=1;i<=n;i++)if(length(b[i])!=w){print f[i]":"l[i]": comment box width "length(b[i])" != "w;bad=1}} FNR==1{ck();n=0;d=0} /^\/\*.*\*\/$$/{b[++n]=$$0;l[n]=FNR;f[n]=FILENAME;if($$0~/^\/\* =+ \*\/$$/){d=1;w=length($$0)};next} {ck();n=0;d=0} END{ck();exit bad}' $(SAIL_FILES) || { echo "lint: FAILED (misaligned comment boxes)"; exit 1; }; \
-	echo "lint: clean"
+	@$(PYTHON) -m devtools.build_support lint-command --log build/lint/sail.log -- \
+		$(SAIL) $(SAIL_Z3_FLAGS) --all-warnings --lint-readability $(MODEL)
+	@$(PYTHON) -m devtools.build_support comment-boxes $(SAIL_FILES)
+	@echo "lint: clean"
 	@$(PYTHON) -m devtools.docs.lint . || { echo "lint: FAILED (docs style)"; exit 1; }
 
 # one sail call per file: the files $include each other, so a single multi-file
@@ -287,77 +300,57 @@ check-optimized-ffi:
 zisk-guest:
 	bash zkvm/zisk/build.sh guest
 
-eest-smoke: python-tools-fixture-smoke
+eest-smoke: eest-provision
+	@$(PYTHON) -m devtools.harness.cli --build optimized $(EEST_SMOKE) --limit 1 --quiet
+
+eest-provision:
+	$(PYTHON_CONFIG) -m devtools.corpus --manifest $(EEST_CORPUS_MANIFEST) provision \
+		$(EEST_CORPUS) --cache $(EEST_CORPUS_CACHE)
+
+eest-verify:
+	$(PYTHON_CONFIG) -m devtools.corpus --manifest $(EEST_CORPUS_MANIFEST) verify $(EEST_CORPUS)
+
+verify-corpus: eest-provision
+	$(PYTHON) -m devtools.build_support run-command --log build/logs/corpus.log -- \
+		$(PYTHON) -m devtools.harness.cli --build optimized --jobs $${EEST_JOBS:-8} --quiet $(EEST_CORPUS)
 
 check-contracts:
-	@for f in $(SAIL_CONTRACTS); do $(SAIL) $(SAIL_Z3_FLAGS) "$$f"; done
-	test -s $(EXTERN_CONTRACT)
-	test -s $(LEAN_HOST_AXIOMS)
-	test -s $(LEAN_SPECIALIZATION)
-	test -s $(PYTHON_HOST_CONTRACT)
-	grep -q "Record InputOracle" $(EXTERN_CONTRACT)
-	grep -q "Record OutputTraceContract" $(EXTERN_CONTRACT)
-	grep -q "Record CryptoContract" $(EXTERN_CONTRACT)
-	grep -q "Record MemoryStackContract" $(EXTERN_CONTRACT)
-	grep -q "continuation_stack_lifo_contract" $(EXTERN_CONTRACT)
-	grep -q "Record PersistentWorld" $(EXTERN_CONTRACT)
-	grep -q "Record TransactionSnapshot" $(EXTERN_CONTRACT)
-	grep -q "Inductive StateJournalEntry" $(EXTERN_CONTRACT)
-	grep -q "Definition split_at_open_checkpoint" $(EXTERN_CONTRACT)
-	grep -q "Definition journal_commit" $(EXTERN_CONTRACT)
-	grep -q "Definition reference_journal_revert" $(EXTERN_CONTRACT)
-	grep -q "Definition journal_step_recorded" $(EXTERN_CONTRACT)
-	grep -q "Definition reference_read_storage_original" $(EXTERN_CONTRACT)
-	grep -q "Definition world_delta_describes" $(EXTERN_CONTRACT)
-	grep -q "Record WorldStateContract" $(EXTERN_CONTRACT)
-	grep -q "world_journal_denotes" $(EXTERN_CONTRACT)
-	grep -q "Definition reference_world_state_contract" $(EXTERN_CONTRACT)
-	grep -q "Definition world_state_boundary" $(EXTERN_CONTRACT)
-	grep -q "Record RegionAccessContract" $(EXTERN_CONTRACT)
-	grep -q "Record ScratchArenaContract" $(EXTERN_CONTRACT)
-	grep -q "Record AcceleratorContract" $(EXTERN_CONTRACT)
-	grep -q "Record AncestorHashContract" $(EXTERN_CONTRACT)
-	grep -q "Record CodeStoreContract" $(EXTERN_CONTRACT)
-	grep -q "Inductive BalIterEntry" $(EXTERN_CONTRACT)
-	grep -q "Record BalRecorderContract" $(EXTERN_CONTRACT)
-	grep -q "Record AuthorizationTrackerContract" $(EXTERN_CONTRACT)
-	grep -q "Record WitnessDbContract" $(EXTERN_CONTRACT)
-	grep -q "Record GuestExternContract" $(EXTERN_CONTRACT)
-	grep -q "^structure PersistentWorld where" $(LEAN_HOST_AXIOMS)
-	grep -q "^structure TransactionSnapshot where" $(LEAN_HOST_AXIOMS)
-	grep -q "^def frame_stack_reset " $(LEAN_HOST_AXIOMS)
-	grep -q "^def frame_stack_push " $(LEAN_HOST_AXIOMS)
-	grep -q "^def frame_stack_pop " $(LEAN_HOST_AXIOMS)
-	grep -q "^def referenceReadStorageOriginal" $(LEAN_HOST_AXIOMS)
-	grep -q "^def worldDeltaDescribes" $(LEAN_HOST_AXIOMS)
-	grep -q "^def splitAtOpenCheckpoint" $(LEAN_HOST_AXIOMS)
-	grep -q "journalDenotes" $(LEAN_HOST_AXIOMS)
-	grep -q "^def referenceWorldStateContract" $(LEAN_HOST_AXIOMS)
-	grep -q "^def worldStateBoundary" $(LEAN_HOST_AXIOMS)
-	grep -q "^class HostState:" $(PYTHON_HOST_CONTRACT)
-	grep -q "^class AcceleratorContract:" $(PYTHON_HOST_CONTRACT)
-	grep -q "^def state_journal_checkpoint(" $(PYTHON_HOST_CONTRACT)
-	grep -q "^def state_journal_revert(" $(PYTHON_HOST_CONTRACT)
+	$(PYTHON_CONFIG) -m devtools.canaries --config $(CONTRACT_CANARIES) --root .
 
-extract-coq: check-contracts
-	mkdir -p $(COQ_MODEL_DIR)
-	$(SAIL) $(SAIL_Z3_FLAGS) --coq $(COQ_SEMANTIC_FLAGS) --coq-output-dir $(COQ_MODEL_DIR) -o evm $(MODEL)
-	test -s $(COQ_MODEL_DIR)/evm.v
-	test -s $(COQ_MODEL_DIR)/evm_types.v
-	grep -q "Definition process_transaction" $(COQ_MODEL_DIR)/evm.v
-	grep -q "Definition compute_state_root " $(COQ_MODEL_DIR)/evm.v
-	grep -q "Definition trie_root " $(COQ_MODEL_DIR)/evm.v
-	grep -q "Definition decode_stateless_input_ref" $(COQ_MODEL_DIR)/evm.v
-	grep -q "Definition main" $(COQ_MODEL_DIR)/evm.v
-	grep -q "Axiom frame_stack_reset " $(COQ_MODEL_DIR)/evm.v
-	grep -q "Axiom frame_stack_push " $(COQ_MODEL_DIR)/evm.v
-	grep -q "Axiom frame_stack_pop " $(COQ_MODEL_DIR)/evm.v
+check-public-targets:
+	$(PYTHON_CONFIG) -m devtools.target_contract --config $(PUBLIC_TARGETS) --makefile Makefile
 
-build-coq: extract-coq
-	$(COQC) -q -noglob -o $(abspath $(COQ_DIR)/contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
-	cd $(COQ_MODEL_DIR) && $(COQC) evm_types.v
-	cd $(COQ_MODEL_DIR) && $(COQC) evm.v
-	cd $(COQ_MODEL_DIR) && $(COQC) $(abspath $(COQ_PROOFS_DIR))/RlpCursor.v
+generate-rocq: check-contracts
+	rm -rf $(ROCQ_STAGE_DIR)
+	mkdir -p $(ROCQ_MODEL_DIR)
+	$(SAIL) $(SAIL_Z3_FLAGS) --coq $(ROCQ_SEMANTIC_FLAGS) --coq-output-dir $(ROCQ_MODEL_DIR) -o evm $(MODEL)
+	$(PYTHON_CONFIG) -m devtools.rocq $(ROCQ_MODEL_DIR)
+
+validate-rocq: generate-rocq
+	$(PYTHON_CONFIG) -m devtools.canaries --config $(ROCQ_CANARIES) --root $(ROCQ_MODEL_DIR)
+
+extract-rocq: validate-rocq
+
+drift-rocq: validate-rocq
+	$(PYTHON) -m devtools.build_support compare-trees $(ROCQ_COMMITTED_MODEL_DIR) $(ROCQ_MODEL_DIR)
+
+build-rocq-interface: validate-rocq
+	mkdir -p $(ROCQ_STAGE_DIR)/contract $(ROCQ_STAGE_DIR)/proofs
+	$(ROCQ) c $(ROCQ_FLAGS) -noglob -o $(abspath $(ROCQ_STAGE_DIR)/contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
+	cd $(ROCQ_MODEL_DIR) && $(ROCQ) c $(ROCQ_FLAGS) evm_types.v
+	cd $(ROCQ_MODEL_DIR) && $(ROCQ) c $(ROCQ_FLAGS) -o $(abspath $(ROCQ_STAGE_DIR)/proofs)/RlpCursor.vo $(abspath $(ROCQ_PROOFS_DIR))/RlpCursor.v
+
+# The complete executable model is one very large transparent Rocq definition.
+# Keep its exhaustive elaboration available as an explicit deep build, while CI
+# verifies the regenerated source, type layer, proof, and extern contract below.
+build-rocq: build-rocq-interface
+	cd $(ROCQ_MODEL_DIR) && $(ROCQ) c $(ROCQ_FLAGS) evm.v
+
+publish-rocq: validate-rocq
+	$(PYTHON) -m devtools.build_support publish-tree $(ROCQ_MODEL_DIR) $(ROCQ_COMMITTED_MODEL_DIR)
+	git diff --stat -- $(ROCQ_COMMITTED_MODEL_DIR)
+
+verify-rocq: drift-rocq build-rocq-interface
 
 # Both targets keep generated output in ignored build directories and
 # compile-check it against the matching complete backend. The optimized model
@@ -366,8 +359,8 @@ build-coq: extract-coq
 # Aggregates: extraction is Sail -> target language; build is target language
 # -> compiled artifact. Splitting them means a generated tree stays available
 # for inspection and publication even when its backend cannot compile it yet.
-extract: extract-c-spec extract-c-optimised extract-coq extract-lean extract-python
-build-extractions: build-c-spec build-c-optimised build-coq build-lean build-python
+extract: extract-c-spec extract-c-optimised extract-rocq extract-lean extract-python
+build-extractions: build-c-spec build-c-optimised build-rocq build-lean build-python
 
 extract-c-spec:
 	mkdir -p $(C_SPEC_BUILD_DIR)
@@ -392,7 +385,7 @@ c-spec: build-c-spec
 
 # Publish the generated C sources into each backend's src/ tree so the
 # extracted code is visible in the repository alongside its contract
-# implementation, matching the lean/coq/python target layout. Sources only:
+# implementation, matching the lean/rocq/python target layout. Sources only:
 # object files, archives, and staging manifests stay in build/.
 publish-c-extraction: extract-c-spec extract-c-optimised
 	rm -rf extractions/c/spec/src extractions/c/optimised/src
@@ -456,7 +449,8 @@ c-optimised-evaluate: c-optimised-compdb
 		$(C_OPT_GENERATED_DIR)
 
 c-optimised-conformance: c-optimised
-	$(PYTHON) -m devtools.optimised_c.check $(C_OPT_GENERATED_DIR)
+	$(PYTHON) -m devtools.optimised_c.check \
+		--waivers $(C_OPT_CONFORMANCE_WAIVERS) $(C_OPT_GENERATED_DIR)
 
 # Advisory by default: this is the compiler-pass work queue. The deterministic
 # conformance target and semantic fixtures remain gates while we burn down the
@@ -464,14 +458,16 @@ c-optimised-conformance: c-optimised
 # own the fix instead of by translation-unit traversal order.
 c-optimised-lint-report: c-optimised-conformance
 	$(PYTHON) -m devtools.optimised_c.lint --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
-		--profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+		--baseline $(C_OPT_LINT_BASELINE) --profile $(LINT_PROFILE) \
+		--jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # This is intentionally separate from c-optimised-conformance: extraction and
 # the deterministic source contract remain runnable on machines without
 # clang-tidy, while reviewers and CI can opt into the richer AST diagnostics.
-c-optimised-clang-tidy: c-optimised-conformance
+c-optimised-clang-tidy: c-optimised-format-generated
 	$(PYTHON) -m devtools.optimised_c.lint --sail $(SAIL) --clang $(CLANG) --clang-tidy $(CLANG_TIDY) \
-		--require-clang-tidy --strict --profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+		--baseline $(C_OPT_LINT_BASELINE) --require-clang-tidy --strict \
+		--profile $(LINT_PROFILE) --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
 # Keep the report target read-only. The explicit clang-format target produces
 # the pretty-C review artifact from canonical compiler output and verifies both
@@ -480,9 +476,18 @@ c-optimised-format-report: c-optimised-conformance
 	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
 		--jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
 
-c-optimised-clang-format: c-optimised-conformance
+c-optimised-format-generated: c-optimised-conformance
 	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
-		--fix --strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+		--scope generated --fix --strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+c-optimised-clang-format: c-optimised-format-generated
+	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
+		--strict --jobs $(LINT_JOBS) $(C_OPT_GENERATED_DIR)
+
+verify-c-spec: build-c-spec
+
+# One extraction is shared across the optimized generated-C policy gates.
+verify-c-optimised: c-optimised-clang-format c-optimised-clang-tidy
 
 # Source diagnostics run both before elaboration and after type/effect
 # checking. Post-Jib diagnostics run in the common lowering, before backend
@@ -507,66 +512,72 @@ sail-readability-lint-report:
 # exist before generation rather than after it.
 $(LEAN_SAIL_LIB)/lakefile.toml:
 	mkdir -p $(dir $(LEAN_SAIL_LIB))
-	git clone --branch $(LEAN_SAIL_LIB_REV) --depth 1 $(LEAN_SAIL_LIB_GIT) $(LEAN_SAIL_LIB)
+	rm -rf $(LEAN_SAIL_LIB)
+	git init $(LEAN_SAIL_LIB)
+	git -C $(LEAN_SAIL_LIB) remote add origin $(LEAN_SAIL_LIB_GIT)
+	git -C $(LEAN_SAIL_LIB) fetch --depth 1 origin $(LEAN_SAIL_LIB_REV)
+	git -C $(LEAN_SAIL_LIB) checkout --detach FETCH_HEAD
+	test "$$(git -C $(LEAN_SAIL_LIB) rev-parse HEAD)" = "$(LEAN_SAIL_LIB_REV)"
 	test -s $@
 
-extract-lean: $(LEAN_SAIL_LIB)/lakefile.toml
-	mkdir -p $(LEAN_MODEL_DIR)
-	rm -rf $(LEAN_MODEL_DIR)/Evm
-	rm -f $(LEAN_MODEL_DIR)/Evm.lean $(LEAN_MODEL_DIR)/lakefile.toml $(LEAN_MODEL_DIR)/lean-toolchain $(LEAN_MODEL_DIR)/.gitignore
-	@# Generate into an empty staging tree. Sail clears its output directory,
-	@# but only of the entries a glob matches, so a stale .lake left by an
-	@# interrupted run would otherwise be copied over the real one below.
-	rm -rf $(LEAN_DIR)/evm
-	$(SAIL) $(SAIL_Z3_FLAGS) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB_REQUIRE) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_DIR) -o evm $(MODEL)
-	@# Sail derives the output directory from -o, which also names the Lake
-	@# package; move the generated tree into src/ (preserving any .lake
-	@# packages already there) so the layout matches the other targets.
-	cp -R $(LEAN_DIR)/evm/. $(LEAN_MODEL_DIR)/
-	rm -rf $(LEAN_DIR)/evm
-	find $(LEAN_MODEL_DIR)/Evm -name '*.lean' -exec sed -E -i.bak 's/(^|[^[:alnum:]_])prefix([^[:alnum:]_]|$$)/\1evm_prefix\2/g' {} +
-	find $(LEAN_MODEL_DIR) -name '*.bak' -exec rm -f {} +
+generate-lean: $(LEAN_SAIL_LIB)/lakefile.toml
+	rm -rf $(LEAN_STAGE_DIR)
+	mkdir -p $(LEAN_STAGE_DIR)
+	$(SAIL) $(SAIL_Z3_FLAGS) --lean --lean-executable --lean-explicit-measures --lean-force-output --lean-source-root sail --lean-lib-path $(LEAN_SAIL_LIB_REQUIRE) --lean-specialization-file $(LEAN_SPECIALIZATION) --lean-import-file $(LEAN_HOST_AXIOMS) --lean-output-dir $(LEAN_STAGE_DIR) -o evm $(MODEL)
+	mv $(LEAN_STAGE_DIR)/evm $(LEAN_MODEL_DIR)
+	cp $(LEAN_COMMITTED_MODEL_DIR)/lake-manifest.json $(LEAN_MODEL_DIR)/lake-manifest.json
 	rm -f $(LEAN_MODEL_DIR)/.gitignore
-	test -s $(LEAN_MODEL_DIR)/lakefile.toml
-	test -s $(LEAN_MODEL_DIR)/lean-toolchain
-	test -s $(LEAN_MODEL_DIR)/Evm.lean
-	grep -R -q "^def process_transaction " $(LEAN_MODEL_DIR)/Evm
-	grep -R -q "^def compute_state_root " $(LEAN_MODEL_DIR)/Evm
-	grep -R -q "^def trie_root " $(LEAN_MODEL_DIR)/Evm
-	grep -R -q "^def decode_stateless_input_ref " $(LEAN_MODEL_DIR)/Evm
-	grep -q "^def main " $(LEAN_MODEL_DIR)/Evm.lean
-	grep -q "^def frame_stack_reset " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
-	grep -q "^def frame_stack_push " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
-	grep -q "^def frame_stack_pop " $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
-	grep -q "^def referenceWorldStateContract" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
-	grep -q "^def worldStateBoundary" $(LEAN_MODEL_DIR)/Evm/HostAxioms.lean
-	! grep -R -E -q "noncomputable (section|def)|^[[:space:]]*partial def" $(LEAN_MODEL_DIR)/Evm $(LEAN_MODEL_DIR)/Evm.lean
+	$(PYTHON) -m devtools.build_support normalize-lean $(LEAN_MODEL_DIR)
 
-build-lean: extract-lean
-	cd $(LEAN_MODEL_DIR) && $(LAKE) update Sail
+validate-lean: generate-lean
+	$(PYTHON_CONFIG) -m devtools.canaries --config $(LEAN_CANARIES) --root $(LEAN_MODEL_DIR)
+
+extract-lean: validate-lean
+
+drift-lean: validate-lean
+	$(PYTHON) -m devtools.build_support compare-trees $(LEAN_COMMITTED_MODEL_DIR) $(LEAN_MODEL_DIR)
+
+build-lean: validate-lean
+	mkdir -p $(LEAN_MODEL_DIR)/.lake/packages
+	ln -sfn $(LEAN_SAIL_LIB) $(LEAN_MODEL_DIR)/.lake/packages/Sail
 	cd $(LEAN_MODEL_DIR) && $(LAKE) build
 
-extract-python:
-	mkdir -p $(PYTHON_DIR) $(PYTHON_CACHE_DIR)
-	rm -rf $(PYTHON_PACKAGE)
-	rm -f $(PYTHON_DIR)/evm.py
-	$(SAIL) $(if $(SAIL_PYTHON_PLUGIN),-plugin $(SAIL_PYTHON_PLUGIN)) --python $(SAIL_PYTHON_FLAGS) -o $(PYTHON_PACKAGE) $(MODEL)
-	test -s $(PYTHON_MODEL)
-	test -s $(PYTHON_PACKAGE)/HostContract.py
-	! grep -R -q "call_extern" $(PYTHON_PACKAGE)
-	! grep -R -q "register_extern" $(PYTHON_PACKAGE)
-	! grep -R -q "_sail_extern\\." $(PYTHON_PACKAGE)
+publish-lean: validate-lean
+	$(PYTHON) -m devtools.build_support publish-tree $(LEAN_MODEL_DIR) $(LEAN_COMMITTED_MODEL_DIR)
+	git diff --stat -- $(LEAN_COMMITTED_MODEL_DIR)
 
-build-python: extract-python
+verify-lean: drift-lean build-lean
+
+generate-python:
+	rm -rf $(PYTHON_STAGE_DIR)
+	mkdir -p $(PYTHON_SRC_ROOT) $(PYTHON_CACHE_DIR)
+	$(SAIL) $(if $(SAIL_PYTHON_PLUGIN),-plugin $(SAIL_PYTHON_PLUGIN)) --python $(SAIL_PYTHON_FLAGS) -o $(PYTHON_PACKAGE) $(MODEL)
+	$(PYTHON_CONFIG) -m devtools.python_extraction $(PYTHON_SRC_ROOT)
+
+validate-python: generate-python
+	$(PYTHON_CONFIG) -m devtools.canaries --config $(PYTHON_CANARIES) --root $(PYTHON_SRC_ROOT)
+
+extract-python: validate-python
+
+drift-python: validate-python
+	$(PYTHON) -m devtools.build_support compare-trees $(PYTHON_COMMITTED_SRC_ROOT) $(PYTHON_SRC_ROOT)
+
+build-python: validate-python
 	mkdir -p $(PYTHON_CACHE_DIR)
 	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) $(PYTHON_EVM) -m compileall -q $(PYTHON_PACKAGE)
-	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
-	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
+	PYTHONPYCACHEPREFIX=$(PYTHON_CACHE_DIR) PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)):$(abspath $(PYTHON_DIR)) $(PYTHON_EVM) -m py_compile $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
+	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_SRC_ROOT) $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(abspath $(PYTHON_SRC_ROOT)) $(PYTHON_EVM) $(PYTHON_DIR)/smoke.py
 
+publish-python: validate-python
+	$(PYTHON) -m devtools.build_support publish-tree $(PYTHON_SRC_ROOT) $(PYTHON_COMMITTED_SRC_ROOT)
+	git diff --stat -- $(PYTHON_COMMITTED_SRC_ROOT)
+
+verify-python: drift-python build-python
+
 python-lint:
-	test -s $(PYTHON_MODEL)
-	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_DIR)
+	test -s $(PYTHON_COMMITTED_SRC_ROOT)/evm/__init__.py
+	$(PYTHON_RUFF) check --select $(PYTHON_RUFF_RULES) --ignore $(PYTHON_RUFF_IGNORES) --output-format concise $(PYTHON_COMMITTED_SRC_ROOT) $(PYTHON_DIR)/adapter.py $(PYTHON_DIR)/smoke.py
 
 # Handwritten Python lives under one package tree. The generated model keeps
 # the separate python-lint policy above.
@@ -601,13 +612,15 @@ ffi-clang-format-check:
 	$(PYTHON) -m devtools.optimised_c.format --clang-format $(CLANG_FORMAT) \
 		--scope ffi --strict --jobs $(LINT_JOBS)
 
-# Type-check the hand-maintained Coq extern contract without regenerating the
+# Type-check the hand-maintained Rocq extern contract without regenerating the
 # model (no custom Sail needed; requires the Rocq prover from opam).
-coq-contracts-check:
-	mkdir -p $(COQ_DIR)/contract
-	$(COQC) -q -noglob -o $(abspath $(COQ_DIR)/contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
+rocq-contracts-check:
+	mkdir -p build/rocq-contract
+	$(ROCQ) c $(ROCQ_FLAGS) -noglob -o $(abspath build/rocq-contract)/ExternBoundary.vo $(EXTERN_CONTRACT)
 
 all: check lint fmt-check
+
+verify-fast: check lint fmt-check runtime-test check-contracts check-public-targets check-optimized-ffi python-tools-check
 
 # Build the MkDocs Material specification book from the sources: docinfo
 # bundle -> sail-lsp semantic index -> generated pages (sail-book-gen) ->
@@ -635,6 +648,8 @@ docs-site: docs-env
 	cd $(BOOK) && DISABLE_MKDOCS_2_WARNING=true '$(DOCS_BIN)/mkdocs' build --strict -d site
 	@echo "book: $(BOOK)/site/index.html"
 
+verify-docs: docs-site
+
 # Compatibility spelling retained for the docs workflow.
 lean-extract: extract-lean
 
@@ -643,7 +658,7 @@ lean-harness:
 
 clean:
 	@if [ -x '$(DOCS_BIN)/sail-book-gen' ]; then '$(DOCS_BIN)/sail-book-gen' --book '$(BOOK)' --clean; fi
-	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(C_OPT_QUALITY_DIR) $(C_OPT_COMPDB) $(LEAN_MODEL_DIR)/.lake/build $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
+	rm -rf $(C_SPEC_BUILD_DIR) $(C_OPT_BUILD_DIR) $(C_OPT_QUALITY_DIR) $(C_OPT_COMPDB) $(GENERATED_ROOT) build/rocq-contract $(PYTHON_CACHE_DIR) $(BOOK)/site $(BOOK_BUILD) $(BOOK)/docs/extraction $(BOOK)/docs/assets/generated
 
 clear-z3-memo:
 	rm -f "$(Z3_MEMO_PATH)" sail/sail_smt_cache

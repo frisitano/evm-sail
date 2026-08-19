@@ -29,10 +29,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -127,7 +129,7 @@ def undefined_Message (_ : Unit) : SailM Message := do
           code_address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           value := ← (undefined_range 0 ((2 ^i 256) - 1)),
-          state_gas_reservoir := ← (undefined_nat ()),
+          state_gas_reservoir := ← (undefined_range 0 ((2 ^i 64) - 1)),
           is_static := ← (undefined_bool ()),
           depth := ← (undefined_range 0 1024) })
 
@@ -137,7 +139,7 @@ def DEFAULT_MESSAGE : Message :=
     address := ZERO_ADDRESS,
     code_address := ZERO_ADDRESS,
     value := ZERO_WORD,
-    state_gas_reservoir := GAS_ZERO,
+    state_gas_reservoir := STATE_GAS_ZERO,
     is_static := false,
     depth := 0 }
 

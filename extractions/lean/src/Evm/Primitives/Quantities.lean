@@ -28,10 +28,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -64,6 +66,10 @@ non-negative quantities after operand validation.
 The aliases below name the semantic role of protocol and structural
 quantities while preserving their mathematical values. Where the protocol or
 data structure supplies a bound, the alias records it explicitly. -/
+
+def undefined_StackPointer (_ : Unit) : SailM StackPointer := do
+  (pure { storage := ← (undefined_bitvector 64),
+          height := ← (undefined_range 0 1024) })
 
 def undefined_PrecompileId (_ : Unit) : SailM PrecompileId := do
   (internal_pick
@@ -162,7 +168,7 @@ def word_of_nat_byte_count (value : Nat) : SailM Nat := do
   then (pure (u256 value))
   else
     (do
-      assert false "sail/primitives/quantities.sail:607.20-607.21"
+      assert false "sail/primitives/quantities.sail:611.20-611.21"
       throw Error.Exit)
 
 /- Type quantifiers: value : Nat, (source_valid_length value) -/

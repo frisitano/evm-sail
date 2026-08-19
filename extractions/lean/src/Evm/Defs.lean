@@ -327,12 +327,16 @@ abbrev operand_stack_height := Nat
 /-- A zero-based index from the top of the operand stack. -/
 abbrev stack_index := Nat
 
-/-- The abstract operand-stack cursor for the active frame, threaded by
-value through the interpreter in the state-passing convention and held
-in the `stack_top` frame register at frame boundaries. Opaque to Sail:
-the spec backend represents it as the frame height, the optimized
-backend as a raw row pointer; both fit one 64-bit value. -/
-abbrev StackTop := (BitVec 64)
+/-- The operand-stack cursor for the active frame, threaded by value through
+the interpreter in the state-passing convention and held in the
+`stack_top` frame register at frame boundaries. `storage` is an opaque
+host coordinate while `height` is the semantic stack height. Keeping the
+height in the cursor makes stack validation independent of the host stack
+representation. Optimized C refines `storage` to a native `u256 *`. -/
+structure StackPointer where
+  storage : (BitVec 64)
+  height : operand_stack_height
+  deriving BEq, Inhabited, Repr
 
 /-- The number of slots an operand-stack cursor moves in one advance or
 retreat. -/
@@ -620,13 +624,31 @@ abbrev block_gas_limit_bound : Int := (2 ^ 64 - 1)
 /-- EIP-7928 charges one BAL item against each 2,000 units of block gas. -/
 abbrev block_access_list_item_gas : Int := 2000
 
-/-- Available gas in a running EVM frame. -/
+/-- Available gas in a running EVM frame. Every admitted transaction gas
+limit originates in the execution payload's SSZ `uint64` gas-limit
+domain, and child frames can only receive gas from their parent. -/
 abbrev gas := Nat
 
 /-- Representation invariant for a value copied from the live frame gas
-counter.  The canonical model requires only non-negativity; production
-splices may strengthen it from the admitted input and counter lifecycle. -/
-def live_gas_valid (k_value : Int) : Prop := 0 ≤ k_value
+counter. -/
+def live_gas_valid (k_value : Int) : Prop := 0 ≤ k_value ∧ k_value ≤ (2 ^ 64 - 1)
+
+/-- Gas that can be restored to a particular live counter without exceeding
+the admitted `uint64` gas domain. The index is type-level only; optimized
+C represents the value as the same native gas scalar. -/
+abbrev gas_credit (k_available : Int) := Nat
+
+/-- State-gas spill that can be restored to the indicated execution gas. -/
+abbrev state_gas_spill_credit (k_available : Int) := Nat
+
+/-- Amsterdam's per-frame state-gas reservoir. The transaction's total gas
+allowance remains in the execution payload's `uint64` domain; only the
+regular-gas portion and state-gas spill into that portion are capped by
+EIP-7825. -/
+abbrev state_gas := Nat
+
+/-- Child state gas that can be restored to the indicated parent reservoir. -/
+abbrev state_gas_credit (k_available : Int) := Nat
 
 /-- Gas supplied by a transaction before fork-specific validation. Any value
 above the execution payload's SSZ `uint64` block-gas-limit domain cannot be
@@ -634,9 +656,9 @@ admitted, so the RLP boundary rejects it before constructing a
 transaction. -/
 abbrev transaction_gas := Nat
 
-/-- A transient computed charge. Canonically this is an exact natural;
-optimized builds use a native representation only after the computation's
-semantic bound has been established. -/
+/-- A transient computed charge after its affordability or structural bound
+has been established. Unaffordable larger computations are represented by
+`GasCharge.affordable = false` rather than materialized as a cost. -/
 abbrev gas_cost := Nat
 
 /-- Exact exclusive byte endpoint used by the canonical memory-expansion
@@ -656,9 +678,8 @@ structure GasCharge where
   cost : gas_cost
   deriving BEq, Inhabited, Repr
 
-/-- Intermediate MODEXP affordability factors.  The canonical model keeps
-their exact natural values; production splices bound them from the live
-gas counter and the at-most-255-bit exponent-head contribution. -/
+/-- Intermediate MODEXP affordability factors, bounded by live gas and the
+at-most-255-bit exponent-head contribution. -/
 abbrev modexp_factor := Nat
 
 /-- Products of two bounded MODEXP affordability factors. -/
@@ -739,8 +760,8 @@ abbrev gas_refund_delta := Int
 
 /-- Net state gas consumed by one execution frame. A credit can make this
 negative until transaction settlement clamps the block-level value at
-zero. The canonical model remains mathematically unbounded; production
-splices refine this type from the live-counter lifecycle. -/
+zero. The bounds follow from subtracting two live `uint64` counters and
+adding at most one EIP-7825 regular-pool spill. -/
 abbrev frame_state_gas_delta := Int
 
 /-- Combined state-gas delta for the Amsterdam authorization and execution
@@ -2345,22 +2366,28 @@ structure Message where
   code_address : address
   address : address
   value : word
-  state_gas_reservoir : gas
+  state_gas_reservoir : state_gas
   is_static : Bool
   depth : frame_depth
   deriving BEq, Inhabited, Repr
+
+/-- Lightweight result of one opcode handler. -/
+inductive OpcodeOutcome where
+  | Continue (_ : Unit)
+  | Failed (_ : ExceptionKind)
+  deriving Inhabited, BEq, Repr
+  open OpcodeOutcome
 
 /-- The suspended parent-frame state restored after nested execution. -/
 structure FrameCheckpoint where
   pc : code_pointer
   gas_remaining : gas
-  stack_top : StackTop
-  state_gas_remaining : gas
+  stack_top : StackPointer
+  state_gas_remaining : state_gas
   state_gas_spilled : state_gas_spill
   refund : gas_refund
   status : FrameStatus
   message : Message
-  call_depth : frame_depth
   code : Code
   calldata : CalldataSlice
   memory : EvmMemorySlice
@@ -2632,6 +2659,15 @@ structure TransactionMergeSemantics where
   preserve_selfdestruct_balance : Bool
   deriving BEq, Inhabited, Repr
 
+/-- Checks the Yellow Paper stack precondition for one instruction before it
+charges gas or performs side effects. `inputs` is the instruction's
+required stack height (delta) and `outputs` is the height it contributes
+after consuming those inputs (alpha). This is the single stack-bounds
+guard: handler bodies consume and produce operands unchecked behind it. -/
+inductive StackValidation where | StackValid | StackUnderflowFailure | StackOverflowFailure
+  deriving BEq, Inhabited, Repr
+  open StackValidation
+
 /-- Returns the number of 32-byte words covering a byte length. Besides the
 exact ceiling division, the result exposes its enclosing byte interval so
 affordability proofs can establish host-range bounds without a second
@@ -2761,13 +2797,22 @@ inductive ast where
   deriving Inhabited, BEq, Repr
   open ast
 
-/-- The behavior selected by one member of the closed CREATE-family algebra.
-Interpreting `CreateKind` once keeps operand decoding, hashing charges, and
-address derivation coupled rather than passing an unexplained boolean
-through the shared creation path. -/
-structure CreateSemantics where
-  uses_salt : Bool
+/-- The storage-owner identity carried by the interpreter. Canonical backends
+retain the semantic address; optimized C refines this to the account row
+and its storage range/generation. -/
+abbrev AccountId := Nat
+
+abbrev StorageId := Nat
+
+abbrev StorageCount := Nat
+
+abbrev StorageGeneration := Nat
+
+structure AccountExecutionContext where
+  address : address
   deriving BEq, Inhabited, Repr
+
+abbrev call_tree_steps := Nat
 
 /-- The behavior selected by one member of the closed CALL-family algebra.
 Interpreting `CallKind` once keeps operand decoding, value transfer, child
@@ -2779,6 +2824,14 @@ structure CallSemantics where
   uses_target_address : Bool
   inherits_caller_and_value : Bool
   enters_static_context : Bool
+  deriving BEq, Inhabited, Repr
+
+/-- The behavior selected by one member of the closed CREATE-family algebra.
+Interpreting `CreateKind` once keeps operand decoding, hashing charges, and
+address derivation coupled rather than passing an unexplained boolean
+through the shared creation path. -/
+structure CreateSemantics where
+  uses_salt : Bool
   deriving BEq, Inhabited, Repr
 
 /-- The refund available when one EIP-7702 authorization targets an existing
@@ -3145,19 +3198,6 @@ inductive HtrRequestKind where | HtrDeposit | HtrWithdrawalRequest | HtrConsolid
   open HtrRequestKind
 
 inductive Register : Type where
-  | evm_memory
-  | returndata
-  | calldata
-  | frame_code
-  | call_depth
-  | message
-  | frame_status
-  | frame_refund
-  | state_gas_spilled
-  | state_gas_remaining
-  | stack_top
-  | gas_remaining
-  | pc
   | k_current_transaction_epoch
   | k_tx
   | k_header
@@ -3170,19 +3210,6 @@ inductive Register : Type where
 open Register
 
 abbrev RegisterType : Register → Type
-  | .evm_memory => EvmMemorySlice
-  | .returndata => OutputSlice
-  | .calldata => CalldataSlice
-  | .frame_code => Code
-  | .call_depth => frame_depth
-  | .message => Message
-  | .frame_status => FrameStatus
-  | .frame_refund => gas_refund
-  | .state_gas_spilled => state_gas_spill
-  | .state_gas_remaining => gas
-  | .stack_top => StackTop
-  | .gas_remaining => gas
-  | .pc => code_pointer
   | .k_current_transaction_epoch => block_access_index
   | .k_tx => TxEnv
   | .k_header => BlockHeader
@@ -3194,24 +3221,10 @@ abbrev RegisterType : Register → Type
 
 instance : Inhabited (RegisterRef RegisterType BlockHeader) where
   default := .Reg k_header
-instance : Inhabited (RegisterRef RegisterType CalldataSlice) where
-  default := .Reg calldata
-instance : Inhabited (RegisterRef RegisterType Code) where
-  default := .Reg frame_code
-instance : Inhabited (RegisterRef RegisterType EvmMemorySlice) where
-  default := .Reg evm_memory
 instance : Inhabited (RegisterRef RegisterType ExecutionProfile) where
   default := .Reg k_execution_profile
-instance : Inhabited (RegisterRef RegisterType FrameStatus) where
-  default := .Reg frame_status
-instance : Inhabited (RegisterRef RegisterType Message) where
-  default := .Reg message
-instance : Inhabited (RegisterRef RegisterType OutputSlice) where
-  default := .Reg returndata
 instance : Inhabited (RegisterRef RegisterType ScratchSlice) where
   default := .Reg scratch_arena
-instance : Inhabited (RegisterRef RegisterType StackTop) where
-  default := .Reg stack_top
 instance : Inhabited (RegisterRef RegisterType TxEnv) where
   default := .Reg k_tx
 instance : Inhabited (RegisterRef RegisterType ancestor_hash_count) where
@@ -3220,18 +3233,8 @@ instance : Inhabited (RegisterRef RegisterType block_access_index) where
   default := .Reg k_current_transaction_epoch
 instance : Inhabited (RegisterRef RegisterType chain_identifier) where
   default := .Reg k_chain_id
-instance : Inhabited (RegisterRef RegisterType code_pointer) where
-  default := .Reg pc
-instance : Inhabited (RegisterRef RegisterType frame_depth) where
-  default := .Reg call_depth
-instance : Inhabited (RegisterRef RegisterType gas) where
-  default := .Reg gas_remaining
-instance : Inhabited (RegisterRef RegisterType gas_refund) where
-  default := .Reg frame_refund
 instance : Inhabited (RegisterRef RegisterType hash) where
   default := .Reg k_parent_state_root
-instance : Inhabited (RegisterRef RegisterType state_gas_spill) where
-  default := .Reg state_gas_spilled
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception

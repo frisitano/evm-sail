@@ -29,10 +29,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -59,7 +61,7 @@ The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
 /-- The `CREATE` address (YP §7): the low 20 bytes of
 `keccak256(rlp([sender, nonce]))`. -/
-/- Type quantifiers: k_ex551155_ : Nat, 0 ≤ k_ex551155_ ∧ k_ex551155_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex608261_ : Nat, 0 ≤ k_ex608261_ ∧ k_ex608261_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   let address_length := (rlp_addr_size ())
   let nonce_length := (rlp_uint_word_size nonce)

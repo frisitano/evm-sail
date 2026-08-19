@@ -4,17 +4,26 @@ from __future__ import annotations
 
 from .._runtime import (
     IntegerRange,
+    U64,
     Uint,
     Unsigned,
 )
 from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 
-gas: TypeAlias = Uint
+gas: TypeAlias = U64
+
+gas_credit: TypeAlias = int
+
+state_gas_spill_credit: TypeAlias = int
+
+state_gas: TypeAlias = U64
+
+state_gas_credit: TypeAlias = int
 
 transaction_gas: TypeAlias = Uint
 
-gas_cost: TypeAlias = Uint
+gas_cost: TypeAlias = U64
 
 memory_required_endpoint: TypeAlias = Uint
 
@@ -25,26 +34,61 @@ class GasCharge:
     affordable: bool
     cost: gas_cost
 
-def gas_charge(cost: transaction_state_gas_used) -> GasCharge:
+def gas_charge(cost: gas_cost) -> GasCharge:
     return GasCharge(affordable=True, cost=gas_cost(cost))
 
-modexp_factor: TypeAlias = Uint
+class modexp_factor(Unsigned):
+    LOWER = 0
+    UPPER = 55340232221128655102
 
-modexp_product: TypeAlias = Uint
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+class modexp_product(Unsigned):
+    LOWER = 0
+    UPPER = 3062541302288446199283209435219270630404
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
 modexp_osaka_extra: TypeAlias = Uint
 
 modexp_pre_osaka_extra: TypeAlias = Uint
 
-bls_msm_coefficient: TypeAlias = Uint
+class bls_msm_coefficient(Unsigned):
+    LOWER = 0
+    UPPER = 2949075000
 
-bls_msm_product: TypeAlias = Uint
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
-bls_msm_tail_product: TypeAlias = Uint
+class bls_msm_product(Unsigned):
+    LOWER = 0
+    UPPER = 54400831779174995929006125000
 
-linear_gas_variable_product: TypeAlias = Uint
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
-linear_gas_product: TypeAlias = Uint
+class bls_msm_tail_product(Unsigned):
+    LOWER = 0
+    UPPER = 2946125925000
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+class linear_gas_variable_product(Unsigned):
+    LOWER = 0
+    UPPER = 830103483316929822675000
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+class linear_gas_product(Unsigned):
+    LOWER = 0
+    UPPER = 830103483316929822720000
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
 class transaction_execution_gas(Unsigned):
     LOWER = 0
@@ -80,13 +124,20 @@ class gas_constant(Unsigned):
 
 gas_refund: TypeAlias = int
 
+gas_refund_delta: TypeAlias = int
+
 frame_state_gas_delta: TypeAlias = int
 
 state_gas_delta: TypeAlias = int
 
 transaction_state_gas_delta: TypeAlias = int
 
-transaction_state_gas_used: TypeAlias = Uint
+class transaction_state_gas_used(Unsigned):
+    LOWER = 0
+    UPPER = 55340232221162209277
+
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
 
 transaction_refund_divisor: TypeAlias = int
 
@@ -98,11 +149,13 @@ GAS_CHARGE_UNAFFORDABLE: GasCharge = GasCharge(affordable=False, cost=gas_cost(G
 
 TRANSACTION_EXECUTION_GAS_LIMIT: Annotated[int, IntegerRange((2 ** 24), (2 ** 24))] = (1 << 24)
 
-STATE_GAS_SPILL_ZERO: int = 0
+STATE_GAS_SPILL_ZERO: Annotated[int, IntegerRange(0, 0)] = 0
 
 STATE_GAS_SPILL_LIMIT: int = (1 << 24)
 
-GAS_ZERO: int = 0
+GAS_ZERO: Annotated[int, IntegerRange(0, 0)] = 0
+
+STATE_GAS_ZERO: Annotated[int, IntegerRange(0, 0)] = 0
 
 SYSTEM_CALL_GAS_LIMIT: Annotated[int, IntegerRange(30000000, 30000000)] = 30000000
 

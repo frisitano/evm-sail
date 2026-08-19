@@ -13,7 +13,7 @@ semantics wired up.
 
 ```
 $ cd ..
-$ python3 -m devtools.harness.cli --spike --limit 1 --quiet \
+$ uv run --frozen python -m devtools.harness.cli --spike --limit 1 --quiet \
     zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
@@ -180,14 +180,14 @@ zkvm/
 Requires `riscv64-unknown-elf-gcc` and `spike` on `PATH`. Every repository
 target uses the same custom Sail compiler. Its optimized C lowering supports
 spliceable type definitions and bound-driven native C representations, while
-its standard Lean and Coq backends preserve the model's semantic types. The
+its standard Lean and Rocq backends preserve the model's semantic types. The
 build uses `sail` on `PATH` and honours `SAIL=` for a different build; there is
 no auto-detection, because silently resolving a stale compiler yields a wrong
 model instead of an error. Upstream Sail is not a proof-extraction fallback; the real target build
 is the capability check.
 
 ```
-cd .. && python3 -m devtools.harness.cli --spike <state-test.json> --fork F   # the gate
+cd .. && uv run --frozen python -m devtools.harness.cli --spike <state-test.json> --fork F   # the gate
 VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
 ./build.sh guest                   # input-free build (build/zkvm_guest.elf)
 ./build.sh clean

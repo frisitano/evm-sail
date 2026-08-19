@@ -1,0 +1,24 @@
+schema_version = 1
+
+required = [
+  "check", "lint", "fmt-check", "runtime-test",
+  "check-contracts", "check-optimized-ffi", "python-tools-check",
+  "rocq-contracts-check",
+  "extract-c-spec", "build-c-spec", "verify-c-spec",
+  "extract-c-optimised", "build-c-optimised", "verify-c-optimised",
+  "extract-rocq", "build-rocq", "publish-rocq", "verify-rocq",
+  "extract-lean", "build-lean", "publish-lean", "verify-lean",
+  "extract-python", "build-python", "publish-python", "verify-python",
+  "eest-provision", "eest-verify", "verify-corpus",
+  "docs-site", "verify-fast", "verify-docs",
+]
+
+forbidden = [
+  "extract-coq", "build-coq", "publish-coq", "verify-coq",
+  "coq-contracts-check",
+]
+
+help = [
+  "extract-rocq", "build-rocq", "publish-rocq",
+  "verify-corpus", "eest-provision",
+]

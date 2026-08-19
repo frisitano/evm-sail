@@ -34,10 +34,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -170,12 +172,12 @@ def k_blobhash (index_word : Nat) : SailM Nat := do
   else (pure ZERO_WORD)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex551840_ : Nat, 0 ≤ k_ex551840_ ∧ k_ex551840_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex608953_ : Nat, 0 ≤ k_ex608953_ ∧ k_ex608953_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   (create_address a nonce)
 
 /-- The `CREATE2` address rule, in kernel form. -/
-/- Type quantifiers: k_ex551841_ : Nat, 0 ≤ k_ex551841_ ∧ k_ex551841_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex608954_ : Nat, 0 ≤ k_ex608954_ ∧ k_ex608954_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : (Vector (BitVec 8) 20)) (salt : Nat) (inithash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (create2_address a salt inithash)
 

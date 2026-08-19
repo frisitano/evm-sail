@@ -34,10 +34,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -82,11 +84,11 @@ the pre-signature fields in the witness and is copied once into the final
 contiguous preimage; legacy EIP-155 transactions append
 `(chain_id, 0, 0)`, typed transactions prepend the type byte as a
 domain separator (EIP-2718). -/
-/- Type quantifiers: k_ex551164_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
+/- Type quantifiers: k_ex608270_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
   : Nat, 0 ≤ content_src_dependentWitness0 ∧
   0 ≤ content_src_dependentWitness1 ∧
   (content_src_dependentWitness0 + content_src_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex551164_ ∧ k_ex551164_ ≤ (2 ^ 256 - 1) -/
+  k_ex608270_ ∧ k_ex608270_ ≤ (2 ^ 256 - 1) -/
 def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (v : Nat) : SailM (Vector (BitVec 8) 32) := do
   let content_src_dependentWitness0 := (content_src).1
@@ -137,8 +139,8 @@ def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
 
 /-- The EIP-7702 authorization signing hash:
 `keccak256(0x05 || rlp([chain_id, address, nonce]))`. -/
-/- Type quantifiers: k_ex551166_ : Nat, k_ex551165_ : Nat, 0 ≤ k_ex551165_ ∧
-  k_ex551165_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex551166_ ∧ k_ex551166_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex608272_ : Nat, k_ex608271_ : Nat, 0 ≤ k_ex608271_ ∧
+  k_ex608271_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex608272_ ∧ k_ex608272_ ≤ (2 ^ 64 - 1) -/
 def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 32) := do
   let chain_id_length := (rlp_uint_word_size chain_id)
   let address_length := (rlp_addr_size ())

@@ -31,7 +31,7 @@ from .primitives.quantities import (
     MemoryRangeFields as MemoryRangeFields,
     MemoryRangeFieldsValidity as MemoryRangeFieldsValidity,
     PrecompileId as PrecompileId,
-    StackTop as StackTop,
+    StackPointer as StackPointer,
     account_nonce as account_nonce,
     ancestor_hash_count as ancestor_hash_count,
     ancestor_index as ancestor_index,
@@ -109,7 +109,9 @@ from .primitives.gas import (
     gas as gas,
     gas_constant as gas_constant,
     gas_cost as gas_cost,
+    gas_credit as gas_credit,
     gas_refund as gas_refund,
+    gas_refund_delta as gas_refund_delta,
     linear_gas_product as linear_gas_product,
     linear_gas_variable_product as linear_gas_variable_product,
     memory_expansion_charge as memory_expansion_charge,
@@ -119,8 +121,11 @@ from .primitives.gas import (
     modexp_pre_osaka_extra as modexp_pre_osaka_extra,
     modexp_product as modexp_product,
     receipt_cumulative_gas as receipt_cumulative_gas,
+    state_gas as state_gas,
+    state_gas_credit as state_gas_credit,
     state_gas_delta as state_gas_delta,
     state_gas_spill as state_gas_spill,
+    state_gas_spill_credit as state_gas_spill_credit,
     transaction_execution_gas as transaction_execution_gas,
     transaction_gas as transaction_gas,
     transaction_refund_divisor as transaction_refund_divisor,
@@ -332,12 +337,15 @@ from .primitives.block import (
 from .primitives.evm import (
     CallContinuation as CallContinuation,
     CallKind as CallKind,
+    Continue as Continue,
     CreateContinuation as CreateContinuation,
     CreateKind as CreateKind,
     Empty as Empty,
+    Failed as Failed,
     FrameCheckpoint as FrameCheckpoint,
     FrameContinuation as FrameContinuation,
     Message as Message,
+    OpcodeOutcome as OpcodeOutcome,
     ResumeCall as ResumeCall,
     ResumeCreate as ResumeCreate,
     TransactionGasAllowance as TransactionGasAllowance,
@@ -435,6 +443,10 @@ from .kernel.environment import (
 
 from .kernel.lifecycle import (
     TransactionMergeSemantics as TransactionMergeSemantics,
+)
+
+from .evm.machine import (
+    StackValidation as StackValidation,
 )
 
 from .evm.gas import (
@@ -537,9 +549,18 @@ from .evm.instructions import (
     opcode_CREATE as opcode_CREATE,
 )
 
+from .evm.execute import (
+    AccountExecutionContext as AccountExecutionContext,
+    AccountId as AccountId,
+    StorageCount as StorageCount,
+    StorageGeneration as StorageGeneration,
+    StorageId as StorageId,
+)
+
 from .evm.interpreter import (
     CallSemantics as CallSemantics,
     CreateSemantics as CreateSemantics,
+    call_tree_steps as call_tree_steps,
 )
 
 from .evm.transaction import (

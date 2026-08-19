@@ -317,13 +317,13 @@ class ReceiptFields:
             raise ValueError("ReceiptFields.state_gas violates Sail type int('state_gas)")
         return self
 
-def receipt_fields(_limit: int, _regular_limit: int, tx_type: TxType, success: bool, gas_used: int, execution_gas: int, state_gas: int, logs: LogSeriesRef) -> ReceiptFields:
-    return ReceiptFields(validity=ReceiptFieldsValidity(limit=int(_limit), regular_limit=int(_regular_limit), gas_used=int(gas_used), execution_gas=int(execution_gas), state_gas=int(state_gas)), tx_type=tx_type, success=success, gas_used=int(gas_used), execution_gas=int(execution_gas), state_gas=int(state_gas), logs=logs)
+def receipt_fields(_limit: int, _regular_limit: int, tx_type: TxType, success: bool, gas_used: int, execution_gas: int, state_gas_: int, logs: LogSeriesRef) -> ReceiptFields:
+    return ReceiptFields(validity=ReceiptFieldsValidity(limit=int(_limit), regular_limit=int(_regular_limit), gas_used=int(gas_used), execution_gas=int(execution_gas), state_gas=int(state_gas_)), tx_type=tx_type, success=success, gas_used=int(gas_used), execution_gas=int(execution_gas), state_gas=int(state_gas_), logs=logs)
 
 ReceiptWithin: TypeAlias = ReceiptFields
 
-def receipt_within(limit: int, regular_limit: int, tx_type: TxType, success: bool, gas_used: int, execution_gas: int, state_gas: int, logs: LogSeriesRef) -> ReceiptFields:
-    return receipt_fields(limit, regular_limit, tx_type, success, gas_used, execution_gas, state_gas, logs)
+def receipt_within(limit: int, regular_limit: int, tx_type: TxType, success: bool, gas_used: int, execution_gas: int, state_gas_: int, logs: LogSeriesRef) -> ReceiptFields:
+    return receipt_fields(limit, regular_limit, tx_type, success, gas_used, execution_gas, state_gas_, logs)
 
 Receipt: TypeAlias = ReceiptFields
 

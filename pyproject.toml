@@ -1,5 +1,27 @@
+[project]
+name = "evm-sail-devtools"
+version = "0.0.0"
+requires-python = "==3.12.*"
+dependencies = [
+  "ethereum-types==0.4.1",
+  "pycryptodome==3.23.0",
+  "pydantic==2.12.5",
+]
+
+[dependency-groups]
+dev = [
+  "mypy==1.18.2",
+  "pytest==8.4.2",
+  "ruff==0.15.22",
+]
+
+[tool.uv]
+package = false
+python-preference = "only-managed"
+required-version = "==0.12.5"
+
 [tool.ruff]
-target-version = "py39"
+target-version = "py312"
 line-length = 100
 extend-exclude = ["extractions/python"]
 
@@ -11,7 +33,7 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
 "devtools/harness/prestate_mpt.py" = ["E402"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 strict = true
 files = ["devtools"]
 

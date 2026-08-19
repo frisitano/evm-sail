@@ -1,16 +1,6 @@
-# Lint and format gates for every language surface in the repository: Sail
-# model checks, C boundary audits and clang policies, the Coq/Lean/Python
-# extraction targets, and the handwritten Python tooling.
-#
-# All steps are make-target-based so the extractions layout can move
-# extractions/c restructure does not touch this workflow.
-#
-# Jobs below the divider need the repository's CUSTOM Sail compiler (targets
-# default to `sail` on PATH and honour SAIL=; upstream Sail is not supported).
-# It is provisioned by .github/actions/setup-sail, which builds it from the
-# compiler repository and caches it on its commit. Those jobs depend on the
-# `sail-compiler` job so the compiler is built once and the rest start from a
-# warm cache rather than rebuilding it in parallel.
+# Required, read-only validation for every maintained model surface. Toolchain
+# and corpus identities live in config/, while this workflow only restores
+# verified caches and invokes Make's public aggregate targets.
 
 name: ci
 
@@ -28,180 +18,199 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # --- toolchain-free jobs -------------------------------------------------
-
-  # C: allocation-free optimized FFI boundary audit (pure Python) and the
-  # clang-format policy over the handwritten FFI sources.
   c-boundary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
       - name: Install clang-format
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang-format
-      - name: Optimized FFI production audit
-        run: make check-optimized-ffi
-      - name: Handwritten FFI clang-format policy
-        run: make ffi-clang-format-check
+      - run: make check-optimized-ffi
+      - run: make ffi-clang-format-check
 
-  # Contracts: textual invariants of the hand-maintained extraction contracts
-  # (ExternBoundary.v, HostAxioms.lean, Specialization.lean, HostContract.py).
-  # SAIL=true skips compiler resolution: the Sail-side contract list is empty
-  # and the remaining checks are pure grep/test.
   contracts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Contract invariants
-        run: make check-contracts SAIL=true
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: make check-contracts check-public-targets
 
-  # Coq: type-check the hand-maintained extern contract with the Rocq prover.
-  # This compiles extractions Coq without regenerating the model, so it needs
-  # opam+Rocq but not the custom Sail compiler.
-  coq-contract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up OCaml/opam
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: "5.2"
-      # TODO(coq): pin the Rocq version to the one used locally (COQC is
-      # `opam exec -- rocq c`; see Makefile) once that version is recorded.
-      - name: Install Rocq
-        run: opam install -y rocq-prover
-      - name: Compile the extern contract
-        run: make coq-contracts-check SAIL=true
-
-  # Python: lint the handwritten harness and tooling scripts with pinned Ruff.
-  # The format check is advisory until the tree is formatted once; drop
-  # continue-on-error after that ratchet.
   python-tools:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-      - name: Lint handwritten Python
-        run: make python-tools-lint
-      - name: Ruff format drift report (advisory)
-        continue-on-error: true # TODO(fmt): make blocking after one-time format
-        run: make python-tools-fmt-check
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: make python-tools-check
 
-  # --- custom-Sail jobs ----------------------------------------------------
+  rocq-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - name: Resolve pinned toolchains
+        run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"
+      - uses: ocaml/setup-ocaml@605a7e998e76e035b82c14d618a6e1010732c4ce # v3
+        with:
+          ocaml-compiler: ${{ env.ROCQ_OCAML }}
+      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }}
+      - run: make rocq-contracts-check SAIL=true
 
-  # Build the custom compiler once and populate the cache the jobs below read.
-  # It carries no checks of its own; its value is that the five jobs after it
-  # do not each build the same compiler concurrently.
   sail-compiler:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Build and cache the custom Sail compiler
-        uses: ./.github/actions/setup-sail
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - uses: ./.github/actions/setup-sail
 
-  # Each job below provisions the compiler through the shared composite
-  # action, the same one .github/workflows/book.yml uses.
-
-  # Sail: model type-check, warnings + typed readability lints + docs style,
-  # and sail --fmt formatting drift.
   sail:
     needs: sail-compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: |
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-      - name: Set up the custom Sail compiler
-        uses: ./.github/actions/setup-sail
-      - name: Type-check the model
-        run: make check
-      - name: Sail lint (warnings, readability, docs style)
-        run: make lint
-      - name: Sail formatting drift
-        run: make fmt-check
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make check lint fmt-check runtime-test
 
-  # C: generate the optimized model and enforce the clang-format and
-  # clang-tidy policies over generated plus handwritten optimized C.
+  c-spec:
+    needs: sail-compiler
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-c-spec
+
   c-optimised:
     needs: sail-compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: |
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             z3 libgmp-dev pkg-config clang clang-format clang-tidy
-      - name: Set up the custom Sail compiler
-        uses: ./.github/actions/setup-sail
-      - name: Optimized C clang-format policy
-        run: make c-optimised-clang-format
-      - name: Optimized C clang-tidy policy
-        run: make c-optimised-clang-tidy
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-c-optimised
 
-  # Lean: regenerate the Lean model and compile it with lake.
   lean:
     needs: sail-compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-      - name: Install elan (Lean toolchain manager)
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-            | sh -s -- -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: Set up the custom Sail compiler
-        uses: ./.github/actions/setup-sail
-      - name: Extract and compile the Lean model
-        run: make extract-lean
-
-  # Coq: regenerate and validate the complete Coq model (heavier than the
-  # toolchain-free coq-contract job above; compiles evm.v).
-  coq-model:
-    needs: sail-compiler
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-      - name: Set up OCaml/opam
-        uses: ocaml/setup-ocaml@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - name: Resolve pinned toolchains
+        run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          ocaml-compiler: "5.2"
-      # TODO(coq): pin the Rocq version once recorded (see coq-contract job).
-      - name: Install Rocq
-        run: opam install -y rocq-prover
-      - name: Set up the custom Sail compiler
-        uses: ./.github/actions/setup-sail
-      - name: Extract and validate the Coq model
-        run: make extract-coq
+          path: |
+            build/deps/lean-sail
+            ~/.elan/toolchains
+          key: lean-${{ runner.os }}-${{ hashFiles('config/toolchains.toml', 'extractions/lean/src/lean-toolchain', 'extractions/lean/src/lake-manifest.json') }}
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config elan
+          elan toolchain install "$LEAN_TOOLCHAIN"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-lean
 
-  # Python: regenerate the Python model, smoke-test it, and lint it with the
-  # pinned Ruff policy.
+  rocq:
+    needs: sail-compiler
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - name: Resolve pinned toolchains
+        run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - uses: ocaml/setup-ocaml@605a7e998e76e035b82c14d618a6e1010732c4ce # v3
+        with:
+          ocaml-compiler: ${{ env.ROCQ_OCAML }}
+      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-rocq
+
   python-model:
     needs: sail-compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: |
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-      - name: Set up the custom Sail compiler
-        uses: ./.github/actions/setup-sail
-      - name: Extract and smoke-test the Python model
-        run: make extract-python
-      - name: Lint the generated Python model
-        run: make python-lint
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-python
+
+  corpus:
+    needs: sail-compiler
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python-tools
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: sail_smt_cache
+          key: z3-memo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - name: Compute exact corpus cache key
+        id: corpus-key
+        run: uv run --frozen python -m devtools.corpus cache-key --github-output >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: zkvm/.fixtures/current-v062-full
+          key: ${{ runner.os }}-${{ steps.corpus-key.outputs.key }}
+      - name: Restore native runner dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            zkvm/accel-host/target
+          key: cargo-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zkvm/accel-host/Cargo.lock', 'zkvm/accel-host/Cargo.toml') }}
+      - run: cargo fetch --locked --manifest-path zkvm/accel-host/Cargo.toml
+      - uses: ./.github/actions/setup-sail
+      - run: make verify-corpus
+      - name: Upload corpus failure log
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: corpus-failure-log
+          path: build/logs/corpus.log
+          if-no-files-found: warn

@@ -1045,14 +1045,14 @@ def _stack_top(value: int) -> Any:
     return Bits(_STACK_TOP_WIDTH, int(value) & _STACK_TOP_MASK)
 
 
-def stack_reset() -> Any:
+def stack_reset_host() -> Any:
     state = get_state()
     state.operand_stack.clear()
     state.operand_stack_frames.clear()
     return _stack_top(0)
 
 
-def operand_stack_push_empty_frame() -> Any:
+def operand_stack_push_empty_frame_host() -> Any:
     get_state().operand_stack_frames.append(len(get_state().operand_stack))
     return _stack_top(0)
 
@@ -1073,11 +1073,11 @@ def _stack_slot_position(state: HostState, top: int, index: int) -> int:
     return _stack_base(state) + int(top) - 1 - int(index)
 
 
-def stack_top_height(top: Any) -> int:
+def stack_top_height_host(top: Any) -> int:
     return int(top)
 
 
-def stack_slot_read(top: Any, index: int) -> int:
+def stack_slot_read_host(top: Any, index: int) -> int:
     state = get_state()
     position = _stack_slot_position(state, top, index)
     if position < _stack_base(state) or position >= len(state.operand_stack):
@@ -1085,7 +1085,7 @@ def stack_slot_read(top: Any, index: int) -> int:
     return state.operand_stack[position]
 
 
-def stack_slot_write(top: Any, index: int, value: int) -> None:
+def stack_slot_write_host(top: Any, index: int, value: int) -> None:
     state = get_state()
     position = _stack_slot_position(state, top, index)
     if position < _stack_base(state):
@@ -1095,11 +1095,19 @@ def stack_slot_write(top: Any, index: int, value: int) -> None:
     state.operand_stack[position] = int(value)
 
 
-def stack_top_advance(top: Any, count: int) -> Any:
+def stack_slot_write_next_host(top: Any, value: int) -> None:
+    state = get_state()
+    position = _stack_base(state) + int(top)
+    while len(state.operand_stack) <= position:
+        state.operand_stack.append(0)
+    state.operand_stack[position] = int(value)
+
+
+def stack_top_advance_host(top: Any, count: int) -> Any:
     return _stack_top(int(top) + int(count))
 
 
-def stack_top_retreat(top: Any, count: int) -> Any:
+def stack_top_retreat_host(top: Any, count: int) -> Any:
     return _stack_top(int(top) - int(count))
 
 

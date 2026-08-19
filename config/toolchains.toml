@@ -1,0 +1,22 @@
+schema_version = 1
+
+[sail]
+repository = "frisitano/sail"
+commit = "340c50a5af40dfcef2a18149424664b4b5d623c9"
+ocaml = "5.2.0"
+
+[sail_lsp]
+repository = "frisitano/sail-lsp"
+commit = "b0d54fe87a6106500e263e24787d00095b0f8839"
+
+[lean]
+toolchain = "leanprover/lean4:v4.29.0"
+sail_repository = "rems-project/lean-sail"
+sail_commit = "79b4d08505af29d88b3918f32d29840fae1fa191"
+
+[rocq]
+version = "9.2.0"
+ocaml = "5.2.0"
+
+[solver]
+z3_memo_schema = 1

@@ -52,16 +52,19 @@ from evm.primitives.quantities import (
 )
 from evm.primitives.gas import (
     GasCharge,
+    gas,
     gas_constant,
     gas_cost,
     gas_refund,
+    memory_expansion_charge,
+    state_gas,
     state_gas_spill,
-    transaction_state_gas_used,
     gas_charge,
     GAS_COST_ZERO,
     GAS_CHARGE_UNAFFORDABLE,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
+    STATE_GAS_ZERO,
     GAS_CONSTANT_ZERO,
 )
 from evm.primitives.bytes import (
@@ -70,7 +73,6 @@ from evm.primitives.bytes import (
     calldata_slice_length,
 )
 from evm.exceptions import (
-    ExceptionKind,
     FatalError,
     fatal_error,
 )
@@ -92,12 +94,10 @@ from evm.primitives.tx import (
 )
 from evm.evm.machine import (
     conserved_gas_add,
-    exc_halt,
     memory_high_water,
     memory_expand_to,
 )
 from evm.kernel import environment
-from evm.evm import machine
 
 def protocol_word(value: int) -> word:
     return word(u256(value))
@@ -133,10 +133,9 @@ def fake_exponential_word(schedule: BlobScheduleFields, numerator: int) -> word:
     else:
         return word(fatal_error(FatalError.NumericOverflow))
 
-def blob_base_fee(profile: ProtocolProfile, excess_blob_gas_: excess_blob_gas) -> word:
-    limit = profile.excess_blob_gas_limit
-    if (((int(profile.fork) >= int(Cancun))) & ((int(excess_blob_gas_) <= int(limit)))):
-        return word(fake_exponential_word(profile.blob_schedule, excess_blob_gas_))
+def blob_base_fee(fork: int, schedule: BlobScheduleFields, limit: int, excess_blob_gas_: int) -> word:
+    if (((int(fork) >= int(Cancun))) & ((int(excess_blob_gas_) <= int(limit)))):
+        return word(fake_exponential_word(schedule, excess_blob_gas_))
     else:
         return word(fatal_error(FatalError.InvalidConfig))
 
@@ -153,7 +152,7 @@ def next_excess_blob_gas(profile: ProtocolProfile, parent_excess_blob_gas: exces
     if (int(parent_blob_gas) < int(target_blob_gas)):
         return excess_blob_gas(0)
     else:
-        parent_blob_base_fee = blob_base_fee(profile, parent_excess_blob_gas)
+        parent_blob_base_fee = blob_base_fee(profile.fork, profile.blob_schedule, profile.excess_blob_gas_limit, parent_excess_blob_gas)
         if (((int(profile.fork) >= int(Osaka))) & ((int((16 * int(parent_blob_base_fee))) < int(parent_base_fee_per_gas)))):
             maximum = profile.blob_schedule.max
             if ((maximum) == (0)):
@@ -192,93 +191,89 @@ def sstore_clear_refund() -> gas_constant:
     else:
         return gas_constant(R_sclear_pre_london)
 
-def charge(g: transaction_state_gas_used, amount: int) -> tuple[bool, transaction_state_gas_used]:
+def charge(g: int, amount: int) -> tuple[bool, int]:
     if (int(amount) <= int(g)):
-        return (True, (int(g) - int(amount)))
+        return (False, (int(g) - int(amount)))
     else:
-        return (False, exc_halt(g, ExceptionKind.OutOfGas))
+        return (True, GAS_ZERO)
 
-def check_execution_gas(g: transaction_state_gas_used, amount: int) -> tuple[bool, transaction_state_gas_used]:
+def check_execution_gas(g: int, amount: int) -> tuple[bool, int]:
     if (int(g) < int(amount)):
-        return (False, exc_halt(g, ExceptionKind.OutOfGas))
-    else:
         return (True, g)
+    else:
+        return (False, g)
 
 def state_gas_spill_room(left: int) -> int:
     return (int((1 << 24)) - int(left))
 
-def state_gas_spill_add(left: state_gas_spill, right: int) -> state_gas_spill:
+def state_gas_spill_add(left: int, right: int) -> int:
     room = state_gas_spill_room(left)
     if (int(right) <= int(room)):
-        return state_gas_spill((int(left) + int(right)))
+        return (int(left) + int(right))
     else:
-        return state_gas_spill(fatal_error(FatalError.ExecutionInvalid))
+        return fatal_error(FatalError.ExecutionInvalid)
 
-def debit_state_gas(g: transaction_state_gas_used, amount: int) -> tuple[bool, transaction_state_gas_used]:
+def debit_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
     try:
         if ((amount) == (0)):
-            raise SailReturn((True, g))
-        state_left = machine.state_gas_remaining
+            raise SailReturn((True, g, state_gas_remaining, state_gas_spilled))
+        state_left = state_gas_remaining
         if (int(amount) <= int(state_left)):
-            machine.state_gas_remaining = (int(state_left) - int(amount))
-            return (True, g)
+            return (True, g, (int(state_left) - int(amount)), state_gas_spilled)
         else:
             remainder = (int(amount) - int(state_left))
             if (int(remainder) <= int(g)):
-                spilled = machine.state_gas_spilled
-                machine.state_gas_remaining = GAS_ZERO
-                machine.state_gas_spilled = state_gas_spill(state_gas_spill_add(spilled, remainder))
-                return (True, (int(g) - int(remainder)))
+                spilled = state_gas_spilled
+                return (True, (int(g) - int(remainder)), STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
             else:
-                return (False, g)
+                return (False, g, state_gas_remaining, state_gas_spilled)
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def charge_state_gas(g: transaction_state_gas_used, amount: int) -> tuple[bool, transaction_state_gas_used]:
-    (debited, debited_gas) = debit_state_gas(g, amount)
+def charge_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
+    (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount)
     if debited:
-        return (True, debited_gas)
+        return (False, debited_gas, state_gas_remaining, state_gas_spilled)
     else:
-        return (False, exc_halt(debited_gas, ExceptionKind.OutOfGas))
+        return (True, debited_gas, state_gas_remaining, state_gas_spilled)
 
-def charge_deployment_state_gas(g: transaction_state_gas_used, amount: int) -> tuple[bool, transaction_state_gas_used]:
-    (debited, debited_gas) = debit_state_gas(g, amount)
+def charge_deployment_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
+    (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount)
     if debited:
-        return (True, debited_gas)
+        return (False, debited_gas, state_gas_remaining, state_gas_spilled)
     else:
-        return (False, exc_halt(debited_gas, ExceptionKind.OutOfGas))
+        return (True, debited_gas, state_gas_remaining, state_gas_spilled)
 
-def credit_state_gas_refund(g: transaction_state_gas_used, amount: state_gas_spill) -> transaction_state_gas_used:
-    spilled = machine.state_gas_spilled
+def credit_state_gas_refund(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: state_gas_spill) -> tuple[gas, state_gas, state_gas_spill]:
+    spilled = state_gas_spilled
     if (int(amount) <= int(spilled)):
         if ((amount) != (0)):
-            machine.state_gas_spilled = (int(spilled) - int(amount))
-            return Uint(conserved_gas_add(g, amount))
+            return (conserved_gas_add(g, amount), state_gas_remaining, (int(spilled) - int(amount)))
         else:
-            return Uint(g)
+            return (g, state_gas_remaining, state_gas_spilled)
     else:
         if ((spilled) != (0)):
-            machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
             credited = conserved_gas_add(g, spilled)
         else:
             credited = g
         to_state = (int(amount) - int(spilled))
-        machine.state_gas_remaining = Uint(conserved_gas_add(machine.state_gas_remaining, to_state))
-        return Uint(credited)
+        return (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
 
-def return_child_state_gas(child_remaining: transaction_state_gas_used, child_spilled: state_gas_spill) -> None:
-    machine.state_gas_remaining = Uint(conserved_gas_add(machine.state_gas_remaining, child_remaining))
-    machine.state_gas_spilled = state_gas_spill(state_gas_spill_add(machine.state_gas_spilled, child_spilled))
-    return None
-
-def refund_gas(g: transaction_state_gas_used, amount: transaction_state_gas_used) -> transaction_state_gas_used:
-    return Uint(conserved_gas_add(g, amount))
-
-def gas_sub(left: transaction_state_gas_used, right: transaction_state_gas_used) -> transaction_state_gas_used:
-    if (int(right) <= int(left)):
-        return Uint((int(left) - int(right)))
+def return_child_state_gas(parent_remaining: state_gas, parent_spilled: state_gas_spill, child_remaining: state_gas, child_spilled: state_gas_spill) -> tuple[state_gas, state_gas_spill]:
+    state_room = (int((int((1 << 64)) - 1)) - int(parent_remaining))
+    if (int(child_remaining) <= int(state_room)):
+        return ((int(parent_remaining) + int(child_remaining)), state_gas_spill_add(parent_spilled, child_spilled))
     else:
-        return Uint(GAS_ZERO)
+        return fatal_error(FatalError.ExecutionInvalid)
+
+def refund_gas(g: gas, amount: gas) -> gas:
+    return gas(conserved_gas_add(g, amount))
+
+def gas_sub(left: gas, right: gas_cost) -> gas:
+    if (int(right) <= int(left)):
+        return gas((int(left) - int(right)))
+    else:
+        return gas(GAS_ZERO)
 
 def memory_word_count(byte_len: int) -> int:
     quotient = sail_tdiv_int(byte_len, 32)
@@ -303,11 +298,19 @@ def mem_cost(words: int) -> int:
     quadratic = sail_ediv_int(square, 512)
     return (int(linear) + int(quadratic))
 
-def memory_required_size(start: int, size: int) -> transaction_state_gas_used:
+def memory_required_size(start: int, size: int) -> memory_expansion_charge:
     if ((size) == (0)):
         return Uint(0)
     else:
-        return Uint((int(start) + int(size)))
+        if (int(start) <= int((int((1 << 32)) - 1))):
+            bounded_start = start
+            if (int(size) <= int((int((int((1 << 32)) - 1)) - int(bounded_start)))):
+                bounded_size = size
+                return Uint((int(bounded_start) + int(bounded_size)))
+            else:
+                return Uint((int((int((1 << 32)) - 1)) + 1))
+        else:
+            return Uint((int((int((1 << 32)) - 1)) + 1))
 
 def memory_access(start: int, size: int) -> MemoryAccess:
     if ((size) == (0)):
@@ -324,19 +327,22 @@ def memory_access(start: int, size: int) -> MemoryAccess:
         else:
             return fatal_error(FatalError.ExecutionInvalid)
 
-def memory_expansion_cost(mem: EvmMemorySlice, required_size: int) -> transaction_state_gas_used:
-    new_words = memory_word_count(required_size)
-    old_size = memory_high_water(mem)
-    old_words = memory_word_count(old_size)
-    if (int(new_words) <= int(old_words)):
-        return Uint(0)
-    else:
-        old_cost = mem_cost(old_words)
-        new_cost = mem_cost(new_words)
-        if (int(old_cost) <= int(new_cost)):
-            return Uint((int(new_cost) - int(old_cost)))
+def charge_memory_expansion(g: int, mem: EvmMemorySlice, required_size: int) -> tuple[bool, int]:
+    if (int(required_size) <= int((int((1 << 32)) - 1))):
+        materialized_size = required_size
+        new_words = memory_word_count(materialized_size)
+        old_words = memory_word_count(memory_high_water(mem))
+        if (int(new_words) <= int(old_words)):
+            return (False, g)
         else:
-            return Uint(0)
+            old_cost = mem_cost(old_words)
+            new_cost = mem_cost(new_words)
+            if (int(old_cost) <= int(new_cost)):
+                return charge(g, (int(new_cost) - int(old_cost)))
+            else:
+                return (False, g)
+    else:
+        return (True, GAS_ZERO)
 
 def expand_memory(mem: EvmMemorySlice, required_size: code_length) -> EvmMemorySlice:
     (_, expanded) = memory_expand_to(mem, required_size)
@@ -388,7 +394,7 @@ def create_access_cost() -> gas_constant:
     else:
         return gas_constant(G_create)
 
-def code_deployment_execution_cost(byte_len: code_length, available: transaction_state_gas_used) -> GasCharge:
+def code_deployment_execution_cost(byte_len: code_length, available: gas) -> GasCharge:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) >= int(Amsterdam)):
@@ -408,16 +414,16 @@ def code_deployment_execution_cost(byte_len: code_length, available: transaction
         else:
             return GAS_CHARGE_UNAFFORDABLE
 
-def code_deployment_state_cost(byte_len: code_length) -> transaction_state_gas_used:
+def code_deployment_state_cost(byte_len: code_length) -> gas_cost:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) >= int(Amsterdam)):
         if (int(byte_len) <= int(profile.deployed_code_size_limit)):
-            return Uint((int(G_amsterdam_state_byte) * int(byte_len)))
+            return gas_cost((int(G_amsterdam_state_byte) * int(byte_len)))
         else:
-            return Uint(fatal_error(FatalError.ExecutionInvalid))
+            return gas_cost(fatal_error(FatalError.ExecutionInvalid))
     else:
-        return Uint(GAS_COST_ZERO)
+        return gas_cost(GAS_COST_ZERO)
 
 def pc_word(input: CalldataSlice, start: int, byte_count: int) -> word:
     value = ZERO_WORD
@@ -459,7 +465,7 @@ def pc_blake2_rounds(input: CalldataSlice) -> blake2_rounds:
     rounds_word = pc_word(input, 0, 4)
     return blake2_rounds(sail_tmod_int(rounds_word, (1 << 32)))
 
-def modexp_gas(input: CalldataSlice, available: transaction_state_gas_used) -> GasCharge:
+def modexp_gas(input: CalldataSlice, available: gas) -> GasCharge:
     try:
         execution_profile = environment.k_execution_profile
         profile = execution_profile.protocol
@@ -609,7 +615,7 @@ def modexp_gas(input: CalldataSlice, available: transaction_state_gas_used) -> G
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def bls_msm_gas(table: Annotated[list[bls_discount], VectorLength(128)], base: gas_constant, maxd: bls_discount, k: code_length, available: transaction_state_gas_used) -> GasCharge:
+def bls_msm_gas(table: Annotated[list[bls_discount], VectorLength(128)], base: gas_constant, maxd: bls_discount, k: code_length, available: gas) -> GasCharge:
     if ((k) == (0)):
         return gas_charge(GAS_COST_ZERO)
     else:
@@ -634,7 +640,7 @@ def bls_msm_gas(table: Annotated[list[bls_discount], VectorLength(128)], base: g
             else:
                 return GAS_CHARGE_UNAFFORDABLE
 
-def linear_gas(base: gas_constant, per_unit: gas_constant, units: code_length, available: transaction_state_gas_used) -> GasCharge:
+def linear_gas(base: gas_constant, per_unit: gas_constant, units: code_length, available: gas) -> GasCharge:
     variable_cost = (int(per_unit) * int(units))
     exact_cost = (int(variable_cost) + int(base))
     if (int(exact_cost) > int(available)):
@@ -643,14 +649,14 @@ def linear_gas(base: gas_constant, per_unit: gas_constant, units: code_length, a
         affordable = exact_cost
         return gas_charge(affordable)
 
-def fixed_precompile_gas(cost: int, available: transaction_state_gas_used) -> GasCharge:
+def fixed_precompile_gas(cost: int, available: gas) -> GasCharge:
     if (int(cost) <= int(available)):
         affordable = cost
         return gas_charge(affordable)
     else:
         return GAS_CHARGE_UNAFFORDABLE
 
-def precompile_gas(num: precompile_id, input: CalldataSlice, available: transaction_state_gas_used) -> GasCharge:
+def precompile_gas(num: precompile_id, input: CalldataSlice, available: gas) -> GasCharge:
     input_len = calldata_slice_length(input)
     input_length = input_len
     words = memory_word_count(input_len)
@@ -716,12 +722,12 @@ def amsterdam_storage_access_cost(cold: bool) -> gas_constant:
     else:
         return gas_constant(G_warm_access)
 
-def sstore_sentry_cost(cold: bool) -> transaction_state_gas_used:
+def sstore_sentry_cost(cold: bool) -> gas:
     access_cost = amsterdam_storage_access_cost(cold)
     if (int(access_cost) < int(G_sstore_sentry)):
-        return Uint(G_sstore_sentry)
+        return gas(G_sstore_sentry)
     else:
-        return Uint(access_cost)
+        return gas(access_cost)
 
 def legacy_sstore_costs(original: word, current: word, new_value: word, cold: bool) -> SstoreCosts:
     if cold:
@@ -806,10 +812,10 @@ def sstore_costs(original: word, current: word, new_value: word, cold: bool) -> 
     else:
         return legacy_sstore_costs(original, current, new_value, cold)
 
-def charge_word_scaled_gas(g: transaction_state_gas_used, per_unit: gas_constant, units: word) -> tuple[bool, transaction_state_gas_used]:
+def charge_word_scaled_gas(g: gas, per_unit: gas_constant, units: word) -> tuple[bool, gas]:
     try:
         if ((((per_unit) == (0))) | (((units) == (0)))):
-            raise SailReturn((True, g))
+            raise SailReturn((False, g))
         if (int(units) <= int(g)):
             affordable_units = units
             exact_cost = (int(per_unit) * int(affordable_units))
@@ -817,40 +823,40 @@ def charge_word_scaled_gas(g: transaction_state_gas_used, per_unit: gas_constant
                 cost = exact_cost
                 return charge(g, cost)
             else:
-                return (False, exc_halt(g, ExceptionKind.OutOfGas))
+                return (True, g)
         else:
-            return (False, exc_halt(g, ExceptionKind.OutOfGas))
+            return (True, g)
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def charge_memory_word_gas(g: transaction_state_gas_used, base: gas_constant, per_word: gas_constant, size: word) -> tuple[bool, transaction_state_gas_used]:
-    (base_charged, base_gas) = charge(g, base)
-    if base_charged:
+def charge_memory_word_gas(g: gas, base: gas_constant, per_word: gas_constant, size: word) -> tuple[bool, gas]:
+    (base_halt, base_gas) = charge(g, base)
+    if base_halt:
+        return (True, base_gas)
+    else:
         words = memory_word_count_word(size)
         return charge_word_scaled_gas(base_gas, per_word, words)
-    else:
-        return (False, base_gas)
 
-def charge_keccak_gas(g: transaction_state_gas_used, size: word) -> tuple[bool, transaction_state_gas_used]:
+def charge_keccak_gas(g: gas, size: word) -> tuple[bool, gas]:
     return charge_memory_word_gas(g, G_keccak, G_keccak_word, size)
 
-def charge_copy_gas(g: transaction_state_gas_used, size: word) -> tuple[bool, transaction_state_gas_used]:
+def charge_copy_gas(g: gas, size: word) -> tuple[bool, gas]:
     return charge_memory_word_gas(g, GAS_CONSTANT_ZERO, G_copy_word, size)
 
-def charge_log_gas(g: transaction_state_gas_used, num_topics: log_topic_count, size: word) -> tuple[bool, transaction_state_gas_used]:
-    (base_charged, base_gas) = charge(g, G_log)
-    if base_charged:
-        topic_cost = (int(G_logtopic) * int(num_topics))
-        (topics_charged, topics_gas) = charge(base_gas, topic_cost)
-        if topics_charged:
-            return charge_word_scaled_gas(topics_gas, G_logdata, size)
-        else:
-            return (False, topics_gas)
+def charge_log_gas(g: gas, num_topics: log_topic_count, size: word) -> tuple[bool, gas]:
+    (base_halt, base_gas) = charge(g, G_log)
+    if base_halt:
+        return (True, base_gas)
     else:
-        return (False, base_gas)
+        topic_cost = (int(G_logtopic) * int(num_topics))
+        (topics_halt, topics_gas) = charge(base_gas, topic_cost)
+        if topics_halt:
+            return (True, topics_gas)
+        else:
+            return charge_word_scaled_gas(topics_gas, G_logdata, size)
 
-def exp_gas(exponent: word) -> transaction_state_gas_used:
-    return Uint((int((int(G_expbyte) * int(word_byte_length(exponent)))) + int(G_exp)))
+def exp_gas(exponent: word) -> gas_cost:
+    return gas_cost((int((int(G_expbyte) * int(word_byte_length(exponent)))) + int(G_exp)))
 
 def transaction_initcode_gas(byte_len: transaction_byte_length) -> transaction_initcode_cost:
     execution_profile = environment.k_execution_profile
@@ -861,13 +867,13 @@ def transaction_initcode_gas(byte_len: transaction_byte_length) -> transaction_i
     else:
         return transaction_initcode_cost(0)
 
-def call_gas_cap_word(available: transaction_state_gas_used, requested: word) -> transaction_state_gas_used:
+def call_gas_cap_word(available: gas, requested: word) -> gas:
     retained = sail_ediv_int(available, 64)
     all_but_64th = gas_sub(available, retained)
     if (int(requested) < int(all_but_64th)):
-        return Uint(requested)
+        return gas(requested)
     else:
-        return Uint(all_but_64th)
+        return gas(all_but_64th)
 
 GAS_PER_BLOB: int = (1 << 17)
 

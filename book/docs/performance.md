@@ -44,6 +44,6 @@ and **instruction steps**; the fixture is the only other selector.
 
     The catalog and per-fixture shards are committed, so this page renders
     without re-running anything. Re-export an existing result with
-    `python3 -m devtools.benchmarks.zisk --regenerate-dashboard results.json
+    `uv run --frozen python -m devtools.benchmarks.zisk --regenerate-dashboard results.json
     --dashboard-dir …`. Fixtures come from the
     [devnet batch catalog](https://pub-df22334654034ebab51bc096137a59d8.r2.dev/devnets/glamsterdam-devnet-7/index.html).

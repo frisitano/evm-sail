@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from .._runtime import (
     Bits,
+    Bytes20,
     IntegerRange,
     SailReturn,
-    Uint,
     Unsigned,
     sail_ediv_int,
 )
-from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 from evm.HostContract import (
     authorization_tracker_commit as _host_authorization_tracker_commit,
@@ -19,7 +18,6 @@ from evm.HostContract import (
     authorization_tracker_originally_delegated as _host_authorization_tracker_originally_delegated,
     authorization_tracker_reset as _host_authorization_tracker_reset,
     authorization_tracker_seen as _host_authorization_tracker_seen,
-    stack_reset as _host_stack_reset,
 )
 from evm._sail.vector import neq_bits
 from evm.prelude import (
@@ -36,9 +34,9 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     PrecompileId,
+    StackPointer,
     account_nonce,
     excess_blob_gas,
-    frame_depth,
     transaction_blob_gas,
     word_of_account_nonce,
     word_of_chain_identifier,
@@ -47,16 +45,23 @@ from evm.primitives.gas import (
     block_gas,
     gas,
     gas_cost,
-    transaction_state_gas_delta,
-    transaction_state_gas_used,
+    gas_refund,
+    state_gas,
+    state_gas_delta,
+    state_gas_spill,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
+    STATE_GAS_ZERO,
     GAS_REFUND_ZERO,
     FRAME_STATE_GAS_DELTA_ZERO,
 )
 from evm.primitives.bytes import (
+    CalldataSlice,
+    EvmMemorySlice,
     InputCalldata,
+    OutputSlice,
     stateless_input_slice,
+    EMPTY_OUTPUT_SLICE,
     EMPTY_CALLDATA,
 )
 from evm.exceptions import (
@@ -65,11 +70,13 @@ from evm.exceptions import (
     fatal_error,
 )
 from evm.evm.halt import (
+    FrameStatus,
     HaltReturn,
     Halted,
     Running,
 )
 from evm.primitives.code import (
+    Code,
     CodeSlice,
     EMPTY_CODE_SLICE,
     EMPTY_CODE,
@@ -103,7 +110,6 @@ from evm.primitives.tx import (
     receipt_within,
 )
 from evm.primitives.evm import (
-    Message,
     TransactionGasAllowance,
     TransactionGasAllowanceFields,
     TransactionGasAllowanceFieldsValidity,
@@ -140,6 +146,7 @@ from evm.lib.rlp.codecs.transactions import (
     prepared_authorization_head,
     prepared_authorization_tail,
 )
+from evm.host.stack import stack_reset
 from evm.kernel.environment import (
     k_coinbase,
     k_create_addr,
@@ -181,8 +188,7 @@ from evm.kernel.lifecycle import (
 )
 from evm.evm.machine import (
     frame_state_gas_used,
-    exc_halt,
-    returndata_clear,
+    exceptional_state,
     memory_reset,
 )
 from evm.evm.gas import (
@@ -213,7 +219,6 @@ from evm.evm.interpreter import (
     executable_code,
 )
 from evm.kernel import environment as kernel_environment
-from evm.evm import machine
 
 class authorization_item_refund(Unsigned):
     LOWER = 0
@@ -263,7 +268,7 @@ def calldata_cost(input: TransactionInputSlice) -> transaction_calldata_cost:
     else:
         return transaction_calldata_cost(fatal_error(FatalError.ExecutionInvalid))
 
-def legacy_intrinsic_gas(tx: Transaction) -> transaction_state_gas_used:
+def legacy_intrinsic_gas(tx: Transaction) -> gas_cost:
     data_cost = calldata_cost(tx.input_src)
     input = tx.input_src
     input_len = input.len
@@ -273,9 +278,9 @@ def legacy_intrinsic_gas(tx: Transaction) -> transaction_state_gas_used:
     auth_cost = (int(PER_EMPTY_ACCOUNT) * int(authorizations.count))
     common = (int((int((int((int(data_cost) + int(G_transaction))) + int(address_cost))) + int(slot_cost))) + int(auth_cost))
     if tx.is_create:
-        return Uint((int((int(common) + int(G_txcreate))) + int(transaction_initcode_gas(input_len))))
+        return gas_cost((int((int(common) + int(G_txcreate))) + int(transaction_initcode_gas(input_len))))
     else:
-        return Uint(common)
+        return gas_cost(common)
 
 def legacy_calldata_floor(input: TransactionInputSlice) -> transaction_calldata_floor_cost:
     nonzeroes = slice_count_nonzero(input)
@@ -343,7 +348,7 @@ def transaction_costs(profile: ProtocolProfile, tx: Transaction, gas_limit: bloc
     if ((blob_gas) == (0)):
         blob_fee_value = 0
     else:
-        blob_price = blob_base_fee(profile, excess_blob_gas_)
+        blob_price = blob_base_fee(profile.fork, profile.blob_schedule, profile.excess_blob_gas_limit, excess_blob_gas_)
         if (int(blob_price) <= int(tx.max_blob_fee)):
             blob_fee_value = transaction_blob_fee(blob_price, blob_gas)
         else:
@@ -361,7 +366,7 @@ def validated_word_product(value: word, factor: int) -> word:
     else:
         return word(fatal_error(FatalError.ExecutionInvalid))
 
-def tx_frame_gas_snapshot(initial: TransactionInitialGasFields, execution: int, state: int, state_delta: transaction_state_gas_delta) -> TxFrameGasSnapshotFields:
+def tx_frame_gas_snapshot(initial: TransactionInitialGasFields, execution: int, state: int, state_delta: state_gas_delta) -> TxFrameGasSnapshotFields:
     limit = initial.admitted_limit
     regular = initial.regular_limit
     if (int(execution) <= int(limit)):
@@ -463,8 +468,11 @@ def process_auth_cursor(authorizations: PreparedAuthorizationList, count: prepar
 def process_auth_list(authorizations: PreparedAuthorizationList) -> authorization_refund:
     return authorization_refund(process_auth_cursor(authorizations, authorizations.count))
 
-def process_amsterdam_auth(au: Authorization, sender: address, current_target: address, transfers_value: bool) -> bool:
+def process_amsterdam_auth(au: Authorization, sender: address, current_target: address, transfers_value: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill) -> tuple[bool, gas, state_gas, state_gas_spill]:
     try:
+        gas_after = carried_gas
+        state_gas_after = carried_state_gas
+        state_spill_after = carried_state_spill
         authority = au.authority
         chain_id_is_zero = word_is_zero(au.chain_id)
         expected_chain_id = word_of_chain_identifier(kernel_environment.k_chain_id)
@@ -484,27 +492,28 @@ def process_amsterdam_auth(au: Authorization, sender: address, current_target: a
                 account_exists = k_account_exists(authority)
                 account_missing = (not (account_exists))
                 if account_missing:
-                    (state_gas_affordable, state_gas) = charge_state_gas(machine.gas_remaining, G_amsterdam_state_new_account)
-                    machine.gas_remaining = state_gas
-                    state_gas_out_of_gas = (not (state_gas_affordable))
-                    if state_gas_out_of_gas:
-                        raise SailReturn(False)
+                    (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                    gas_after = next_gas
+                    state_gas_after = next_state_gas
+                    state_spill_after = next_state_spill
+                    if state_gas_halt:
+                        raise SailReturn((False, gas_after, state_gas_after, state_spill_after))
                 requires_account_write = (not (already_written))
                 if requires_account_write:
-                    (write_affordable, write_gas) = charge(machine.gas_remaining, G_amsterdam_account_write)
-                    machine.gas_remaining = write_gas
-                    write_out_of_gas = (not (write_affordable))
-                    if write_out_of_gas:
-                        raise SailReturn(False)
+                    (write_halt, write_gas) = charge(gas_after, G_amsterdam_account_write)
+                    gas_after = write_gas
+                    if write_halt:
+                        raise SailReturn((False, gas_after, state_gas_after, state_spill_after))
                 not_delegated_before_tx = (not (delegated_before_tx))
                 delegation_set = _host_authorization_tracker_delegation_set(authority)
                 delegation_not_set = (not (delegation_set))
                 if ((((au.address) != (ZERO_ADDRESS))) & (((not_delegated_before_tx) & (delegation_not_set)))):
-                    (auth_state_gas_affordable, auth_state_gas) = charge_state_gas(machine.gas_remaining, G_amsterdam_state_auth_base)
-                    machine.gas_remaining = auth_state_gas
-                    auth_state_gas_out_of_gas = (not (auth_state_gas_affordable))
-                    if auth_state_gas_out_of_gas:
-                        raise SailReturn(False)
+                    (auth_state_gas_halt, auth_gas, auth_state_gas, auth_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_auth_base)
+                    gas_after = auth_gas
+                    state_gas_after = auth_state_gas
+                    state_spill_after = auth_state_spill
+                    if auth_state_gas_halt:
+                        raise SailReturn((False, gas_after, state_gas_after, state_spill_after))
                 if ((au.address) == (ZERO_ADDRESS)):
                     k_clear_code(authority)
                 else:
@@ -513,21 +522,21 @@ def process_amsterdam_auth(au: Authorization, sender: address, current_target: a
                 unseen = (not (seen))
                 originally_delegated = ((unseen) & (currently_delegated))
                 _host_authorization_tracker_commit(authority, originally_delegated, ((au.address) != (ZERO_ADDRESS)))
-        return True
+        return (True, gas_after, state_gas_after, state_spill_after)
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def process_amsterdam_auth_cursor(authorizations: PreparedAuthorizationList, count: prepared_authorization_count, sender: address, current_target: address, transfers_value: bool) -> bool:
+def process_amsterdam_auth_cursor(authorizations: PreparedAuthorizationList, count: prepared_authorization_count, sender: address, current_target: address, transfers_value: bool, gas_: gas, state_gas_: state_gas, state_spill: state_gas_spill) -> tuple[bool, gas, state_gas, state_gas_spill]:
     if ((count) == (0)):
-        return True
+        return (True, gas_, state_gas_, state_spill)
     else:
         authorization = prepared_authorization_head(authorizations)
         remaining = prepared_authorization_tail(authorizations, count)
-        processed = process_amsterdam_auth(authorization, sender, current_target, transfers_value)
+        (processed, gas_after, state_gas_after, state_spill_after) = process_amsterdam_auth(authorization, sender, current_target, transfers_value, gas_, state_gas_, state_spill)
         if processed:
-            return process_amsterdam_auth_cursor(remaining, (int(count) - 1), sender, current_target, transfers_value)
+            return process_amsterdam_auth_cursor(remaining, (int(count) - 1), sender, current_target, transfers_value, gas_after, state_gas_after, state_spill_after)
         else:
-            return False
+            return (False, gas_after, state_gas_after, state_spill_after)
 
 def warm_access_list_keys(cursor: RlpCursor, addr: address) -> None:
     try:
@@ -680,84 +689,87 @@ def apply_transaction_upfront_effects(tx: Transaction, v: TxValidity, authorizat
         authorization_refund_ = 0
     return TxUpfrontResult(authorization_refund=authorization_refund(authorization_refund_), create_target_prestate_empty=create_target_prestate_empty)
 
-def enter_transaction_frame(v: TxValidity) -> None:
+def enter_transaction_frame(v: TxValidity) -> tuple[gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice]:
     initial_gas = v.gas
-    machine.pc = 0
-    machine.call_depth = 0
-    machine.gas_remaining = initial_gas.execution_remaining
-    machine.state_gas_remaining = initial_gas.state_remaining
-    machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-    machine.message = Message(caller=address(ZERO_ADDRESS), address=address(ZERO_ADDRESS), code_address=address(ZERO_ADDRESS), value=word(ZERO_WORD), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
-    machine.stack_top = _host_stack_reset()
-    memory_reset()
-    returndata_clear()
-    machine.calldata = EMPTY_CALLDATA
-    machine.frame_code = EMPTY_CODE
-    machine.frame_refund = GAS_REFUND_ZERO
-    machine.frame_status = Running(None)
-    return None
+    stack = stack_reset()
+    memory = memory_reset()
+    return (initial_gas.execution_remaining, initial_gas.state_remaining, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack, memory)
 
 @dataclass(slots=True)
 class TransactionPreparation:
     ready: bool
     delegated: bool
 
-def prepare_amsterdam_transaction_dispatch(tx: Transaction, v: TxValidity, upfront: TxUpfrontResult) -> TransactionPreparation:
+def prepare_amsterdam_transaction_dispatch(tx: Transaction, v: TxValidity, upfront: TxUpfrontResult, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill) -> tuple[TransactionPreparation, gas, state_gas, state_gas_spill, address, address, Code, CalldataSlice]:
     try:
+        gas_after = carried_gas
+        state_gas_after = carried_state_gas
+        state_spill_after = carried_state_spill
         execution_profile = kernel_environment.k_execution_profile
         profile = execution_profile.protocol
         if tx.is_create:
             current_target = k_create_addr(v.sender, v.nonce_before)
         else:
             current_target = tx.recipient
-        machine.message = Message(caller=address(v.sender), address=address(current_target), code_address=address(current_target), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
         if tx.is_create:
             if upfront.create_target_prestate_empty:
-                (state_gas_affordable, state_gas) = charge_state_gas(machine.gas_remaining, G_amsterdam_state_new_account)
-                machine.gas_remaining = state_gas
-                state_gas_out_of_gas = (not (state_gas_affordable))
-                if state_gas_out_of_gas:
-                    raise SailReturn(TransactionPreparation(ready=False, delegated=False))
+                (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                gas_after = next_gas
+                state_gas_after = next_state_gas
+                state_spill_after = next_state_spill
+                if state_gas_halt:
+                    raise SailReturn((TransactionPreparation(ready=False, delegated=False), gas_after, state_gas_after, state_spill_after, current_target, current_target, EMPTY_CODE, EMPTY_CALLDATA))
             initcode = transaction_initcode_slice(tx.input_src)
             code_id = code_db_insert(initcode, profile.fork)
-            machine.frame_code = code_db_resolve(code_id)
-            return TransactionPreparation(ready=True, delegated=False)
+            code = code_db_resolve(code_id)
+            return (TransactionPreparation(ready=True, delegated=False), gas_after, state_gas_after, state_spill_after, current_target, current_target, code, EMPTY_CALLDATA)
         else:
-            machine.calldata = InputCalldata(tx.input_src)
+            calldata = InputCalldata(tx.input_src)
             transfers_value = word_nonzero(tx.value)
             recipient_empty = k_account_is_empty(tx.recipient)
             if ((transfers_value) & (recipient_empty)):
-                (state_gas_affordable, state_gas) = charge_state_gas(machine.gas_remaining, G_amsterdam_state_new_account)
-                machine.gas_remaining = state_gas
-                state_gas_out_of_gas = (not (state_gas_affordable))
-                if state_gas_out_of_gas:
-                    raise SailReturn(TransactionPreparation(ready=False, delegated=False))
+                (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
+                gas_after = next_gas
+                state_gas_after = next_state_gas
+                state_spill_after = next_state_spill
+                if state_gas_halt:
+                    raise SailReturn((TransactionPreparation(ready=False, delegated=False), gas_after, state_gas_after, state_spill_after, current_target, current_target, EMPTY_CODE, calldata))
             (delegated, delegate) = k_deleg_target(tx.recipient)
             if delegated:
                 warm = k_account_is_warm(delegate)
                 access_cost = account_cost(warm)
-                (access_affordable, access_gas) = charge(machine.gas_remaining, access_cost)
-                machine.gas_remaining = access_gas
-                access_out_of_gas = (not (access_affordable))
-                if access_out_of_gas:
-                    raise SailReturn(TransactionPreparation(ready=False, delegated=False))
+                (access_halt, access_gas) = charge(gas_after, access_cost)
+                gas_after = access_gas
+                if access_halt:
+                    raise SailReturn((TransactionPreparation(ready=False, delegated=False), gas_after, state_gas_after, state_spill_after, current_target, current_target, EMPTY_CODE, calldata))
                 k_account_mark_warm(delegate)
             if delegated:
-                machine.message = replace(deepcopy(machine.message), code_address=address(delegate))
-            machine.frame_code = executable_code(tx.recipient, delegated, delegate)
-            return TransactionPreparation(ready=True, delegated=delegated)
+                code_address = delegate
+            else:
+                code_address = current_target
+            code = executable_code(tx.recipient, delegated, delegate)
+            return (TransactionPreparation(ready=True, delegated=delegated), gas_after, state_gas_after, state_spill_after, current_target, code_address, code, calldata)
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before: account_nonce) -> None:
+def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before: account_nonce, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory: EvmMemorySlice, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     new_addr = k_create_addr(sender, nonce_before)
+    gas_after = carried_gas
+    state_gas_after = carried_state_gas
+    state_spill_after = carried_state_spill
+    refund_after = carried_refund
+    status_after = Running(None)
+    output_after = EMPTY_OUTPUT_SLICE
     k_account_mark_warm(new_addr)
     occupied = k_account_occupied(new_addr)
     if occupied:
-        machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.AddressCollision))
-        return None
+        gas_after = GAS_ZERO
+        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.AddressCollision)
+        state_gas_after = tup__0
+        state_spill_after = tup__1
+        status_after = tup__2
     else:
         k_mark_created(new_addr)
         k_clear_storage(new_addr)
@@ -765,52 +777,81 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
         transfers_value = word_nonzero(tx.value)
         if transfers_value:
             k_transfer(sender, new_addr, tx.value)
+        frame_code = carried_code
+        frame_calldata = carried_calldata
         if (int(profile.fork) < int(Amsterdam)):
-            machine.message = Message(caller=address(sender), address=address(new_addr), code_address=address(new_addr), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
             initcode = transaction_initcode_slice(tx.input_src)
             code_id = code_db_insert(initcode, profile.fork)
-            machine.frame_code = code_db_resolve(code_id)
-        deployed_code = interpret()
-        initcode_succeeded = frame_succeeded()
+            frame_code = code_db_resolve(code_id)
+            frame_calldata = EMPTY_CALLDATA
+        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory, sender, new_addr, new_addr, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
+        gas_after = tup__0
+        state_gas_after = tup__1
+        state_spill_after = tup__2
+        refund_after = tup__3
+        status_after = tup__4
+        output_after = tup__5
+        initcode_succeeded = frame_succeeded(status_after)
         if initcode_succeeded:
-            dep_len = deployed_code.len
+            deployed_output = output_after
+            dep_len = deployed_output.len
             deployed_length = dep_len
             valid_deployed_size = deployed_code_size_allowed(deployed_length)
             if (((int(profile.fork) < int(London))) | (((deployed_length) == (0)))):
                 valid_prefix = True
             else:
-                first_byte = output_byte(deployed_code, 0)
+                first_byte = output_byte(deployed_output, 0)
                 valid_prefix = neq_bits(first_byte, Bits(8, 0b11101111))
             if ((valid_deployed_size) & (valid_prefix)):
-                deployment_charge = code_deployment_execution_cost(dep_len, machine.gas_remaining)
+                deployment_charge = code_deployment_execution_cost(dep_len, gas_after)
                 if deployment_charge.affordable:
                     execution_deposit = deployment_charge.cost
-                    machine.gas_remaining = Uint(gas_sub(machine.gas_remaining, execution_deposit))
+                    gas_after = gas(gas_sub(gas_after, execution_deposit))
                     state_deposit = code_deployment_state_cost(dep_len)
-                    (_, deployment_gas) = charge_deployment_state_gas(machine.gas_remaining, state_deposit)
-                    machine.gas_remaining = deployment_gas
-                    deployment_succeeded = frame_succeeded()
+                    (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(gas_after, state_gas_after, state_spill_after, state_deposit)
+                    gas_after = deployment_gas
+                    state_gas_after = deployment_state_gas
+                    state_spill_after = deployment_state_spill
+                    if deployment_halt:
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
+                    deployment_succeeded = frame_succeeded(status_after)
                     if deployment_succeeded:
-                        stored_code = code_db_intern_output(deployed_code)
-                        return k_deploy_code(new_addr, stored_code)
-                    else:
-                        return None
+                        stored_code = code_db_intern_output(deployed_output)
+                        k_deploy_code(new_addr, stored_code)
                 else:
                     if (int(profile.fork) < int(Homestead)):
-                        machine.gas_remaining = GAS_ZERO
-                        return k_deploy_code(new_addr, EMPTY_CODE_SLICE)
+                        gas_after = GAS_ZERO
+                        k_deploy_code(new_addr, EMPTY_CODE_SLICE)
                     else:
-                        machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
-                        return None
+                        gas_after = GAS_ZERO
+                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = tup__0
+                        state_spill_after = tup__1
+                        status_after = tup__2
             else:
-                machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
-                return None
-        else:
-            return None
+                gas_after = GAS_ZERO
+                (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                state_gas_after = tup__0
+                state_spill_after = tup__1
+                status_after = tup__2
+    return (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after)
 
-def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool) -> None:
+def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory: EvmMemorySlice, carried_code_address: address, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
+    gas_after = carried_gas
+    state_gas_after = carried_state_gas
+    state_spill_after = carried_state_spill
+    refund_after = carried_refund
+    status_after = Running(None)
+    output_after = EMPTY_OUTPUT_SLICE
+    code_address = carried_code_address
+    frame_code = carried_code
+    frame_calldata = carried_calldata
     k_aload(tx.recipient)
     transfers_value = word_nonzero(tx.value)
     if transfers_value:
@@ -820,93 +861,139 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
     if ((direct_recipient) & (((selected_precompile) != (PrecompileId.NotPrecompile)))):
         input_src = tx.input_src
         precompile_input = InputCalldata(input_src)
-        precompile_charge = precompile_gas(selected_precompile, precompile_input, machine.gas_remaining)
+        precompile_charge = precompile_gas(selected_precompile, precompile_input, gas_after)
         if precompile_charge.affordable:
             used = precompile_charge.cost
             result = run_precompile_slice(selected_precompile, precompile_input)
             if result.success:
-                machine.gas_remaining = Uint(gas_sub(machine.gas_remaining, used))
-                halt = HaltReturn(result.output)
-                machine.frame_status = Halted(halt)
-                return None
+                gas_after = gas(gas_sub(gas_after, used))
+                output_after = result.output
+                status_after = Halted(HaltReturn(result.output))
             else:
-                machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
-                return None
+                gas_after = GAS_ZERO
+                (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                state_gas_after = tup__0
+                state_spill_after = tup__1
+                status_after = tup__2
         else:
-            machine.gas_remaining = Uint(exc_halt(machine.gas_remaining, ExceptionKind.OutOfGas))
-            return None
+            gas_after = GAS_ZERO
+            (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+            state_gas_after = tup__0
+            state_spill_after = tup__1
+            status_after = tup__2
     else:
         if (int(profile.fork) < int(Amsterdam)):
-            machine.calldata = InputCalldata(tx.input_src)
-            machine.message = Message(caller=address(sender), address=address(tx.recipient), code_address=address(tx.recipient), value=word(tx.value), state_gas_reservoir=gas(machine.state_gas_remaining), is_static=False, depth=frame_depth(0))
+            frame_calldata = InputCalldata(tx.input_src)
+            code_address = Bytes20(tx.recipient)
             (tx_deleg, tx_dtgt) = k_deleg_target(tx.recipient)
             if tx_deleg:
                 k_account_mark_warm(tx_dtgt)
                 k_aload(tx_dtgt)
-            machine.frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
-        interpret()
-        return None
+            if tx_deleg:
+                code_address = Bytes20(tx_dtgt)
+            frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
+        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory, sender, tx.recipient, code_address, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
+        gas_after = tup__0
+        state_gas_after = tup__1
+        state_spill_after = tup__2
+        refund_after = tup__3
+        status_after = tup__4
+        output_after = tup__5
+    return (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after)
 
 def run_legacy_transaction_frame(tx: Transaction, v: TxValidityFields) -> TxFrameResultFields:
     initial_gas = v.gas
     k_journal_checkpoint()
-    enter_transaction_frame(v)
+    (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) = enter_transaction_frame(v)
+    state_gas_reservoir = initial_state_gas
     if tx.is_create:
-        run_create_transaction_frame(tx, v.sender, v.nonce_before)
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_create_transaction_frame(tx, v.sender, v.nonce_before, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
     else:
-        run_call_transaction_frame(tx, v.sender, False)
-    success = frame_succeeded()
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_call_transaction_frame(tx, v.sender, False, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory, tx.recipient, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
+    success = frame_succeeded(status_after)
     failed = (not (success))
     if failed:
         k_journal_revert()
     else:
         k_journal_commit()
-    state_delta = frame_state_gas_used()
-    return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, state_delta), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
+    state_delta = frame_state_gas_used(state_gas_reservoir, state_gas_after, state_spill_after)
+    return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=(refund_after if success else GAS_REFUND_ZERO))
 
 def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfront: TxUpfrontResult, authorizations: PreparedAuthorizationList) -> TxFrameResultFields:
     try:
-        enter_transaction_frame(v)
+        (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) = enter_transaction_frame(v)
+        gas_after = entered_gas
+        state_gas_after = entered_state_gas
+        state_spill_after = entered_state_spill
+        refund_after = entered_refund
+        status_after = Running(None)
+        output_after = EMPTY_OUTPUT_SLICE
         initial_gas = v.gas
         k_journal_checkpoint()
-        preparation_reservoir = machine.state_gas_remaining
+        preparation_reservoir = state_gas_after
         if tx.is_create:
             current_target = k_create_addr(v.sender, v.nonce_before)
         else:
             current_target = tx.recipient
         _host_authorization_tracker_reset(authorizations.count)
         transfers_value = word_nonzero(tx.value)
-        preparation_ready = process_amsterdam_auth_cursor(authorizations, authorizations.count, v.sender, current_target, transfers_value)
+        preparation_ready = False
+        (tup__0, tup__1, tup__2, tup__3) = process_amsterdam_auth_cursor(authorizations, authorizations.count, v.sender, current_target, transfers_value, gas_after, state_gas_after, state_spill_after)
+        preparation_ready = tup__0
+        gas_after = tup__1
+        state_gas_after = tup__2
+        state_spill_after = tup__3
         authorization_state_gas = FRAME_STATE_GAS_DELTA_ZERO
         delegated = False
+        execution_reservoir = state_gas_after
+        prepared_code_address = current_target
+        prepared_code = EMPTY_CODE
+        prepared_calldata = EMPTY_CALLDATA
         if preparation_ready:
-            authorization_state_gas = frame_state_gas_used()
-            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=gas(machine.state_gas_remaining))
-            machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-            preparation = prepare_amsterdam_transaction_dispatch(tx, v, upfront)
+            authorization_state_gas = frame_state_gas_used(preparation_reservoir, state_gas_after, state_spill_after)
+            execution_reservoir = state_gas(state_gas_after)
+            state_spill_after = STATE_GAS_SPILL_ZERO
+            (preparation, prepared_gas, prepared_state_gas, prepared_state_spill, _, code_address, code, calldata) = prepare_amsterdam_transaction_dispatch(tx, v, upfront, gas_after, state_gas_after, state_spill_after)
+            gas_after = prepared_gas
+            state_gas_after = prepared_state_gas
+            state_spill_after = prepared_state_spill
             preparation_ready = preparation.ready
             delegated = preparation.delegated
+            prepared_code_address = Bytes20(code_address)
+            prepared_code = code
+            prepared_calldata = calldata
         preparation_failed = (not (preparation_ready))
         if preparation_failed:
             k_journal_revert()
-            machine.message = replace(deepcopy(machine.message), state_gas_reservoir=gas(preparation_reservoir))
-            machine.state_gas_remaining = preparation_reservoir
-            machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-            raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
+            state_gas_after = preparation_reservoir
+            state_spill_after = STATE_GAS_SPILL_ZERO
+            raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, GAS_ZERO, STATE_GAS_ZERO, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
         k_journal_checkpoint()
         if tx.is_create:
-            run_create_transaction_frame(tx, v.sender, v.nonce_before)
+            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_create_transaction_frame(tx, v.sender, v.nonce_before, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory, prepared_code, prepared_calldata, execution_reservoir)
+            gas_after = tup__0
+            state_gas_after = tup__1
+            state_spill_after = tup__2
+            refund_after = tup__3
+            status_after = tup__4
+            output_after = tup__5
         else:
-            run_call_transaction_frame(tx, v.sender, delegated)
-        success = frame_succeeded()
+            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_call_transaction_frame(tx, v.sender, delegated, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory, prepared_code_address, prepared_code, prepared_calldata, execution_reservoir)
+            gas_after = tup__0
+            state_gas_after = tup__1
+            state_spill_after = tup__2
+            refund_after = tup__3
+            status_after = tup__4
+            output_after = tup__5
+        success = frame_succeeded(status_after)
         failed = (not (success))
         if failed:
             k_journal_revert()
         else:
             k_journal_commit()
         k_journal_commit()
-        state_delta = (int(authorization_state_gas) + int(frame_state_gas_used()))
-        return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, machine.gas_remaining, machine.state_gas_remaining, state_delta), refund=(machine.frame_refund if success else GAS_REFUND_ZERO))
+        state_delta = (int(authorization_state_gas) + int(frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after)))
+        return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=(refund_after if success else GAS_REFUND_ZERO))
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -955,7 +1042,7 @@ def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refun
         execution_gas = floor
     else:
         execution_gas = unrefunded_execution_gas
-    state_gas = tx_state_gas
+    state_gas_ = tx_state_gas
     sender_refund = validated_word_product(v.gas_price, gas_left)
     k_add_balance(v.sender, sender_refund)
     coinbase = k_coinbase()
@@ -965,7 +1052,7 @@ def settle_transaction(tx: Transaction, v: TxValidityFields, authorization_refun
     logs = read_logs()
     gas_used_value = gas_used
     execution_gas_value = execution_gas
-    state_gas_value = state_gas
+    state_gas_value = state_gas_
     if (int(gas_used_value) <= int((int(execution_gas_value) + int(state_gas_value)))):
         return receipt_within(gas_limit, gas_snapshot.regular_limit, tx.tx_type, fr.success, gas_used_value, execution_gas_value, state_gas_value, logs)
     else:

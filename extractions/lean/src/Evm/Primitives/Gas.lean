@@ -32,10 +32,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -84,24 +86,26 @@ def GAS_COST_ZERO : gas_cost := 0
 
 def undefined_GasCharge (_ : Unit) : SailM GasCharge := do
   (pure { affordable := ← (undefined_bool ()),
-          cost := ← (undefined_nat ()) })
+          cost := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
 def GAS_CHARGE_UNAFFORDABLE : GasCharge :=
   { affordable := false,
     cost := GAS_COST_ZERO }
 
-/- Type quantifiers: cost : Nat, 0 ≤ cost -/
+/- Type quantifiers: cost : Nat, 0 ≤ cost ∧ cost ≤ (2 ^ 64 - 1) -/
 def gas_charge (cost : Nat) : GasCharge :=
   { affordable := true,
     cost := cost }
 
 def TRANSACTION_EXECUTION_GAS_LIMIT : Nat := (2 ^i 24)
 
-def STATE_GAS_SPILL_ZERO : state_gas_spill := 0
+abbrev STATE_GAS_SPILL_ZERO : Nat := 0
 
 def STATE_GAS_SPILL_LIMIT : state_gas_spill := (2 ^i 24)
 
-def GAS_ZERO : gas := 0
+abbrev GAS_ZERO : Nat := 0
+
+abbrev STATE_GAS_ZERO : Nat := 0
 
 /-- The execution-gas allowance of each protocol system call (EIP-4788,
 EIP-2935, EIP-7002, EIP-7251, and EIP-8282). -/

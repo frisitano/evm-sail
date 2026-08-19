@@ -1,0 +1,22 @@
+name: Set up Python developer tools
+description: Install pinned uv, restore its portable caches, and sync the locked project.
+
+inputs:
+  cache-dependency-glob:
+    description: Files that invalidate the shared uv dependency cache.
+    required: false
+    default: uv.lock
+
+runs:
+  using: composite
+  steps:
+    - name: Install pinned uv and restore caches
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        enable-cache: true
+        cache-python: true
+        cache-dependency-glob: ${{ inputs.cache-dependency-glob }}
+
+    - name: Install the managed Python and locked dependencies
+      shell: bash
+      run: uv sync --frozen

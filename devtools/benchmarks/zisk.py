@@ -1396,7 +1396,7 @@ def main() -> int:
 
         measured_cases: list[dict[str, object]] = []
         if args.dashboard_only:
-            for case, profile in zip(cases, profiles):
+            for case, profile in zip(cases, profiles, strict=True):
                 profile_artifacts = profile["artifacts"]
                 assert isinstance(profile_artifacts, dict)
                 profile_unavailable = profile_artifacts.get("unavailable")

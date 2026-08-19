@@ -33,10 +33,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -123,7 +125,7 @@ def path_concat (a : TriePath) (b : TriePath) : SailM TriePath := do
   else (fatal_error WitnessDeficient)
 
 /-- The path with its first `n` nibbles removed. -/
-/- Type quantifiers: k_ex553441_ : Nat, 0 ≤ k_ex553441_ ∧ k_ex553441_ ≤ 64 -/
+/- Type quantifiers: k_ex610867_ : Nat, 0 ≤ k_ex610867_ ∧ k_ex610867_ ≤ 64 -/
 def path_drop (path : TriePath) (n : Nat) : SailM TriePath := do
   let length := (path_len path)
   if ((length ≤b n) : Bool)
@@ -208,7 +210,7 @@ def hex_prefix_encoded_length (path : TriePath) : Nat :=
   (1 + packed_pair_count)
 
 /-- The flag byte beginning the hex-evm_prefix form of a trie path. -/
-/- Type quantifiers: k_ex553442_ : Bool -/
+/- Type quantifiers: k_ex610868_ : Bool -/
 def hex_prefix_first_byte (path : TriePath) (is_leaf : Bool) : SailM (BitVec 8) := do
   let length : Nat := (path_len path)
   let odd := ((Nat.mod length 2) != 0)

@@ -1,13 +1,9 @@
 import Evm.Prelude
-import Evm.Primitives.Gas
 import Evm.Primitives.Bytes
-import Evm.Primitives.Code
 import Evm.Kernel.Scratch
 import Evm.Primitives.ChainConfig
 import Evm.Primitives.Tx
-import Evm.Primitives.Evm
 import Evm.Kernel.Environment
-import Evm.Evm.Machine
 import Evm.Main
 
 set_option maxHeartbeats 1_000_000_000
@@ -38,10 +34,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -91,19 +89,6 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
                          gas_price := ZERO_WORD,
                          blob_hashes := EMPTY_BLOB_HASHES } : (TxEnvFields 0))⟩
   writeReg k_current_transaction_epoch 0
-  writeReg pc 0
-  writeReg gas_remaining GAS_ZERO
-  writeReg stack_top 0x0000000000000000#64
-  writeReg state_gas_remaining GAS_ZERO
-  writeReg state_gas_spilled STATE_GAS_SPILL_ZERO
-  writeReg frame_refund GAS_REFUND_ZERO
-  writeReg frame_status (Running ())
-  writeReg message DEFAULT_MESSAGE
-  writeReg call_depth 0
-  writeReg frame_code ⟨_, ⟨_, ((EMPTY_CODE).2).2⟩⟩
-  writeReg calldata EMPTY_CALLDATA
-  writeReg returndata ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩
-  writeReg evm_memory ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩
   (pure (initialize_registers ()))
 
 end Evm.Functions

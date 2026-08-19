@@ -14,29 +14,30 @@ from evm.HostContract import (
     log_topics_count as _host_log_topics_count,
     mem_store_word as _host_mem_store_word,
     scratch_input_slices_equal as _host_scratch_input_slices_equal,
-    stack_reset as _host_stack_reset,
 )
 from evm.prelude import (
     address,
     hash,
-    word,
     u256,
     hash_to_word,
     ZERO_WORD,
 )
-from evm.primitives.quantities import (
-    frame_depth,
-    memory_range,
-)
+from evm.primitives.quantities import memory_range
 from evm.primitives.gas import (
     gas,
+    gas_refund,
+    state_gas,
+    state_gas_spill,
     STATE_GAS_SPILL_ZERO,
+    STATE_GAS_ZERO,
+    SYSTEM_CALL_GAS_LIMIT,
     GAS_REFUND_ZERO,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
     LogDataSlice,
     MemoryCalldata,
+    OutputSlice,
     ScratchSlice,
     StatelessInputSlice,
     stateless_input_slice_length,
@@ -46,13 +47,15 @@ from evm.primitives.bytes import (
     stateless_input_slice_suffix,
     WORD_BYTE_LENGTH,
     EIGHT_BYTE_LENGTH,
+    EMPTY_EVM_MEMORY_SLICE,
     EMPTY_CALLDATA,
 )
 from evm.exceptions import (
     FatalError,
     fatal_error,
 )
-from evm.evm.halt import Running
+from evm.evm.halt import FrameStatus
+from evm.primitives.code import Code
 from evm.host.region_access import log_data_slice_load
 from evm.kernel.scratch import (
     scratch_reserve,
@@ -76,8 +79,8 @@ from evm.primitives.tx import (
     log_store_index_increment,
     log_store_index_add,
 )
-from evm.primitives.evm import Message
 from evm.host.code import code_db_resolve
+from evm.host.stack import stack_reset
 from evm.kernel.logs import read_log_data
 from evm.kernel.code import k_code_key
 from evm.kernel.lifecycle import (
@@ -87,7 +90,6 @@ from evm.kernel.lifecycle import (
     k_journal_commit,
 )
 from evm.evm.machine import (
-    returndata_clear,
     memory_reset,
     memory_expand_to,
     active_memory_slice,
@@ -100,47 +102,29 @@ from evm.evm.interpreter import (
 )
 from evm.lib.ssz.stateless_input import StatelessInputRef
 from evm.kernel import environment
-from evm.evm import machine
 
-def enter_system_call_frame(tgt: address, input: CalldataSlice) -> None:
-    execution_profile = environment.k_execution_profile
-    gas_limits = execution_profile.gas
+def run_system_call_frame(tgt: address, code: Code, input: CalldataSlice) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     k_journal_checkpoint()
-    machine.pc = 0
-    machine.call_depth = 0
-    machine.gas_remaining = gas_limits.system_regular_limit
-    machine.state_gas_remaining = gas_limits.system_state_limit
-    machine.state_gas_spilled = STATE_GAS_SPILL_ZERO
-    machine.frame_refund = GAS_REFUND_ZERO
-    machine.stack_top = _host_stack_reset()
-    returndata_clear()
-    machine.frame_status = Running(None)
-    machine.calldata = input
-    machine.message = Message(caller=address(SYSTEM_ADDRESS), address=address(tgt), code_address=address(tgt), value=word(ZERO_WORD), state_gas_reservoir=gas(gas_limits.system_state_limit), is_static=False, depth=frame_depth(0))
-    code_hash = k_code_key(tgt)
-    machine.frame_code = code_db_resolve(code_hash)
-    return None
+    return interpret(SYSTEM_CALL_GAS_LIMIT, STATE_GAS_ZERO, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_reset(), EMPTY_EVM_MEMORY_SLICE, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, STATE_GAS_ZERO, False, 0, code, input)
 
 def system_call(tgt: address, input: hash) -> None:
     try:
         code_hash = k_code_key(tgt)
         if ((code_hash) == (KECCAK_EMPTY)):
             raise SailReturn(None)
-        memory_reset()
+        code = code_db_resolve(code_hash)
+        initial_memory = memory_reset()
         input_range = memory_range(0, SYSTEM_CALL_INPUT_LENGTH)
-        (_, expanded_memory) = memory_expand_to(machine.evm_memory, input_range.len)
-        machine.evm_memory = expanded_memory
+        (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len)
         input_word = hash_to_word(input)
         _host_mem_store_word(input_range.off, input_word)
-        (input_slice, accessed_memory) = active_memory_slice(machine.evm_memory, input_range.off, input_range.len)
-        machine.evm_memory = accessed_memory
+        (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len)
         parent_memory = memory_frame_enter()
         memory_input = evm_memory_slice(input_slice.bytes, input_slice.len)
         frame_input = MemoryCalldata(memory_input)
-        enter_system_call_frame(tgt, frame_input)
-        interpret()
+        (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input)
         memory_frame_leave(parent_memory)
-        succeeded = frame_succeeded()
+        succeeded = frame_succeeded(status)
         failed = (not (succeeded))
         if failed:
             k_journal_revert()
@@ -155,11 +139,11 @@ def system_call_checked(tgt: address) -> ScratchSlice:
     if ((code_hash) == (KECCAK_EMPTY)):
         return fatal_error(FatalError.ExecutionInvalid)
     else:
+        code = code_db_resolve(code_hash)
         memory_reset()
         parent_memory = memory_frame_enter()
-        enter_system_call_frame(tgt, EMPTY_CALLDATA)
-        output = interpret()
-        succeeded = frame_succeeded()
+        (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA)
+        succeeded = frame_succeeded(status)
         if succeeded:
             start = scratch_reserve(output.len)
             output_scratch_push_slice(output)

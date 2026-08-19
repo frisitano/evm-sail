@@ -61,5 +61,5 @@ def tx_auth_valid(sender: address, h: hash, parity: y_parity, r: word, s: word) 
     if high_s:
         return False
     else:
-        (recovered, recovered_sender) = ecrecover_addr(h, parity, r, s)
-        return ((recovered) & (((recovered_sender) == (sender))))
+        recovered = ecrecover_addr(h, parity, r, s)
+        return ((recovered.success) & (((recovered.address) == (sender))))

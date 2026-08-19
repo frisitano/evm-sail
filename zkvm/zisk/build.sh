@@ -27,8 +27,7 @@ build_guest() {
     if [ ! -f "$ziskos_lib" ]; then
         local checkout
         checkout="$(cargo metadata --manifest-path "$HERE/Cargo.toml" --format-version 1 2>/dev/null \
-            | python3 -c 'import json,sys; m=json.load(sys.stdin); print(next(p["manifest_path"] for p in m["packages"] if p["name"]=="ziskos"))' \
-            | xargs dirname | xargs dirname | xargs dirname)"
+            | (cd "$ROOT" && uv run --frozen python -c 'import json, pathlib, sys; m=json.load(sys.stdin); p=next((p for p in m["packages"] if p["name"] == "ziskos"), None); p is not None or sys.exit("ziskos package missing from cargo metadata"); print(pathlib.Path(p["manifest_path"]).parents[2])'))"
         RUSTUP_TOOLCHAIN="$TOOLCHAIN" cargo build --release \
             --manifest-path "$checkout/ziskos-staticlib/Cargo.toml" \
             --target "$TARGET" \

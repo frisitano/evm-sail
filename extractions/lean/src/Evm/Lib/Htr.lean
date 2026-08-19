@@ -36,10 +36,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -522,11 +524,11 @@ def htr_bytes_subtree (bytes : (Sigma fun (k_off : Nat) =>
   else (_rec_htr_bytes_subtree ⟨_, ⟨_, bytes⟩⟩ start count depth (_measure + 1))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex554935_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex612370_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
-  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex554935_ ∧
-  k_ex554935_ ≤ 25 -/
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex612370_ ∧
+  k_ex612370_ ≤ 25 -/
 def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1

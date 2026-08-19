@@ -21,7 +21,7 @@ unchanged ELF. This subsumes the old
 zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 
 Usage:
-    python3 -m devtools.harness.cli <test.json|dir> [...] [--fork F] [--limit N]
+    uv run --frozen python -m devtools.harness.cli <test.json|dir> [...] [--fork F] [--limit N]
             [--build standard|optimized] [--python|--spike|--zisk] [--rebuild]
             [--verbose] [--debug]
 Requires `sail` on PATH and a C compiler; devtools.harness.ssz_builder runs under the

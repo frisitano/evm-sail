@@ -34,10 +34,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -147,7 +149,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex552677_ : Bool, output_len : Nat, (source_valid_length output_len) -/
+/- Type quantifiers: k_ex609854_ : Bool, output_len : Nat, (source_valid_length output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then
@@ -164,7 +166,7 @@ def copied_result (data : CalldataSlice) : SailM PrecompileResult := do
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex552680_ : Bool -/
+/- Type quantifiers: k_ex609857_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   let result_word :=
     if (value : Bool)
@@ -191,11 +193,11 @@ def run_ecrecover (input : CalldataSlice) : SailM PrecompileResult := do
       let message_hash := (word_to_hash message_word)
       let r ← do (calldata_slice_load input PRECOMPILE_DOUBLE_WORD_OFFSET)
       let s ← do (calldata_slice_load input ECRECOVER_S_OFFSET)
-      let (recovered, address) ← do (ecrecover_addr message_hash parity r s)
-      if (recovered : Bool)
+      let recovered ← do (ecrecover_addr message_hash parity r s)
+      if (recovered.success : Bool)
       then
         (do
-          let address_word := (address_to_word address)
+          let address_word := (address_to_word recovered.address)
           let ⟨_, ⟨_, output⟩⟩ ← do (output_buffer_word address_word)
           (pure (precompile_success ⟨_, ⟨_, output⟩⟩)))
       else (pure (precompile_success ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩)))

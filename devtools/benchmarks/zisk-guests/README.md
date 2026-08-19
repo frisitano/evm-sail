@@ -1,7 +1,7 @@
 # Local ZisK benchmark guests
 
 This directory is the stable repository-local home for the three guest ELFs
-used by `python3 -m devtools.benchmarks.zisk`:
+used by `uv run --frozen python -m devtools.benchmarks.zisk`:
 
 - `stateless-validator-evm-sail-zisk.elf`
 - `stateless-validator-reth-zisk.elf`
@@ -24,7 +24,7 @@ bash devtools/benchmarks/stage_zisk_guests.sh \
 Once staged, the standard comparison needs no `--guest` arguments:
 
 ```sh
-python3 -m devtools.benchmarks.zisk path/to/fixture.json
+uv run --frozen python -m devtools.benchmarks.zisk path/to/fixture.json
 ```
 
 The runner validates every public output before recording a step count.
@@ -71,7 +71,7 @@ for semantic tags and a full statistics/disassembly pass for comprehensive
 operation and executed-function data.
 
 ```sh
-python3 -m devtools.benchmarks.zisk \
+uv run --frozen python -m devtools.benchmarks.zisk \
   --guest evm-sail=.agent-tmp/build-zisk-profile/stateless-validator-evm-sail-zisk.elf \
   --guest reth=devtools/benchmarks/zisk-guests/stateless-validator-reth-zisk.elf \
   --guest ethrex=devtools/benchmarks/zisk-guests/stateless-validator-ethrex-zisk.elf \
@@ -249,7 +249,7 @@ An existing `results.json` can be re-exported without re-running any
 emulator:
 
 ```sh
-python3 -m devtools.benchmarks.zisk \
+uv run --frozen python -m devtools.benchmarks.zisk \
   --regenerate-dashboard .agent-tmp/zisk-dashboard-run/results.json \
   --dashboard-dir book/docs/assets/generated/performance
 ```

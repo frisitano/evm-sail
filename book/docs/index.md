@@ -10,7 +10,7 @@ layer, written in [Sail](https://github.com/rems-project/sail) — and a
 workbench for asking hard questions about the guests that prove it.
 
 One source defines the state transition function. From it we extract a
-reference implementation in C, proof objects for Lean and Coq, an
+reference implementation in C, proof objects for Lean and Rocq, an
 executable Python rendering, and a research-centric optimised zkEVM guest
 — through a [custom Sail compiler](https://github.com/frisitano/sail/tree/evm-sail)
 that lowers the specification's semantic types to machine representations.
@@ -51,7 +51,7 @@ to our guest, so the tooling is built to extend to others.
 - **[Spec](introduction.md)** — the state transition, the EVM, gas, the
   tries, and stateless validation.
 - **[Spec extractions](extractions.md)** — how one source becomes C
-  backends, Lean and Coq developments, and a Python rendering.
+  backends, Lean and Rocq developments, and a Python rendering.
 - **[Research](engineering.md)** — the compiler, the extraction
   toolchain, the cost model, and what the experiments showed.
 - **[zkEVM benchmarks](performance.md)** — this guest against reth and

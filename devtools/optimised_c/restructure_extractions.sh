@@ -6,7 +6,7 @@
 #   ffi/spec/                           -> extractions/c/spec/contract/         repo-wide spelling:
 #                                                                                sail/optimised,
 #                                                                                make c-optimised)
-#   extractions/contracts/ExternBoundary.v   -> extractions/coq/contract/
+#   extractions/contracts/ExternBoundary.v   -> extractions/rocq/contract/
 #   extractions/contracts/HostAxioms.lean    -> extractions/lean/contract/
 #   extractions/contracts/Specialization.lean-> extractions/lean/contract/  (companion Lean
 #                                               contract file; travels with HostAxioms.lean)
@@ -43,7 +43,7 @@ die() {
 [ -f sail/evm.sail_project ] || die "run from the repository root"
 [ -d ffi ] || die "ffi/ does not exist (already restructured?)"
 [ ! -e extractions/c ] || die "target extractions/c already exists; refusing"
-[ ! -e extractions/coq/contract ] || die "target extractions/coq/contract already exists; refusing"
+[ ! -e extractions/rocq/contract ] || die "target extractions/rocq/contract already exists; refusing"
 [ ! -e extractions/lean/contract ] || die "target extractions/lean/contract already exists; refusing"
 [ ! -e extractions/python/contract ] || die "target extractions/python/contract already exists; refusing"
 [ -d ffi/optimized ] || die "ffi/optimized does not exist"
@@ -65,8 +65,8 @@ mkdir -p extractions/c
 git mv ffi extractions/c
 git mv extractions/c/optimized extractions/c/optimised/contract
 
-mkdir -p extractions/coq/contract extractions/lean/contract extractions/python/contract
-git mv extractions/contracts/ExternBoundary.v extractions/coq/contract/ExternBoundary.v
+mkdir -p extractions/rocq/contract extractions/lean/contract extractions/python/contract
+git mv extractions/contracts/ExternBoundary.v extractions/rocq/contract/ExternBoundary.v
 git mv extractions/contracts/HostAxioms.lean extractions/lean/contract/HostAxioms.lean
 git mv extractions/contracts/Specialization.lean extractions/lean/contract/Specialization.lean
 git mv extractions/contracts/HostContract.py extractions/python/contract/HostContract.py
@@ -141,7 +141,7 @@ perl -pi -e '
     s{\$\(CONTRACTS_DIR\)/HostContract\.py}{extractions/python/contract/HostContract.py};
     s{\$\(CONTRACTS_DIR\)/HostAxioms\.lean}{extractions/lean/contract/HostAxioms.lean};
     s{\$\(CONTRACTS_DIR\)/Specialization\.lean}{extractions/lean/contract/Specialization.lean};
-    s{\$\(CONTRACTS_DIR\)/ExternBoundary\.v}{extractions/coq/contract/ExternBoundary.v};
+    s{\$\(CONTRACTS_DIR\)/ExternBoundary\.v}{extractions/rocq/contract/ExternBoundary.v};
     s{find sail extractions/contracts }{find sail };
 ' Makefile
 perl -ni -e 'print unless /^CONTRACTS_DIR\s+:= extractions\/contracts$/' Makefile
@@ -157,14 +157,14 @@ perl -pi -e '
     s{"optimized/include"}{"optimised/include"}g;
 ' devtools/optimised_c/package.py
 
-# AGENTS.md: the extern-contract pointer follows the Coq contract move.
+# AGENTS.md: the extern-contract pointer follows the Rocq contract move.
 perl -pi -e '
-    s{extractions/contracts/ExternBoundary\.v}{extractions/coq/contract/ExternBoundary.v}g;
+    s{extractions/contracts/ExternBoundary\.v}{extractions/rocq/contract/ExternBoundary.v}g;
 ' AGENTS.md
 
 # book/docs/extractions.md: the stub pointer fans out per target.
 perl -pi -e '
-    s{`extractions/contracts/`}{`extractions/{coq,lean,python}/contract/`}g;
+    s{`extractions/contracts/`}{`extractions/{rocq,lean,python}/contract/`}g;
 ' book/docs/extractions.md
 
 # Moved-tree docs that name the optimized/ subdir relative to the ffi root.
@@ -215,7 +215,7 @@ echo "  ffi/                                 -> extractions/c/"
 echo "  ffi/optimized/                       -> extractions/c/optimised/contract/"
 echo "  ffi/spec/                            -> extractions/c/spec/contract/"
 echo "  ffi/zkvm_{accelerators,io,bigint}.h  -> extractions/c/"
-echo "  extractions/contracts/ExternBoundary.v    -> extractions/coq/contract/"
+echo "  extractions/contracts/ExternBoundary.v    -> extractions/rocq/contract/"
 echo "  extractions/contracts/HostAxioms.lean     -> extractions/lean/contract/"
 echo "  extractions/contracts/Specialization.lean -> extractions/lean/contract/"
 echo "  extractions/contracts/HostContract.py     -> extractions/python/contract/"
@@ -229,8 +229,8 @@ echo "  make lint && make fmt-check"
 echo "  make check-optimized-ffi"
 echo "  make c-spec"
 echo "  make c-optimised"
-echo "  python3 -m devtools.harness.cli --rebuild --limit 1 --quiet \\"
+echo "  uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --limit 1 --quiet \\"
 echo "    zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json"
-echo "  python3 -m devtools.harness.cli --jobs 8 --quiet zkvm/.fixtures/current-v062-full   # full native gate"
+echo "  uv run --frozen python -m devtools.harness.cli --build optimized --jobs 8 --quiet zkvm/.fixtures/current-v062-full   # full native gate"
 echo "  make zisk-guest    # production ZisK ELF build"
 echo "  make docs-site     # regenerates the book reference pages"

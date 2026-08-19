@@ -1,13 +1,16 @@
 # Developer tools
 
 All handwritten Python and repository developer utilities live in this tree.
+They require Python 3.12.x exactly; `pyproject.toml` declares the Python and
+dependency versions, while `uv.lock` fixes the environment. `uv` installs its
+managed Python automatically. Other Python minor versions are not supported.
 Run Python entry points from the repository root with module syntax so imports
 and shared path handling are consistent:
 
 ```sh
-python3 -m devtools.harness.cli --help
-python3 -m devtools.benchmarks.zisk --help
-python3 -m devtools.optimised_c.check --help
+uv run --frozen python -m devtools.harness.cli --help
+uv run --frozen python -m devtools.benchmarks.zisk --help
+uv run --frozen python -m devtools.optimised_c.check --help
 ```
 
 - `harness/` owns fixture discovery, SSZ construction, guest adapters, and the
@@ -18,6 +21,10 @@ python3 -m devtools.optimised_c.check --help
   directory.
 - `optimised_c/` owns optimized-C build metadata, conformance, formatting,
   linting, packaging, and quality evaluation.
+- `rocq.py` normalizes colliding binder names in generated dependent tuple
+  patterns before the staged Rocq tree is checked or published.
+- `python_extraction.py` localizes the state-trie callback imports emitted into
+  the generic MPT reducer, avoiding a split-module import cycle.
 - `docs/` owns documentation checks and Sail readability summaries.
 - `tests/` is the pytest suite for handwritten tooling.
 

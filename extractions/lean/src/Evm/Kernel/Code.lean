@@ -35,10 +35,12 @@ open StorageTxPopResult
 open StorageTxLookup
 open StorageBlockIterResult
 open StateJournalEntry
+open StackValidation
 open ScratchTrieNode
 open RlpResult
 open Register
 open PrecompileId
+open OpcodeOutcome
 open NodeRef
 open LogTopics
 open LogData
@@ -128,9 +130,9 @@ def k_get_code_size (a : (Vector (BitVec 8) 20)) : SailM Nat := do
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex551982_ : Nat, k_ex551981_ : Nat, k_ex551980_ : Nat, 0 ≤ k_ex551980_ ∧
-  k_ex551980_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551981_ ∧ k_ex551981_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex551982_ ∧ k_ex551982_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex609095_ : Nat, k_ex609094_ : Nat, k_ex609093_ : Nat, 0 ≤ k_ex609093_ ∧
+  k_ex609093_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex609094_ ∧ k_ex609094_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex609095_ ∧ k_ex609095_ ≤ (2 ^ 32 - 1) -/
 def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let code_key ← do (k_code_key a)
   let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_key)

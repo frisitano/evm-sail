@@ -48,6 +48,10 @@ OPTIMIZED_GENERATED="$BUILD/generated"
 rm -rf "$OPTIMIZED_GENERATED"
 OPTIMIZED_MODEL_MANIFEST="$OPTIMIZED_GENERATED/src/spec/sources.list"
 OPTIMIZED_STAGED_FFI="$OPTIMIZED_GENERATED/src/ffi"
+OPTIMIZED_MODEL_MANIFEST_CANONICAL="$BUILD/generated-model-sources.list"
+OPTIMIZED_FFI_MANIFEST_CANONICAL="$BUILD/optimized-ffi-sources.list"
+OPTIMIZED_SPLICE_MANIFEST_CANONICAL="$BUILD/optimized-splices.list"
+PROFILE_SPLICE_MANIFEST_CANONICAL="$BUILD/profile-splices.list"
 
 SAIL="${SAIL:-}"
 GCC="${GCC:-riscv64-unknown-elf-gcc}"
@@ -260,6 +264,11 @@ done
 
 mkdir -p "$BUILD"
 
+canonicalize_manifest() {
+  ( cd "$ROOT" && uv run --frozen python -m devtools.build_support canonicalize-manifest \
+    --root "$1" --output "$3" "$2" ) >/dev/null
+}
+
 build_runtime() {
   # start.S is the machine-mode platform crt0 + trap vector (vendor/platform
   # glue, not the proven STF). It uses Zicsr CSR ops (mtvec/mcause/...) to map
@@ -286,6 +295,8 @@ compile_common() {
         "${MODEL_INCLUDE_FLAGS[@]}" \
         "$GUEST" -o "$BUILD/zkvm_block"
   else
+    canonicalize_manifest "$C_OPTIMISED_DIR" "$C_OPTIMISED_MANIFEST" \
+      "$OPTIMIZED_SPLICE_MANIFEST_CANONICAL"
     local optimized_splice_flags=()
     local relative
     while IFS= read -r relative || [ -n "$relative" ]; do
@@ -294,13 +305,15 @@ compile_common() {
         continue
       fi
       optimized_splice_flags+=(--splice "$C_OPTIMISED_DIR/$relative")
-    done < "$C_OPTIMISED_MANIFEST"
+    done < "$OPTIMIZED_SPLICE_MANIFEST_CANONICAL"
     local profile_splice_flags=()
     if [ "$EVM_PROFILE" = on ]; then
+      canonicalize_manifest "$C_PROFILE_DIR" "$C_PROFILE_MANIFEST" \
+        "$PROFILE_SPLICE_MANIFEST_CANONICAL"
       while IFS= read -r relative || [ -n "$relative" ]; do
         [ -z "$relative" ] && continue
         profile_splice_flags+=(--splice "$C_PROFILE_DIR/$relative")
-      done < "$C_PROFILE_MANIFEST"
+      done < "$PROFILE_SPLICE_MANIFEST_CANONICAL"
     fi
     local interpreter_preserve_flags=()
     local callback
@@ -349,12 +362,16 @@ compile_common() {
         ${profile_splice_flags[@]+"${profile_splice_flags[@]}"} \
         sail/evm.sail_project evm \
         --variable EVM_DEBUG="$EVM_DEBUG" )
-    ( cd "$ROOT" && python3 -m devtools.optimised_c.package "$OPTIMIZED_GENERATED" )
+    local package_args=()
     if [ "$EVM_GENERATED_INTERP" = on ]; then
-      grep -v '^evm/interpreter\.c$' "$OPTIMIZED_STAGED_FFI/sources.list" \
-        > "$OPTIMIZED_STAGED_FFI/sources.list.tmp"
-      mv "$OPTIMIZED_STAGED_FFI/sources.list.tmp" "$OPTIMIZED_STAGED_FFI/sources.list"
+      package_args+=(--exclude-ffi-source evm/interpreter.c)
     fi
+    ( cd "$ROOT" && uv run --frozen python -m devtools.optimised_c.package \
+      "$OPTIMIZED_GENERATED" ${package_args[@]+"${package_args[@]}"} )
+    canonicalize_manifest "$OPTIMIZED_GENERATED/src/spec" \
+      "$OPTIMIZED_MODEL_MANIFEST" "$OPTIMIZED_MODEL_MANIFEST_CANONICAL"
+    canonicalize_manifest "$OPTIMIZED_STAGED_FFI" \
+      "$OPTIMIZED_STAGED_FFI/sources.list" "$OPTIMIZED_FFI_MANIFEST_CANONICAL"
   fi
   # 2. Compile the generated model.  Proven small ranges lower to native
   #    integers; mathematical int/nat values use sail256's exact bounded ABI.
@@ -379,7 +396,7 @@ compile_common() {
             -c "$source" -o "$object"
         MODEL_OBJS+=("$object")
       fi
-    done < "$OPTIMIZED_MODEL_MANIFEST"
+    done < "$OPTIMIZED_MODEL_MANIFEST_CANONICAL"
     [ "${#MODEL_SOURCES[@]}" -gt 0 ] || { echo "error: empty generated model manifest" >&2; exit 2; }
   else
     local object="$BUILD/zkvm_block.o"
@@ -409,7 +426,7 @@ compile_common() {
             -c "$source" -o "$object"
         MODEL_BACKEND_OBJS+=("$object")
       fi
-    done < "$OPTIMIZED_STAGED_FFI/sources.list"
+    done < "$OPTIMIZED_FFI_MANIFEST_CANONICAL"
   else
     local source_and_name source object
     local -a backend_sources=(

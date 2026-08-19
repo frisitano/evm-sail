@@ -1,0 +1,19 @@
+schema_version = 1
+compiler_revision = "340c50a5af40dfcef2a18149424664b4b5d623c9"
+
+# These exact lowering artifacts are emitted by the pinned public Sail compiler.
+# The conformance check rejects new findings and fails when any waiver goes stale.
+[[waiver]]
+rule = "immediate-scalar-return"
+path = "src/spec/prelude.c"
+name = "result_8_429"
+
+[[waiver]]
+rule = "immediate-scalar-return"
+path = "src/spec/prelude.c"
+name = "result_8_454"
+
+[[waiver]]
+rule = "adjacent-scalar-initializer"
+path = "src/spec/kernel/environment.c"
+name = "tmp_3_3500"
