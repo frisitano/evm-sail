@@ -108,4 +108,3 @@ def tx_auth_valid (sender : (Vector (BitVec 8) 20)) (h : (Vector (BitVec 8) 32))
     (do
       let recovered ← do (ecrecover_addr h parity r s)
       (pure (recovered.success && (recovered.address == sender))))
-

@@ -122,4 +122,3 @@ def undefined_Withdrawal (_ : Unit) : SailM Withdrawal := do
           validator_index := ← (undefined_range 0 ((2 ^i 64) - 1)),
           address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           amount := ← (undefined_range 0 ((2 ^i 64) - 1)) })
-

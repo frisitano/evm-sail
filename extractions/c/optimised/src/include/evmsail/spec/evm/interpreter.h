@@ -33,10 +33,14 @@ struct tuple_uint_32_bits_8 {
   uint64_t tup1;
 };
 
-// struct tuple_u256_StackPointer
-struct tuple_u256_StackPointer {
-  u256 tup0;
-  StackPointer tup1;
+// struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes {
+  uint64_t tup0;
+  uint64_t tup1;
+  uint32_t tup2;
+  __int128 tup3;
+  struct FrameStatus tup4;
+  Bytes tup5;
 };
 
 u256 read_push(Bytes code, uint32_t offset, uint8_t n);
@@ -65,13 +69,13 @@ struct CodeFields executable_code(bytes20 target, bool dele, bytes20 dtgt);
 
 struct CallSemantics call_semantics(enum CallKind kind);
 
-__attribute__((__always_inline__)) uint16_t call_stack_inputs(enum CallKind kind);
+uint16_t call_stack_inputs(enum CallKind kind);
 
 struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_sp, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_caller, bytes20 carried_address, bytes20 carried_code_address, u256 carried_value, uint64_t carried_state_gas_reservoir, bool carried_is_static, uint16_t carried_depth, struct CodeFields carried_code, struct CalldataSlice carried_calldata, Bytes carried_returndata, enum CallKind kind);
 
 struct CreateSemantics create_semantics(enum CreateKind kind);
 
-__attribute__((__always_inline__)) uint16_t create_stack_inputs(enum CreateKind kind);
+uint16_t create_stack_inputs(enum CreateKind kind);
 
 struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_sp, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_caller, bytes20 carried_address, bytes20 carried_code_address, u256 carried_value, uint64_t carried_state_gas_reservoir, bool carried_is_static, uint16_t carried_depth, struct CodeFields carried_code, struct CalldataSlice carried_calldata, Bytes carried_returndata, enum CreateKind kind);
 
@@ -83,9 +87,9 @@ struct FrameTransition resume_frame(struct FrameContinuation continuation, Bytes
 
 struct FrameTransition run_frame_entry_encoded(uint32_t carried_pc, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_sp, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_caller, bytes20 carried_address, bytes20 carried_code_address, u256 carried_value, uint64_t carried_state_gas_reservoir, bool carried_is_static, uint16_t carried_depth, struct CodeFields carried_code, struct CalldataSlice carried_calldata, Bytes carried_returndata, uint8_t opcode);
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes interpret_uint32_t_uint8_t_uint8_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint8_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint32_t initial_gas, uint8_t initial_state_gas, uint8_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint8_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata);
+Bytes interpret_uint32_t_uint8_t_uint8_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint8_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint32_t initial_gas, uint8_t initial_state_gas, uint8_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint8_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1523, uint64_t *restrict field_1_8_1524, uint32_t *restrict field_2_8_1525, __int128 *restrict field_3_8_1526, struct FrameStatus *restrict framestatus_8_1527);
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes interpret_uint64_t_uint64_t_uint32_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata);
+Bytes interpret_uint64_t_uint64_t_uint32_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1529, uint64_t *restrict field_1_8_1530, uint32_t *restrict field_2_8_1531, __int128 *restrict field_3_8_1532, struct FrameStatus *restrict framestatus_8_1533);
 
 struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint16_t_struct_CodeFields_struct_CalldataSlice_Bytes_enum_CallKind_to_struct_FrameTransition(uint32_t carried_pc, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_sp, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_caller, bytes20 carried_address, bytes20 carried_code_address, u256 carried_value, uint64_t carried_state_gas_reservoir, bool carried_is_static, uint16_t carried_depth, struct CodeFields carried_code, struct CalldataSlice carried_calldata, Bytes carried_returndata, enum CallKind kind);
 

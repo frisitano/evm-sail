@@ -8,9 +8,9 @@ static bool eq_Bytes(Bytes op1, Bytes op2);
 static bool eq_u256(u256 op1, u256 op2);
 static bool eq_ExceptionKind(enum ExceptionKind op1, enum ExceptionKind op2);
 static bool eq_HaltKind(struct HaltKind op1, struct HaltKind op2);
+static bool eq_FrameStatus(struct FrameStatus op1, struct FrameStatus op2);
 static bool eq_BoundedSszListRef(struct BoundedSszListRef op1, struct BoundedSszListRef op2);
 static bool eq_BoundedSszListCursor(struct BoundedSszListCursor op1, struct BoundedSszListCursor op2);
-static bool eq_FrameStatus(struct FrameStatus op1, struct FrameStatus op2);
 static bool eq_BlobScheduleFields(struct BlobScheduleFields op1, struct BlobScheduleFields op2);
 static bool eq_GasLimitsFields(struct GasLimitsFields op1, struct GasLimitsFields op2);
 static bool eq_ProtocolProfileFields(struct ProtocolProfileFields op1, struct ProtocolProfileFields op2);
@@ -2052,6 +2052,10 @@ static inline struct FrameStatus Running(unit op) {
   return result;
 }
 
+static inline bool EQUAL(InterpreterCompletion)(struct InterpreterCompletion op1, struct InterpreterCompletion op2) {
+  return (bool)((op1.gas_remaining == op2.gas_remaining) && EQUAL(Bytes)(op1.output, op2.output) && (op1.refund == op2.refund) && (op1.state_gas_remaining == op2.state_gas_remaining) && (op1.state_gas_spilled == op2.state_gas_spilled) && EQUAL(FrameStatus)(op1.status, op2.status));
+}
+
 static inline bool EQUAL(BoundedSszListRef)(struct BoundedSszListRef op1, struct BoundedSszListRef op2) {
   return (bool)(EQUAL(Bytes)(op1.bytes, op2.bytes) && (op1.count == op2.count) && (op1.max_item_length == op2.max_item_length));
 }
@@ -2076,10 +2080,6 @@ static inline enum DeepStackOperation UNDEFINED(DeepStackOperation)(void) { retu
 
 static inline bool EQUAL(CodeFields)(struct CodeFields op1, struct CodeFields op2) {
   return (bool)((op1.bytes == op2.bytes) && (op1.jumpdests == op2.jumpdests) && (op1.len == op2.len));
-}
-
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes)(struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op1, struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(FrameStatus)(op1.tup4, op2.tup4) && EQUAL(Bytes)(op1.tup5, op2.tup5));
 }
 
 static inline bool EQUAL(ScratchRlpFieldRef)(struct ScratchRlpFieldRef op1, struct ScratchRlpFieldRef op2) {
@@ -2575,15 +2575,7 @@ static inline bool EQUAL(tuple_uint_64_uint_64_uint_32)(struct tuple_uint_64_uin
   return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_8)(struct tuple_uint_64_uint_64_uint_8 op1, struct tuple_uint_64_uint_64_uint_8 op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
-}
-
 static inline bool EQUAL(tuple_bool_uint_64_uint_64_uint_32)(struct tuple_bool_uint_64_uint_64_uint_32 op1, struct tuple_bool_uint_64_uint_64_uint_32 op2) {
-  return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
-}
-
-static inline bool EQUAL(tuple_bool_uint_64_uint_8_uint_32)(struct tuple_bool_uint_64_uint_8_uint_32 op1, struct tuple_bool_uint_64_uint_8_uint_32 op2) {
   return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
 }
 
@@ -2616,10 +2608,6 @@ static inline bool EQUAL(tuple_uint_64_StackPointer_OpcodeOutcome)(struct tuple_
 }
 
 static inline bool EQUAL(tuple_uint_64_StackPointer_uint_32_OpcodeOutcome)(struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome op1, struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome op2) {
-  return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
-}
-
-static inline bool EQUAL(tuple_uint_8_StackPointer_uint_32_OpcodeOutcome)(struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome op1, struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome op2) {
   return (bool)((op1.tup0 == op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1) && (op1.tup2 == op2.tup2) && EQUAL(OpcodeOutcome)(op1.tup3, op2.tup3));
 }
 
@@ -2659,8 +2647,8 @@ static inline bool EQUAL(tuple_uint_32_bits_8)(struct tuple_uint_32_bits_8 op1, 
   return (bool)((op1.tup0 == op2.tup0) && EQUAL(fbits)(op1.tup1, op2.tup1));
 }
 
-static inline bool EQUAL(tuple_u256_StackPointer)(struct tuple_u256_StackPointer op1, struct tuple_u256_StackPointer op2) {
-  return (bool)(EQUAL(u256)(op1.tup0, op2.tup0) && EQUAL(StackPointer)(op1.tup1, op2.tup1));
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes)(struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op1, struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(FrameStatus)(op1.tup4, op2.tup4) && EQUAL(Bytes)(op1.tup5, op2.tup5));
 }
 
 static inline bool EQUAL(TxUpfrontResult)(struct TxUpfrontResult op1, struct TxUpfrontResult op2) {
@@ -2679,23 +2667,11 @@ static inline bool EQUAL(IntrinsicGasCost)(struct IntrinsicGasCost op1, struct I
   return (bool)((op1.calldata_floor == op2.calldata_floor) && (op1.execution == op2.execution) && (op1.state == op2.state));
 }
 
-static inline bool EQUAL(tuple_bool_uint_8_uint_64_uint_32)(struct tuple_bool_uint_8_uint_64_uint_32 op1, struct tuple_bool_uint_8_uint_64_uint_32 op2) {
-  return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
-}
-
 static inline bool EQUAL(tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32)(struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 op1, struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 op2) {
   return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && (op1.tup5 == op2.tup5) && (op1.tup6 == op2.tup6));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32)(struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32 op1, struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32 op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(StackPointer)(op1.tup4, op2.tup4) && (op1.tup5 == op2.tup5) && (op1.tup6 == op2.tup6));
-}
-
 static inline bool EQUAL(tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice)(struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op1, struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op2) {
-  return (bool)(EQUAL(TransactionPreparation)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(bytes20)(op1.tup4, op2.tup4) && EQUAL(bytes20)(op1.tup5, op2.tup5) && EQUAL(CodeFields)(op1.tup6, op2.tup6) && EQUAL(CalldataSlice)(op1.tup7, op2.tup7));
-}
-
-static inline bool EQUAL(tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice)(struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op1, struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice op2) {
   return (bool)(EQUAL(TransactionPreparation)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3) && EQUAL(bytes20)(op1.tup4, op2.tup4) && EQUAL(bytes20)(op1.tup5, op2.tup5) && EQUAL(CodeFields)(op1.tup6, op2.tup6) && EQUAL(CalldataSlice)(op1.tup7, op2.tup7));
 }
 
@@ -3093,19 +3069,7 @@ static inline bool EQUAL(HtrRequestKind)(enum HtrRequestKind op1, enum HtrReques
   return (bool)(op1 == op2);
 }
 
-static inline enum HtrRequestKind UNDEFINED(HtrRequestKind)(void) { return HtrDeposit; }static inline vector_32_bits_8 internal_vector_update_vector_32_bits_8(vector_32_bits_8 op, const int64_t n, uint64_t elem) {
-  size_t m = (size_t)n;
-  op.data[m] = elem;
-  return op;
-}
-
-static inline vector_32_bits_8 internal_vector_init_vector_32_bits_8(const int64_t len) {
-  vector_32_bits_8 rop;
-  rop.len = (size_t)len;
-  return rop;
-}
-
-static inline vector_16_NodeRef fast_unsigned_vector_init_vector_16_NodeRef(const uint64_t n, struct NodeRef elem) {
+static inline enum HtrRequestKind UNDEFINED(HtrRequestKind)(void) { return HtrDeposit; }static inline vector_16_NodeRef fast_unsigned_vector_init_vector_16_NodeRef(const uint64_t n, struct NodeRef elem) {
   vector_16_NodeRef vec;
   size_t m = (size_t)n;
   vec.len = m;

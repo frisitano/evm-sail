@@ -515,4 +515,3 @@ def merge_ext_ref (evm_prefix' : TriePath) (childref : NodeRef) : SailM NodeRef 
               let merged_path ← do (path_concat evm_prefix' path)
               (extension_child_ref merged_path child))
           | _ => (extension_child_ref evm_prefix' childref)))
-

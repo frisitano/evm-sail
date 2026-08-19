@@ -411,4 +411,3 @@ def receipt_record_append (r : (Sigma fun (k_state_gas : Nat) =>
   (receipt_write_encoded ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, r⟩⟩⟩⟩⟩ cumulative_gas_used)
   let ⟨_, ⟨_, _encoded⟩⟩ ← do (rlp_encoder_finish encoder)
   (pure ())
-

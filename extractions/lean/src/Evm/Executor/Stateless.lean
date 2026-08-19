@@ -129,4 +129,3 @@ def verify_stateless_payload (input_ref : StatelessInputRef) : SailM Unit := do
   let block' := input.payload.block'
   let result ← do (execute_block_body block'.body input_ref)
   (validate_executed_block block' result)
-

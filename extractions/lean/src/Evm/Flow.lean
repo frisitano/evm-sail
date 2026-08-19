@@ -65,4 +65,3 @@ def neq_bool (x : Bool) (y : Bool) : Bool :=
 /- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
-

@@ -123,4 +123,3 @@ def stack_top_retreat (top : StackPointer) (count : Nat) : SailM StackPointer :=
   let storage ← do (stack_top_retreat_host top.storage count)
   (pure { storage := storage,
           height := ← (stack_top_height_host storage) })
-

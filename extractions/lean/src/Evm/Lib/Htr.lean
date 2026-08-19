@@ -1220,4 +1220,3 @@ def htr_new_payload_request (input_ref : StatelessInputRef) : SailM (Vector (Bit
   let beacon_root ← do (htr_ssz_bytes32 input_ref.new_payload_request NPR_BEACON_ROOT)
   let requests_root ← do (htr_execution_requests input_ref)
   (merkleize #v[requests_root, beacon_root, versioned_hashes_root, payload_root] 2)
-

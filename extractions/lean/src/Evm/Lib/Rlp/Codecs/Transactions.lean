@@ -916,4 +916,3 @@ def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (pubkey :
         (decode_set_code_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ sender fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))
-

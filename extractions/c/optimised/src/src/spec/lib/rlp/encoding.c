@@ -35,8 +35,7 @@ uint32_t rlp_materialized_slice_size(uint32_t length_, uint64_t first)
     return UINT32_C(1);
   }
   uint8_t prefix_size = rlp_length_prefix_len_uint32_t_to_uint8_t(length_);
-  uint32_t prefix_length = rlp_scratch_small_length(prefix_size);
-  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(length_, prefix_length);
+  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(length_, (rlp_scratch_small_length(prefix_size)));
 }
 
 uint32_t rlp_scratch_region_size(Bytes data)
@@ -79,8 +78,7 @@ uint8_t rlp_uint_word_size(u256 w)
 uint32_t rlp_scratch_list_size(uint32_t content_len)
 {
   uint8_t prefix_size = rlp_length_prefix_len_uint32_t_to_uint8_t(content_len);
-  uint32_t prefix_length = rlp_scratch_small_length(prefix_size);
-  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(content_len, prefix_length);
+  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(content_len, (rlp_scratch_small_length(prefix_size)));
 }
 
 uint32_t rlp_input_scratch_slice_size(Bytes data)
@@ -150,8 +148,7 @@ void rlp_write_uint_word(u256 w)
     first = UINT64_C(0x00);
   }
   rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(len, first);
-  u256 word = as_u256(w);
-  scratch_push_word_be(word, len);
+  scratch_push_word_be((as_u256(w)), len);
 }
 
 void rlp_write_word(u256 w)
@@ -168,8 +165,7 @@ void rlp_write_addr(bytes20 a)
 
 struct RlpEncoder rlp_encoder_begin(uint32_t expected_len)
 {
-  uint32_t scratch_reserve_result_2_2376 = scratch_reserve(expected_len);
-  return ((struct RlpEncoder){.expected_len = expected_len, .start = scratch_reserve_result_2_2376});
+  return ((struct RlpEncoder){.expected_len = expected_len, .start = (scratch_reserve(expected_len))});
 }
 
 Bytes rlp_encoder_finish(struct RlpEncoder encoder)
@@ -188,15 +184,13 @@ void rlp_encoder_rewind(struct RlpEncoder encoder)
 
 struct RlpEncoder rlp_encoder_begin_uint8_t_to_struct_RlpEncoder(uint8_t expected_len)
 {
-  uint32_t scratch_reserve_result_2_2376 = scratch_reserve_uint8_t_to_uint32_t(expected_len);
-  return ((struct RlpEncoder){.expected_len = (uint32_t)expected_len, .start = scratch_reserve_result_2_2376});
+  return ((struct RlpEncoder){.expected_len = (uint32_t)expected_len, .start = (scratch_reserve_uint8_t_to_uint32_t(expected_len))});
 }
 
 uint8_t rlp_length_prefix_len_uint16_t_to_uint8_t(uint16_t len)
 {
   u256 length_word = rlp_length_word_uint16_t_to_u256(len);
-  uint8_t rlp_minimal_word_len_result_2_2419 = rlp_minimal_word_len(length_word);
-  return ((uint8_t)((uint32_t)rlp_minimal_word_len_result_2_2419 + (uint32_t)UINT8_C(1)));
+  return ((uint8_t)((uint32_t)(rlp_minimal_word_len(length_word)) + (uint32_t)UINT8_C(1)));
 }
 
 uint8_t rlp_length_prefix_len_uint32_t_to_uint8_t(uint32_t len)
@@ -205,8 +199,7 @@ uint8_t rlp_length_prefix_len_uint32_t_to_uint8_t(uint32_t len)
     return UINT8_C(1);
   }
   u256 length_word = rlp_length_word_uint32_t_to_u256(len);
-  uint8_t rlp_minimal_word_len_result_2_2419 = rlp_minimal_word_len(length_word);
-  return ((uint8_t)((uint32_t)rlp_minimal_word_len_result_2_2419 + (uint32_t)UINT8_C(1)));
+  return ((uint8_t)((uint32_t)(rlp_minimal_word_len(length_word)) + (uint32_t)UINT8_C(1)));
 }
 
 uint8_t rlp_length_prefix_len_uint8_t_to_uint8_t(void)
@@ -220,15 +213,13 @@ uint8_t rlp_length_prefix_len_uint8_t_to_uint8_t_variant_2(uint8_t len)
     return UINT8_C(1);
   }
   u256 length_word = rlp_length_word_uint8_t_to_u256(len);
-  uint8_t rlp_minimal_word_len_result_2_2419 = rlp_minimal_word_len(length_word);
-  return ((uint8_t)((uint32_t)rlp_minimal_word_len_result_2_2419 + (uint32_t)UINT8_C(1)));
+  return ((uint8_t)((uint32_t)(rlp_minimal_word_len(length_word)) + (uint32_t)UINT8_C(1)));
 }
 
 uint8_t rlp_length_prefix_len_uint8_t_to_uint8_t_variant_3(uint8_t len)
 {
   u256 length_word = rlp_length_word_uint8_t_to_u256(len);
-  uint8_t rlp_minimal_word_len_result_2_2419 = rlp_minimal_word_len(length_word);
-  return ((uint8_t)((uint32_t)rlp_minimal_word_len_result_2_2419 + (uint32_t)UINT8_C(1)));
+  return ((uint8_t)((uint32_t)(rlp_minimal_word_len(length_word)) + (uint32_t)UINT8_C(1)));
 }
 
 u256 rlp_length_word_uint16_t_to_u256(uint16_t value)
@@ -248,20 +239,17 @@ u256 rlp_length_word_uint8_t_to_u256(uint8_t value)
 
 uint8_t rlp_list_size_uint8_t_to_uint8_t(uint8_t content_len)
 {
-  uint8_t rlp_length_prefix_len_result_2_2404 = rlp_length_prefix_len_uint8_t_to_uint8_t();
-  return ((uint8_t)((uint32_t)content_len + (uint32_t)rlp_length_prefix_len_result_2_2404));
+  return ((uint8_t)((uint32_t)content_len + (uint32_t)(rlp_length_prefix_len_uint8_t_to_uint8_t())));
 }
 
 uint8_t rlp_list_size_uint8_t_to_uint8_t_variant_2(uint8_t content_len)
 {
-  uint8_t rlp_length_prefix_len_result_2_2404 = rlp_length_prefix_len_uint8_t_to_uint8_t_variant_2(content_len);
-  return ((uint8_t)((uint32_t)content_len + (uint32_t)rlp_length_prefix_len_result_2_2404));
+  return ((uint8_t)((uint32_t)content_len + (uint32_t)(rlp_length_prefix_len_uint8_t_to_uint8_t_variant_2(content_len))));
 }
 
 uint8_t rlp_list_size_uint8_t_to_uint8_t_variant_3(uint8_t content_len)
 {
-  uint8_t rlp_length_prefix_len_result_2_2404 = rlp_length_prefix_len_uint8_t_to_uint8_t_variant_3(content_len);
-  return ((uint8_t)((uint32_t)content_len + (uint32_t)rlp_length_prefix_len_result_2_2404));
+  return ((uint8_t)((uint32_t)content_len + (uint32_t)(rlp_length_prefix_len_uint8_t_to_uint8_t_variant_3(content_len))));
 }
 
 uint8_t rlp_minimal_word_len_u128_to_uint8_t(u128 w)
@@ -316,35 +304,26 @@ uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_2(uint32_t
 
 uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(uint32_t left, uint32_t right)
 {
-  uint32_t result_8_1214;
   if (right <= (UINT32_C(4294967295) - left)) {
-    result_8_1214 = (uint32_t)((uint64_t)left + (uint64_t)right);
-  } else {
-    fatal_error(RlpDecode);
+    return (uint32_t)((uint64_t)left + (uint64_t)right);
   }
-  return result_8_1214;
+  fatal_error(RlpDecode);
 }
 
 uint32_t rlp_scratch_length_add_uint32_t_uint8_t_to_uint32_t(uint32_t left, uint8_t right)
 {
-  uint32_t result_8_1215;
   if (right <= (UINT32_C(4294967295) - left)) {
-    result_8_1215 = (uint32_t)((uint64_t)left + (uint64_t)right);
-  } else {
-    fatal_error(RlpDecode);
+    return (uint32_t)((uint64_t)left + (uint64_t)right);
   }
-  return result_8_1215;
+  fatal_error(RlpDecode);
 }
 
 uint32_t rlp_scratch_length_add_uint8_t_uint32_t_to_uint32_t(uint8_t left, uint32_t right)
 {
-  uint32_t result_8_1216;
   if (right <= (UINT32_C(4294967295) - (uint32_t)left)) {
-    result_8_1216 = (uint32_t)((uint64_t)left + (uint64_t)right);
-  } else {
-    fatal_error(RlpDecode);
+    return (uint32_t)((uint64_t)left + (uint64_t)right);
   }
-  return result_8_1216;
+  fatal_error(RlpDecode);
 }
 
 uint8_t rlp_uint_word_size_uint64_t_to_uint8_t(uint64_t w)
@@ -380,48 +359,41 @@ uint8_t rlp_uint_word_size_uint8_t_to_uint8_t(uint8_t w)
 void rlp_write_list_prefix_uint16_t_to_unit(uint16_t content_len)
 {
   if (content_len <= RLP_SHORT_LENGTH_LIMIT) {
-    uint64_t rlp_length_byte_native_result_2_2389 = rlp_length_byte_native((uint8_t)content_len);
-    scratch_push_byte(((UINT64_C(0xC0) + rlp_length_byte_native_result_2_2389) & UINT64_C(0xFF)));
+    scratch_push_byte(((UINT64_C(0xC0) + (rlp_length_byte_native((uint8_t)content_len))) & UINT64_C(0xFF)));
     return;
   }
   u256 length_word = rlp_length_word_uint16_t_to_u256(content_len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2391 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xF7) + rlp_length_byte_native_result_2_2391) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xF7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
 void rlp_write_list_prefix_uint32_t_to_unit(uint32_t content_len)
 {
   if (content_len <= RLP_SHORT_LENGTH_LIMIT) {
-    uint64_t rlp_length_byte_native_result_2_2389 = rlp_length_byte_native((uint8_t)content_len);
-    scratch_push_byte(((UINT64_C(0xC0) + rlp_length_byte_native_result_2_2389) & UINT64_C(0xFF)));
+    scratch_push_byte(((UINT64_C(0xC0) + (rlp_length_byte_native((uint8_t)content_len))) & UINT64_C(0xFF)));
     return;
   }
   u256 length_word = rlp_length_word_uint32_t_to_u256(content_len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2391 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xF7) + rlp_length_byte_native_result_2_2391) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xF7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
 void rlp_write_list_prefix_uint8_t_to_unit(uint8_t content_len)
 {
-  uint64_t rlp_length_byte_native_result_2_2389 = rlp_length_byte_native(content_len);
-  scratch_push_byte(((UINT64_C(0xC0) + rlp_length_byte_native_result_2_2389) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xC0) + (rlp_length_byte_native(content_len))) & UINT64_C(0xFF)));
 }
 
 void rlp_write_list_prefix_uint8_t_to_unit_variant_2(uint8_t content_len)
 {
   if (content_len <= RLP_SHORT_LENGTH_LIMIT) {
-    uint64_t rlp_length_byte_native_result_2_2389 = rlp_length_byte_native(content_len);
-    scratch_push_byte(((UINT64_C(0xC0) + rlp_length_byte_native_result_2_2389) & UINT64_C(0xFF)));
+    scratch_push_byte(((UINT64_C(0xC0) + (rlp_length_byte_native(content_len))) & UINT64_C(0xFF)));
     return;
   }
   u256 length_word = rlp_length_word_uint8_t_to_u256(content_len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2391 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xF7) + rlp_length_byte_native_result_2_2391) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xF7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
@@ -429,8 +401,7 @@ void rlp_write_list_prefix_uint8_t_to_unit_variant_3(uint8_t content_len)
 {
   u256 length_word = rlp_length_word_uint8_t_to_u256(content_len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2391 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xF7) + rlp_length_byte_native_result_2_2391) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xF7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
@@ -438,8 +409,7 @@ void rlp_write_string_prefix_uint16_t_uint64_t_to_unit(uint16_t len)
 {
   u256 length_word = rlp_length_word_uint16_t_to_u256(len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2399 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xB7) + rlp_length_byte_native_result_2_2399) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xB7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
@@ -449,21 +419,18 @@ void rlp_write_string_prefix_uint32_t_uint64_t_to_unit(uint32_t len, uint64_t fi
     return;
   }
   if (len <= RLP_SHORT_LENGTH_LIMIT) {
-    uint64_t rlp_length_byte_native_result_2_2397 = rlp_length_byte_native((uint8_t)len);
-    scratch_push_byte(((UINT64_C(0x80) + rlp_length_byte_native_result_2_2397) & UINT64_C(0xFF)));
+    scratch_push_byte(((UINT64_C(0x80) + (rlp_length_byte_native((uint8_t)len))) & UINT64_C(0xFF)));
     return;
   }
   u256 length_word = rlp_length_word_uint32_t_to_u256(len);
   uint8_t length_len = rlp_minimal_word_len(length_word);
-  uint64_t rlp_length_byte_native_result_2_2399 = rlp_length_byte_native(length_len);
-  scratch_push_byte(((UINT64_C(0xB7) + rlp_length_byte_native_result_2_2399) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0xB7) + (rlp_length_byte_native(length_len))) & UINT64_C(0xFF)));
   scratch_push_word_be(length_word, length_len);
 }
 
 void rlp_write_string_prefix_uint8_t_uint64_t_to_unit(uint8_t len)
 {
-  uint64_t rlp_length_byte_native_result_2_2397 = rlp_length_byte_native(len);
-  scratch_push_byte(((UINT64_C(0x80) + rlp_length_byte_native_result_2_2397) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0x80) + (rlp_length_byte_native(len))) & UINT64_C(0xFF)));
 }
 
 void rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(uint8_t len, uint64_t first)
@@ -471,8 +438,7 @@ void rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(uint8_t len, uin
   if ((len == UINT8_C(1)) && ((UINT64_C(1) & (first >> UINT8_C(7))) == UINT64_C(0x0))) {
     return;
   }
-  uint64_t rlp_length_byte_native_result_2_2397 = rlp_length_byte_native(len);
-  scratch_push_byte(((UINT64_C(0x80) + rlp_length_byte_native_result_2_2397) & UINT64_C(0xFF)));
+  scratch_push_byte(((UINT64_C(0x80) + (rlp_length_byte_native(len))) & UINT64_C(0xFF)));
 }
 
 void rlp_write_uint_word_u128_to_unit(u128 w)
@@ -485,8 +451,7 @@ void rlp_write_uint_word_u128_to_unit(u128 w)
     first = UINT64_C(0x00);
   }
   rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(len, first);
-  u256 word = u256_u128_to_u256(w);
-  scratch_push_word_be(word, len);
+  scratch_push_word_be((u256_u128_to_u256(w)), len);
 }
 
 void rlp_write_uint_word_uint64_t_to_unit(uint64_t w)
@@ -499,8 +464,7 @@ void rlp_write_uint_word_uint64_t_to_unit(uint64_t w)
     first = UINT64_C(0x00);
   }
   rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(len, first);
-  u256 word = u256_uint64_t_to_u256(w);
-  scratch_push_word_be(word, len);
+  scratch_push_word_be((u256_uint64_t_to_u256(w)), len);
 }
 
 void rlp_write_uint_word_uint8_t_to_unit(uint8_t w)
@@ -513,7 +477,6 @@ void rlp_write_uint_word_uint8_t_to_unit(uint8_t w)
     first = UINT64_C(0x00);
   }
   rlp_write_string_prefix_uint8_t_uint64_t_to_unit_variant_2(len, first);
-  u256 word = u256_uint8_t_to_u256(w);
-  scratch_push_word_be(word, len);
+  scratch_push_word_be((u256_uint8_t_to_u256(w)), len);
 }
 

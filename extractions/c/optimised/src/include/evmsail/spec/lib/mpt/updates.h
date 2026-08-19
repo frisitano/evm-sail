@@ -137,7 +137,7 @@ struct TrieItem trie_input_leaf(struct TriePath path, Bytes value);
 
 struct TrieItem trie_subtree(struct TriePath path, struct NodeRef childref);
 
-struct tuple_TrieUpdate_TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates);
+struct TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates, struct TrieUpdate *restrict trieupdate_8_1499);
 
 struct TrieUpdateCursor trie_updates_begin(struct TrieUpdateSource source);
 

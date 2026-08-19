@@ -135,4 +135,3 @@ def account_from_info (info : AccountInfo) : Account :=
     storage_cleared := false,
     created := false,
     selfdestructed := false }
-

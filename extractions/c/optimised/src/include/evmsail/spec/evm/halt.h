@@ -34,6 +34,16 @@ struct FrameStatus {
   } variants;
 };
 
+// struct InterpreterCompletion
+struct InterpreterCompletion {
+  uint64_t gas_remaining;
+  Bytes output;
+  __int128 refund;
+  uint64_t state_gas_remaining;
+  uint32_t state_gas_spilled;
+  struct FrameStatus status;
+};
+
 
 #ifdef __cplusplus
 }

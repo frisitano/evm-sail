@@ -118,4 +118,3 @@ def GAS_REFUND_ZERO : gas_refund := 0
 def FRAME_STATE_GAS_DELTA_ZERO : frame_state_gas_delta := 0
 
 def STATE_GAS_DELTA_ZERO : state_gas_delta := 0
-

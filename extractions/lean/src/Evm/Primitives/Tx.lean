@@ -226,4 +226,3 @@ def receipt_within (limit : Nat) (regular_limit : Nat) (tx_type : TxType) (succe
   (Sigma fun (k_syn_execution_gas : Nat) =>
   (Sigma fun (k_syn_gas_used : Nat) =>
   (ReceiptFields limit regular_limit k_syn_gas_used k_syn_execution_gas k_syn_state_gas)))))
-

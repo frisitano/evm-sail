@@ -28,8 +28,6 @@ bool neq_anything_EPrecompileId__(enum PrecompileId x, enum PrecompileId y);
 
 uint64_t word_of_account_nonce(uint64_t value);
 
-uint64_t word_of_withdrawal_amount(uint64_t value);
-
 uint64_t word_of_slot_number(uint64_t value);
 
 uint64_t word_of_block_number(uint64_t value);

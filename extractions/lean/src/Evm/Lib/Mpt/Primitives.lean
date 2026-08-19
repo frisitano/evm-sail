@@ -270,4 +270,3 @@ def scratch_hex_prefix_decode_ref (f : (ScratchRlpFieldRef k_source_off k_source
             (let path_data := (word_to_hash packed)
             let path := (path_new path_data paired_nibbles)
             (pure (is_leaf, path)))))
-

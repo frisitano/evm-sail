@@ -118,9 +118,6 @@ runs:
         # public package is 0.20.1 and BOTH this fork and upstream sail2 carry
         # 0.20.2, so only the source identifies it.
         #
-        # No pin is needed here: sail-lsp names the fork in its own
-        # pin-depends, and opam honours that from `opam install . --deps-only`
-        # (verified: it resolves libsail from the pin, not the repository).
         prefix="$(opam var prefix)"
         if [ ! -x "$prefix/bin/sail" ]; then
           echo "::error::sail was not installed at $prefix/bin/sail"
@@ -170,9 +167,17 @@ runs:
       shell: bash
       working-directory: .sail-lsp
       run: |
-        # libsail resolves to the fork named in sail-lsp's pin-depends, so this
-        # cannot pull the public package.
-        opam install . --deps-only --yes
+        # sail-lsp's metadata currently pin-depends on a mutable branch. Bind
+        # libsail to the already verified exact compiler checkout instead and
+        # ignore the project's mutable extra pin while solving dependencies.
+        compiler_source="$(git -C "$GITHUB_WORKSPACE/.sail-compiler" rev-parse --show-toplevel)"
+        compiler_revision="$(git -C "$compiler_source" rev-parse HEAD)"
+        if [ "$compiler_revision" != "$SAIL_COMMIT" ]; then
+          echo "::error::compiler checkout is $compiler_revision, expected $SAIL_COMMIT"
+          exit 1
+        fi
+        opam pin add libsail "$compiler_source" --yes --no-action
+        opam install . --deps-only --yes --ignore-pin-depends
         # @install rather than the default alias: the default builds the test
         # directory too, whose ppx_expect is a with-test dependency that
         # --deps-only does not install. This job wants the server binary, not
@@ -183,4 +188,14 @@ runs:
           echo "::error::sail_lsp was not installed onto PATH"
           exit 1
         fi
+        if ! opam pin list --short | grep -Fxq libsail; then
+          echo "::error::libsail is not pinned to the configured compiler source"
+          exit 1
+        fi
+        if ! opam list --installed --short | grep -Fxq libsail; then
+          echo "::error::the pinned libsail dependency is not installed"
+          exit 1
+        fi
+        test "$(git -C "$compiler_source" rev-parse HEAD)" = "$SAIL_COMMIT"
+        "$SAIL_PREFIX/bin/sail" --version
         sail_lsp --version 2>/dev/null || true

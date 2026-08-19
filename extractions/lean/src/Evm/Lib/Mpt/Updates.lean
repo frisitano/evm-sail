@@ -1106,4 +1106,3 @@ def witness_subtree (node : (Sigma fun (k_off : Nat) =>
   then throw Error.Exit
   else (_rec_witness_subtree ⟨_, ⟨_, node⟩⟩ evm_prefix' updates cursor (_measure + 1))
 end
-

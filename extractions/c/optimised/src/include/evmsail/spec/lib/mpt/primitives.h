@@ -23,7 +23,7 @@ struct tuple_bool_TriePath {
 
 struct TriePath path_new(bytes32 data, uint8_t len);
 
-struct tuple_bool_TriePath hex_prefix_decode_ref(struct RlpFieldRef f);
+struct TriePath hex_prefix_decode_ref(struct RlpFieldRef f, bool *restrict condition_8_1361);
 
 uint8_t path_len(struct TriePath path);
 
@@ -47,7 +47,7 @@ uint8_t hex_prefix_encoded_length(struct TriePath path);
 
 uint64_t hex_prefix_first_byte(struct TriePath path, bool is_leaf);
 
-struct tuple_bool_TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldRef f);
+struct TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldRef f, bool *restrict condition_8_1493);
 
 uint8_t path_byte_index(uint8_t i);
 

@@ -240,4 +240,3 @@ def k_emit_burn_log (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
       let topics := (LogTopics2 (EIP7708_BURN_TOPIC, address))
       let data := (LogDataWord v)
       (k_log EIP7708_SYSTEM_ADDRESS topics data))
-

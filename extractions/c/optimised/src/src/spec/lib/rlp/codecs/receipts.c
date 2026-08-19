@@ -24,8 +24,7 @@ uint32_t log_entry_rlp_content_size(uint64_t index)
   uint32_t topics_length = topics_rlp_size(index);
   Bytes data = read_log_data(index);
   uint32_t data_length = rlp_log_scratch_slice_size(data);
-  uint32_t address_and_topics_length = rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_2(UINT32_C(21), topics_length);
-  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(address_and_topics_length, data_length);
+  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3((rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_2(UINT32_C(21), topics_length)), data_length);
 }
 
 uint32_t log_entry_rlp_size(uint64_t index)
@@ -92,8 +91,7 @@ void rlp_write_logs(struct LogSeriesRef logs)
 void receipt_write_logs_bloom(struct ReceiptFields receipt)
 {
   rlp_write_string_prefix_uint16_t_uint64_t_to_unit(LOGS_BLOOM_BYTE_LENGTH);
-  Bytes arena = scratch_arena;
-  scratch_arena = scratch_store_receipt_logs_bloom(arena.len, receipt.logs.start, receipt.logs.count);
+  scratch_arena = scratch_store_receipt_logs_bloom((scratch_arena).len, receipt.logs.start, receipt.logs.count);
 }
 
 uint32_t receipt_payload_content_size(struct ReceiptFields r, u128 cumulative_gas_used)
@@ -109,8 +107,7 @@ uint32_t receipt_payload_content_size(struct ReceiptFields r, u128 cumulative_ga
   uint32_t bloom_length = rlp_scratch_length_add_uint16_t_uint32_t_to_uint32_t(LOGS_BLOOM_BYTE_LENGTH, bloom_prefix_length);
   uint32_t logs_length = logs_rlp_size(r.logs);
   uint32_t fixed_length = rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t(status_length, gas_length);
-  uint32_t fixed_and_bloom_length = rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(fixed_length, bloom_length);
-  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(fixed_and_bloom_length, logs_length);
+  return rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3((rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(fixed_length, bloom_length)), logs_length);
 }
 
 uint32_t receipt_encoded_length(struct ReceiptFields r, u128 cumulative_gas_used)

@@ -188,4 +188,3 @@ def validate_execution_payload (input : StatelessInput) (input_ref : StatelessIn
       then (fatal_error InvalidBlockHash)
       else (pure ()))
   else (pure ())
-

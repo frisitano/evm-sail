@@ -76,4 +76,3 @@ def create2_address (sender : (Vector (BitVec 8) 20)) (salt : Nat) (init_hash : 
   (scratch_rewind mark)
   let digest_word := (hash_to_word digest)
   (pure (word_to_address digest_word))
-

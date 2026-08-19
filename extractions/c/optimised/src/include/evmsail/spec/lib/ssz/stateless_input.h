@@ -63,7 +63,7 @@ struct BoundedSszListCursor ssz_list_cursor(struct BoundedSszListRef items);
 
 bool ssz_list_cursor_empty(struct BoundedSszListCursor cursor);
 
-struct tuple_Bytes_BoundedSszListCursor ssz_list_pop(struct BoundedSszListCursor cursor);
+struct BoundedSszListCursor ssz_list_pop(struct BoundedSszListCursor cursor, Bytes *restrict statelessinputslicefields_8_1503);
 
 struct StatelessInputRef decode_stateless_input_ref(Bytes /* arg_0 */);
 
@@ -109,7 +109,7 @@ struct ParentHeaderFields decode_parent_header_fields_Bytes_uint8_t_struct_Paren
 
 uint8_t next_parent_header_field_uint8_t_to_uint8_t(uint8_t index);
 
-struct tuple_Bytes_BoundedSszListRef ssz_fixed_list_pop(struct BoundedSszListRef items, uint8_t item_size);
+struct BoundedSszListRef ssz_fixed_list_pop(struct BoundedSszListRef items, uint8_t item_size, Bytes *restrict statelessinputslicefields_8_1551);
 
 extern const uint8_t NPR_BEACON_ROOT;
 

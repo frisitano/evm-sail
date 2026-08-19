@@ -2191,4 +2191,3 @@ def process_transaction (tx : (Sigma fun (k_blob_limit : Nat) => (TransactionFie
       authorizations)
   (settle_transaction ⟨_, tx⟩ ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, validity⟩⟩⟩⟩⟩
     upfront.authorization_refund frame_result)
-

@@ -157,6 +157,9 @@ typedef uint64_t zmodexp_osaka_extra;
 // type abbreviation modexp_factor
 typedef u128 zmodexp_factor;
 
+// type abbreviation memory_required_endpoint
+typedef sail_int zmemory_required_endpoint;
+
 // type abbreviation memory_length
 typedef uint32_t zmemory_length;
 
@@ -2299,8 +2302,6 @@ u256 zalu_clzz(u256 zx);
 
 uint64_t zword_of_account_nonce(uint64_t zvalue);
 
-uint64_t zword_of_withdrawal_amount(uint64_t zvalue);
-
 uint64_t zword_of_slot_number(uint64_t zvalue);
 
 uint64_t zword_of_block_number(uint64_t zvalue);
@@ -2513,7 +2514,7 @@ unit zcode_slice_copy_word_offset(struct zCodeRegionSliceFields zs, uint32_t zds
 
 unit zcalldata_slice_copy_word_offset(struct zCalldataSlice zs, uint32_t zdst, u256 zoff, uint32_t zlen);
 
-uint32_t zscratch_begin(unit z3zE5102);
+uint32_t zscratch_begin(unit z3zE5100);
 
 uint32_t zscratch_reserve(uint32_t zlen);
 
@@ -2539,7 +2540,7 @@ struct zScratchSliceFields zscratch_finish(uint32_t zstart);
 
 unit zscratch_rewind(uint32_t zmark);
 
-unit zscratch_reset(unit z3zE5097);
+unit zscratch_reset(unit z3zE5095);
 
 void create_letbind_36(void);
 void kill_letbind_36(void);
@@ -2967,9 +2968,9 @@ struct zTransactionFields zdecode_set_code_tx(struct zStatelessInputSliceFields 
 
 struct zTransactionFields zrlp_decode_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, uint8_t zblob_limit);
 
-struct zStackPointer zstack_reset(unit z3zE4749);
+struct zStackPointer zstack_reset(unit z3zE4747);
 
-struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4747);
+struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4745);
 
 uint16_t zstack_top_height(struct zStackPointer ztop);
 
@@ -2989,7 +2990,7 @@ struct zOutputSliceFields zoutput_buffer_words(u256 zfirst, u256 zsecond);
 
 u256 zk_env(enum zEnvField zf);
 
-fixed_bytes_20 zk_coinbase(unit z3zE4729);
+fixed_bytes_20 zk_coinbase(unit z3zE4727);
 
 u256 zblockhash_word_distance(u256 zcurrent, u256 znumber);
 
@@ -3655,7 +3656,7 @@ void kill_letbind_186(void);
 
 struct zPrecompileResult zprecompile_success(struct zOutputSliceFields zoutput);
 
-struct zPrecompileResult zprecompile_failure(unit z3zE4441);
+struct zPrecompileResult zprecompile_failure(unit z3zE4440);
 
 struct zPrecompileResult zcopied_result(struct zCalldataSlice zdata);
 
@@ -3865,7 +3866,7 @@ void zexecute_swapn(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5union
 
 void zexecute_exchange(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint64_t zimmediate);
 
-void zexecute_stop(struct zFrameStatus *rop, unit z3zE3292);
+void zexecute_stop(struct zFrameStatus *rop, unit z3zE3293);
 
 void zexecute_return(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
@@ -4145,7 +4146,7 @@ void ztrie_updates_rebase(struct zTrieUpdateCursor *rop, struct zTrieUpdateCurso
 
 void ztrie_updates_descend(struct zTrieUpdateCursor *rop, struct zTrieUpdateCursor zupdates);
 
-void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1326);
+void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1325);
 
 void ztrie_leaf(struct zTrieItem *rop, struct zTriePath zpath, struct zTrieLeafValue zvalue);
 
@@ -4157,7 +4158,7 @@ void ztrie_branch(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef
 
 void ztrie_subtree(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef zchildref);
 
-void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1312);
+void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1311);
 
 void ztrie_children_add(struct zTrieChildren *rop, struct zTrieChildren zchildren, struct zTriePath zprefix, uint64_t zindex, struct zTrieItem zchild);
 
@@ -4217,9 +4218,9 @@ void znext_storage_trie_update(struct zTrieUpdateFetch *rop, fixed_bytes_20 zadd
 
 void zaccount_trie_update(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *rop, struct zAcctTrieEntry ztrie_entry);
 
-void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1083);
+void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1079);
 
-fixed_bytes_32 zcompute_state_root(unit z3zE1078);
+fixed_bytes_32 zcompute_state_root(unit z3zE1074);
 
 unit zvalidation_debug_capture_block_gas(uint64_t z_actual, uint64_t z_expected, uint64_t z_execution, uint64_t z_state);
 
@@ -5077,7 +5078,7 @@ void create_letbind_360(void);
 void kill_letbind_360(void);
 
 
-unit zresult_prefix(fixed_bytes_32 zroot, bool zsuccess);
+unit zwrite_prefix(fixed_bytes_32 zroot, bool zsuccess);
 
 unit zcommit_validation_result(fixed_bytes_32 zroot, bool zsuccess, struct zStatelessInputSliceFields zchain_config);
 

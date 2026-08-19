@@ -214,4 +214,3 @@ def k_journal_revert (_ : Unit) : SailM Unit := do
 /-- Records a successful child frame without discarding its reversible entries. -/
 def k_journal_commit (_ : Unit) : SailM Unit := do
   (state_journal_commit ())
-

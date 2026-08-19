@@ -274,4 +274,3 @@ def ssz_u256 (input : (Sigma fun (k_off : Nat) =>
       let shifted_result := (word_mul_word result 256)
       (pure (word_add_word shifted_result byte_value))
   (pure loop_vars)
-

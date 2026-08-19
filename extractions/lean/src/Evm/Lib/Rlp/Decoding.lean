@@ -642,4 +642,3 @@ def rlp_decode_bool (field : (RlpFieldRef k_source_off k_source_len k_content_le
   | 0 => (pure (RlpOk false))
   | 1 => (pure (RlpOk true))
   | _ => (pure (RlpInvalidValue ()))
-

@@ -124,4 +124,3 @@ def write_invalid_result (_ : Unit) : SailM Unit := do
   let ⟨_, ⟨_, output⟩⟩ ← do (scratch_finish output_start)
   let written ← do (public_output_write ⟨_, ⟨_, output⟩⟩)
   assert written "public output write"
-

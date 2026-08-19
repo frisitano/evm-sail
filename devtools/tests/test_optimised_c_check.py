@@ -10,7 +10,7 @@ from devtools.optimised_c.check import (
     reconcile_waivers,
 )
 
-REVISION = "340c50a5af40dfcef2a18149424664b4b5d623c9"
+REVISION = "7132a90c173997183dfe114f11dfa90459493879"
 
 
 class OptimisedCConformanceWaiverTests(unittest.TestCase):
@@ -75,7 +75,7 @@ name = "result_1"
             Path("config/optimised-c-conformance-waivers.toml"),
             Path("config/toolchains.toml"),
         )
-        self.assertEqual(len(waivers), 3)
+        self.assertEqual(len(waivers), 0)
 
 
 if __name__ == "__main__":

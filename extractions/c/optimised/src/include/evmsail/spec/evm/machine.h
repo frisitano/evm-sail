@@ -82,7 +82,7 @@ __int128 record_refund___int128_uint16_t_to___int128(__int128 refund, uint16_t d
 
 __attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w);
 
-struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32 suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata);
+uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata, struct FrameCheckpoint *restrict framecheckpoint_8_1553, StackPointer *restrict stackpointer_8_1554, uint32_t *restrict field_2_8_1555);
 
 __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs);
 

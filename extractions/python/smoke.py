@@ -203,12 +203,16 @@ def main() -> None:
     with host_contract.use_state(isolated_host_state):
         assert host_contract.get_state() is isolated_host_state
 
+        host_contract.mem_expand(0, 0, 32)
         host_contract.mem_store_word(0, 0x1234)
         assert host_contract.mem_load_word(0) == 0x1234
-        host_contract.mem_frame_enter()
-        host_contract.mem_store_word(0, 0xABCD)
-        assert host_contract.mem_load_word(0) == 0xABCD
-        host_contract.mem_frame_leave()
+        child_base = 32
+        host_contract.mem_expand(child_base, 0, 32)
+        host_contract.mem_store_word(child_base, 0xABCD)
+        assert host_contract.mem_load_word(child_base) == 0xABCD
+        child_view = host_contract.mem_view(child_base, 32, 32)
+        assert child_view.bytes == child_base
+        assert child_view.len == 32
         assert host_contract.mem_load_word(0) == 0x1234
 
         parent_top = host_contract.stack_reset_host()

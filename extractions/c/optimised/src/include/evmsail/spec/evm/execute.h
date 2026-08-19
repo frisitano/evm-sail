@@ -52,14 +52,6 @@ struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome {
   struct OpcodeOutcome tup3;
 };
 
-// struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome
-struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome {
-  uint8_t tup0;
-  StackPointer tup1;
-  uint32_t tup2;
-  struct OpcodeOutcome tup3;
-};
-
 // struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_OpcodeOutcome
 struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_OpcodeOutcome {
   uint64_t tup0;
@@ -114,7 +106,7 @@ __attribute__((__always_inline__)) struct OpcodeOutcome do_jump(uint32_t *restri
 
 struct OpcodeOutcome guard_stack(StackPointer carried_sp, uint16_t inputs, uint16_t outputs);
 
-struct tuple_LogTopics_StackPointer pop_log_topics(uint8_t count, StackPointer sp_in);
+StackPointer pop_log_topics(uint8_t count, StackPointer sp_in, struct LogTopics *restrict logtopics_8_1374);
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_add(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp);
 

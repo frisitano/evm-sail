@@ -157,4 +157,3 @@ def num_of_FatalError (arg_ : FatalError) : Nat :=
 /- Type quantifiers: k_a : Type -/
 def fatal_error (_reason : FatalError) : SailM k_a := do
   throw Error.Exit
-

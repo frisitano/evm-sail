@@ -85,4 +85,3 @@ def validation_debug_record (_stage : Nat) (_reason : FatalError) : Unit :=
 
 def debug_account_storage_root (_a : (Vector (BitVec 8) 20)) : (Vector (BitVec 8) 32) :=
   EMPTY_TRIE_ROOT
-

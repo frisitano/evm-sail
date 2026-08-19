@@ -9,6 +9,14 @@
 extern "C" {
 #endif
 
+#ifndef SAIL_FIXED_VECTOR_VECTOR_32_BITS_8_DEFINED
+#define SAIL_FIXED_VECTOR_VECTOR_32_BITS_8_DEFINED
+typedef struct vector_32_bits_8 {
+  size_t len;
+  uint64_t data[32];
+} vector_32_bits_8;
+#endif
+
 bytes32 host_keccak_stateless_input(Bytes /* arg_0 */);
 
 bytes32 host_keccak_scratch(Bytes /* arg_0 */);

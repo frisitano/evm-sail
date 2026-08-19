@@ -37,13 +37,7 @@ struct TxTypeSemantics tx_type_semantics(enum TxType t)
 }
 
 void create_letbind_73(void) {
-
-  struct BlobHashesFields let_value_3_98;
-  struct BlobHashesFields tmp_3_97;
-  tmp_3_97.bytes = EMPTY_STATELESS_INPUT_SLICE;
-  tmp_3_97.count = UINT8_C(0);
-  let_value_3_98 = tmp_3_97;
-  EMPTY_BLOB_HASHES = let_value_3_98;
+    EMPTY_BLOB_HASHES = ((struct BlobHashesFields){.bytes = EMPTY_STATELESS_INPUT_SLICE, .count = UINT8_C(0)});
 }
 void kill_letbind_73(void) {
 }

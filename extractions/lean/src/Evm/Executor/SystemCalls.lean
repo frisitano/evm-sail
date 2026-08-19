@@ -497,4 +497,3 @@ def validate_execution_requests (input_ref : StatelessInputRef) : SailM Unit := 
       if (((builder_deposit_length != 0) || (builder_exit_length != 0)) : Bool)
       then (fatal_error InvalidExecutionRequests)
       else (pure ()))
-

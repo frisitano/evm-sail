@@ -40,8 +40,7 @@ struct TransactionMergeSemantics transaction_merge_semantics(uint8_t fork)
 void k_tx_merge(void)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
-  struct TransactionMergeSemantics semantics = transaction_merge_semantics(execution_profile.protocol.fork);
-  tx_merge(semantics, k_current_transaction_epoch);
+  tx_merge((transaction_merge_semantics(execution_profile.protocol.fork)), k_current_transaction_epoch);
 }
 
 void k_journal_revert(void)

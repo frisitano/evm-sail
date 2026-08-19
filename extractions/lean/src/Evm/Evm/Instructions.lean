@@ -86,4 +86,3 @@ def decode_exchange_stack_indices (immediate : (BitVec 8)) : SailM (Nat × Nat) 
   if ((quotient <b remainder) : Bool)
   then (pure ((quotient + 1), (remainder + 1)))
   else (pure ((remainder + 1), (29 - quotient)))
-

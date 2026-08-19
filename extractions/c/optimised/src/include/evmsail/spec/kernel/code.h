@@ -25,7 +25,7 @@ void k_set_delegation(bytes20 a, bytes20 target);
 
 void k_clear_code(bytes20 a);
 
-struct tuple_bool_bytes20 k_deleg_target(bytes20 a);
+bytes20 k_deleg_target(bytes20 a, bool *restrict condition_8_1363);
 
 uint32_t k_get_code_size(bytes20 a);
 

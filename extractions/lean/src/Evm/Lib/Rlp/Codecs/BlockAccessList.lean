@@ -106,4 +106,3 @@ def bal_expect_end (cursor : (StatelessInputSliceFields k_source_off k_source_le
   if ((k_source_len == 0) : Bool)
   then (pure ())
   else (fatal_error InvalidBlockAccessList)
-

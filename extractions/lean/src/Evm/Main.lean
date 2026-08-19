@@ -76,4 +76,3 @@ def sail_main (_ : Unit) : SailM Unit := do
   (fatal_error_set_input input_ref)
   (verify_stateless_payload input_ref)
   (write_validation_result input_ref true)
-

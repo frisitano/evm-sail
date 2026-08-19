@@ -9,6 +9,14 @@
 extern "C" {
 #endif
 
+#ifndef SAIL_FIXED_VECTOR_VECTOR_20_BITS_8_DEFINED
+#define SAIL_FIXED_VECTOR_VECTOR_20_BITS_8_DEFINED
+typedef struct vector_20_bits_8 {
+  size_t len;
+  uint64_t data[20];
+} vector_20_bits_8;
+#endif
+
 extern const bytes20 SYSTEM_ADDRESS;
 
 

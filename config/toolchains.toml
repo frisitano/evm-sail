@@ -2,7 +2,7 @@ schema_version = 1
 
 [sail]
 repository = "frisitano/sail"
-commit = "340c50a5af40dfcef2a18149424664b4b5d623c9"
+commit = "7132a90c173997183dfe114f11dfa90459493879"
 ocaml = "5.2.0"
 
 [sail_lsp]

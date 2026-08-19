@@ -157,4 +157,3 @@ def code_bytes (code : (CodeFields k_off k_len)) : (CodeRegionSliceFields k_off 
   {  }
 
 def EMPTY_CODE : Code := ⟨_, ⟨_, (analyzed_code ((EMPTY_CODE_SLICE).2).2 EMPTY_JUMP_TABLE)⟩⟩
-

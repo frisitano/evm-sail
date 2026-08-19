@@ -24,9 +24,7 @@ Bytes validated_code_slice(Bytes bytes)
 }
 
 void create_letbind_34(void) {
-
-  Bytes let_value_3_45 = code_slice(EMPTY_CODE_REGION_SLICE);
-  EMPTY_CODE_SLICE = let_value_3_45;
+    EMPTY_CODE_SLICE = (code_slice(EMPTY_CODE_REGION_SLICE));
 }
 void kill_letbind_34(void) {
 }
@@ -79,9 +77,7 @@ Bytes code_bytes(struct CodeFields code)
 }
 
 void create_letbind_35(void) {
-
-  struct CodeFields let_value_3_46 = analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE);
-  EMPTY_CODE = let_value_3_46;
+    EMPTY_CODE = (analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE));
 }
 void kill_letbind_35(void) {
 }

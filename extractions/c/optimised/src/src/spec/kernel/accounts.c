@@ -19,9 +19,7 @@ bool account_info_empty(struct AccountInfo info)
 
 struct Account account_clear_storage(struct Account acc)
 {
-  struct Account tmp_3_3132 = acc;
-  tmp_3_3132.storage_cleared = true;
-  return tmp_3_3132;
+  return ((struct Account){.created = acc.created, .info = acc.info, .present = acc.present, .selfdestructed = acc.selfdestructed, .storage_cleared = true});
 }
 
 void store_account_(bytes20 a, struct Account account)
@@ -36,20 +34,17 @@ void store_account_info_(bytes20 a, struct Account account, struct AccountInfo i
 
 u256 k_get_balance(bytes20 a)
 {
-  struct Account k_aload_result_2_2090 = k_aload_(a);
-  return k_aload_result_2_2090.info.balance;
+  return (k_aload_(a)).info.balance;
 }
 
 uint64_t k_get_nonce(bytes20 a)
 {
-  struct Account k_aload_result_2_2088 = k_aload_(a);
-  return k_aload_result_2_2088.info.nonce;
+  return (k_aload_(a)).info.nonce;
 }
 
 bool k_account_exists(bytes20 a)
 {
-  struct Account k_aload_result_2_2087 = k_aload_(a);
-  return k_aload_result_2_2087.present;
+  return (k_aload_(a)).present;
 }
 
 bool k_account_is_empty(bytes20 a)
@@ -62,14 +57,12 @@ bool k_account_occupied(bytes20 a)
 {
   struct Account acc = k_aload_(a);
   struct AccountInfo info = acc.info;
-  bool tmp_3_3129;
-  if (acc.storage_cleared) {
-    tmp_3_3129 = false;
-  } else {
-    tmp_3_3129 = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(info.storage_root, EMPTY_TRIE_ROOT);
+  bool anchored_storage = false;
+  if (!acc.storage_cleared) {
+    anchored_storage = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(info.storage_root, EMPTY_TRIE_ROOT);
   }
-  bool result_2_2081 = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(info.code_hash, KECCAK_EMPTY);
-  if (result_2_2081 || ((info.nonce != UINT8_C(0)) || tmp_3_3129)) {
+  bool has_code = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(info.code_hash, KECCAK_EMPTY);
+  if (has_code || ((info.nonce != UINT8_C(0)) || anchored_storage)) {
     return true;
   }
   return storage_has_writes(a);
@@ -79,18 +72,11 @@ void k_transfer(bytes20 src, bytes20 dst, u256 v)
 {
   struct Account src_acc = k_aload_(src);
   struct Account dst_acc = k_aload_(dst);
-  bool value_is_zero = eq_u256(v, WORD_ZERO);
-  if (value_is_zero || eq_bytes20(src, dst)) {
+  if (eq_u256(v, WORD_ZERO) || eq_bytes20(src, dst)) {
     return;
   }
-  u256 source_balance = alu_sub(src_acc.info.balance, v);
-  struct AccountInfo tmp_3_3125 = src_acc.info;
-  tmp_3_3125.balance = source_balance;
-  store_account_info_(src, src_acc, tmp_3_3125);
-  u256 destination_balance = alu_add(dst_acc.info.balance, v);
-  struct AccountInfo tmp_3_3127 = dst_acc.info;
-  tmp_3_3127.balance = destination_balance;
-  store_account_info_(dst, dst_acc, tmp_3_3127);
+  store_account_info_(src, src_acc, ((struct AccountInfo){.balance = (alu_sub(src_acc.info.balance, v)), .code_hash = src_acc.info.code_hash, .nonce = src_acc.info.nonce, .storage_root = src_acc.info.storage_root}));
+  store_account_info_(dst, dst_acc, ((struct AccountInfo){.balance = (alu_add(dst_acc.info.balance, v)), .code_hash = dst_acc.info.code_hash, .nonce = dst_acc.info.nonce, .storage_root = dst_acc.info.storage_root}));
   k_emit_transfer_log(src, dst, v);
 }
 
@@ -98,9 +84,7 @@ void k_bump_nonce(bytes20 a)
 {
   struct Account cur = k_aload_(a);
   if (cur.info.nonce < UINT64_C(18446744073709551615)) {
-    struct AccountInfo tmp_3_3122 = cur.info;
-    tmp_3_3122.nonce = (cur.info.nonce + UINT64_C(1));
-    store_account_info_(a, cur, tmp_3_3122);
+    store_account_info_(a, cur, ((struct AccountInfo){.balance = cur.info.balance, .code_hash = cur.info.code_hash, .nonce = (cur.info.nonce + UINT64_C(1)), .storage_root = cur.info.storage_root}));
     return;
   }
   fatal_error(ExecutionInvalid);
@@ -112,10 +96,7 @@ void k_add_balance(bytes20 a, u256 v)
   if (eq_u256(v, WORD_ZERO)) {
     return;
   }
-  u256 balance = alu_add(cur.info.balance, v);
-  struct AccountInfo tmp_3_3121 = cur.info;
-  tmp_3_3121.balance = balance;
-  store_account_info_(a, cur, tmp_3_3121);
+  store_account_info_(a, cur, ((struct AccountInfo){.balance = (alu_add(cur.info.balance, v)), .code_hash = cur.info.code_hash, .nonce = cur.info.nonce, .storage_root = cur.info.storage_root}));
 }
 
 void k_sub_balance(bytes20 a, u256 v)
@@ -124,18 +105,14 @@ void k_sub_balance(bytes20 a, u256 v)
   if (eq_u256(v, WORD_ZERO)) {
     return;
   }
-  u256 balance = alu_sub(cur.info.balance, v);
-  struct AccountInfo tmp_3_3120 = cur.info;
-  tmp_3_3120.balance = balance;
-  store_account_info_(a, cur, tmp_3_3120);
+  store_account_info_(a, cur, ((struct AccountInfo){.balance = (alu_sub(cur.info.balance, v)), .code_hash = cur.info.code_hash, .nonce = cur.info.nonce, .storage_root = cur.info.storage_root}));
 }
 
 void k_clear_storage(bytes20 a)
 {
   struct Account cur = k_aload_(a);
   storage_tx_clear(a);
-  struct Account cleared = account_clear_storage(cur);
-  store_account_(a, cleared);
+  store_account_(a, (account_clear_storage(cur)));
 }
 
 void k_add_balance_bytes20_u128_to_unit(bytes20 a, u128 v)
@@ -144,10 +121,7 @@ void k_add_balance_bytes20_u128_to_unit(bytes20 a, u128 v)
   if (u256_eq_u128(WORD_ZERO, v)) {
     return;
   }
-  u256 balance = alu_add_u256_u128_to_u256(cur.info.balance, v);
-  struct AccountInfo tmp_3_3121 = cur.info;
-  tmp_3_3121.balance = balance;
-  store_account_info_(a, cur, tmp_3_3121);
+  store_account_info_(a, cur, ((struct AccountInfo){.balance = (alu_add_u256_u128_to_u256(cur.info.balance, v)), .code_hash = cur.info.code_hash, .nonce = cur.info.nonce, .storage_root = cur.info.storage_root}));
 }
 
 void k_add_balance_bytes20_uint64_t_to_unit(bytes20 a, uint64_t v)
@@ -156,9 +130,6 @@ void k_add_balance_bytes20_uint64_t_to_unit(bytes20 a, uint64_t v)
   if (u256_eq_u64(WORD_ZERO, v)) {
     return;
   }
-  u256 balance = alu_add_u256_uint64_t_to_u256(cur.info.balance, v);
-  struct AccountInfo tmp_3_3121 = cur.info;
-  tmp_3_3121.balance = balance;
-  store_account_info_(a, cur, tmp_3_3121);
+  store_account_info_(a, cur, ((struct AccountInfo){.balance = (alu_add_u256_uint64_t_to_u256(cur.info.balance, v)), .code_hash = cur.info.code_hash, .nonce = cur.info.nonce, .storage_root = cur.info.storage_root}));
 }
 

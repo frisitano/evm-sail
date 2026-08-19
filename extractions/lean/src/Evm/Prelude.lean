@@ -668,4 +668,3 @@ def alu_sar (shift_amt : Nat) (v : Nat) : Nat :=
 def alu_clz (x : Nat) : Nat :=
   let bit_length := (word_bit_length x)
   (u256 (256 - bit_length))
-

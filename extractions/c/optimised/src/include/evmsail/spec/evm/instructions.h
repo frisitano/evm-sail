@@ -17,7 +17,7 @@ struct tuple_uint_16_uint_16 {
 
 uint8_t decode_single_stack_index(uint64_t immediate);
 
-struct tuple_uint_16_uint_16 decode_exchange_stack_indices(uint64_t immediate);
+uint16_t decode_exchange_stack_indices(uint64_t immediate, uint16_t *restrict field_0_8_1370);
 
 
 #ifdef __cplusplus

@@ -114,4 +114,3 @@ recovery success and the recovered address (used by EIP-7702). -/
   k_ex546881_ ≤ (2 ^ 256 - 1) -/
 def ecrecover_addr (h : (Vector (BitVec 8) 32)) (yparity : Nat) (r : Nat) (s : Nat) : SailM AddressResult := do
   (host_ecrecover h yparity r s)
-

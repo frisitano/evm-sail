@@ -1308,4 +1308,3 @@ def call_gas_cap_word (available : Nat) (requested : Nat) : Nat :=
   if ((requested <b all_but_64th) : Bool)
   then requested
   else all_but_64th
-

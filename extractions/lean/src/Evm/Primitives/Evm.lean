@@ -142,4 +142,3 @@ def DEFAULT_MESSAGE : Message :=
     state_gas_reservoir := STATE_GAS_ZERO,
     is_static := false,
     depth := 0 }
-

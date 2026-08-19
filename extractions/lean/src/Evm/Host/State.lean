@@ -86,4 +86,3 @@ def undefined_BalNonceChangeEntry (_ : Unit) : SailM BalNonceChangeEntry := do
 def undefined_BalCodeChangeEntry (_ : Unit) : SailM BalCodeChangeEntry := do
   (pure { index := ← (undefined_range 0 ((2 ^i 20) + 1)),
           code_hash := ← (undefined_vector 32 (← (undefined_bitvector 8))) })
-

@@ -469,4 +469,3 @@ def rlp_encoder_finish (encoder : RlpEncoder) : SailM (Sigma fun (k_off : Nat) =
 /-- Releases every byte appended by an encoder after its result is consumed. -/
 def rlp_encoder_rewind (encoder : RlpEncoder) : SailM Unit := do
   (scratch_rewind encoder.start)
-

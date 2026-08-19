@@ -23,6 +23,10 @@ DIAGNOSTIC_RE = re.compile(r"\b(?:warning|error)\b", re.IGNORECASE)
 LEAN_PREFIX_RE = re.compile(r"(?<![A-Za-z0-9_])prefix(?![A-Za-z0-9_])")
 LEAN_REDUNDANT_SIGMA_PACK_RE = re.compile(r"⟨_, ⟨_, (dependentValue[0-9]+)⟩⟩")
 LEAN_REDUNDANT_SIGMA_BIND_RE = re.compile(r"let ⟨_, ⟨_, (carried_(?:code|memory|returndata))⟩⟩ :")
+LEAN_REDUNDANT_CARRIED_SIGMA_PACK_RE = re.compile(
+    r"⟨_, ⟨_, (carried_(?:code|returndata))⟩⟩"
+    r"( : \(Sigma\n[ \t]+fun \(initial_code_dependentWitness0)"
+)
 LEAN_RESULT_STATUS_PROJECTION_RE = re.compile(r"\(\(\(result\)\.2\)\.2\)")
 LEAN_REDUNDANT_OUTPUT_BIND_RE = re.compile(
     r"let ⟨_, ⟨_, output_after⟩⟩ :"
@@ -33,6 +37,7 @@ LEAN_INTERPRETER_SIGMA_PACKS = 0
 LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES = 14
 LEAN_INTERPRETER_SIGMA_BINDS = 14
 LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS = 0
+LEAN_INTERPRETER_CARRIED_SIGMA_PACKS = 14
 LEAN_INTERPRETER_RESULT_PROJECTIONS = 0
 
 
@@ -241,9 +246,13 @@ def normalize_lean_tree(root: Path) -> int:
     for path in sorted(root.rglob("*.lean")):
         original = path.read_text(encoding="utf-8")
         normalized, count = LEAN_PREFIX_RE.subn("evm_prefix", original)
-        if count:
+        # Sail may leave blank lines after the final declaration. Canonicalize
+        # every generated file to one final newline so published extractions
+        # remain acceptable to `git diff --check`.
+        normalized = normalized.rstrip() + "\n"
+        if normalized != original:
             path.write_text(normalized, encoding="utf-8")
-            replacements += count
+        replacements += count
 
     interpreter = root / "Evm" / "Evm" / "Interpreter.lean"
     if interpreter.is_file():
@@ -273,27 +282,33 @@ def normalize_lean_tree(root: Path) -> int:
             previous_end = candidate.end()
         bind_parts.append(normalized[previous_end:])
         normalized = "".join(bind_parts)
+        normalized, carried_pack_count = LEAN_REDUNDANT_CARRIED_SIGMA_PACK_RE.subn(
+            r"\1\2", normalized
+        )
         normalized, projection_count = LEAN_RESULT_STATUS_PROJECTION_RE.subn("result", normalized)
         if (
             pack_count != LEAN_INTERPRETER_SIGMA_PACKS
             or len(bind_candidates) != LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES
             or bind_count != LEAN_INTERPRETER_SIGMA_BINDS
             or skipped_bind_count != LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS
+            or carried_pack_count != LEAN_INTERPRETER_CARRIED_SIGMA_PACKS
             or projection_count != LEAN_INTERPRETER_RESULT_PROJECTIONS
         ):
             raise BuildSupportError(
                 f"{interpreter}: generated dependent-tuple shape changed "
                 f"(packs={pack_count}, bind candidates={len(bind_candidates)}, "
                 f"binds={bind_count}, skipped binds={skipped_bind_count}, "
+                f"carried packs={carried_pack_count}, "
                 f"result projections={projection_count}; expected "
                 f"{LEAN_INTERPRETER_SIGMA_PACKS}/"
                 f"{LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES}/"
                 f"{LEAN_INTERPRETER_SIGMA_BINDS}/"
                 f"{LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS}/"
+                f"{LEAN_INTERPRETER_CARRIED_SIGMA_PACKS}/"
                 f"{LEAN_INTERPRETER_RESULT_PROJECTIONS})"
             )
         interpreter.write_text(normalized, encoding="utf-8")
-        replacements += pack_count + bind_count + projection_count
+        replacements += pack_count + bind_count + carried_pack_count + projection_count
 
     transaction = root / "Evm" / "Evm" / "Transaction.lean"
     if transaction.is_file():

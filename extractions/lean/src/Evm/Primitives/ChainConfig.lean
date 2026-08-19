@@ -337,4 +337,3 @@ def DEFAULT_EXECUTION_PROFILE : ExecutionProfile :=
 
 def undefined_ChainConfig (_ : Unit) : SailM ChainConfig := do
   (pure { chain_id := ← (undefined_range 0 ((2 ^i 64) - 1)) })
-

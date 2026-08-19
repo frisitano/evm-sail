@@ -224,4 +224,3 @@ def scratch_rewind (mark : Nat) : SailM Unit := do
 def scratch_reset (_ : Unit) : SailM Unit := do
   writeReg scratch_arena ⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩
   (host_scratch_truncate 0)
-

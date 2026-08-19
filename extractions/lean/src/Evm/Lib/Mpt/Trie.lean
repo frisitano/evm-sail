@@ -85,4 +85,3 @@ updates. The source's host iterator must be opened by its owner first. -/
 def trie_root (base_root : (Vector (BitVec 8) 32)) (source : TrieUpdateSource) : SailM TrieRootResult := do
   let updates ← do (trie_updates_begin source)
   (trie_root_cursor base_root updates)
-

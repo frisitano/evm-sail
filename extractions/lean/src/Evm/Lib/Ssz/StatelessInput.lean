@@ -1537,4 +1537,3 @@ def decode_transaction (transaction : (StatelessInputSliceFields k_transaction_o
   else
     (do
       (fatal_error InvalidConfig))
-

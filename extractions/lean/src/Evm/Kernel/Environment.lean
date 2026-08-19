@@ -180,4 +180,3 @@ def k_create_addr (a : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (Bi
 /- Type quantifiers: k_ex549869_ : Nat, 0 ≤ k_ex549869_ ∧ k_ex549869_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : (Vector (BitVec 8) 20)) (salt : Nat) (inithash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (create2_address a salt inithash)
-

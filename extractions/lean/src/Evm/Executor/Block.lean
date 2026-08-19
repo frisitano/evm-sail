@@ -490,4 +490,3 @@ def execute_block_body (body : BlockBody) (input_ref : StatelessInputRef) : Sail
   then (validate_execution_requests input_ref)
   else (pure ())
   (pure result)
-

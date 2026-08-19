@@ -174,4 +174,3 @@ def word_of_nat_byte_count (value : Nat) : SailM Nat := do
 /- Type quantifiers: value : Nat, (source_valid_length value) -/
 def word_of_source_byte_count (value : Nat) : SailM Nat := do
   (word_of_nat_byte_count value)
-

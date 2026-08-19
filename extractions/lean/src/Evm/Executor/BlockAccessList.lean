@@ -443,4 +443,3 @@ def validate_block_access_list (bytes : (Sigma fun (k_off : Nat) =>
   if (((BLOCK_ACCESS_LIST_ITEM_GAS *i bal_items) >b block_gas_limit) : Bool)
   then (fatal_error BlockAccessListTooLarge)
   else (pure ())
-

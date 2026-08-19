@@ -28,34 +28,27 @@ u256 k_env(enum EnvField f)
   switch (f) {
   case F_Number:
   {
-    uint64_t number;
-    uint64_t result_2_2180 = k_header.number;
-    number = word_of_block_number(result_2_2180);
+    uint64_t number = word_of_block_number((k_header.number));
     return u256_uint64_t_to_u256(number);
   }
   case F_Timestamp:
   {
-    uint64_t timestamp;
-    uint64_t result_2_2181 = k_header.timestamp;
-    timestamp = word_of_block_timestamp(result_2_2181);
+    uint64_t timestamp = word_of_block_timestamp((k_header.timestamp));
     return u256_uint64_t_to_u256(timestamp);
   }
   case F_Coinbase:
   {
-    bytes20 result_2_2182 = k_header.fee_recipient;
-    return address_to_word(result_2_2182);
+    return address_to_word((k_header.fee_recipient));
   }
   case F_BaseFee:
     return k_header.base_fee;
   case F_ChainId:
   {
-    uint64_t chain_id = word_of_chain_identifier(k_chain_id);
-    return u256_uint64_t_to_u256(chain_id);
+    return u256_uint64_t_to_u256((word_of_chain_identifier(k_chain_id)));
   }
   case F_GasLimit:
   {
-    uint64_t result_2_2183 = k_header.gas_limit;
-    return u256_uint64_t_to_u256(result_2_2183);
+    return u256_uint64_t_to_u256((k_header.gas_limit));
   }
   case F_PrevRandao:
     return k_header.prev_randao;
@@ -65,9 +58,7 @@ u256 k_env(enum EnvField f)
     return active_tx.gas_price;
   case F_SlotNumber:
   {
-    uint64_t slot_number;
-    uint64_t result_2_2185 = k_header.slot_number;
-    slot_number = word_of_slot_number(result_2_2185);
+    uint64_t slot_number = word_of_slot_number((k_header.slot_number));
     return u256_uint64_t_to_u256(slot_number);
   }
   }
@@ -89,9 +80,9 @@ bytes32 k_blockhash(u256 number_word)
   uint64_t current_number = word_of_block_number(current);
   u256 current_word = u256_uint64_t_to_u256(current_number);
   if (u256_lt(number_word, current_word)) {
-    u256 blockhash_word_distance_result_2_2177 = blockhash_word_distance(current_word, number_word);
-    if (!u64_lt_u256(UINT16_C(256), blockhash_word_distance_result_2_2177)) {
-      uint16_t distance = (uint16_t)u256_to_u64(blockhash_word_distance_result_2_2177);
+    u256 distance_word = blockhash_word_distance(current_word, number_word);
+    if (!u64_lt_u256(UINT16_C(256), distance_word)) {
+      uint16_t distance = (uint16_t)u256_to_u64_unchecked(distance_word);
       if (k_n_headers < distance) {
         fatal_error(WitnessDeficient);
       }

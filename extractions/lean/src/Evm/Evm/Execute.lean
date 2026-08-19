@@ -2617,4 +2617,3 @@ def execute_selfdestruct (carried_address : (Vector (BitVec 8) 20)) (fork : Nat)
                           (k_selfdestruct carried_address))
                       else (pure ()))
                   (pure (gas, state_gas, state_spill, refund, sp, halt_status))))))
-

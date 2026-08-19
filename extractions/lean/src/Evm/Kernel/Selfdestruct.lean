@@ -92,4 +92,3 @@ def k_zero_balance (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   if (balance_is_zero : Bool)
   then (pure ())
   else (store_account_info a cur { cur.info with balance := ZERO_WORD })
-

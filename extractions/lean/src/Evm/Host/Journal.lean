@@ -114,4 +114,3 @@ def undefined_JournalStorageRowGenerationChange (_ : Unit) : SailM JournalStorag
 def undefined_JournalAccountStorageGenerationChange (_ : Unit) : SailM JournalAccountStorageGenerationChange := do
   (pure { address := ← (undefined_vector 20 (← (undefined_bitvector 8))),
           prior := ← (undefined_range 0 ((2 ^i 32) - 1)) })
-

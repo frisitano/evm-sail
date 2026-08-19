@@ -11,7 +11,7 @@ extern "C" {
 
 uint64_t rlp_uint64_append(uint64_t prefix, uint64_t next);
 
-struct tuple_bool_uint_32_uint_64 rlp_ref_hdr(Bytes b);
+uint64_t rlp_ref_hdr(Bytes b, bool *restrict condition_8_1355, uint32_t *restrict field_1_8_1356);
 
 Bytes rlp_decode_list(struct RlpFieldRef f);
 
@@ -27,7 +27,7 @@ Bytes rlp_node_cursor(Bytes node);
 
 Bytes rlp_item_content(struct RlpFieldRef f);
 
-struct tuple_bool_uint_32_uint_64 scratch_rlp_ref_hdr(Bytes b);
+uint64_t scratch_rlp_ref_hdr(Bytes b, bool *restrict condition_8_1358, uint32_t *restrict field_1_8_1359);
 
 Bytes scratch_rlp_decode_list(struct ScratchRlpFieldRef f);
 

@@ -6,11 +6,9 @@ const uint8_t MPT_HASH_LENGTH = UINT8_C(32);
 
 struct InlineNode inline_node_from_scratch_slice(Bytes bytes)
 {
-  uint32_t length_ = bytes.len;
-  if (length_ < MPT_HASH_LENGTH) {
+  if (bytes.len < MPT_HASH_LENGTH) {
     u256 encoded = scratch_slice_load(bytes, UINT8_C(0));
-    bytes32 word_to_hash_result_2_588 = word_to_hash(encoded);
-    return ((struct InlineNode){.data = word_to_hash_result_2_588, .len = (uint8_t)length_});
+    return ((struct InlineNode){.data = (word_to_hash(encoded)), .len = (uint8_t)bytes.len});
   }
   fatal_error(WitnessDeficient);
 }

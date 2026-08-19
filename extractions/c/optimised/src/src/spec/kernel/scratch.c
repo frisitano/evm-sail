@@ -6,8 +6,7 @@ Bytes scratch_arena;
 
 uint32_t scratch_begin(void)
 {
-  Bytes arena = scratch_arena;
-  return arena.len;
+  return scratch_arena.len;
 }
 
 uint32_t scratch_reserve(uint32_t len)
@@ -22,15 +21,13 @@ uint32_t scratch_reserve(uint32_t len)
 
 void scratch_push_byte(uint64_t data)
 {
-  Bytes arena = scratch_arena;
-  scratch_arena = scratch_store_byte(arena.len, data);
+  scratch_arena = scratch_store_byte((scratch_arena).len, data);
 }
 
 void stateless_input_scratch_push_slice(Bytes data)
 {
   if (data.len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_stateless_input(arena.len, data);
+    scratch_arena = scratch_store_stateless_input((scratch_arena).len, data);
     return;
   }
 }
@@ -38,8 +35,7 @@ void stateless_input_scratch_push_slice(Bytes data)
 void scratch_scratch_push_slice(Bytes data)
 {
   if (data.len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_scratch(arena.len, data);
+    scratch_arena = scratch_store_scratch((scratch_arena).len, data);
     return;
   }
 }
@@ -47,8 +43,7 @@ void scratch_scratch_push_slice(Bytes data)
 void log_data_scratch_push_slice(Bytes data)
 {
   if (data.len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_log_data(arena.len, data);
+    scratch_arena = scratch_store_log_data((scratch_arena).len, data);
     return;
   }
 }
@@ -56,23 +51,20 @@ void log_data_scratch_push_slice(Bytes data)
 void output_scratch_push_slice(Bytes data)
 {
   if (data.len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_output(arena.len, data);
+    scratch_arena = scratch_store_output((scratch_arena).len, data);
     return;
   }
 }
 
 void scratch_push_address(bytes20 data)
 {
-  Bytes arena = scratch_arena;
-  scratch_arena = scratch_store_address(arena.len, data);
+  scratch_arena = scratch_store_address((scratch_arena).len, data);
 }
 
 void scratch_push_b256(bytes32 data, uint8_t len)
 {
   if (len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_b256(arena.len, data, len);
+    scratch_arena = scratch_store_b256((scratch_arena).len, data, len);
     return;
   }
 }
@@ -80,8 +72,7 @@ void scratch_push_b256(bytes32 data, uint8_t len)
 void scratch_push_word_be(u256 data, uint8_t len)
 {
   if (len != UINT8_C(0)) {
-    Bytes arena = scratch_arena;
-    scratch_arena = scratch_store_word(arena.len, data, len);
+    scratch_arena = scratch_store_word((scratch_arena).len, data, len);
     return;
   }
 }
@@ -123,14 +114,12 @@ uint32_t scratch_length_add(uint8_t left, uint32_t right)
 
 void scratch_push_b256_bytes32_uint8_t_to_unit(bytes32 data, uint8_t len)
 {
-  Bytes arena = scratch_arena;
-  scratch_arena = scratch_store_b256(arena.len, data, len);
+  scratch_arena = scratch_store_b256((scratch_arena).len, data, len);
 }
 
 void scratch_push_word_be_u256_uint8_t_to_unit(u256 data, uint8_t len)
 {
-  Bytes arena = scratch_arena;
-  scratch_arena = scratch_store_word(arena.len, data, len);
+  scratch_arena = scratch_store_word((scratch_arena).len, data, len);
 }
 
 uint32_t scratch_reserve_uint8_t_to_uint32_t(uint8_t len)

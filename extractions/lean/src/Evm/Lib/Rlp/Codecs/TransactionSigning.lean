@@ -157,4 +157,3 @@ def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : 
   let signing_hash ← do (scratch_keccak256 ⟨_, ⟨_, encoded⟩⟩)
   (rlp_encoder_rewind encoder)
   (pure signing_hash)
-

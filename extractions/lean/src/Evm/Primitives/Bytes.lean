@@ -190,4 +190,3 @@ def stateless_input_slice_suffix (s : (StatelessInputSliceFields k_base k_source
   ∧ 0 ≤ off ∧ off ≤ k_source_len -/
 def scratch_slice_suffix (s : (ScratchSliceFields k_base k_source_len)) (off : Nat) : (ScratchSliceFields (k_base + off) (k_source_len - off)) :=
   {  }
-

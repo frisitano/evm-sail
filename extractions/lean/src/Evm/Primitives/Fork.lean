@@ -115,4 +115,3 @@ abbrev BPO2 : Nat := 15
 
 /-- EIP-7954 code/initcode size bump (65536/131072). -/
 abbrev Amsterdam : Nat := 16
-

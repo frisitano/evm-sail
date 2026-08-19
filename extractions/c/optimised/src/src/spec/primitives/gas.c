@@ -29,13 +29,7 @@ const __int128 FRAME_STATE_GAS_DELTA_ZERO = ((__int128)((((unsigned __int128)UIN
 
 
 void create_letbind_11(void) {
-
-  struct GasCharge let_value_3_16;
-  struct GasCharge tmp_3_15;
-  tmp_3_15.affordable = false;
-  tmp_3_15.cost = GAS_COST_ZERO;
-  let_value_3_16 = tmp_3_15;
-  GAS_CHARGE_UNAFFORDABLE = let_value_3_16;
+    GAS_CHARGE_UNAFFORDABLE = ((struct GasCharge){.affordable = false, .cost = GAS_COST_ZERO});
 }
 void kill_letbind_11(void) {
 }

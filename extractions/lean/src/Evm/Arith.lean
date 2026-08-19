@@ -82,4 +82,3 @@ def fdiv_int (n : Int) (m : Int) : Int :=
 /- Type quantifiers: k_ex545413_ : Int, k_ex545412_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
-

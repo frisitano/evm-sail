@@ -198,8 +198,7 @@ u256 fake_exponential_word(struct BlobScheduleFields schedule, uint32_t numerato
         fatal_error(NumericOverflow);
       } else {
         output = next_output;
-        u320 mult_atom_result_2_1990 = u320_mul_widen(denominator, term_index);
-        numerator_accum = u320_div(u320_mul_widen(current_accum, numerator), mult_atom_result_2_1990);
+        numerator_accum = u320_div(u320_mul_widen(current_accum, numerator), u320_mul_widen(denominator, term_index));
         u320 current_index = term_index;
         if (u320_lt(current_index, scaled_limit)) {
           term_index = u320_add_widen(current_index, UINT8_C(1));
@@ -209,14 +208,12 @@ u256 fake_exponential_word(struct BlobScheduleFields schedule, uint32_t numerato
       }
     }
   }
-  u256 tmp_3_3087 = u256_of_u320(u320_div_u64(output, denominator));
-  return protocol_word(tmp_3_3087);
+  return protocol_word((u256_of_u320(u320_div_u64(output, denominator))));
 }
 
 u256 blob_base_fee(uint8_t fork, struct BlobScheduleFields schedule, uint32_t limit, uint32_t excess_blob_gas)
 {
-  bool gteq_int_result_2_1985 = (bool)(fork >= Cancun);
-  if (gteq_int_result_2_1985 && (excess_blob_gas <= limit)) {
+  if ((fork >= Cancun) && (excess_blob_gas <= limit)) {
     return fake_exponential_word(schedule, excess_blob_gas);
   }
   fatal_error(InvalidConfig);
@@ -236,8 +233,7 @@ uint32_t next_excess_blob_gas(struct ProtocolProfileFields profile, uint32_t par
     return UINT32_C(0);
   }
   u256 parent_blob_base_fee = blob_base_fee(profile.fork, profile.blob_schedule, profile.excess_blob_gas_limit, parent_excess_blob_gas);
-  bool result_2_1967 = (bool)(profile.fork >= Osaka);
-  if (result_2_1967 && u320_lt(u320_mul_widen(UINT8_C(16), parent_blob_base_fee), u320_of_u256(parent_base_fee_per_gas))) {
+  if ((profile.fork >= Osaka) && u320_lt(u320_mul_widen(UINT8_C(16), parent_blob_base_fee), u320_of_u256(parent_base_fee_per_gas))) {
     if ((parent_excess_blob_gas + ((uint32_t)((int64_t)parent_blob_gas_used * ((int64_t)profile.blob_schedule.max - (int64_t)profile.blob_schedule.target)) / (uint32_t)profile.blob_schedule.max)) <= profile.excess_blob_gas_limit) {
       return (parent_excess_blob_gas + ((uint32_t)((int64_t)parent_blob_gas_used * ((int64_t)profile.blob_schedule.max - (int64_t)profile.blob_schedule.target)) / (uint32_t)profile.blob_schedule.max));
     }
@@ -251,8 +247,7 @@ uint32_t next_excess_blob_gas(struct ProtocolProfileFields profile, uint32_t par
 
 uint16_t sstore_clear_refund(void)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= London) {
+  if (k_execution_profile.protocol.fork >= London) {
     return R_sclear_london;
   }
   return R_sclear_pre_london;
@@ -263,39 +258,34 @@ uint32_t state_gas_spill_room(uint32_t left)
   return (UINT32_C(16777216) - left);
 }
 
-struct tuple_uint_64_uint_64_uint_32 credit_state_gas_refund(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount)
+uint32_t credit_state_gas_refund(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount, uint64_t *restrict field_0_8_1365, uint64_t *restrict field_1_8_1366)
 {
-  struct tuple_uint_64_uint_64_uint_32 result_8_711;
   if (amount <= state_gas_spilled) {
     if (amount != UINT8_C(0)) {
-      uint64_t conserved_gas_add_result_2_1949 = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(g, amount);
-      result_8_711 = ((struct tuple_uint_64_uint_64_uint_32){.tup0 = conserved_gas_add_result_2_1949, .tup1 = state_gas_remaining, .tup2 = (state_gas_spilled - amount)});
-    } else {
-      result_8_711 = ((struct tuple_uint_64_uint_64_uint_32){.tup0 = g, .tup1 = state_gas_remaining, .tup2 = state_gas_spilled});
+      (*field_0_8_1365) = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(g, amount);
+      (*field_1_8_1366) = state_gas_remaining;
+      return (state_gas_spilled - amount);
     }
-  } else {
-    uint64_t credited;
-    if (state_gas_spilled != UINT8_C(0)) {
-      credited = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(g, state_gas_spilled);
-    } else {
-      credited = g;
-    }
-    uint64_t conserved_gas_add_result_2_1951 = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(state_gas_remaining, (amount - state_gas_spilled));
-    struct tuple_uint_64_uint_64_uint_8 tmp_3_3066 = ((struct tuple_uint_64_uint_64_uint_8){.tup0 = credited, .tup1 = conserved_gas_add_result_2_1951, .tup2 = STATE_GAS_SPILL_ZERO});
-    /* conversions */
-    result_8_711.tup0 = tmp_3_3066.tup0;
-    result_8_711.tup1 = tmp_3_3066.tup1;
-    result_8_711.tup2 = (uint32_t)tmp_3_3066.tup2;
-    /* end conversions */
+    (*field_0_8_1365) = g;
+    (*field_1_8_1366) = state_gas_remaining;
+    return state_gas_spilled;
   }
-  return result_8_711;
+  uint64_t credited;
+  if (state_gas_spilled != UINT8_C(0)) {
+    credited = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(g, state_gas_spilled);
+  } else {
+    credited = g;
+  }
+  (*field_1_8_1366) = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(state_gas_remaining, (amount - state_gas_spilled));
+  (*field_0_8_1365) = credited;
+  return (uint32_t)STATE_GAS_SPILL_ZERO;
 }
 
-struct tuple_uint_64_uint_32 return_child_state_gas(uint64_t parent_remaining, uint32_t parent_spilled, uint64_t child_remaining, uint32_t child_spilled)
+uint32_t return_child_state_gas(uint64_t parent_remaining, uint32_t parent_spilled, uint64_t child_remaining, uint32_t child_spilled, uint64_t *restrict field_0_8_1368)
 {
   if (child_remaining <= (UINT64_C(18446744073709551615) - parent_remaining)) {
-    uint32_t state_gas_spill_add_result_2_1946 = state_gas_spill_add_uint32_t_uint32_t_to_uint32_t(parent_spilled, child_spilled);
-    return ((struct tuple_uint_64_uint_32){.tup0 = (child_remaining + parent_remaining), .tup1 = state_gas_spill_add_result_2_1946});
+    (*field_0_8_1368) = (child_remaining + parent_remaining);
+    return state_gas_spill_add_uint32_t_uint32_t_to_uint32_t(parent_spilled, child_spilled);
   }
   fatal_error(ExecutionInvalid);
 }
@@ -316,42 +306,35 @@ uint64_t gas_sub(uint64_t left, uint64_t right)
 __attribute__((__always_inline__)) u256 memory_word_count_word(u256 byte_len)
 {
   u256 quotient = word_div_word_u256_u256_to_u256(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  u256 remainder = word_mod_word_u256_u256_to_u256(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  bool eq_int_result_2_1941 = eq_u256(remainder, WORD_ZERO);
-  if (!eq_int_result_2_1941) {
+  if (!eq_u256((word_mod_word_u256_u256_to_u256(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}})), WORD_ZERO)) {
     quotient = word_add_word(quotient, WORD_ONE);
   }
   return quotient;
 }
 
-__attribute__((__always_inline__)) uint64_t memory_requested_height(u256 start, u256 size)
+uint64_t memory_requested_height(u256 start, u256 size)
 {
   if (u256_eq_u64(size, UINT8_C(0))) {
     return UINT64_C(0);
   }
   if (!u64_lt_u256(UINT32_C(4294967295), start)) {
     if (!u64_lt_u256((UINT32_C(4294967295) - (uint32_t)u256_to_u64_unchecked(start)), size)) {
-      uint64_t tmp_3_3063;
-      uint32_t bounded_size = (uint32_t)u256_to_u64(size);
-      tmp_3_3063 = u256_to_u64_unchecked(u256_add_u64(u256_of_fbits((uint32_t)u256_to_u64_unchecked(start)), bounded_size));
-      return tmp_3_3063;
+      return (uint64_t)u256_to_u64_unchecked(u256_add_u64(u256_of_fbits((uint32_t)u256_to_u64_unchecked(start)), (uint32_t)u256_to_u64_unchecked(size)));
     }
     return UINT64_C(4294967296);
   }
   return UINT64_C(4294967296);
 }
 
-__attribute__((__always_inline__)) struct MemoryAccessFields memory_access(u256 start, u256 size)
+struct MemoryAccessFields memory_access(u256 start, u256 size)
 {
   if (u256_eq_u64(size, UINT8_C(0))) {
     return EMPTY_MEMORY_ACCESS;
   }
   if (!u64_lt_u256(UINT32_C(4294967295), start)) {
     if (!u64_lt_u256((UINT32_C(4294967295) - (uint32_t)u256_to_u64_unchecked(start)), size)) {
-      uint32_t bounded_size = (uint32_t)u256_to_u64(size);
-      struct MemoryRangeFields memory_range_result_2_1935 = memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size);
-      uint32_t add_atom_result_2_1936 = (uint32_t)u256_to_u64(u256_add_u64(u256_of_fbits((uint32_t)u256_to_u64_unchecked(start)), bounded_size));
-      return ((struct MemoryAccessFields){.range = memory_range_result_2_1935, .requested_height = add_atom_result_2_1936});
+      uint32_t bounded_size = (uint32_t)u256_to_u64_unchecked(size);
+      return ((struct MemoryAccessFields){.range = (memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size)), .requested_height = (uint32_t)u256_to_u64_unchecked(u256_add_u64(u256_of_fbits((uint32_t)u256_to_u64_unchecked(start)), bounded_size))});
     }
     fatal_error(ExecutionInvalid);
   }
@@ -372,8 +355,7 @@ uint16_t account_cost(bool warm)
 
 uint16_t external_code_read_cost(void)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Amsterdam) {
+  if (k_execution_profile.protocol.fork >= Amsterdam) {
     return G_warm_access;
   }
   return G_zero;
@@ -393,8 +375,7 @@ uint16_t sload_cost(bool warm)
 
 uint16_t call_value_cost(void)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Amsterdam) {
+  if (k_execution_profile.protocol.fork >= Amsterdam) {
     return G_amsterdam_call_value;
   }
   return G_callvalue;
@@ -402,8 +383,7 @@ uint16_t call_value_cost(void)
 
 uint16_t create_access_cost(void)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Amsterdam) {
+  if (k_execution_profile.protocol.fork >= Amsterdam) {
     return G_amsterdam_create_access;
   }
   return G_create;
@@ -412,23 +392,18 @@ uint16_t create_access_cost(void)
 struct GasCharge code_deployment_execution_cost(uint32_t byte_len, uint64_t available)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
-  struct ProtocolProfileFields profile = execution_profile.protocol;
-  if (profile.fork >= Amsterdam) {
-    if (byte_len <= profile.deployed_code_size_limit) {
+  if (execution_profile.protocol.fork >= Amsterdam) {
+    if (byte_len <= execution_profile.protocol.deployed_code_size_limit) {
       uint16_t words = memory_word_count_uint32_t_to_uint16_t(byte_len);
-      uint64_t ediv_int_result_2_1913 = (available / (uint64_t)G_keccak_word);
-      if (words <= ediv_int_result_2_1913) {
-        uint32_t integer_result_3_3598 = ((uint32_t)G_keccak_word * (uint32_t)words);
-        return gas_charge((uint64_t)integer_result_3_3598);
+      if (words <= (available / (uint64_t)G_keccak_word)) {
+        return gas_charge(((uint64_t)(uint32_t)G_keccak_word * (uint64_t)(uint32_t)words));
       }
       return GAS_CHARGE_UNAFFORDABLE;
     }
     return GAS_CHARGE_UNAFFORDABLE;
   }
-  uint64_t ediv_int_result_2_1915 = (available / (uint64_t)G_codedeposit);
-  if (byte_len <= ediv_int_result_2_1915) {
-    uint64_t cost_3_3052 = ((uint64_t)G_codedeposit * (uint64_t)byte_len);
-    return gas_charge(cost_3_3052);
+  if (byte_len <= (available / (uint64_t)G_codedeposit)) {
+    return gas_charge(((uint64_t)G_codedeposit * (uint64_t)byte_len));
   }
   return GAS_CHARGE_UNAFFORDABLE;
 }
@@ -436,9 +411,8 @@ struct GasCharge code_deployment_execution_cost(uint32_t byte_len, uint64_t avai
 uint64_t code_deployment_state_cost(uint32_t byte_len)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
-  struct ProtocolProfileFields profile = execution_profile.protocol;
-  if (profile.fork >= Amsterdam) {
-    if (byte_len <= profile.deployed_code_size_limit) {
+  if (execution_profile.protocol.fork >= Amsterdam) {
+    if (byte_len <= execution_profile.protocol.deployed_code_size_limit) {
       return ((uint64_t)G_amsterdam_state_byte * (uint64_t)byte_len);
     }
     fatal_error(ExecutionInvalid);
@@ -452,22 +426,18 @@ u256 pc_word(struct CalldataSlice input, uint32_t start, uint8_t byte_count)
   uint32_t start_offset = start;
   uint8_t count = byte_count;
   uint32_t input_length = calldata_slice_length(input);
-  int64_t tmp_3_3047 = (int64_t)UINT8_C(31);
-  int64_t tmp_3_3048 = (int64_t)UINT8_C(1);
   int64_t byte_index = (int64_t)UINT8_C(0);
-  while (byte_index <= tmp_3_3047) {
-    uint8_t offset = (uint8_t)byte_index;
-    if (offset < count) {
+  while (byte_index <= (int64_t)UINT8_C(31)) {
+    if ((uint8_t)byte_index < count) {
       uint64_t next_byte;
-      if ((start_offset < input_length) && (offset < (input_length - start_offset))) {
-        next_byte = calldata_slice_byte(input, (start_offset + (uint32_t)offset));
+      if ((start_offset < input_length) && ((uint8_t)byte_index < (input_length - start_offset))) {
+        next_byte = calldata_slice_byte(input, (start_offset + (uint32_t)(uint8_t)byte_index));
       } else {
         next_byte = UINT64_C(0x00);
       }
-      u256 shifted = word_shift_left_u256_uint8_t_to_u256(value, UINT8_C(8));
-      value = word_add_word_u256_uint8_t_to_u256(shifted, (uint8_t)next_byte);
+      value = word_add_word_u256_uint8_t_to_u256((word_shift_left_u256_uint8_t_to_u256(value, UINT8_C(8))), (uint8_t)next_byte);
     }
-    byte_index = (byte_index + tmp_3_3048);
+    byte_index = (byte_index + (int64_t)UINT8_C(1));
   }
   return value;
 }
@@ -486,8 +456,7 @@ u256 pc_word_after_declared_field(struct CalldataSlice input, uint32_t prefix, u
 
 uint32_t pc_blake2_rounds(struct CalldataSlice input)
 {
-  u256 rounds_word = pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(input, UINT8_C(0), UINT8_C(4));
-  return (uint32_t)u256_to_u64_unchecked(u256_mod_u64(rounds_word, UINT64_C(4294967296)));
+  return (uint32_t)u256_to_u64_unchecked(u256_mod_u64((pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(input, UINT8_C(0), UINT8_C(4))), UINT64_C(4294967296)));
 }
 
 struct GasCharge modexp_gas(struct CalldataSlice input, uint64_t available)
@@ -497,29 +466,19 @@ struct GasCharge modexp_gas(struct CalldataSlice input, uint64_t available)
   u256 el_word = pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(input, UINT8_C(32), UINT8_C(32));
   u256 ml_word = pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(input, UINT8_C(64), UINT8_C(32));
   bool osaka = (bool)(execution_profile.protocol.fork >= Osaka);
-  bool tmp_3_3010;
-  if (osaka) {
-    bool tmp_3_3009 = (bool)(u64_lt_u256(UINT16_C(1024), bl_word) || (u64_lt_u256(UINT16_C(1024), el_word) || u64_lt_u256(UINT16_C(1024), ml_word)));
-    tmp_3_3010 = tmp_3_3009;
-  } else {
-    tmp_3_3010 = false;
-  }
-  if (tmp_3_3010) {
+  if (osaka && (u64_lt_u256(UINT16_C(1024), bl_word) || (u64_lt_u256(UINT16_C(1024), el_word) || u64_lt_u256(UINT16_C(1024), ml_word)))) {
     return GAS_CHARGE_UNAFFORDABLE;
   }
   uint16_t minimum = osaka ? UINT16_C(500) : UINT16_C(200);
   if (available < minimum) {
     return GAS_CHARGE_UNAFFORDABLE;
   }
-  bool base_is_zero = eq_u256(bl_word, WORD_ZERO);
-  bool modulus_is_zero = eq_u256(ml_word, WORD_ZERO);
-  if (!osaka && (base_is_zero && modulus_is_zero)) {
+  if (!osaka && (eq_u256(bl_word, WORD_ZERO) && eq_u256(ml_word, WORD_ZERO))) {
     return ((struct GasCharge){.affordable = true, .cost = UINT64_C(200)});
   }
   u256 maxlen = u256_lt(ml_word, bl_word) ? bl_word : ml_word;
-  u256 words;
-  uint8_t result_2_1896 = (uint8_t)u256_to_u64_unchecked(u256_mod_u64(maxlen, UINT8_C(8))) == UINT8_C(0) ? UINT8_C(0) : UINT8_C(1);
-  words = u256_add_u64(u256_div_u64(maxlen, UINT8_C(8)), result_2_1896);
+  uint8_t trailing_word = (uint8_t)u256_to_u64_unchecked(u256_mod_u64(maxlen, UINT8_C(8))) == UINT8_C(0) ? UINT8_C(0) : UINT8_C(1);
+  u256 words = u256_add_u64(u256_div_u64(maxlen, UINT8_C(8)), trailing_word);
   u128 product_limit_value = osaka ? u128_of_u64(available) : u128_add_u64(u128_mul_u64_u64(UINT8_C(3), available), UINT8_C(2));
   bool words_unaffordable = u128_lt_u256(product_limit_value, words);
   u128 bounded_words = words_unaffordable ? product_limit_value : u128_of_u256_unchecked(words);
@@ -554,10 +513,10 @@ struct GasCharge modexp_gas(struct CalldataSlice input, uint64_t available)
     uint16_t exponent_bits = word_bit_length(exponent_head);
     iterations = (exponent_bits == UINT8_C(0)) || ((uint8_t)((uint16_t)((uint32_t)exponent_bits - (uint32_t)UINT16_C(1))) == UINT8_C(0)) ? u128_of_u64(UINT8_C(1)) : u128_of_u64((uint8_t)((uint16_t)((uint32_t)exponent_bits - (uint32_t)UINT16_C(1))));
   } else {
-    u256 exponent_head_3_3034 = pc_word_after_declared_field_struct_CalldataSlice_uint8_t_u256_uint8_t_to_u256(input, UINT8_C(96), bl_word, UINT8_C(32));
-    uint16_t head_bits = word_bit_length(exponent_head_3_3034);
+    u256 exponent_head_3_3035 = pc_word_after_declared_field_struct_CalldataSlice_uint8_t_u256_uint8_t_to_u256(input, UINT8_C(96), bl_word, UINT8_C(32));
+    uint16_t head_bits = word_bit_length(exponent_head_3_3035);
     uint8_t high_bits = head_bits != UINT8_C(0) ? (uint8_t)((uint16_t)((uint32_t)head_bits - (uint32_t)UINT16_C(1))) : UINT8_C(0);
-    u128 count_3_3035;
+    u128 count_3_3036;
     if (osaka) {
       uint64_t extra_limit = (available >> 4);
       bool exceeds_maximum = word_greater_than_word(u256_sub_u64(el_word, UINT8_C(32)), (u256){{UINT64_C(992), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
@@ -567,17 +526,18 @@ struct GasCharge modexp_gas(struct CalldataSlice input, uint64_t available)
       if (extra_unaffordable) {
         return GAS_CHARGE_UNAFFORDABLE;
       }
-      count_3_3035 = u128_of_u64(((uint16_t)((uint32_t)(uint16_t)((uint64_t)UINT16_C(16) * (uint64_t)(uint16_t)bounded_extra) + (uint32_t)(uint16_t)high_bits)));
+      count_3_3036 = u128_of_u64(((uint16_t)((uint32_t)(uint16_t)((uint64_t)UINT16_C(16) * (uint64_t)(uint16_t)bounded_extra) + (uint32_t)(uint16_t)high_bits)));
     } else {
-      uint64_t tmp_3_3028 = (uint64_t)u128_to_u64_unchecked(u128_div_u64(u128_add_u64(u128_mul_u64_u64(UINT8_C(3), available), UINT8_C(2)), UINT8_C(8)));
-      bool extra_unaffordable_3_3037 = u64_lt_u256(tmp_3_3028, u256_sub_u64(el_word, UINT8_C(32)));
-      uint64_t bounded_extra_3_3038 = extra_unaffordable_3_3037 ? tmp_3_3028 : (uint64_t)u256_to_u64_unchecked(u256_sub_u64(el_word, UINT8_C(32)));
-      if (extra_unaffordable_3_3037) {
+      uint64_t extra_limit_3_3037 = UINT64_C(0);
+      extra_limit_3_3037 = (uint64_t)u128_to_u64_unchecked(u128_div_u64(u128_add_u64(u128_mul_u64_u64(UINT8_C(3), available), UINT8_C(2)), UINT8_C(8)));
+      bool extra_unaffordable_3_3038 = u64_lt_u256(extra_limit_3_3037, u256_sub_u64(el_word, UINT8_C(32)));
+      uint64_t bounded_extra_3_3039 = extra_unaffordable_3_3038 ? extra_limit_3_3037 : (uint64_t)u256_to_u64_unchecked(u256_sub_u64(el_word, UINT8_C(32)));
+      if (extra_unaffordable_3_3038) {
         return GAS_CHARGE_UNAFFORDABLE;
       }
-      count_3_3035 = u128_add_u64(u128_mul_u64_u64(UINT8_C(8), bounded_extra_3_3038), high_bits);
+      count_3_3036 = u128_add_u64(u128_mul_u64_u64(UINT8_C(8), bounded_extra_3_3039), high_bits);
     }
-    iterations = count_3_3035;
+    iterations = count_3_3036;
   }
   if (u128_eq_u64(iterations, UINT8_C(0))) {
     return GAS_CHARGE_UNAFFORDABLE;
@@ -667,8 +627,6 @@ struct SstoreCosts legacy_sstore_costs(u256 original, u256 current, u256 new_val
   uint16_t cold_cost = cold ? G_cold_sload : GAS_CONSTANT_ZERO;
   uint16_t clear_refund = sstore_clear_refund();
   bool original_is_zero = eq_u256(original, WORD_ZERO);
-  bool current_is_zero = eq_u256(current, WORD_ZERO);
-  bool new_value_is_zero = eq_u256(new_value, WORD_ZERO);
   uint16_t base;
   if ((!eq_u256(current, new_value)) && eq_u256(original, current)) {
     base = original_is_zero ? G_sset : G_sreset;
@@ -679,15 +637,15 @@ struct SstoreCosts legacy_sstore_costs(u256 original, u256 current, u256 new_val
   if (eq_u256(current, new_value)) {
     refund = (__int128)UINT8_C(0);
   } else if (eq_u256(original, current)) {
-    refund = !original_is_zero && new_value_is_zero ? (__int128)clear_refund : (__int128)UINT8_C(0);
+    refund = !original_is_zero && eq_u256(new_value, WORD_ZERO) ? (__int128)clear_refund : (__int128)UINT8_C(0);
   } else {
     int32_t clear_delta;
     if (original_is_zero) {
       clear_delta = (int32_t)UINT8_C(0);
     } else {
-      int32_t result_2_1862 = current_is_zero ? ((int32_t)UINT8_C(0) - (int32_t)clear_refund) : (int32_t)UINT8_C(0);
-      uint16_t result_2_1863 = new_value_is_zero ? clear_refund : UINT16_C(0);
-      clear_delta = (result_2_1862 + (int32_t)result_2_1863);
+      int32_t withdrawn_clear_refund = eq_u256(current, WORD_ZERO) ? ((int32_t)UINT8_C(0) - (int32_t)clear_refund) : (int32_t)UINT8_C(0);
+      uint16_t awarded_clear_refund = eq_u256(new_value, WORD_ZERO) ? clear_refund : UINT16_C(0);
+      clear_delta = (withdrawn_clear_refund + (int32_t)awarded_clear_refund);
     }
     int32_t reset_delta;
     if (eq_u256(original, new_value)) {
@@ -706,19 +664,11 @@ struct SstoreCosts amsterdam_sstore_costs(u256 original, u256 current, u256 new_
   bool clean_change = (bool)(eq_u256(original, current) && changed);
   uint16_t access = amsterdam_storage_access_cost(cold);
   bool original_is_zero = eq_u256(original, WORD_ZERO);
-  bool current_is_zero = eq_u256(current, WORD_ZERO);
-  bool new_value_is_zero = eq_u256(new_value, WORD_ZERO);
-  uint64_t execution;
-  if (clean_change) {
-    uint32_t integer_result_3_3607 = ((uint32_t)access + (uint32_t)G_amsterdam_storage_write);
-    execution = (uint64_t)integer_result_3_3607;
-  } else {
-    execution = (uint64_t)access;
-  }
+  uint64_t execution = clean_change ? ((uint64_t)(uint32_t)access + (uint64_t)(uint32_t)G_amsterdam_storage_write) : (uint64_t)access;
   int16_t clear_delta;
-  if (changed && (!original_is_zero && (!current_is_zero && new_value_is_zero))) {
+  if (changed && (!original_is_zero && ((!eq_u256(current, WORD_ZERO)) && eq_u256(new_value, WORD_ZERO)))) {
     clear_delta = (int16_t)R_amsterdam_storage_clear;
-  } else if (changed && (!original_is_zero && current_is_zero)) {
+  } else if (changed && (!original_is_zero && eq_u256(current, WORD_ZERO))) {
     clear_delta = ((int16_t)((int32_t)(int16_t)UINT8_C(0) - (int32_t)(int16_t)R_amsterdam_storage_clear));
   } else {
     clear_delta = (int16_t)UINT8_C(0);
@@ -734,8 +684,7 @@ struct SstoreCosts amsterdam_sstore_costs(u256 original, u256 current, u256 new_
 
 struct SstoreCosts sstore_costs(u256 original, u256 current, u256 new_value, bool cold)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Amsterdam) {
+  if (k_execution_profile.protocol.fork >= Amsterdam) {
     return amsterdam_sstore_costs(original, current, new_value, cold);
   }
   return legacy_sstore_costs(original, current, new_value, cold);
@@ -762,8 +711,7 @@ struct GasCharge memory_word_gas_cost(uint16_t base, uint16_t per_word, u256 siz
   }
   u256 words;
   u256 quotient = word_div_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  u256 remainder = word_mod_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  if (eq_u256(remainder, WORD_ZERO)) {
+  if (eq_u256((word_mod_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}})), WORD_ZERO)) {
     words = quotient;
   } else {
     words = word_add_word(quotient, WORD_ONE);
@@ -790,15 +738,13 @@ struct GasCharge copy_gas_cost(u256 size, uint64_t available)
 
 struct GasCharge log_gas_cost(uint8_t num_topics, u256 size, uint64_t available)
 {
-  uint32_t topic_cost = ((uint32_t)G_logtopic * (uint32_t)num_topics);
-  uint32_t fixed_cost = (topic_cost + (uint32_t)G_log);
-  if (fixed_cost > available) {
+  if ((((uint32_t)G_logtopic * (uint32_t)num_topics) + (uint32_t)G_log) > available) {
     return GAS_CHARGE_UNAFFORDABLE;
   }
-  struct GasCharge variable = word_scaled_gas_cost(G_logdata, size, (available - (uint64_t)fixed_cost));
+  struct GasCharge variable = word_scaled_gas_cost(G_logdata, size, (available - (((uint64_t)(uint32_t)G_logtopic * (uint64_t)(uint32_t)num_topics) + (uint64_t)(uint32_t)G_log)));
   if (variable.affordable) {
-    if (!u64_lt_u128(available, u128_add_u64_u64(fixed_cost, variable.cost))) {
-      return gas_charge((uint64_t)u128_to_u64_unchecked(u128_add_u64_u64(fixed_cost, variable.cost)));
+    if (!u64_lt_u128(available, u128_add_u64_u64((((uint32_t)G_logtopic * (uint32_t)num_topics) + (uint32_t)G_log), variable.cost))) {
+      return gas_charge((uint64_t)u128_to_u64_unchecked(u128_add_u64_u64((((uint32_t)G_logtopic * (uint32_t)num_topics) + (uint32_t)G_log), variable.cost)));
     }
     return GAS_CHARGE_UNAFFORDABLE;
   }
@@ -807,19 +753,15 @@ struct GasCharge log_gas_cost(uint8_t num_topics, u256 size, uint64_t available)
 
 uint64_t exp_gas(u256 exponent)
 {
-  uint32_t result_2_1834;
-  uint8_t word_byte_length_result_2_1833;
+  uint8_t exponent_bytes;
   uint16_t bit_length = word_bit_length(exponent);
-  word_byte_length_result_2_1833 = bit_length == UINT8_C(0) ? UINT8_C(0) : (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
-  result_2_1834 = ((uint32_t)G_expbyte * (uint32_t)word_byte_length_result_2_1833);
-  uint32_t integer_result_3_3609 = (result_2_1834 + (uint32_t)G_exp);
-  return (uint64_t)integer_result_3_3609;
+  exponent_bytes = bit_length == UINT8_C(0) ? UINT8_C(0) : (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
+  return (((uint64_t)(uint32_t)G_expbyte * (uint64_t)(uint32_t)exponent_bytes) + (uint64_t)(uint32_t)G_exp);
 }
 
 uint32_t transaction_initcode_gas(uint32_t byte_len)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Shanghai) {
+  if (k_execution_profile.protocol.fork >= Shanghai) {
     uint32_t words = memory_word_count_uint32_t_to_uint32_t(byte_len);
     return (words + words);
   }
@@ -861,73 +803,82 @@ struct GasCharge bls_msm_gas(vector_128_uint_16 table, uint16_t base, uint16_t m
   return GAS_CHARGE_UNAFFORDABLE;
 }
 
-struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount)
+uint32_t charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount, bool *restrict condition_8_1511, uint64_t *restrict field_1_8_1512, uint64_t *restrict field_2_8_1513)
 {
-  struct tuple_bool_uint_64_uint_64_uint_32 result_8_1068;
   if (amount == UINT8_C(0)) {
-    return ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1511) = false;
+    (*field_1_8_1512) = g;
+    (*field_2_8_1513) = state_gas_remaining;
+    return state_gas_spilled;
   }
   if (amount <= state_gas_remaining) {
-    result_8_1068 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = (state_gas_remaining - (uint64_t)amount), .tup3 = state_gas_spilled});
-  } else if (!((__int128)g < (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining))) {
-    uint32_t state_gas_spill_add_result_2_1958 = state_gas_spill_add_uint32_t_int64_t_to_uint32_t(state_gas_spilled, ((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
-    struct tuple_bool_uint_64_uint_8_uint_32 tmp_3_3072 = ((struct tuple_bool_uint_64_uint_8_uint_32){.tup0 = false, .tup1 = (uint64_t)((__int128)g - (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining)), .tup2 = STATE_GAS_ZERO, .tup3 = state_gas_spill_add_result_2_1958});
-    /* conversions */
-    result_8_1068.tup0 = tmp_3_3072.tup0;
-    result_8_1068.tup1 = tmp_3_3072.tup1;
-    result_8_1068.tup2 = (uint64_t)tmp_3_3072.tup2;
-    result_8_1068.tup3 = tmp_3_3072.tup3;
-    /* end conversions */
-  } else {
-    result_8_1068 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = true, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1511) = false;
+    (*field_1_8_1512) = g;
+    (*field_2_8_1513) = (state_gas_remaining - (uint64_t)amount);
+    return state_gas_spilled;
   }
-  return result_8_1068;
+  if (!((__int128)g < (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining))) {
+    (*condition_8_1511) = false;
+    (*field_1_8_1512) = (uint64_t)((__int128)g - (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
+    (*field_2_8_1513) = (uint64_t)STATE_GAS_ZERO;
+    return state_gas_spill_add_uint32_t_int64_t_to_uint32_t(state_gas_spilled, ((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
+  }
+  (*condition_8_1511) = true;
+  (*field_1_8_1512) = g;
+  (*field_2_8_1513) = state_gas_remaining;
+  return state_gas_spilled;
 }
 
-struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount)
+uint32_t charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32_variant_2(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint32_t amount, bool *restrict condition_8_1515, uint64_t *restrict field_1_8_1516, uint64_t *restrict field_2_8_1517)
 {
-  struct tuple_bool_uint_64_uint_64_uint_32 result_8_1069;
   if (amount == UINT8_C(0)) {
-    return ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1515) = false;
+    (*field_1_8_1516) = g;
+    (*field_2_8_1517) = state_gas_remaining;
+    return state_gas_spilled;
   }
   if (amount <= state_gas_remaining) {
-    result_8_1069 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = (state_gas_remaining - (uint64_t)amount), .tup3 = state_gas_spilled});
-  } else if (!((__int128)g < (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining))) {
-    uint32_t state_gas_spill_add_result_2_1958 = state_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(state_gas_spilled, ((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
-    struct tuple_bool_uint_64_uint_8_uint_32 tmp_3_3072 = ((struct tuple_bool_uint_64_uint_8_uint_32){.tup0 = false, .tup1 = (uint64_t)((__int128)g - (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining)), .tup2 = STATE_GAS_ZERO, .tup3 = state_gas_spill_add_result_2_1958});
-    /* conversions */
-    result_8_1069.tup0 = tmp_3_3072.tup0;
-    result_8_1069.tup1 = tmp_3_3072.tup1;
-    result_8_1069.tup2 = (uint64_t)tmp_3_3072.tup2;
-    result_8_1069.tup3 = tmp_3_3072.tup3;
-    /* end conversions */
-  } else {
-    result_8_1069 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = true, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1515) = false;
+    (*field_1_8_1516) = g;
+    (*field_2_8_1517) = (state_gas_remaining - (uint64_t)amount);
+    return state_gas_spilled;
   }
-  return result_8_1069;
+  if (!((__int128)g < (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining))) {
+    (*condition_8_1515) = false;
+    (*field_1_8_1516) = (uint64_t)((__int128)g - (__int128)((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
+    (*field_2_8_1517) = (uint64_t)STATE_GAS_ZERO;
+    return state_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(state_gas_spilled, ((int64_t)amount - (int64_t)(uint32_t)state_gas_remaining));
+  }
+  (*condition_8_1515) = true;
+  (*field_1_8_1516) = g;
+  (*field_2_8_1517) = state_gas_remaining;
+  return state_gas_spilled;
 }
 
-struct tuple_bool_uint_64_uint_64_uint_32 charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount)
+uint32_t charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(uint64_t g, uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t amount, bool *restrict condition_8_1519, uint64_t *restrict field_1_8_1520, uint64_t *restrict field_2_8_1521)
 {
-  struct tuple_bool_uint_64_uint_64_uint_32 result_8_1070;
   if (amount == UINT8_C(0)) {
-    return ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1519) = false;
+    (*field_1_8_1520) = g;
+    (*field_2_8_1521) = state_gas_remaining;
+    return state_gas_spilled;
   }
   if (amount <= state_gas_remaining) {
-    result_8_1070 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = g, .tup2 = (state_gas_remaining - amount), .tup3 = state_gas_spilled});
-  } else if (!(g < ((__int128)amount - (__int128)state_gas_remaining))) {
-    uint32_t state_gas_spill_add_result_2_1958 = state_gas_spill_add_uint32_t___int128_to_uint32_t(state_gas_spilled, ((__int128)amount - (__int128)state_gas_remaining));
-    struct tuple_bool_uint_64_uint_8_uint_32 tmp_3_3072 = ((struct tuple_bool_uint_64_uint_8_uint_32){.tup0 = false, .tup1 = (uint64_t)((__int128)g - ((__int128)amount - (__int128)state_gas_remaining)), .tup2 = STATE_GAS_ZERO, .tup3 = state_gas_spill_add_result_2_1958});
-    /* conversions */
-    result_8_1070.tup0 = tmp_3_3072.tup0;
-    result_8_1070.tup1 = tmp_3_3072.tup1;
-    result_8_1070.tup2 = (uint64_t)tmp_3_3072.tup2;
-    result_8_1070.tup3 = tmp_3_3072.tup3;
-    /* end conversions */
-  } else {
-    result_8_1070 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = true, .tup1 = g, .tup2 = state_gas_remaining, .tup3 = state_gas_spilled});
+    (*condition_8_1519) = false;
+    (*field_1_8_1520) = g;
+    (*field_2_8_1521) = (state_gas_remaining - amount);
+    return state_gas_spilled;
   }
-  return result_8_1070;
+  if (!(g < ((__int128)amount - (__int128)state_gas_remaining))) {
+    (*condition_8_1519) = false;
+    (*field_1_8_1520) = (uint64_t)((__int128)g - ((__int128)amount - (__int128)state_gas_remaining));
+    (*field_2_8_1521) = (uint64_t)STATE_GAS_ZERO;
+    return state_gas_spill_add_uint32_t___int128_to_uint32_t(state_gas_spilled, ((__int128)amount - (__int128)state_gas_remaining));
+  }
+  (*condition_8_1519) = true;
+  (*field_1_8_1520) = g;
+  (*field_2_8_1521) = state_gas_remaining;
+  return state_gas_spilled;
 }
 
 struct GasCharge copy_gas_cost_u256_uint64_t_to_struct_GasCharge(u256 size, uint64_t available)
@@ -937,8 +888,7 @@ struct GasCharge copy_gas_cost_u256_uint64_t_to_struct_GasCharge(u256 size, uint
 
 bool deployed_code_size_allowed(uint32_t size)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  return (bool)(size <= execution_profile.protocol.deployed_code_size_limit);
+  return (bool)(size <= k_execution_profile.protocol.deployed_code_size_limit);
 }
 
 struct GasCharge fixed_precompile_gas_uint16_t_uint64_t_to_struct_GasCharge(uint16_t cost, uint64_t available)
@@ -1013,24 +963,22 @@ struct GasCharge linear_gas_uint8_t_uint8_t_uint32_t_uint64_t_to_struct_GasCharg
 
 __attribute__((__always_inline__)) uint64_t mem_cost(uint32_t words)
 {
-  uint64_t linear = ((uint64_t)G_memory * (uint64_t)words);
-  return ((((uint64_t)words * (uint64_t)words) >> 9) + linear);
+  return ((((uint64_t)words * (uint64_t)words) >> 9) + ((uint64_t)G_memory * (uint64_t)words));
 }
 
-__attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields(u256 start, u256 size)
+struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields(u256 start, u256 size)
 {
   if (!u64_lt_u256(UINT32_C(4294967295), start)) {
     if (!u64_lt_u256((UINT32_C(4294967295) - (uint32_t)u256_to_u64_unchecked(start)), size)) {
       uint32_t bounded_size = (uint32_t)u256_to_u64_unchecked(size);
-      struct MemoryRangeFields memory_range_result_2_1935 = memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size);
-      return ((struct MemoryAccessFields){.range = memory_range_result_2_1935, .requested_height = (bounded_size + (uint32_t)u256_to_u64_unchecked(start))});
+      return ((struct MemoryAccessFields){.range = (memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size)), .requested_height = (bounded_size + (uint32_t)u256_to_u64_unchecked(start))});
     }
     fatal_error(ExecutionInvalid);
   }
   fatal_error(ExecutionInvalid);
 }
 
-__attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(u256 start, u256 size)
+struct MemoryAccessFields memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(u256 start, u256 size)
 {
   if (u256_eq_u64(size, UINT8_C(0))) {
     return EMPTY_MEMORY_ACCESS;
@@ -1038,8 +986,7 @@ __attribute__((__always_inline__)) struct MemoryAccessFields memory_access_u256_
   if (!u64_lt_u256(UINT32_C(4294967295), start)) {
     if (!u64_lt_u256((UINT32_C(4294967295) - (uint32_t)u256_to_u64_unchecked(start)), size)) {
       uint32_t bounded_size = (uint32_t)u256_to_u64_unchecked(size);
-      struct MemoryRangeFields memory_range_result_2_1935 = memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size);
-      return ((struct MemoryAccessFields){.range = memory_range_result_2_1935, .requested_height = (bounded_size + (uint32_t)u256_to_u64_unchecked(start))});
+      return ((struct MemoryAccessFields){.range = (memory_range((uint32_t)u256_to_u64_unchecked(start), bounded_size)), .requested_height = (bounded_size + (uint32_t)u256_to_u64_unchecked(start))});
     }
     fatal_error(ExecutionInvalid);
   }
@@ -1065,7 +1012,7 @@ __attribute__((__always_inline__)) struct GasCharge memory_expansion_gas_cost(ui
   return GAS_CHARGE_UNAFFORDABLE;
 }
 
-__attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to_uint64_t(u256 start, u256 size)
+uint64_t memory_requested_height_u256_u256_to_uint64_t(u256 start, u256 size)
 {
   if (!u64_lt_u256(UINT32_C(4294967295), start)) {
     if (!u64_lt_u256((UINT32_C(4294967295) - (uint32_t)u256_to_u64_unchecked(start)), size)) {
@@ -1076,7 +1023,7 @@ __attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to
   return UINT64_C(4294967296);
 }
 
-__attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to_uint64_t_variant_2(u256 start, u256 size)
+uint64_t memory_requested_height_u256_u256_to_uint64_t_variant_2(u256 start, u256 size)
 {
   if (u256_eq_u64(size, UINT8_C(0))) {
     return UINT64_C(0);
@@ -1092,7 +1039,10 @@ __attribute__((__always_inline__)) uint64_t memory_requested_height_u256_u256_to
 
 uint16_t memory_word_count_uint32_t_to_uint16_t(uint32_t byte_len)
 {
-  return (uint8_t)(byte_len & UINT32_C(31)) == UINT8_C(0) ? (uint16_t)(byte_len >> 5) : (uint16_t)((byte_len >> 5) + UINT32_C(1));
+  if ((uint8_t)(byte_len & UINT32_C(31)) == UINT8_C(0)) {
+    return (uint16_t)(byte_len >> 5);
+  }
+  return (uint16_t)((byte_len >> 5) + UINT32_C(1));
 }
 
 uint32_t memory_word_count_uint32_t_to_uint32_t(uint32_t byte_len)
@@ -1106,9 +1056,7 @@ uint32_t memory_word_count_uint32_t_to_uint32_t(uint32_t byte_len)
 __attribute__((__always_inline__)) u256 memory_word_count_word_u256_to_u256(u256 byte_len)
 {
   u256 quotient = word_div_word_u256_u256_to_u256_variant_2(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  u256 remainder = word_mod_word_u256_u256_to_u256_variant_2(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  bool eq_int_result_2_1941 = eq_u256(remainder, WORD_ZERO);
-  if (!eq_int_result_2_1941) {
+  if (!eq_u256((word_mod_word_u256_u256_to_u256_variant_2(byte_len, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}})), WORD_ZERO)) {
     quotient = word_add_word(quotient, WORD_ONE);
   }
   return quotient;
@@ -1121,8 +1069,7 @@ struct GasCharge memory_word_gas_cost_uint16_t_uint16_t_u256_uint64_t_to_struct_
   }
   u256 words;
   u256 quotient = word_div_word_u256_u256_to_u256_variant_2(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  u256 remainder = word_mod_word_u256_u256_to_u256_variant_2(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  if (eq_u256(remainder, WORD_ZERO)) {
+  if (eq_u256((word_mod_word_u256_u256_to_u256_variant_2(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}})), WORD_ZERO)) {
     words = quotient;
   } else {
     words = word_add_word(quotient, WORD_ONE);
@@ -1144,8 +1091,7 @@ struct GasCharge memory_word_gas_cost_uint16_t_uint8_t_u256_uint64_t_to_struct_G
   }
   u256 words;
   u256 quotient = word_div_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  u256 remainder = word_mod_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  if (eq_u256(remainder, WORD_ZERO)) {
+  if (eq_u256((word_mod_word_u256_u256_to_u256(size, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}})), WORD_ZERO)) {
     words = quotient;
   } else {
     words = word_add_word(quotient, WORD_ONE);
@@ -1166,22 +1112,18 @@ u256 pc_word_struct_CalldataSlice_uint8_t_uint8_t_to_u256(struct CalldataSlice i
   uint32_t start_offset = (uint32_t)start;
   uint8_t count = byte_count;
   uint32_t input_length = calldata_slice_length(input);
-  int64_t tmp_3_3047 = (int64_t)UINT8_C(31);
-  int64_t tmp_3_3048 = (int64_t)UINT8_C(1);
   int64_t byte_index = (int64_t)UINT8_C(0);
-  while (byte_index <= tmp_3_3047) {
-    uint8_t offset = (uint8_t)byte_index;
-    if (offset < count) {
+  while (byte_index <= (int64_t)UINT8_C(31)) {
+    if ((uint8_t)byte_index < count) {
       uint64_t next_byte;
-      if ((start_offset < input_length) && (offset < (input_length - start_offset))) {
-        next_byte = calldata_slice_byte(input, ((uint32_t)offset + (uint32_t)(uint8_t)start_offset));
+      if ((start_offset < input_length) && ((uint8_t)byte_index < (input_length - start_offset))) {
+        next_byte = calldata_slice_byte(input, ((uint32_t)(uint8_t)byte_index + (uint32_t)(uint8_t)start_offset));
       } else {
         next_byte = UINT64_C(0x00);
       }
-      u256 shifted = word_shift_left_u256_uint8_t_to_u256(value, UINT8_C(8));
-      value = word_add_word_u256_uint8_t_to_u256(shifted, (uint8_t)next_byte);
+      value = word_add_word_u256_uint8_t_to_u256((word_shift_left_u256_uint8_t_to_u256(value, UINT8_C(8))), (uint8_t)next_byte);
     }
-    byte_index = (byte_index + tmp_3_3048);
+    byte_index = (byte_index + (int64_t)UINT8_C(1));
   }
   return value;
 }
@@ -1200,50 +1142,34 @@ u256 pc_word_after_declared_field_struct_CalldataSlice_uint8_t_u256_uint8_t_to_u
 
 uint32_t state_gas_spill_add_uint32_t___int128_to_uint32_t(uint32_t left, __int128 right)
 {
-  uint32_t result_8_1298;
-  uint32_t room = state_gas_spill_room(left);
-  if (!(room < right)) {
-    result_8_1298 = (uint32_t)(right + (__int128)left);
-  } else {
-    fatal_error(ExecutionInvalid);
+  if (!((state_gas_spill_room(left)) < right)) {
+    return (uint32_t)(right + (__int128)left);
   }
-  return result_8_1298;
+  fatal_error(ExecutionInvalid);
 }
 
 uint32_t state_gas_spill_add_uint32_t_int64_t_to_uint32_t(uint32_t left, int64_t right)
 {
-  uint32_t result_8_1299;
-  uint32_t room = state_gas_spill_room(left);
-  if (right <= room) {
-    result_8_1299 = (uint32_t)(right + (int64_t)left);
-  } else {
-    fatal_error(ExecutionInvalid);
+  if (right <= (state_gas_spill_room(left))) {
+    return (uint32_t)(right + (int64_t)left);
   }
-  return result_8_1299;
+  fatal_error(ExecutionInvalid);
 }
 
 uint32_t state_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(uint32_t left, int64_t right)
 {
-  uint32_t result_8_1300;
-  uint32_t room = state_gas_spill_room_uint32_t_to_uint32_t(left);
-  if (right <= room) {
-    result_8_1300 = (uint32_t)(right + (int64_t)left);
-  } else {
-    fatal_error(ExecutionInvalid);
+  if (right <= (state_gas_spill_room_uint32_t_to_uint32_t(left))) {
+    return (uint32_t)(right + (int64_t)left);
   }
-  return result_8_1300;
+  fatal_error(ExecutionInvalid);
 }
 
 uint32_t state_gas_spill_add_uint32_t_uint32_t_to_uint32_t(uint32_t left, uint32_t right)
 {
-  uint32_t result_8_1301;
-  uint32_t room = state_gas_spill_room(left);
-  if ((int64_t)right <= (int64_t)room) {
-    result_8_1301 = (uint32_t)((uint64_t)left + (uint64_t)right);
-  } else {
-    fatal_error(ExecutionInvalid);
+  if ((int64_t)right <= (int64_t)(state_gas_spill_room(left))) {
+    return (uint32_t)((uint64_t)left + (uint64_t)right);
   }
-  return result_8_1301;
+  fatal_error(ExecutionInvalid);
 }
 
 uint32_t state_gas_spill_room_uint32_t_to_uint32_t(uint32_t left)

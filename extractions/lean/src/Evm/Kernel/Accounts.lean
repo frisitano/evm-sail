@@ -227,4 +227,3 @@ def k_clear_storage (a : (Vector (BitVec 8) 20)) : SailM Unit := do
   (storage_tx_clear a)
   let cleared := (account_clear_storage cur)
   (store_account a cleared)
-

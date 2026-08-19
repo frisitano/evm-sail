@@ -35,22 +35,6 @@ struct AddressResult {
   bool success;
 };
 
-#ifndef SAIL_FIXED_VECTOR_VECTOR_32_BITS_8_DEFINED
-#define SAIL_FIXED_VECTOR_VECTOR_32_BITS_8_DEFINED
-typedef struct vector_32_bits_8 {
-  size_t len;
-  uint64_t data[32];
-} vector_32_bits_8;
-#endif
-
-#ifndef SAIL_FIXED_VECTOR_VECTOR_20_BITS_8_DEFINED
-#define SAIL_FIXED_VECTOR_VECTOR_20_BITS_8_DEFINED
-typedef struct vector_20_bits_8 {
-  size_t len;
-  uint64_t data[20];
-} vector_20_bits_8;
-#endif
-
 
 #ifndef SAIL_U128_DEFINED
 #define SAIL_U128_DEFINED

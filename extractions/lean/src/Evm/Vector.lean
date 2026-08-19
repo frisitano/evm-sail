@@ -93,4 +93,3 @@ def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.r
     let res := loop_vars
     loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) + 7) (8 *i i) (GetElem?.getElem! v i))
   (pure loop_vars)
-

@@ -370,4 +370,3 @@ def block_logs_bloom_matches (logs : LogSeriesRef) (reference : (Sigma fun (k_of
   let reference := ((reference).2).2
   let logs_bloom ← do (bloom_add_logs EMPTY_LOGS_BLOOM logs)
   (logs_bloom_matches_ref logs_bloom ⟨_, ⟨_, reference⟩⟩)
-

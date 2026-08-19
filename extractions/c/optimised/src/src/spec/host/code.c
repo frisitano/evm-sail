@@ -3,8 +3,7 @@
 
 uint8_t * analyze_code(Bytes code, uint8_t fork)
 {
-  bool gteq_int_result_2_2448 = (bool)(fork >= Amsterdam);
-  return code_db_analyze_indexed(code, gteq_int_result_2_2448);
+  return code_db_analyze_indexed(code, (bool)(fork >= Amsterdam));
 }
 
 Bytes code_db_intern_input(Bytes bytes)
@@ -33,7 +32,6 @@ struct CodeFields code_db_resolve(bytes32 code_hash)
 bytes32 code_db_insert(Bytes code, uint8_t fork)
 {
   uint8_t * jumpdest_table = analyze_code(code, fork);
-  struct CodeFields analyzed = analyzed_code(code, jumpdest_table);
-  return code_db_store_indexed(analyzed);
+  return code_db_store_indexed((analyzed_code(code, jumpdest_table)));
 }
 

@@ -2165,13 +2165,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -2222,13 +2222,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -2279,13 +2279,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -2336,13 +2336,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -2393,13 +2393,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -2450,13 +2450,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -3089,13 +3089,13 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
                     let carried_account_context : AccountExecutionContext :=
                       (refresh_account_execution_context carried_account_context previous_address
                         carried_address)
-                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma
+                    (pure ((carried_account_context : AccountExecutionContext), (carried_address : (Vector (BitVec 8) 20)), (carried_calldata : CalldataSlice), (carried_caller : (Vector (BitVec 8) 20)), ((carried_code : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
-                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma
+                      (CodeFields initial_code_dependentWitness0 initial_code_dependentWitness1)))), (carried_code_address : (Vector (BitVec 8) 20)), (carried_depth : Nat), (carried_gas : Nat), (carried_is_static : Bool), (carried_memory_base : Nat), (carried_memory_height : Nat), (carried_pc : Nat), (carried_refund : Int), ((carried_returndata : (Sigma
                       fun (initial_code_dependentWitness0 : Nat) =>
                       (Sigma fun (initial_code_dependentWitness1 : Nat) =>
                       (OutputSliceFields initial_code_dependentWitness0 initial_code_dependentWitness1)))) : (Sigma
@@ -3273,4 +3273,3 @@ def run_frame_entry_encoded (carried_pc : Nat) (carried_gas : Nat) (carried_stat
               code := ⟨_, ⟨_, carried_code⟩⟩,
               calldata := carried_calldata,
               returndata := ⟨_, ⟨_, carried_returndata⟩⟩ }))
-

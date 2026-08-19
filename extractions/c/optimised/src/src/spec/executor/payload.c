@@ -13,8 +13,7 @@ bytes32 withdrawals_trie_root_(struct BoundedSszListRef wds)
 
 uint32_t expected_payload_excess_blob_gas(struct WitnessContext witness)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  return next_excess_blob_gas(execution_profile.protocol, witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas);
+  return next_excess_blob_gas((k_execution_profile).protocol, witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas);
 }
 
 bytes32 execution_requests_hash_(struct StatelessInputRef input_ref)
@@ -32,13 +31,11 @@ void validate_execution_payload(struct StatelessInput input, struct StatelessInp
   if (header.gas_limit < header.gas_used) {
     fatal_error(InvalidGasUsed);
   }
-  bool result_2_128 = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(witness.parent_hash, header.parent_hash);
-  if (result_2_128) {
+  if (neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(witness.parent_hash, header.parent_hash)) {
     fatal_error(InvalidParentHash);
   }
   uint32_t expected_excess_blob_gas = expected_payload_excess_blob_gas(witness);
-  bool result_2_131 = (bool)(profile.fork >= Cancun);
-  if (result_2_131 && (header.excess_blob_gas != expected_excess_blob_gas)) {
+  if ((profile.fork >= Cancun) && (header.excess_blob_gas != expected_excess_blob_gas)) {
     fatal_error(InvalidExcessBlobGas);
   }
   if (profile.fork >= Paris) {
@@ -62,8 +59,7 @@ void validate_execution_payload(struct StatelessInput input, struct StatelessInp
       block_access_list_hash = ZERO_HASH;
     }
     bytes32 computed_block_hash = block_header_hash_(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash);
-    bool result_2_136 = neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(computed_block_hash, payload.expected_block_hash);
-    if (result_2_136) {
+    if (neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(computed_block_hash, payload.expected_block_hash)) {
       fatal_error(InvalidBlockHash);
     }
     return;

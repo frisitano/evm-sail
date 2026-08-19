@@ -14,12 +14,10 @@ void run_block_start_system_calls(void)
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   struct ProtocolProfileFields profile = execution_profile.protocol;
   if (profile.fork >= Cancun) {
-    bytes32 result_2_225 = k_header.parent_beacon_block_root;
-    system_call(BEACON_ROOTS_ADDR, result_2_225);
+    system_call(BEACON_ROOTS_ADDR, (k_header.parent_beacon_block_root));
   }
   if (profile.fork >= Prague) {
-    bytes32 result_2_228 = k_header.parent_hash;
-    system_call(HISTORY_STORAGE_ADDR, result_2_228);
+    system_call(HISTORY_STORAGE_ADDR, (k_header.parent_hash));
     return;
   }
 }
@@ -44,22 +42,21 @@ struct BlockExecutionResult execute_block_transactions(struct BoundedSszListRef 
   Bytes remaining_deposits = expected_deposits;
   struct BoundedSszListCursor cursor = ssz_list_cursor(transactions);
   Bytes keys = public_keys;
-  bool initial_cursor_empty = ssz_list_cursor_empty(cursor);
-  bool cursor_has_item = (bool)(!initial_cursor_empty);
+  bool cursor_has_item = (bool)(!(ssz_list_cursor_empty(cursor)));
   while (cursor_has_item) {
     uint32_t i = cursor.index;
-    struct tuple_Bytes_BoundedSszListCursor ssz_list_pop_result_2_171 = ssz_list_pop(cursor);
-    cursor = ssz_list_pop_result_2_171.tup1;
-    Bytes keys_fields = keys;
+    Bytes _8_1503_8_1746;
+    struct BoundedSszListCursor _8_1504_8_1747 = ssz_list_pop(cursor, &_8_1503_8_1746);
+    cursor = _8_1504_8_1747;
     Bytes keys_fields_1_0;
-    if (public_key_length <= keys_fields.len) {
-      keys_fields_1_0 = keys_fields;
+    if (public_key_length <= keys.len) {
+      keys_fields_1_0 = keys;
     } else {
       fatal_error(WitnessDeficient);
     }
     Bytes public_key = stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(keys_fields_1_0, UINT8_C(0), PUBLIC_KEY_LENGTH);
     keys = stateless_input_slice_suffix_Bytes_uint8_t_to_Bytes(keys_fields_1_0, public_key_length);
-    struct TransactionFields tx = decode_transaction_(ssz_list_pop_result_2_171.tup0, public_key);
+    struct TransactionFields tx = decode_transaction_(_8_1503_8_1746, public_key);
     k_current_transaction_epoch = (i + UINT32_C(1));
     if (i == UINT8_C(0)) {
       tx0_to = tx.recipient;
@@ -70,44 +67,38 @@ struct BlockExecutionResult execute_block_transactions(struct BoundedSszListRef 
       if (((gas_limit - usage.execution) < allowance.regular) || ((gas_limit - usage.state) < allowance.total)) {
         fatal_error(GasUsedExceedsLimit);
       } else {
-        uint32_t next_blob_gas = block_blob_gas_add_uint8_t_uint32_t_uint32_t_to_uint32_t(profile.blob_schedule.max, blob_gas_acc, (UINT32_C(131072) * (uint32_t)tx.blob_hashes.count));
+        blob_gas_acc = block_blob_gas_add_uint8_t_uint32_t_uint32_t_to_uint32_t(profile.blob_schedule.max, blob_gas_acc, (UINT32_C(131072) * (uint32_t)tx.blob_hashes.count));
         struct ReceiptFields receipt = process_transaction(tx, allowance);
         struct BlockGasUsageFields next_usage = block_gas_usage_add_struct_BlockGasUsageFields_uint64_t_uint64_t_uint64_t_to_struct_BlockGasUsageFields(usage, receipt.execution_gas, receipt.state_gas, receipt.gas_used);
         gas_usage = next_usage;
         receipt_store_append(receipt, next_usage.receipts, i);
         remaining_deposits = authenticate_deposit_logs(receipt.logs, remaining_deposits);
-        blob_gas_acc = next_blob_gas;
       }
     } else if ((gas_limit - usage.execution) < allowance.total) {
       fatal_error(GasUsedExceedsLimit);
     } else {
-      uint32_t next_blob_gas_3_673;
+      uint32_t next_blob_gas_3_676;
       if (profile.fork < Cancun) {
-        next_blob_gas_3_673 = blob_gas_acc;
+        next_blob_gas_3_676 = blob_gas_acc;
       } else {
-        next_blob_gas_3_673 = block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, (UINT32_C(131072) * (uint32_t)tx.blob_hashes.count));
+        next_blob_gas_3_676 = block_blob_gas_add(profile.blob_schedule.max, blob_gas_acc, (UINT32_C(131072) * (uint32_t)tx.blob_hashes.count));
       }
-      struct ReceiptFields receipt_3_674 = process_transaction(tx, allowance);
-      struct BlockGasUsageFields next_usage_3_675 = block_gas_usage_add_struct_BlockGasUsageFields_uint64_t_uint8_t_uint64_t_to_struct_BlockGasUsageFields(usage, receipt_3_674.gas_used, UINT8_C(0), receipt_3_674.gas_used);
-      gas_usage = next_usage_3_675;
-      receipt_store_append(receipt_3_674, next_usage_3_675.receipts, i);
+      struct ReceiptFields receipt_3_677 = process_transaction(tx, allowance);
+      struct BlockGasUsageFields next_usage_3_678 = block_gas_usage_add_struct_BlockGasUsageFields_uint64_t_uint8_t_uint64_t_to_struct_BlockGasUsageFields(usage, receipt_3_677.gas_used, UINT8_C(0), receipt_3_677.gas_used);
+      gas_usage = next_usage_3_678;
+      receipt_store_append(receipt_3_677, next_usage_3_678.receipts, i);
       if (profile.fork >= Prague) {
-        remaining_deposits = authenticate_deposit_logs(receipt_3_674.logs, remaining_deposits);
+        remaining_deposits = authenticate_deposit_logs(receipt_3_677.logs, remaining_deposits);
       }
-      blob_gas_acc = next_blob_gas_3_673;
+      blob_gas_acc = next_blob_gas_3_676;
     }
-    bool cursor_empty = ssz_list_cursor_empty(cursor);
-    cursor_has_item = (bool)(!cursor_empty);
+    cursor_has_item = (bool)(!(ssz_list_cursor_empty(cursor)));
   }
   uint32_t remaining_deposits_length = stateless_input_slice_length(remaining_deposits);
-  bool result_2_212 = (bool)(profile.fork >= Prague);
-  if (result_2_212 && (remaining_deposits_length != UINT8_C(0))) {
+  if ((profile.fork >= Prague) && (remaining_deposits_length != UINT8_C(0))) {
     fatal_error(InvalidExecutionRequests);
   }
-  uint64_t header_gas_used;
-  bool result_2_221 = (bool)(profile.fork >= Amsterdam);
-  bool tmp_3_668 = (bool)(result_2_221 && (gas_usage.execution < gas_usage.state));
-  header_gas_used = tmp_3_668 ? gas_usage.state : gas_usage.execution;
+  uint64_t header_gas_used = (profile.fork >= Amsterdam) && (gas_usage.execution < gas_usage.state) ? gas_usage.state : gas_usage.execution;
   bytes32 receipts_root = receipt_store_root(transactions.count);
   uint64_t retained_logs_start = logs_tx_start();
   uint64_t retained_logs_count = logs_tx_count();
@@ -119,21 +110,12 @@ struct BlockExecutionResult execute_block_transactions(struct BoundedSszListRef 
 void apply_withdrawals(struct BoundedSszListRef withdrawals)
 {
   struct BoundedSszListRef rest = withdrawals;
-  while (true) {
-    bool tmp_3_644;
-    uint8_t result_2_162 = (uint8_t)rest.count;
-    tmp_3_644 = (bool)(result_2_162 != UINT8_C(0));
-    if (!tmp_3_644) {
-      break;
-    }
-    struct tuple_Bytes_BoundedSszListRef ssz_fixed_list_pop_result_2_163 = ssz_fixed_list_pop(rest, WD_SIZE);
-    rest = ssz_fixed_list_pop_result_2_163.tup1;
-    struct Withdrawal withdrawal = decode_withdrawal_(ssz_fixed_list_pop_result_2_163.tup0);
-    uint64_t amount = word_of_withdrawal_amount(withdrawal.amount);
-    u128 amount_in_wei;
-    u256 tmp_3_3761 = alu_mul(u256_of_fbits(amount), u256_of_fbits(UINT32_C(1000000000)));
-    amount_in_wei = u128_of_u256_unchecked(tmp_3_3761);
-    k_add_balance_bytes20_u128_to_unit(withdrawal.address, amount_in_wei);
+  while ((uint8_t)rest.count != UINT8_C(0)) {
+    Bytes _8_1551_8_1748;
+    struct BoundedSszListRef _8_1552_8_1749 = ssz_fixed_list_pop(rest, WD_SIZE, &_8_1551_8_1748);
+    rest = _8_1552_8_1749;
+    struct Withdrawal withdrawal = decode_withdrawal_(_8_1551_8_1748);
+    k_add_balance_bytes20_u128_to_unit(withdrawal.address, u128_mul_u64_u64(withdrawal.amount, UINT32_C(1000000000)));
   }
 }
 

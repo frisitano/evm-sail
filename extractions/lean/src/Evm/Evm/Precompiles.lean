@@ -512,4 +512,3 @@ def run_precompile_slice (num : PrecompileId) (input : CalldataSlice) : SailM Pr
   | .BlsMapFpToG1 => (run_bls_map_fp_to_g1 input)
   | .BlsMapFp2ToG2 => (run_bls_map_fp2_to_g2 input)
   | .P256Verify => (run_p256_verify input)
-

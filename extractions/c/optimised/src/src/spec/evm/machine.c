@@ -48,13 +48,10 @@ __int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_r
 
 __attribute__((__always_inline__)) struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k)
 {
-  struct ExecutionProfileFields execution_profile = k_execution_profile;
-  if (execution_profile.protocol.fork >= Amsterdam) {
-    struct FrameStatus Exceptional_result_2_2021 = Exceptional(k);
-    return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = Exceptional_result_2_2021});
+  if (k_execution_profile.protocol.fork >= Amsterdam) {
+    return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(k))});
   }
-  struct FrameStatus Exceptional_result_2_2022 = Exceptional(k);
-  return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = Exceptional_result_2_2022});
+  return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = (Exceptional(k))});
 }
 
 __attribute__((__always_inline__)) uint16_t stack_height(StackPointer top)
@@ -156,8 +153,7 @@ Bytes memory_code_slice(uint32_t base, uint32_t mem, uint32_t off, uint32_t len)
   }
   if ((mem <= (UINT32_C(4294967295) - base)) && ((len + off) <= mem)) {
     Bytes window = mem_view(base, mem, (len + off));
-    Bytes initcode = memory_sub_slice(window, off, len);
-    return code_db_intern_memory(initcode);
+    return code_db_intern_memory((memory_sub_slice(window, off, len)));
   }
   fatal_error(ExecutionInvalid);
 }
@@ -182,8 +178,7 @@ void mem_store(uint32_t base, uint32_t off, u256 w)
 
 void mem_store_byte(uint32_t base, uint32_t off, u256 w)
 {
-  uint64_t value = word_low_byte(w);
-  mem_set_byte(base, off, value);
+  mem_set_byte(base, off, (word_low_byte(w)));
 }
 
 void mem_mcopy(uint32_t base, uint32_t dst, uint32_t src, uint32_t len)
@@ -221,13 +216,13 @@ __attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_u
   stack_slot_write_StackPointer_uint8_t_u256_to_unit(top, n, w);
 }
 
-struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32 suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata)
+uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata, struct FrameCheckpoint *restrict framecheckpoint_8_1553, StackPointer *restrict stackpointer_8_1554, uint32_t *restrict field_2_8_1555)
 {
   k_journal_checkpoint();
-  StackPointer child_stack = operand_stack_push_empty_frame();
-  uint32_t child_memory_base = memory_absolute(memory_base, memory_height);
-  uint32_t child_memory_height = MEMORY_HEIGHT_ZERO;
-  return ((struct tuple_FrameCheckpoint_StackPointer_uint_32_uint_32){.tup0 = ((struct FrameCheckpoint){.calldata = calldata, .code = frame_code, .gas_remaining = gas_remaining, .memory_height = memory_height, .message = message, .pc = pc, .refund = frame_refund, .stack_top = stack_top, .state_gas_remaining = (uint64_t)state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = frame_status}), .tup1 = child_stack, .tup2 = child_memory_base, .tup3 = child_memory_height});
+  (*stackpointer_8_1554) = operand_stack_push_empty_frame();
+  (*field_2_8_1555) = memory_absolute(memory_base, memory_height);
+  (*framecheckpoint_8_1553) = ((struct FrameCheckpoint){.calldata = calldata, .code = frame_code, .gas_remaining = gas_remaining, .memory_height = memory_height, .message = message, .pc = pc, .refund = frame_refund, .stack_top = stack_top, .state_gas_remaining = (uint64_t)state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = frame_status});
+  return MEMORY_HEIGHT_ZERO;
 }
 
 __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs)
@@ -280,8 +275,7 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
 
 __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs)
 {
-  uint16_t height = stack_height(top);
-  if (STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
+  if (STACK_LIMIT < ((uint16_t)(((uint32_t)(stack_height(top)) - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;

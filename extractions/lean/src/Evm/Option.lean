@@ -69,4 +69,3 @@ def is_some (opt : (Option k_a)) : Bool :=
   match opt with
   | .some _ => true
   | none => false
-

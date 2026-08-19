@@ -438,12 +438,6 @@ def _store_output(state: HostState, payload: bytes) -> None:
 
 
 @dataclass(slots=True)
-class MemoryFrame:
-    base: int
-    length: int = 0
-
-
-@dataclass(slots=True)
 class JumpdestTable:
     code_length: int
     positions: set[int] = field(default_factory=set)
@@ -498,9 +492,6 @@ class HostState:
 
     stateless_input_bytes: bytes = b""
     memory_bytes: bytearray = field(default_factory=bytearray)
-    memory_frames: list[MemoryFrame] = field(
-        default_factory=lambda: [MemoryFrame(base=0)]
-    )
     code_bytes: bytearray = field(default_factory=bytearray)
     scratch_bytes: bytearray = field(default_factory=bytearray)
     output_bytes: bytearray = field(default_factory=bytearray)
@@ -641,14 +632,6 @@ def _slice_bytes(region: bytes | bytearray, value: Any) -> bytes:
     return bytes(region[start:end])
 
 
-def _current_memory_frame(state: HostState) -> MemoryFrame:
-    return state.memory_frames[-1]
-
-
-def _memory_absolute_offset(state: HostState, offset: int) -> int:
-    return _current_memory_frame(state).base + int(offset)
-
-
 def _memory_slice_bytes(value: Any) -> bytes:
     return _slice_bytes(get_state().memory_bytes, value)
 
@@ -687,7 +670,7 @@ def _copy_to_memory(
     count = int(length)
     payload = _region_bytes(kind, value)[int(source) : int(source) + count]
     payload = payload.ljust(count, b"\x00")
-    absolute = _memory_absolute_offset(state, destination)
+    absolute = int(destination)
     _ensure_length(state.memory_bytes, absolute + count)
     state.memory_bytes[absolute : absolute + count] = payload
 
@@ -950,60 +933,45 @@ def input_code_slices_equal(left: Any, right: Any) -> bool:
     return _region_bytes("input", left) == _region_bytes("code", right)
 
 
-def mem_read_byte(offset: int) -> Any:
-    state = get_state()
-    absolute = _memory_absolute_offset(state, offset)
-    value = state.memory_bytes[absolute] if absolute < len(state.memory_bytes) else 0
-    return _byte(value)
-
-
 def mem_write_byte(offset: int, value: Any) -> None:
     state = get_state()
-    absolute = _memory_absolute_offset(state, offset)
+    absolute = int(offset)
     _ensure_length(state.memory_bytes, absolute + 1)
     state.memory_bytes[absolute] = int(value)
-    _current_memory_frame(state).length = max(
-        _current_memory_frame(state).length, int(offset) + 1
-    )
 
 
-def mem_clear() -> None:
+def mem_expand(base: int, established: int, required: int) -> None:
     state = get_state()
-    state.memory_bytes.clear()
-    state.memory_frames[:] = [MemoryFrame(base=0)]
+    start = int(base) + int(established)
+    end = int(base) + int(required)
+    if int(base) < 0 or int(established) < 0 or end <= start:
+        raise ValueError("invalid EVM memory expansion")
+    _ensure_length(state.memory_bytes, end)
+    state.memory_bytes[start:end] = bytes(end - start)
 
 
-def mem_frame_enter() -> int:
-    state = get_state()
-    base = len(state.memory_bytes)
-    state.memory_frames.append(MemoryFrame(base=base))
-    return base
-
-
-def mem_frame_leave() -> None:
-    state = get_state()
-    if len(state.memory_frames) <= 1:
-        raise RuntimeError("cannot leave the root memory frame")
-    frame = state.memory_frames.pop()
-    del state.memory_bytes[frame.base:]
-
-
-def mem_expand(required: int) -> Any:
+def mem_view(base: int, established: int, required: int) -> Any:
     from evm.primitives.bytes import evm_memory_slice
 
     state = get_state()
-    frame = _current_memory_frame(state)
-    length = int(required)
-    _ensure_length(state.memory_bytes, frame.base + length)
-    frame.length = max(frame.length, length)
-    return evm_memory_slice(frame.base, length)
+    absolute_base = int(base)
+    established_length = int(established)
+    required_length = int(required)
+    if (
+        absolute_base < 0
+        or required_length < 0
+        or required_length > established_length
+        or absolute_base + established_length > len(state.memory_bytes)
+    ):
+        raise ValueError("invalid EVM memory view")
+    return evm_memory_slice(absolute_base, required_length)
 
 
 def mem_move(destination: int, source: int, length: int) -> None:
     state = get_state()
     count = int(length)
-    source_absolute = _memory_absolute_offset(state, source)
-    destination_absolute = _memory_absolute_offset(state, destination)
+    source_absolute = int(source)
+    destination_absolute = int(destination)
     payload = bytes(
         state.memory_bytes[source_absolute : source_absolute + count]
     ).ljust(count, b"\x00")
@@ -1013,19 +981,16 @@ def mem_move(destination: int, source: int, length: int) -> None:
 
 def mem_load_word(offset: int) -> int:
     state = get_state()
-    absolute = _memory_absolute_offset(state, offset)
+    absolute = int(offset)
     payload = bytes(state.memory_bytes[absolute : absolute + WORD_BYTES])
     return int.from_bytes(payload.ljust(WORD_BYTES, b"\x00"), "big")
 
 
 def mem_store_word(offset: int, value: int) -> None:
     state = get_state()
-    absolute = _memory_absolute_offset(state, offset)
+    absolute = int(offset)
     _ensure_length(state.memory_bytes, absolute + WORD_BYTES)
     state.memory_bytes[absolute : absolute + WORD_BYTES] = _word_bytes(value)
-    _current_memory_frame(state).length = max(
-        _current_memory_frame(state).length, int(offset) + WORD_BYTES
-    )
 
 
 # The reference reading of the opaque StackTop cursor token is the frame

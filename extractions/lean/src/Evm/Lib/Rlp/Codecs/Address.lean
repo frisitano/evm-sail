@@ -77,4 +77,3 @@ def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vect
   let address := (word_to_address digest_word)
   (rlp_encoder_rewind encoder)
   (pure address)
-

@@ -228,4 +228,3 @@ def code_db_resolve (code_hash : (Vector (BitVec 8) 32)) : SailM (Sigma fun (k_o
         (pure ((⟨_, ⟨_, code⟩⟩ : (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))))))
-

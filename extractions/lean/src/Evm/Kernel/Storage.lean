@@ -879,4 +879,3 @@ of the host's semantic checkpoint contract. -/
   k_ex549990_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex549991_ ∧ k_ex549991_ ≤ (2 ^ 256 - 1) -/
 def k_tstore (a : (Vector (BitVec 8) 20)) (s : Nat) (v : Nat) : SailM Unit := do
   (transient_store a s v)
-

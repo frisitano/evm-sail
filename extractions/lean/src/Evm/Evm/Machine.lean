@@ -477,4 +477,3 @@ def mem_keccak (base : Nat) (mem : Nat) (range : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, bytes⟩⟩ ← do (active_memory_slice base mem range.off range.len)
   let digest ← do (memory_keccak256 ⟨_, ⟨_, bytes⟩⟩)
   (pure (hash_to_word digest))
-

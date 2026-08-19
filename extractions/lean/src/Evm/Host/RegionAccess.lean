@@ -470,4 +470,3 @@ def calldata_slice_copy_word_offset (s : CalldataSlice) (dst : Nat) (off : Nat) 
     (stateless_input_slice_copy_word_offset ⟨_, ⟨_, bytes⟩⟩ dst off len)
   | .MemoryCalldata ⟨_, ⟨_, bytes⟩⟩ =>
     (memory_slice_copy_word_offset ⟨_, ⟨_, bytes⟩⟩ dst off len)
-

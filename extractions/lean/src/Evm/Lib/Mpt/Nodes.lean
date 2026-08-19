@@ -127,4 +127,3 @@ def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))
   else (fatal_error RlpDecode)
-

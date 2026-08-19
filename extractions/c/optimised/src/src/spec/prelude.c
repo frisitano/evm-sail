@@ -4,23 +4,10 @@
 const u256 ZERO_WORD = (u256){{UINT64_C(0), UINT64_C(0), UINT64_C(0), UINT64_C(0)}};
 
 
-const bytes20 ZERO_ADDRESS = {
-  .lanes = {
-      UINT64_C(0),
-      UINT64_C(0),
-      UINT64_C(0)
-  },
-};
+const bytes20 ZERO_ADDRESS = ((bytes20){0});
 
 
-const bytes32 ZERO_HASH = {
-  .lanes = {
-      UINT64_C(0),
-      UINT64_C(0),
-      UINT64_C(0),
-      UINT64_C(0)
-  },
-};
+const bytes32 ZERO_HASH = ((bytes32){0});
 
 
 const u256 WORD_ZERO = (u256){{UINT64_C(0), UINT64_C(0), UINT64_C(0), UINT64_C(0)}};
@@ -39,14 +26,12 @@ bool neq_bool(bool x, bool y)
 
 bool neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(bytes32 x, bytes32 y)
 {
-  bool eq_anything_result_2_2757 = eq_bytes32(y, x);
-  return (bool)(!eq_anything_result_2_2757);
+  return (bool)(!(eq_bytes32(y, x)));
 }
 
 bool neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C20__(bytes20 x, bytes20 y)
 {
-  bool eq_anything_result_2_2757 = eq_bytes20(y, x);
-  return (bool)(!eq_anything_result_2_2757);
+  return (bool)(!(eq_bytes20(y, x)));
 }
 
 u256 as_u256(u256 value)
@@ -114,8 +99,7 @@ __attribute__((__always_inline__)) bool word_is_zero(u256 w)
 
 bool word_nonzero(u256 w)
 {
-  bool is_zero = eq_u256(w, WORD_ZERO);
-  return (bool)(!is_zero);
+  return (bool)(!eq_u256(w, WORD_ZERO));
 }
 
 bool word_ult(u256 a, u256 b)
@@ -125,8 +109,7 @@ bool word_ult(u256 a, u256 b)
 
 bool word_ule(u256 a, u256 b)
 {
-  bool greater = word_ult(b, a);
-  return (bool)(!greater);
+  return (bool)(!(word_ult(b, a)));
 }
 
 uint8_t u64_bit_length_(uint64_t value)
@@ -136,21 +119,16 @@ uint8_t u64_bit_length_(uint64_t value)
 
 uint16_t word_bit_length(u256 value)
 {
-  uint16_t result_8_390;
   if (u256_extract_u64(value, (uint64_t)(UINT64_C(192))) != UINT8_C(0)) {
-    uint8_t u64_bit_length_result_2_2631 = u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(192))));
-    result_8_390 = ((uint16_t)((uint32_t)UINT16_C(192) + (uint32_t)(uint16_t)u64_bit_length_result_2_2631));
-  } else if (u256_extract_u64(value, (uint64_t)(UINT64_C(128))) != UINT8_C(0)) {
-    uint8_t u64_bit_length_result_2_2633 = u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(128))));
-    result_8_390 = ((uint16_t)u64_bit_length_result_2_2633 + (uint16_t)UINT8_C(128));
-  } else if (u256_extract_u64(value, (uint64_t)(UINT64_C(64))) != UINT8_C(0)) {
-    uint8_t u64_bit_length_result_2_2635 = u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(64))));
-    result_8_390 = ((uint16_t)u64_bit_length_result_2_2635 + (uint16_t)UINT8_C(64));
-  } else {
-    uint8_t tmp_3_3736 = u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(0))));
-    result_8_390 = (uint16_t)tmp_3_3736;
+    return ((uint16_t)((uint32_t)UINT16_C(192) + (uint32_t)(uint16_t)(u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(192)))))));
   }
-  return result_8_390;
+  if (u256_extract_u64(value, (uint64_t)(UINT64_C(128))) != UINT8_C(0)) {
+    return ((uint16_t)(u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(128))))) + (uint16_t)UINT8_C(128));
+  }
+  if (u256_extract_u64(value, (uint64_t)(UINT64_C(64))) != UINT8_C(0)) {
+    return ((uint16_t)(u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(64))))) + (uint16_t)UINT8_C(64));
+  }
+  return (uint16_t)(u64_bit_length_(u256_extract_u64(value, (uint64_t)(UINT64_C(0)))));
 }
 
 u256 word_mul_word(u256 a, u256 b)
@@ -186,30 +164,20 @@ __attribute__((__always_inline__)) uint8_t word_byte_length(u256 value)
 __attribute__((__always_inline__)) u256 word_arithmetic_shift_right(u256 value, uint16_t amount)
 {
   u256 shifted = word_shift_right(value, amount);
-  uint64_t sign_bit = word_bit(value, UINT8_C(255));
-  if (sign_bit == UINT64_C(0x1)) {
-    u256 sign_fill = word_shift_left(WORD_ALL_ONES, ((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)amount)));
-    shifted = word_or(shifted, sign_fill);
+  if ((word_bit(value, UINT8_C(255))) == UINT64_C(0x1)) {
+    shifted = word_or(shifted, (word_shift_left(WORD_ALL_ONES, ((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)amount)))));
   }
   return shifted;
 }
 
 u256 word_negate(u256 value)
 {
-  u256 result_8_398;
-  if (!u256_lt(WORD_ZERO, value)) {
-    result_8_398 = u256_sub(WORD_ZERO, value);
-  } else {
-    u256 sub_atom_result_2_2638 = u256_sub(value, WORD_ZERO);
-    result_8_398 = u256_of_u320_unchecked(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, sub_atom_result_2_2638)), u320_of_u64(UINT8_C(1))));
-  }
-  return result_8_398;
+  return !u256_lt(WORD_ZERO, value) ? u256_sub(WORD_ZERO, value) : u256_of_u320(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, u256_sub(value, WORD_ZERO))), u320_of_u64(UINT8_C(1))));
 }
 
 __attribute__((__always_inline__)) u256 word_abs(u256 value)
 {
-  uint64_t sign_bit = word_bit(value, UINT8_C(255));
-  if (sign_bit == UINT64_C(0x1)) {
+  if ((word_bit(value, UINT8_C(255))) == UINT64_C(0x1)) {
     return word_negate(value);
   }
   return value;
@@ -217,15 +185,15 @@ __attribute__((__always_inline__)) u256 word_abs(u256 value)
 
 __attribute__((__always_inline__)) bool word_slt(u256 a, u256 b)
 {
-  uint64_t word_bit_result_2_2582 = word_bit(a, UINT8_C(255));
-  uint64_t word_bit_result_2_2581 = word_bit(b, UINT8_C(255));
-  if (word_bit_result_2_2582 == UINT64_C(0x1)) {
-    if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  uint64_t a_sign = word_bit(a, UINT8_C(255));
+  uint64_t b_sign = word_bit(b, UINT8_C(255));
+  if (a_sign == UINT64_C(0x1)) {
+    if (b_sign == UINT64_C(0x1)) {
       return word_ult(a, b);
     }
     return true;
   }
-  if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  if (b_sign == UINT64_C(0x1)) {
     return false;
   }
   return word_ult(a, b);
@@ -284,8 +252,7 @@ u256 alu_sdiv(u256 a, u256 b)
   u256 quotient = word_div_nonzero(dividend_magnitude, divisor_magnitude);
   uint64_t dividend_sign = word_bit(a, UINT8_C(255));
   uint64_t divisor_sign = word_bit(b, UINT8_C(255));
-  bool result_2_2580 = neq_bool((bool)(dividend_sign == UINT64_C(0x1)), (bool)(divisor_sign == UINT64_C(0x1)));
-  if (result_2_2580) {
+  if (neq_bool((bool)(dividend_sign == UINT64_C(0x1)), (bool)(divisor_sign == UINT64_C(0x1)))) {
     quotient = word_negate(quotient);
   }
   return quotient;
@@ -311,8 +278,7 @@ u256 alu_smod(u256 a, u256 b)
     modulus_magnitude = b;
   }
   u256 remainder = word_mod_nonzero(dividend_magnitude, modulus_magnitude);
-  uint64_t dividend_sign = word_bit(a, UINT8_C(255));
-  if (dividend_sign == UINT64_C(0x1)) {
+  if ((word_bit(a, UINT8_C(255))) == UINT64_C(0x1)) {
     remainder = word_negate(remainder);
   }
   return remainder;
@@ -345,19 +311,11 @@ u256 alu_signextend(u256 byte_index, u256 value)
     uint8_t index = (uint8_t)u256_to_u64_unchecked(byte_index);
     u256 shifted_sign = word_shift_right(value, ((uint16_t)UINT8_C(7) + ((uint16_t)UINT8_C(8) * (uint16_t)index)));
     u256 isolated_sign = word_and(shifted_sign, WORD_ONE);
-    bool sign_set = eq_u256(isolated_sign, WORD_ONE);
     u256 low_mask_end = word_shift_left(WORD_ONE, ((uint16_t)((uint32_t)((uint16_t)UINT8_C(8) * (uint16_t)index) + (uint32_t)UINT16_C(8))));
-    u256 low_mask;
-    if (!u256_lt(low_mask_end, WORD_ONE)) {
-      low_mask = u256_sub(low_mask_end, WORD_ONE);
-    } else {
-      u256 sub_atom_result_2_2638 = u256_sub(WORD_ONE, low_mask_end);
-      low_mask = u256_of_u320_unchecked(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, sub_atom_result_2_2638)), u320_of_u64(UINT8_C(1))));
-    }
-    if (sign_set) {
+    u256 low_mask = !u256_lt(low_mask_end, WORD_ONE) ? u256_sub(low_mask_end, WORD_ONE) : u256_of_u320(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, u256_sub(WORD_ONE, low_mask_end))), u320_of_u64(UINT8_C(1))));
+    if (eq_u256(isolated_sign, WORD_ONE)) {
       u256 low_value = word_and(value, low_mask);
-      u256 high_mask = word_not(low_mask);
-      return word_or(low_value, high_mask);
+      return word_or(low_value, (word_not(low_mask)));
     }
     return word_and(value, low_mask);
   }
@@ -366,28 +324,26 @@ u256 alu_signextend(u256 byte_index, u256 value)
 
 u256 alu_lt(u256 a, u256 b)
 {
-  bool result = word_ult(a, b);
-  return word_of_bool(result);
+  return word_of_bool((word_ult(a, b)));
 }
 
 u256 alu_gt(u256 a, u256 b)
 {
-  bool result = word_ult(b, a);
-  return word_of_bool(result);
+  return word_of_bool((word_ult(b, a)));
 }
 
 u256 alu_slt(u256 a, u256 b)
 {
   bool result;
-  uint64_t word_bit_result_2_2582 = word_bit(a, UINT8_C(255));
-  uint64_t word_bit_result_2_2581 = word_bit(b, UINT8_C(255));
-  if (word_bit_result_2_2582 == UINT64_C(0x1)) {
-    if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  uint64_t a_sign = word_bit(a, UINT8_C(255));
+  uint64_t b_sign = word_bit(b, UINT8_C(255));
+  if (a_sign == UINT64_C(0x1)) {
+    if (b_sign == UINT64_C(0x1)) {
       result = word_ult(a, b);
     } else {
       result = true;
     }
-  } else if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  } else if (b_sign == UINT64_C(0x1)) {
     result = false;
   } else {
     result = word_ult(a, b);
@@ -398,15 +354,15 @@ u256 alu_slt(u256 a, u256 b)
 u256 alu_sgt(u256 a, u256 b)
 {
   bool result;
-  uint64_t word_bit_result_2_2582 = word_bit(b, UINT8_C(255));
-  uint64_t word_bit_result_2_2581 = word_bit(a, UINT8_C(255));
-  if (word_bit_result_2_2582 == UINT64_C(0x1)) {
-    if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  uint64_t a_sign = word_bit(b, UINT8_C(255));
+  uint64_t b_sign = word_bit(a, UINT8_C(255));
+  if (a_sign == UINT64_C(0x1)) {
+    if (b_sign == UINT64_C(0x1)) {
       result = word_ult(b, a);
     } else {
       result = true;
     }
-  } else if (word_bit_result_2_2581 == UINT64_C(0x1)) {
+  } else if (b_sign == UINT64_C(0x1)) {
     result = false;
   } else {
     result = word_ult(b, a);
@@ -421,8 +377,7 @@ u256 alu_eq(u256 a, u256 b)
 
 u256 alu_iszero(u256 a)
 {
-  bool result = eq_u256(a, WORD_ZERO);
-  return word_of_bool(result);
+  return word_of_bool(eq_u256(a, WORD_ZERO));
 }
 
 u256 alu_and(u256 a, u256 b)
@@ -449,8 +404,7 @@ u256 alu_byte(u256 i, u256 x)
 {
   if (u256_lt_u64(i, UINT8_C(32))) {
     u256 shifted = word_shift_right(x, ((uint16_t)UINT8_C(8) * ((uint16_t)UINT8_C(31) - (uint16_t)(uint8_t)u256_to_u64_unchecked(i))));
-    uint64_t result_byte = word_low_byte(shifted);
-    return u256_of_fbits((uint8_t)result_byte);
+    return u256_of_fbits((uint8_t)(word_low_byte(shifted)));
   }
   return WORD_ZERO;
 }
@@ -475,15 +429,12 @@ u256 alu_sar(u256 shift_amt, u256 v)
 {
   if (u256_lt_u64(shift_amt, UINT16_C(256))) {
     u256 shifted = word_shift_right(v, (uint16_t)u256_to_u64_unchecked(shift_amt));
-    uint64_t sign_bit = word_bit(v, UINT8_C(255));
-    if (sign_bit == UINT64_C(0x1)) {
-      u256 sign_fill = word_shift_left(WORD_ALL_ONES, ((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)(uint16_t)u256_to_u64_unchecked(shift_amt))));
-      shifted = word_or(shifted, sign_fill);
+    if ((word_bit(v, UINT8_C(255))) == UINT64_C(0x1)) {
+      shifted = word_or(shifted, (word_shift_left(WORD_ALL_ONES, ((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)(uint16_t)u256_to_u64_unchecked(shift_amt))))));
     }
     return shifted;
   }
-  uint64_t sign_bit_8_4 = word_bit(v, UINT8_C(255));
-  if (sign_bit_8_4 == UINT64_C(0x1)) {
+  if ((word_bit(v, UINT8_C(255))) == UINT64_C(0x1)) {
     return WORD_ALL_ONES;
   }
   return WORD_ZERO;
@@ -491,8 +442,7 @@ u256 alu_sar(u256 shift_amt, u256 v)
 
 u256 alu_clz(u256 x)
 {
-  uint16_t bit_length = word_bit_length(x);
-  return u256_uint16_t_to_u256(((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)bit_length)));
+  return u256_uint16_t_to_u256(((uint16_t)((uint32_t)UINT16_C(256) - (uint32_t)(word_bit_length(x)))));
 }
 
 void initialize_registers(void)
@@ -552,27 +502,20 @@ u256 word_add_word_u256_uint8_t_to_u256(u256 left, uint8_t right)
 
 uint16_t word_bit_length_u128_to_uint16_t(u128 value)
 {
-  uint16_t result_8_1365;
   if (u128_extract_u64(value, (uint64_t)(UINT64_C(64))) != UINT8_C(0)) {
-    uint8_t u64_bit_length_result_2_2635 = u64_bit_length_(u128_extract_u64(value, (uint64_t)(UINT64_C(64))));
-    result_8_1365 = ((uint16_t)u64_bit_length_result_2_2635 + (uint16_t)UINT8_C(64));
-  } else {
-    uint8_t tmp_3_3836 = u64_bit_length_(u128_extract_u64(value, (uint64_t)(UINT64_C(0))));
-    result_8_1365 = (uint16_t)tmp_3_3836;
+    return ((uint16_t)(u64_bit_length_(u128_extract_u64(value, (uint64_t)(UINT64_C(64))))) + (uint16_t)UINT8_C(64));
   }
-  return result_8_1365;
+  return (uint16_t)(u64_bit_length_(u128_extract_u64(value, (uint64_t)(UINT64_C(0)))));
 }
 
 uint16_t word_bit_length_uint64_t_to_uint16_t(uint64_t value)
 {
-  uint8_t tmp_3_3837 = u64_bit_length_((value >> UINT64_C(0)));
-  return (uint16_t)tmp_3_3837;
+  return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
 }
 
 uint16_t word_bit_length_uint8_t_to_uint16_t(uint8_t value)
 {
-  uint8_t tmp_3_3838 = u64_bit_length_((value >> UINT64_C(0)));
-  return (uint16_t)tmp_3_3838;
+  return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
 }
 
 __attribute__((__always_inline__)) uint8_t word_byte_length_u128_to_uint8_t(u128 value)
@@ -709,8 +652,7 @@ __attribute__((__always_inline__)) u256 word_sub_word_u256_uint8_t_to_u256(u256 
 
 bool word_ule_uint8_t_u256_to_bool(uint8_t a, u256 b)
 {
-  bool greater = word_ult_u256_uint8_t_to_bool(b, a);
-  return (bool)(!greater);
+  return (bool)(!(word_ult_u256_uint8_t_to_bool(b, a)));
 }
 
 bool word_ult_u256_uint8_t_to_bool(u256 a, uint8_t b)

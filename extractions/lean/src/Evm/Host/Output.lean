@@ -196,4 +196,3 @@ def output_buffer_words (first : Nat) (second : Nat) : SailM (Sigma fun (k_off :
     (pure ((⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ : (Sigma fun (k_off : Nat) =>
       (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
       (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))))
-

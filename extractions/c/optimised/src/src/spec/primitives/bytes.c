@@ -48,68 +48,46 @@ uint32_t stateless_input_slice_length(Bytes s)
 
 void create_letbind_26(void) {
 
-  Bytes let_value_3_32;
-  Bytes tmp_3_31;
-  tmp_3_31.bytes = NULL;
-  tmp_3_31.len = UINT32_C(0);
-  let_value_3_32 = tmp_3_31;
-  EMPTY_STATELESS_INPUT_SLICE = let_value_3_32;
+  EMPTY_STATELESS_INPUT_SLICE.bytes = NULL;
+  EMPTY_STATELESS_INPUT_SLICE.len = UINT32_C(0);
 }
 void kill_letbind_26(void) {
 }
 
 void create_letbind_27(void) {
 
-  Bytes let_value_3_34;
-  Bytes tmp_3_33;
-  tmp_3_33.bytes = NULL;
-  tmp_3_33.len = UINT32_C(0);
-  let_value_3_34 = tmp_3_33;
-  EMPTY_SCRATCH_SLICE = let_value_3_34;
+  EMPTY_SCRATCH_SLICE.bytes = NULL;
+  EMPTY_SCRATCH_SLICE.len = UINT32_C(0);
 }
 void kill_letbind_27(void) {
 }
 
 void create_letbind_28(void) {
 
-  Bytes let_value_3_36;
-  Bytes tmp_3_35;
-  tmp_3_35.bytes = NULL;
-  tmp_3_35.len = UINT32_C(0);
-  let_value_3_36 = tmp_3_35;
-  EMPTY_EVM_MEMORY_SLICE = let_value_3_36;
+  EMPTY_EVM_MEMORY_SLICE.bytes = NULL;
+  EMPTY_EVM_MEMORY_SLICE.len = UINT32_C(0);
 }
 void kill_letbind_28(void) {
 }
 
 void create_letbind_29(void) {
 
-  Bytes let_value_3_38;
-  Bytes tmp_3_37;
-  tmp_3_37.bytes = NULL;
-  tmp_3_37.len = UINT32_C(0);
-  let_value_3_38 = tmp_3_37;
-  EMPTY_CODE_REGION_SLICE = let_value_3_38;
+  EMPTY_CODE_REGION_SLICE.bytes = NULL;
+  EMPTY_CODE_REGION_SLICE.len = UINT32_C(0);
 }
 void kill_letbind_29(void) {
 }
 
 void create_letbind_31(void) {
 
-  Bytes let_value_3_42;
-  Bytes tmp_3_41;
-  tmp_3_41.bytes = NULL;
-  tmp_3_41.len = UINT32_C(0);
-  let_value_3_42 = tmp_3_41;
-  EMPTY_OUTPUT_SLICE = let_value_3_42;
+  EMPTY_OUTPUT_SLICE.bytes = NULL;
+  EMPTY_OUTPUT_SLICE.len = UINT32_C(0);
 }
 void kill_letbind_31(void) {
 }
 
 void create_letbind_32(void) {
-
-  struct CalldataSlice let_value_3_43 = InputCalldata(EMPTY_STATELESS_INPUT_SLICE);
-  EMPTY_CALLDATA = let_value_3_43;
+    EMPTY_CALLDATA = (InputCalldata(EMPTY_STATELESS_INPUT_SLICE));
 }
 void kill_letbind_32(void) {
 }
@@ -153,17 +131,15 @@ struct CalldataSlice calldata_sub_slice(struct CalldataSlice s, uint8_t off, uin
     if (((uint64_t)len + (uint64_t)off) > bytes.len) {
       __builtin_trap();
     }
-    Bytes subslice = stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes, off, len);
-    return InputCalldata(subslice);
+    return InputCalldata((stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes, off, len)));
   }
   case Kind_MemoryCalldata:
   {
-    Bytes bytes_3_3512 = s.variants.MemoryCalldata;
-    if (((uint64_t)len + (uint64_t)off) > bytes_3_3512.len) {
+    Bytes bytes_3_3511 = s.variants.MemoryCalldata;
+    if (((uint64_t)len + (uint64_t)off) > bytes_3_3511.len) {
       __builtin_trap();
     }
-    Bytes subslice_3_3513 = memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3512, off, len);
-    return MemoryCalldata(subslice_3_3513);
+    return MemoryCalldata((memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3511, off, len)));
   }
   }
 }

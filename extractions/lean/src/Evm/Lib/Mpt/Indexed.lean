@@ -201,4 +201,3 @@ def rlp_index_cursor_advance (cursor : (RlpIndexCursor k_maximum)) : SailM (RlpI
 def rlp_index_cursor_pop (cursor : (RlpIndexCursor k_maximum)) : SailM ((RlpIndexItem k_maximum) × (RlpIndexCursor k_maximum)) := do
   let item ← do (rlp_index_cursor_peek cursor)
   (pure (item, (← (rlp_index_cursor_advance cursor))))
-

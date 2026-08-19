@@ -1070,11 +1070,6 @@ namespace Evm
 host stores that the C model keeps behind its FFI boundary.  Keeping this
 state explicit makes ordinary memory and database operations executable Lean
 definitions; only genuine cryptographic accelerators remain external. -/
-structure MemoryFrame where
-  base : Nat
-  established : Nat
-  deriving Inhabited
-
 /-- One record of the block-lifetime log store.  The payload stays in the log
 data arena; the row keeps only its span. -/
 structure LogRecordRow where
@@ -1103,7 +1098,6 @@ structure JournalFrame where
 structure HostState where
   inputBytes : Array byte
   memoryBytes : Array byte
-  memoryFrames : List MemoryFrame
   scratchBytes : Array byte
   codeBytes : Array byte
   logBytes : Array byte
@@ -1144,7 +1138,6 @@ structure HostState where
 def initialHostState : HostState where
   inputBytes := #[]
   memoryBytes := #[]
-  memoryFrames := [{ base := 0, established := 0 }]
   scratchBytes := #[]
   codeBytes := #[]
   logBytes := #[]
@@ -1423,14 +1416,12 @@ def scratch_slice_load_n_word
     SailM word := do
   pure (spanWord (scratchBytesOf (← get) s) off n)
 
-/-! ### EVM memory -/
+/-! ### EVM memory
 
-private def currentMemoryFrame (state : HostState) : MemoryFrame :=
-  state.memoryFrames.head?.getD default
-
-private def replaceCurrentMemoryFrame
-    (state : HostState) (frame : MemoryFrame) : HostState :=
-  { state with memoryFrames := frame :: state.memoryFrames.drop 1 }
+Sail carries the active frame's absolute arena base and relative established
+height.  The host state therefore owns only the shared byte arena: every
+crossing below receives an absolute position, and `mem_expand` is the sole
+operation that materializes a newly established range. -/
 
 private def zeroMemoryRange
     (bytes : Array byte) (start count : Nat) : Array byte :=
@@ -1438,49 +1429,34 @@ private def zeroMemoryRange
     (fun result index => result.set! (start + index) 0)
     (ensureArraySize bytes (start + count))
 
-private def establishMemory (required : Nat) : SailM MemoryFrame := do
-  let state ← get
-  let frame := currentMemoryFrame state
-  if required ≤ frame.established then
-    pure frame
-  else
-    let bytes :=
-      zeroMemoryRange state.memoryBytes
-        (frame.base + frame.established) (required - frame.established)
-    let frame := { frame with established := required }
-    set (replaceCurrentMemoryFrame { state with memoryBytes := bytes } frame)
-    pure frame
-
 private def copyIntoMemory
-    (values : List byte) (dst : memory_pointer) : SailM Unit := do
-  let frame ← establishMemory (dst + values.length)
+    (values : List byte) (dst : memory_base) : SailM Unit := do
   modify fun state =>
     { state with
-      memoryBytes :=
-        writeArrayBytes state.memoryBytes (frame.base + dst) values }
+      memoryBytes := writeArrayBytes state.memoryBytes dst values }
 
 private def copySpanIntoMemory
-    (bytes : List byte) (dst : memory_pointer) (src len : Nat) : SailM Unit :=
+    (bytes : List byte) (dst : memory_base) (src len : Nat) : SailM Unit :=
   copyIntoMemory ((List.range len).map fun index =>
     bytes.getD (src + index) 0) dst
 
 def stateless_input_copy_to_memory
-    (s : StatelessInputSlice) (dst : memory_pointer)
+    (s : StatelessInputSlice) (dst : memory_base)
     (off : stateless_input_length) (len : memory_length) : SailM Unit := do
   copySpanIntoMemory (inputBytesOf (← get) s) dst off len
 
 def memory_slice_copy_to_memory
-    (s : EvmMemorySlice) (dst : memory_pointer) (off : memory_length)
+    (s : EvmMemorySlice) (dst : memory_base) (off : memory_length)
     (len : memory_length) : SailM Unit := do
   copySpanIntoMemory (memoryBytesOf (← get) s) dst off len
 
 def code_region_copy_to_memory
-    (s : CodeRegionSlice) (dst : memory_pointer) (off : code_length)
+    (s : CodeRegionSlice) (dst : memory_base) (off : code_length)
     (len : memory_length) : SailM Unit := do
   copySpanIntoMemory (codeBytesOf (← get) s) dst off len
 
 def output_slice_copy_to_memory
-    (s : OutputSlice) (dst : memory_pointer) (off : output_length)
+    (s : OutputSlice) (dst : memory_base) (off : output_length)
     (len : memory_length) : SailM Unit := do
   copySpanIntoMemory (outputBytesOf (← get) s) dst off len
 
@@ -1499,71 +1475,42 @@ def input_code_slices_equal
   let state ← get
   pure (inputBytesOf state left == codeBytesOf state right)
 
-def mem_read_byte (off : memory_pointer) : SailM byte := do
-  let state ← get
-  let frame := currentMemoryFrame state
-  pure <| if off < frame.established then
-    state.memoryBytes.getD (frame.base + off) 0
-  else
-    0
-
-def mem_write_byte (off : memory_pointer) (value : byte) : SailM Unit := do
-  let frame ← establishMemory (off + 1)
+def mem_write_byte (off : memory_base) (value : byte) : SailM Unit := do
   modify fun state =>
     { state with
-      memoryBytes := writeArrayByte state.memoryBytes (frame.base + off) value }
+      memoryBytes := writeArrayByte state.memoryBytes off value }
 
-def mem_clear (_ : Unit) : SailM Unit :=
-  modify fun state =>
-    { state with memoryFrames := [{ base := 0, established := 0 }] }
-
-def mem_frame_enter (_ : Unit) : SailM memory_pointer := do
-  let state ← get
-  let parent := currentMemoryFrame state
-  let base := parent.base + parent.established
-  set { state with
-    memoryFrames := { base := base, established := 0 } :: state.memoryFrames }
-  pure base
-
-def mem_frame_leave (_ : Unit) : SailM Unit :=
+def mem_expand
+    (base : memory_base) (established required : memory_length) :
+    SailM Unit :=
   modify fun state =>
     { state with
-      memoryFrames :=
-        match state.memoryFrames with
-        | _ :: parent :: rest => parent :: rest
-        | frames => frames }
+      memoryBytes := zeroMemoryRange state.memoryBytes
+        (base + established) (required - established) }
 
-def mem_expand (required : Nat) :
+def mem_view
+    (base : memory_base) (_established required : memory_length) :
     SailM (Sigma fun (k_off : Nat) =>
-      Sigma fun (k_len : Nat) => EvmMemorySliceFields k_off k_len) := do
-  let frame ← establishMemory required
-  pure ⟨frame.base, ⟨required, {}⟩⟩
+      Sigma fun (k_len : Nat) => EvmMemorySliceFields k_off k_len) :=
+  pure ⟨base, ⟨required, {}⟩⟩
 
 def mem_move
-    (dst : memory_pointer) (src : memory_pointer) (len : memory_length) :
+    (dst : memory_base) (src : memory_base) (len : memory_length) :
     SailM Unit := do
-  let frame ← establishMemory (max (src + len) (dst + len))
   let state ← get
-  let values := readArrayBytes state.memoryBytes (frame.base + src) len
+  let values := readArrayBytes state.memoryBytes src len
   set { state with
-    memoryBytes :=
-      writeArrayBytes state.memoryBytes (frame.base + dst) values }
+    memoryBytes := writeArrayBytes state.memoryBytes dst values }
 
-def mem_load_word (off : memory_pointer) : SailM word := do
+def mem_load_word (off : memory_base) : SailM word := do
   let state ← get
-  let frame := currentMemoryFrame state
   pure <| bytesToWord <| (List.range 32).map fun index =>
-    if off + index < frame.established then
-      state.memoryBytes.getD (frame.base + off + index) 0
-    else
-      0
+    state.memoryBytes.getD (off + index) 0
 
-def mem_store_word (off : memory_pointer) (value : word) : SailM Unit := do
-  let frame ← establishMemory (off + 32)
+def mem_store_word (off : memory_base) (value : word) : SailM Unit := do
   modify fun state =>
     { state with
-      memoryBytes :=
-        writeArrayBytes state.memoryBytes (frame.base + off) (wordBytes value) }
+      memoryBytes := writeArrayBytes state.memoryBytes off (wordBytes value) }
 
 /-! ### The scratch arena
 

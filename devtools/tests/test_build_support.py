@@ -132,7 +132,7 @@ class ArtifactTests(unittest.TestCase):
             root = Path(temporary)
             source = root / "Model.lean"
             source.write_text(
-                "def prefix := 1\ndef prefix_sum := prefix + 1\n-- prefixing\n",
+                "def prefix := 1\ndef prefix_sum := prefix + 1\n-- prefixing\n\n",
                 encoding="utf-8",
             )
             self.assertEqual(normalize_lean_tree(root), 2)
@@ -150,11 +150,21 @@ class ArtifactTests(unittest.TestCase):
                 "\n".join(
                     ["def prefix := 1"]
                     + ["let ⟨_, ⟨_, carried_memory⟩⟩ : SigmaType :=\n  (tup__7 : SigmaType)"] * 14
+                    + [
+                        "(pure ((⟨_, ⟨_, carried_code⟩⟩ : (Sigma\n"
+                        "  fun (initial_code_dependentWitness0 : Nat) => SigmaType))))"
+                    ]
+                    * 7
+                    + [
+                        "(pure ((⟨_, ⟨_, carried_returndata⟩⟩ : (Sigma\n"
+                        "  fun (initial_code_dependentWitness0 : Nat) => SigmaType))))"
+                    ]
+                    * 7
                 )
                 + "\n",
                 encoding="utf-8",
             )
-            self.assertEqual(normalize_lean_tree(root), 15)
+            self.assertEqual(normalize_lean_tree(root), 29)
             normalized = interpreter.read_text(encoding="utf-8")
             self.assertEqual(normalized.count("let carried_memory : SigmaType"), 14)
             self.assertEqual(
@@ -162,6 +172,8 @@ class ArtifactTests(unittest.TestCase):
                 0,
             )
             self.assertIn("let carried_memory : SigmaType", normalized)
+            self.assertEqual(normalized.count("⟨_, ⟨_, carried_code⟩⟩"), 0)
+            self.assertEqual(normalized.count("⟨_, ⟨_, carried_returndata⟩⟩"), 0)
 
     def test_lean_normalization_repairs_known_transaction_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -138,4 +138,3 @@ def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat)
   let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_key)
   let bytes := (code_bytes code)
   (code_slice_copy_word_offset ⟨_, ⟨_, bytes⟩⟩ dst off len)
-

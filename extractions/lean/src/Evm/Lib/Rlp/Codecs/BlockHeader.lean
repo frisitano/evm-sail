@@ -196,4 +196,3 @@ def block_header_hash (header : BlockHeader) (transactions_root : (Vector (BitVe
   let block_hash ← do (scratch_keccak256 ⟨_, ⟨_, encoded⟩⟩)
   (rlp_encoder_rewind encoder)
   (pure block_hash)
-

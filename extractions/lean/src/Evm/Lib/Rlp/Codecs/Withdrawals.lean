@@ -101,4 +101,3 @@ def withdrawal_rlp (withdrawal : (Sigma fun (k_off : Nat) =>
   (rlp_write_input_slice ⟨_, ⟨_, address⟩⟩)
   (rlp_write_uint_word amount)
   (rlp_encoder_finish encoder)
-

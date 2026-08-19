@@ -282,8 +282,7 @@ bool precompile_active_at_fork(enum PrecompileId n)
 
 enum PrecompileId precompile_id_if_active(enum PrecompileId candidate)
 {
-  bool active = precompile_active_at_fork(candidate);
-  if (active) {
+  if (precompile_active_at_fork(candidate)) {
     return candidate;
   }
   return NotPrecompile;
@@ -361,8 +360,7 @@ struct PrecompileResult precompile_failure(void)
 struct PrecompileResult copied_result(struct CalldataSlice data)
 {
   Bytes output = freeze_calldata_output(data);
-  uint32_t input_length = calldata_slice_length(data);
-  if (output.len == input_length) {
+  if (output.len == (calldata_slice_length(data))) {
     return precompile_success(output);
   }
   return precompile_failure();
@@ -370,8 +368,8 @@ struct PrecompileResult copied_result(struct CalldataSlice data)
 
 struct PrecompileResult boolean_result(bool value)
 {
-  u256 result_word = value ? WORD_ONE : WORD_ZERO;
-  Bytes output = output_buffer_word(result_word);
+  u256 encoded_word = value ? WORD_ONE : WORD_ZERO;
+  Bytes output = output_buffer_word(encoded_word);
   return precompile_success(output);
 }
 
@@ -417,28 +415,11 @@ struct PrecompileResult run_modexp(struct CalldataSlice input)
   if (u256_eq_u64(modulus_len, UINT8_C(0))) {
     return precompile_success(EMPTY_OUTPUT_SLICE);
   }
-  bool lt_int_result_2_1819 = u64_lt_u256(ACCELERATOR_INPUT_MAX, base_len);
-  bool tmp_3_2963;
-  if (lt_int_result_2_1819) {
-    tmp_3_2963 = true;
-  } else {
-    bool lt_int_result_2_1818 = u64_lt_u256(ACCELERATOR_INPUT_MAX, exponent_len);
-    tmp_3_2963 = (bool)(lt_int_result_2_1818 || u64_lt_u256(ACCELERATOR_INPUT_MAX, modulus_len));
-  }
-  if (tmp_3_2963) {
+  if ((u64_lt_u256(ACCELERATOR_INPUT_MAX, base_len) || (u64_lt_u256(ACCELERATOR_INPUT_MAX, exponent_len) || u64_lt_u256(ACCELERATOR_INPUT_MAX, modulus_len))) || (ACCELERATOR_INPUT_MAX < ((uint32_t)u256_to_u64_unchecked(modulus_len) + (uint32_t)u320_to_u64_unchecked(u320_add(u320_of_u64(((uint32_t)u256_to_u64_unchecked(base_len) + UINT32_C(96))), u320_of_u64((uint32_t)u256_to_u64_unchecked(exponent_len))))))) {
     return precompile_failure();
   }
-  uint32_t bounded_base = (uint32_t)u256_to_u64(base_len);
-  uint32_t bounded_exponent = (uint32_t)u256_to_u64(exponent_len);
-  uint32_t bounded_modulus = (uint32_t)u256_to_u64(modulus_len);
-  uint32_t input_end;
-  uint32_t result_2_1823 = (uint32_t)u320_to_u64(u320_add(u320_of_u64((bounded_base + UINT32_C(96))), u320_of_u64(bounded_exponent)));
-  input_end = (uint32_t)u320_to_u64_unchecked(u320_add(u320_of_u64(result_2_1823), u320_of_u64(bounded_modulus)));
-  if (ACCELERATOR_INPUT_MAX < input_end) {
-    return precompile_failure();
-  }
-  bool success = accelerator_modexp(input, bounded_base, bounded_exponent, bounded_modulus);
-  return accelerator_result_bool_uint32_t_to_struct_PrecompileResult(success, bounded_modulus);
+  bool success = accelerator_modexp(input, (uint32_t)u256_to_u64_unchecked(base_len), (uint32_t)u256_to_u64_unchecked(exponent_len), (uint32_t)u256_to_u64_unchecked(modulus_len));
+  return accelerator_result_bool_uint32_t_to_struct_PrecompileResult(success, (uint32_t)u256_to_u64_unchecked(modulus_len));
 }
 
 struct PrecompileResult pairing_result(uint8_t result)
@@ -453,8 +434,7 @@ struct PrecompileResult run_blake2f(struct CalldataSlice input)
 {
   uint64_t final_byte = calldata_slice_byte_struct_CalldataSlice_uint8_t_to_uint64_t(input, BLAKE2F_FINAL_BLOCK_OFFSET);
   uint32_t input_length = calldata_slice_length(input);
-  bool neq_int_result_2_1812 = (bool)(input_length != BLAKE2F_INPUT_LENGTH);
-  if (neq_int_result_2_1812 || ((final_byte != UINT64_C(0x00)) && (final_byte != UINT64_C(0x01)))) {
+  if ((input_length != BLAKE2F_INPUT_LENGTH) || ((final_byte != UINT64_C(0x00)) && (final_byte != UINT64_C(0x01)))) {
     return precompile_failure();
   }
   uint8_t final_block = final_byte == UINT64_C(0x00) ? UINT8_C(0) : UINT8_C(1);
@@ -466,22 +446,18 @@ struct PrecompileResult run_blake2f(struct CalldataSlice input)
 bool kzg_versioned_hash_matches(struct CalldataSlice input)
 {
   struct CalldataSlice commitment = calldata_sub_slice(input, KZG_COMMITMENT_OFFSET, KZG_COMMITMENT_LENGTH);
-  bytes32 commitment_hash = calldata_sha256(commitment);
-  bytes32 expected = commitment_hash;
+  bytes32 expected = (calldata_sha256(commitment));
   expected = fast_unsigned_vector_update_bytes32(expected, UINT8_C(0), UINT64_C(0x01));
   u256 claimed_word = calldata_slice_load_struct_CalldataSlice_uint8_t_to_u256(input, UINT8_C(0));
-  bytes32 claimed_hash = word_to_hash(claimed_word);
-  return eq_bytes32(claimed_hash, expected);
+  return eq_bytes32((word_to_hash(claimed_word)), expected);
 }
 
 struct PrecompileResult run_kzg_point_evaluation(struct CalldataSlice input)
 {
-  uint32_t input_length = calldata_slice_length(input);
-  if (input_length != KZG_INPUT_LENGTH) {
+  if ((calldata_slice_length(input)) != KZG_INPUT_LENGTH) {
     return precompile_failure();
   }
-  bool versioned_hash_matches = kzg_versioned_hash_matches(input);
-  if (versioned_hash_matches) {
+  if (kzg_versioned_hash_matches(input)) {
     bool valid_proof = accelerator_kzg_point_evaluation(input);
     if (valid_proof) {
       Bytes output = output_buffer_words(FIELD_ELEMENTS_PER_BLOB, BLS_MODULUS);
@@ -494,12 +470,10 @@ struct PrecompileResult run_kzg_point_evaluation(struct CalldataSlice input)
 
 struct PrecompileResult run_bls_g1_add(struct CalldataSlice input)
 {
-  uint32_t input_length = calldata_slice_length(input);
-  if (input_length != BLS_G1_ADD_INPUT_LENGTH) {
+  if ((calldata_slice_length(input)) != BLS_G1_ADD_INPUT_LENGTH) {
     return precompile_failure();
   }
-  bool valid_padding = bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_G1_POINT_LENGTH, TWO_COMPONENTS);
-  if (valid_padding) {
+  if (bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_G1_POINT_LENGTH, TWO_COMPONENTS)) {
     bool success = accelerator_bls_g1_add(input);
     return accelerator_result_bool_uint8_t_to_struct_PrecompileResult(success, BLS_G1_POINT_LENGTH);
   }
@@ -509,13 +483,10 @@ struct PrecompileResult run_bls_g1_add(struct CalldataSlice input)
 struct PrecompileResult run_bls_g1_msm(struct CalldataSlice input)
 {
   uint32_t length_ = calldata_slice_length(input);
-  uint8_t item_length = BLS_G1_MSM_ITEM_LENGTH;
-  uint32_t pairs = (length_ / (uint32_t)item_length);
-  if ((length_ == UINT8_C(0)) || (length_ != (pairs * (uint32_t)item_length))) {
+  if ((length_ == UINT8_C(0)) || (length_ != ((length_ / (uint32_t)BLS_G1_MSM_ITEM_LENGTH) * (uint32_t)BLS_G1_MSM_ITEM_LENGTH))) {
     return precompile_failure();
   }
-  bool valid_padding = bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint32_t_to_bool(input, UINT8_C(0), BLS_G1_MSM_ITEM_LENGTH, pairs);
-  if (valid_padding) {
+  if (bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint32_t_to_bool(input, UINT8_C(0), BLS_G1_MSM_ITEM_LENGTH, (length_ / (uint32_t)BLS_G1_MSM_ITEM_LENGTH))) {
     bool success = accelerator_bls_g1_msm(input);
     return accelerator_result_bool_uint8_t_to_struct_PrecompileResult(success, BLS_G1_POINT_LENGTH);
   }
@@ -524,12 +495,10 @@ struct PrecompileResult run_bls_g1_msm(struct CalldataSlice input)
 
 struct PrecompileResult run_bls_g2_add(struct CalldataSlice input)
 {
-  uint32_t input_length = calldata_slice_length(input);
-  if (input_length != BLS_G2_ADD_INPUT_LENGTH) {
+  if ((calldata_slice_length(input)) != BLS_G2_ADD_INPUT_LENGTH) {
     return precompile_failure();
   }
-  bool valid_padding = bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(input, UINT8_C(0), BLS_G2_POINT_LENGTH, TWO_COMPONENTS);
-  if (valid_padding) {
+  if (bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(input, UINT8_C(0), BLS_G2_POINT_LENGTH, TWO_COMPONENTS)) {
     bool success = accelerator_bls_g2_add(input);
     return accelerator_result_bool_uint16_t_to_struct_PrecompileResult(success, BLS_G2_POINT_LENGTH);
   }
@@ -539,13 +508,10 @@ struct PrecompileResult run_bls_g2_add(struct CalldataSlice input)
 struct PrecompileResult run_bls_g2_msm(struct CalldataSlice input)
 {
   uint32_t length_ = calldata_slice_length(input);
-  uint16_t item_length = BLS_G2_MSM_ITEM_LENGTH;
-  uint32_t pairs = (length_ / (uint32_t)item_length);
-  if ((length_ == UINT8_C(0)) || (length_ != (pairs * (uint32_t)item_length))) {
+  if ((length_ == UINT8_C(0)) || (length_ != ((length_ / (uint32_t)BLS_G2_MSM_ITEM_LENGTH) * (uint32_t)BLS_G2_MSM_ITEM_LENGTH))) {
     return precompile_failure();
   }
-  bool valid_padding = bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(input, UINT8_C(0), BLS_G2_MSM_ITEM_LENGTH, pairs);
-  if (valid_padding) {
+  if (bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(input, UINT8_C(0), BLS_G2_MSM_ITEM_LENGTH, (length_ / (uint32_t)BLS_G2_MSM_ITEM_LENGTH))) {
     bool success = accelerator_bls_g2_msm(input);
     return accelerator_result_bool_uint16_t_to_struct_PrecompileResult(success, BLS_G2_POINT_LENGTH);
   }
@@ -555,13 +521,11 @@ struct PrecompileResult run_bls_g2_msm(struct CalldataSlice input)
 struct PrecompileResult run_bls_pairing(struct CalldataSlice input)
 {
   uint32_t length_ = calldata_slice_length(input);
-  uint16_t item_length = BLS_PAIRING_ITEM_LENGTH;
-  uint32_t pairs = (length_ / (uint32_t)item_length);
-  if ((length_ == UINT8_C(0)) || (length_ != (pairs * (uint32_t)item_length))) {
+  if ((length_ == UINT8_C(0)) || (length_ != ((length_ / (uint32_t)BLS_PAIRING_ITEM_LENGTH) * (uint32_t)BLS_PAIRING_ITEM_LENGTH))) {
     return precompile_failure();
   }
-  bool valid_g1_padding = bls_g1_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(input, UINT8_C(0), BLS_PAIRING_ITEM_LENGTH, pairs);
-  bool valid_g2_padding = bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_variant_2(input, BLS_G2_POINT_OFFSET, BLS_PAIRING_ITEM_LENGTH, pairs);
+  bool valid_g1_padding = bls_g1_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(input, UINT8_C(0), BLS_PAIRING_ITEM_LENGTH, (length_ / (uint32_t)BLS_PAIRING_ITEM_LENGTH));
+  bool valid_g2_padding = bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_variant_2(input, BLS_G2_POINT_OFFSET, BLS_PAIRING_ITEM_LENGTH, (length_ / (uint32_t)BLS_PAIRING_ITEM_LENGTH));
   if (valid_g1_padding && valid_g2_padding) {
     uint8_t result = accelerator_bls_pairing(input);
     return pairing_result(result);
@@ -571,12 +535,10 @@ struct PrecompileResult run_bls_pairing(struct CalldataSlice input)
 
 struct PrecompileResult run_bls_map_fp_to_g1(struct CalldataSlice input)
 {
-  uint32_t input_length = calldata_slice_length(input);
-  if (input_length != BLS_PADDED_FIELD_LENGTH) {
+  if ((calldata_slice_length(input)) != BLS_PADDED_FIELD_LENGTH) {
     return precompile_failure();
   }
-  bool valid_padding = slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, UINT8_C(1));
-  if (valid_padding) {
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, UINT8_C(1))) {
     bool success = accelerator_bls_map_fp_to_g1(input);
     return accelerator_result_bool_uint8_t_to_struct_PrecompileResult(success, BLS_G1_POINT_LENGTH);
   }
@@ -585,12 +547,10 @@ struct PrecompileResult run_bls_map_fp_to_g1(struct CalldataSlice input)
 
 struct PrecompileResult run_bls_map_fp2_to_g2(struct CalldataSlice input)
 {
-  uint32_t input_length = calldata_slice_length(input);
-  if (input_length != BLS_G1_POINT_LENGTH) {
+  if ((calldata_slice_length(input)) != BLS_G1_POINT_LENGTH) {
     return precompile_failure();
   }
-  bool valid_padding = slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, TWO_COMPONENTS);
-  if (valid_padding) {
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, UINT8_C(0), BLS_PADDED_FIELD_LENGTH, BLS_FIELD_PADDING_LENGTH, TWO_COMPONENTS)) {
     bool success = accelerator_bls_map_fp2_to_g2(input);
     return accelerator_result_bool_uint16_t_to_struct_PrecompileResult(success, BLS_G2_POINT_LENGTH);
   }
@@ -641,8 +601,7 @@ struct PrecompileResult run_precompile_slice(enum PrecompileId num, struct Calld
   case Bn254Pairing:
   {
     uint32_t input_length = calldata_slice_length(input);
-    uint8_t item_length = BN254_PAIRING_ITEM_LENGTH;
-    if (input_length == ((input_length / (uint32_t)item_length) * (uint32_t)item_length)) {
+    if (input_length == ((input_length / (uint32_t)BN254_PAIRING_ITEM_LENGTH) * (uint32_t)BN254_PAIRING_ITEM_LENGTH)) {
       uint8_t result = accelerator_bn254_pairing(input);
       return pairing_result(result);
     }
@@ -674,8 +633,7 @@ struct PrecompileResult run_precompile_slice(enum PrecompileId num, struct Calld
 struct PrecompileResult accelerator_result_bool_uint16_t_to_struct_PrecompileResult(bool success, uint16_t output_len)
 {
   if (success) {
-    Bytes output = output_buffer_slice_uint16_t_to_Bytes(output_len);
-    return precompile_success(output);
+    return precompile_success((output_buffer_slice_uint16_t_to_Bytes(output_len)));
   }
   return precompile_failure();
 }
@@ -683,8 +641,7 @@ struct PrecompileResult accelerator_result_bool_uint16_t_to_struct_PrecompileRes
 struct PrecompileResult accelerator_result_bool_uint32_t_to_struct_PrecompileResult(bool success, uint32_t output_len)
 {
   if (success) {
-    Bytes output = output_buffer_slice_uint32_t_to_Bytes(output_len);
-    return precompile_success(output);
+    return precompile_success((output_buffer_slice_uint32_t_to_Bytes(output_len)));
   }
   return precompile_failure();
 }
@@ -692,56 +649,41 @@ struct PrecompileResult accelerator_result_bool_uint32_t_to_struct_PrecompileRes
 struct PrecompileResult accelerator_result_bool_uint8_t_to_struct_PrecompileResult(bool success, uint8_t output_len)
 {
   if (success) {
-    Bytes output = output_buffer_slice_uint8_t_to_Bytes(output_len);
-    return precompile_success(output);
+    return precompile_success((output_buffer_slice_uint8_t_to_Bytes(output_len)));
   }
   return precompile_failure();
 }
 
 bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count)
 {
-  bool slice_strided_zero_result_2_1809 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1809) {
-    uint8_t integer_result_3_3673 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3673, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count);
   }
   return false;
 }
 
 bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint8_t stride, uint32_t count)
 {
-  bool slice_strided_zero_result_2_1809 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1809) {
-    uint8_t integer_result_3_3666 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3666, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count);
   }
   return false;
 }
 
 bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_to_bool(struct CalldataSlice input, uint8_t base, uint8_t stride, uint8_t count)
 {
-  bool slice_strided_zero_result_2_1809 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1809) {
-    uint8_t integer_result_3_3665 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(input, (uint32_t)integer_result_3_3665, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    return slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count);
   }
   return false;
 }
 
 bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count)
 {
-  bool slice_strided_zero_result_2_1807 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1807) {
-    bool result_2_1806;
-    uint8_t integer_result_3_3670 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    result_2_1806 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3670, stride, BLS_FIELD_PADDING_LENGTH, count);
-    if (result_2_1806) {
-      bool result_2_1805;
-      uint8_t integer_result_3_3671 = ((uint8_t)((uint32_t)BLS_G1_POINT_LENGTH + (uint32_t)base));
-      result_2_1805 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3671, stride, BLS_FIELD_PADDING_LENGTH, count);
-      if (result_2_1805) {
-        uint8_t integer_result_3_3672 = ((uint8_t)((uint32_t)BLS_G2_FINAL_FIELD_OFFSET + (uint32_t)base));
-        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3672, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+      if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_G1_POINT_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_G2_FINAL_FIELD_OFFSET + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count);
       }
       return false;
     }
@@ -752,18 +694,10 @@ bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(struc
 
 bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_variant_2(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count)
 {
-  bool slice_strided_zero_result_2_1807 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1807) {
-    bool result_2_1806;
-    uint8_t integer_result_3_3674 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    result_2_1806 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3674, stride, BLS_FIELD_PADDING_LENGTH, count);
-    if (result_2_1806) {
-      bool result_2_1805;
-      uint16_t integer_result_3_3675 = ((uint16_t)((uint32_t)(uint16_t)base + (uint32_t)(uint16_t)BLS_G1_POINT_LENGTH));
-      result_2_1805 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3675, stride, BLS_FIELD_PADDING_LENGTH, count);
-      if (result_2_1805) {
-        uint16_t integer_result_3_3676 = ((uint16_t)((uint32_t)(uint16_t)base + (uint32_t)(uint16_t)BLS_G2_FINAL_FIELD_OFFSET));
-        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, (uint32_t)integer_result_3_3676, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+      if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)(uint16_t)base + (uint32_t)(uint16_t)BLS_G1_POINT_LENGTH), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(input, ((uint32_t)(uint16_t)base + (uint32_t)(uint16_t)BLS_G2_FINAL_FIELD_OFFSET), stride, BLS_FIELD_PADDING_LENGTH, count);
       }
       return false;
     }
@@ -774,18 +708,10 @@ bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_varia
 
 bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint8_t count)
 {
-  bool slice_strided_zero_result_2_1807 = slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count);
-  if (slice_strided_zero_result_2_1807) {
-    bool result_2_1806;
-    uint8_t integer_result_3_3667 = ((uint8_t)((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base));
-    result_2_1806 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, (uint32_t)integer_result_3_3667, stride, BLS_FIELD_PADDING_LENGTH, count);
-    if (result_2_1806) {
-      bool result_2_1805;
-      uint8_t integer_result_3_3668 = ((uint8_t)((uint32_t)BLS_G1_POINT_LENGTH + (uint32_t)base));
-      result_2_1805 = slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, (uint32_t)integer_result_3_3668, stride, BLS_FIELD_PADDING_LENGTH, count);
-      if (result_2_1805) {
-        uint8_t integer_result_3_3669 = ((uint8_t)((uint32_t)BLS_G2_FINAL_FIELD_OFFSET + (uint32_t)base));
-        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, (uint32_t)integer_result_3_3669, stride, BLS_FIELD_PADDING_LENGTH, count);
+  if (slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(input, base, stride, BLS_FIELD_PADDING_LENGTH, count)) {
+    if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, ((uint32_t)BLS_PADDED_FIELD_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+      if (slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, ((uint32_t)BLS_G1_POINT_LENGTH + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count)) {
+        return slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(input, ((uint32_t)BLS_G2_FINAL_FIELD_OFFSET + (uint32_t)base), stride, BLS_FIELD_PADDING_LENGTH, count);
       }
       return false;
     }

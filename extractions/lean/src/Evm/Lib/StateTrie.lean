@@ -69,4 +69,3 @@ def compute_state_root (_ : Unit) : SailM (Vector (BitVec 8) 32) := do
   (acct_block_iter_begin ())
   let updates := (ChangedAccountTrieUpdates ())
   (pure (← (trie_root (← readReg k_parent_state_root) updates)).root)
-

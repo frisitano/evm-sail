@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-void result_prefix(bytes32 root, bool success);
+void write_prefix(bytes32 root, bool success);
 
 void commit_validation_result(bytes32 root, bool success, Bytes chain_config);
 
