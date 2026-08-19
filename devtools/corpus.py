@@ -19,6 +19,7 @@ from devtools.build_support import BuildSupportError
 
 TREE_DIGEST_SCHEMA = 1
 BUFFER_SIZE = 1024 * 1024
+DOWNLOAD_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -212,7 +213,10 @@ def extract_archive(archive_path: Path, destination: Path) -> None:
 
 def _download(url: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with urlopen(url) as response, destination.open("wb") as output:
+    with (
+        urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response,
+        destination.open("wb") as output,
+    ):
         shutil.copyfileobj(response, output, length=BUFFER_SIZE)
 
 

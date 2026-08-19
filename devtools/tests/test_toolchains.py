@@ -13,6 +13,8 @@ class ToolchainManifestTests(unittest.TestCase):
         self.assertEqual(len(values["SAIL_COMMIT"]), 40)
         self.assertEqual(len(values["SAIL_LSP_COMMIT"]), 40)
         self.assertEqual(len(values["LEAN_SAIL_COMMIT"]), 40)
+        self.assertEqual(values["SOLVER_Z3_SUPPORTED_MAJOR"], "4")
+        self.assertEqual(values["LLVM_MAJOR"], "18")
         project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(project["project"]["requires-python"], "==3.12.*")
         self.assertEqual(project["tool"]["uv"]["python-preference"], "only-managed")
@@ -29,7 +31,27 @@ commit = "main"
 commit = "0000000000000000000000000000000000000000"
 [lean]
 sail_commit = "0000000000000000000000000000000000000000"
+[solver]
+z3_supported_major = 4
+z3_memo_schema = 1
+[llvm]
+major = 18
 """,
+                encoding="utf-8",
+            )
+            with self.assertRaises(BuildSupportError):
+                load_toolchains(path)
+
+    def test_rejects_nonpositive_tool_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "toolchains.toml"
+            path.write_text(
+                Path("config/toolchains.toml").read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "z3_supported_major = 4", "z3_supported_major = 0"
+                ),
                 encoding="utf-8",
             )
             with self.assertRaises(BuildSupportError):

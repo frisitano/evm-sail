@@ -6,10 +6,13 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from devtools.build_support import BuildSupportError
 from devtools.corpus import (
+    DOWNLOAD_TIMEOUT_SECONDS,
     CorpusManifest,
+    _download,
     extract_archive,
     inventory_corpus,
     load_manifest,
@@ -39,6 +42,18 @@ def manifest_for(inventory_sha: str, files: int = 1, cases: int = 1) -> CorpusMa
 
 
 class CorpusTests(unittest.TestCase):
+    def test_download_uses_a_bounded_network_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.tar.gz"
+            response = io.BytesIO(b"archive")
+            with patch("devtools.corpus.urlopen", return_value=response) as mocked:
+                _download("https://example.invalid/archive.tar.gz", destination)
+            mocked.assert_called_once_with(
+                "https://example.invalid/archive.tar.gz",
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            )
+            self.assertEqual(destination.read_bytes(), b"archive")
+
     def test_inventory_is_deterministic_and_counts_cases(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

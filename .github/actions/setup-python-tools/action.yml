@@ -20,3 +20,7 @@ runs:
     - name: Install the managed Python and locked dependencies
       shell: bash
       run: uv sync --frozen
+
+    - name: Export the repository toolchain policy
+      shell: bash
+      run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"

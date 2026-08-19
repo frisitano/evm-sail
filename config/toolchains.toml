@@ -19,4 +19,8 @@ version = "9.2.0"
 ocaml = "5.2.0"
 
 [solver]
+z3_supported_major = 4
 z3_memo_schema = 1
+
+[llvm]
+major = 18

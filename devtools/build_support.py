@@ -181,26 +181,37 @@ def comment_box_errors(paths: Iterable[Path]) -> list[str]:
 def tree_differences(expected: Path, actual: Path, *, limit: int = 40) -> list[str]:
     """Return bounded, deterministic path/content differences for two trees."""
 
-    def files(root: Path) -> dict[str, Path]:
+    def entries(root: Path) -> dict[str, tuple[str, Path | str]]:
         if not root.is_dir():
             return {}
-        return {
-            path.relative_to(root).as_posix(): path
-            for path in root.rglob("*")
-            if path.is_file() and not path.is_symlink()
-        }
+        result: dict[str, tuple[str, Path | str]] = {}
+        for path in root.rglob("*"):
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                result[relative] = ("symlink", os.readlink(path))
+            elif path.is_file():
+                result[relative] = ("file", path)
+        return result
 
-    expected_files = files(expected)
-    actual_files = files(actual)
+    expected_entries = entries(expected)
+    actual_entries = entries(actual)
     differences: list[str] = []
-    for relative in sorted(expected_files.keys() - actual_files.keys()):
+    for relative in sorted(expected_entries.keys() - actual_entries.keys()):
         differences.append(f"missing from generated tree: {relative}")
-    for relative in sorted(actual_files.keys() - expected_files.keys()):
+    for relative in sorted(actual_entries.keys() - expected_entries.keys()):
         differences.append(f"unexpected generated file: {relative}")
-    for relative in sorted(expected_files.keys() & actual_files.keys()):
-        left = expected_files[relative].read_bytes()
-        right = actual_files[relative].read_bytes()
-        if left != right:
+    for relative in sorted(expected_entries.keys() & actual_entries.keys()):
+        expected_kind, expected_value = expected_entries[relative]
+        actual_kind, actual_value = actual_entries[relative]
+        if expected_kind != actual_kind:
+            differences.append(
+                f"entry type differs: {relative} "
+                f"(expected {expected_kind}, generated {actual_kind})"
+            )
+        elif expected_kind == "symlink":
+            if expected_value != actual_value:
+                differences.append(f"symlink target differs: {relative}")
+        elif cast(Path, expected_value).read_bytes() != cast(Path, actual_value).read_bytes():
             differences.append(f"content differs: {relative}")
     if len(differences) > limit:
         omitted = len(differences) - limit
@@ -222,6 +233,7 @@ def publish_tree(staged: Path, destination: Path) -> None:
         shutil.copytree(
             staged,
             temporary / destination.name,
+            symlinks=True,
             ignore=shutil.ignore_patterns(".lake", "__pycache__", "*.pyc"),
         )
         if backup.exists():

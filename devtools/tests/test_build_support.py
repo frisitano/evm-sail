@@ -127,6 +127,26 @@ class ArtifactTests(unittest.TestCase):
                 ],
             )
 
+    def test_tree_difference_and_publish_preserve_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            expected, actual = root / "expected", root / "actual"
+            expected.mkdir()
+            actual.mkdir()
+            (expected / "target").write_text("target", encoding="utf-8")
+            (actual / "target").write_text("target", encoding="utf-8")
+            (expected / "link").symlink_to("target")
+            (actual / "link").symlink_to("different")
+            self.assertEqual(
+                tree_differences(expected, actual),
+                ["symlink target differs: link"],
+            )
+
+            published = root / "published"
+            publish_tree(expected, published)
+            self.assertTrue((published / "link").is_symlink())
+            self.assertEqual((published / "link").readlink(), Path("target"))
+
     def test_lean_normalization_is_identifier_aware(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

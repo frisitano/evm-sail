@@ -25,6 +25,11 @@ commit = "{revision}"
 commit = "0000000000000000000000000000000000000000"
 [lean]
 sail_commit = "0000000000000000000000000000000000000000"
+[solver]
+z3_supported_major = 4
+z3_memo_schema = 1
+[llvm]
+major = 18
 """,
             encoding="utf-8",
         )

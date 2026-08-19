@@ -31,6 +31,17 @@ def load_toolchains(path: Path) -> dict[str, object]:
         value = section_data.get(key)
         if not isinstance(value, str) or not SHA_RE.fullmatch(value):
             raise BuildSupportError(f"{path}: {section}.{key} must be a full Git SHA")
+    for section, key in (
+        ("solver", "z3_supported_major"),
+        ("solver", "z3_memo_schema"),
+        ("llvm", "major"),
+    ):
+        section_data = data.get(section)
+        if not isinstance(section_data, dict):
+            raise BuildSupportError(f"{path}: {section} must be a table")
+        value = section_data.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise BuildSupportError(f"{path}: {section}.{key} must be a positive integer")
     return data
 
 

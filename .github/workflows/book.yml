@@ -47,10 +47,13 @@ jobs:
             uv.lock
             mkdocstrings-sail/uv.lock
 
-      - name: Install system dependencies
+      - name: Install and identify Z3
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+          version="$(z3 --version | awk '{print $3}')"
+          test "${version%%.*}" = "$SOLVER_Z3_SUPPORTED_MAJOR"
+          z3 --version
 
       # The book needs sail_lsp too: step 3 builds the semantic index with it.
       - name: Set up the custom Sail compiler and sail-lsp
