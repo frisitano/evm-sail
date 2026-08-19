@@ -89,7 +89,7 @@ def rlp_write_node_ref (r : NodeRef) : SailM Unit := do
       (rlp_write_word hash_word))
 
 /-- Returns the canonical RLP width of a compact trie path. -/
-/- Type quantifiers: k_ex610911_ : Bool -/
+/- Type quantifiers: k_ex551588_ : Bool -/
 def rlp_hex_prefix_size (path : TriePath) (is_leaf : Bool) : SailM Nat := do
   let encoded_length := (hex_prefix_encoded_length path)
   let first ← do (hex_prefix_first_byte path is_leaf)
@@ -98,7 +98,7 @@ def rlp_hex_prefix_size (path : TriePath) (is_leaf : Bool) : SailM Nat := do
   else (pure (encoded_length + 1))
 
 /-- Writes the hex-evm_prefix path directly into scratch in wire order. -/
-/- Type quantifiers: k_ex610912_ : Bool -/
+/- Type quantifiers: k_ex551589_ : Bool -/
 def rlp_write_hex_prefix (path : TriePath) (is_leaf : Bool) : SailM Unit := do
   let length := (path_len path)
   let encoded_length := (hex_prefix_encoded_length path)
@@ -248,7 +248,8 @@ def branch_child_ref (mask : (BitVec 16)) (children : (Vector NodeRef 16)) : Sai
           if (child_present : Bool)
           then
             (do
-              let child_length := (node_ref_size (GetElem?.getElem! children i))
+              let childref := (GetElem?.getElem! children i)
+              let child_length := (node_ref_size childref)
               (branch_content_length_add content_length child_length))
           else
             (do
@@ -270,7 +271,10 @@ def branch_child_ref (mask : (BitVec 16)) (children : (Vector NodeRef 16)) : Sai
       loop_vars ← do
         let child_present := ((mask &&& child_bit) != 0x0000#16)
         if (child_present : Bool)
-        then (rlp_write_node_ref (GetElem?.getElem! children i))
+        then
+          (do
+            let childref := (GetElem?.getElem! children i)
+            (rlp_write_node_ref childref))
         else (scratch_push_byte 0x80#8)
         (pure (child_bit <<< 1))
     (pure loop_vars) ) : SailM (BitVec 16) )
@@ -354,8 +358,8 @@ def scratch_field_to_ref (f : (ScratchRlpFieldRef k_source_off k_source_len k_co
       else (pure (EmptyRef ())))
 
 /-- [decode_input_branch_node][] over the scratch cursor family. -/
-/- Type quantifiers: _reclimit : Nat, k_ex610970_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
-  ≤ k_ex610970_ ∧ k_ex610970_ ≤ 16, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex551647_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ k_ex551647_ ∧ k_ex551647_ ≤ 16, 0 ≤ _reclimit -/
 def _rec_decode_scratch_branch_node (cursor : (ScratchSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) (_reclimit : Nat) : SailM ScratchTrieNode := do
   match _reclimit with
   | 0 =>
@@ -369,8 +373,9 @@ def _rec_decode_scratch_branch_node (cursor : (ScratchSliceFields k_source_off k
         (do
           let ⟨_, ⟨_, child⟩⟩ ← do (scratch_rlp_decode_item cursor)
           let next := (scratch_rlp_cursor_advance cursor child.source.len)
+          let decoded_child ← do (scratch_field_to_ref child)
           let updated := children
-          let updated ← (pure (vectorUpdate updated index (← (scratch_field_to_ref child))))
+          let updated : (Vector NodeRef 16) := (vectorUpdate updated index decoded_child)
           (_rec_decode_scratch_branch_node next (index + 1) updated _reclimit_pred))
       else
         (do
@@ -428,9 +433,11 @@ def decode_scratch_trie_node (node : (Sigma fun (k_off : Nat) =>
   else
     (do
       let empty_child := (EmptyRef ())
+      let first_child ← do (scratch_field_to_ref first)
+      let second_child ← do (scratch_field_to_ref second)
       let children : (Vector NodeRef 16) := (vectorInit empty_child)
-      let children ← (pure (vectorUpdate children 0 (← (scratch_field_to_ref first))))
-      let children ← (pure (vectorUpdate children 1 (← (scratch_field_to_ref second))))
+      let children : (Vector NodeRef 16) := (vectorUpdate children 0 first_child)
+      let children : (Vector NodeRef 16) := (vectorUpdate children 1 second_child)
       (decode_scratch_branch_node fields 2 children))
 
 /-- Re-keys a decoded child node under `evm_prefix` without copying a leaf

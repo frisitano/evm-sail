@@ -394,7 +394,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex611472_ : Nat, 0 ≤ k_ex611472_ ∧ k_ex611472_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex552153_ : Nat, 0 ≤ k_ex552153_ ∧ k_ex552153_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -878,8 +878,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex611543_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex611543_ ∧ k_ex611543_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex552224_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex552224_ ∧ k_ex552224_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1002,11 +1002,15 @@ def _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : N
               (do
                 let ⟨_, ⟨_, fields⟩⟩ ← do (rlp_node_cursor header)
                 let decoded ← do (decode_parent_header_fields fields 0 EMPTY_PARENT_HEADER_FIELDS)
-                let parent_missing := (! decoded.have_parent)
                 let result : WitnessHeaderIndex :=
-                  if (((index != 0) && (parent_missing || (bne decoded.parent_hash
-                           state.previous_hash))) : Bool)
-                  then { result with valid := false }
+                  if ((index != 0) : Bool)
+                  then
+                    (if ((! decoded.have_parent) : Bool)
+                    then { result with valid := false }
+                    else
+                      (if ((bne decoded.parent_hash state.previous_hash) : Bool)
+                      then { result with valid := false }
+                      else result))
                   else result
                 if (is_last : Bool)
                 then
@@ -1018,7 +1022,18 @@ def _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : N
                     { result with parent_blob_gas_used := decoded.blob_gas_used }
                   let result : WitnessHeaderIndex :=
                     { result with parent_excess_blob_gas := decoded.excess_blob_gas }
-                  (pure { result with parent_fields_valid := (decoded.have_state && (((profile.fork <b Cancun) || decoded.have_base_fee) && ((profile.fork <b Cancun) || (decoded.have_blob_gas == decoded.have_excess_blob_gas)))) }))
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_fields_valid := decoded.have_state }
+                  if ((profile.fork ≥b Cancun) : Bool)
+                  then
+                    (let result : WitnessHeaderIndex :=
+                      if ((! decoded.have_base_fee) : Bool)
+                      then { result with parent_fields_valid := false }
+                      else result
+                    if ((neq_bool decoded.have_blob_gas decoded.have_excess_blob_gas) : Bool)
+                    then (pure { result with parent_fields_valid := false })
+                    else (pure result))
+                  else (pure result))
                 else (pure result))
             else (pure result) ) : SailM WitnessHeaderIndex )
           let current_hash ← do (stateless_input_keccak256 header)
@@ -1334,23 +1349,35 @@ def decode_block_header_ssz (input_ref : StatelessInputRef) : SailM BlockHeader 
   let gas_used_value ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED)
   let prev_randao_hash ← do (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO)
   let prev_randao := (hash_to_word prev_randao_hash)
-  (pure { number := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER),
-          timestamp := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP),
+  let number ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER)
+  let timestamp ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP)
+  let base_fee ← do (ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE)
+  let blob_gas_used ← do
+    (decode_payload_blob_gas_used ⟨_, ⟨_, payload⟩⟩ input_ref.protocol)
+  let excess_blob_gas ← do
+    (decode_payload_excess_blob_gas ⟨_, ⟨_, payload⟩⟩ input_ref.protocol)
+  let state_root ← do (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_STATE_ROOT)
+  let receipts_root ← do (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT)
+  let logs_bloom := (stateless_input_sub_slice payload PL_LOGS_BLOOM 256)
+  let fee_recipient ← do (ssz_addr ⟨_, ⟨_, payload⟩⟩ PL_FEE_RECIPIENT)
+  let parent_hash ← do (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ 0)
+  let parent_beacon_block_root ← do (ssz_bytes32 input_ref.new_payload_request NPR_BEACON_ROOT)
+  let slot_number ← do (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER)
+  (pure { number := number,
+          timestamp := timestamp,
           gas_limit := gas_limit_value,
           gas_used := gas_used_value,
           prev_randao := prev_randao,
-          base_fee := ← (ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE),
-          blob_gas_used := ← (decode_payload_blob_gas_used ⟨_, ⟨_, payload⟩⟩
-              input_ref.protocol),
-          excess_blob_gas := ← (decode_payload_excess_blob_gas ⟨_, ⟨_, payload⟩⟩
-              input_ref.protocol),
-          state_root := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_STATE_ROOT),
-          receipts_root := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT),
-          logs_bloom := ⟨_, ⟨_, (stateless_input_sub_slice payload PL_LOGS_BLOOM 256)⟩⟩,
-          fee_recipient := ← (ssz_addr ⟨_, ⟨_, payload⟩⟩ PL_FEE_RECIPIENT),
-          parent_hash := ← (ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ 0),
-          parent_beacon_block_root := ← (ssz_bytes32 input_ref.new_payload_request NPR_BEACON_ROOT),
-          slot_number := ← (decode_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER),
+          base_fee := base_fee,
+          blob_gas_used := blob_gas_used,
+          excess_blob_gas := excess_blob_gas,
+          state_root := state_root,
+          receipts_root := receipts_root,
+          logs_bloom := ⟨_, ⟨_, logs_bloom⟩⟩,
+          fee_recipient := fee_recipient,
+          parent_hash := parent_hash,
+          parent_beacon_block_root := parent_beacon_block_root,
+          slot_number := slot_number,
           extra_data := input_ref.extra_data })
 
 /-- Decodes one fixed-layout SSZ withdrawal element. -/
@@ -1373,11 +1400,11 @@ the active Amsterdam `SszForkConfig` activation.
 The activation point (optional block number / timestamp, `List[u64,1]`
 each) must be reached by this payload: at least one bound set, none
 exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex611651_ : Nat, k_ex611650_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
+/- Type quantifiers: k_ex552332_ : Nat, k_ex552331_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
   : Nat, 0 ≤ cc_dependentWitness0 ∧
   0 ≤ cc_dependentWitness1 ∧ (cc_dependentWitness0 + cc_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex611650_ ∧ k_ex611650_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex611651_ ∧
-  k_ex611651_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex552331_ ∧ k_ex552331_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex552332_ ∧
+  k_ex552332_ ≤ (2 ^ 64 - 1) -/
 def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
   let cc_dependentWitness0 := (cc).1
@@ -1463,20 +1490,20 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
   writeReg k_chain_id chain_config.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex678397_ : Nat) =>
-    (Sigma fun (k_ex678398_ : Nat) =>
-    (Sigma fun (k_ex678399_ : Nat) =>
-    (Sigma fun (k_ex678400_ : Nat) =>
-    (Sigma fun (k_ex678401_ : Nat) =>
-    (Sigma fun (k_ex678402_ : Nat) =>
-    (Sigma fun (k_ex678403_ : Nat) =>
-    (Sigma fun (k_ex678404_ : Nat) =>
-    (Sigma fun (k_ex678405_ : Nat) =>
-    (Sigma fun (k_ex678406_ : Nat) =>
-    (Sigma fun (k_ex678407_ : Nat) =>
-    (ExecutionProfileFields k_ex678397_ k_ex678398_ k_ex678399_ k_ex678400_ k_ex678401_ k_ex678402_ k_ex678403_ k_ex678404_ k_ex678405_ k_ex678406_ k_ex678407_ (if ( k_ex678407_
-    < k_ex678403_  : Bool) then k_ex678407_ else k_ex678403_) (if ( (if ( k_ex678407_ < k_ex678403_  : Bool) then k_ex678407_ else k_ex678403_)
-    < k_ex678404_  : Bool) then (if ( k_ex678407_ < k_ex678403_  : Bool) then k_ex678407_ else k_ex678403_) else k_ex678404_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex611445_ : Nat) =>
+    (Sigma fun (k_ex611446_ : Nat) =>
+    (Sigma fun (k_ex611447_ : Nat) =>
+    (Sigma fun (k_ex611448_ : Nat) =>
+    (Sigma fun (k_ex611449_ : Nat) =>
+    (Sigma fun (k_ex611450_ : Nat) =>
+    (Sigma fun (k_ex611451_ : Nat) =>
+    (Sigma fun (k_ex611452_ : Nat) =>
+    (Sigma fun (k_ex611453_ : Nat) =>
+    (Sigma fun (k_ex611454_ : Nat) =>
+    (Sigma fun (k_ex611455_ : Nat) =>
+    (ExecutionProfileFields k_ex611445_ k_ex611446_ k_ex611447_ k_ex611448_ k_ex611449_ k_ex611450_ k_ex611451_ k_ex611452_ k_ex611453_ k_ex611454_ k_ex611455_ (if ( k_ex611455_
+    < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_) (if ( (if ( k_ex611455_ < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_)
+    < k_ex611452_  : Bool) then (if ( k_ex611455_ < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_) else k_ex611452_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,

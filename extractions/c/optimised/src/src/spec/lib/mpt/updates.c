@@ -4,56 +4,56 @@
 struct TrieUpdate EMPTY_TRIE_UPDATE;
 
 
-void create_letbind_206(void) {
+void create_letbind_208(void) {
 
-  struct TrieUpdate let_value_3_262;
+  struct TrieUpdate let_value_3_264;
   struct TrieChange TrieDelete_result_2_0 = TrieDelete(UNIT);
-  struct TrieUpdate tmp_3_259;
-  tmp_3_259.change = TrieDelete_result_2_0;
-  struct TriePath tmp_3_260;
-  vector_32_bits_8 tmp_3_261 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(0), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(1), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(2), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(3), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(4), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(5), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(6), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(7), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(8), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(9), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(10), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(11), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(12), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(13), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(14), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(15), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(16), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(17), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(18), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(19), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(20), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(21), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(22), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(23), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(24), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(25), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(26), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(27), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(28), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(29), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(30), UINT64_C(0x00));
-  tmp_3_261 = internal_vector_update_vector_32_bits_8(tmp_3_261, INT64_C(31), UINT64_C(0x00));
-  tmp_3_260.data = bytes32_zero();
-  for (size_t tmp_8_1573 = 0; tmp_8_1573 < 32; ++tmp_8_1573) {
-    tmp_3_260.data = fast_unsigned_vector_update_bytes32(tmp_3_260.data, tmp_8_1573, tmp_3_261.data[tmp_8_1573]);
+  struct TrieUpdate tmp_3_261;
+  tmp_3_261.change = TrieDelete_result_2_0;
+  struct TriePath tmp_3_262;
+  vector_32_bits_8 tmp_3_263 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(0), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(1), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(2), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(3), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(4), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(5), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(6), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(7), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(8), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(9), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(10), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(11), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(12), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(13), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(14), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(15), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(16), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(17), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(18), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(19), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(20), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(21), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(22), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(23), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(24), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(25), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(26), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(27), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(28), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(29), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(30), UINT64_C(0x00));
+  tmp_3_263 = internal_vector_update_vector_32_bits_8(tmp_3_263, INT64_C(31), UINT64_C(0x00));
+  tmp_3_262.data = bytes32_zero();
+  for (size_t tmp_8_1520 = 0; tmp_8_1520 < 32; ++tmp_8_1520) {
+    tmp_3_262.data = fast_unsigned_vector_update_bytes32(tmp_3_262.data, tmp_8_1520, tmp_3_263.data[tmp_8_1520]);
   }
-  tmp_3_260.len = UINT8_C(0);
-  tmp_3_259.key = tmp_3_260;
-  let_value_3_262 = tmp_3_259;
-  EMPTY_TRIE_UPDATE = let_value_3_262;
+  tmp_3_262.len = UINT8_C(0);
+  tmp_3_261.key = tmp_3_262;
+  let_value_3_264 = tmp_3_261;
+  EMPTY_TRIE_UPDATE = let_value_3_264;
 }
-void kill_letbind_206(void) {
+void kill_letbind_208(void) {
 }
 
 bytes32 trie_subtree_root(struct TrieItem subtree)
@@ -115,12 +115,11 @@ struct TrieChildren trie_children_add(struct TrieChildren children, struct TrieP
       fatal_error(WitnessDeficient);
     }
     struct TrieChildren updated = children;
-    uint64_t result_2_474 = updated.mask;
-    updated.mask = branch_mask_set(result_2_474, index);
-    vector_16_NodeRef result_2_475 = updated.children;
-    uint8_t tmp_3_873 = (uint8_t)index;
-    struct NodeRef trie_child_ref_result_2_477 = trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef(child, child_depth);
-    updated.children = fast_unsigned_vector_update_vector_16_NodeRef(result_2_475, tmp_3_873, trie_child_ref_result_2_477);
+    uint64_t result_2_464 = updated.mask;
+    updated.mask = branch_mask_set(result_2_464, index);
+    vector_16_NodeRef result_2_465 = updated.children;
+    struct NodeRef trie_child_ref_result_2_467 = trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef(child, child_depth);
+    updated.children = fast_unsigned_vector_update_vector_16_NodeRef(result_2_465, (uint8_t)index, trie_child_ref_result_2_467);
     updated.only = child;
     updated.count = next_child_count;
     return updated;
@@ -130,50 +129,50 @@ struct TrieChildren trie_children_add(struct TrieChildren children, struct TrieP
 
 struct TrieItem trie_empty_subtree(void)
 {
-  struct TrieItemValue EmptySubtree_result_2_472 = EmptySubtree(UNIT);
-  struct TrieItem tmp_3_867;
-  struct TriePath tmp_3_868;
-  vector_32_bits_8 tmp_3_869 = internal_vector_init_vector_32_bits_8(INT64_C(32));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(0), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(1), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(2), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(3), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(4), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(5), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(6), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(7), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(8), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(9), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(10), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(11), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(12), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(13), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(14), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(15), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(16), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(17), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(18), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(19), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(20), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(21), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(22), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(23), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(24), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(25), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(26), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(27), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(28), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(29), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(30), UINT64_C(0x00));
-  tmp_3_869 = internal_vector_update_vector_32_bits_8(tmp_3_869, INT64_C(31), UINT64_C(0x00));
-  tmp_3_868.data = bytes32_zero();
-  for (size_t tmp_8_1574 = 0; tmp_8_1574 < 32; ++tmp_8_1574) {
-    tmp_3_868.data = fast_unsigned_vector_update_bytes32(tmp_3_868.data, tmp_8_1574, tmp_3_869.data[tmp_8_1574]);
+  struct TrieItemValue EmptySubtree_result_2_462 = EmptySubtree(UNIT);
+  struct TrieItem tmp_3_857;
+  struct TriePath tmp_3_858;
+  vector_32_bits_8 tmp_3_859 = internal_vector_init_vector_32_bits_8(INT64_C(32));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(0), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(1), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(2), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(3), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(4), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(5), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(6), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(7), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(8), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(9), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(10), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(11), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(12), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(13), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(14), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(15), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(16), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(17), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(18), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(19), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(20), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(21), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(22), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(23), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(24), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(25), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(26), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(27), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(28), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(29), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(30), UINT64_C(0x00));
+  tmp_3_859 = internal_vector_update_vector_32_bits_8(tmp_3_859, INT64_C(31), UINT64_C(0x00));
+  tmp_3_858.data = bytes32_zero();
+  for (size_t tmp_8_1521 = 0; tmp_8_1521 < 32; ++tmp_8_1521) {
+    tmp_3_858.data = fast_unsigned_vector_update_bytes32(tmp_3_858.data, tmp_8_1521, tmp_3_859.data[tmp_8_1521]);
   }
-  tmp_3_868.len = UINT8_C(0);
-  tmp_3_867.path = tmp_3_868;
-  tmp_3_867.value = EmptySubtree_result_2_472;
-  return tmp_3_867;
+  tmp_3_858.len = UINT8_C(0);
+  tmp_3_857.path = tmp_3_858;
+  tmp_3_857.value = EmptySubtree_result_2_462;
+  return tmp_3_857;
 }
 
 struct TrieChildren trie_children_empty(void)
@@ -186,15 +185,15 @@ struct TrieChildren trie_children_empty(void)
 
 struct TrieItem trie_branch(struct TriePath path, struct NodeRef childref)
 {
-  struct TrieItemValue BranchItem_result_2_471 = BranchItem(childref);
-  return ((struct TrieItem){.path = path, .value = BranchItem_result_2_471});
+  struct TrieItemValue BranchItem_result_2_461 = BranchItem(childref);
+  return ((struct TrieItem){.path = path, .value = BranchItem_result_2_461});
 }
 
 struct TrieItem trie_children_finish(struct TriePath prefix, struct TrieChildren children)
 {
   if (children.count == UINT8_C(0)) {
-    struct TrieItemValue EmptySubtree_result_2_466 = EmptySubtree(UNIT);
-    return ((struct TrieItem){.path = prefix, .value = EmptySubtree_result_2_466});
+    struct TrieItemValue EmptySubtree_result_2_456 = EmptySubtree(UNIT);
+    return ((struct TrieItem){.path = prefix, .value = EmptySubtree_result_2_456});
   }
   if (children.count == UINT8_C(1)) {
     return children.only;
@@ -205,8 +204,8 @@ struct TrieItem trie_children_finish(struct TriePath prefix, struct TrieChildren
 
 struct TrieItem trie_leaf(struct TriePath path, struct TrieLeafValue value)
 {
-  struct TrieItemValue LeafItem_result_2_463 = LeafItem(value);
-  return ((struct TrieItem){.path = path, .value = LeafItem_result_2_463});
+  struct TrieItemValue LeafItem_result_2_453 = LeafItem(value);
+  return ((struct TrieItem){.path = path, .value = LeafItem_result_2_453});
 }
 
 struct TrieItem trie_scratch_leaf(struct TriePath path, Bytes value)
@@ -246,8 +245,8 @@ struct TrieUpdateCursor trie_updates_rebase(struct TrieUpdateCursor updates, str
   case Kind_UpdateBeyondPrefix:
     if (prefix_len <= updates.relation.variants.UpdateBeyondPrefix) {
       struct TriePath path_postfix = path_drop(updates.current.key, prefix_len);
-      struct TrieUpdateRelation UpdateUnderPrefix_result_2_458 = UpdateUnderPrefix(path_postfix);
-      return ((struct TrieUpdateCursor){.current = updates.current, .relation = UpdateUnderPrefix_result_2_458, .source = updates.source});
+      struct TrieUpdateRelation UpdateUnderPrefix_result_2_448 = UpdateUnderPrefix(path_postfix);
+      return ((struct TrieUpdateCursor){.current = updates.current, .relation = UpdateUnderPrefix_result_2_448, .source = updates.source});
     }
     return updates;
   }
@@ -261,8 +260,8 @@ struct TrieItem trie_input_leaf(struct TriePath path, Bytes value)
 
 struct TrieItem trie_subtree(struct TriePath path, struct NodeRef childref)
 {
-  struct TrieItemValue SubtreeItem_result_2_449 = SubtreeItem(childref);
-  return ((struct TrieItem){.path = path, .value = SubtreeItem_result_2_449});
+  struct TrieItemValue SubtreeItem_result_2_439 = SubtreeItem(childref);
+  return ((struct TrieItem){.path = path, .value = SubtreeItem_result_2_439});
 }
 
 struct TrieUpdateFetch next_changed_account_trie_update(void)
@@ -346,13 +345,11 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree(struct TrieUpdateCursor u
     struct TrieItem trie_empty_subtree_result_2_58 = trie_empty_subtree();
     return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_empty_subtree_result_2_58, .tup1 = updates});
   }
-  bool eq_int_result_2_59 = (bool)(cursor == UINT8_C(64));
-  if (eq_int_result_2_59) {
-    struct TrieUpdateRelation result_2_60 = updates.relation;
-    switch (result_2_60.kind) {
+  if (cursor == UINT8_C(64)) {
+    switch (updates.relation.kind) {
     case Kind_UpdateUnderPrefix:
     {
-      uint8_t postfix_len = path_len(result_2_60.variants.UpdateUnderPrefix);
+      uint8_t postfix_len = path_len(updates.relation.variants.UpdateUnderPrefix);
       if (postfix_len != UINT8_C(0)) {
         fatal_error(WitnessDeficient);
       }
@@ -364,22 +361,20 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree(struct TrieUpdateCursor u
     }
     struct tuple_TrieUpdate_TrieUpdateCursor trie_updates_pop_result_2_62 = trie_updates_pop(updates);
     struct TrieUpdate update = trie_updates_pop_result_2_62.tup0;
-    struct TrieUpdateCursor next = trie_updates_pop_result_2_62.tup1;
     bool update_matches_prefix = path_eq(update.key, prefix);
     if (!update_matches_prefix) {
       fatal_error(WitnessDeficient);
     }
-    struct TrieChange result_2_64 = update.change;
-    struct TrieItem tmp_3_376;
-    switch (result_2_64.kind) {
+    struct TrieItem tmp_3_378;
+    switch (update.change.kind) {
     case Kind_TrieDelete:
-      tmp_3_376 = trie_empty_subtree();
+      tmp_3_378 = trie_empty_subtree();
       break;
     case Kind_TriePut:
-      tmp_3_376 = trie_scratch_leaf(update.key, result_2_64.variants.TriePut);
+      tmp_3_378 = trie_scratch_leaf(update.key, update.change.variants.TriePut);
       break;
     }
-    return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_376, .tup1 = next});
+    return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_378, .tup1 = trie_updates_pop_result_2_62.tup1});
   }
   uint8_t next_cursor = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren children = trie_children_empty();
@@ -396,9 +391,7 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree(struct TrieUpdateCursor u
     bool rebased_update_pending = update_under_current_prefix(rebased);
     if (rebased_update_pending) {
       uint64_t rebased_nibble = update_child_nibble(rebased);
-      uint8_t tmp_3_362 = (uint8_t)rebased_nibble;
-      uint8_t tmp_3_363 = (uint8_t)nib;
-      if (tmp_3_362 <= tmp_3_363) {
+      if ((uint8_t)rebased_nibble <= (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
     }
@@ -424,12 +417,12 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree(Bytes node, struct TriePa
     return overlay_leaf_subtree_struct_TrieUpdateCursor_struct_TriePath_struct_TriePath_Bytes_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(updates, prefix, key, decoded.variants.InputLeafNode.tup1, cursor);
   }
   if (!(decoded.kind != Kind_InputExtensionNode)) {
-    struct TriePath path_3_409 = decoded.variants.InputExtensionNode.tup0;
-    uint8_t extension_len = path_len(path_3_409);
+    struct TriePath path_3_411 = decoded.variants.InputExtensionNode.tup0;
+    uint8_t extension_len = path_len(path_3_411);
     if ((extension_len == UINT8_C(0)) || (UINT8_C(64) < ((uint8_t)((uint32_t)extension_len + (uint32_t)cursor)))) {
       fatal_error(WitnessDeficient);
     }
-    struct TriePath child_prefix = path_concat(prefix, path_3_409);
+    struct TriePath child_prefix = path_concat(prefix, path_3_411);
     return overlay_extension_subtree_struct_NodeRef_struct_TriePath_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(decoded.variants.InputExtensionNode.tup1, child_prefix, updates, prefix, cursor);
   }
   /* complete */
@@ -437,25 +430,23 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree(Bytes node, struct TriePa
   if ((decoded.variants.InputBranchNode.tup1.len != UINT8_C(0)) || (UINT8_C(64) <= cursor)) {
     fatal_error(WitnessDeficient);
   }
-  uint8_t next_cursor_3_411 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
+  uint8_t next_cursor_3_413 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren built = trie_children_empty();
   struct TrieUpdateCursor remaining = updates;
   uint64_t nib = UINT64_C(0x0);
-  int64_t tmp_3_388 = (int64_t)UINT8_C(15);
-  int64_t tmp_3_389 = (int64_t)UINT8_C(1);
+  int64_t tmp_3_390 = (int64_t)UINT8_C(15);
+  int64_t tmp_3_391 = (int64_t)UINT8_C(1);
   int64_t i = (int64_t)UINT8_C(0);
-  while (i <= tmp_3_388) {
+  while (i <= tmp_3_390) {
     struct TriePath child_path = path_single(nib);
-    struct TriePath child_prefix_3_412 = path_concat(prefix, child_path);
-    struct NodeRef childref_3_413 = fast_vector_access_vector_16_NodeRef(children, i);
-    bool tmp_3_390 = (bool)(childref_3_413.kind != Kind_EmptyRef);
+    struct TriePath child_prefix_3_414 = path_concat(prefix, child_path);
+    struct NodeRef childref_3_415 = fast_vector_access_vector_16_NodeRef(children, i);
+    bool tmp_3_392 = (bool)(childref_3_415.kind != Kind_EmptyRef);
     bool update_pending = update_under_current_prefix(remaining);
     bool update_here;
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_393 = (uint8_t)update_nibble;
-      uint8_t tmp_3_394 = (uint8_t)nib;
-      if (tmp_3_393 < tmp_3_394) {
+      if ((uint8_t)update_nibble < (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
       update_here = (bool)(update_nibble == nib);
@@ -465,14 +456,14 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree(Bytes node, struct TriePa
     struct tuple_TrieItem_TrieUpdateCursor result_2_80;
     if (update_here) {
       struct TrieUpdateCursor descended = trie_updates_descend(remaining);
-      if (tmp_3_390) {
-        Bytes child = resolve_witness_ref(childref_3_413);
-        result_2_80 = witness_subtree(child, child_prefix_3_412, descended, next_cursor_3_411);
+      if (tmp_3_392) {
+        Bytes child = resolve_witness_ref(childref_3_415);
+        result_2_80 = witness_subtree(child, child_prefix_3_414, descended, next_cursor_3_413);
       } else {
-        result_2_80 = updates_subtree(descended, child_prefix_3_412, next_cursor_3_411);
+        result_2_80 = updates_subtree(descended, child_prefix_3_414, next_cursor_3_413);
       }
-    } else if (tmp_3_390) {
-      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_412, childref_3_413);
+    } else if (tmp_3_392) {
+      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_414, childref_3_415);
       result_2_80 = ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_subtree_result_2_78, .tup1 = remaining});
     } else {
       struct TrieItem trie_empty_subtree_result_2_79 = trie_empty_subtree();
@@ -485,10 +476,10 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree(Bytes node, struct TriePa
       remaining = result_2_80.tup1;
     }
     nib = ((nib + UINT64_C(0x1)) & UINT64_C(0xF));
-    i = (i + tmp_3_389);
+    i = (i + tmp_3_391);
   }
-  bool update_pending_3_415 = update_under_current_prefix(remaining);
-  if (update_pending_3_415) {
+  bool update_pending_3_417 = update_under_current_prefix(remaining);
+  if (update_pending_3_417) {
     fatal_error(WitnessDeficient);
   }
   struct TrieItem trie_children_finish_result_2_82 = trie_children_finish(prefix, built);
@@ -524,10 +515,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
   while (extension_pending || update_pending) {
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_286 = (uint8_t)extension_nibble;
-      uint8_t tmp_3_287 = (uint8_t)update_nibble;
-      bool condition_2_17 = (bool)(extension_pending && (tmp_3_286 < tmp_3_287));
-      if (condition_2_17) {
+      uint8_t update_index = (uint8_t)update_nibble;
+      if (extension_pending && ((uint8_t)extension_nibble < update_index)) {
         struct TrieItem extension = trie_branch(child_prefix, childref);
         children = trie_children_add(children, prefix, extension_nibble, extension);
         extension_pending = false;
@@ -550,8 +539,7 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
         bool rebased_update_pending = update_under_current_prefix(rebased);
         if (rebased_update_pending) {
           uint64_t rebased_nibble = update_child_nibble(rebased);
-          uint8_t tmp_3_295 = (uint8_t)rebased_nibble;
-          if (tmp_3_295 <= tmp_3_287) {
+          if ((uint8_t)rebased_nibble <= update_index) {
             fatal_error(WitnessDeficient);
           }
         }
@@ -559,8 +547,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
         update_pending = rebased_update_pending;
       }
     } else {
-      struct TrieItem extension_3_302 = trie_branch(child_prefix, childref);
-      children = trie_children_add(children, prefix, extension_nibble, extension_3_302);
+      struct TrieItem extension_3_304 = trie_branch(child_prefix, childref);
+      children = trie_children_add(children, prefix, extension_nibble, extension_3_304);
       extension_pending = false;
     }
   }
@@ -594,10 +582,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
   while (extension_pending || update_pending) {
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_286 = (uint8_t)extension_nibble;
-      uint8_t tmp_3_287 = (uint8_t)update_nibble;
-      bool condition_2_17 = (bool)(extension_pending && (tmp_3_286 < tmp_3_287));
-      if (condition_2_17) {
+      uint8_t update_index = (uint8_t)update_nibble;
+      if (extension_pending && ((uint8_t)extension_nibble < update_index)) {
         struct TrieItem extension = trie_branch(child_prefix, childref);
         children = trie_children_add(children, prefix, extension_nibble, extension);
         extension_pending = false;
@@ -620,8 +606,7 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
         bool rebased_update_pending = update_under_current_prefix(rebased);
         if (rebased_update_pending) {
           uint64_t rebased_nibble = update_child_nibble(rebased);
-          uint8_t tmp_3_295 = (uint8_t)rebased_nibble;
-          if (tmp_3_295 <= tmp_3_287) {
+          if ((uint8_t)rebased_nibble <= update_index) {
             fatal_error(WitnessDeficient);
           }
         }
@@ -629,8 +614,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_extension_subtree_struct_NodeRef_
         update_pending = rebased_update_pending;
       }
     } else {
-      struct TrieItem extension_3_302 = trie_branch(child_prefix, childref);
-      children = trie_children_add(children, prefix, extension_nibble, extension_3_302);
+      struct TrieItem extension_3_304 = trie_branch(child_prefix, childref);
+      children = trie_children_add(children, prefix, extension_nibble, extension_3_304);
       extension_pending = false;
     }
   }
@@ -645,19 +630,17 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
   if ((prefix_len != cursor) || !key_below_prefix) {
     fatal_error(WitnessDeficient);
   }
-  bool eq_int_result_2_23 = (bool)(cursor == UINT8_C(64));
-  if (eq_int_result_2_23) {
+  if (cursor == UINT8_C(64)) {
     bool key_matches_prefix = path_eq(prefix, key);
     if (!key_matches_prefix) {
       fatal_error(WitnessDeficient);
     }
     bool has_update = update_under_current_prefix(updates);
     if (has_update) {
-      struct TrieUpdateRelation result_2_25 = updates.relation;
-      switch (result_2_25.kind) {
+      switch (updates.relation.kind) {
       case Kind_UpdateUnderPrefix:
       {
-        uint8_t postfix_len = path_len(result_2_25.variants.UpdateUnderPrefix);
+        uint8_t postfix_len = path_len(updates.relation.variants.UpdateUnderPrefix);
         if (postfix_len != UINT8_C(0)) {
           fatal_error(WitnessDeficient);
         }
@@ -669,22 +652,20 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
       }
       struct tuple_TrieUpdate_TrieUpdateCursor trie_updates_pop_result_2_27 = trie_updates_pop(updates);
       struct TrieUpdate update = trie_updates_pop_result_2_27.tup0;
-      struct TrieUpdateCursor next = trie_updates_pop_result_2_27.tup1;
       bool update_matches_key = path_eq(update.key, key);
       if (!update_matches_key) {
         fatal_error(WitnessDeficient);
       }
-      struct TrieChange result_2_29 = update.change;
-      struct TrieItem tmp_3_332;
-      switch (result_2_29.kind) {
+      struct TrieItem tmp_3_334;
+      switch (update.change.kind) {
       case Kind_TrieDelete:
-        tmp_3_332 = trie_empty_subtree();
+        tmp_3_334 = trie_empty_subtree();
         break;
       case Kind_TriePut:
-        tmp_3_332 = trie_scratch_leaf(key, result_2_29.variants.TriePut);
+        tmp_3_334 = trie_scratch_leaf(key, update.change.variants.TriePut);
         break;
       }
-      return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_332, .tup1 = next});
+      return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_334, .tup1 = trie_updates_pop_result_2_27.tup1});
     }
     struct TrieItem trie_input_leaf_result_2_31 = trie_input_leaf(key, value);
     return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_input_leaf_result_2_31, .tup1 = updates});
@@ -698,10 +679,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
   while (leaf_pending || update_pending) {
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_309 = (uint8_t)leaf_nibble;
-      uint8_t tmp_3_310 = (uint8_t)update_nibble;
-      bool condition_2_32 = (bool)(leaf_pending && (tmp_3_309 < tmp_3_310));
-      if (condition_2_32) {
+      uint8_t update_index = (uint8_t)update_nibble;
+      if (leaf_pending && ((uint8_t)leaf_nibble < update_index)) {
         struct TrieItem leaf = trie_input_leaf(key, value);
         children = trie_children_add(children, prefix, leaf_nibble, leaf);
         leaf_pending = false;
@@ -724,8 +703,7 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
         bool rebased_update_pending = update_under_current_prefix(rebased);
         if (rebased_update_pending) {
           uint64_t rebased_nibble = update_child_nibble(rebased);
-          uint8_t tmp_3_318 = (uint8_t)rebased_nibble;
-          if (tmp_3_318 <= tmp_3_310) {
+          if ((uint8_t)rebased_nibble <= update_index) {
             fatal_error(WitnessDeficient);
           }
         }
@@ -733,8 +711,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
         update_pending = rebased_update_pending;
       }
     } else {
-      struct TrieItem leaf_3_338 = trie_input_leaf(key, value);
-      children = trie_children_add(children, prefix, leaf_nibble, leaf_3_338);
+      struct TrieItem leaf_3_340 = trie_input_leaf(key, value);
+      children = trie_children_add(children, prefix, leaf_nibble, leaf_3_340);
       leaf_pending = false;
     }
   }
@@ -758,10 +736,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
   while (leaf_pending || update_pending) {
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_309 = (uint8_t)leaf_nibble;
-      uint8_t tmp_3_310 = (uint8_t)update_nibble;
-      bool condition_2_32 = (bool)(leaf_pending && (tmp_3_309 < tmp_3_310));
-      if (condition_2_32) {
+      uint8_t update_index = (uint8_t)update_nibble;
+      if (leaf_pending && ((uint8_t)leaf_nibble < update_index)) {
         struct TrieItem leaf = trie_input_leaf(key, value);
         children = trie_children_add(children, prefix, leaf_nibble, leaf);
         leaf_pending = false;
@@ -784,8 +760,7 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
         bool rebased_update_pending = update_under_current_prefix(rebased);
         if (rebased_update_pending) {
           uint64_t rebased_nibble = update_child_nibble(rebased);
-          uint8_t tmp_3_318 = (uint8_t)rebased_nibble;
-          if (tmp_3_318 <= tmp_3_310) {
+          if ((uint8_t)rebased_nibble <= update_index) {
             fatal_error(WitnessDeficient);
           }
         }
@@ -793,8 +768,8 @@ struct tuple_TrieItem_TrieUpdateCursor overlay_leaf_subtree_struct_TrieUpdateCur
         update_pending = rebased_update_pending;
       }
     } else {
-      struct TrieItem leaf_3_338 = trie_input_leaf(key, value);
-      children = trie_children_add(children, prefix, leaf_nibble, leaf_3_338);
+      struct TrieItem leaf_3_340 = trie_input_leaf(key, value);
+      children = trie_children_add(children, prefix, leaf_nibble, leaf_3_340);
       leaf_pending = false;
     }
   }
@@ -887,13 +862,11 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree_struct_TrieUpdateCursor_s
     struct TrieItem trie_empty_subtree_result_2_58 = trie_empty_subtree();
     return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_empty_subtree_result_2_58, .tup1 = updates});
   }
-  bool eq_int_result_2_59 = (bool)(cursor == UINT8_C(64));
-  if (eq_int_result_2_59) {
-    struct TrieUpdateRelation result_2_60 = updates.relation;
-    switch (result_2_60.kind) {
+  if (cursor == UINT8_C(64)) {
+    switch (updates.relation.kind) {
     case Kind_UpdateUnderPrefix:
     {
-      uint8_t postfix_len = path_len(result_2_60.variants.UpdateUnderPrefix);
+      uint8_t postfix_len = path_len(updates.relation.variants.UpdateUnderPrefix);
       if (postfix_len != UINT8_C(0)) {
         fatal_error(WitnessDeficient);
       }
@@ -905,22 +878,20 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree_struct_TrieUpdateCursor_s
     }
     struct tuple_TrieUpdate_TrieUpdateCursor trie_updates_pop_result_2_62 = trie_updates_pop(updates);
     struct TrieUpdate update = trie_updates_pop_result_2_62.tup0;
-    struct TrieUpdateCursor next = trie_updates_pop_result_2_62.tup1;
     bool update_matches_prefix = path_eq(update.key, prefix);
     if (!update_matches_prefix) {
       fatal_error(WitnessDeficient);
     }
-    struct TrieChange result_2_64 = update.change;
-    struct TrieItem tmp_3_376;
-    switch (result_2_64.kind) {
+    struct TrieItem tmp_3_378;
+    switch (update.change.kind) {
     case Kind_TrieDelete:
-      tmp_3_376 = trie_empty_subtree();
+      tmp_3_378 = trie_empty_subtree();
       break;
     case Kind_TriePut:
-      tmp_3_376 = trie_scratch_leaf(update.key, result_2_64.variants.TriePut);
+      tmp_3_378 = trie_scratch_leaf(update.key, update.change.variants.TriePut);
       break;
     }
-    return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_376, .tup1 = next});
+    return ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = tmp_3_378, .tup1 = trie_updates_pop_result_2_62.tup1});
   }
   uint8_t next_cursor = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren children = trie_children_empty();
@@ -937,9 +908,7 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree_struct_TrieUpdateCursor_s
     bool rebased_update_pending = update_under_current_prefix(rebased);
     if (rebased_update_pending) {
       uint64_t rebased_nibble = update_child_nibble(rebased);
-      uint8_t tmp_3_362 = (uint8_t)rebased_nibble;
-      uint8_t tmp_3_363 = (uint8_t)nib;
-      if (tmp_3_362 <= tmp_3_363) {
+      if ((uint8_t)rebased_nibble <= (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
     }
@@ -976,9 +945,7 @@ struct tuple_TrieItem_TrieUpdateCursor updates_subtree_struct_TrieUpdateCursor_s
     bool rebased_update_pending = update_under_current_prefix(rebased);
     if (rebased_update_pending) {
       uint64_t rebased_nibble = update_child_nibble(rebased);
-      uint8_t tmp_3_362 = (uint8_t)rebased_nibble;
-      uint8_t tmp_3_363 = (uint8_t)nib;
-      if (tmp_3_362 <= tmp_3_363) {
+      if ((uint8_t)rebased_nibble <= (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
     }
@@ -1004,12 +971,12 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     return overlay_leaf_subtree_struct_TrieUpdateCursor_struct_TriePath_struct_TriePath_Bytes_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(updates, prefix, key, decoded.variants.InputLeafNode.tup1, cursor);
   }
   if (!(decoded.kind != Kind_InputExtensionNode)) {
-    struct TriePath path_3_409 = decoded.variants.InputExtensionNode.tup0;
-    uint8_t extension_len = path_len(path_3_409);
+    struct TriePath path_3_411 = decoded.variants.InputExtensionNode.tup0;
+    uint8_t extension_len = path_len(path_3_411);
     if ((extension_len == UINT8_C(0)) || (UINT8_C(64) < ((uint8_t)((uint32_t)extension_len + (uint32_t)cursor)))) {
       fatal_error(WitnessDeficient);
     }
-    struct TriePath child_prefix = path_concat(prefix, path_3_409);
+    struct TriePath child_prefix = path_concat(prefix, path_3_411);
     return overlay_extension_subtree_struct_NodeRef_struct_TriePath_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(decoded.variants.InputExtensionNode.tup1, child_prefix, updates, prefix, cursor);
   }
   /* complete */
@@ -1017,25 +984,23 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
   if ((decoded.variants.InputBranchNode.tup1.len != UINT8_C(0)) || (UINT8_C(64) <= cursor)) {
     fatal_error(WitnessDeficient);
   }
-  uint8_t next_cursor_3_411 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
+  uint8_t next_cursor_3_413 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren built = trie_children_empty();
   struct TrieUpdateCursor remaining = updates;
   uint64_t nib = UINT64_C(0x0);
-  int64_t tmp_3_388 = (int64_t)UINT8_C(15);
-  int64_t tmp_3_389 = (int64_t)UINT8_C(1);
+  int64_t tmp_3_390 = (int64_t)UINT8_C(15);
+  int64_t tmp_3_391 = (int64_t)UINT8_C(1);
   int64_t i = (int64_t)UINT8_C(0);
-  while (i <= tmp_3_388) {
+  while (i <= tmp_3_390) {
     struct TriePath child_path = path_single(nib);
-    struct TriePath child_prefix_3_412 = path_concat(prefix, child_path);
-    struct NodeRef childref_3_413 = fast_vector_access_vector_16_NodeRef(children, i);
-    bool tmp_3_390 = (bool)(childref_3_413.kind != Kind_EmptyRef);
+    struct TriePath child_prefix_3_414 = path_concat(prefix, child_path);
+    struct NodeRef childref_3_415 = fast_vector_access_vector_16_NodeRef(children, i);
+    bool tmp_3_392 = (bool)(childref_3_415.kind != Kind_EmptyRef);
     bool update_pending = update_under_current_prefix(remaining);
     bool update_here;
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_393 = (uint8_t)update_nibble;
-      uint8_t tmp_3_394 = (uint8_t)nib;
-      if (tmp_3_393 < tmp_3_394) {
+      if ((uint8_t)update_nibble < (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
       update_here = (bool)(update_nibble == nib);
@@ -1045,14 +1010,14 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     struct tuple_TrieItem_TrieUpdateCursor result_2_80;
     if (update_here) {
       struct TrieUpdateCursor descended = trie_updates_descend(remaining);
-      if (tmp_3_390) {
-        Bytes child = resolve_witness_ref(childref_3_413);
-        result_2_80 = witness_subtree(child, child_prefix_3_412, descended, next_cursor_3_411);
+      if (tmp_3_392) {
+        Bytes child = resolve_witness_ref(childref_3_415);
+        result_2_80 = witness_subtree(child, child_prefix_3_414, descended, next_cursor_3_413);
       } else {
-        result_2_80 = updates_subtree(descended, child_prefix_3_412, next_cursor_3_411);
+        result_2_80 = updates_subtree(descended, child_prefix_3_414, next_cursor_3_413);
       }
-    } else if (tmp_3_390) {
-      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_412, childref_3_413);
+    } else if (tmp_3_392) {
+      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_414, childref_3_415);
       result_2_80 = ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_subtree_result_2_78, .tup1 = remaining});
     } else {
       struct TrieItem trie_empty_subtree_result_2_79 = trie_empty_subtree();
@@ -1065,10 +1030,10 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
       remaining = result_2_80.tup1;
     }
     nib = ((nib + UINT64_C(0x1)) & UINT64_C(0xF));
-    i = (i + tmp_3_389);
+    i = (i + tmp_3_391);
   }
-  bool update_pending_3_415 = update_under_current_prefix(remaining);
-  if (update_pending_3_415) {
+  bool update_pending_3_417 = update_under_current_prefix(remaining);
+  if (update_pending_3_417) {
     fatal_error(WitnessDeficient);
   }
   struct TrieItem trie_children_finish_result_2_82 = trie_children_finish(prefix, built);
@@ -1090,12 +1055,12 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     return overlay_leaf_subtree_struct_TrieUpdateCursor_struct_TriePath_struct_TriePath_Bytes_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(updates, prefix, key, decoded.variants.InputLeafNode.tup1, cursor);
   }
   if (!(decoded.kind != Kind_InputExtensionNode)) {
-    struct TriePath path_3_409 = decoded.variants.InputExtensionNode.tup0;
-    uint8_t extension_len = path_len(path_3_409);
+    struct TriePath path_3_411 = decoded.variants.InputExtensionNode.tup0;
+    uint8_t extension_len = path_len(path_3_411);
     if ((extension_len == UINT8_C(0)) || (UINT8_C(64) < ((uint8_t)((uint32_t)extension_len + (uint32_t)cursor)))) {
       fatal_error(WitnessDeficient);
     }
-    struct TriePath child_prefix = path_concat(prefix, path_3_409);
+    struct TriePath child_prefix = path_concat(prefix, path_3_411);
     return overlay_extension_subtree_struct_NodeRef_struct_TriePath_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(decoded.variants.InputExtensionNode.tup1, child_prefix, updates, prefix, cursor);
   }
   /* complete */
@@ -1103,25 +1068,23 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
   if ((decoded.variants.InputBranchNode.tup1.len != UINT8_C(0)) || (UINT8_C(64) <= cursor)) {
     fatal_error(WitnessDeficient);
   }
-  uint8_t next_cursor_3_411 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
+  uint8_t next_cursor_3_413 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren built = trie_children_empty();
   struct TrieUpdateCursor remaining = updates;
   uint64_t nib = UINT64_C(0x0);
-  int64_t tmp_3_388 = (int64_t)UINT8_C(15);
-  int64_t tmp_3_389 = (int64_t)UINT8_C(1);
+  int64_t tmp_3_390 = (int64_t)UINT8_C(15);
+  int64_t tmp_3_391 = (int64_t)UINT8_C(1);
   int64_t i = (int64_t)UINT8_C(0);
-  while (i <= tmp_3_388) {
+  while (i <= tmp_3_390) {
     struct TriePath child_path = path_single(nib);
-    struct TriePath child_prefix_3_412 = path_concat(prefix, child_path);
-    struct NodeRef childref_3_413 = fast_vector_access_vector_16_NodeRef(children, i);
-    bool tmp_3_390 = (bool)(childref_3_413.kind != Kind_EmptyRef);
+    struct TriePath child_prefix_3_414 = path_concat(prefix, child_path);
+    struct NodeRef childref_3_415 = fast_vector_access_vector_16_NodeRef(children, i);
+    bool tmp_3_392 = (bool)(childref_3_415.kind != Kind_EmptyRef);
     bool update_pending = update_under_current_prefix(remaining);
     bool update_here;
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_393 = (uint8_t)update_nibble;
-      uint8_t tmp_3_394 = (uint8_t)nib;
-      if (tmp_3_393 < tmp_3_394) {
+      if ((uint8_t)update_nibble < (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
       update_here = (bool)(update_nibble == nib);
@@ -1131,14 +1094,14 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     struct tuple_TrieItem_TrieUpdateCursor result_2_80;
     if (update_here) {
       struct TrieUpdateCursor descended = trie_updates_descend(remaining);
-      if (tmp_3_390) {
-        Bytes child = resolve_witness_ref(childref_3_413);
-        result_2_80 = witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(child, child_prefix_3_412, descended, next_cursor_3_411);
+      if (tmp_3_392) {
+        Bytes child = resolve_witness_ref(childref_3_415);
+        result_2_80 = witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(child, child_prefix_3_414, descended, next_cursor_3_413);
       } else {
-        result_2_80 = updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(descended, child_prefix_3_412, next_cursor_3_411);
+        result_2_80 = updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(descended, child_prefix_3_414, next_cursor_3_413);
       }
-    } else if (tmp_3_390) {
-      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_412, childref_3_413);
+    } else if (tmp_3_392) {
+      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_414, childref_3_415);
       result_2_80 = ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_subtree_result_2_78, .tup1 = remaining});
     } else {
       struct TrieItem trie_empty_subtree_result_2_79 = trie_empty_subtree();
@@ -1151,10 +1114,10 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
       remaining = result_2_80.tup1;
     }
     nib = ((nib + UINT64_C(0x1)) & UINT64_C(0xF));
-    i = (i + tmp_3_389);
+    i = (i + tmp_3_391);
   }
-  bool update_pending_3_415 = update_under_current_prefix(remaining);
-  if (update_pending_3_415) {
+  bool update_pending_3_417 = update_under_current_prefix(remaining);
+  if (update_pending_3_417) {
     fatal_error(WitnessDeficient);
   }
   struct TrieItem trie_children_finish_result_2_82 = trie_children_finish(prefix, built);
@@ -1176,12 +1139,12 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     return overlay_leaf_subtree_struct_TrieUpdateCursor_struct_TriePath_struct_TriePath_Bytes_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(updates, prefix, key, decoded.variants.InputLeafNode.tup1, cursor);
   }
   if (!(decoded.kind != Kind_InputExtensionNode)) {
-    struct TriePath path_3_409 = decoded.variants.InputExtensionNode.tup0;
-    uint8_t extension_len = path_len(path_3_409);
+    struct TriePath path_3_411 = decoded.variants.InputExtensionNode.tup0;
+    uint8_t extension_len = path_len(path_3_411);
     if ((extension_len == UINT8_C(0)) || (UINT8_C(64) < ((uint8_t)((uint32_t)extension_len + (uint32_t)cursor)))) {
       fatal_error(WitnessDeficient);
     }
-    struct TriePath child_prefix = path_concat(prefix, path_3_409);
+    struct TriePath child_prefix = path_concat(prefix, path_3_411);
     return overlay_extension_subtree_struct_NodeRef_struct_TriePath_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(decoded.variants.InputExtensionNode.tup1, child_prefix, updates, prefix, cursor);
   }
   /* complete */
@@ -1189,25 +1152,23 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
   if ((decoded.variants.InputBranchNode.tup1.len != UINT8_C(0)) || (UINT8_C(64) <= cursor)) {
     fatal_error(WitnessDeficient);
   }
-  uint8_t next_cursor_3_411 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
+  uint8_t next_cursor_3_413 = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)cursor));
   struct TrieChildren built = trie_children_empty();
   struct TrieUpdateCursor remaining = updates;
   uint64_t nib = UINT64_C(0x0);
-  int64_t tmp_3_388 = (int64_t)UINT8_C(15);
-  int64_t tmp_3_389 = (int64_t)UINT8_C(1);
+  int64_t tmp_3_390 = (int64_t)UINT8_C(15);
+  int64_t tmp_3_391 = (int64_t)UINT8_C(1);
   int64_t i = (int64_t)UINT8_C(0);
-  while (i <= tmp_3_388) {
+  while (i <= tmp_3_390) {
     struct TriePath child_path = path_single(nib);
-    struct TriePath child_prefix_3_412 = path_concat(prefix, child_path);
-    struct NodeRef childref_3_413 = fast_vector_access_vector_16_NodeRef(children, i);
-    bool tmp_3_390 = (bool)(childref_3_413.kind != Kind_EmptyRef);
+    struct TriePath child_prefix_3_414 = path_concat(prefix, child_path);
+    struct NodeRef childref_3_415 = fast_vector_access_vector_16_NodeRef(children, i);
+    bool tmp_3_392 = (bool)(childref_3_415.kind != Kind_EmptyRef);
     bool update_pending = update_under_current_prefix(remaining);
     bool update_here;
     if (update_pending) {
       uint64_t update_nibble = update_child_nibble(remaining);
-      uint8_t tmp_3_393 = (uint8_t)update_nibble;
-      uint8_t tmp_3_394 = (uint8_t)nib;
-      if (tmp_3_393 < tmp_3_394) {
+      if ((uint8_t)update_nibble < (uint8_t)nib) {
         fatal_error(WitnessDeficient);
       }
       update_here = (bool)(update_nibble == nib);
@@ -1217,14 +1178,14 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
     struct tuple_TrieItem_TrieUpdateCursor result_2_80;
     if (update_here) {
       struct TrieUpdateCursor descended = trie_updates_descend(remaining);
-      if (tmp_3_390) {
-        Bytes child = resolve_witness_ref(childref_3_413);
-        result_2_80 = witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(child, child_prefix_3_412, descended, next_cursor_3_411);
+      if (tmp_3_392) {
+        Bytes child = resolve_witness_ref(childref_3_415);
+        result_2_80 = witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(child, child_prefix_3_414, descended, next_cursor_3_413);
       } else {
-        result_2_80 = updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(descended, child_prefix_3_412, next_cursor_3_411);
+        result_2_80 = updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor(descended, child_prefix_3_414, next_cursor_3_413);
       }
-    } else if (tmp_3_390) {
-      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_412, childref_3_413);
+    } else if (tmp_3_392) {
+      struct TrieItem trie_subtree_result_2_78 = trie_subtree(child_prefix_3_414, childref_3_415);
       result_2_80 = ((struct tuple_TrieItem_TrieUpdateCursor){.tup0 = trie_subtree_result_2_78, .tup1 = remaining});
     } else {
       struct TrieItem trie_empty_subtree_result_2_79 = trie_empty_subtree();
@@ -1237,10 +1198,10 @@ struct tuple_TrieItem_TrieUpdateCursor witness_subtree_Bytes_struct_TriePath_str
       remaining = result_2_80.tup1;
     }
     nib = ((nib + UINT64_C(0x1)) & UINT64_C(0xF));
-    i = (i + tmp_3_389);
+    i = (i + tmp_3_391);
   }
-  bool update_pending_3_415 = update_under_current_prefix(remaining);
-  if (update_pending_3_415) {
+  bool update_pending_3_417 = update_under_current_prefix(remaining);
+  if (update_pending_3_417) {
     fatal_error(WitnessDeficient);
   }
   struct TrieItem trie_children_finish_result_2_82 = trie_children_finish(prefix, built);

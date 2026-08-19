@@ -183,8 +183,8 @@ def output_buffer_word (value : Nat) : SailM (Sigma fun (k_off : Nat) =>
 
 /-- Stores two words as the output (64-byte precompile results, e.g.
 `ecrecover`-style pairs). -/
-/- Type quantifiers: k_ex608950_ : Nat, k_ex608949_ : Nat, 0 ≤ k_ex608949_ ∧
-  k_ex608949_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex608950_ ∧ k_ex608950_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex549865_ : Nat, k_ex549864_ : Nat, 0 ≤ k_ex549864_ ∧
+  k_ex549864_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex549865_ ∧ k_ex549865_ ≤ (2 ^ 256 - 1) -/
 def output_buffer_words (first : Nat) (second : Nat) : SailM (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len))) := do
   let stored ← do (output_buffer_store_words first second)

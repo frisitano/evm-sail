@@ -21,13 +21,9 @@ from evm.HostContract import (
 from evm.prelude import (
     address,
     hash,
-    alu_mul,
     ZERO_ADDRESS,
 )
-from evm.primitives.quantities import (
-    blob_gas_used,
-    word_of_withdrawal_amount,
-)
+from evm.primitives.quantities import blob_gas_used
 from evm.primitives.gas import block_gas
 from evm.primitives.bytes import (
     StatelessInputSlice,
@@ -250,8 +246,7 @@ def apply_withdrawals(withdrawals: WithdrawalListRef) -> None:
         (withdrawal_ref, tail) = ssz_fixed_list_pop(rest, WD_SIZE)
         rest = tail
         withdrawal = decode_withdrawal(withdrawal_ref)
-        amount = word_of_withdrawal_amount(withdrawal.amount)
-        amount_in_wei = alu_mul(amount, 1000000000)
+        amount_in_wei = (int(withdrawal.amount) * 1000000000)
         k_add_balance(withdrawal.address, amount_in_wei)
     return None
 

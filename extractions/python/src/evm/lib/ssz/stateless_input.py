@@ -24,6 +24,7 @@ from evm.HostContract import (
     scratch_sha256 as _host_scratch_sha256,
     stateless_input_keccak256 as _host_stateless_input_keccak256,
 )
+from evm._sail.flow import neq_bool
 from evm._sail.vector import neq_bits
 from evm.prelude import (
     address,
@@ -595,15 +596,23 @@ def index_witness_header_cursor(state: WitnessHeaderIndex) -> WitnessHeaderIndex
         if ((((index) != (0))) | (is_last)):
             fields = rlp_node_cursor(header)
             decoded = decode_parent_header_fields(fields, 0, EMPTY_PARENT_HEADER_FIELDS)
-            parent_missing = (not (decoded.have_parent))
-            if ((((index) != (0))) & (((parent_missing) | (((decoded.parent_hash) != (state.previous_hash)))))):
-                result.valid = False
+            if ((index) != (0)):
+                if (not (decoded.have_parent)):
+                    result.valid = False
+                else:
+                    if ((decoded.parent_hash) != (state.previous_hash)):
+                        result.valid = False
             if is_last:
                 result.parent_state_root = Bytes32(decoded.state_root)
                 result.parent_base_fee_per_gas = word(decoded.base_fee)
                 result.parent_blob_gas_used = decoded.blob_gas_used
                 result.parent_excess_blob_gas = excess_blob_gas(decoded.excess_blob_gas)
-                result.parent_fields_valid = ((decoded.have_state) & ((((((int(profile.fork) < int(Cancun))) | (decoded.have_base_fee))) & ((((int(profile.fork) < int(Cancun))) | (((decoded.have_blob_gas) == (decoded.have_excess_blob_gas))))))))
+                result.parent_fields_valid = decoded.have_state
+                if (int(profile.fork) >= int(Cancun)):
+                    if (not (decoded.have_base_fee)):
+                        result.parent_fields_valid = False
+                    if neq_bool(decoded.have_blob_gas, decoded.have_excess_blob_gas):
+                        result.parent_fields_valid = False
         current_hash = _host_stateless_input_keccak256(header)
         result.previous_hash = Bytes32(current_hash)
         header_count = state.cursor.items.count
@@ -652,7 +661,19 @@ def decode_block_header_ssz(input_ref: StatelessInputRef) -> BlockHeader:
     gas_used_value = decode_ssz_uint(payload, PL_GAS_USED)
     prev_randao_hash = ssz_bytes32(payload, PL_PREV_RANDAO)
     prev_randao = hash_to_word(prev_randao_hash)
-    return BlockHeader(number=block_number(decode_ssz_uint(payload, PL_BLOCK_NUMBER)), timestamp=block_timestamp(decode_ssz_uint(payload, PL_TIMESTAMP)), gas_limit=block_gas_limit(gas_limit_value), gas_used=block_gas(gas_used_value), prev_randao=word(prev_randao), base_fee=word(ssz_u256(payload, PL_BASE_FEE)), blob_gas_used=decode_payload_blob_gas_used(payload, input_ref.protocol), excess_blob_gas=excess_blob_gas(decode_payload_excess_blob_gas(payload, input_ref.protocol)), state_root=hash(ssz_bytes32(payload, PL_STATE_ROOT)), receipts_root=hash(ssz_bytes32(payload, PL_RECEIPTS_ROOT)), logs_bloom=stateless_input_sub_slice(payload, PL_LOGS_BLOOM, 256), fee_recipient=address(ssz_addr(payload, PL_FEE_RECIPIENT)), parent_hash=hash(ssz_bytes32(payload, 0)), parent_beacon_block_root=hash(ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)), slot_number=slot_number(decode_ssz_uint(payload, PL_SLOT_NUMBER)), extra_data=input_ref.extra_data)
+    number = decode_ssz_uint(payload, PL_BLOCK_NUMBER)
+    timestamp = decode_ssz_uint(payload, PL_TIMESTAMP)
+    base_fee = ssz_u256(payload, PL_BASE_FEE)
+    blob_gas_used_ = decode_payload_blob_gas_used(payload, input_ref.protocol)
+    excess_blob_gas_ = decode_payload_excess_blob_gas(payload, input_ref.protocol)
+    state_root = ssz_bytes32(payload, PL_STATE_ROOT)
+    receipts_root = ssz_bytes32(payload, PL_RECEIPTS_ROOT)
+    logs_bloom = stateless_input_sub_slice(payload, PL_LOGS_BLOOM, 256)
+    fee_recipient = ssz_addr(payload, PL_FEE_RECIPIENT)
+    parent_hash = ssz_bytes32(payload, 0)
+    parent_beacon_block_root = ssz_bytes32(input_ref.new_payload_request, NPR_BEACON_ROOT)
+    slot_number_ = decode_ssz_uint(payload, PL_SLOT_NUMBER)
+    return BlockHeader(number=block_number(number), timestamp=block_timestamp(timestamp), gas_limit=block_gas_limit(gas_limit_value), gas_used=block_gas(gas_used_value), prev_randao=word(prev_randao), base_fee=word(base_fee), blob_gas_used=blob_gas_used_, excess_blob_gas=excess_blob_gas(excess_blob_gas_), state_root=hash(state_root), receipts_root=hash(receipts_root), logs_bloom=logs_bloom, fee_recipient=address(fee_recipient), parent_hash=hash(parent_hash), parent_beacon_block_root=hash(parent_beacon_block_root), slot_number=slot_number(slot_number_), extra_data=input_ref.extra_data)
 
 def decode_withdrawal(withdrawal: StatelessInputSlice) -> Withdrawal:
     return Withdrawal(index=withdrawal_index(decode_ssz_uint(withdrawal, WD_INDEX)), validator_index=validator_index(decode_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)), address=address(ssz_addr(withdrawal, WD_ADDRESS)), amount=withdrawal_amount(decode_ssz_uint(withdrawal, WD_AMOUNT)))

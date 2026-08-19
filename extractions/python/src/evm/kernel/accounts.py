@@ -125,8 +125,12 @@ def k_account_is_empty(a: address) -> bool:
 def k_account_occupied(a: address) -> bool:
     acc = k_aload(a)
     info = acc.info
-    anchored_storage = (((not (acc.storage_cleared))) & (((info.storage_root) != (EMPTY_TRIE_ROOT))))
-    if ((((info.code_hash) != (KECCAK_EMPTY))) | (((((info.nonce) != (0))) | (anchored_storage)))):
+    anchored_storage = False
+    if (not (acc.storage_cleared)):
+        anchored_storage = ((info.storage_root) != (EMPTY_TRIE_ROOT))
+    has_code = ((info.code_hash) != (KECCAK_EMPTY))
+    has_nonce = ((info.nonce) != (0))
+    if ((has_code) | (((has_nonce) | (anchored_storage)))):
         return True
     else:
         return _host_storage_has_writes(a)

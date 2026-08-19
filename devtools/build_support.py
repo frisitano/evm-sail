@@ -29,10 +29,11 @@ LEAN_REDUNDANT_OUTPUT_BIND_RE = re.compile(
     r"((?:(?!\n[ \t]*\(pure ).)*?)(?=\n[ \t]*\(pure \(\)\))",
     re.DOTALL,
 )
-LEAN_INTERPRETER_SIGMA_PACKS = 19
-LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES = 22
-LEAN_INTERPRETER_SIGMA_BINDS = 21
-LEAN_INTERPRETER_RESULT_PROJECTIONS = 1
+LEAN_INTERPRETER_SIGMA_PACKS = 0
+LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES = 14
+LEAN_INTERPRETER_SIGMA_BINDS = 14
+LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS = 0
+LEAN_INTERPRETER_RESULT_PROJECTIONS = 0
 
 
 class BuildSupportError(ValueError):
@@ -277,7 +278,7 @@ def normalize_lean_tree(root: Path) -> int:
             pack_count != LEAN_INTERPRETER_SIGMA_PACKS
             or len(bind_candidates) != LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES
             or bind_count != LEAN_INTERPRETER_SIGMA_BINDS
-            or skipped_bind_count != 1
+            or skipped_bind_count != LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS
             or projection_count != LEAN_INTERPRETER_RESULT_PROJECTIONS
         ):
             raise BuildSupportError(
@@ -287,7 +288,8 @@ def normalize_lean_tree(root: Path) -> int:
                 f"result projections={projection_count}; expected "
                 f"{LEAN_INTERPRETER_SIGMA_PACKS}/"
                 f"{LEAN_INTERPRETER_SIGMA_BIND_CANDIDATES}/"
-                f"{LEAN_INTERPRETER_SIGMA_BINDS}/1/"
+                f"{LEAN_INTERPRETER_SIGMA_BINDS}/"
+                f"{LEAN_INTERPRETER_SIGMA_SKIPPED_BINDS}/"
                 f"{LEAN_INTERPRETER_RESULT_PROJECTIONS})"
             )
         interpreter.write_text(normalized, encoding="utf-8")

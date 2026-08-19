@@ -158,7 +158,8 @@ function branch_child_ref(mask : branch_mask, children : BranchRefs) -> NodeRef 
     foreach (i from 0 to 15) {
         let child_present = and_vec(mask, child_bit) != 0x0000;
         if child_present then {
-            let child_length = node_ref_size(children[i]);
+            let childref = children[i];
+            let child_length = node_ref_size(childref);
             content_length = branch_content_length_add(content_length, child_length)
         } else {
             content_length = branch_content_length_add(content_length, 1)
@@ -174,7 +175,8 @@ function branch_child_ref(mask : branch_mask, children : BranchRefs) -> NodeRef 
     foreach (i from 0 to 15) {
         let child_present = and_vec(mask, child_bit) != 0x0000;
         if child_present then {
-            rlp_write_node_ref(children[i])
+            let childref = children[i];
+            rlp_write_node_ref(childref)
         } else {
             scratch_push_byte(0x80)
         };
@@ -319,8 +321,9 @@ function decode_input_branch_node forall 'source_off 'source_len, source_valid_r
     if index < 16 then {
         let child = rlp_decode_item(cursor);
         let next = rlp_cursor_advance(cursor, child.source.len);
+        let decoded_child = input_field_to_ref(child);
         var updated = children;
-        updated[index] = input_field_to_ref(child);
+        updated[index] = decoded_child;
         decode_input_branch_node(next, index + 1, updated)
     } else {
         let value = rlp_decode_item(cursor);
@@ -342,8 +345,9 @@ function decode_scratch_branch_node forall 'source_off 'source_len, source_valid
     if index < 16 then {
         let child = scratch_rlp_decode_item(cursor);
         let next = scratch_rlp_cursor_advance(cursor, child.source.len);
+        let decoded_child = scratch_field_to_ref(child);
         var updated = children;
-        updated[index] = scratch_field_to_ref(child);
+        updated[index] = decoded_child;
         decode_scratch_branch_node(next, index + 1, updated)
     } else {
         let value = scratch_rlp_decode_item(cursor);
@@ -381,9 +385,11 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
         }
     } else {
         let empty_child = EmptyRef();
+        let first_child = input_field_to_ref(first);
+        let second_child = input_field_to_ref(second);
         var children : BranchRefs = vector_init(16, empty_child);
-        children[0] = input_field_to_ref(first);
-        children[1] = input_field_to_ref(second);
+        children[0] = first_child;
+        children[1] = second_child;
         decode_input_branch_node(fields, 2, children)
     }
 }
@@ -411,9 +417,11 @@ function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
         }
     } else {
         let empty_child = EmptyRef();
+        let first_child = scratch_field_to_ref(first);
+        let second_child = scratch_field_to_ref(second);
         var children : BranchRefs = vector_init(16, empty_child);
-        children[0] = scratch_field_to_ref(first);
-        children[1] = scratch_field_to_ref(second);
+        children[0] = first_child;
+        children[1] = second_child;
         decode_scratch_branch_node(fields, 2, children)
     }
 }

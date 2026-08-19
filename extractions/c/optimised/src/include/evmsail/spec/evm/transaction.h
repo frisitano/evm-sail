@@ -38,30 +38,52 @@ struct IntrinsicGasCost {
   uint64_t state;
 };
 
-// struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes
-struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes {
+// struct tuple_bool_uint_8_uint_64_uint_32
+struct tuple_bool_uint_8_uint_64_uint_32 {
+  bool tup0;
+  uint8_t tup1;
+  uint64_t tup2;
+  uint32_t tup3;
+};
+
+// struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32
+struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 {
   uint64_t tup0;
   uint64_t tup1;
   uint32_t tup2;
   __int128 tup3;
   StackPointer tup4;
-  Bytes tup5;
+  uint32_t tup5;
+  uint32_t tup6;
 };
 
-// struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes
-struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_Bytes {
+// struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32
+struct tuple_uint_64_uint_64_uint_8_int_128_StackPointer_uint_32_uint_32 {
   uint64_t tup0;
   uint64_t tup1;
   uint8_t tup2;
   __int128 tup3;
   StackPointer tup4;
-  Bytes tup5;
+  uint32_t tup5;
+  uint32_t tup6;
 };
 
 // struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice
 struct tuple_TransactionPreparation_uint_64_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice {
   struct TransactionPreparation tup0;
   uint64_t tup1;
+  uint64_t tup2;
+  uint32_t tup3;
+  bytes20 tup4;
+  bytes20 tup5;
+  struct CodeFields tup6;
+  struct CalldataSlice tup7;
+};
+
+// struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice
+struct tuple_TransactionPreparation_uint_8_uint_64_uint_32_bytes20_bytes20_CodeFields_CalldataSlice {
+  struct TransactionPreparation tup0;
+  uint8_t tup1;
   uint64_t tup2;
   uint32_t tup3;
   bytes20 tup4;
@@ -112,11 +134,11 @@ struct TxValidityFields check_transaction_validity(struct TransactionFields tx, 
 
 struct TxUpfrontResult apply_transaction_upfront_effects(struct TransactionFields tx, struct TxValidityFields v, PreparedAuthorizationList authorizations);
 
-struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_Bytes enter_transaction_frame(struct TxValidityFields v);
+struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_uint_32_uint_32 enter_transaction_frame(struct TxValidityFields v);
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, Bytes carried_memory, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
 
-struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, Bytes carried_memory, bytes20 carried_code_address, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
+struct tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_code_address, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir);
 
 struct TxFrameResultFields run_legacy_transaction_frame(struct TransactionFields tx, struct TxValidityFields v);
 

@@ -277,9 +277,11 @@ journal_cursor: TypeAlias = Uint
 
 storage_generation: TypeAlias = Uint
 
-memory_pointer: TypeAlias = Uint
+memory_base: TypeAlias = Uint
 
 memory_length: TypeAlias = Uint
+
+memory_height: TypeAlias = memory_length
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class MemoryRangeFieldsValidity:
@@ -324,12 +326,12 @@ class MemoryAccessFieldsValidity:
 class MemoryAccessFields:
     validity: MemoryAccessFieldsValidity
     range: MemoryRangeFields
-    required_size: int
+    requested_height: int
 
     @model_validator(mode="after")
     def validate(self) -> Self:
-        if not ((int(self.required_size) == self.validity.required)):
-            raise ValueError("MemoryAccessFields.required_size violates Sail type int('required)")
+        if not ((int(self.requested_height) == self.validity.required)):
+            raise ValueError("MemoryAccessFields.requested_height violates Sail type int('required)")
         return self
 
 MemoryAccess: TypeAlias = MemoryAccessFields
@@ -353,7 +355,7 @@ def word_of_nat_byte_count(value: int) -> word:
         return word(u256(value))
     else:
         if not (False):
-            raise SailError("sail/primitives/quantities.sail:611.20-611.21")
+            raise SailError("sail/primitives/quantities.sail:615.20-615.21")
         raise SailExit(None)
 
 def word_of_source_byte_count(value: int) -> word:
@@ -361,4 +363,4 @@ def word_of_source_byte_count(value: int) -> word:
 
 EMPTY_MEMORY_RANGE: MemoryRangeFields = memory_range(0, 0)
 
-EMPTY_MEMORY_ACCESS: MemoryAccessFields = MemoryAccessFields(validity=MemoryAccessFieldsValidity(off=0, len=0, required=0), range=EMPTY_MEMORY_RANGE, required_size=0)
+EMPTY_MEMORY_ACCESS: MemoryAccessFields = MemoryAccessFields(validity=MemoryAccessFieldsValidity(off=0, len=0, required=0), range=EMPTY_MEMORY_RANGE, requested_height=0)

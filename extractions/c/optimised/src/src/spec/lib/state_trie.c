@@ -7,12 +7,12 @@ struct TrieUpdate account_update(struct AcctTrieEntry trie_entry, bytes32 storag
   struct TriePath key = path_new(trie_entry.address_hash, UINT8_C(64));
   bool account_empty = account_info_empty(current.info);
   if (!current.present || account_empty) {
-    struct TrieChange TrieDelete_result_2_535 = TrieDelete(UNIT);
-    return ((struct TrieUpdate){.change = TrieDelete_result_2_535, .key = key});
+    struct TrieChange TrieDelete_result_2_525 = TrieDelete(UNIT);
+    return ((struct TrieUpdate){.change = TrieDelete_result_2_525, .key = key});
   }
   Bytes encoded_account = encode_state_account(current.info, storage_root);
-  struct TrieChange TriePut_result_2_536 = TriePut(encoded_account);
-  return ((struct TrieUpdate){.change = TriePut_result_2_536, .key = key});
+  struct TrieChange TriePut_result_2_526 = TriePut(encoded_account);
+  return ((struct TrieUpdate){.change = TriePut_result_2_526, .key = key});
 }
 
 bool account_value_changed(struct AcctValue value)
@@ -61,8 +61,8 @@ struct TrieUpdateFetch next_storage_trie_update(bytes20 addr)
       struct StorageTrieEntry trie_entry = iterator_item.variants.StorageBlockIterRow;
       bool changed = storage_value_changed(trie_entry.entry.value);
       if (changed) {
-        struct TrieUpdate storage_update_result_2_438 = storage_update(trie_entry);
-        result = ((struct TrieUpdateFetch){.available = true, .update = storage_update_result_2_438});
+        struct TrieUpdate storage_update_result_2_428 = storage_update(trie_entry);
+        result = ((struct TrieUpdateFetch){.available = true, .update = storage_update_result_2_428});
         searching = false;
       }
       break;

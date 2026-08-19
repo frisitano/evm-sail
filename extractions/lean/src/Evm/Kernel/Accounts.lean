@@ -158,15 +158,21 @@ nonce, or any storage. -/
 def k_account_occupied (a : (Vector (BitVec 8) 20)) : SailM Bool := do
   let acc ← do (k_aload a)
   let info := acc.info
-  let anchored_storage := ((! acc.storage_cleared) && (bne info.storage_root EMPTY_TRIE_ROOT))
-  if (((bne info.code_hash KECCAK_EMPTY) || (((info.nonce != 0) || anchored_storage) : Bool)) : Bool)
+  let anchored_storage : Bool := false
+  let anchored_storage : Bool :=
+    if ((! acc.storage_cleared) : Bool)
+    then (bne info.storage_root EMPTY_TRIE_ROOT)
+    else anchored_storage
+  let has_code := (bne info.code_hash KECCAK_EMPTY)
+  let has_nonce := (info.nonce != 0)
+  if ((has_code || (has_nonce || anchored_storage)) : Bool)
   then (pure true)
   else (storage_has_writes a)
 
 /-- Moves `v` wei from `src` to `dst` (both updates recorded for frame
 rollback; the EVM checks sufficiency before calling) and emits the
 EIP-7708 transfer log. -/
-/- Type quantifiers: k_ex609085_ : Nat, 0 ≤ k_ex609085_ ∧ k_ex609085_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex550000_ : Nat, 0 ≤ k_ex550000_ ∧ k_ex550000_ ≤ (2 ^ 256 - 1) -/
 def k_transfer (src : (Vector (BitVec 8) 20)) (dst : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let src_acc ← do (k_aload src)
   let dst_acc ← do (k_aload dst)
@@ -203,7 +209,7 @@ def k_add_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   else (pure ())
 
 /-- Debits `v` wei (no-op when zero; caller guarantees sufficiency). -/
-/- Type quantifiers: k_ex609086_ : Nat, 0 ≤ k_ex609086_ ∧ k_ex609086_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex550001_ : Nat, 0 ≤ k_ex550001_ ∧ k_ex550001_ ≤ (2 ^ 256 - 1) -/
 def k_sub_balance (a : (Vector (BitVec 8) 20)) (v : Nat) : SailM Unit := do
   let cur ← do (k_aload a)
   let value_is_zero := (word_is_zero v)

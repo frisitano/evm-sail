@@ -244,7 +244,8 @@ def branch_child_ref(mask: Annotated[Bits, BitWidth(16)], children: BranchRefs) 
     for i in sail_range(0, 15, 1, True):
         child_present = neq_bits(((mask) & (child_bit)), Bits(16, 0b0000000000000000))
         if child_present:
-            child_length = node_ref_size(sail_vector_access(children, i, False))
+            childref = sail_vector_access(children, i, False)
+            child_length = node_ref_size(childref)
             content_length = branch_content_length(branch_content_length_add(content_length, child_length))
         else:
             content_length = branch_content_length(branch_content_length_add(content_length, 1))
@@ -257,7 +258,8 @@ def branch_child_ref(mask: Annotated[Bits, BitWidth(16)], children: BranchRefs) 
     for i in sail_range(0, 15, 1, True):
         child_present = neq_bits(((mask) & (child_bit)), Bits(16, 0b0000000000000000))
         if child_present:
-            rlp_write_node_ref(sail_vector_access(children, i, False))
+            childref = sail_vector_access(children, i, False)
+            rlp_write_node_ref(childref)
         else:
             scratch_push_byte(Bits(8, 0b10000000))
         child_bit = ((child_bit) << 1)
@@ -399,8 +401,9 @@ def decode_input_branch_node(cursor: RlpCursor, index: BoundedUint[2, 16], child
     if (int(index) < 16):
         child = rlp_decode_item(cursor)
         next = rlp_cursor_advance(cursor, child.source.len)
+        decoded_child = input_field_to_ref(child)
         updated = children
-        updated = sail_vector_update(updated, index, input_field_to_ref(child), False)
+        updated = sail_vector_update(updated, index, decoded_child, False)
         return decode_input_branch_node(next, (int(index) + 1), updated)
     else:
         value = rlp_decode_item(cursor)
@@ -413,8 +416,9 @@ def decode_scratch_branch_node(cursor: ScratchRlpCursor, index: BoundedUint[2, 1
     if (int(index) < 16):
         child = scratch_rlp_decode_item(cursor)
         next = scratch_rlp_cursor_advance(cursor, child.source.len)
+        decoded_child = scratch_field_to_ref(child)
         updated = children
-        updated = sail_vector_update(updated, index, scratch_field_to_ref(child), False)
+        updated = sail_vector_update(updated, index, decoded_child, False)
         return decode_scratch_branch_node(next, (int(index) + 1), updated)
     else:
         value = scratch_rlp_decode_item(cursor)
@@ -445,9 +449,11 @@ def decode_input_trie_node(node: StatelessInputSlice) -> InputTrieNode:
                 return InputExtensionNode((path, child))
     else:
         empty_child = EmptyRef(None)
+        first_child = input_field_to_ref(first)
+        second_child = input_field_to_ref(second)
         children = sail_vector_init(16, empty_child)
-        children = sail_vector_update(children, 0, input_field_to_ref(first), False)
-        children = sail_vector_update(children, 1, input_field_to_ref(second), False)
+        children = sail_vector_update(children, 0, first_child, False)
+        children = sail_vector_update(children, 1, second_child, False)
         return decode_input_branch_node(fields, 2, children)
 
 def decode_scratch_trie_node(node: ScratchSlice) -> ScratchTrieNode:
@@ -470,9 +476,11 @@ def decode_scratch_trie_node(node: ScratchSlice) -> ScratchTrieNode:
                 return ScratchExtensionNode((path, child))
     else:
         empty_child = EmptyRef(None)
+        first_child = scratch_field_to_ref(first)
+        second_child = scratch_field_to_ref(second)
         children = sail_vector_init(16, empty_child)
-        children = sail_vector_update(children, 0, scratch_field_to_ref(first), False)
-        children = sail_vector_update(children, 1, scratch_field_to_ref(second), False)
+        children = sail_vector_update(children, 0, first_child, False)
+        children = sail_vector_update(children, 1, second_child, False)
         return decode_scratch_branch_node(fields, 2, children)
 
 def resolve_witness_ref(r: NodeRef) -> StatelessInputSlice:

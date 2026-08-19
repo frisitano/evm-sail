@@ -64,12 +64,12 @@ from evm.primitives.gas import (
     gas_refund,
     state_gas,
     state_gas_spill,
+    STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
     GAS_REFUND_ZERO,
 )
 from evm.primitives.bytes import (
     CalldataSlice,
-    EvmMemorySlice,
     LogDataMemory,
     OutputSlice,
     calldata_slice_length,
@@ -162,7 +162,7 @@ from evm.evm.machine import (
     record_refund,
     frame_code_len,
     frame_jumpdest_valid,
-    refill_frame_state_gas,
+    conserved_gas_add,
     validate_stack,
     read_stack_word,
     write_stack_word,
@@ -171,6 +171,8 @@ from evm.evm.machine import (
     returndata_copy,
     returndata_remaining,
     memory_high_water,
+    memory_absolute,
+    expand_memory,
     active_memory_slice,
     mem_load,
     mem_store,
@@ -179,23 +181,21 @@ from evm.evm.machine import (
     mem_keccak,
 )
 from evm.evm.gas import (
-    charge,
-    check_execution_gas,
     charge_state_gas,
     credit_state_gas_refund,
+    gas_sub,
     memory_word_count,
-    memory_required_size,
+    memory_requested_height,
     memory_access,
-    charge_memory_expansion,
-    expand_memory,
+    memory_expansion_gas_cost,
     account_cost,
     external_code_read_cost,
     sload_cost,
     sstore_sentry_cost,
     sstore_costs,
-    charge_keccak_gas,
-    charge_copy_gas,
-    charge_log_gas,
+    keccak_gas_cost,
+    copy_gas_cost,
+    log_gas_cost,
     exp_gas,
     G_zero,
     G_jumpdest,
@@ -218,15 +218,7 @@ from evm.evm.instructions import (
     decode_single_stack_index,
     decode_exchange_stack_indices,
 )
-
-def opcode_failed(result: OpcodeOutcome) -> bool:
-    match result:
-        case Continue(None):
-            return False
-        case Failed(_):
-            return True
-        case _:
-            raise SailMatchFailure("no Sail match clause applied")
+from evm.kernel import environment
 
 def opcode_frame_status(result: OpcodeOutcome) -> FrameStatus:
     match result:
@@ -309,1464 +301,1530 @@ def pop_log_topics(count: log_topic_count, sp_in: StackPointer) -> tuple[LogTopi
 def execute_add(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_0 = True
+            case _:
+                _sail_value_0 = False
+        if _sail_value_0:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_add(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_mul(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_1 = True
+            case _:
+                _sail_value_1 = False
+        if _sail_value_1:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_mul(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_sub(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_2 = True
+            case _:
+                _sail_value_2 = False
+        if _sail_value_2:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_sub(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_div(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_3 = True
+            case _:
+                _sail_value_3 = False
+        if _sail_value_3:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_div(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_sdiv(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_4 = True
+            case _:
+                _sail_value_4 = False
+        if _sail_value_4:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_sdiv(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_mod(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_5 = True
+            case _:
+                _sail_value_5 = False
+        if _sail_value_5:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_mod(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_smod(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_6 = True
+            case _:
+                _sail_value_6 = False
+        if _sail_value_6:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_smod(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_addmod(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_7 = True
+            case _:
+                _sail_value_7 = False
+        if _sail_value_7:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_mid)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        n = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_mid)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_mid))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        n = read_stack_word(sp)
         result = alu_addmod(a, b, n)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_mulmod(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_8 = True
+            case _:
+                _sail_value_8 = False
+        if _sail_value_8:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_mid)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        n = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_mid)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_mid))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        n = read_stack_word(sp)
         result = alu_mulmod(a, b, n)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_exp(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_9 = True
+            case _:
+                _sail_value_9 = False
+        if _sail_value_9:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        e = read_stack_word(sp_after)
+        sp = carried_sp
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        e = read_stack_word(sp)
         gas_cost_ = exp_gas(e)
-        (halt, gas_after_charge) = charge(gas_after, gas_cost_)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(gas_cost_)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(gas_cost_))
         result = alu_exp(a, e)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_signextend(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_10 = True
+            case _:
+                _sail_value_10 = False
+        if _sail_value_10:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        bi = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
+        bi = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
         result = alu_signextend(bi, v)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_lt(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_11 = True
+            case _:
+                _sail_value_11 = False
+        if _sail_value_11:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_lt(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_gt(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_12 = True
+            case _:
+                _sail_value_12 = False
+        if _sail_value_12:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_gt(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_slt(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_13 = True
+            case _:
+                _sail_value_13 = False
+        if _sail_value_13:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_slt(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_sgt(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_14 = True
+            case _:
+                _sail_value_14 = False
+        if _sail_value_14:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_sgt(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_eq(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_15 = True
+            case _:
+                _sail_value_15 = False
+        if _sail_value_15:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_eq(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_iszero(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_16 = True
+            case _:
+                _sail_value_16 = False
+        if _sail_value_16:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
         a = read_stack_word(carried_sp)
         result = alu_iszero(a)
         write_stack_word(carried_sp, result)
-        gas_after = gas_after_charge
-        return (gas_after, carried_sp, Continue(None))
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_and(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_17 = True
+            case _:
+                _sail_value_17 = False
+        if _sail_value_17:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_and(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_or(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_18 = True
+            case _:
+                _sail_value_18 = False
+        if _sail_value_18:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_or(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_xor(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_19 = True
+            case _:
+                _sail_value_19 = False
+        if _sail_value_19:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        a = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        b = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        a = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        b = read_stack_word(sp)
         result = alu_xor(a, b)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_not(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_20 = True
+            case _:
+                _sail_value_20 = False
+        if _sail_value_20:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
         a = read_stack_word(carried_sp)
         result = alu_not(a)
         write_stack_word(carried_sp, result)
-        gas_after = gas_after_charge
-        return (gas_after, carried_sp, Continue(None))
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_byte(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_21 = True
+            case _:
+                _sail_value_21 = False
+        if _sail_value_21:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        i = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        x = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        i = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        x = read_stack_word(sp)
         result = alu_byte(i, x)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_shl(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_22 = True
+            case _:
+                _sail_value_22 = False
+        if _sail_value_22:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
         result = alu_shl(s, v)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_shr(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_23 = True
+            case _:
+                _sail_value_23 = False
+        if _sail_value_23:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
         result = alu_shr(s, v)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_sar(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_24 = True
+            case _:
+                _sail_value_24 = False
+        if _sail_value_24:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
         result = alu_sar(s, v)
-        write_stack_word(sp_after, result)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        write_stack_word(sp, result)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_clz(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_25 = True
+            case _:
+                _sail_value_25 = False
+        if _sail_value_25:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
         x = read_stack_word(carried_sp)
         result = alu_clz(x)
         write_stack_word(carried_sp, result)
-        gas_after = gas_after_charge
-        return (gas_after, carried_sp, Continue(None))
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_keccak256(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_keccak256(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (hashing_halt, gas_after_hashing) = charge_keccak_gas(gas_after, length_word)
-        if hashing_halt:
-            gas_after = gas_after_hashing
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        required_size = memory_required_size(offset_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_hashing, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        match stack_status:
+            case Failed(_):
+                _sail_value_26 = True
+            case _:
+                _sail_value_26 = False
+        if _sail_value_26:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        keccak_cost = keccak_gas_cost(length_word, gas_)
+        if (not (keccak_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, keccak_cost.cost))
+        requested_height = memory_requested_height(offset_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
-        (digest, mem2) = mem_keccak(mem1, access.range)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, digest)
-        memory_after = mem2
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
+        digest = mem_keccak(memory_base_, memory, access.range)
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, digest)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_address(carried_address: address, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_27 = True
+            case _:
+                _sail_value_27 = False
+        if _sail_value_27:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         address_word = address_to_word(carried_address)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, address_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, address_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_origin(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_28 = True
+            case _:
+                _sail_value_28 = False
+        if _sail_value_28:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         origin = k_env(EnvField.F_Origin)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, origin)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, origin)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_caller(carried_caller: address, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_29 = True
+            case _:
+                _sail_value_29 = False
+        if _sail_value_29:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         caller = address_to_word(carried_caller)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, caller)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, caller)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_callvalue(carried_value: word, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_30 = True
+            case _:
+                _sail_value_30 = False
+        if _sail_value_30:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, carried_value)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, carried_value)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_gasprice(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_31 = True
+            case _:
+                _sail_value_31 = False
+        if _sail_value_31:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         gas_price = k_env(EnvField.F_GasPrice)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, gas_price)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, gas_price)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_calldatasize(carried_calldata: CalldataSlice, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_32 = True
+            case _:
+                _sail_value_32 = False
+        if _sail_value_32:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         input = carried_calldata
         input_length = calldata_slice_length(input)
         length_word = word_of_source_byte_count(input_length)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, length_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, length_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_calldataload(carried_calldata: CalldataSlice, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_33 = True
+            case _:
+                _sail_value_33 = False
+        if _sail_value_33:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         value = calldata_slice_load_word_offset(carried_calldata, offset_word)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, value)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, value)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_calldatacopy(carried_calldata: CalldataSlice, carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_calldatacopy(carried_calldata: CalldataSlice, memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        destination_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        source_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (copy_halt, gas_after_copy) = charge_copy_gas(gas_after_base, length_word)
-        if copy_halt:
-            gas_after = gas_after_copy
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        required_size = memory_required_size(destination_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_copy, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        match stack_status:
+            case Failed(_):
+                _sail_value_34 = True
+            case _:
+                _sail_value_34 = False
+        if _sail_value_34:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        destination_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        source_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        copy_cost = copy_gas_cost(length_word, gas_)
+        if (not (copy_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, copy_cost.cost))
+        requested_height = memory_requested_height(destination_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(destination_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
-        calldata_slice_copy_word_offset(carried_calldata, sail_range_.off, source_word, sail_range_.len)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        destination = memory_absolute(memory_base_, sail_range_.off)
+        calldata_slice_copy_word_offset(carried_calldata, destination, source_word, sail_range_.len)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_codesize(carried_code: Code, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_35 = True
+            case _:
+                _sail_value_35 = False
+        if _sail_value_35:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         code_length_ = frame_code_len(carried_code)
         length_word = word_of_source_byte_count(code_length_)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, length_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, length_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_codecopy(carried_code: Code, carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_codecopy(carried_code: Code, memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        destination_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        source_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (copy_halt, gas_after_copy) = charge_copy_gas(gas_after_base, length_word)
-        if copy_halt:
-            gas_after = gas_after_copy
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        required_size = memory_required_size(destination_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_copy, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        match stack_status:
+            case Failed(_):
+                _sail_value_36 = True
+            case _:
+                _sail_value_36 = False
+        if _sail_value_36:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        destination_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        source_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        copy_cost = copy_gas_cost(length_word, gas_)
+        if (not (copy_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, copy_cost.cost))
+        requested_height = memory_requested_height(destination_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(destination_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
         code = carried_code
         bytes = code_bytes(code)
-        code_slice_copy_word_offset(bytes, sail_range_.off, source_word, sail_range_.len)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        destination = memory_absolute(memory_base_, sail_range_.off)
+        code_slice_copy_word_offset(bytes, destination, source_word, sail_range_.len)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_balance(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_37 = True
+            case _:
+                _sail_value_37 = False
+        if _sail_value_37:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        address_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        address_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         a = word_to_address(address_word)
         warm = k_account_is_warm(a)
         gas_cost_ = account_cost(warm)
-        (halt, gas_after_charge) = charge(gas_after, gas_cost_)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(gas_cost_)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(gas_cost_))
         k_account_mark_warm(a)
         balance = k_get_balance(a)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, balance)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, balance)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_selfbalance(carried_address: address, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_38 = True
+            case _:
+                _sail_value_38 = False
+        if _sail_value_38:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_low)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_low)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_low))
         balance = k_get_balance(carried_address)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, balance)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, balance)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_extcodesize(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_39 = True
+            case _:
+                _sail_value_39 = False
+        if _sail_value_39:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        address_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        address_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         a = word_to_address(address_word)
         warm = k_account_is_warm(a)
         access_cost = account_cost(warm)
         read_cost = external_code_read_cost()
-        (halt, gas_after_charge) = charge(gas_after, (int(access_cost) + int(read_cost)))
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int((int(access_cost) + int(read_cost)))):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas_sub(carried_gas, (int(access_cost) + int(read_cost)))
         k_account_mark_warm(a)
         code_size = k_get_code_size(a)
         size_word = word_of_source_byte_count(code_size)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, size_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, size_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_extcodecopy(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_extcodecopy(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 4, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        address_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        match stack_status:
+            case Failed(_):
+                _sail_value_40 = True
+            case _:
+                _sail_value_40 = False
+        if _sail_value_40:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        address_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         a = word_to_address(address_word)
-        destination_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        source_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        destination_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        source_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         warm = k_account_is_warm(a)
         access_cost = account_cost(warm)
         read_cost = external_code_read_cost()
-        (access_halt, gas_after_access) = charge(gas_after, (int(access_cost) + int(read_cost)))
-        if access_halt:
-            gas_after = gas_after_access
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        (copy_halt, gas_after_copy) = charge_copy_gas(gas_after_access, length_word)
-        if copy_halt:
-            gas_after = gas_after_copy
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        required_size = memory_required_size(destination_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_copy, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(gas_) < int((int(access_cost) + int(read_cost)))):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, (int(access_cost) + int(read_cost))))
+        copy_cost = copy_gas_cost(length_word, gas_)
+        if (not (copy_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, copy_cost.cost))
+        requested_height = memory_requested_height(destination_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(destination_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
         k_account_mark_warm(a)
-        k_code_copy(a, sail_range_.off, source_word, sail_range_.len)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        destination = memory_absolute(memory_base_, sail_range_.off)
+        k_code_copy(a, destination, source_word, sail_range_.len)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_extcodehash(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_41 = True
+            case _:
+                _sail_value_41 = False
+        if _sail_value_41:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        address_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        address_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         a = word_to_address(address_word)
         warm = k_account_is_warm(a)
         gas_cost_ = account_cost(warm)
-        (halt, gas_after_charge) = charge(gas_after, gas_cost_)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(gas_cost_)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(gas_cost_))
         k_account_mark_warm(a)
         code_hash = k_get_codehash(a)
         hash_word = hash_to_word(code_hash)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, hash_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, hash_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_returndatasize(carried_returndata: OutputSlice, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_42 = True
+            case _:
+                _sail_value_42 = False
+        if _sail_value_42:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         return_data_size = returndata_size(carried_returndata)
         size_word = word_of_source_byte_count(return_data_size)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, size_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, size_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_returndatacopy(carried_returndata: OutputSlice, carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_returndatacopy(carried_returndata: OutputSlice, memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        destination_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        source_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        match stack_status:
+            case Failed(_):
+                _sail_value_43 = True
+            case _:
+                _sail_value_43 = False
+        if _sail_value_43:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        destination_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        source_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         available = returndata_size(carried_returndata)
         if (int(source_word) <= int(available)):
             remaining = returndata_remaining(available, source_word)
-            bounded_source_offset = source_word
             if (int(length_word) <= int(remaining)):
                 bounded_length = length_word
-                (copy_halt, gas_after_copy) = charge_copy_gas(gas_after_base, length_word)
-                if copy_halt:
-                    gas_after = gas_after_copy
-                    raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-                required_size = memory_required_size(destination_word, length_word)
-                (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_copy, memory_after, required_size)
-                if expansion_halt:
-                    gas_after = gas_after_expansion
-                    raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+                copy_cost = copy_gas_cost(length_word, gas_)
+                if (not (copy_cost.affordable)):
+                    raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+                gas_ = gas(gas_sub(gas_, copy_cost.cost))
+                requested_height = memory_requested_height(destination_word, length_word)
+                expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+                if (not (expansion_cost.affordable)):
+                    raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+                gas_ = gas(gas_sub(gas_, expansion_cost.cost))
                 access = memory_access(destination_word, length_word)
-                mem1 = expand_memory(memory_after, access.required_size)
-                returndata_copy(carried_returndata, access.range.off, bounded_source_offset, bounded_length)
-                memory_after = mem1
-                gas_after = gas_after_expansion
-                return (gas_after, sp_after, memory_after, Continue(None))
+                memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
+                destination = memory_absolute(memory_base_, access.range.off)
+                bounded_source_offset = source_word
+                returndata_copy(carried_returndata, destination, bounded_source_offset, bounded_length)
+                return (gas_, sp, memory, Continue(None))
             else:
-                return (GAS_ZERO, sp_after, memory_after, Failed(ExceptionKind.InvalidOpcode))
+                return (GAS_ZERO, sp, memory, Failed(ExceptionKind.InvalidOpcode))
         else:
-            return (GAS_ZERO, sp_after, memory_after, Failed(ExceptionKind.InvalidOpcode))
+            return (GAS_ZERO, sp, memory, Failed(ExceptionKind.InvalidOpcode))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_blockhash(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_44 = True
+            case _:
+                _sail_value_44 = False
+        if _sail_value_44:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, 20)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        block_number_ = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        if (int(carried_gas) < 20):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - 20)
+        block_number_ = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         block_hash = k_blockhash(block_number_)
         hash_word = hash_to_word(block_hash)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, hash_word)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, hash_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_coinbase(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_45 = True
+            case _:
+                _sail_value_45 = False
+        if _sail_value_45:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         coinbase = k_env(EnvField.F_Coinbase)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, coinbase)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, coinbase)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_timestamp(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_46 = True
+            case _:
+                _sail_value_46 = False
+        if _sail_value_46:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         timestamp = k_env(EnvField.F_Timestamp)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, timestamp)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, timestamp)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_number(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_47 = True
+            case _:
+                _sail_value_47 = False
+        if _sail_value_47:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         block_number_ = k_env(EnvField.F_Number)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, block_number_)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, block_number_)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_slotnum(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_48 = True
+            case _:
+                _sail_value_48 = False
+        if _sail_value_48:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         slot_number_ = k_env(EnvField.F_SlotNumber)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, slot_number_)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, slot_number_)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_prevrandao(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_49 = True
+            case _:
+                _sail_value_49 = False
+        if _sail_value_49:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         prev_randao = k_env(EnvField.F_PrevRandao)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, prev_randao)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, prev_randao)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_gaslimit(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_50 = True
+            case _:
+                _sail_value_50 = False
+        if _sail_value_50:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         gas_limit = k_env(EnvField.F_GasLimit)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, gas_limit)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, gas_limit)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_chainid(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_51 = True
+            case _:
+                _sail_value_51 = False
+        if _sail_value_51:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         chain_id = k_env(EnvField.F_ChainId)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, chain_id)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, chain_id)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_basefee(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_52 = True
+            case _:
+                _sail_value_52 = False
+        if _sail_value_52:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         base_fee = k_env(EnvField.F_BaseFee)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, base_fee)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, base_fee)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_blobbasefee(blob_fee: word, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_53 = True
+            case _:
+                _sail_value_53 = False
+        if _sail_value_53:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, blob_fee)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, blob_fee)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_blobhash(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_54 = True
+            case _:
+                _sail_value_54 = False
+        if _sail_value_54:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        index = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        index = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         blob_hash = k_blobhash(index)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, blob_hash)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, blob_hash)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_pop(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_55 = True
+            case _:
+                _sail_value_55 = False
+        if _sail_value_55:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
+        read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_mload(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_mload(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        match stack_status:
+            case Failed(_):
+                _sail_value_56 = True
+            case _:
+                _sail_value_56 = False
+        if _sail_value_56:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         word_size = u256(32)
-        required_size = memory_required_size(offset_word, word_size)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_base, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        requested_height = memory_requested_height(offset_word, word_size)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, word_size)
-        mem1 = expand_memory(memory_after, access.required_size)
-        value = mem_load(access.range.off)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, value)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
+        value = mem_load(memory_base_, access.range.off)
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, value)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_mstore(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_mstore(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        match stack_status:
+            case Failed(_):
+                _sail_value_57 = True
+            case _:
+                _sail_value_57 = False
+        if _sail_value_57:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         word_size = u256(32)
-        required_size = memory_required_size(offset_word, word_size)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_base, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        requested_height = memory_requested_height(offset_word, word_size)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, word_size)
-        mem1 = expand_memory(memory_after, access.required_size)
-        mem_store(access.range.off, v)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
+        mem_store(memory_base_, access.range.off, v)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_mstore8(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_mstore8(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        required_size = memory_required_size(offset_word, WORD_ONE)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_base, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        match stack_status:
+            case Failed(_):
+                _sail_value_58 = True
+            case _:
+                _sail_value_58 = False
+        if _sail_value_58:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        requested_height = memory_requested_height(offset_word, WORD_ONE)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, WORD_ONE)
-        mem1 = expand_memory(memory_after, access.required_size)
-        mem_store_byte(access.range.off, v)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
+        mem_store_byte(memory_base_, access.range.off, v)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_msize(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_msize(carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, carried_memory, Failed(ExceptionKind.OutOfGas)))
-        high_water = memory_high_water(carried_memory)
+        match stack_status:
+            case Failed(_):
+                _sail_value_59 = True
+            case _:
+                _sail_value_59 = False
+        if _sail_value_59:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        sp = carried_sp
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, sp, carried_memory_height, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
+        high_water = memory_high_water(carried_memory_height)
         words = memory_word_count(high_water)
         size = word_of_nat_byte_count((int(words) * 32))
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, size)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, carried_memory, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, size)
+        return (gas_, sp, carried_memory_height, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_mcopy(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_mcopy(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 3, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (base_halt, gas_after_base) = charge(gas_after, G_verylow)
-        if base_halt:
-            gas_after = gas_after_base
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        destination_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        source_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (copy_halt, gas_after_copy) = charge_copy_gas(gas_after_base, length_word)
-        if copy_halt:
-            gas_after = gas_after_copy
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        destination_required = memory_required_size(destination_word, length_word)
-        source_required = memory_required_size(source_word, length_word)
-        if (int(destination_required) < int(source_required)):
-            required_size = source_required
+        match stack_status:
+            case Failed(_):
+                _sail_value_60 = True
+            case _:
+                _sail_value_60 = False
+        if _sail_value_60:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        if (int(gas_) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_verylow))
+        destination_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        source_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        copy_cost = copy_gas_cost(length_word, gas_)
+        if (not (copy_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, copy_cost.cost))
+        destination_requested_height = memory_requested_height(destination_word, length_word)
+        source_requested_height = memory_requested_height(source_word, length_word)
+        if (int(destination_requested_height) < int(source_requested_height)):
+            requested_height = source_requested_height
         else:
-            required_size = destination_required
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_copy, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+            requested_height = destination_requested_height
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         destination = memory_access(destination_word, length_word)
         source = memory_access(source_word, length_word)
-        if (int(destination.required_size) < int(source.required_size)):
-            materialized_required_size = source.required_size
+        if (int(destination.requested_height) < int(source.requested_height)):
+            materialized_required_size = source.requested_height
         else:
-            materialized_required_size = destination.required_size
-        mem1 = expand_memory(memory_after, materialized_required_size)
-        mem_mcopy(destination.range.off, source.range.off, destination.range.len)
-        memory_after = mem1
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+            materialized_required_size = destination.requested_height
+        memory = code_length(expand_memory(memory_base_, memory, materialized_required_size))
+        mem_mcopy(memory_base_, destination.range.off, source.range.off, destination.range.len)
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -1795,477 +1853,523 @@ def refresh_account_execution_context(context: AccountExecutionContext, previous
 def execute_sload(context: AccountExecutionContext, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_61 = True
+            case _:
+                _sail_value_61 = False
+        if _sail_value_61:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         warm = k_slot_is_warm(context.address, s)
         gas_cost_ = sload_cost(warm)
-        (halt, gas_after_charge) = charge(gas_after, gas_cost_)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(gas_cost_)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(gas_cost_))
         k_slot_mark_warm(context.address, s)
         entry = k_sload(context.address, s)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, entry.curr)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, entry.curr)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_sstore(context: AccountExecutionContext, fork: Fork, carried_is_static: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_sp: StackPointer) -> tuple[gas, state_gas, state_gas_spill, gas_refund, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_63 = True
+            case _:
+                _sail_value_63 = False
+        if _sail_value_63:
             raise SailReturn((GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, stack_status))
-        (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static)
-        guard_failed = opcode_failed(guard_result)
-        if guard_failed:
-            raise SailReturn((gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, guard_result))
-        if (((int(fork) < int(Amsterdam))) & ((int(carried_gas) <= int(G_callstipend)))):
-            raise SailReturn((carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(carried_sp)
-        sp_after_slot = stack_top_retreat(carried_sp, 1)
-        v = read_stack_word(sp_after_slot)
-        sp_after = stack_top_retreat(sp_after_slot, 1)
+        gas_ = carried_gas
+        state_gas_ = carried_state_gas
+        state_spill = carried_state_spill
+        refund = carried_refund
+        sp = carried_sp
+        halt = False
+        status = Continue(None)
+        (tup__0, tup__1) = guard_static(gas_, carried_is_static)
+        gas_ = tup__0
+        status = tup__1
+        match status:
+            case Failed(_):
+                _sail_value_62 = True
+            case _:
+                _sail_value_62 = False
+        if _sail_value_62:
+            raise SailReturn((gas_, state_gas_, state_spill, refund, sp, status))
+        if (((int(fork) < int(Amsterdam))) & ((int(gas_) <= int(G_callstipend)))):
+            raise SailReturn((gas_, state_gas_, state_spill, refund, sp, Failed(ExceptionKind.OutOfGas)))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         warm = k_slot_is_warm(context.address, s)
         cold = (not (warm))
         if (int(fork) >= int(Amsterdam)):
             sentry_cost = sstore_sentry_cost(cold)
-            (sentry_halt, _) = check_execution_gas(carried_gas, sentry_cost)
-            if sentry_halt:
-                raise SailReturn((carried_gas, carried_state_gas, carried_state_spill, carried_refund, sp_after, Failed(ExceptionKind.OutOfGas)))
+            if (int(gas_) < int(sentry_cost)):
+                raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Failed(ExceptionKind.OutOfGas)))
         k_slot_mark_warm(context.address, s)
         entry = k_sload(context.address, s)
         costs = sstore_costs(entry.orig, entry.curr, v, cold)
         if ((costs.state_credit) != (0)):
-            (gas_after_refund_credit, state_gas_after_credit, state_spill_after_credit) = credit_state_gas_refund(carried_gas, carried_state_gas, carried_state_spill, costs.state_credit)
-        else:
-            (gas_after_refund_credit, state_gas_after_credit, state_spill_after_credit) = (carried_gas, carried_state_gas, carried_state_spill)
-        (execution_halt, gas_after_execution) = charge(gas_after_refund_credit, costs.execution)
-        if execution_halt:
-            raise SailReturn((gas_after_execution, state_gas_after_credit, state_spill_after_credit, carried_refund, sp_after, Failed(ExceptionKind.OutOfGas)))
-        (state_halt, gas_after_state_charge, state_gas_after_charge, state_spill_after_charge) = charge_state_gas(gas_after_execution, state_gas_after_credit, state_spill_after_credit, costs.state_charge)
-        if state_halt:
-            raise SailReturn((gas_after_state_charge, state_gas_after_charge, state_spill_after_charge, carried_refund, sp_after, Failed(ExceptionKind.OutOfGas)))
+            (tup__0, tup__1, tup__2) = credit_state_gas_refund(gas_, state_gas_, state_spill, costs.state_credit)
+            gas_ = tup__0
+            state_gas_ = tup__1
+            state_spill = tup__2
+        if (int(gas_) < int(costs.execution)):
+            raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, costs.execution))
+        (tup__0, tup__1, tup__2, tup__3) = charge_state_gas(gas_, state_gas_, state_spill, costs.state_charge)
+        halt = tup__0
+        gas_ = tup__1
+        state_gas_ = tup__2
+        state_spill = tup__3
+        if halt:
+            raise SailReturn((gas_, state_gas_, state_spill, refund, sp, Failed(ExceptionKind.OutOfGas)))
         if (not (((costs.refund) == (GAS_REFUND_ZERO)))):
-            refund_after = record_refund(carried_refund, costs.refund)
-        else:
-            refund_after = carried_refund
+            refund = record_refund(refund, costs.refund)
         if ((entry.curr) != (v)):
             k_sstore(context.address, s, StorageValue(curr=word(v), orig=word(entry.orig)))
-        return (gas_after_state_charge, state_gas_after_charge, state_spill_after_charge, refund_after, sp_after, Continue(None))
+        return (gas_, state_gas_, state_spill, refund, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_tload(carried_address: address, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_64 = True
+            case _:
+                _sail_value_64 = False
+        if _sail_value_64:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_warm_access)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        sp = carried_sp
+        if (int(carried_gas) < int(G_warm_access)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_warm_access))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         value = k_tload(carried_address, s)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, value)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(sp, 1)
+        write_stack_word(sp, value)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_tstore(carried_address: address, carried_is_static: bool, carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_66 = True
+            case _:
+                _sail_value_66 = False
+        if _sail_value_66:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (gas_after_static_guard, status_after_guard) = guard_static(gas_after, carried_is_static)
-        guard_failed = opcode_failed(status_after_guard)
-        if guard_failed:
-            gas_after = gas_after_static_guard
-            raise SailReturn((gas_after, sp_after, status_after_guard))
-        (halt, gas_after_charge) = charge(gas_after_static_guard, G_warm_access)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        s = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        v = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        gas_ = carried_gas
+        status = Continue(None)
+        sp = carried_sp
+        (tup__0, tup__1) = guard_static(gas_, carried_is_static)
+        gas_ = tup__0
+        status = tup__1
+        match status:
+            case Failed(_):
+                _sail_value_65 = True
+            case _:
+                _sail_value_65 = False
+        if _sail_value_65:
+            raise SailReturn((gas_, sp, status))
+        if (int(gas_) < int(G_warm_access)):
+            raise SailReturn((GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_warm_access))
+        s = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        v = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         k_tstore(carried_address, s, v)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_jump(carried_code: Code, carried_pc: code_length, carried_gas: gas, carried_sp: StackPointer) -> tuple[code_length, gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 1, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_67 = True
+            case _:
+                _sail_value_67 = False
+        if _sail_value_67:
             raise SailReturn((carried_pc, GAS_ZERO, carried_sp, stack_status))
-        pc_after = carried_pc
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_mid)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((pc_after, gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        dest = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (next_pc, g2, jump_status) = do_jump(pc_after, gas_after_charge, carried_code, dest)
-        pc_after = next_pc
-        gas_after = g2
-        return (pc_after, gas_after, sp_after, jump_status)
+        gas_ = carried_gas
+        pc = carried_pc
+        status = Continue(None)
+        if (int(gas_) < int(G_mid)):
+            raise SailReturn((pc, GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_mid))
+        dest = read_stack_word(carried_sp)
+        sp = stack_top_retreat(carried_sp, 1)
+        (tup__0, tup__1, tup__2) = do_jump(pc, gas_, carried_code, dest)
+        pc = tup__0
+        gas_ = tup__1
+        status = tup__2
+        return (pc, gas_, sp, status)
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_jumpi(carried_code: Code, carried_pc: code_length, carried_gas: gas, carried_sp: StackPointer) -> tuple[code_length, gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_68 = True
+            case _:
+                _sail_value_68 = False
+        if _sail_value_68:
             raise SailReturn((carried_pc, GAS_ZERO, carried_sp, stack_status))
-        pc_after = carried_pc
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_high)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((pc_after, gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        dest = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        cond = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
+        gas_ = carried_gas
+        pc = carried_pc
+        status = Continue(None)
+        sp = carried_sp
+        if (int(gas_) < int(G_high)):
+            raise SailReturn((pc, GAS_ZERO, sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, G_high))
+        dest = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        cond = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         condition_is_zero = word_is_zero(cond)
         if condition_is_zero:
-            gas_after = gas_after_charge
-            raise SailReturn((pc_after, gas_after, sp_after, Continue(None)))
-        (next_pc, g2, jump_status) = do_jump(pc_after, gas_after_charge, carried_code, dest)
-        pc_after = next_pc
-        gas_after = g2
-        return (pc_after, gas_after, sp_after, jump_status)
+            raise SailReturn((pc, gas_, sp, status))
+        (tup__0, tup__1, tup__2) = do_jump(pc, gas_, carried_code, dest)
+        pc = tup__0
+        gas_ = tup__1
+        status = tup__2
+        return (pc, gas_, sp, status)
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_pc(carried_pc: code_length, carried_gas: gas, carried_sp: StackPointer) -> tuple[code_length, gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_69 = True
+            case _:
+                _sail_value_69 = False
+        if _sail_value_69:
             raise SailReturn((carried_pc, GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((carried_pc, gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((carried_pc, GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
         next_pc = word_of_source_byte_count(carried_pc)
         opcode_pc = alu_sub(next_pc, WORD_ONE)
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, opcode_pc)
-        gas_after = gas_after_charge
-        return (carried_pc, gas_after, sp_after, Continue(None))
+        sp = stack_top_advance(carried_sp, 1)
+        write_stack_word(sp, opcode_pc)
+        return (carried_pc, gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_gas(carried_gas: gas, carried_sp: StackPointer) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_70 = True
+            case _:
+                _sail_value_70 = False
+        if _sail_value_70:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_base)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, word_of_nat_byte_count(gas_after_charge))
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        if (int(carried_gas) < int(G_base)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_base))
+        gas_word = word_of_nat_byte_count(gas_)
+        sp = stack_top_advance(carried_sp, 1)
+        write_stack_word(sp, gas_word)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_jumpdest(carried_gas: gas) -> tuple[gas, OpcodeOutcome]:
     try:
-        gas_after = carried_gas
-        (halt, next_gas) = charge(gas_after, G_jumpdest)
-        if halt:
-            gas_after = next_gas
-            raise SailReturn((gas_after, Failed(ExceptionKind.OutOfGas)))
-        gas_after = next_gas
-        return (gas_after, Continue(None))
+        if (int(carried_gas) < int(G_jumpdest)):
+            raise SailReturn((GAS_ZERO, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_jumpdest))
+        return (gas_, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_push(carried_gas: gas, carried_sp: StackPointer, n: word_byte_count, v: word) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, 0, 1)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_71 = True
+            case _:
+                _sail_value_71 = False
+        if _sail_value_71:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
         if ((n) == (0)):
-            (halt, gas_after_charge) = charge(gas_after, G_base)
-            if halt:
-                gas_after = gas_after_charge
-                raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-            sp_after = stack_top_advance(sp_after, 1)
-            write_stack_word(sp_after, v)
-            gas_after = gas_after_charge
-            return (gas_after, sp_after, Continue(None))
+            cost = G_base
         else:
-            (halt, gas_after_charge) = charge(gas_after, G_verylow)
-            if halt:
-                gas_after = gas_after_charge
-                raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-            sp_after = stack_top_advance(sp_after, 1)
-            write_stack_word(sp_after, v)
-            gas_after = gas_after_charge
-            return (gas_after, sp_after, Continue(None))
+            cost = G_verylow
+        if (int(carried_gas) < int(cost)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(cost))
+        sp = stack_top_advance(carried_sp, 1)
+        write_stack_word(sp, v)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_dup(carried_gas: gas, carried_sp: StackPointer, n: stack_operation_index) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, n, (int(n) + 1))
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_72 = True
+            case _:
+                _sail_value_72 = False
+        if _sail_value_72:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-        value = stack_slot_read(sp_after, (int(n) - 1))
-        sp_after = stack_top_advance(sp_after, 1)
-        write_stack_word(sp_after, value)
-        gas_after = gas_after_charge
-        return (gas_after, sp_after, Continue(None))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        value = stack_slot_read(carried_sp, (int(n) - 1))
+        sp = stack_top_advance(carried_sp, 1)
+        write_stack_word(sp, value)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_swap(carried_gas: gas, carried_sp: StackPointer, n: stack_operation_index) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, (int(n) + 1), (int(n) + 1))
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_73 = True
+            case _:
+                _sail_value_73 = False
+        if _sail_value_73:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        gas_after = carried_gas
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
         top_value = read_stack_word(carried_sp)
         other = stack_slot_read(carried_sp, n)
         stack_set(carried_sp, 0, other)
         stack_set(carried_sp, n, top_value)
-        gas_after = gas_after_charge
-        return (gas_after, carried_sp, Continue(None))
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_dupn(carried_gas: gas, carried_sp: StackPointer, immediate: Annotated[Bits, BitWidth(8)]) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
-        gas_after = carried_gas
-        sp_after = carried_sp
         valid_immediate = deep_stack_immediate_valid(immediate)
         if (not (valid_immediate)):
-            raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.InvalidOpcode)))
-        else:
-            n = decode_single_stack_index(immediate)
-            stack_status = guard_stack(carried_sp, n, (int(n) + 1))
-            stack_failed = opcode_failed(stack_status)
-            if stack_failed:
-                raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-            (halt, gas_after_charge) = charge(gas_after, G_verylow)
-            if halt:
-                gas_after = gas_after_charge
-                raise SailReturn((gas_after, sp_after, Failed(ExceptionKind.OutOfGas)))
-            value = stack_slot_read(sp_after, (int(n) - 1))
-            sp_after = stack_top_advance(sp_after, 1)
-            write_stack_word(sp_after, value)
-            gas_after = gas_after_charge
-            return (gas_after, sp_after, Continue(None))
+            raise SailReturn((carried_gas, carried_sp, Failed(ExceptionKind.InvalidOpcode)))
+        n = decode_single_stack_index(immediate)
+        stack_status = guard_stack(carried_sp, n, (int(n) + 1))
+        match stack_status:
+            case Failed(_):
+                _sail_value_74 = True
+            case _:
+                _sail_value_74 = False
+        if _sail_value_74:
+            raise SailReturn((GAS_ZERO, carried_sp, stack_status))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        value = stack_slot_read(carried_sp, (int(n) - 1))
+        sp = stack_top_advance(carried_sp, 1)
+        write_stack_word(sp, value)
+        return (gas_, sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_swapn(carried_gas: gas, carried_sp: StackPointer, immediate: Annotated[Bits, BitWidth(8)]) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
-        gas_after = carried_gas
         valid_immediate = deep_stack_immediate_valid(immediate)
         if (not (valid_immediate)):
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.InvalidOpcode)))
-        else:
-            n = decode_single_stack_index(immediate)
-            stack_status = guard_stack(carried_sp, (int(n) + 1), (int(n) + 1))
-            stack_failed = opcode_failed(stack_status)
-            if stack_failed:
-                raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-            (halt, gas_after_charge) = charge(gas_after, G_verylow)
-            if halt:
-                gas_after = gas_after_charge
-                raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
-            top_value = read_stack_word(carried_sp)
-            other = stack_slot_read(carried_sp, n)
-            stack_set(carried_sp, 0, other)
-            stack_set(carried_sp, n, top_value)
-            gas_after = gas_after_charge
-            return (gas_after, carried_sp, Continue(None))
+            raise SailReturn((carried_gas, carried_sp, Failed(ExceptionKind.InvalidOpcode)))
+        n = decode_single_stack_index(immediate)
+        stack_status = guard_stack(carried_sp, (int(n) + 1), (int(n) + 1))
+        match stack_status:
+            case Failed(_):
+                _sail_value_75 = True
+            case _:
+                _sail_value_75 = False
+        if _sail_value_75:
+            raise SailReturn((GAS_ZERO, carried_sp, stack_status))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
+        top_value = read_stack_word(carried_sp)
+        other = stack_slot_read(carried_sp, n)
+        stack_set(carried_sp, 0, other)
+        stack_set(carried_sp, n, top_value)
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_exchange(carried_gas: gas, carried_sp: StackPointer, immediate: Annotated[Bits, BitWidth(8)]) -> tuple[gas, StackPointer, OpcodeOutcome]:
     try:
-        gas_after = carried_gas
         valid_immediate = exchange_immediate_valid(immediate)
         if (not (valid_immediate)):
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.InvalidOpcode)))
+            raise SailReturn((carried_gas, carried_sp, Failed(ExceptionKind.InvalidOpcode)))
         (n, m) = decode_exchange_stack_indices(immediate)
         stack_status = guard_stack(carried_sp, (int(m) + 1), (int(m) + 1))
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_76 = True
+            case _:
+                _sail_value_76 = False
+        if _sail_value_76:
             raise SailReturn((GAS_ZERO, carried_sp, stack_status))
-        (halt, gas_after_charge) = charge(gas_after, G_verylow)
-        if halt:
-            gas_after = gas_after_charge
-            raise SailReturn((gas_after, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        if (int(carried_gas) < int(G_verylow)):
+            raise SailReturn((GAS_ZERO, carried_sp, Failed(ExceptionKind.OutOfGas)))
+        gas_ = (int(carried_gas) - int(G_verylow))
         first = stack_slot_read(carried_sp, n)
         second = stack_slot_read(carried_sp, m)
         stack_set(carried_sp, n, second)
         stack_set(carried_sp, m, first)
-        gas_after = gas_after_charge
-        return (gas_after, carried_sp, Continue(None))
+        return (gas_, carried_sp, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_log(carried_address: address, carried_is_static: bool, carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice, n: log_topic_count) -> tuple[gas, StackPointer, EvmMemorySlice, OpcodeOutcome]:
+def execute_log(carried_address: address, carried_is_static: bool, memory_base_: code_length, n: log_topic_count, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, OpcodeOutcome]:
     try:
         stack_status = guard_stack(carried_sp, (int(n) + 2), 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, stack_status))
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        (gas_after_static_guard, status_after_guard) = guard_static(gas_after, carried_is_static)
-        guard_failed = opcode_failed(status_after_guard)
-        if guard_failed:
-            gas_after = gas_after_static_guard
-            raise SailReturn((gas_after, sp_after, memory_after, status_after_guard))
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        (topics, next_sp_1) = pop_log_topics(n, sp_after)
-        sp_after = next_sp_1
-        (log_halt, gas_after_log) = charge_log_gas(gas_after_static_guard, n, length_word)
-        if log_halt:
-            gas_after = gas_after_log
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
-        required_size = memory_required_size(offset_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after_log, memory_after, required_size)
-        if expansion_halt:
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, Failed(ExceptionKind.OutOfGas)))
+        match stack_status:
+            case Failed(_):
+                _sail_value_78 = True
+            case _:
+                _sail_value_78 = False
+        if _sail_value_78:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, stack_status))
+        gas_ = carried_gas
+        status = Continue(None)
+        sp = carried_sp
+        memory = carried_memory_height
+        topics = LogTopics0(None)
+        (tup__0, tup__1) = guard_static(gas_, carried_is_static)
+        gas_ = tup__0
+        status = tup__1
+        match status:
+            case Failed(_):
+                _sail_value_77 = True
+            case _:
+                _sail_value_77 = False
+        if _sail_value_77:
+            raise SailReturn((gas_, sp, memory, status))
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        (tup__0, tup__1) = pop_log_topics(n, sp)
+        topics = tup__0
+        sp = tup__1
+        log_cost = log_gas_cost(n, length_word, gas_)
+        if (not (log_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, log_cost.cost))
+        requested_height = memory_requested_height(offset_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Failed(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
-        (data, mem2) = active_memory_slice(mem1, sail_range_.off, sail_range_.len)
+        data = active_memory_slice(memory_base_, memory, sail_range_.off, sail_range_.len)
         memory_slice = evm_memory_slice(data.bytes, data.len)
         log_data = LogDataMemory(memory_slice)
         k_log(carried_address, topics, log_data)
-        memory_after = mem2
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, Continue(None))
+        return (gas_, sp, memory, Continue(None))
     except SailReturn as _sail_return:
         return _sail_return.value
 
 def execute_stop() -> FrameStatus:
-    status_after = Running(None)
     reason = HaltStop(None)
-    status_after = Halted(reason)
-    return status_after
+    return Halted(reason)
 
-def execute_return(carried_gas: gas, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, StackPointer, EvmMemorySlice, FrameStatus]:
+def execute_return(memory_base_: code_length, carried_gas: gas, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, StackPointer, code_length, FrameStatus]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_sp, carried_memory, opcode_frame_status(stack_status)))
-        status_after = Running(None)
-        gas_after = carried_gas
-        sp_after = carried_sp
-        memory_after = carried_memory
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        required_size = memory_required_size(offset_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size)
-        if expansion_halt:
-            status_after = Exceptional(ExceptionKind.OutOfGas)
-            gas_after = gas_after_expansion
-            raise SailReturn((gas_after, sp_after, memory_after, status_after))
+        match stack_status:
+            case Failed(_):
+                _sail_value_79 = True
+            case _:
+                _sail_value_79 = False
+        if _sail_value_79:
+            raise SailReturn((GAS_ZERO, carried_sp, carried_memory_height, opcode_frame_status(stack_status)))
+        gas_ = carried_gas
+        sp = carried_sp
+        memory = carried_memory_height
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        requested_height = memory_requested_height(offset_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, sp, memory, Exceptional(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
-        (data, mem2) = active_memory_slice(mem1, sail_range_.off, sail_range_.len)
+        data = active_memory_slice(memory_base_, memory, sail_range_.off, sail_range_.len)
         output = freeze_memory_output(data)
         reason = HaltReturn(output)
-        status_after = Halted(reason)
-        memory_after = mem2
-        gas_after = gas_after_expansion
-        return (gas_after, sp_after, memory_after, status_after)
+        return (gas_, sp, memory, Halted(reason))
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def execute_revert(carried_state_gas_reservoir: state_gas, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_sp: StackPointer, carried_memory: EvmMemorySlice) -> tuple[gas, state_gas, state_gas_spill, StackPointer, EvmMemorySlice, FrameStatus]:
+def execute_revert(carried_state_gas_reservoir: state_gas, memory_base_: code_length, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_sp: StackPointer, carried_memory_height: code_length) -> tuple[gas, state_gas, state_gas_spill, StackPointer, code_length, FrameStatus]:
     try:
         stack_status = guard_stack(carried_sp, 2, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
-            raise SailReturn((GAS_ZERO, carried_state_gas, carried_state_spill, carried_sp, carried_memory, opcode_frame_status(stack_status)))
-        status_after = Running(None)
-        sp_after = carried_sp
-        memory_after = carried_memory
-        offset_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        length_word = read_stack_word(sp_after)
-        sp_after = stack_top_retreat(sp_after, 1)
-        required_size = memory_required_size(offset_word, length_word)
-        (expansion_halt, gas_after_expansion) = charge_memory_expansion(carried_gas, memory_after, required_size)
-        if expansion_halt:
-            status_after = Exceptional(ExceptionKind.OutOfGas)
-            raise SailReturn((gas_after_expansion, carried_state_gas, carried_state_spill, sp_after, memory_after, status_after))
+        match stack_status:
+            case Failed(_):
+                _sail_value_80 = True
+            case _:
+                _sail_value_80 = False
+        if _sail_value_80:
+            raise SailReturn((GAS_ZERO, carried_state_gas, carried_state_spill, carried_sp, carried_memory_height, opcode_frame_status(stack_status)))
+        gas_ = carried_gas
+        state_gas_ = carried_state_gas
+        state_spill = carried_state_spill
+        sp = carried_sp
+        memory = carried_memory_height
+        offset_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        length_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
+        requested_height = memory_requested_height(offset_word, length_word)
+        expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas_)
+        if (not (expansion_cost.affordable)):
+            raise SailReturn((GAS_ZERO, carried_state_gas, carried_state_spill, sp, memory, Exceptional(ExceptionKind.OutOfGas)))
+        gas_ = gas(gas_sub(gas_, expansion_cost.cost))
         access = memory_access(offset_word, length_word)
-        mem1 = expand_memory(memory_after, access.required_size)
+        memory = code_length(expand_memory(memory_base_, memory, access.requested_height))
         sail_range_ = access.range
-        (g2, state_gas_after, state_spill_after) = refill_frame_state_gas(gas_after_expansion, carried_state_gas, carried_state_spill, carried_state_gas_reservoir)
-        (data, mem2) = active_memory_slice(mem1, sail_range_.off, sail_range_.len)
+        execution_profile = environment.k_execution_profile
+        profile = execution_profile.protocol
+        if (int(profile.fork) >= int(Amsterdam)):
+            gas_ = gas(conserved_gas_add(gas_, state_spill))
+            state_gas_ = carried_state_gas_reservoir
+            state_spill = STATE_GAS_SPILL_ZERO
+        data = active_memory_slice(memory_base_, memory, sail_range_.off, sail_range_.len)
         output = freeze_memory_output(data)
         reason = HaltRevert(output)
-        status_after = Halted(reason)
-        memory_after = mem2
-        return (g2, state_gas_after, state_spill_after, sp_after, memory_after, status_after)
+        return (gas_, state_gas_, state_spill, sp, memory, Halted(reason))
     except SailReturn as _sail_return:
         return _sail_return.value
 
@@ -2275,22 +2379,44 @@ def execute_invalid(carried_gas: gas) -> tuple[gas, OpcodeOutcome]:
 def execute_selfdestruct(carried_address: address, fork: Fork, carried_is_static: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_sp: StackPointer) -> tuple[gas, state_gas, state_gas_spill, gas_refund, StackPointer, FrameStatus]:
     try:
         stack_status = guard_stack(carried_sp, 1, 0)
-        stack_failed = opcode_failed(stack_status)
-        if stack_failed:
+        match stack_status:
+            case Failed(_):
+                _sail_value_82 = True
+            case _:
+                _sail_value_82 = False
+        if _sail_value_82:
             raise SailReturn((GAS_ZERO, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(stack_status)))
-        (gas_after_guard, guard_result) = guard_static(carried_gas, carried_is_static)
-        guard_failed = opcode_failed(guard_result)
-        if guard_failed:
-            raise SailReturn((gas_after_guard, carried_state_gas, carried_state_spill, carried_refund, carried_sp, opcode_frame_status(guard_result)))
-        beneficiary_word = read_stack_word(carried_sp)
-        sp_after = stack_top_retreat(carried_sp, 1)
+        gas_ = carried_gas
+        state_gas_ = carried_state_gas
+        state_spill = carried_state_spill
+        refund = carried_refund
+        sp = carried_sp
+        halt = False
+        status = Continue(None)
+        (tup__0, tup__1) = guard_static(gas_, carried_is_static)
+        gas_ = tup__0
+        status = tup__1
+        match status:
+            case Failed(_):
+                _sail_value_81 = True
+            case _:
+                _sail_value_81 = False
+        if _sail_value_81:
+            raise SailReturn((gas_, state_gas_, state_spill, refund, sp, opcode_frame_status(status)))
+        beneficiary_word = read_stack_word(sp)
+        sp = stack_top_retreat(sp, 1)
         beneficiary = word_to_address(beneficiary_word)
+        halt_reason = HaltSelfDestruct(None)
+        halt_status = Halted(halt_reason)
         if (int(fork) >= int(Amsterdam)):
             warm = k_account_is_warm(beneficiary)
-            access_cost = (int((0 + int(G_selfdestruct))) + int((G_zero if warm else G_amsterdam_cold_account_access)))
-            (sentry_halt, sentry_gas) = check_execution_gas(carried_gas, access_cost)
-            if sentry_halt:
-                raise SailReturn((sentry_gas, carried_state_gas, carried_state_spill, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+            if warm:
+                cold_access_cost = G_zero
+            else:
+                cold_access_cost = G_amsterdam_cold_account_access
+            access_cost = (int(G_selfdestruct) + int(cold_access_cost))
+            if (int(gas_) < int(access_cost)):
+                raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
             k_account_mark_warm(beneficiary)
             bal = k_get_balance(carried_address)
             nonzero_balance = word_nonzero(bal)
@@ -2300,47 +2426,43 @@ def execute_selfdestruct(carried_address: address, fork: Fork, carried_is_static
                 execution_cost = (int(access_cost) + int(G_amsterdam_account_write))
             else:
                 execution_cost = access_cost
-            (execution_halt, gas_after_execution) = charge(carried_gas, execution_cost)
-            if execution_halt:
-                raise SailReturn((gas_after_execution, carried_state_gas, carried_state_spill, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+            if (int(gas_) < int(execution_cost)):
+                raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
+            gas_ = gas(gas_sub(gas_, execution_cost))
             if creates_account:
-                (state_halt, gas_after_all_charges, state_gas_after, state_spill_after) = charge_state_gas(gas_after_execution, carried_state_gas, carried_state_spill, G_amsterdam_state_new_account)
-            else:
-                (state_halt, gas_after_all_charges, state_gas_after, state_spill_after) = (False, gas_after_execution, carried_state_gas, carried_state_spill)
-            if state_halt:
-                raise SailReturn((gas_after_all_charges, state_gas_after, state_spill_after, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+                (tup__0, tup__1, tup__2, tup__3) = charge_state_gas(gas_, state_gas_, state_spill, G_amsterdam_state_new_account)
+                halt = tup__0
+                gas_ = tup__1
+                state_gas_ = tup__2
+                state_spill = tup__3
+            if halt:
+                raise SailReturn((gas_, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
             k_transfer(carried_address, beneficiary, bal)
             created = k_was_created(carried_address)
             if created:
                 k_selfdestruct(carried_address)
-            return (gas_after_all_charges, state_gas_after, state_spill_after, carried_refund, sp_after, Halted(HaltSelfDestruct(None)))
+            return (gas_, state_gas_, state_spill, refund, sp, halt_status)
         else:
             bal = k_get_balance(carried_address)
             warm = k_account_is_warm(beneficiary)
-            (selfdestruct_halt, gas_after_execution) = charge(carried_gas, G_selfdestruct)
-            if selfdestruct_halt:
-                raise SailReturn((gas_after_execution, carried_state_gas, carried_state_spill, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+            if (int(gas_) < int(G_selfdestruct)):
+                raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
+            gas_ = gas(gas_sub(gas_, G_selfdestruct))
             if (not (warm)):
-                (cold_account_halt, gas_after_access) = charge(gas_after_execution, G_cold_account)
-            else:
-                (cold_account_halt, gas_after_access) = (False, gas_after_execution)
-            if cold_account_halt:
-                raise SailReturn((gas_after_access, carried_state_gas, carried_state_spill, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+                if (int(gas_) < int(G_cold_account)):
+                    raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
+                gas_ = gas(gas_sub(gas_, G_cold_account))
             k_account_mark_warm(beneficiary)
             nonzero_balance = word_nonzero(bal)
             beneficiary_empty = k_account_is_empty(beneficiary)
             if ((nonzero_balance) & (beneficiary_empty)):
-                (new_account_halt, gas_after_all_charges) = charge(gas_after_access, G_newaccount)
-            else:
-                (new_account_halt, gas_after_all_charges) = (False, gas_after_access)
-            if new_account_halt:
-                raise SailReturn((gas_after_all_charges, carried_state_gas, carried_state_spill, carried_refund, sp_after, Exceptional(ExceptionKind.OutOfGas)))
+                if (int(gas_) < int(G_newaccount)):
+                    raise SailReturn((GAS_ZERO, state_gas_, state_spill, refund, sp, Exceptional(ExceptionKind.OutOfGas)))
+                gas_ = gas(gas_sub(gas_, G_newaccount))
             is_selfdestructed = k_is_selfdestructed(carried_address)
             first_selfdestruct = (not (is_selfdestructed))
             if (((int(fork) < int(London))) & (first_selfdestruct)):
-                refund_after = record_refund(carried_refund, R_selfdestruct_pre_london)
-            else:
-                refund_after = carried_refund
+                refund = record_refund(refund, R_selfdestruct_pre_london)
             k_transfer(carried_address, beneficiary, bal)
             if (int(fork) < int(Cancun)):
                 k_zero_balance(carried_address)
@@ -2350,6 +2472,6 @@ def execute_selfdestruct(carried_address: address, fork: Fork, carried_is_static
                 if created:
                     k_zero_balance(carried_address)
                     k_selfdestruct(carried_address)
-            return (gas_after_all_charges, carried_state_gas, carried_state_spill, refund_after, sp_after, Halted(HaltSelfDestruct(None)))
+            return (gas_, state_gas_, state_spill, refund, sp, halt_status)
     except SailReturn as _sail_return:
         return _sail_return.value

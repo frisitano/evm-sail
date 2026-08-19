@@ -33,9 +33,13 @@ from evm.kernel.scratch import (
 from evm.lib.ssz.stateless_input import StatelessInputRef
 from evm.lib.htr import htr_new_payload_request
 
-def result_prefix(root: hash, success: bool) -> None:
+def write_prefix(root: hash, success: bool) -> None:
     scratch_push_b256(root, WORD_BYTE_LENGTH)
-    scratch_push_byte((Bits(8, 0b00000001) if success else Bits(8, 0b00000000)))
+    if success:
+        success_byte = Bits(8, 0b00000001)
+    else:
+        success_byte = Bits(8, 0b00000000)
+    scratch_push_byte(success_byte)
     scratch_push_byte(Bits(8, 0b00100101))
     scratch_push_byte(Bits(8, 0b00000000))
     scratch_push_byte(Bits(8, 0b00000000))
@@ -45,7 +49,7 @@ def commit_validation_result(root: hash, success: bool, chain_config: StatelessI
     fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
     output_length_ = scratch_length_add(fixed_length, chain_config.len)
     start = scratch_reserve(output_length_)
-    result_prefix(root, success)
+    write_prefix(root, success)
     stateless_input_scratch_push_slice(chain_config)
     output = scratch_finish(start)
     written = _host_public_output_write(output)
@@ -69,7 +73,7 @@ def write_invalid_result() -> None:
     fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
     output_length_ = scratch_length_add(fixed_length, chain_config.len)
     output_start = scratch_reserve(output_length_)
-    result_prefix(ZERO_HASH, False)
+    write_prefix(ZERO_HASH, False)
     scratch_scratch_push_slice(chain_config)
     output = scratch_finish(output_start)
     written = _host_public_output_write(output)

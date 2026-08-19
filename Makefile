@@ -95,8 +95,11 @@ C_OPT_COMPDB        := compile_commands.json
 C_OPT_QUALITY_DIR   := build/extraction-quality
 C_OPT_QUALITY_RECORD := $(C_OPT_QUALITY_DIR)/record.json
 C_OPT_QUALITY_SUMMARY := $(C_OPT_QUALITY_DIR)/summary.md
+C_OPT_PROVENANCE_STATE := $(C_OPT_BUILD_DIR)/compiler-provenance.pre.json
+C_OPT_PROVENANCE_STAMP := $(C_OPT_GENERATED_DIR)/extraction-provenance.json
 C_OPT_EVALUATION_PURPOSE ?= experiment
 C_OPT_SAIL_SOURCE_ARG = $(if $(strip $(SAIL_SOURCE)),--sail-source "$(SAIL_SOURCE)")
+C_OPT_SAIL_EFFECTIVE_BINARY_ARG = $(if $(strip $(SAIL_EFFECTIVE_BINARY)),--sail-effective-binary "$(SAIL_EFFECTIVE_BINARY)")
 C_OPTIMISED_DIR     := sail/optimised
 C_OPTIMISED_SPLICE_FLAGS = $(shell $(PYTHON_CONFIG) -m devtools.build_support manifest-words \
 	--root $(C_OPTIMISED_DIR) --prefix=--splice $(C_OPTIMISED_DIR)/manifest)
@@ -226,7 +229,7 @@ SAIL_PYTHON_FLAGS   ?= --python-preserve-structure \
 # hand.  Keep workspace-local worktrees and generated trees out of formatting.
 SAIL_FILES := $(shell find sail -name '*.sail' | sort)
 
-.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised generate-rocq validate-rocq drift-rocq extract-rocq build-rocq-interface build-rocq publish-rocq generate-lean validate-lean drift-lean extract-lean build-lean publish-lean generate-python validate-python drift-python extract-python build-python publish-python all c-optimised c-optimised-format-generated c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-public-targets check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo rocq-contracts-check docs-env docs-site eest-provision eest-verify eest-smoke verify-corpus verify-rocq verify-lean verify-python verify-c-spec verify-c-optimised verify-fast verify-docs extract ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint python-lint python-tools-check python-tools-fixture-smoke python-tools-fmt-check python-tools-format python-tools-format-check python-tools-lint python-tools-test python-tools-typecheck runtime-test sail-readability-lint-report zisk-guest
+.PHONY: publish-c-extraction extract build-extractions extract-c-spec build-c-spec extract-c-optimised build-c-optimised generate-rocq validate-rocq drift-rocq extract-rocq build-rocq-interface build-rocq publish-rocq generate-lean validate-lean drift-lean extract-lean build-lean publish-lean generate-python validate-python drift-python extract-python build-python publish-python all c-optimised c-optimised-format-generated c-optimised-clang-format c-optimised-clang-tidy c-optimised-compdb c-optimised-conformance c-optimised-evaluate c-optimised-evaluator-test c-optimised-format-report c-optimised-lint-report c-spec check check-contracts check-public-targets check-optimized-ffi check-optimized-ffi-manifest clean clear-z3-memo rocq-contracts-check docs-env docs-site eest-provision eest-verify eest-smoke verify-corpus verify-rocq verify-lean verify-python verify-c-spec verify-c-optimised verify-fast verify-docs extract ffi-clang-format-check fmt fmt-check help lean-extract lean-harness lint memory-regression-test python-lint python-tools-check python-tools-fixture-smoke python-tools-fmt-check python-tools-format python-tools-format-check python-tools-lint python-tools-test python-tools-typecheck runtime-test sail-readability-lint-report zisk-guest
 
 help:
 	@echo "evm-sail targets:"
@@ -237,6 +240,7 @@ help:
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
 	@echo "  make clear-z3-memo  - remove the persistent Sail/Z3 type-check cache"
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v0.6.2 fixture"
+	@echo "  make memory-regression-test - run focused frame-memory regressions on both C backends"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
 	@echo "  make c-optimised-compdb - write and smoke-check root clangd metadata"
@@ -313,6 +317,9 @@ eest-verify:
 verify-corpus: eest-provision
 	$(PYTHON) -m devtools.build_support run-command --log build/logs/corpus.log -- \
 		$(PYTHON) -m devtools.harness.cli --build optimized --jobs $${EEST_JOBS:-8} --quiet $(EEST_CORPUS)
+
+memory-regression-test:
+	SAIL="$(SAIL)" $(PYTHON) -m devtools.tests.test_memory_frames
 
 check-contracts:
 	$(PYTHON_CONFIG) -m devtools.canaries --config $(CONTRACT_CANARIES) --root .
@@ -401,7 +408,10 @@ publish-c-extraction: extract-c-spec extract-c-optimised
 extract-c-optimised: check-optimized-ffi
 	rm -rf $(C_OPT_GENERATED_DIR)
 	mkdir -p $(C_OPT_GENERATED_DIR)
-	$(SAIL) $(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
+	$(PYTHON) -m devtools.optimised_c.run_optimised_c_extraction run --sail $(SAIL) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--state $(C_OPT_PROVENANCE_STATE) --cwd $(CURDIR) -- \
+		$(SAIL_Z3_FLAGS) -c -O --Oconstant-fold --all-modules \
 		--c-optimized-model --c-package $(C_OPT_PACKAGE) \
 		--c-output-dir $(C_OPT_GENERATED_DIR) \
 		--c-optimized-source-root sail \
@@ -418,6 +428,11 @@ extract-c-optimised: check-optimized-ffi
 	test -s $(C_OPT_GENERATED_MANIFEST)
 	test -s $(C_OPT_PACKAGE_MANIFEST)
 	test -s $(C_OPT_GENERATED_INCLUDE_DIR)/$(C_OPT_PACKAGE)/spec.h
+	$(PYTHON) -m devtools.optimised_c.run_optimised_c_extraction finalize --sail $(SAIL) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--state $(C_OPT_PROVENANCE_STATE) --generated $(C_OPT_GENERATED_DIR) \
+		--output $(C_OPT_PROVENANCE_STAMP)
+	test -s $(C_OPT_PROVENANCE_STAMP)
 
 build-c-optimised: extract-c-optimised
 	$(MAKE) --no-print-directory -C $(C_OPT_GENERATED_DIR) CC="$(CC)"
@@ -442,7 +457,8 @@ c-optimised-evaluator-test:
 # make every recorded blocking gate fatal.
 c-optimised-evaluate: c-optimised-compdb
 	$(PYTHON) -m devtools.optimised_c.evaluate --sail $(SAIL) --clang $(CLANG) \
-		$(C_OPT_SAIL_SOURCE_ARG) \
+		$(C_OPT_SAIL_SOURCE_ARG) $(C_OPT_SAIL_EFFECTIVE_BINARY_ARG) \
+		--provenance-stamp $(C_OPT_PROVENANCE_STAMP) \
 		--purpose $(C_OPT_EVALUATION_PURPOSE) --compdb $(C_OPT_COMPDB) \
 		--built-library $(C_OPT_GENERATED_DIR)/libevmsail.a \
 		--output $(C_OPT_QUALITY_RECORD) --summary $(C_OPT_QUALITY_SUMMARY) \

@@ -21,7 +21,7 @@ function write_invalid_result() -> unit = {
     let chain_config = scratch_finish(start);
     let fixed_length = WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH;
     let output_start = scratch_reserve(scratch_length_add(fixed_length, chain_config.len));
-    result_prefix(ZERO_HASH, false);
+    write_prefix(ZERO_HASH, false);
     scratch_push_slice(chain_config);
     assert(public_output_write(scratch_finish(output_start)), "public output write");
     cycle_scope_end(7)

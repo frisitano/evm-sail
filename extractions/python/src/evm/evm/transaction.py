@@ -36,6 +36,7 @@ from evm.primitives.quantities import (
     PrecompileId,
     StackPointer,
     account_nonce,
+    code_length,
     excess_blob_gas,
     transaction_blob_gas,
     word_of_account_nonce,
@@ -57,7 +58,6 @@ from evm.primitives.gas import (
 )
 from evm.primitives.bytes import (
     CalldataSlice,
-    EvmMemorySlice,
     InputCalldata,
     OutputSlice,
     stateless_input_slice,
@@ -189,16 +189,15 @@ from evm.kernel.lifecycle import (
 from evm.evm.machine import (
     frame_state_gas_used,
     exceptional_state,
-    memory_reset,
+    MEMORY_HEIGHT_ZERO,
+    MEMORY_BASE_ZERO,
 )
 from evm.evm.gas import (
     protocol_word,
     blob_base_fee,
     deployed_code_size_allowed,
     initcode_size_allowed,
-    charge,
     charge_state_gas,
-    charge_deployment_state_gas,
     gas_sub,
     account_cost,
     code_deployment_execution_cost,
@@ -318,7 +317,9 @@ def intrinsic_gas(tx: Transaction) -> IntrinsicGasCost:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) < int(Amsterdam)):
-        return IntrinsicGasCost(execution=gas_cost(legacy_intrinsic_gas(tx)), state=gas_cost(0), calldata_floor=gas_cost(legacy_calldata_floor(tx.input_src)))
+        execution = legacy_intrinsic_gas(tx)
+        calldata_floor = legacy_calldata_floor(tx.input_src)
+        return IntrinsicGasCost(execution=gas_cost(execution), state=gas_cost(0), calldata_floor=gas_cost(calldata_floor))
     else:
         input = tx.input_src
         recipient = amsterdam_recipient_execution_cost(tx)
@@ -500,14 +501,14 @@ def process_amsterdam_auth(au: Authorization, sender: address, current_target: a
                         raise SailReturn((False, gas_after, state_gas_after, state_spill_after))
                 requires_account_write = (not (already_written))
                 if requires_account_write:
-                    (write_halt, write_gas) = charge(gas_after, G_amsterdam_account_write)
-                    gas_after = write_gas
-                    if write_halt:
-                        raise SailReturn((False, gas_after, state_gas_after, state_spill_after))
+                    if (int(gas_after) < int(G_amsterdam_account_write)):
+                        raise SailReturn((False, GAS_ZERO, state_gas_after, state_spill_after))
+                    gas_after = gas(gas_sub(gas_after, G_amsterdam_account_write))
                 not_delegated_before_tx = (not (delegated_before_tx))
                 delegation_set = _host_authorization_tracker_delegation_set(authority)
                 delegation_not_set = (not (delegation_set))
-                if ((((au.address) != (ZERO_ADDRESS))) & (((not_delegated_before_tx) & (delegation_not_set)))):
+                creates_delegation = ((au.address) != (ZERO_ADDRESS))
+                if ((creates_delegation) & (((not_delegated_before_tx) & (delegation_not_set)))):
                     (auth_state_gas_halt, auth_gas, auth_state_gas, auth_state_spill) = charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_auth_base)
                     gas_after = auth_gas
                     state_gas_after = auth_state_gas
@@ -521,7 +522,7 @@ def process_amsterdam_auth(au: Authorization, sender: address, current_target: a
                 k_bump_nonce(authority)
                 unseen = (not (seen))
                 originally_delegated = ((unseen) & (currently_delegated))
-                _host_authorization_tracker_commit(authority, originally_delegated, ((au.address) != (ZERO_ADDRESS)))
+                _host_authorization_tracker_commit(authority, originally_delegated, creates_delegation)
         return (True, gas_after, state_gas_after, state_spill_after)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -659,7 +660,8 @@ def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowan
     authorizations = tx.authorizations
     if ((tx_semantics.set_code) & (((authorizations.count) == (0)))):
         fatal_error(FatalError.ExecutionInvalid)
-    if ((((tx_semantics.signature) == (TxSignatureScheme.TypedSignature))) & (((tx.chain_id) != (kernel_environment.k_chain_id)))):
+    typed_signature = ((tx_semantics.signature) == (TxSignatureScheme.TypedSignature))
+    if ((typed_signature) & (((tx.chain_id) != (kernel_environment.k_chain_id)))):
         fatal_error(FatalError.ExecutionInvalid)
     if ((nonce_before) == ((int((1 << 64)) - 1))):
         fatal_error(FatalError.ExecutionInvalid)
@@ -689,11 +691,10 @@ def apply_transaction_upfront_effects(tx: Transaction, v: TxValidity, authorizat
         authorization_refund_ = 0
     return TxUpfrontResult(authorization_refund=authorization_refund(authorization_refund_), create_target_prestate_empty=create_target_prestate_empty)
 
-def enter_transaction_frame(v: TxValidity) -> tuple[gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice]:
+def enter_transaction_frame(v: TxValidity) -> tuple[gas, state_gas, state_gas_spill, gas_refund, StackPointer, code_length, code_length]:
     initial_gas = v.gas
     stack = stack_reset()
-    memory = memory_reset()
-    return (initial_gas.execution_remaining, initial_gas.state_remaining, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack, memory)
+    return (initial_gas.execution_remaining, initial_gas.state_remaining, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack, MEMORY_BASE_ZERO, MEMORY_HEIGHT_ZERO)
 
 @dataclass(slots=True)
 class TransactionPreparation:
@@ -738,10 +739,9 @@ def prepare_amsterdam_transaction_dispatch(tx: Transaction, v: TxValidity, upfro
             if delegated:
                 warm = k_account_is_warm(delegate)
                 access_cost = account_cost(warm)
-                (access_halt, access_gas) = charge(gas_after, access_cost)
-                gas_after = access_gas
-                if access_halt:
-                    raise SailReturn((TransactionPreparation(ready=False, delegated=False), gas_after, state_gas_after, state_spill_after, current_target, current_target, EMPTY_CODE, calldata))
+                if (int(gas_after) < int(access_cost)):
+                    raise SailReturn((TransactionPreparation(ready=False, delegated=False), GAS_ZERO, state_gas_after, state_spill_after, current_target, current_target, EMPTY_CODE, calldata))
+                gas_after = gas(gas_sub(gas_after, access_cost))
                 k_account_mark_warm(delegate)
             if delegated:
                 code_address = delegate
@@ -752,7 +752,7 @@ def prepare_amsterdam_transaction_dispatch(tx: Transaction, v: TxValidity, upfro
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before: account_nonce, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory: EvmMemorySlice, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
+def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before: account_nonce, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory_base: code_length, carried_memory_height: code_length, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     new_addr = k_create_addr(sender, nonce_before)
@@ -766,10 +766,10 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
     occupied = k_account_occupied(new_addr)
     if occupied:
         gas_after = GAS_ZERO
-        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.AddressCollision)
-        state_gas_after = tup__0
-        state_spill_after = tup__1
-        status_after = tup__2
+        exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.AddressCollision)
+        state_gas_after = state_gas(exceptional.state_gas_remaining)
+        state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+        status_after = exceptional.status
     else:
         k_mark_created(new_addr)
         k_clear_storage(new_addr)
@@ -784,7 +784,7 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
             code_id = code_db_insert(initcode, profile.fork)
             frame_code = code_db_resolve(code_id)
             frame_calldata = EMPTY_CALLDATA
-        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory, sender, new_addr, new_addr, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
+        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory_base, carried_memory_height, sender, new_addr, new_addr, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
         gas_after = tup__0
         state_gas_after = tup__1
         state_spill_after = tup__2
@@ -808,16 +808,18 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
                     execution_deposit = deployment_charge.cost
                     gas_after = gas(gas_sub(gas_after, execution_deposit))
                     state_deposit = code_deployment_state_cost(dep_len)
-                    (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) = charge_deployment_state_gas(gas_after, state_gas_after, state_spill_after, state_deposit)
-                    gas_after = deployment_gas
-                    state_gas_after = deployment_state_gas
-                    state_spill_after = deployment_state_spill
+                    deployment_halt = False
+                    (tup__0, tup__1, tup__2, tup__3) = charge_state_gas(gas_after, state_gas_after, state_spill_after, state_deposit)
+                    deployment_halt = tup__0
+                    gas_after = tup__1
+                    state_gas_after = tup__2
+                    state_spill_after = tup__3
                     if deployment_halt:
                         gas_after = GAS_ZERO
-                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
-                        state_gas_after = tup__0
-                        state_spill_after = tup__1
-                        status_after = tup__2
+                        exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = state_gas(exceptional.state_gas_remaining)
+                        state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+                        status_after = exceptional.status
                     deployment_succeeded = frame_succeeded(status_after)
                     if deployment_succeeded:
                         stored_code = code_db_intern_output(deployed_output)
@@ -828,19 +830,19 @@ def run_create_transaction_frame(tx: Transaction, sender: address, nonce_before:
                         k_deploy_code(new_addr, EMPTY_CODE_SLICE)
                     else:
                         gas_after = GAS_ZERO
-                        (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
-                        state_gas_after = tup__0
-                        state_spill_after = tup__1
-                        status_after = tup__2
+                        exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                        state_gas_after = state_gas(exceptional.state_gas_remaining)
+                        state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+                        status_after = exceptional.status
             else:
                 gas_after = GAS_ZERO
-                (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
-                state_gas_after = tup__0
-                state_spill_after = tup__1
-                status_after = tup__2
+                exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                state_gas_after = state_gas(exceptional.state_gas_remaining)
+                state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+                status_after = exceptional.status
     return (gas_after, state_gas_after, state_spill_after, refund_after, status_after, output_after)
 
-def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory: EvmMemorySlice, carried_code_address: address, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
+def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool, carried_gas: gas, carried_state_gas: state_gas, carried_state_spill: state_gas_spill, carried_refund: gas_refund, carried_stack: StackPointer, carried_memory_base: code_length, carried_memory_height: code_length, carried_code_address: address, carried_code: Code, carried_calldata: CalldataSlice, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     gas_after = carried_gas
@@ -857,8 +859,10 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
     if transfers_value:
         k_transfer(sender, tx.recipient, tx.value)
     selected_precompile = precompile_id_for_address(tx.recipient)
-    direct_recipient = (not (delegated))
-    if ((direct_recipient) & (((selected_precompile) != (PrecompileId.NotPrecompile)))):
+    direct_precompile = False
+    if (not (delegated)):
+        direct_precompile = ((selected_precompile) != (PrecompileId.NotPrecompile))
+    if direct_precompile:
         input_src = tx.input_src
         precompile_input = InputCalldata(input_src)
         precompile_charge = precompile_gas(selected_precompile, precompile_input, gas_after)
@@ -868,19 +872,20 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
             if result.success:
                 gas_after = gas(gas_sub(gas_after, used))
                 output_after = result.output
-                status_after = Halted(HaltReturn(result.output))
+                halt_reason = HaltReturn(result.output)
+                status_after = Halted(halt_reason)
             else:
                 gas_after = GAS_ZERO
-                (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
-                state_gas_after = tup__0
-                state_spill_after = tup__1
-                status_after = tup__2
+                exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+                state_gas_after = state_gas(exceptional.state_gas_remaining)
+                state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+                status_after = exceptional.status
         else:
             gas_after = GAS_ZERO
-            (tup__0, tup__1, tup__2) = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
-            state_gas_after = tup__0
-            state_spill_after = tup__1
-            status_after = tup__2
+            exceptional = exceptional_state(state_gas_after, state_spill_after, state_gas_reservoir, ExceptionKind.OutOfGas)
+            state_gas_after = state_gas(exceptional.state_gas_remaining)
+            state_spill_after = state_gas_spill(exceptional.state_gas_spilled)
+            status_after = exceptional.status
     else:
         if (int(profile.fork) < int(Amsterdam)):
             frame_calldata = InputCalldata(tx.input_src)
@@ -892,7 +897,7 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
             if tx_deleg:
                 code_address = Bytes20(tx_dtgt)
             frame_code = executable_code(tx.recipient, tx_deleg, tx_dtgt)
-        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory, sender, tx.recipient, code_address, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
+        (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = interpret(gas_after, state_gas_after, state_spill_after, refund_after, carried_stack, carried_memory_base, carried_memory_height, sender, tx.recipient, code_address, tx.value, state_gas_reservoir, False, 0, frame_code, frame_calldata)
         gas_after = tup__0
         state_gas_after = tup__1
         state_spill_after = tup__2
@@ -904,12 +909,12 @@ def run_call_transaction_frame(tx: Transaction, sender: address, delegated: bool
 def run_legacy_transaction_frame(tx: Transaction, v: TxValidityFields) -> TxFrameResultFields:
     initial_gas = v.gas
     k_journal_checkpoint()
-    (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory) = enter_transaction_frame(v)
+    (initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory_base, initial_memory_height) = enter_transaction_frame(v)
     state_gas_reservoir = initial_state_gas
     if tx.is_create:
-        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_create_transaction_frame(tx, v.sender, v.nonce_before, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_create_transaction_frame(tx, v.sender, v.nonce_before, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory_base, initial_memory_height, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
     else:
-        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_call_transaction_frame(tx, v.sender, False, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory, tx.recipient, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
+        (gas_after, state_gas_after, state_spill_after, refund_after, status_after, _) = run_call_transaction_frame(tx, v.sender, False, initial_execution_gas, initial_state_gas, initial_state_spill, initial_refund, initial_stack, initial_memory_base, initial_memory_height, tx.recipient, EMPTY_CODE, EMPTY_CALLDATA, state_gas_reservoir)
     success = frame_succeeded(status_after)
     failed = (not (success))
     if failed:
@@ -917,11 +922,15 @@ def run_legacy_transaction_frame(tx: Transaction, v: TxValidityFields) -> TxFram
     else:
         k_journal_commit()
     state_delta = frame_state_gas_used(state_gas_reservoir, state_gas_after, state_spill_after)
-    return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=(refund_after if success else GAS_REFUND_ZERO))
+    if success:
+        retained_refund = refund_after
+    else:
+        retained_refund = GAS_REFUND_ZERO
+    return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=retained_refund)
 
 def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfront: TxUpfrontResult, authorizations: PreparedAuthorizationList) -> TxFrameResultFields:
     try:
-        (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory) = enter_transaction_frame(v)
+        (entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory_base, entered_memory) = enter_transaction_frame(v)
         gas_after = entered_gas
         state_gas_after = entered_state_gas
         state_spill_after = entered_state_spill
@@ -970,7 +979,7 @@ def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfron
             raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, GAS_ZERO, STATE_GAS_ZERO, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
         k_journal_checkpoint()
         if tx.is_create:
-            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_create_transaction_frame(tx, v.sender, v.nonce_before, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory, prepared_code, prepared_calldata, execution_reservoir)
+            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_create_transaction_frame(tx, v.sender, v.nonce_before, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory_base, entered_memory, prepared_code, prepared_calldata, execution_reservoir)
             gas_after = tup__0
             state_gas_after = tup__1
             state_spill_after = tup__2
@@ -978,7 +987,7 @@ def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfron
             status_after = tup__4
             output_after = tup__5
         else:
-            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_call_transaction_frame(tx, v.sender, delegated, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory, prepared_code_address, prepared_code, prepared_calldata, execution_reservoir)
+            (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_call_transaction_frame(tx, v.sender, delegated, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory_base, entered_memory, prepared_code_address, prepared_code, prepared_calldata, execution_reservoir)
             gas_after = tup__0
             state_gas_after = tup__1
             state_spill_after = tup__2
@@ -992,8 +1001,13 @@ def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfron
         else:
             k_journal_commit()
         k_journal_commit()
-        state_delta = (int(authorization_state_gas) + int(frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after)))
-        return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=(refund_after if success else GAS_REFUND_ZERO))
+        execution_state_delta = frame_state_gas_used(execution_reservoir, state_gas_after, state_spill_after)
+        state_delta = (int(authorization_state_gas) + int(execution_state_delta))
+        if success:
+            retained_refund = refund_after
+        else:
+            retained_refund = GAS_REFUND_ZERO
+        return TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=success, gas=tx_frame_gas_snapshot(initial_gas, gas_after, state_gas_after, state_delta), refund=retained_refund)
     except SailReturn as _sail_return:
         return _sail_return.value
 

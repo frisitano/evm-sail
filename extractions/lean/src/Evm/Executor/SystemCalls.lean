@@ -147,13 +147,14 @@ abbrev DEPOSIT_REQUEST_INDEX : Nat := 184
 /-- Runs a top-level protocol system-call frame. The caller has already
 resolved `code`, made a fresh memory frame and, for a word input, frozen
 the parent-memory span that `input` references. -/
-/- Type quantifiers: code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0 ≤
-  code_dependentWitness0 ∧
+/- Type quantifiers: k_ex552539_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+  ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex552539_
+  ∧ k_ex552539_ ≤ (2 ^ 32 - 1) -/
 def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (input : CalldataSlice) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
+  (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (input : CalldataSlice) (memory_base : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
   fun (code_dependentWitness0 : Nat) =>
   (Sigma fun (code_dependentWitness1 : Nat) =>
   (OutputSliceFields code_dependentWitness0 code_dependentWitness1)))) := do
@@ -161,9 +162,10 @@ def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_o
   let code_dependentWitness1 := ((code).2).1
   let code := ((code).2).2
   (k_journal_checkpoint ())
-  (interpret SYSTEM_CALL_GAS_LIMIT STATE_GAS_ZERO STATE_GAS_SPILL_ZERO GAS_REFUND_ZERO
-    (← (stack_reset ())) ⟨_, ⟨_, EMPTY_EVM_MEMORY_SLICE⟩⟩ SYSTEM_ADDRESS tgt tgt ZERO_WORD
-    STATE_GAS_ZERO false 0 ⟨_, ⟨_, code⟩⟩ input)
+  let stack_top ← do (stack_reset ())
+  (interpret SYSTEM_CALL_GAS_LIMIT STATE_GAS_ZERO STATE_GAS_SPILL_ZERO GAS_REFUND_ZERO stack_top
+    memory_base MEMORY_HEIGHT_ZERO SYSTEM_ADDRESS tgt tgt ZERO_WORD STATE_GAS_ZERO false 0
+    ⟨_, ⟨_, code⟩⟩ input)
 
 /-- Issues one unchecked block-start system call: a 30M-gas frame from
 `SYSTEM_ADDRESS` with a 32-byte input; skipped when the target has no
@@ -175,24 +177,25 @@ def system_call (tgt : (Vector (BitVec 8) 20)) (input : (Vector (BitVec 8) 32)) 
   else
     (do
       let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_hash)
-      let ⟨_, ⟨_, initial_memory⟩⟩ ← do (memory_reset ())
+      let initial_memory_base := MEMORY_BASE_ZERO
+      let initial_memory_height := MEMORY_HEIGHT_ZERO
       let input_range : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len))) :=
         ((⟨_, ⟨_, (memory_range 0 SYSTEM_CALL_INPUT_LENGTH)⟩⟩ : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len)))) : (Sigma fun (k_off : Nat) =>
         (Sigma fun (k_len : Nat) => (MemoryRangeFields k_off k_len))))
-      let (_, expanded_memory) ← do
-        (memory_expand_to ⟨_, ⟨_, initial_memory⟩⟩ ((input_range).2).2.len)
+      let expanded_memory ← do
+        (expand_memory initial_memory_base initial_memory_height ((input_range).2).2.len)
       let input_word := (hash_to_word input)
-      (mem_store_word ((input_range).2).2.off input_word)
-      let (input_slice, accessed_memory) ← do
-        (active_memory_slice expanded_memory ((input_range).2).2.off ((input_range).2).2.len)
-      let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
-      let memory_input := (evm_memory_slice ((input_slice).2).2.bytes ((input_slice).2).2.len)
+      (mem_store initial_memory_base ((input_range).2).2.off input_word)
+      let ⟨_, ⟨_, input_slice⟩⟩ ← do
+        (active_memory_slice initial_memory_base expanded_memory ((input_range).2).2.off
+          ((input_range).2).2.len)
+      let child_memory_base ← do (memory_absolute initial_memory_base expanded_memory)
+      let memory_input := (evm_memory_slice input_slice.bytes input_slice.len)
       let frame_input := (MemoryCalldata ⟨_, ⟨_, memory_input⟩⟩)
       let (_, _, _, _, status, _) ← do
-        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ frame_input)
-      let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
+        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ frame_input child_memory_base)
       let succeeded := (frame_succeeded status)
       let failed := (! succeeded)
       if (failed : Bool)
@@ -213,10 +216,8 @@ def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off
   else
     (do
       let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_hash)
-      let ⟨_, ⟨_, _⟩⟩ ← do (memory_reset ())
-      let ⟨_, ⟨_, parent_memory⟩⟩ ← do (memory_frame_enter ())
       let (_, _, _, _, status, output) ← do
-        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ EMPTY_CALLDATA)
+        (run_system_call_frame tgt ⟨_, ⟨_, code⟩⟩ EMPTY_CALLDATA MEMORY_BASE_ZERO)
       let succeeded := (frame_succeeded status)
       if _sailIf1 : (succeeded : Bool) = true
       then
@@ -224,7 +225,6 @@ def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off
           let start ← do (scratch_reserve ((output).2).2.len)
           (output_scratch_push_slice output)
           let ⟨_, ⟨_, result⟩⟩ ← do (scratch_finish start)
-          let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
           (k_journal_commit ())
           (k_tx_merge ())
           (pure ((⟨_, ⟨_, result⟩⟩ : (Sigma fun (k_off : Nat) =>
@@ -232,7 +232,6 @@ def system_call_checked (tgt : (Vector (BitVec 8) 20)) : SailM (Sigma fun (k_off
             (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))
       else
         (do
-          let ⟨_, ⟨_, _⟩⟩ ← do (memory_frame_leave ⟨_, ⟨_, parent_memory⟩⟩)
           (k_journal_revert ())
           (k_tx_merge ())
           (fatal_error ExecutionInvalid)))
@@ -313,7 +312,34 @@ def authenticate_deposit_request (data : (Sigma fun (k_off : Nat) =>
   let expected_amount_length : Nat := (u256 8)
   let expected_signature_length : Nat := (u256 96)
   let expected_index_length : Nat := (u256 8)
-  if (((pubkey_head != expected_pubkey_head) || ((withdrawal_credentials_head != expected_withdrawal_credentials_head) || ((amount_head != expected_amount_head) || ((signature_head != expected_signature_head) || ((index_head != expected_index_head) || ((pubkey_length != expected_pubkey_length) || ((withdrawal_credentials_length != expected_withdrawal_credentials_length) || ((amount_length != expected_amount_length) || ((signature_length != expected_signature_length) || (index_length != expected_index_length)))))))))) : Bool)
+  if ((pubkey_head != expected_pubkey_head) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((withdrawal_credentials_head != expected_withdrawal_credentials_head) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((amount_head != expected_amount_head) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((signature_head != expected_signature_head) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((index_head != expected_index_head) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((pubkey_length != expected_pubkey_length) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((withdrawal_credentials_length != expected_withdrawal_credentials_length) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((amount_length != expected_amount_length) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((signature_length != expected_signature_length) : Bool)
+  then (fatal_error InvalidExecutionRequests)
+  else (pure ())
+  if ((index_length != expected_index_length) : Bool)
   then (fatal_error InvalidExecutionRequests)
   else (pure ())
   if _sailIf0 : ((DEPOSIT_REQUEST_LENGTH ≤b expected.len) : Bool) = true

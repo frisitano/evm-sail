@@ -168,7 +168,7 @@ def word_of_nat_byte_count (value : Nat) : SailM Nat := do
   then (pure (u256 value))
   else
     (do
-      assert false "sail/primitives/quantities.sail:611.20-611.21"
+      assert false "sail/primitives/quantities.sail:615.20-615.21"
       throw Error.Exit)
 
 /- Type quantifiers: value : Nat, (source_valid_length value) -/

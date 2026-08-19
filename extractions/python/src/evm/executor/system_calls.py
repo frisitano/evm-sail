@@ -12,7 +12,6 @@ from evm.HostContract import (
     log_input_slices_equal as _host_log_input_slices_equal,
     log_topic as _host_log_topic,
     log_topics_count as _host_log_topics_count,
-    mem_store_word as _host_mem_store_word,
     scratch_input_slices_equal as _host_scratch_input_slices_equal,
 )
 from evm.prelude import (
@@ -22,7 +21,10 @@ from evm.prelude import (
     hash_to_word,
     ZERO_WORD,
 )
-from evm.primitives.quantities import memory_range
+from evm.primitives.quantities import (
+    code_length,
+    memory_range,
+)
 from evm.primitives.gas import (
     gas,
     gas_refund,
@@ -47,7 +49,6 @@ from evm.primitives.bytes import (
     stateless_input_slice_suffix,
     WORD_BYTE_LENGTH,
     EIGHT_BYTE_LENGTH,
-    EMPTY_EVM_MEMORY_SLICE,
     EMPTY_CALLDATA,
 )
 from evm.exceptions import (
@@ -90,11 +91,12 @@ from evm.kernel.lifecycle import (
     k_journal_commit,
 )
 from evm.evm.machine import (
-    memory_reset,
-    memory_expand_to,
+    memory_absolute,
+    expand_memory,
     active_memory_slice,
-    memory_frame_enter,
-    memory_frame_leave,
+    mem_store,
+    MEMORY_HEIGHT_ZERO,
+    MEMORY_BASE_ZERO,
 )
 from evm.evm.interpreter import (
     interpret,
@@ -103,9 +105,10 @@ from evm.evm.interpreter import (
 from evm.lib.ssz.stateless_input import StatelessInputRef
 from evm.kernel import environment
 
-def run_system_call_frame(tgt: address, code: Code, input: CalldataSlice) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
+def run_system_call_frame(tgt: address, code: Code, input: CalldataSlice, memory_base_: code_length) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     k_journal_checkpoint()
-    return interpret(SYSTEM_CALL_GAS_LIMIT, STATE_GAS_ZERO, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_reset(), EMPTY_EVM_MEMORY_SLICE, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, STATE_GAS_ZERO, False, 0, code, input)
+    stack_top = stack_reset()
+    return interpret(SYSTEM_CALL_GAS_LIMIT, STATE_GAS_ZERO, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_top, memory_base_, MEMORY_HEIGHT_ZERO, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, STATE_GAS_ZERO, False, 0, code, input)
 
 def system_call(tgt: address, input: hash) -> None:
     try:
@@ -113,17 +116,17 @@ def system_call(tgt: address, input: hash) -> None:
         if ((code_hash) == (KECCAK_EMPTY)):
             raise SailReturn(None)
         code = code_db_resolve(code_hash)
-        initial_memory = memory_reset()
+        initial_memory_base = MEMORY_BASE_ZERO
+        initial_memory_height = MEMORY_HEIGHT_ZERO
         input_range = memory_range(0, SYSTEM_CALL_INPUT_LENGTH)
-        (_, expanded_memory) = memory_expand_to(initial_memory, input_range.len)
+        expanded_memory = expand_memory(initial_memory_base, initial_memory_height, input_range.len)
         input_word = hash_to_word(input)
-        _host_mem_store_word(input_range.off, input_word)
-        (input_slice, accessed_memory) = active_memory_slice(expanded_memory, input_range.off, input_range.len)
-        parent_memory = memory_frame_enter()
+        mem_store(initial_memory_base, input_range.off, input_word)
+        input_slice = active_memory_slice(initial_memory_base, expanded_memory, input_range.off, input_range.len)
+        child_memory_base = memory_absolute(initial_memory_base, expanded_memory)
         memory_input = evm_memory_slice(input_slice.bytes, input_slice.len)
         frame_input = MemoryCalldata(memory_input)
-        (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input)
-        memory_frame_leave(parent_memory)
+        (_, _, _, _, status, _) = run_system_call_frame(tgt, code, frame_input, child_memory_base)
         succeeded = frame_succeeded(status)
         failed = (not (succeeded))
         if failed:
@@ -140,20 +143,16 @@ def system_call_checked(tgt: address) -> ScratchSlice:
         return fatal_error(FatalError.ExecutionInvalid)
     else:
         code = code_db_resolve(code_hash)
-        memory_reset()
-        parent_memory = memory_frame_enter()
-        (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA)
+        (_, _, _, _, status, output) = run_system_call_frame(tgt, code, EMPTY_CALLDATA, MEMORY_BASE_ZERO)
         succeeded = frame_succeeded(status)
         if succeeded:
             start = scratch_reserve(output.len)
             output_scratch_push_slice(output)
             result = scratch_finish(start)
-            memory_frame_leave(parent_memory)
             k_journal_commit()
             k_tx_merge()
             return result
         else:
-            memory_frame_leave(parent_memory)
             k_journal_revert()
             k_tx_merge()
             return fatal_error(FatalError.ExecutionInvalid)
@@ -195,7 +194,25 @@ def authenticate_deposit_request(data: LogDataSlice, expected: StatelessInputSli
     expected_amount_length = u256(8)
     expected_signature_length = u256(96)
     expected_index_length = u256(8)
-    if ((((pubkey_head) != (expected_pubkey_head))) | (((((withdrawal_credentials_head) != (expected_withdrawal_credentials_head))) | (((((amount_head) != (expected_amount_head))) | (((((signature_head) != (expected_signature_head))) | (((((index_head) != (expected_index_head))) | (((((pubkey_length) != (expected_pubkey_length))) | (((((withdrawal_credentials_length) != (expected_withdrawal_credentials_length))) | (((((amount_length) != (expected_amount_length))) | (((((signature_length) != (expected_signature_length))) | (((index_length) != (expected_index_length)))))))))))))))))))):
+    if ((pubkey_head) != (expected_pubkey_head)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((withdrawal_credentials_head) != (expected_withdrawal_credentials_head)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((amount_head) != (expected_amount_head)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((signature_head) != (expected_signature_head)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((index_head) != (expected_index_head)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((pubkey_length) != (expected_pubkey_length)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((withdrawal_credentials_length) != (expected_withdrawal_credentials_length)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((amount_length) != (expected_amount_length)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((signature_length) != (expected_signature_length)):
+        fatal_error(FatalError.InvalidExecutionRequests)
+    if ((index_length) != (expected_index_length)):
         fatal_error(FatalError.InvalidExecutionRequests)
     if (int(DEPOSIT_REQUEST_LENGTH) <= int(expected.len)):
         log_pubkey = log_data_sub_slice(data, DEPOSIT_PUBKEY_DATA, DEPOSIT_PUBKEY_LENGTH)

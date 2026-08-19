@@ -77,8 +77,6 @@ Bytes output_buffer_slice(uint32_t /* arg_0 */);
 
 Bytes host_log_data_slice(uint64_t /* arg_0 */);
 
-Bytes mem_frame_enter_slice(void);
-
 Bytes scratch_store_receipt_logs_bloom(uint32_t /* arg_0 */, uint64_t /* arg_1 */, uint64_t /* arg_2 */);
 
 void receipt_table_push(uint32_t /* arg_0 */, Bytes /* arg_1 */);
@@ -98,8 +96,6 @@ Bytes evm_memory_slice(const uint8_t * off, uint32_t len);
 Bytes log_data_sub_slice_Bytes_uint16_t_uint8_t_to_Bytes(Bytes s, uint16_t off, uint8_t len);
 
 Bytes log_data_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(Bytes s, uint8_t off, uint8_t len);
-
-Bytes memory_sub_slice_Bytes_uint8_t_uint32_t_to_Bytes(Bytes s, uint8_t off, uint32_t len);
 
 Bytes memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(Bytes s, uint8_t off, uint8_t len);
 

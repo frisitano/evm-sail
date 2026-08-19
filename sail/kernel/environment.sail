@@ -121,7 +121,7 @@ function k_blockhash(number_word : word) -> hash = {
     let current_number = word_of_block_number(current);
     let current_word : word = u256(current_number);
     if number_word < current_word then {
-        let (distance_word as 'distance) = blockhash_word_distance(current_word, number_word);
+        let distance_word = blockhash_word_distance(current_word, number_word);
         if distance_word <= 256 then {
             let distance : range(1, 256) = distance_word;
             if k_n_headers < distance then {

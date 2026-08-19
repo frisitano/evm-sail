@@ -516,10 +516,15 @@ Generation zero is reserved for the absence of a generation. -/
 abbrev storage_generation := Nat
 
 /-- An absolute byte position in the shared EVM-memory arena. -/
-abbrev memory_pointer := Nat
+abbrev memory_base := Nat
 
 /-- A materialized length or allocation size in the EVM-memory arena. -/
 abbrev memory_length := Nat
+
+/-- The active EVM frame's exact relative byte high-water mark. It is carried
+beside the frame's absolute `memory_base`; the host retains no hidden
+frame coordinate or lifecycle state. -/
+abbrev memory_height := memory_length
 
 /-- Largest possible initial/live gas value from the SSZ-backed block-gas
 domain. Fork and header limits may make this ceiling smaller; this union
@@ -591,7 +596,7 @@ structure MemoryAccessFields (k_off : Nat) (k_len : Nat) (k_required : Nat) wher
   range : (MemoryRangeFields k_off k_len)
   deriving BEq, Inhabited, Repr
 
-@[simp] def MemoryAccessFields.required_size {k_off : Nat} {k_len : Nat} {k_required : Nat}
+@[simp] def MemoryAccessFields.requested_height {k_off : Nat} {k_len : Nat} {k_required : Nat}
   (_ : (MemoryAccessFields k_off k_len k_required)) : Nat :=
   k_required
 
@@ -666,9 +671,9 @@ equation. The optimized C splice may replace endpoints beyond its
 materializable arena with one proven-unaffordable sentinel. -/
 abbrev memory_required_endpoint := Nat
 
-/-- Exact incremental memory charge. Optimized C retains one additional
-sentinel value above every representable live-gas value so `charge`
-remains the sole out-of-gas decision. -/
+/-- Exact incremental memory cost. Optimized C retains one additional
+sentinel value above every representable live-gas value so affordability
+can be decided without overflowing the native cost representation. -/
 abbrev memory_expansion_charge := Nat
 
 /-- One affordability decision together with its bounded cost. The payload is
@@ -845,10 +850,11 @@ abbrev ScratchSliceLength (k_required : Int) :=
 abbrev ScratchSliceAtLeast (k_minimum : Int) :=
   (Sigma fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))
 
-/-- A range in the shared EVM-memory arena. Its coordinate is absolute within
-the arena (an offset in the standard ABI and a stable pointer in the
-optimized ABI), so a suspended parent's range remains valid while a child
-frame is active. -/
+/-- A borrowed range in the shared EVM-memory arena. Its coordinate is absolute
+within the arena (an offset in the standard ABI and a stable pointer in the
+optimized ABI), so calldata borrowed from a suspended parent remains valid
+while a child frame is active. The machine carries only `memory_height`;
+this pointer-bearing value exists at derived-view boundaries. -/
 /- Type quantifiers: k_off : Nat, k_len : Nat, (memory_region_valid_range k_off k_len) -/
 structure EvmMemorySliceFields (k_off : Nat) (k_len : Nat) where
   deriving BEq, Inhabited, Repr
@@ -2371,6 +2377,35 @@ structure Message where
   depth : frame_depth
   deriving BEq, Inhabited, Repr
 
+/-- The complete carried state installed after entering or resuming a frame.
+Named fields replace the former positional 19-tuple at this cold semantic
+boundary; the optimized interpreter immediately unpacks the record into
+its hot scalar locals. -/
+structure FrameTransition where
+  pc : code_pointer
+  gas_remaining : gas
+  state_gas_remaining : state_gas
+  state_gas_spilled : state_gas_spill
+  refund : gas_refund
+  status : FrameStatus
+  stack_top : StackPointer
+  memory_base : memory_base
+  memory_height : memory_height
+  message : Message
+  code : Code
+  calldata : CalldataSlice
+  returndata : OutputSlice
+  deriving BEq, Inhabited, Repr
+
+/-- State installed when an executing frame enters an exceptional halt.
+Keeping the normalized Amsterdam state-gas values together prevents the
+transition from being represented as an anonymous positional tuple. -/
+structure ExceptionalStateTransition where
+  state_gas_remaining : state_gas
+  state_gas_spilled : state_gas_spill
+  status : FrameStatus
+  deriving BEq, Inhabited, Repr
+
 /-- Lightweight result of one opcode handler. -/
 inductive OpcodeOutcome where
   | Continue (_ : Unit)
@@ -2390,13 +2425,13 @@ structure FrameCheckpoint where
   message : Message
   code : Code
   calldata : CalldataSlice
-  memory : EvmMemorySlice
+  memory_height : memory_height
   deriving BEq, Inhabited, Repr
 
 /-- The suspended parent information needed after a message call returns. -/
 structure CallContinuation where
   checkpoint : FrameCheckpoint
-  return_offset : memory_pointer
+  return_offset : memory_base
   return_length : memory_length
   new_account_charged : Bool
   deriving BEq, Inhabited, Repr
@@ -2802,16 +2837,21 @@ retain the semantic address; optimized C refines this to the account row
 and its storage range/generation. -/
 abbrev AccountId := Nat
 
+/-- A stable row identifier in an account's optimized storage table. -/
 abbrev StorageId := Nat
 
+/-- The number of storage rows belonging to an optimized account row. -/
 abbrev StorageCount := Nat
 
+/-- A generation token that invalidates storage rows after an account clear. -/
 abbrev StorageGeneration := Nat
 
+/-- The semantic account identity carried while executing one frame. -/
 structure AccountExecutionContext where
   address : address
   deriving BEq, Inhabited, Repr
 
+/-- A decreasing bound for the non-recursive interpreter's complete call tree. -/
 abbrev call_tree_steps := Nat
 
 /-- The behavior selected by one member of the closed CALL-family algebra.

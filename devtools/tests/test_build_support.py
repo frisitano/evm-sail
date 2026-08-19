@@ -149,26 +149,19 @@ class ArtifactTests(unittest.TestCase):
             interpreter.write_text(
                 "\n".join(
                     ["def prefix := 1"]
-                    + ["⟨_, ⟨_, dependentValue7⟩⟩"] * 19
-                    + ["let ⟨_, ⟨_, carried_memory⟩⟩ : SigmaType :=\n  (tup__7 : SigmaType)"] * 21
-                    + [
-                        "let ⟨_, ⟨_, carried_memory⟩⟩ : SigmaType :=\n  (tup__6 : SigmaType)",
-                        "(((result).2).2)",
-                    ]
+                    + ["let ⟨_, ⟨_, carried_memory⟩⟩ : SigmaType :=\n  (tup__7 : SigmaType)"] * 14
                 )
                 + "\n",
                 encoding="utf-8",
             )
-            self.assertEqual(normalize_lean_tree(root), 42)
+            self.assertEqual(normalize_lean_tree(root), 15)
             normalized = interpreter.read_text(encoding="utf-8")
-            self.assertNotIn("⟨_, ⟨_, dependentValue7⟩⟩", normalized)
-            self.assertEqual(normalized.count("let carried_memory : SigmaType"), 21)
+            self.assertEqual(normalized.count("let carried_memory : SigmaType"), 14)
             self.assertEqual(
                 normalized.count("let ⟨_, ⟨_, carried_memory⟩⟩ : SigmaType"),
-                1,
+                0,
             )
             self.assertIn("let carried_memory : SigmaType", normalized)
-            self.assertNotIn("(((result).2).2)", normalized)
 
     def test_lean_normalization_repairs_known_transaction_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

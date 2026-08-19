@@ -1,16 +1,6 @@
 #include "evmsail/spec.h"
 #include "evmsail/spec/support.h"
 
-bool opcode_failed(struct OpcodeOutcome result)
-{
-  switch (result.kind) {
-  case Kind_Continue:
-    return false;
-  case Kind_Failed:
-    return true;
-  }
-}
-
 __attribute__((__always_inline__)) struct FrameStatus opcode_frame_status(struct OpcodeOutcome result)
 {
   switch (result.kind) {
@@ -24,12 +14,12 @@ __attribute__((__always_inline__)) struct FrameStatus opcode_frame_status(struct
 __attribute__((__always_inline__)) struct OpcodeOutcome guard_static(uint64_t *restrict g, bool is_static)
 {
   if (is_static) {
-    struct OpcodeOutcome Failed_result_2_1785 = Failed(WriteProtection);
+    struct OpcodeOutcome Failed_result_2_1773 = Failed(WriteProtection);
     (*g) = (uint64_t)GAS_ZERO;
-    return Failed_result_2_1785;
+    return Failed_result_2_1773;
   } else {
-    struct OpcodeOutcome Continue_result_2_1786 = Continue(UNIT);
-    return Continue_result_2_1786;
+    struct OpcodeOutcome Continue_result_2_1774 = Continue(UNIT);
+    return Continue_result_2_1774;
   }
 }
 
@@ -40,31 +30,31 @@ __attribute__((__always_inline__)) struct OpcodeOutcome do_jump(uint32_t *restri
     uint32_t destination = (uint32_t)u256_to_u64_unchecked(destination_value);
     bool valid_destination = frame_jumpdest_valid(frame_code, destination);
     if (valid_destination) {
-      struct OpcodeOutcome Continue_result_2_1782 = Continue(UNIT);
+      struct OpcodeOutcome Continue_result_2_1770 = Continue(UNIT);
       (*pc_in) = destination;
-      return Continue_result_2_1782;
+      return Continue_result_2_1770;
     } else {
-      struct OpcodeOutcome Failed_result_2_1783 = Failed(InvalidJump);
+      struct OpcodeOutcome Failed_result_2_1771 = Failed(InvalidJump);
       (*g) = (uint64_t)GAS_ZERO;
-      return Failed_result_2_1783;
+      return Failed_result_2_1771;
     }
   } else {
-    struct OpcodeOutcome Failed_result_2_1784 = Failed(InvalidJump);
+    struct OpcodeOutcome Failed_result_2_1772 = Failed(InvalidJump);
     (*g) = (uint64_t)GAS_ZERO;
-    return Failed_result_2_1784;
+    return Failed_result_2_1772;
   }
 }
 
 struct OpcodeOutcome guard_stack(StackPointer carried_sp, uint16_t inputs, uint16_t outputs)
 {
-  enum StackValidation validate_stack_result_2_1780;
+  enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
-    validate_stack_result_2_1780 = StackUnderflowFailure;
+    stack_validation = StackUnderflowFailure;
   } else {
-    bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
-    validate_stack_result_2_1780 = result_2_2037 ? StackOverflowFailure : StackValid;
+    bool result_2_2018 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
+    stack_validation = result_2_2018 ? StackOverflowFailure : StackValid;
   }
-  switch (validate_stack_result_2_1780) {
+  switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
   case StackUnderflowFailure:
@@ -78,2409 +68,2165 @@ struct tuple_LogTopics_StackPointer pop_log_topics(uint8_t count, StackPointer s
 {
   StackPointer sp = sp_in;
   if (count == UINT8_C(0)) {
-    struct LogTopics LogTopics0_result_2_1774 = LogTopics0(UNIT);
-    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics0_result_2_1774, .tup1 = sp});
+    struct LogTopics LogTopics0_result_2_1763 = LogTopics0(UNIT);
+    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics0_result_2_1763, .tup1 = sp});
   }
   if (count == UINT8_C(1)) {
     u256 t0 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    struct LogTopics LogTopics1_result_2_1775 = LogTopics1(t0);
-    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics1_result_2_1775, .tup1 = sp});
+    struct LogTopics LogTopics1_result_2_1764 = LogTopics1(t0);
+    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics1_result_2_1764, .tup1 = sp});
   }
   if (count == UINT8_C(2)) {
-    u256 t0_3_3112 = stack_slot_read(sp, UINT16_C(0));
+    u256 t0_3_2902 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
     u256 t1 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    struct LogTopics LogTopics2_result_2_1776 = LogTopics2(((struct tuple_u256_u256){.tup0 = t0_3_3112, .tup1 = t1}));
-    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics2_result_2_1776, .tup1 = sp});
+    struct LogTopics LogTopics2_result_2_1765 = LogTopics2(((struct tuple_u256_u256){.tup0 = t0_3_2902, .tup1 = t1}));
+    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics2_result_2_1765, .tup1 = sp});
   }
   if (count == UINT8_C(3)) {
-    u256 t0_3_3114 = stack_slot_read(sp, UINT16_C(0));
+    u256 t0_3_2904 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    u256 t1_3_3115 = stack_slot_read(sp, UINT16_C(0));
+    u256 t1_3_2905 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
     u256 t2 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    struct LogTopics LogTopics3_result_2_1777 = LogTopics3(((struct tuple_u256_u256_u256){.tup0 = t0_3_3114, .tup1 = t1_3_3115, .tup2 = t2}));
-    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics3_result_2_1777, .tup1 = sp});
+    struct LogTopics LogTopics3_result_2_1766 = LogTopics3(((struct tuple_u256_u256_u256){.tup0 = t0_3_2904, .tup1 = t1_3_2905, .tup2 = t2}));
+    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics3_result_2_1766, .tup1 = sp});
   }
   if (count == UINT8_C(4)) {
-    u256 t0_3_3117 = stack_slot_read(sp, UINT16_C(0));
+    u256 t0_3_2907 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    u256 t1_3_3118 = stack_slot_read(sp, UINT16_C(0));
+    u256 t1_3_2908 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    u256 t2_3_3119 = stack_slot_read(sp, UINT16_C(0));
+    u256 t2_3_2909 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
     u256 t3 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    struct LogTopics LogTopics4_result_2_1778 = LogTopics4(((struct tuple_u256_u256_u256_u256){.tup0 = t0_3_3117, .tup1 = t1_3_3118, .tup2 = t2_3_3119, .tup3 = t3}));
-    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics4_result_2_1778, .tup1 = sp});
+    struct LogTopics LogTopics4_result_2_1767 = LogTopics4(((struct tuple_u256_u256_u256_u256){.tup0 = t0_3_2907, .tup1 = t1_3_2908, .tup2 = t2_3_2909, .tup3 = t3}));
+    return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics4_result_2_1767, .tup1 = sp});
   }
-  struct LogTopics LogTopics0_result_2_1779 = LogTopics0(UNIT);
-  return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics0_result_2_1779, .tup1 = sp});
+  struct LogTopics LogTopics0_result_2_1768 = LogTopics0(UNIT);
+  return ((struct tuple_LogTopics_StackPointer){.tup0 = LogTopics0_result_2_1768, .tup1 = sp});
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_add(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1475;
+  struct OpcodeOutcome opcodeoutcome_8_1410;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1769 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1769) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1475 = stack_status;
-    goto end_function_2743;
+    opcodeoutcome_8_1410 = stack_status;
+    goto end_function_2673;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1770 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1770.tup1;
-  if (charge_result_2_1770.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1771 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1771;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1760 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1410 = Failed_result_2_1760;
+    goto end_function_2673;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_add(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1773 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1475 = Continue_result_2_1773;
-end_function_2743: ;
-  return opcodeoutcome_8_1475;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1762 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1410 = Continue_result_2_1762;
+end_function_2673: ;
+  return opcodeoutcome_8_1410;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_mul(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1476;
+  struct OpcodeOutcome opcodeoutcome_8_1411;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1764 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1764) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1476 = stack_status;
-    goto end_function_2735;
+    opcodeoutcome_8_1411 = stack_status;
+    goto end_function_2664;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1765 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1765.tup1;
-  if (charge_result_2_1765.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1766 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1766;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1755 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1411 = Failed_result_2_1755;
+    goto end_function_2664;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_mul(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1768 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1476 = Continue_result_2_1768;
-end_function_2735: ;
-  return opcodeoutcome_8_1476;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1757 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1411 = Continue_result_2_1757;
+end_function_2664: ;
+  return opcodeoutcome_8_1411;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sub(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1477;
+  struct OpcodeOutcome opcodeoutcome_8_1412;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1759 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1759) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1477 = stack_status;
-    goto end_function_2727;
+    opcodeoutcome_8_1412 = stack_status;
+    goto end_function_2655;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1760 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1760.tup1;
-  if (charge_result_2_1760.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1761 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1761;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1750 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1412 = Failed_result_2_1750;
+    goto end_function_2655;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_sub(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1763 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1477 = Continue_result_2_1763;
-end_function_2727: ;
-  return opcodeoutcome_8_1477;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1752 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1412 = Continue_result_2_1752;
+end_function_2655: ;
+  return opcodeoutcome_8_1412;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_div(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1478;
+  struct OpcodeOutcome opcodeoutcome_8_1413;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1754 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1754) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1478 = stack_status;
-    goto end_function_2719;
+    opcodeoutcome_8_1413 = stack_status;
+    goto end_function_2646;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1755 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1755.tup1;
-  if (charge_result_2_1755.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1756 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1756;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1745 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1413 = Failed_result_2_1745;
+    goto end_function_2646;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_div(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1758 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1478 = Continue_result_2_1758;
-end_function_2719: ;
-  return opcodeoutcome_8_1478;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1747 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1413 = Continue_result_2_1747;
+end_function_2646: ;
+  return opcodeoutcome_8_1413;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sdiv(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1479;
+  struct OpcodeOutcome opcodeoutcome_8_1414;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1749 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1749) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1479 = stack_status;
-    goto end_function_2711;
+    opcodeoutcome_8_1414 = stack_status;
+    goto end_function_2637;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1750 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1750.tup1;
-  if (charge_result_2_1750.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1751 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1751;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1740 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1414 = Failed_result_2_1740;
+    goto end_function_2637;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_sdiv(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1753 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1479 = Continue_result_2_1753;
-end_function_2711: ;
-  return opcodeoutcome_8_1479;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1742 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1414 = Continue_result_2_1742;
+end_function_2637: ;
+  return opcodeoutcome_8_1414;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_mod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1480;
+  struct OpcodeOutcome opcodeoutcome_8_1415;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1744 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1744) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1480 = stack_status;
-    goto end_function_2703;
+    opcodeoutcome_8_1415 = stack_status;
+    goto end_function_2628;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1745 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1745.tup1;
-  if (charge_result_2_1745.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1746 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1746;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1735 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1415 = Failed_result_2_1735;
+    goto end_function_2628;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_mod(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1748 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1480 = Continue_result_2_1748;
-end_function_2703: ;
-  return opcodeoutcome_8_1480;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1737 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1415 = Continue_result_2_1737;
+end_function_2628: ;
+  return opcodeoutcome_8_1415;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_smod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1481;
+  struct OpcodeOutcome opcodeoutcome_8_1416;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1739 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1739) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1481 = stack_status;
-    goto end_function_2695;
+    opcodeoutcome_8_1416 = stack_status;
+    goto end_function_2619;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1740 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1740.tup1;
-  if (charge_result_2_1740.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1741 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1741;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1730 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1416 = Failed_result_2_1730;
+    goto end_function_2619;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_smod(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1743 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1481 = Continue_result_2_1743;
-end_function_2695: ;
-  return opcodeoutcome_8_1481;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1732 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1416 = Continue_result_2_1732;
+end_function_2619: ;
+  return opcodeoutcome_8_1416;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_addmod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1482;
+  struct OpcodeOutcome opcodeoutcome_8_1417;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(1));
-  bool opcode_failed_result_2_1734 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1734) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1482 = stack_status;
-    goto end_function_2687;
+    opcodeoutcome_8_1417 = stack_status;
+    goto end_function_2610;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1735 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_mid);
-  uint64_t gas_after_charge = charge_result_2_1735.tup1;
-  if (charge_result_2_1735.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1736 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1736;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_mid) {
+    struct OpcodeOutcome Failed_result_2_1725 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1417 = Failed_result_2_1725;
+    goto end_function_2610;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 n = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_mid);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 n = read_stack_word(sp);
   u256 result = alu_addmod(a, b, n);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1738 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1482 = Continue_result_2_1738;
-end_function_2687: ;
-  return opcodeoutcome_8_1482;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1727 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1417 = Continue_result_2_1727;
+end_function_2610: ;
+  return opcodeoutcome_8_1417;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_mulmod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1483;
+  struct OpcodeOutcome opcodeoutcome_8_1418;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(1));
-  bool opcode_failed_result_2_1729 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1729) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1483 = stack_status;
-    goto end_function_2679;
+    opcodeoutcome_8_1418 = stack_status;
+    goto end_function_2601;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1730 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_mid);
-  uint64_t gas_after_charge = charge_result_2_1730.tup1;
-  if (charge_result_2_1730.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1731 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1731;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_mid) {
+    struct OpcodeOutcome Failed_result_2_1720 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1418 = Failed_result_2_1720;
+    goto end_function_2601;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 n = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_mid);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 n = read_stack_word(sp);
   u256 result = alu_mulmod(a, b, n);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1733 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1483 = Continue_result_2_1733;
-end_function_2679: ;
-  return opcodeoutcome_8_1483;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1722 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1418 = Continue_result_2_1722;
+end_function_2601: ;
+  return opcodeoutcome_8_1418;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_exp(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1484;
+  struct OpcodeOutcome opcodeoutcome_8_1419;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1724 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1724) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1484 = stack_status;
-    goto end_function_2671;
+    opcodeoutcome_8_1419 = stack_status;
+    goto end_function_2592;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 e = read_stack_word(sp_after);
+  StackPointer sp = (*carried_sp);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 e = read_stack_word(sp);
   uint64_t gas_cost = exp_gas(e);
-  struct tuple_bool_uint_64 charge_result_2_1725 = charge_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(gas_after, gas_cost);
-  uint64_t gas_after_charge = charge_result_2_1725.tup1;
-  if (charge_result_2_1725.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1726 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1726;
+  if ((*carried_gas) < gas_cost) {
+    struct OpcodeOutcome Failed_result_2_1715 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1419 = Failed_result_2_1715;
+    goto end_function_2592;
   }
   u256 result = alu_exp(a, e);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1728 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1484 = Continue_result_2_1728;
-end_function_2671: ;
-  return opcodeoutcome_8_1484;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1717 = Continue(UNIT);
+  (*carried_gas) = ((*carried_gas) - gas_cost);
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1419 = Continue_result_2_1717;
+end_function_2592: ;
+  return opcodeoutcome_8_1419;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_signextend(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1485;
+  struct OpcodeOutcome opcodeoutcome_8_1420;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1719 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1719) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1485 = stack_status;
-    goto end_function_2663;
+    opcodeoutcome_8_1420 = stack_status;
+    goto end_function_2583;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1720 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1720.tup1;
-  if (charge_result_2_1720.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1721 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1721;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1710 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1420 = Failed_result_2_1710;
+    goto end_function_2583;
   }
-  u256 bi = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
+  u256 bi = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
   u256 result = alu_signextend(bi, v);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1723 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1485 = Continue_result_2_1723;
-end_function_2663: ;
-  return opcodeoutcome_8_1485;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1712 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1420 = Continue_result_2_1712;
+end_function_2583: ;
+  return opcodeoutcome_8_1420;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_lt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1486;
+  struct OpcodeOutcome opcodeoutcome_8_1421;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1714 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1714) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1486 = stack_status;
-    goto end_function_2655;
+    opcodeoutcome_8_1421 = stack_status;
+    goto end_function_2574;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1715 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1715.tup1;
-  if (charge_result_2_1715.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1716 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1716;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1705 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1421 = Failed_result_2_1705;
+    goto end_function_2574;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_lt(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1718 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1486 = Continue_result_2_1718;
-end_function_2655: ;
-  return opcodeoutcome_8_1486;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1707 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1421 = Continue_result_2_1707;
+end_function_2574: ;
+  return opcodeoutcome_8_1421;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_gt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1487;
+  struct OpcodeOutcome opcodeoutcome_8_1422;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1709 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1709) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1487 = stack_status;
-    goto end_function_2647;
+    opcodeoutcome_8_1422 = stack_status;
+    goto end_function_2565;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1710 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1710.tup1;
-  if (charge_result_2_1710.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1711 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1711;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1700 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1422 = Failed_result_2_1700;
+    goto end_function_2565;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_gt(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1713 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1487 = Continue_result_2_1713;
-end_function_2647: ;
-  return opcodeoutcome_8_1487;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1702 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1422 = Continue_result_2_1702;
+end_function_2565: ;
+  return opcodeoutcome_8_1422;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_slt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1488;
+  struct OpcodeOutcome opcodeoutcome_8_1423;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1704 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1704) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1488 = stack_status;
-    goto end_function_2639;
+    opcodeoutcome_8_1423 = stack_status;
+    goto end_function_2556;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1705 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1705.tup1;
-  if (charge_result_2_1705.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1706 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1706;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1695 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1423 = Failed_result_2_1695;
+    goto end_function_2556;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_slt(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1708 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1488 = Continue_result_2_1708;
-end_function_2639: ;
-  return opcodeoutcome_8_1488;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1697 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1423 = Continue_result_2_1697;
+end_function_2556: ;
+  return opcodeoutcome_8_1423;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sgt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1489;
+  struct OpcodeOutcome opcodeoutcome_8_1424;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1699 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1699) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1489 = stack_status;
-    goto end_function_2631;
+    opcodeoutcome_8_1424 = stack_status;
+    goto end_function_2547;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1700 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1700.tup1;
-  if (charge_result_2_1700.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1701 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1701;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1690 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1424 = Failed_result_2_1690;
+    goto end_function_2547;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_sgt(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1703 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1489 = Continue_result_2_1703;
-end_function_2631: ;
-  return opcodeoutcome_8_1489;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1692 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1424 = Continue_result_2_1692;
+end_function_2547: ;
+  return opcodeoutcome_8_1424;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_eq(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1490;
+  struct OpcodeOutcome opcodeoutcome_8_1425;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1694 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1694) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1490 = stack_status;
-    goto end_function_2623;
+    opcodeoutcome_8_1425 = stack_status;
+    goto end_function_2538;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1695 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1695.tup1;
-  if (charge_result_2_1695.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1696 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1696;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1685 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1425 = Failed_result_2_1685;
+    goto end_function_2538;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_eq(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1698 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1490 = Continue_result_2_1698;
-end_function_2623: ;
-  return opcodeoutcome_8_1490;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1687 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1425 = Continue_result_2_1687;
+end_function_2538: ;
+  return opcodeoutcome_8_1425;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_iszero(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1491;
+  struct OpcodeOutcome opcodeoutcome_8_1426;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1689 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1689) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1491 = stack_status;
-    goto end_function_2615;
+    opcodeoutcome_8_1426 = stack_status;
+    goto end_function_2529;
   }
-  uint64_t gas_after = (*carried_gas);
-  struct tuple_bool_uint_64 charge_result_2_1690 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1690.tup1;
-  if (charge_result_2_1690.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1691 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1691;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1680 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1426 = Failed_result_2_1680;
+    goto end_function_2529;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
   u256 a = read_stack_word((*carried_sp));
   u256 result = alu_iszero(a);
   write_stack_word((*carried_sp), result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1693 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1491 = Continue_result_2_1693;
-end_function_2615: ;
-  return opcodeoutcome_8_1491;
+  struct OpcodeOutcome Continue_result_2_1682 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1426 = Continue_result_2_1682;
+end_function_2529: ;
+  return opcodeoutcome_8_1426;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_and(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1492;
+  struct OpcodeOutcome opcodeoutcome_8_1427;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1684 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1684) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1492 = stack_status;
-    goto end_function_2607;
+    opcodeoutcome_8_1427 = stack_status;
+    goto end_function_2520;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1685 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1685.tup1;
-  if (charge_result_2_1685.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1686 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1686;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1675 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1427 = Failed_result_2_1675;
+    goto end_function_2520;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_and(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1688 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1492 = Continue_result_2_1688;
-end_function_2607: ;
-  return opcodeoutcome_8_1492;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1677 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1427 = Continue_result_2_1677;
+end_function_2520: ;
+  return opcodeoutcome_8_1427;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_or(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1493;
+  struct OpcodeOutcome opcodeoutcome_8_1428;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1679 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1679) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1493 = stack_status;
-    goto end_function_2599;
+    opcodeoutcome_8_1428 = stack_status;
+    goto end_function_2511;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1680 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1680.tup1;
-  if (charge_result_2_1680.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1681 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1681;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1670 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1428 = Failed_result_2_1670;
+    goto end_function_2511;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_or(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1683 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1493 = Continue_result_2_1683;
-end_function_2599: ;
-  return opcodeoutcome_8_1493;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1672 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1428 = Continue_result_2_1672;
+end_function_2511: ;
+  return opcodeoutcome_8_1428;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_xor(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1494;
+  struct OpcodeOutcome opcodeoutcome_8_1429;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1674 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1674) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1494 = stack_status;
-    goto end_function_2591;
+    opcodeoutcome_8_1429 = stack_status;
+    goto end_function_2502;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1675 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1675.tup1;
-  if (charge_result_2_1675.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1676 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1676;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1665 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1429 = Failed_result_2_1665;
+    goto end_function_2502;
   }
-  u256 a = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 b = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 a = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 b = read_stack_word(sp);
   u256 result = alu_xor(a, b);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1678 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1494 = Continue_result_2_1678;
-end_function_2591: ;
-  return opcodeoutcome_8_1494;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1667 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1429 = Continue_result_2_1667;
+end_function_2502: ;
+  return opcodeoutcome_8_1429;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_not(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1495;
+  struct OpcodeOutcome opcodeoutcome_8_1430;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1669 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1669) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1495 = stack_status;
-    goto end_function_2583;
+    opcodeoutcome_8_1430 = stack_status;
+    goto end_function_2493;
   }
-  uint64_t gas_after = (*carried_gas);
-  struct tuple_bool_uint_64 charge_result_2_1670 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1670.tup1;
-  if (charge_result_2_1670.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1671 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1671;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1660 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1430 = Failed_result_2_1660;
+    goto end_function_2493;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
   u256 a = read_stack_word((*carried_sp));
   u256 result = alu_not(a);
   write_stack_word((*carried_sp), result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1673 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1495 = Continue_result_2_1673;
-end_function_2583: ;
-  return opcodeoutcome_8_1495;
+  struct OpcodeOutcome Continue_result_2_1662 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1430 = Continue_result_2_1662;
+end_function_2493: ;
+  return opcodeoutcome_8_1430;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_byte(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1496;
+  struct OpcodeOutcome opcodeoutcome_8_1431;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1664 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1664) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1496 = stack_status;
-    goto end_function_2575;
+    opcodeoutcome_8_1431 = stack_status;
+    goto end_function_2484;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1665 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1665.tup1;
-  if (charge_result_2_1665.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1666 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1666;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1655 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1431 = Failed_result_2_1655;
+    goto end_function_2484;
   }
-  u256 i = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 x = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 i = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 x = read_stack_word(sp);
   u256 result = alu_byte(i, x);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1668 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1496 = Continue_result_2_1668;
-end_function_2575: ;
-  return opcodeoutcome_8_1496;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1657 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1431 = Continue_result_2_1657;
+end_function_2484: ;
+  return opcodeoutcome_8_1431;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_shl(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1497;
+  struct OpcodeOutcome opcodeoutcome_8_1432;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1659 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1659) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1497 = stack_status;
-    goto end_function_2567;
+    opcodeoutcome_8_1432 = stack_status;
+    goto end_function_2475;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1660 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1660.tup1;
-  if (charge_result_2_1660.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1661 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1661;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1650 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1432 = Failed_result_2_1650;
+    goto end_function_2475;
   }
-  u256 s = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 s = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
   u256 result = alu_shl(s, v);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1663 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1497 = Continue_result_2_1663;
-end_function_2567: ;
-  return opcodeoutcome_8_1497;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1652 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1432 = Continue_result_2_1652;
+end_function_2475: ;
+  return opcodeoutcome_8_1432;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_shr(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1498;
+  struct OpcodeOutcome opcodeoutcome_8_1433;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1654 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1654) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1498 = stack_status;
-    goto end_function_2559;
+    opcodeoutcome_8_1433 = stack_status;
+    goto end_function_2466;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1655 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1655.tup1;
-  if (charge_result_2_1655.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1656 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1656;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1645 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1433 = Failed_result_2_1645;
+    goto end_function_2466;
   }
-  u256 s = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 s = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
   u256 result = alu_shr(s, v);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1658 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1498 = Continue_result_2_1658;
-end_function_2559: ;
-  return opcodeoutcome_8_1498;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1647 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1433 = Continue_result_2_1647;
+end_function_2466: ;
+  return opcodeoutcome_8_1433;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sar(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1499;
+  struct OpcodeOutcome opcodeoutcome_8_1434;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1649 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1649) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1499 = stack_status;
-    goto end_function_2551;
+    opcodeoutcome_8_1434 = stack_status;
+    goto end_function_2457;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1650 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1650.tup1;
-  if (charge_result_2_1650.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1651 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1651;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1640 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1434 = Failed_result_2_1640;
+    goto end_function_2457;
   }
-  u256 s = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 s = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
   u256 result = alu_sar(s, v);
-  write_stack_word(sp_after, result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1653 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1499 = Continue_result_2_1653;
-end_function_2551: ;
-  return opcodeoutcome_8_1499;
+  write_stack_word(sp, result);
+  struct OpcodeOutcome Continue_result_2_1642 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1434 = Continue_result_2_1642;
+end_function_2457: ;
+  return opcodeoutcome_8_1434;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_clz(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1500;
+  struct OpcodeOutcome opcodeoutcome_8_1435;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1644 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1644) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1500 = stack_status;
-    goto end_function_2543;
+    opcodeoutcome_8_1435 = stack_status;
+    goto end_function_2448;
   }
-  uint64_t gas_after = (*carried_gas);
-  struct tuple_bool_uint_64 charge_result_2_1645 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1645.tup1;
-  if (charge_result_2_1645.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1646 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1646;
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1635 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1435 = Failed_result_2_1635;
+    goto end_function_2448;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
   u256 x = read_stack_word((*carried_sp));
   u256 result = alu_clz(x);
   write_stack_word((*carried_sp), result);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1648 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1500 = Continue_result_2_1648;
-end_function_2543: ;
-  return opcodeoutcome_8_1500;
+  struct OpcodeOutcome Continue_result_2_1637 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1435 = Continue_result_2_1637;
+end_function_2448: ;
+  return opcodeoutcome_8_1435;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_keccak256(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_keccak256(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1501;
+  struct OpcodeOutcome opcodeoutcome_8_1436;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
-  bool opcode_failed_result_2_1633 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1633) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1501 = stack_status;
-    goto end_function_2533;
+    opcodeoutcome_8_1436 = stack_status;
+    goto end_function_2437;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_bool_uint_64 charge_keccak_gas_result_2_1634 = charge_keccak_gas(gas_after, length_word);
-  uint64_t gas_after_hashing = charge_keccak_gas_result_2_1634.tup1;
-  if (charge_keccak_gas_result_2_1634.tup0) {
-    gas_after = gas_after_hashing;
-    struct OpcodeOutcome Failed_result_2_1635 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1635;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct GasCharge keccak_cost = keccak_gas_cost(length_word, gas);
+  if (!keccak_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1622 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1436 = Failed_result_2_1622;
+    goto end_function_2437;
   }
-  uint64_t required_size = memory_required_size(offset_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1637 = charge_memory_expansion(gas_after_hashing, memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1637.tup1;
-  if (charge_memory_expansion_result_2_1637.tup0) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1638 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1638;
+  gas = gas_sub(gas, keccak_cost.cost);
+  uint64_t requested_height = memory_requested_height(offset_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1627 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1436 = Failed_result_2_1627;
+    goto end_function_2437;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(offset_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  struct tuple_u256_Bytes result_2_1641 = mem_keccak(mem1, access.range);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, result_2_1641.tup0);
-  memory_after = result_2_1641.tup1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1642 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1501 = Continue_result_2_1642;
-end_function_2533: ;
-  return opcodeoutcome_8_1501;
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  u256 digest = mem_keccak(memory_base, memory, access.range);
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, digest);
+  struct OpcodeOutcome Continue_result_2_1631 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1436 = Continue_result_2_1631;
+end_function_2437: ;
+  return opcodeoutcome_8_1436;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_address(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1502;
+  struct OpcodeOutcome opcodeoutcome_8_1437;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1628 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1628) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1502 = stack_status;
-    goto end_function_2521;
+    opcodeoutcome_8_1437 = stack_status;
+    goto end_function_2428;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1629 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1629.tup1;
-  if (charge_result_2_1629.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1630 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1630;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1616 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1437 = Failed_result_2_1616;
+    goto end_function_2428;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 address_word = address_to_word(carried_address);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, address_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1632 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1502 = Continue_result_2_1632;
-end_function_2521: ;
-  return opcodeoutcome_8_1502;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, address_word);
+  struct OpcodeOutcome Continue_result_2_1618 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1437 = Continue_result_2_1618;
+end_function_2428: ;
+  return opcodeoutcome_8_1437;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_origin(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1503;
+  struct OpcodeOutcome opcodeoutcome_8_1438;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1623 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1623) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1503 = stack_status;
-    goto end_function_2513;
+    opcodeoutcome_8_1438 = stack_status;
+    goto end_function_2419;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1624 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1624.tup1;
-  if (charge_result_2_1624.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1625 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1625;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1611 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1438 = Failed_result_2_1611;
+    goto end_function_2419;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 origin = k_env(F_Origin);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, origin);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1627 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1503 = Continue_result_2_1627;
-end_function_2513: ;
-  return opcodeoutcome_8_1503;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, origin);
+  struct OpcodeOutcome Continue_result_2_1613 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1438 = Continue_result_2_1613;
+end_function_2419: ;
+  return opcodeoutcome_8_1438;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_caller(bytes20 carried_caller, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1504;
+  struct OpcodeOutcome opcodeoutcome_8_1439;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1618 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1618) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1504 = stack_status;
-    goto end_function_2505;
+    opcodeoutcome_8_1439 = stack_status;
+    goto end_function_2410;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1619 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1619.tup1;
-  if (charge_result_2_1619.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1620 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1620;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1606 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1439 = Failed_result_2_1606;
+    goto end_function_2410;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 caller = address_to_word(carried_caller);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, caller);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1622 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1504 = Continue_result_2_1622;
-end_function_2505: ;
-  return opcodeoutcome_8_1504;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, caller);
+  struct OpcodeOutcome Continue_result_2_1608 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1439 = Continue_result_2_1608;
+end_function_2410: ;
+  return opcodeoutcome_8_1439;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_callvalue(u256 carried_value, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1505;
+  struct OpcodeOutcome opcodeoutcome_8_1440;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1613 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1613) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1505 = stack_status;
-    goto end_function_2497;
+    opcodeoutcome_8_1440 = stack_status;
+    goto end_function_2401;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1614 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1614.tup1;
-  if (charge_result_2_1614.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1615 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1615;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1601 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1440 = Failed_result_2_1601;
+    goto end_function_2401;
   }
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, carried_value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1617 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1505 = Continue_result_2_1617;
-end_function_2497: ;
-  return opcodeoutcome_8_1505;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, carried_value);
+  struct OpcodeOutcome Continue_result_2_1603 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1440 = Continue_result_2_1603;
+end_function_2401: ;
+  return opcodeoutcome_8_1440;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_gasprice(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1506;
+  struct OpcodeOutcome opcodeoutcome_8_1441;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1608 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1608) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1506 = stack_status;
-    goto end_function_2489;
+    opcodeoutcome_8_1441 = stack_status;
+    goto end_function_2392;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1609 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1609.tup1;
-  if (charge_result_2_1609.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1610 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1610;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1596 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1441 = Failed_result_2_1596;
+    goto end_function_2392;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 gas_price = k_env(F_GasPrice);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, gas_price);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1612 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1506 = Continue_result_2_1612;
-end_function_2489: ;
-  return opcodeoutcome_8_1506;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, gas_price);
+  struct OpcodeOutcome Continue_result_2_1598 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1441 = Continue_result_2_1598;
+end_function_2392: ;
+  return opcodeoutcome_8_1441;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatasize(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1507;
+  struct OpcodeOutcome opcodeoutcome_8_1442;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1603 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1603) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1507 = stack_status;
-    goto end_function_2481;
+    opcodeoutcome_8_1442 = stack_status;
+    goto end_function_2383;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1604 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1604.tup1;
-  if (charge_result_2_1604.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1605 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1605;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1591 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1442 = Failed_result_2_1591;
+    goto end_function_2383;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   uint32_t input_length = calldata_slice_length(carried_calldata);
   u256 length_word = word_of_source_byte_count(input_length);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, length_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1607 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1507 = Continue_result_2_1607;
-end_function_2481: ;
-  return opcodeoutcome_8_1507;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, length_word);
+  struct OpcodeOutcome Continue_result_2_1593 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1442 = Continue_result_2_1593;
+end_function_2383: ;
+  return opcodeoutcome_8_1442;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_calldataload(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1508;
+  struct OpcodeOutcome opcodeoutcome_8_1443;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1598 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1598) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1508 = stack_status;
-    goto end_function_2473;
+    opcodeoutcome_8_1443 = stack_status;
+    goto end_function_2374;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1599 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1599.tup1;
-  if (charge_result_2_1599.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1600 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1600;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1586 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1443 = Failed_result_2_1586;
+    goto end_function_2374;
   }
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   u256 value = calldata_slice_load_word_offset(carried_calldata, offset_word);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1602 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1508 = Continue_result_2_1602;
-end_function_2473: ;
-  return opcodeoutcome_8_1508;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, value);
+  struct OpcodeOutcome Continue_result_2_1588 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1443 = Continue_result_2_1588;
+end_function_2374: ;
+  return opcodeoutcome_8_1443;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1509;
+  struct OpcodeOutcome opcodeoutcome_8_1444;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
-  bool opcode_failed_result_2_1584 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1584) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1509 = stack_status;
-    goto end_function_2461;
+    opcodeoutcome_8_1444 = stack_status;
+    goto end_function_2361;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1585 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1585.tup1;
-  if (charge_result_2_1585.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1586 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1586;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1568 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1444 = Failed_result_2_1568;
+    goto end_function_2361;
   }
-  u256 destination_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 source_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_bool_uint_64 charge_copy_gas_result_2_1588 = charge_copy_gas(gas_after_base, length_word);
-  uint64_t gas_after_copy = charge_copy_gas_result_2_1588.tup1;
-  if (charge_copy_gas_result_2_1588.tup0) {
-    gas_after = gas_after_copy;
-    struct OpcodeOutcome Failed_result_2_1589 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1589;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 destination_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 source_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct GasCharge copy_cost = copy_gas_cost(length_word, gas);
+  if (!copy_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1572 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1444 = Failed_result_2_1572;
+    goto end_function_2361;
   }
-  uint64_t required_size = memory_required_size(destination_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1591 = charge_memory_expansion(gas_after_copy, memory_after, required_size);
-  bool expansion_halt = charge_memory_expansion_result_2_1591.tup0;
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1591.tup1;
-  if (expansion_halt) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1592 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1592;
+  gas = gas_sub(gas, copy_cost.cost);
+  uint64_t requested_height = memory_requested_height(destination_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1577 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1444 = Failed_result_2_1577;
+    goto end_function_2361;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(destination_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  calldata_slice_copy_word_offset(carried_calldata, access.range.off, source_word, access.range.len);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1596 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1509 = Continue_result_2_1596;
-end_function_2461: ;
-  return opcodeoutcome_8_1509;
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  struct MemoryRangeFields range = access.range;
+  uint32_t destination = memory_absolute(memory_base, range.off);
+  calldata_slice_copy_word_offset(carried_calldata, destination, source_word, range.len);
+  struct OpcodeOutcome Continue_result_2_1582 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1444 = Continue_result_2_1582;
+end_function_2361: ;
+  return opcodeoutcome_8_1444;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_codesize(struct CodeFields carried_code, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1510;
+  struct OpcodeOutcome opcodeoutcome_8_1445;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1579 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1579) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1510 = stack_status;
-    goto end_function_2449;
+    opcodeoutcome_8_1445 = stack_status;
+    goto end_function_2352;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1580 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1580.tup1;
-  if (charge_result_2_1580.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1581 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1581;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1563 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1445 = Failed_result_2_1563;
+    goto end_function_2352;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   uint32_t code_length = frame_code_len(carried_code);
   u256 length_word = word_of_source_byte_count(code_length);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, length_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1583 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1510 = Continue_result_2_1583;
-end_function_2449: ;
-  return opcodeoutcome_8_1510;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, length_word);
+  struct OpcodeOutcome Continue_result_2_1565 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1445 = Continue_result_2_1565;
+end_function_2352: ;
+  return opcodeoutcome_8_1445;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1511;
+  struct OpcodeOutcome opcodeoutcome_8_1446;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
-  bool opcode_failed_result_2_1565 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1565) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1511 = stack_status;
-    goto end_function_2437;
+    opcodeoutcome_8_1446 = stack_status;
+    goto end_function_2339;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1566 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1566.tup1;
-  if (charge_result_2_1566.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1567 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1567;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1545 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1446 = Failed_result_2_1545;
+    goto end_function_2339;
   }
-  u256 destination_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 source_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_bool_uint_64 charge_copy_gas_result_2_1569 = charge_copy_gas(gas_after_base, length_word);
-  uint64_t gas_after_copy = charge_copy_gas_result_2_1569.tup1;
-  if (charge_copy_gas_result_2_1569.tup0) {
-    gas_after = gas_after_copy;
-    struct OpcodeOutcome Failed_result_2_1570 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1570;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 destination_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 source_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct GasCharge copy_cost = copy_gas_cost(length_word, gas);
+  if (!copy_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1549 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1446 = Failed_result_2_1549;
+    goto end_function_2339;
   }
-  uint64_t required_size = memory_required_size(destination_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1572 = charge_memory_expansion(gas_after_copy, memory_after, required_size);
-  bool expansion_halt = charge_memory_expansion_result_2_1572.tup0;
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1572.tup1;
-  if (expansion_halt) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1573 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1573;
+  gas = gas_sub(gas, copy_cost.cost);
+  uint64_t requested_height = memory_requested_height(destination_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1554 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1446 = Failed_result_2_1554;
+    goto end_function_2339;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(destination_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  struct MemoryRangeFields range = access.range;
   Bytes bytes = code_bytes(carried_code);
-  code_slice_copy_word_offset(bytes, access.range.off, source_word, access.range.len);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1577 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1511 = Continue_result_2_1577;
-end_function_2437: ;
-  return opcodeoutcome_8_1511;
+  uint32_t destination = memory_absolute(memory_base, range.off);
+  code_slice_copy_word_offset(bytes, destination, source_word, range.len);
+  struct OpcodeOutcome Continue_result_2_1559 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1446 = Continue_result_2_1559;
+end_function_2339: ;
+  return opcodeoutcome_8_1446;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_balance(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1512;
+  struct OpcodeOutcome opcodeoutcome_8_1447;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1560 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1560) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1512 = stack_status;
-    goto end_function_2425;
+    opcodeoutcome_8_1447 = stack_status;
+    goto end_function_2330;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  u256 address_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  StackPointer sp = (*carried_sp);
+  u256 address_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes20 a = word_to_address(address_word);
   bool warm = k_account_is_warm(a);
   uint16_t gas_cost = account_cost(warm);
-  struct tuple_bool_uint_64 charge_result_2_1561 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, gas_cost);
-  uint64_t gas_after_charge = charge_result_2_1561.tup1;
-  if (charge_result_2_1561.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1562 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1562;
+  if ((*carried_gas) < gas_cost) {
+    struct OpcodeOutcome Failed_result_2_1540 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1447 = Failed_result_2_1540;
+    goto end_function_2330;
   }
   k_account_mark_warm(a);
   u256 balance = k_get_balance(a);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, balance);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1564 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1512 = Continue_result_2_1564;
-end_function_2425: ;
-  return opcodeoutcome_8_1512;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, balance);
+  struct OpcodeOutcome Continue_result_2_1542 = Continue(UNIT);
+  (*carried_gas) = ((*carried_gas) - (uint64_t)gas_cost);
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1447 = Continue_result_2_1542;
+end_function_2330: ;
+  return opcodeoutcome_8_1447;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_selfbalance(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1513;
+  struct OpcodeOutcome opcodeoutcome_8_1448;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1555 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1555) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1513 = stack_status;
-    goto end_function_2417;
+    opcodeoutcome_8_1448 = stack_status;
+    goto end_function_2321;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1556 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_low);
-  uint64_t gas_after_charge = charge_result_2_1556.tup1;
-  if (charge_result_2_1556.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1557 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1557;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_low) {
+    struct OpcodeOutcome Failed_result_2_1535 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1448 = Failed_result_2_1535;
+    goto end_function_2321;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_low);
   u256 balance = k_get_balance(carried_address);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, balance);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1559 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1513 = Continue_result_2_1559;
-end_function_2417: ;
-  return opcodeoutcome_8_1513;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, balance);
+  struct OpcodeOutcome Continue_result_2_1537 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1448 = Continue_result_2_1537;
+end_function_2321: ;
+  return opcodeoutcome_8_1448;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1514;
+  struct OpcodeOutcome opcodeoutcome_8_1449;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1549 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1549) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1514 = stack_status;
-    goto end_function_2409;
+    opcodeoutcome_8_1449 = stack_status;
+    goto end_function_2312;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  u256 address_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  StackPointer sp = (*carried_sp);
+  u256 address_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes20 a = word_to_address(address_word);
   bool warm = k_account_is_warm(a);
   uint16_t access_cost = account_cost(warm);
   uint16_t read_cost = external_code_read_cost();
-  struct tuple_bool_uint_64 result_2_1551 = charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(gas_after, ((uint32_t)access_cost + (uint32_t)read_cost));
-  uint64_t gas_after_charge = result_2_1551.tup1;
-  if (result_2_1551.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1552 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1552;
+  if ((*carried_gas) < ((uint32_t)access_cost + (uint32_t)read_cost)) {
+    struct OpcodeOutcome Failed_result_2_1529 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1449 = Failed_result_2_1529;
+    goto end_function_2312;
   }
+  uint64_t gas = gas_sub_uint64_t_uint32_t_to_uint64_t((*carried_gas), ((uint32_t)access_cost + (uint32_t)read_cost));
   k_account_mark_warm(a);
   uint32_t code_size = k_get_code_size(a);
   u256 size_word = word_of_source_byte_count(code_size);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, size_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1554 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1514 = Continue_result_2_1554;
-end_function_2409: ;
-  return opcodeoutcome_8_1514;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, size_word);
+  struct OpcodeOutcome Continue_result_2_1531 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1449 = Continue_result_2_1531;
+end_function_2312: ;
+  return opcodeoutcome_8_1449;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodecopy(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodecopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1515;
+  struct OpcodeOutcome opcodeoutcome_8_1450;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(4), UINT8_C(0));
-  bool opcode_failed_result_2_1534 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1534) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1515 = stack_status;
-    goto end_function_2397;
+    opcodeoutcome_8_1450 = stack_status;
+    goto end_function_2299;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  u256 address_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  u256 address_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes20 a = word_to_address(address_word);
-  u256 destination_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 source_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  u256 destination_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 source_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bool warm = k_account_is_warm(a);
   uint16_t access_cost = account_cost(warm);
   uint16_t read_cost = external_code_read_cost();
-  struct tuple_bool_uint_64 result_2_1536 = charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64(gas_after, ((uint32_t)access_cost + (uint32_t)read_cost));
-  uint64_t gas_after_access = result_2_1536.tup1;
-  if (result_2_1536.tup0) {
-    gas_after = gas_after_access;
-    struct OpcodeOutcome Failed_result_2_1537 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1537;
+  if (gas < ((uint32_t)access_cost + (uint32_t)read_cost)) {
+    struct OpcodeOutcome Failed_result_2_1509 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1450 = Failed_result_2_1509;
+    goto end_function_2299;
   }
-  struct tuple_bool_uint_64 charge_copy_gas_result_2_1539 = charge_copy_gas(gas_after_access, length_word);
-  uint64_t gas_after_copy = charge_copy_gas_result_2_1539.tup1;
-  if (charge_copy_gas_result_2_1539.tup0) {
-    gas_after = gas_after_copy;
-    struct OpcodeOutcome Failed_result_2_1540 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1540;
+  gas = gas_sub_uint64_t_uint32_t_to_uint64_t(gas, ((uint32_t)access_cost + (uint32_t)read_cost));
+  struct GasCharge copy_cost = copy_gas_cost(length_word, gas);
+  if (!copy_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1514 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1450 = Failed_result_2_1514;
+    goto end_function_2299;
   }
-  uint64_t required_size = memory_required_size(destination_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1542 = charge_memory_expansion(gas_after_copy, memory_after, required_size);
-  bool expansion_halt = charge_memory_expansion_result_2_1542.tup0;
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1542.tup1;
-  if (expansion_halt) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1543 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1543;
+  gas = gas_sub(gas, copy_cost.cost);
+  uint64_t requested_height = memory_requested_height(destination_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1519 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1450 = Failed_result_2_1519;
+    goto end_function_2299;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(destination_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  struct MemoryRangeFields range = access.range;
   k_account_mark_warm(a);
-  k_code_copy(a, access.range.off, source_word, access.range.len);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1547 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1515 = Continue_result_2_1547;
-end_function_2397: ;
-  return opcodeoutcome_8_1515;
+  uint32_t destination = memory_absolute(memory_base, range.off);
+  k_code_copy(a, destination, source_word, range.len);
+  struct OpcodeOutcome Continue_result_2_1524 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1450 = Continue_result_2_1524;
+end_function_2299: ;
+  return opcodeoutcome_8_1450;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_extcodehash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1516;
+  struct OpcodeOutcome opcodeoutcome_8_1451;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1529 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1529) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1516 = stack_status;
-    goto end_function_2385;
+    opcodeoutcome_8_1451 = stack_status;
+    goto end_function_2290;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  u256 address_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  StackPointer sp = (*carried_sp);
+  u256 address_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes20 a = word_to_address(address_word);
   bool warm = k_account_is_warm(a);
   uint16_t gas_cost = account_cost(warm);
-  struct tuple_bool_uint_64 charge_result_2_1530 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, gas_cost);
-  uint64_t gas_after_charge = charge_result_2_1530.tup1;
-  if (charge_result_2_1530.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1531 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1531;
+  if ((*carried_gas) < gas_cost) {
+    struct OpcodeOutcome Failed_result_2_1503 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1451 = Failed_result_2_1503;
+    goto end_function_2290;
   }
   k_account_mark_warm(a);
   bytes32 code_hash = k_get_codehash(a);
   u256 hash_word = hash_to_word(code_hash);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, hash_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1533 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1516 = Continue_result_2_1533;
-end_function_2385: ;
-  return opcodeoutcome_8_1516;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, hash_word);
+  struct OpcodeOutcome Continue_result_2_1505 = Continue(UNIT);
+  (*carried_gas) = ((*carried_gas) - (uint64_t)gas_cost);
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1451 = Continue_result_2_1505;
+end_function_2290: ;
+  return opcodeoutcome_8_1451;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatasize(Bytes carried_returndata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1517;
+  struct OpcodeOutcome opcodeoutcome_8_1452;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1524 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1524) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1517 = stack_status;
-    goto end_function_2377;
+    opcodeoutcome_8_1452 = stack_status;
+    goto end_function_2281;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1525 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1525.tup1;
-  if (charge_result_2_1525.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1526 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1526;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1498 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1452 = Failed_result_2_1498;
+    goto end_function_2281;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   uint32_t return_data_size = returndata_size(carried_returndata);
   u256 size_word = word_of_source_byte_count(return_data_size);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, size_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1528 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1517 = Continue_result_2_1528;
-end_function_2377: ;
-  return opcodeoutcome_8_1517;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, size_word);
+  struct OpcodeOutcome Continue_result_2_1500 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1452 = Continue_result_2_1500;
+end_function_2281: ;
+  return opcodeoutcome_8_1452;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1518;
+  struct OpcodeOutcome opcodeoutcome_8_1453;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
-  bool opcode_failed_result_2_1505 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1505) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1518 = stack_status;
-    goto end_function_2365;
+    opcodeoutcome_8_1453 = stack_status;
+    goto end_function_2268;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1506 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1506.tup1;
-  if (charge_result_2_1506.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1507 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1507;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1475 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1453 = Failed_result_2_1475;
+    goto end_function_2268;
   }
-  u256 destination_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 source_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint32_t returndata_size_result_2_1509 = returndata_size(carried_returndata);
-  struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome tmp_3_2492;
-  if (!u64_lt_u256(returndata_size_result_2_1509, source_word)) {
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 destination_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 source_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint32_t returndata_size_result_2_1477 = returndata_size(carried_returndata);
+  struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome tmp_3_2343;
+  if (!u64_lt_u256(returndata_size_result_2_1477, source_word)) {
     uint32_t remaining;
-    uint32_t tmp_3_4022 = (uint32_t)u256_to_u64(source_word);
-    remaining = returndata_remaining(returndata_size_result_2_1509, tmp_3_4022);
+    uint32_t tmp_3_3760 = (uint32_t)u256_to_u64(source_word);
+    remaining = returndata_remaining(returndata_size_result_2_1477, tmp_3_3760);
     if (!u64_lt_u256(remaining, length_word)) {
-      struct tuple_bool_uint_64 charge_copy_gas_result_2_1512 = charge_copy_gas_uint64_t_u256_to_struct_tuple_bool_uint_64(gas_after_base, length_word);
-      uint64_t gas_after_copy = charge_copy_gas_result_2_1512.tup1;
-      if (charge_copy_gas_result_2_1512.tup0) {
-        gas_after = gas_after_copy;
-        struct OpcodeOutcome Failed_result_2_1513 = Failed(OutOfGas);
-        (*carried_gas) = gas_after;
-        (*carried_sp) = sp_after;
-        (*carried_memory) = memory_after;
-        return Failed_result_2_1513;
+      struct GasCharge copy_cost = copy_gas_cost_u256_uint64_t_to_struct_GasCharge(length_word, gas);
+      if (!copy_cost.affordable) {
+        struct OpcodeOutcome Failed_result_2_1482 = Failed(OutOfGas);
+        (*carried_gas) = (uint64_t)GAS_ZERO;
+        (*carried_sp) = sp;
+        (*carried_memory_height) = memory;
+        opcodeoutcome_8_1453 = Failed_result_2_1482;
+        goto end_function_2268;
       }
-      uint64_t required_size = memory_required_size_u256_u256_to_uint64_t_variant_2(destination_word, length_word);
-      struct tuple_bool_uint_64 charge_memory_expansion_result_2_1515 = charge_memory_expansion(gas_after_copy, memory_after, required_size);
-      uint64_t gas_after_expansion = charge_memory_expansion_result_2_1515.tup1;
-      if (charge_memory_expansion_result_2_1515.tup0) {
-        gas_after = gas_after_expansion;
-        struct OpcodeOutcome Failed_result_2_1516 = Failed(OutOfGas);
-        (*carried_gas) = gas_after;
-        (*carried_sp) = sp_after;
-        (*carried_memory) = memory_after;
-        return Failed_result_2_1516;
+      gas = gas_sub(gas, copy_cost.cost);
+      uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t_variant_2(destination_word, length_word);
+      struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+      if (!expansion_cost.affordable) {
+        struct OpcodeOutcome Failed_result_2_1487 = Failed(OutOfGas);
+        (*carried_gas) = (uint64_t)GAS_ZERO;
+        (*carried_sp) = sp;
+        (*carried_memory_height) = memory;
+        opcodeoutcome_8_1453 = Failed_result_2_1487;
+        goto end_function_2268;
       }
+      gas = gas_sub(gas, expansion_cost.cost);
       struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(destination_word, length_word);
-      Bytes mem1 = expand_memory(memory_after, access.required_size);
-      returndata_copy(carried_returndata, access.range.off, (uint32_t)u256_to_u64_unchecked(source_word), (uint32_t)u256_to_u64_unchecked(length_word));
-      memory_after = mem1;
-      gas_after = gas_after_expansion;
-      struct OpcodeOutcome Continue_result_2_1520 = Continue(UNIT);
-      tmp_3_2492 = ((struct tuple_uint_64_StackPointer_Bytes_OpcodeOutcome){.tup0 = gas_after, .tup1 = sp_after, .tup2 = memory_after, .tup3 = Continue_result_2_1520});
+      memory = expand_memory(memory_base, memory, access.requested_height);
+      uint32_t destination = memory_absolute(memory_base, access.range.off);
+      returndata_copy(carried_returndata, destination, (uint32_t)u256_to_u64_unchecked(source_word), (uint32_t)u256_to_u64_unchecked(length_word));
+      struct OpcodeOutcome Continue_result_2_1491 = Continue(UNIT);
+      tmp_3_2343 = ((struct tuple_uint_64_StackPointer_uint_32_OpcodeOutcome){.tup0 = gas, .tup1 = sp, .tup2 = memory, .tup3 = Continue_result_2_1491});
     } else {
-      struct OpcodeOutcome Failed_result_2_1522 = Failed(InvalidOpcode);
-      struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome tmp_3_2495 = ((struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome){.tup0 = GAS_ZERO, .tup1 = sp_after, .tup2 = memory_after, .tup3 = Failed_result_2_1522});
+      struct OpcodeOutcome Failed_result_2_1494 = Failed(InvalidOpcode);
+      struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome tmp_3_2346 = ((struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome){.tup0 = GAS_ZERO, .tup1 = sp, .tup2 = memory, .tup3 = Failed_result_2_1494});
       /* conversions */
-      tmp_3_2492.tup0 = (uint64_t)tmp_3_2495.tup0;
-      tmp_3_2492.tup1 = tmp_3_2495.tup1;
-      tmp_3_2492.tup2 = tmp_3_2495.tup2;
-      tmp_3_2492.tup3 = tmp_3_2495.tup3;
+      tmp_3_2343.tup0 = (uint64_t)tmp_3_2346.tup0;
+      tmp_3_2343.tup1 = tmp_3_2346.tup1;
+      tmp_3_2343.tup2 = tmp_3_2346.tup2;
+      tmp_3_2343.tup3 = tmp_3_2346.tup3;
       /* end conversions */
     }
   } else {
-    struct OpcodeOutcome Failed_result_2_1523 = Failed(InvalidOpcode);
-    struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome tmp_3_2494 = ((struct tuple_uint_8_StackPointer_Bytes_OpcodeOutcome){.tup0 = GAS_ZERO, .tup1 = sp_after, .tup2 = memory_after, .tup3 = Failed_result_2_1523});
+    struct OpcodeOutcome Failed_result_2_1495 = Failed(InvalidOpcode);
+    struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome tmp_3_2345 = ((struct tuple_uint_8_StackPointer_uint_32_OpcodeOutcome){.tup0 = GAS_ZERO, .tup1 = sp, .tup2 = memory, .tup3 = Failed_result_2_1495});
     /* conversions */
-    tmp_3_2492.tup0 = (uint64_t)tmp_3_2494.tup0;
-    tmp_3_2492.tup1 = tmp_3_2494.tup1;
-    tmp_3_2492.tup2 = tmp_3_2494.tup2;
-    tmp_3_2492.tup3 = tmp_3_2494.tup3;
+    tmp_3_2343.tup0 = (uint64_t)tmp_3_2345.tup0;
+    tmp_3_2343.tup1 = tmp_3_2345.tup1;
+    tmp_3_2343.tup2 = tmp_3_2345.tup2;
+    tmp_3_2343.tup3 = tmp_3_2345.tup3;
     /* end conversions */
   }
-  (*carried_gas) = tmp_3_2492.tup0;
-  (*carried_sp) = tmp_3_2492.tup1;
-  (*carried_memory) = tmp_3_2492.tup2;
-  opcodeoutcome_8_1518 = tmp_3_2492.tup3;
-end_function_2365: ;
-  return opcodeoutcome_8_1518;
+  (*carried_gas) = tmp_3_2343.tup0;
+  (*carried_sp) = tmp_3_2343.tup1;
+  (*carried_memory_height) = tmp_3_2343.tup2;
+  opcodeoutcome_8_1453 = tmp_3_2343.tup3;
+end_function_2268: ;
+  return opcodeoutcome_8_1453;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_blockhash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1519;
+  struct OpcodeOutcome opcodeoutcome_8_1454;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1500 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1500) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1519 = stack_status;
-    goto end_function_2351;
+    opcodeoutcome_8_1454 = stack_status;
+    goto end_function_2257;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1501 = charge_uint64_t_uint8_t_to_struct_tuple_bool_uint_64(gas_after, UINT8_C(20));
-  uint64_t gas_after_charge = charge_result_2_1501.tup1;
-  if (charge_result_2_1501.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1502 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1502;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < UINT8_C(20)) {
+    struct OpcodeOutcome Failed_result_2_1470 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1454 = Failed_result_2_1470;
+    goto end_function_2257;
   }
-  u256 block_number = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  u256 block_number = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes32 block_hash = k_blockhash(block_number);
   u256 hash_word = hash_to_word(block_hash);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, hash_word);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1504 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1519 = Continue_result_2_1504;
-end_function_2351: ;
-  return opcodeoutcome_8_1519;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, hash_word);
+  struct OpcodeOutcome Continue_result_2_1472 = Continue(UNIT);
+  (*carried_gas) = ((*carried_gas) - UINT64_C(20));
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1454 = Continue_result_2_1472;
+end_function_2257: ;
+  return opcodeoutcome_8_1454;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_coinbase(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1520;
+  struct OpcodeOutcome opcodeoutcome_8_1455;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1495 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1495) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1520 = stack_status;
-    goto end_function_2343;
+    opcodeoutcome_8_1455 = stack_status;
+    goto end_function_2248;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1496 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1496.tup1;
-  if (charge_result_2_1496.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1497 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1497;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1465 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1455 = Failed_result_2_1465;
+    goto end_function_2248;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 coinbase = k_env(F_Coinbase);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, coinbase);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1499 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1520 = Continue_result_2_1499;
-end_function_2343: ;
-  return opcodeoutcome_8_1520;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, coinbase);
+  struct OpcodeOutcome Continue_result_2_1467 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1455 = Continue_result_2_1467;
+end_function_2248: ;
+  return opcodeoutcome_8_1455;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_timestamp(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1521;
+  struct OpcodeOutcome opcodeoutcome_8_1456;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1490 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1490) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1521 = stack_status;
-    goto end_function_2335;
+    opcodeoutcome_8_1456 = stack_status;
+    goto end_function_2239;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1491 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1491.tup1;
-  if (charge_result_2_1491.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1492 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1492;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1460 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1456 = Failed_result_2_1460;
+    goto end_function_2239;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 timestamp = k_env(F_Timestamp);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, timestamp);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1494 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1521 = Continue_result_2_1494;
-end_function_2335: ;
-  return opcodeoutcome_8_1521;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, timestamp);
+  struct OpcodeOutcome Continue_result_2_1462 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1456 = Continue_result_2_1462;
+end_function_2239: ;
+  return opcodeoutcome_8_1456;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_number(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1522;
+  struct OpcodeOutcome opcodeoutcome_8_1457;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1485 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1485) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1522 = stack_status;
-    goto end_function_2327;
+    opcodeoutcome_8_1457 = stack_status;
+    goto end_function_2230;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1486 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1486.tup1;
-  if (charge_result_2_1486.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1487 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1487;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1455 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1457 = Failed_result_2_1455;
+    goto end_function_2230;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 block_number = k_env(F_Number);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, block_number);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1489 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1522 = Continue_result_2_1489;
-end_function_2327: ;
-  return opcodeoutcome_8_1522;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, block_number);
+  struct OpcodeOutcome Continue_result_2_1457 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1457 = Continue_result_2_1457;
+end_function_2230: ;
+  return opcodeoutcome_8_1457;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_slotnum(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1523;
+  struct OpcodeOutcome opcodeoutcome_8_1458;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1480 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1480) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1523 = stack_status;
-    goto end_function_2319;
+    opcodeoutcome_8_1458 = stack_status;
+    goto end_function_2221;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1481 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1481.tup1;
-  if (charge_result_2_1481.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1482 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1482;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1450 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1458 = Failed_result_2_1450;
+    goto end_function_2221;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 slot_number = k_env(F_SlotNumber);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, slot_number);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1484 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1523 = Continue_result_2_1484;
-end_function_2319: ;
-  return opcodeoutcome_8_1523;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, slot_number);
+  struct OpcodeOutcome Continue_result_2_1452 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1458 = Continue_result_2_1452;
+end_function_2221: ;
+  return opcodeoutcome_8_1458;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_prevrandao(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1524;
+  struct OpcodeOutcome opcodeoutcome_8_1459;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1475 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1475) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1524 = stack_status;
-    goto end_function_2311;
+    opcodeoutcome_8_1459 = stack_status;
+    goto end_function_2212;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1476 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1476.tup1;
-  if (charge_result_2_1476.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1477 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1477;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1445 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1459 = Failed_result_2_1445;
+    goto end_function_2212;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 prev_randao = k_env(F_PrevRandao);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, prev_randao);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1479 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1524 = Continue_result_2_1479;
-end_function_2311: ;
-  return opcodeoutcome_8_1524;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, prev_randao);
+  struct OpcodeOutcome Continue_result_2_1447 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1459 = Continue_result_2_1447;
+end_function_2212: ;
+  return opcodeoutcome_8_1459;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_gaslimit(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1525;
+  struct OpcodeOutcome opcodeoutcome_8_1460;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1470 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1470) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1525 = stack_status;
-    goto end_function_2303;
+    opcodeoutcome_8_1460 = stack_status;
+    goto end_function_2203;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1471 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1471.tup1;
-  if (charge_result_2_1471.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1472 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1472;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1440 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1460 = Failed_result_2_1440;
+    goto end_function_2203;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 gas_limit = k_env(F_GasLimit);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, gas_limit);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1474 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1525 = Continue_result_2_1474;
-end_function_2303: ;
-  return opcodeoutcome_8_1525;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, gas_limit);
+  struct OpcodeOutcome Continue_result_2_1442 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1460 = Continue_result_2_1442;
+end_function_2203: ;
+  return opcodeoutcome_8_1460;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_chainid(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1526;
+  struct OpcodeOutcome opcodeoutcome_8_1461;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1465 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1465) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1526 = stack_status;
-    goto end_function_2295;
+    opcodeoutcome_8_1461 = stack_status;
+    goto end_function_2194;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1466 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1466.tup1;
-  if (charge_result_2_1466.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1467 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1467;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1435 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1461 = Failed_result_2_1435;
+    goto end_function_2194;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 chain_id = k_env(F_ChainId);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, chain_id);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1469 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1526 = Continue_result_2_1469;
-end_function_2295: ;
-  return opcodeoutcome_8_1526;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, chain_id);
+  struct OpcodeOutcome Continue_result_2_1437 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1461 = Continue_result_2_1437;
+end_function_2194: ;
+  return opcodeoutcome_8_1461;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_basefee(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1527;
+  struct OpcodeOutcome opcodeoutcome_8_1462;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1460 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1460) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1527 = stack_status;
-    goto end_function_2287;
+    opcodeoutcome_8_1462 = stack_status;
+    goto end_function_2185;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1461 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1461.tup1;
-  if (charge_result_2_1461.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1462 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1462;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1430 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1462 = Failed_result_2_1430;
+    goto end_function_2185;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 base_fee = k_env(F_BaseFee);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, base_fee);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1464 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1527 = Continue_result_2_1464;
-end_function_2287: ;
-  return opcodeoutcome_8_1527;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, base_fee);
+  struct OpcodeOutcome Continue_result_2_1432 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1462 = Continue_result_2_1432;
+end_function_2185: ;
+  return opcodeoutcome_8_1462;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_blobbasefee(u256 blob_fee, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1528;
+  struct OpcodeOutcome opcodeoutcome_8_1463;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1455 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1455) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1528 = stack_status;
-    goto end_function_2279;
+    opcodeoutcome_8_1463 = stack_status;
+    goto end_function_2176;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1456 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1456.tup1;
-  if (charge_result_2_1456.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1457 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1457;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1425 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1463 = Failed_result_2_1425;
+    goto end_function_2176;
   }
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, blob_fee);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1459 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1528 = Continue_result_2_1459;
-end_function_2279: ;
-  return opcodeoutcome_8_1528;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, blob_fee);
+  struct OpcodeOutcome Continue_result_2_1427 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1463 = Continue_result_2_1427;
+end_function_2176: ;
+  return opcodeoutcome_8_1463;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_blobhash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1529;
+  struct OpcodeOutcome opcodeoutcome_8_1464;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1450 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1450) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1529 = stack_status;
-    goto end_function_2271;
+    opcodeoutcome_8_1464 = stack_status;
+    goto end_function_2167;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1451 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1451.tup1;
-  if (charge_result_2_1451.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1452 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1452;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1420 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1464 = Failed_result_2_1420;
+    goto end_function_2167;
   }
-  u256 index = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 index = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   u256 blob_hash = k_blobhash(index);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, blob_hash);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1454 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1529 = Continue_result_2_1454;
-end_function_2271: ;
-  return opcodeoutcome_8_1529;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, blob_hash);
+  struct OpcodeOutcome Continue_result_2_1422 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1464 = Continue_result_2_1422;
+end_function_2167: ;
+  return opcodeoutcome_8_1464;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_pop(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1530;
+  struct OpcodeOutcome opcodeoutcome_8_1465;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
-  bool opcode_failed_result_2_1444 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1444) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1530 = stack_status;
-    goto end_function_2263;
+    opcodeoutcome_8_1465 = stack_status;
+    goto end_function_2158;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1445 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1445.tup1;
-  if (charge_result_2_1445.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1446 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1446;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1414 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1465 = Failed_result_2_1414;
+    goto end_function_2158;
   }
-  read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1449 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1530 = Continue_result_2_1449;
-end_function_2263: ;
-  return opcodeoutcome_8_1530;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
+  read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct OpcodeOutcome Continue_result_2_1417 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1465 = Continue_result_2_1417;
+end_function_2158: ;
+  return opcodeoutcome_8_1465;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mload(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1531;
+  struct OpcodeOutcome opcodeoutcome_8_1466;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1433 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1433) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1531 = stack_status;
-    goto end_function_2251;
+    opcodeoutcome_8_1466 = stack_status;
+    goto end_function_2145;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1434 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1434.tup1;
-  if (charge_result_2_1434.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1435 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1435;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1401 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1466 = Failed_result_2_1401;
+    goto end_function_2145;
   }
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint64_t required_size = memory_required_size_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1437 = charge_memory_expansion(gas_after_base, memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1437.tup1;
-  if (charge_memory_expansion_result_2_1437.tup0) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1438 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1438;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1405 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1466 = Failed_result_2_1405;
+    goto end_function_2145;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  u256 value = mem_load(access.range.off);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, value);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1440 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1531 = Continue_result_2_1440;
-end_function_2251: ;
-  return opcodeoutcome_8_1531;
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  u256 value = mem_load(memory_base, access.range.off);
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, value);
+  struct OpcodeOutcome Continue_result_2_1409 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1466 = Continue_result_2_1409;
+end_function_2145: ;
+  return opcodeoutcome_8_1466;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1532;
+  struct OpcodeOutcome opcodeoutcome_8_1467;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1422 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1422) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1532 = stack_status;
-    goto end_function_2239;
+    opcodeoutcome_8_1467 = stack_status;
+    goto end_function_2134;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1423 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1423.tup1;
-  if (charge_result_2_1423.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1424 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1424;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1388 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1467 = Failed_result_2_1388;
+    goto end_function_2134;
   }
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint64_t required_size = memory_required_size_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1426 = charge_memory_expansion(gas_after_base, memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1426.tup1;
-  if (charge_memory_expansion_result_2_1426.tup0) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1427 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1427;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1392 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1467 = Failed_result_2_1392;
+    goto end_function_2134;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  mem_store(access.range.off, v);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1431 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1532 = Continue_result_2_1431;
-end_function_2239: ;
-  return opcodeoutcome_8_1532;
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  mem_store(memory_base, access.range.off, v);
+  struct OpcodeOutcome Continue_result_2_1398 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1467 = Continue_result_2_1398;
+end_function_2134: ;
+  return opcodeoutcome_8_1467;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore8(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mstore8(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1533;
+  struct OpcodeOutcome opcodeoutcome_8_1468;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1411 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1411) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1533 = stack_status;
-    goto end_function_2227;
+    opcodeoutcome_8_1468 = stack_status;
+    goto end_function_2123;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1412 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1412.tup1;
-  if (charge_result_2_1412.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1413 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1413;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1375 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1468 = Failed_result_2_1375;
+    goto end_function_2123;
   }
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint64_t required_size = memory_required_size(offset_word, WORD_ONE);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1415 = charge_memory_expansion(gas_after_base, memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1415.tup1;
-  if (charge_memory_expansion_result_2_1415.tup0) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1416 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1416;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint64_t requested_height = memory_requested_height(offset_word, WORD_ONE);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1379 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1468 = Failed_result_2_1379;
+    goto end_function_2123;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(offset_word, WORD_ONE);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  mem_store_byte(access.range.off, v);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1420 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1533 = Continue_result_2_1420;
-end_function_2227: ;
-  return opcodeoutcome_8_1533;
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  mem_store_byte(memory_base, access.range.off, v);
+  struct OpcodeOutcome Continue_result_2_1385 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1468 = Continue_result_2_1385;
+end_function_2123: ;
+  return opcodeoutcome_8_1468;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1534;
+  struct OpcodeOutcome opcodeoutcome_8_1469;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1405 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1405) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1534 = stack_status;
-    goto end_function_2217;
+    opcodeoutcome_8_1469 = stack_status;
+    goto end_function_2114;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1406 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1406.tup1;
-  if (charge_result_2_1406.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1407 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1407;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1369 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1469 = Failed_result_2_1369;
+    goto end_function_2114;
   }
-  uint32_t high_water = memory_high_water((*carried_memory));
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
+  uint32_t high_water = memory_high_water((*carried_memory_height));
   uint32_t words = memory_word_count_uint32_t_to_uint32_t(high_water);
   u256 size = word_of_nat_byte_count_uint64_t_to_u256(((uint64_t)words * UINT64_C(32)));
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, size);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1409 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1534 = Continue_result_2_1409;
-end_function_2217: ;
-  return opcodeoutcome_8_1534;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, size);
+  struct OpcodeOutcome Continue_result_2_1371 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1469 = Continue_result_2_1371;
+end_function_2114: ;
+  return opcodeoutcome_8_1469;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_mcopy(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1535;
+  struct OpcodeOutcome opcodeoutcome_8_1470;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
-  bool opcode_failed_result_2_1384 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1384) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1535 = stack_status;
-    goto end_function_2205;
+    opcodeoutcome_8_1470 = stack_status;
+    goto end_function_2101;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  struct tuple_bool_uint_64 charge_result_2_1385 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_base = charge_result_2_1385.tup1;
-  if (charge_result_2_1385.tup0) {
-    gas_after = gas_after_base;
-    struct OpcodeOutcome Failed_result_2_1386 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1386;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  if (gas < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1344 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1470 = Failed_result_2_1344;
+    goto end_function_2101;
   }
-  u256 destination_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 source_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_bool_uint_64 charge_copy_gas_result_2_1388 = charge_copy_gas(gas_after_base, length_word);
-  uint64_t gas_after_copy = charge_copy_gas_result_2_1388.tup1;
-  if (charge_copy_gas_result_2_1388.tup0) {
-    gas_after = gas_after_copy;
-    struct OpcodeOutcome Failed_result_2_1389 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1389;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
+  u256 destination_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 source_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct GasCharge copy_cost = copy_gas_cost(length_word, gas);
+  if (!copy_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1348 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1470 = Failed_result_2_1348;
+    goto end_function_2101;
   }
-  uint64_t destination_required = memory_required_size(destination_word, length_word);
-  uint64_t source_required = memory_required_size(source_word, length_word);
-  uint64_t required_size = destination_required < source_required ? source_required : destination_required;
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1391 = charge_memory_expansion(gas_after_copy, memory_after, required_size);
-  bool expansion_halt = charge_memory_expansion_result_2_1391.tup0;
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1391.tup1;
-  if (expansion_halt) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1392 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1392;
+  gas = gas_sub(gas, copy_cost.cost);
+  uint64_t destination_requested_height = memory_requested_height(destination_word, length_word);
+  uint64_t source_requested_height = memory_requested_height(source_word, length_word);
+  uint64_t requested_height = destination_requested_height < source_requested_height ? source_requested_height : destination_requested_height;
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1353 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1470 = Failed_result_2_1353;
+    goto end_function_2101;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields destination = memory_access(destination_word, length_word);
   struct MemoryAccessFields source = memory_access(source_word, length_word);
-  uint32_t materialized_required_size = destination.required_size < source.required_size ? source.required_size : destination.required_size;
-  Bytes mem1 = expand_memory(memory_after, materialized_required_size);
-  mem_mcopy(destination.range.off, source.range.off, destination.range.len);
-  memory_after = mem1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1400 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1535 = Continue_result_2_1400;
-end_function_2205: ;
-  return opcodeoutcome_8_1535;
+  uint32_t materialized_required_size = destination.requested_height < source.requested_height ? source.requested_height : destination.requested_height;
+  memory = expand_memory(memory_base, memory, materialized_required_size);
+  mem_mcopy(memory_base, destination.range.off, source.range.off, destination.range.len);
+  struct OpcodeOutcome Continue_result_2_1362 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1470 = Continue_result_2_1362;
+end_function_2101: ;
+  return opcodeoutcome_8_1470;
 }
 
 __attribute__((__always_inline__)) struct AccountExecutionContext account_execution_context_(bytes20 address)
@@ -2498,692 +2244,633 @@ __attribute__((__always_inline__)) struct AccountExecutionContext refresh_accoun
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sload(struct AccountExecutionContext context, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1536;
+  struct OpcodeOutcome opcodeoutcome_8_1471;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1372 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1372) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1536 = stack_status;
-    goto end_function_2191;
+    opcodeoutcome_8_1471 = stack_status;
+    goto end_function_2090;
   }
-  u256 slot = read_stack_word((*carried_sp));
-  StackPointer sp_after_pop = stack_top_retreat_((*carried_sp), UINT8_C(1));
+  StackPointer sp = (*carried_sp);
+  u256 slot = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count, context.storage_count, slot);
   bool warm = storage_id_is_warm(storage_id);
   uint16_t gas_cost = sload_cost(warm);
-  struct tuple_bool_uint_64 charge_result_2_1373 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64((*carried_gas), gas_cost);
-  struct tuple_uint_64_StackPointer_OpcodeOutcome tmp_3_2236;
-  if (charge_result_2_1373.tup0) {
-    struct OpcodeOutcome Failed_result_2_1374 = Failed(OutOfGas);
-    tmp_3_2236 = ((struct tuple_uint_64_StackPointer_OpcodeOutcome){.tup0 = charge_result_2_1373.tup1, .tup1 = sp_after_pop, .tup2 = Failed_result_2_1374});
+  if ((*carried_gas) < gas_cost) {
+    struct OpcodeOutcome Failed_result_2_1332 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1471 = Failed_result_2_1332;
   } else {
     struct StorageValue entry = storage_load_by_id(context.account_id, context.storage_generation, storage_id, (bool)(!warm));
-    write_stack_word((*carried_sp), entry.curr);
-    struct OpcodeOutcome Continue_result_2_1376 = Continue(UNIT);
-    tmp_3_2236 = ((struct tuple_uint_64_StackPointer_OpcodeOutcome){.tup0 = charge_result_2_1373.tup1, .tup1 = (*carried_sp), .tup2 = Continue_result_2_1376});
+    sp = stack_top_advance_(sp, UINT8_C(1));
+    write_stack_word(sp, entry.curr);
+    struct OpcodeOutcome Continue_result_2_1334 = Continue(UNIT);
+    (*carried_gas) = ((*carried_gas) - (uint64_t)gas_cost);
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1471 = Continue_result_2_1334;
   }
-  (*carried_gas) = tmp_3_2236.tup0;
-  (*carried_sp) = tmp_3_2236.tup1;
-  opcodeoutcome_8_1536 = tmp_3_2236.tup2;
-end_function_2191: ;
-  return opcodeoutcome_8_1536;
+end_function_2090: ;
+  return opcodeoutcome_8_1471;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint8_t fork, bool carried_is_static, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, __int128 *restrict carried_refund, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1537;
+  struct OpcodeOutcome opcodeoutcome_8_1472;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1332 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1332) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1537 = stack_status;
-    goto end_function_2175;
+    opcodeoutcome_8_1472 = stack_status;
+    goto end_function_2073;
   }
-  uint64_t g_after_8_1563;
-  struct OpcodeOutcome guard_result;
-  g_after_8_1563 = (*carried_gas);
-  guard_result = guard_static(&g_after_8_1563, carried_is_static);
-  bool opcode_failed_result_2_1334 = opcode_failed(guard_result);
-  if (opcode_failed_result_2_1334) {
-    (*carried_gas) = g_after_8_1563;
-    return guard_result;
+  uint64_t gas = (*carried_gas);
+  uint64_t state_gas = (*carried_state_gas);
+  uint32_t state_spill = (*carried_state_spill);
+  __int128 refund = (*carried_refund);
+  StackPointer sp = (*carried_sp);
+  bool halt = false;
+  struct OpcodeOutcome status = Continue(UNIT);
+  uint64_t g_after_8_1498;
+  struct OpcodeOutcome _8_1408_8_1499;
+  g_after_8_1498 = gas;
+  _8_1408_8_1499 = guard_static(&g_after_8_1498, carried_is_static);
+  gas = g_after_8_1498;
+  status = _8_1408_8_1499;
+  if (!(status.kind != Kind_Failed)) {
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    return status;
   }
-  bool result_2_1336;
-  bool lt_int_result_2_1335 = (bool)(fork < Amsterdam);
-  result_2_1336 = (bool)(lt_int_result_2_1335 && ((*carried_gas) <= G_callstipend));
-  if (result_2_1336) {
-    struct OpcodeOutcome Failed_result_2_1337 = Failed(OutOfGas);
-    return Failed_result_2_1337;
+  bool result_2_1293;
+  bool lt_int_result_2_1292 = (bool)(fork < Amsterdam);
+  result_2_1293 = (bool)(lt_int_result_2_1292 && (gas <= G_callstipend));
+  if (result_2_1293) {
+    struct OpcodeOutcome Failed_result_2_1294 = Failed(OutOfGas);
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    return Failed_result_2_1294;
   }
-  u256 slot = read_stack_word((*carried_sp));
-  StackPointer sp_after_slot = stack_top_retreat_((*carried_sp), UINT8_C(1));
-  u256 value = read_stack_word(sp_after_slot);
-  StackPointer sp_after = stack_top_retreat_(sp_after_slot, UINT8_C(1));
+  u256 slot = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 value = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count, context.storage_count, slot);
   bool warm = storage_id_is_warm(storage_id);
   bool cold = (bool)(!warm);
-  bool gteq_int_result_2_1339 = (bool)(fork >= Amsterdam);
-  if (gteq_int_result_2_1339) {
+  if (fork >= Amsterdam) {
     uint64_t sentry_cost = sstore_sentry_cost(cold);
-    struct tuple_bool_uint_64 check_execution_gas_result_2_1340 = check_execution_gas_uint64_t_uint64_t_to_struct_tuple_bool_uint_64((*carried_gas), sentry_cost);
-    if (check_execution_gas_result_2_1340.tup0) {
-      struct OpcodeOutcome Failed_result_2_1341 = Failed(OutOfGas);
-      (*carried_sp) = sp_after;
-      return Failed_result_2_1341;
+    if (gas < sentry_cost) {
+      struct OpcodeOutcome Failed_result_2_1298 = Failed(OutOfGas);
+      (*carried_gas) = (uint64_t)GAS_ZERO;
+      (*carried_state_gas) = state_gas;
+      (*carried_state_spill) = state_spill;
+      (*carried_refund) = refund;
+      (*carried_sp) = sp;
+      opcodeoutcome_8_1472 = Failed_result_2_1298;
+      goto end_function_2073;
     }
   }
   struct StorageValue entry = storage_load_by_id(context.account_id, context.storage_generation, storage_id, cold);
   struct SstoreCosts costs = sstore_costs(entry.orig, entry.curr, value, cold);
-  struct tuple_uint_64_uint_64_uint_32 result_2_1346;
   if (costs.state_credit != UINT8_C(0)) {
-    result_2_1346 = credit_state_gas_refund((*carried_gas), (*carried_state_gas), (*carried_state_spill), costs.state_credit);
-  } else {
-    result_2_1346 = ((struct tuple_uint_64_uint_64_uint_32){.tup0 = (*carried_gas), .tup1 = (*carried_state_gas), .tup2 = (*carried_state_spill)});
+    struct tuple_uint_64_uint_64_uint_32 result_2_1303 = credit_state_gas_refund(gas, state_gas, state_spill, costs.state_credit);
+    gas = result_2_1303.tup0;
+    state_gas = result_2_1303.tup1;
+    state_spill = result_2_1303.tup2;
   }
-  uint64_t state_gas_after_credit = result_2_1346.tup1;
-  uint32_t state_spill_after_credit = result_2_1346.tup2;
-  struct tuple_bool_uint_64 result_2_1348 = charge_uint64_t_uint64_t_to_struct_tuple_bool_uint_64(result_2_1346.tup0, costs.execution);
-  bool execution_halt = result_2_1348.tup0;
-  uint64_t gas_after_execution = result_2_1348.tup1;
-  if (execution_halt) {
-    struct OpcodeOutcome Failed_result_2_1349 = Failed(OutOfGas);
-    (*carried_gas) = gas_after_execution;
-    (*carried_state_gas) = state_gas_after_credit;
-    (*carried_state_spill) = state_spill_after_credit;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1349;
+  if (gas < costs.execution) {
+    struct OpcodeOutcome Failed_result_2_1306 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1472 = Failed_result_2_1306;
+    goto end_function_2073;
   }
-  struct tuple_bool_uint_64_uint_64_uint_32 result_2_1352 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after_execution, state_gas_after_credit, state_spill_after_credit, costs.state_charge);
-  bool state_halt = result_2_1352.tup0;
-  uint64_t gas_after_state_charge = result_2_1352.tup1;
-  uint64_t state_gas_after_charge = result_2_1352.tup2;
-  uint32_t state_spill_after_charge = result_2_1352.tup3;
-  if (state_halt) {
-    struct OpcodeOutcome Failed_result_2_1353 = Failed(OutOfGas);
-    (*carried_gas) = gas_after_state_charge;
-    (*carried_state_gas) = state_gas_after_charge;
-    (*carried_state_spill) = state_spill_after_charge;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1353;
+  gas = gas_sub(gas, costs.execution);
+  struct tuple_bool_uint_64_uint_64_uint_32 result_2_1310 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas, state_gas, state_spill, costs.state_charge);
+  halt = result_2_1310.tup0;
+  gas = result_2_1310.tup1;
+  state_gas = result_2_1310.tup2;
+  state_spill = result_2_1310.tup3;
+  if (halt) {
+    struct OpcodeOutcome Failed_result_2_1311 = Failed(OutOfGas);
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    return Failed_result_2_1311;
   }
-  __int128 refund_after;
-  bool result_2_1362 = (bool)(costs.refund == GAS_REFUND_ZERO);
-  if (result_2_1362) {
-    refund_after = (*carried_refund);
-  } else {
-    refund_after = record_refund((*carried_refund), costs.refund);
+  if (costs.refund != GAS_REFUND_ZERO) {
+    refund = record_refund(refund, costs.refund);
   }
   if (!eq_u256(entry.curr, value)) {
     storage_update_by_id(context.account_id, context.storage_generation, storage_id, value, entry.orig);
   }
-  struct OpcodeOutcome Continue_result_2_1360 = Continue(UNIT);
-  (*carried_gas) = gas_after_state_charge;
-  (*carried_state_gas) = state_gas_after_charge;
-  (*carried_state_spill) = state_spill_after_charge;
-  (*carried_refund) = refund_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1537 = Continue_result_2_1360;
-end_function_2175: ;
-  return opcodeoutcome_8_1537;
+  struct OpcodeOutcome Continue_result_2_1322 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_state_gas) = state_gas;
+  (*carried_state_spill) = state_spill;
+  (*carried_refund) = refund;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1472 = Continue_result_2_1322;
+end_function_2073: ;
+  return opcodeoutcome_8_1472;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_tload(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1538;
+  struct OpcodeOutcome opcodeoutcome_8_1473;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
-  bool opcode_failed_result_2_1327 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1327) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1538 = stack_status;
-    goto end_function_2159;
+    opcodeoutcome_8_1473 = stack_status;
+    goto end_function_2055;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1328 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_warm_access);
-  uint64_t gas_after_charge = charge_result_2_1328.tup1;
-  if (charge_result_2_1328.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1329 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1329;
+  StackPointer sp = (*carried_sp);
+  if ((*carried_gas) < G_warm_access) {
+    struct OpcodeOutcome Failed_result_2_1286 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1473 = Failed_result_2_1286;
+    goto end_function_2055;
   }
-  u256 s = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_warm_access);
+  u256 s = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   u256 value = k_tload(carried_address, s);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1331 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1538 = Continue_result_2_1331;
-end_function_2159: ;
-  return opcodeoutcome_8_1538;
+  sp = stack_top_advance_(sp, UINT8_C(1));
+  write_stack_word(sp, value);
+  struct OpcodeOutcome Continue_result_2_1288 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1473 = Continue_result_2_1288;
+end_function_2055: ;
+  return opcodeoutcome_8_1473;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_tstore(bytes20 carried_address, bool carried_is_static, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1539;
+  struct OpcodeOutcome opcodeoutcome_8_1474;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1320 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1320) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1539 = stack_status;
-    goto end_function_2149;
+    opcodeoutcome_8_1474 = stack_status;
+    goto end_function_2044;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  uint64_t gas_after_static_guard;
-  struct OpcodeOutcome status_after_guard;
-  gas_after_static_guard = gas_after;
-  status_after_guard = guard_static(&gas_after_static_guard, carried_is_static);
-  bool opcode_failed_result_2_1322 = opcode_failed(status_after_guard);
-  if (opcode_failed_result_2_1322) {
-    gas_after = gas_after_static_guard;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return status_after_guard;
+  uint64_t gas = (*carried_gas);
+  struct OpcodeOutcome status = Continue(UNIT);
+  StackPointer sp = (*carried_sp);
+  uint64_t g_after_8_1500;
+  struct OpcodeOutcome _8_1408_8_1501;
+  g_after_8_1500 = gas;
+  _8_1408_8_1501 = guard_static(&g_after_8_1500, carried_is_static);
+  gas = g_after_8_1500;
+  status = _8_1408_8_1501;
+  if (!(status.kind != Kind_Failed)) {
+    (*carried_gas) = gas;
+    (*carried_sp) = sp;
+    return status;
   }
-  struct tuple_bool_uint_64 charge_result_2_1323 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after_static_guard, G_warm_access);
-  uint64_t gas_after_charge = charge_result_2_1323.tup1;
-  if (charge_result_2_1323.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1324 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1324;
+  if (gas < G_warm_access) {
+    struct OpcodeOutcome Failed_result_2_1281 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1474 = Failed_result_2_1281;
+    goto end_function_2044;
   }
-  u256 s = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 v = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_warm_access);
+  u256 s = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 v = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   k_tstore(carried_address, s, v);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1326 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1539 = Continue_result_2_1326;
-end_function_2149: ;
-  return opcodeoutcome_8_1539;
+  struct OpcodeOutcome Continue_result_2_1283 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1474 = Continue_result_2_1283;
+end_function_2044: ;
+  return opcodeoutcome_8_1474;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_jump(struct CodeFields carried_code, uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1540;
+  struct OpcodeOutcome opcodeoutcome_8_1475;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
-  bool opcode_failed_result_2_1315 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1315) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1540 = stack_status;
-    goto end_function_2139;
+    opcodeoutcome_8_1475 = stack_status;
+    goto end_function_2030;
   }
-  uint32_t pc_after = (*carried_pc);
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1316 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_mid);
-  uint64_t gas_after_charge = charge_result_2_1316.tup1;
-  if (charge_result_2_1316.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1317 = Failed(OutOfGas);
-    (*carried_pc) = pc_after;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1317;
+  uint64_t gas = (*carried_gas);
+  uint32_t pc = (*carried_pc);
+  struct OpcodeOutcome status = Continue(UNIT);
+  if (gas < G_mid) {
+    struct OpcodeOutcome Failed_result_2_1274 = Failed(OutOfGas);
+    (*carried_pc) = pc;
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1475 = Failed_result_2_1274;
+    goto end_function_2030;
   }
-  u256 dest = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_uint_32_uint_64_OpcodeOutcome do_jump_result_2_1319;
-  do_jump_result_2_1319.tup0 = pc_after;
-  do_jump_result_2_1319.tup2 = do_jump(&((&do_jump_result_2_1319)->tup0), &gas_after_charge, carried_code, dest);
-  do_jump_result_2_1319.tup1 = gas_after_charge;
-  pc_after = do_jump_result_2_1319.tup0;
-  gas_after = do_jump_result_2_1319.tup1;
-  (*carried_pc) = pc_after;
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1540 = do_jump_result_2_1319.tup2;
-end_function_2139: ;
-  return opcodeoutcome_8_1540;
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_mid);
+  u256 dest = read_stack_word((*carried_sp));
+  StackPointer sp = stack_top_retreat_((*carried_sp), UINT8_C(1));
+  uint32_t pc_in_after_8_1502;
+  uint64_t g_after_8_1503;
+  struct OpcodeOutcome _8_1409_8_1504;
+  pc_in_after_8_1502 = pc;
+  g_after_8_1503 = gas;
+  _8_1409_8_1504 = do_jump(&pc_in_after_8_1502, &g_after_8_1503, carried_code, dest);
+  pc = pc_in_after_8_1502;
+  gas = g_after_8_1503;
+  status = _8_1409_8_1504;
+  (*carried_pc) = pc;
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1475 = status;
+end_function_2030: ;
+  return opcodeoutcome_8_1475;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_jumpi(struct CodeFields carried_code, uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1541;
+  struct OpcodeOutcome opcodeoutcome_8_1476;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1308 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1308) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1541 = stack_status;
-    goto end_function_2127;
+    opcodeoutcome_8_1476 = stack_status;
+    goto end_function_2017;
   }
-  uint32_t pc_after = (*carried_pc);
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1309 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_high);
-  uint64_t gas_after_charge = charge_result_2_1309.tup1;
-  if (charge_result_2_1309.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1310 = Failed(OutOfGas);
-    (*carried_pc) = pc_after;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1310;
+  uint64_t gas = (*carried_gas);
+  uint32_t pc = (*carried_pc);
+  struct OpcodeOutcome status = Continue(UNIT);
+  StackPointer sp = (*carried_sp);
+  if (gas < G_high) {
+    struct OpcodeOutcome Failed_result_2_1269 = Failed(OutOfGas);
+    (*carried_pc) = pc;
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    opcodeoutcome_8_1476 = Failed_result_2_1269;
+    goto end_function_2017;
   }
-  u256 dest = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 cond = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
+  gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_high);
+  u256 dest = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 cond = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bool condition_is_zero = word_is_zero(cond);
   if (condition_is_zero) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Continue_result_2_1312 = Continue(UNIT);
-    (*carried_pc) = pc_after;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Continue_result_2_1312;
+    (*carried_pc) = pc;
+    (*carried_gas) = gas;
+    (*carried_sp) = sp;
+    return status;
   }
-  struct tuple_uint_32_uint_64_OpcodeOutcome do_jump_result_2_1314;
-  do_jump_result_2_1314.tup0 = pc_after;
-  do_jump_result_2_1314.tup2 = do_jump(&((&do_jump_result_2_1314)->tup0), &gas_after_charge, carried_code, dest);
-  do_jump_result_2_1314.tup1 = gas_after_charge;
-  pc_after = do_jump_result_2_1314.tup0;
-  gas_after = do_jump_result_2_1314.tup1;
-  (*carried_pc) = pc_after;
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1541 = do_jump_result_2_1314.tup2;
-end_function_2127: ;
-  return opcodeoutcome_8_1541;
+  uint32_t pc_in_after_8_1505;
+  uint64_t g_after_8_1506;
+  struct OpcodeOutcome _8_1409_8_1507;
+  pc_in_after_8_1505 = pc;
+  g_after_8_1506 = gas;
+  _8_1409_8_1507 = do_jump(&pc_in_after_8_1505, &g_after_8_1506, carried_code, dest);
+  pc = pc_in_after_8_1505;
+  gas = g_after_8_1506;
+  status = _8_1409_8_1507;
+  (*carried_pc) = pc;
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1476 = status;
+end_function_2017: ;
+  return opcodeoutcome_8_1476;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_pc(uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1542;
+  struct OpcodeOutcome opcodeoutcome_8_1477;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1303 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1303) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1542 = stack_status;
-    goto end_function_2117;
+    opcodeoutcome_8_1477 = stack_status;
+    goto end_function_2006;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1304 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1304.tup1;
-  if (charge_result_2_1304.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1305 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1305;
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1264 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1477 = Failed_result_2_1264;
+    goto end_function_2006;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
   u256 next_pc = word_of_source_byte_count((*carried_pc));
   u256 opcode_pc = alu_sub(next_pc, WORD_ONE);
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, opcode_pc);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1307 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1542 = Continue_result_2_1307;
-end_function_2117: ;
-  return opcodeoutcome_8_1542;
+  StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
+  write_stack_word(sp, opcode_pc);
+  struct OpcodeOutcome Continue_result_2_1266 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1477 = Continue_result_2_1266;
+end_function_2006: ;
+  return opcodeoutcome_8_1477;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_gas(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1543;
+  struct OpcodeOutcome opcodeoutcome_8_1478;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1297 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1297) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1543 = stack_status;
-    goto end_function_2109;
+    opcodeoutcome_8_1478 = stack_status;
+    goto end_function_1997;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1298 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-  uint64_t gas_after_charge = charge_result_2_1298.tup1;
-  if (charge_result_2_1298.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1299 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1299;
+  if ((*carried_gas) < G_base) {
+    struct OpcodeOutcome Failed_result_2_1259 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1478 = Failed_result_2_1259;
+    goto end_function_1997;
   }
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  u256 word_of_nat_byte_count_result_2_1301 = word_of_nat_byte_count_uint64_t_to_u256(gas_after_charge);
-  write_stack_word(sp_after, word_of_nat_byte_count_result_2_1301);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1302 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1543 = Continue_result_2_1302;
-end_function_2109: ;
-  return opcodeoutcome_8_1543;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_base);
+  u256 gas_word = word_of_nat_byte_count_uint64_t_to_u256(gas);
+  StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
+  write_stack_word(sp, gas_word);
+  struct OpcodeOutcome Continue_result_2_1261 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1478 = Continue_result_2_1261;
+end_function_1997: ;
+  return opcodeoutcome_8_1478;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_jumpdest(uint64_t *restrict carried_gas)
 {
-  uint64_t gas_after = (*carried_gas);
-  struct tuple_bool_uint_64 charge_result_2_1293 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_jumpdest);
-  uint64_t next_gas = charge_result_2_1293.tup1;
-  if (charge_result_2_1293.tup0) {
-    gas_after = next_gas;
-    struct OpcodeOutcome Failed_result_2_1294 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1294;
+  struct OpcodeOutcome opcodeoutcome_8_1479;
+  if ((*carried_gas) < G_jumpdest) {
+    struct OpcodeOutcome Failed_result_2_1254 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1479 = Failed_result_2_1254;
+    goto end_function_1990;
   }
-  gas_after = next_gas;
-  struct OpcodeOutcome Continue_result_2_1296 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  return Continue_result_2_1296;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_jumpdest);
+  struct OpcodeOutcome Continue_result_2_1256 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1479 = Continue_result_2_1256;
+end_function_1990: ;
+  return opcodeoutcome_8_1479;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_push(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n, u256 v)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1545;
+  struct OpcodeOutcome opcodeoutcome_8_1480;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
-  bool opcode_failed_result_2_1283 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1283) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1545 = stack_status;
-    goto end_function_2093;
+    opcodeoutcome_8_1480 = stack_status;
+    goto end_function_1984;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  if (n == UINT8_C(0)) {
-    struct tuple_bool_uint_64 charge_result_2_1285 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_base);
-    uint64_t gas_after_charge = charge_result_2_1285.tup1;
-    if (charge_result_2_1285.tup0) {
-      gas_after = gas_after_charge;
-      struct OpcodeOutcome Failed_result_2_1286 = Failed(OutOfGas);
-      (*carried_gas) = gas_after;
-      (*carried_sp) = sp_after;
-      return Failed_result_2_1286;
-    }
-    sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-    write_stack_word(sp_after, v);
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Continue_result_2_1288 = Continue(UNIT);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    opcodeoutcome_8_1545 = Continue_result_2_1288;
-  } else {
-    struct tuple_bool_uint_64 charge_result_2_1289 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-    uint64_t gas_after_charge_3_2111 = charge_result_2_1289.tup1;
-    if (charge_result_2_1289.tup0) {
-      gas_after = gas_after_charge_3_2111;
-      struct OpcodeOutcome Failed_result_2_1290 = Failed(OutOfGas);
-      (*carried_gas) = gas_after;
-      (*carried_sp) = sp_after;
-      return Failed_result_2_1290;
-    }
-    sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-    write_stack_word(sp_after, v);
-    gas_after = gas_after_charge_3_2111;
-    struct OpcodeOutcome Continue_result_2_1292 = Continue(UNIT);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    opcodeoutcome_8_1545 = Continue_result_2_1292;
+  uint16_t cost = n == UINT8_C(0) ? G_base : G_verylow;
+  if ((*carried_gas) < cost) {
+    struct OpcodeOutcome Failed_result_2_1249 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1480 = Failed_result_2_1249;
+    goto end_function_1984;
   }
-end_function_2093: ;
-  return opcodeoutcome_8_1545;
+  StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
+  write_stack_word(sp, v);
+  struct OpcodeOutcome Continue_result_2_1251 = Continue(UNIT);
+  (*carried_gas) = ((*carried_gas) - (uint64_t)cost);
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1480 = Continue_result_2_1251;
+end_function_1984: ;
+  return opcodeoutcome_8_1480;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_dup(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1546;
+  struct OpcodeOutcome opcodeoutcome_8_1481;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
-  bool opcode_failed_result_2_1276 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1276) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1546 = stack_status;
-    goto end_function_2083;
+    opcodeoutcome_8_1481 = stack_status;
+    goto end_function_1975;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  struct tuple_bool_uint_64 charge_result_2_1277 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1277.tup1;
-  if (charge_result_2_1277.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1278 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1278;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1242 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1481 = Failed_result_2_1242;
+    goto end_function_1975;
   }
-  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256(sp_after, ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1280 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1546 = Continue_result_2_1280;
-end_function_2083: ;
-  return opcodeoutcome_8_1546;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
+  StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
+  write_stack_word(sp, value);
+  struct OpcodeOutcome Continue_result_2_1244 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1481 = Continue_result_2_1244;
+end_function_1975: ;
+  return opcodeoutcome_8_1481;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_swap(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1547;
+  struct OpcodeOutcome opcodeoutcome_8_1482;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
-  bool opcode_failed_result_2_1269 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1269) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1547 = stack_status;
-    goto end_function_2075;
+    opcodeoutcome_8_1482 = stack_status;
+    goto end_function_1966;
   }
-  uint64_t gas_after = (*carried_gas);
-  struct tuple_bool_uint_64 charge_result_2_1270 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1270.tup1;
-  if (charge_result_2_1270.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1271 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1271;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1235 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1482 = Failed_result_2_1235;
+    goto end_function_1966;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
   u256 top_value = read_stack_word((*carried_sp));
   u256 other = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n);
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), UINT8_C(0), other);
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), n, top_value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1273 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1547 = Continue_result_2_1273;
-end_function_2075: ;
-  return opcodeoutcome_8_1547;
+  struct OpcodeOutcome Continue_result_2_1237 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1482 = Continue_result_2_1237;
+end_function_1966: ;
+  return opcodeoutcome_8_1482;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_dupn(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1548;
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
+  struct OpcodeOutcome opcodeoutcome_8_1483;
   bool valid_immediate = deep_stack_immediate_valid(immediate);
   if (!valid_immediate) {
-    struct OpcodeOutcome Failed_result_2_1260 = Failed(InvalidOpcode);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1260;
+    struct OpcodeOutcome Failed_result_2_1224 = Failed(InvalidOpcode);
+    return Failed_result_2_1224;
   }
   uint8_t n = decode_single_stack_index(immediate);
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
-  bool opcode_failed_result_2_1262 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1262) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1548 = stack_status;
-    goto end_function_2065;
+    opcodeoutcome_8_1483 = stack_status;
+    goto end_function_1955;
   }
-  struct tuple_bool_uint_64 charge_result_2_1263 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1263.tup1;
-  if (charge_result_2_1263.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1264 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    return Failed_result_2_1264;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1228 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1483 = Failed_result_2_1228;
+    goto end_function_1955;
   }
-  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256(sp_after, ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
-  sp_after = stack_top_advance_(sp_after, UINT8_C(1));
-  write_stack_word(sp_after, value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1266 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  opcodeoutcome_8_1548 = Continue_result_2_1266;
-end_function_2065: ;
-  return opcodeoutcome_8_1548;
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
+  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
+  StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
+  write_stack_word(sp, value);
+  struct OpcodeOutcome Continue_result_2_1230 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  opcodeoutcome_8_1483 = Continue_result_2_1230;
+end_function_1955: ;
+  return opcodeoutcome_8_1483;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_swapn(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1549;
-  uint64_t gas_after = (*carried_gas);
+  struct OpcodeOutcome opcodeoutcome_8_1484;
   bool valid_immediate = deep_stack_immediate_valid(immediate);
   if (!valid_immediate) {
-    struct OpcodeOutcome Failed_result_2_1250 = Failed(InvalidOpcode);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1250;
+    struct OpcodeOutcome Failed_result_2_1214 = Failed(InvalidOpcode);
+    return Failed_result_2_1214;
   }
   uint8_t n = decode_single_stack_index(immediate);
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
-  bool opcode_failed_result_2_1252 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1252) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1549 = stack_status;
-    goto end_function_2055;
+    opcodeoutcome_8_1484 = stack_status;
+    goto end_function_1944;
   }
-  struct tuple_bool_uint_64 charge_result_2_1253 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1253.tup1;
-  if (charge_result_2_1253.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1254 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1254;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1218 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1484 = Failed_result_2_1218;
+    goto end_function_1944;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
   u256 top_value = read_stack_word((*carried_sp));
   u256 other = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n);
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), UINT8_C(0), other);
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), n, top_value);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1256 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1549 = Continue_result_2_1256;
-end_function_2055: ;
-  return opcodeoutcome_8_1549;
+  struct OpcodeOutcome Continue_result_2_1220 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1484 = Continue_result_2_1220;
+end_function_1944: ;
+  return opcodeoutcome_8_1484;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_exchange(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1550;
-  uint64_t gas_after = (*carried_gas);
+  struct OpcodeOutcome opcodeoutcome_8_1485;
   bool valid_immediate = exchange_immediate_valid(immediate);
   if (!valid_immediate) {
-    struct OpcodeOutcome Failed_result_2_1239 = Failed(InvalidOpcode);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1239;
+    struct OpcodeOutcome Failed_result_2_1203 = Failed(InvalidOpcode);
+    return Failed_result_2_1203;
   }
-  struct tuple_uint_16_uint_16 decode_exchange_stack_indices_result_2_1241 = decode_exchange_stack_indices(immediate);
-  uint16_t n = decode_exchange_stack_indices_result_2_1241.tup0;
-  uint16_t m = decode_exchange_stack_indices_result_2_1241.tup1;
+  struct tuple_uint_16_uint_16 decode_exchange_stack_indices_result_2_1205 = decode_exchange_stack_indices(immediate);
+  uint16_t n = decode_exchange_stack_indices_result_2_1205.tup0;
+  uint16_t m = decode_exchange_stack_indices_result_2_1205.tup1;
   struct OpcodeOutcome stack_status = guard_stack((*carried_sp), ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))), ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))));
-  bool opcode_failed_result_2_1242 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1242) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1550 = stack_status;
-    goto end_function_2045;
+    opcodeoutcome_8_1485 = stack_status;
+    goto end_function_1933;
   }
-  struct tuple_bool_uint_64 charge_result_2_1243 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after, G_verylow);
-  uint64_t gas_after_charge = charge_result_2_1243.tup1;
-  if (charge_result_2_1243.tup0) {
-    gas_after = gas_after_charge;
-    struct OpcodeOutcome Failed_result_2_1244 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    return Failed_result_2_1244;
+  if ((*carried_gas) < G_verylow) {
+    struct OpcodeOutcome Failed_result_2_1208 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    opcodeoutcome_8_1485 = Failed_result_2_1208;
+    goto end_function_1933;
   }
+  uint64_t gas = ((*carried_gas) - (uint64_t)G_verylow);
   u256 first = stack_slot_read_((*carried_sp), n);
   u256 second = stack_slot_read_((*carried_sp), m);
   stack_set((*carried_sp), n, second);
   stack_set((*carried_sp), m, first);
-  gas_after = gas_after_charge;
-  struct OpcodeOutcome Continue_result_2_1246 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  opcodeoutcome_8_1550 = Continue_result_2_1246;
-end_function_2045: ;
-  return opcodeoutcome_8_1550;
+  struct OpcodeOutcome Continue_result_2_1210 = Continue(UNIT);
+  (*carried_gas) = gas;
+  opcodeoutcome_8_1485 = Continue_result_2_1210;
+end_function_1933: ;
+  return opcodeoutcome_8_1485;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory, uint8_t n)
+__attribute__((__always_inline__)) struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static, uint32_t memory_base, uint8_t n, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome opcodeoutcome_8_1551;
+  struct OpcodeOutcome opcodeoutcome_8_1486;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(2) + (uint32_t)n)), UINT8_C(0));
-  bool opcode_failed_result_2_1220 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1220) {
+  if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    opcodeoutcome_8_1551 = stack_status;
-    goto end_function_2031;
+    opcodeoutcome_8_1486 = stack_status;
+    goto end_function_1918;
   }
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  uint64_t gas_after_static_guard;
-  struct OpcodeOutcome status_after_guard;
-  gas_after_static_guard = gas_after;
-  status_after_guard = guard_static(&gas_after_static_guard, carried_is_static);
-  bool opcode_failed_result_2_1222 = opcode_failed(status_after_guard);
-  if (opcode_failed_result_2_1222) {
-    gas_after = gas_after_static_guard;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return status_after_guard;
+  uint64_t gas = (*carried_gas);
+  struct OpcodeOutcome status = Continue(UNIT);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  struct LogTopics topics = LogTopics0(UNIT);
+  uint64_t g_after_8_1508;
+  struct OpcodeOutcome _8_1408_8_1509;
+  g_after_8_1508 = gas;
+  _8_1408_8_1509 = guard_static(&g_after_8_1508, carried_is_static);
+  gas = g_after_8_1508;
+  status = _8_1408_8_1509;
+  if (!(status.kind != Kind_Failed)) {
+    (*carried_gas) = gas;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    return status;
   }
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  struct tuple_LogTopics_StackPointer pop_log_topics_result_2_1223 = pop_log_topics(n, sp_after);
-  sp_after = pop_log_topics_result_2_1223.tup1;
-  struct tuple_bool_uint_64 charge_log_gas_result_2_1224 = charge_log_gas(gas_after_static_guard, n, length_word);
-  bool log_halt = charge_log_gas_result_2_1224.tup0;
-  uint64_t gas_after_log = charge_log_gas_result_2_1224.tup1;
-  if (log_halt) {
-    gas_after = gas_after_log;
-    struct OpcodeOutcome Failed_result_2_1225 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1225;
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  struct tuple_LogTopics_StackPointer result_2_1184 = pop_log_topics(n, sp);
+  topics = result_2_1184.tup0;
+  sp = result_2_1184.tup1;
+  struct GasCharge log_cost = log_gas_cost(n, length_word, gas);
+  if (!log_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1187 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1486 = Failed_result_2_1187;
+    goto end_function_1918;
   }
-  uint64_t required_size = memory_required_size(offset_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1227 = charge_memory_expansion(gas_after_log, memory_after, required_size);
-  bool expansion_halt = charge_memory_expansion_result_2_1227.tup0;
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1227.tup1;
-  if (expansion_halt) {
-    gas_after = gas_after_expansion;
-    struct OpcodeOutcome Failed_result_2_1228 = Failed(OutOfGas);
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return Failed_result_2_1228;
+  gas = gas_sub(gas, log_cost.cost);
+  uint64_t requested_height = memory_requested_height(offset_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct OpcodeOutcome Failed_result_2_1192 = Failed(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    opcodeoutcome_8_1486 = Failed_result_2_1192;
+    goto end_function_1918;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(offset_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  struct tuple_Bytes_Bytes result_2_1232 = active_memory_slice(mem1, access.range.off, access.range.len);
-  Bytes memory_slice = evm_memory_slice(result_2_1232.tup0.bytes, result_2_1232.tup0.len);
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  Bytes data = active_memory_slice(memory_base, memory, access.range.off, access.range.len);
+  Bytes memory_slice = evm_memory_slice(data.bytes, data.len);
   struct LogData log_data = LogDataMemory(memory_slice);
-  k_log(carried_address, pop_log_topics_result_2_1223.tup0, log_data);
-  memory_after = result_2_1232.tup1;
-  gas_after = gas_after_expansion;
-  struct OpcodeOutcome Continue_result_2_1233 = Continue(UNIT);
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  opcodeoutcome_8_1551 = Continue_result_2_1233;
-end_function_2031: ;
-  return opcodeoutcome_8_1551;
+  k_log(carried_address, topics, log_data);
+  struct OpcodeOutcome Continue_result_2_1196 = Continue(UNIT);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  opcodeoutcome_8_1486 = Continue_result_2_1196;
+end_function_1918: ;
+  return opcodeoutcome_8_1486;
 }
 
 struct FrameStatus execute_stop(void)
@@ -3192,143 +2879,159 @@ struct FrameStatus execute_stop(void)
   return Halted(reason);
 }
 
-__attribute__((__always_inline__)) struct FrameStatus execute_return(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct FrameStatus execute_return(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct FrameStatus framestatus_8_1552;
+  struct FrameStatus framestatus_8_1487;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1212 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1212) {
-    struct FrameStatus opcode_frame_status_result_2_1213 = opcode_frame_status(stack_status);
+  if (!(stack_status.kind != Kind_Failed)) {
+    struct FrameStatus opcode_frame_status_result_2_1170 = opcode_frame_status(stack_status);
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    framestatus_8_1552 = opcode_frame_status_result_2_1213;
-    goto end_function_2013;
+    framestatus_8_1487 = opcode_frame_status_result_2_1170;
+    goto end_function_1900;
   }
-  struct FrameStatus status_after = Running(UNIT);
-  uint64_t gas_after = (*carried_gas);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint64_t required_size = memory_required_size(offset_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1215 = charge_memory_expansion(gas_after, memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1215.tup1;
-  if (charge_memory_expansion_result_2_1215.tup0) {
-    status_after = Exceptional(OutOfGas);
-    gas_after = gas_after_expansion;
-    (*carried_gas) = gas_after;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return status_after;
+  uint64_t gas = (*carried_gas);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint64_t requested_height = memory_requested_height(offset_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct FrameStatus Exceptional_result_2_1174 = Exceptional(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    framestatus_8_1487 = Exceptional_result_2_1174;
+    goto end_function_1900;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(offset_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  struct tuple_Bytes_Bytes result_2_1218 = active_memory_slice(mem1, access.range.off, access.range.len);
-  Bytes output = freeze_memory_output(result_2_1218.tup0);
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  Bytes data = active_memory_slice(memory_base, memory, access.range.off, access.range.len);
+  Bytes output = freeze_memory_output(data);
   struct HaltKind reason = HaltReturn(output);
-  status_after = Halted(reason);
-  memory_after = result_2_1218.tup1;
-  gas_after = gas_after_expansion;
-  (*carried_gas) = gas_after;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  framestatus_8_1552 = status_after;
-end_function_2013: ;
-  return framestatus_8_1552;
+  struct FrameStatus Halted_result_2_1178 = Halted(reason);
+  (*carried_gas) = gas;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  framestatus_8_1487 = Halted_result_2_1178;
+end_function_1900: ;
+  return framestatus_8_1487;
 }
 
-__attribute__((__always_inline__)) struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, StackPointer *restrict carried_sp, Bytes *restrict carried_memory)
+__attribute__((__always_inline__)) struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint32_t memory_base, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
 {
-  struct FrameStatus framestatus_8_1553;
+  struct FrameStatus framestatus_8_1488;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
-  bool opcode_failed_result_2_1203 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1203) {
-    struct FrameStatus opcode_frame_status_result_2_1204 = opcode_frame_status(stack_status);
+  if (!(stack_status.kind != Kind_Failed)) {
+    struct FrameStatus opcode_frame_status_result_2_1156 = opcode_frame_status(stack_status);
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    framestatus_8_1553 = opcode_frame_status_result_2_1204;
-    goto end_function_2003;
+    framestatus_8_1488 = opcode_frame_status_result_2_1156;
+    goto end_function_1891;
   }
-  struct FrameStatus status_after = Running(UNIT);
-  StackPointer sp_after = (*carried_sp);
-  Bytes memory_after = (*carried_memory);
-  u256 offset_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  u256 length_word = read_stack_word(sp_after);
-  sp_after = stack_top_retreat_(sp_after, UINT8_C(1));
-  uint64_t required_size = memory_required_size(offset_word, length_word);
-  struct tuple_bool_uint_64 charge_memory_expansion_result_2_1206 = charge_memory_expansion((*carried_gas), memory_after, required_size);
-  uint64_t gas_after_expansion = charge_memory_expansion_result_2_1206.tup1;
-  if (charge_memory_expansion_result_2_1206.tup0) {
-    status_after = Exceptional(OutOfGas);
-    (*carried_gas) = gas_after_expansion;
-    (*carried_sp) = sp_after;
-    (*carried_memory) = memory_after;
-    return status_after;
+  uint64_t gas = (*carried_gas);
+  uint64_t state_gas = (*carried_state_gas);
+  uint32_t state_spill = (*carried_state_spill);
+  StackPointer sp = (*carried_sp);
+  uint32_t memory = (*carried_memory_height);
+  u256 offset_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  u256 length_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
+  uint64_t requested_height = memory_requested_height(offset_word, length_word);
+  struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
+  if (!expansion_cost.affordable) {
+    struct FrameStatus Exceptional_result_2_1160 = Exceptional(OutOfGas);
+    (*carried_gas) = (uint64_t)GAS_ZERO;
+    (*carried_sp) = sp;
+    (*carried_memory_height) = memory;
+    framestatus_8_1488 = Exceptional_result_2_1160;
+    goto end_function_1891;
   }
+  gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields access = memory_access(offset_word, length_word);
-  Bytes mem1 = expand_memory(memory_after, access.required_size);
-  struct tuple_uint_64_uint_64_uint_32 refill_frame_state_gas_result_2_1207 = refill_frame_state_gas(gas_after_expansion, (*carried_state_gas), (*carried_state_spill), carried_state_gas_reservoir);
-  struct tuple_Bytes_Bytes result_2_1210 = active_memory_slice(mem1, access.range.off, access.range.len);
-  Bytes output = freeze_memory_output(result_2_1210.tup0);
+  memory = expand_memory(memory_base, memory, access.requested_height);
+  struct ExecutionProfileFields execution_profile = k_execution_profile;
+  if (execution_profile.protocol.fork >= Amsterdam) {
+    gas = conserved_gas_add_uint64_t_uint32_t_to_uint64_t(gas, state_spill);
+    state_gas = carried_state_gas_reservoir;
+    state_spill = (uint32_t)STATE_GAS_SPILL_ZERO;
+  }
+  Bytes data = active_memory_slice(memory_base, memory, access.range.off, access.range.len);
+  Bytes output = freeze_memory_output(data);
   struct HaltKind reason = HaltRevert(output);
-  status_after = Halted(reason);
-  memory_after = result_2_1210.tup1;
-  (*carried_gas) = refill_frame_state_gas_result_2_1207.tup0;
-  (*carried_state_gas) = refill_frame_state_gas_result_2_1207.tup1;
-  (*carried_state_spill) = refill_frame_state_gas_result_2_1207.tup2;
-  (*carried_sp) = sp_after;
-  (*carried_memory) = memory_after;
-  framestatus_8_1553 = status_after;
-end_function_2003: ;
-  return framestatus_8_1553;
+  struct FrameStatus Halted_result_2_1166 = Halted(reason);
+  (*carried_gas) = gas;
+  (*carried_state_gas) = state_gas;
+  (*carried_state_spill) = state_spill;
+  (*carried_sp) = sp;
+  (*carried_memory_height) = memory;
+  framestatus_8_1488 = Halted_result_2_1166;
+end_function_1891: ;
+  return framestatus_8_1488;
 }
 
 __attribute__((__always_inline__)) struct OpcodeOutcome execute_invalid(uint64_t *restrict carried_gas)
 {
   (void)carried_gas;
-  struct OpcodeOutcome Failed_result_2_1202 = Failed(InvalidOpcode);
-  return Failed_result_2_1202;
+  struct OpcodeOutcome Failed_result_2_1154 = Failed(InvalidOpcode);
+  return Failed_result_2_1154;
 }
 
 __attribute__((__always_inline__)) struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork, bool carried_is_static, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, __int128 *restrict carried_refund, StackPointer *restrict carried_sp)
 {
-  struct FrameStatus framestatus_8_1555;
+  struct FrameStatus framestatus_8_1490;
   struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
-  bool opcode_failed_result_2_1165 = opcode_failed(stack_status);
-  if (opcode_failed_result_2_1165) {
-    struct FrameStatus opcode_frame_status_result_2_1166 = opcode_frame_status(stack_status);
+  if (!(stack_status.kind != Kind_Failed)) {
+    struct FrameStatus opcode_frame_status_result_2_1122 = opcode_frame_status(stack_status);
     (*carried_gas) = (uint64_t)GAS_ZERO;
-    framestatus_8_1555 = opcode_frame_status_result_2_1166;
-    goto end_function_1977;
+    framestatus_8_1490 = opcode_frame_status_result_2_1122;
+    goto end_function_1868;
   }
-  uint64_t g_after_8_1564;
-  struct OpcodeOutcome guard_result;
-  g_after_8_1564 = (*carried_gas);
-  guard_result = guard_static(&g_after_8_1564, carried_is_static);
-  struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus tmp_3_1908;
-  bool opcode_failed_result_2_1169 = opcode_failed(guard_result);
-  if (opcode_failed_result_2_1169) {
-    struct FrameStatus opcode_frame_status_result_2_1170 = opcode_frame_status(guard_result);
-    (*carried_gas) = g_after_8_1564;
-    return opcode_frame_status_result_2_1170;
+  uint64_t gas = (*carried_gas);
+  uint64_t state_gas = (*carried_state_gas);
+  uint32_t state_spill = (*carried_state_spill);
+  __int128 refund = (*carried_refund);
+  StackPointer sp = (*carried_sp);
+  bool halt = false;
+  struct OpcodeOutcome status = Continue(UNIT);
+  uint64_t g_after_8_1510;
+  struct OpcodeOutcome _8_1408_8_1511;
+  g_after_8_1510 = gas;
+  _8_1408_8_1511 = guard_static(&g_after_8_1510, carried_is_static);
+  gas = g_after_8_1510;
+  status = _8_1408_8_1511;
+  if (!(status.kind != Kind_Failed)) {
+    struct FrameStatus opcode_frame_status_result_2_1126 = opcode_frame_status(status);
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    return opcode_frame_status_result_2_1126;
   }
-  u256 beneficiary_word = read_stack_word((*carried_sp));
-  StackPointer sp_after = stack_top_retreat_((*carried_sp), UINT8_C(1));
+  u256 beneficiary_word = read_stack_word(sp);
+  sp = stack_top_retreat_(sp, UINT8_C(1));
   bytes20 beneficiary = word_to_address(beneficiary_word);
-  bool gteq_int_result_2_1172 = (bool)(fork >= Amsterdam);
-  if (gteq_int_result_2_1172) {
+  struct HaltKind halt_reason = HaltSelfDestruct(UNIT);
+  struct FrameStatus halt_status = Halted(halt_reason);
+  if (fork >= Amsterdam) {
     bool warm = k_account_is_warm(beneficiary);
     uint32_t access_cost;
-    uint16_t add_atom_result_2_1184 = ((uint16_t)((uint32_t)G_selfdestruct + (uint32_t)UINT16_C(0)));
-    uint16_t result_2_1185 = warm ? G_zero : G_amsterdam_cold_account_access;
-    access_cost = ((uint32_t)add_atom_result_2_1184 + (uint32_t)result_2_1185);
-    struct tuple_bool_uint_64 check_execution_gas_result_2_1173 = check_execution_gas_uint64_t_uint32_t_to_struct_tuple_bool_uint_64((*carried_gas), access_cost);
-    if (check_execution_gas_result_2_1173.tup0) {
-      struct FrameStatus Exceptional_result_2_1174 = Exceptional(OutOfGas);
-      (*carried_gas) = check_execution_gas_result_2_1173.tup1;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1174;
+    uint16_t add_atom_result_2_1138 = ((uint16_t)((uint32_t)G_selfdestruct + (uint32_t)UINT16_C(0)));
+    uint16_t result_2_1139 = warm ? G_zero : G_amsterdam_cold_account_access;
+    access_cost = ((uint32_t)add_atom_result_2_1138 + (uint32_t)result_2_1139);
+    if (gas < access_cost) {
+      struct FrameStatus Exceptional_result_2_1130 = Exceptional(OutOfGas);
+      (*carried_gas) = (uint64_t)GAS_ZERO;
+      (*carried_state_gas) = state_gas;
+      (*carried_state_spill) = state_spill;
+      (*carried_refund) = refund;
+      (*carried_sp) = sp;
+      framestatus_8_1490 = Exceptional_result_2_1130;
+      goto end_function_1868;
     }
     k_account_mark_warm(beneficiary);
     u256 bal = k_get_balance(carried_address);
@@ -3336,127 +3039,124 @@ __attribute__((__always_inline__)) struct FrameStatus execute_selfdestruct(bytes
     bool beneficiary_empty = k_account_is_empty(beneficiary);
     bool creates_account = (bool)(nonzero_balance && beneficiary_empty);
     uint32_t execution_cost = creates_account ? (access_cost + (uint32_t)G_amsterdam_account_write) : access_cost;
-    struct tuple_bool_uint_64 charge_result_2_1176 = charge_uint64_t_uint32_t_to_struct_tuple_bool_uint_64((*carried_gas), execution_cost);
-    uint64_t gas_after_execution = charge_result_2_1176.tup1;
-    if (charge_result_2_1176.tup0) {
-      struct FrameStatus Exceptional_result_2_1177 = Exceptional(OutOfGas);
-      (*carried_gas) = gas_after_execution;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1177;
+    if (gas < execution_cost) {
+      struct FrameStatus Exceptional_result_2_1133 = Exceptional(OutOfGas);
+      (*carried_gas) = (uint64_t)GAS_ZERO;
+      (*carried_state_gas) = state_gas;
+      (*carried_state_spill) = state_spill;
+      (*carried_refund) = refund;
+      (*carried_sp) = sp;
+      framestatus_8_1490 = Exceptional_result_2_1133;
+      goto end_function_1868;
     }
-    struct tuple_bool_uint_64_uint_64_uint_32 result_2_1179;
+    gas = gas_sub_uint64_t_uint32_t_to_uint64_t(gas, execution_cost);
     if (creates_account) {
-      result_2_1179 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after_execution, (*carried_state_gas), (*carried_state_spill), G_amsterdam_state_new_account);
-    } else {
-      result_2_1179 = ((struct tuple_bool_uint_64_uint_64_uint_32){.tup0 = false, .tup1 = gas_after_execution, .tup2 = (*carried_state_gas), .tup3 = (*carried_state_spill)});
+      struct tuple_bool_uint_64_uint_64_uint_32 result_2_1135 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas, state_gas, state_spill, G_amsterdam_state_new_account);
+      halt = result_2_1135.tup0;
+      gas = result_2_1135.tup1;
+      state_gas = result_2_1135.tup2;
+      state_spill = result_2_1135.tup3;
     }
-    bool state_halt = result_2_1179.tup0;
-    uint64_t gas_after_all_charges = result_2_1179.tup1;
-    uint64_t state_gas_after = result_2_1179.tup2;
-    uint32_t state_spill_after = result_2_1179.tup3;
-    if (state_halt) {
-      struct FrameStatus Exceptional_result_2_1180 = Exceptional(OutOfGas);
-      (*carried_gas) = gas_after_all_charges;
-      (*carried_state_gas) = state_gas_after;
-      (*carried_state_spill) = state_spill_after;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1180;
+    if (halt) {
+      struct FrameStatus Exceptional_result_2_1136 = Exceptional(OutOfGas);
+      (*carried_gas) = gas;
+      (*carried_state_gas) = state_gas;
+      (*carried_state_spill) = state_spill;
+      (*carried_refund) = refund;
+      (*carried_sp) = sp;
+      return Exceptional_result_2_1136;
     }
     k_transfer(carried_address, beneficiary, bal);
     bool created = k_was_created(carried_address);
     if (created) {
       k_selfdestruct(carried_address);
     }
-    struct FrameStatus result_2_1183;
-    struct HaltKind HaltSelfDestruct_result_2_1182 = HaltSelfDestruct(UNIT);
-    result_2_1183 = Halted(HaltSelfDestruct_result_2_1182);
-    tmp_3_1908 = ((struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus){.tup0 = gas_after_all_charges, .tup1 = state_gas_after, .tup2 = state_spill_after, .tup3 = (*carried_refund), .tup4 = sp_after, .tup5 = result_2_1183});
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    framestatus_8_1490 = halt_status;
   } else {
-    u256 bal_3_1952 = k_get_balance(carried_address);
-    bool warm_3_1953 = k_account_is_warm(beneficiary);
-    struct tuple_bool_uint_64 charge_result_2_1186 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64((*carried_gas), G_selfdestruct);
-    uint64_t gas_after_execution_3_1954 = charge_result_2_1186.tup1;
-    if (charge_result_2_1186.tup0) {
-      struct FrameStatus Exceptional_result_2_1187 = Exceptional(OutOfGas);
-      (*carried_gas) = gas_after_execution_3_1954;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1187;
+    u256 bal_3_1828 = k_get_balance(carried_address);
+    bool warm_3_1829 = k_account_is_warm(beneficiary);
+    if (gas < G_selfdestruct) {
+      struct FrameStatus Exceptional_result_2_1141 = Exceptional(OutOfGas);
+      (*carried_gas) = (uint64_t)GAS_ZERO;
+      (*carried_state_gas) = state_gas;
+      (*carried_state_spill) = state_spill;
+      (*carried_refund) = refund;
+      (*carried_sp) = sp;
+      framestatus_8_1490 = Exceptional_result_2_1141;
+      goto end_function_1868;
     }
-    struct tuple_bool_uint_64 result_2_1190;
-    if (warm_3_1953) {
-      result_2_1190 = ((struct tuple_bool_uint_64){.tup0 = false, .tup1 = gas_after_execution_3_1954});
-    } else {
-      result_2_1190 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after_execution_3_1954, G_cold_account);
-    }
-    uint64_t gas_after_access = result_2_1190.tup1;
-    if (result_2_1190.tup0) {
-      struct FrameStatus Exceptional_result_2_1191 = Exceptional(OutOfGas);
-      (*carried_gas) = gas_after_access;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1191;
+    gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_selfdestruct);
+    if (!warm_3_1829) {
+      if (gas < G_cold_account) {
+        struct FrameStatus Exceptional_result_2_1145 = Exceptional(OutOfGas);
+        (*carried_gas) = (uint64_t)GAS_ZERO;
+        (*carried_state_gas) = state_gas;
+        (*carried_state_spill) = state_spill;
+        (*carried_refund) = refund;
+        (*carried_sp) = sp;
+        framestatus_8_1490 = Exceptional_result_2_1145;
+        goto end_function_1868;
+      }
+      gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_cold_account);
     }
     k_account_mark_warm(beneficiary);
-    bool nonzero_balance_3_1955 = word_nonzero(bal_3_1952);
-    bool beneficiary_empty_3_1956 = k_account_is_empty(beneficiary);
-    struct tuple_bool_uint_64 result_2_1194;
-    if (nonzero_balance_3_1955 && beneficiary_empty_3_1956) {
-      result_2_1194 = charge_uint64_t_uint16_t_to_struct_tuple_bool_uint_64(gas_after_access, G_newaccount);
-    } else {
-      result_2_1194 = ((struct tuple_bool_uint_64){.tup0 = false, .tup1 = gas_after_access});
-    }
-    bool new_account_halt = result_2_1194.tup0;
-    uint64_t gas_after_all_charges_3_1957 = result_2_1194.tup1;
-    if (new_account_halt) {
-      struct FrameStatus Exceptional_result_2_1195 = Exceptional(OutOfGas);
-      (*carried_gas) = gas_after_all_charges_3_1957;
-      (*carried_sp) = sp_after;
-      return Exceptional_result_2_1195;
+    bool nonzero_balance_3_1830 = word_nonzero(bal_3_1828);
+    bool beneficiary_empty_3_1831 = k_account_is_empty(beneficiary);
+    if (nonzero_balance_3_1830 && beneficiary_empty_3_1831) {
+      if (gas < G_newaccount) {
+        struct FrameStatus Exceptional_result_2_1149 = Exceptional(OutOfGas);
+        (*carried_gas) = (uint64_t)GAS_ZERO;
+        (*carried_state_gas) = state_gas;
+        (*carried_state_spill) = state_spill;
+        (*carried_refund) = refund;
+        (*carried_sp) = sp;
+        framestatus_8_1490 = Exceptional_result_2_1149;
+        goto end_function_1868;
+      }
+      gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_newaccount);
     }
     bool is_selfdestructed = k_is_selfdestructed(carried_address);
-    __int128 refund_after;
-    bool lt_int_result_2_1200 = (bool)(fork < London);
-    if (lt_int_result_2_1200 && !is_selfdestructed) {
-      refund_after = record_refund___int128_uint16_t_to___int128((*carried_refund), R_selfdestruct_pre_london);
-    } else {
-      refund_after = (*carried_refund);
+    bool lt_int_result_2_1151 = (bool)(fork < London);
+    if (lt_int_result_2_1151 && !is_selfdestructed) {
+      refund = record_refund___int128_uint16_t_to___int128(refund, R_selfdestruct_pre_london);
     }
-    k_transfer(carried_address, beneficiary, bal_3_1952);
-    bool lt_int_result_2_1197 = (bool)(fork < Cancun);
-    if (lt_int_result_2_1197) {
+    k_transfer(carried_address, beneficiary, bal_3_1828);
+    if (fork < Cancun) {
       k_zero_balance(carried_address);
       k_selfdestruct(carried_address);
     } else {
-      bool created_3_1958 = k_was_created(carried_address);
-      if (created_3_1958) {
+      bool created_3_1832 = k_was_created(carried_address);
+      if (created_3_1832) {
         k_zero_balance(carried_address);
         k_selfdestruct(carried_address);
       }
     }
-    struct FrameStatus result_2_1199;
-    struct HaltKind HaltSelfDestruct_result_2_1198 = HaltSelfDestruct(UNIT);
-    result_2_1199 = Halted(HaltSelfDestruct_result_2_1198);
-    tmp_3_1908 = ((struct tuple_uint_64_uint_64_uint_32_int_128_StackPointer_FrameStatus){.tup0 = gas_after_all_charges_3_1957, .tup1 = (*carried_state_gas), .tup2 = (*carried_state_spill), .tup3 = refund_after, .tup4 = sp_after, .tup5 = result_2_1199});
+    (*carried_gas) = gas;
+    (*carried_state_gas) = state_gas;
+    (*carried_state_spill) = state_spill;
+    (*carried_refund) = refund;
+    (*carried_sp) = sp;
+    framestatus_8_1490 = halt_status;
   }
-  (*carried_gas) = tmp_3_1908.tup0;
-  (*carried_state_gas) = tmp_3_1908.tup1;
-  (*carried_state_spill) = tmp_3_1908.tup2;
-  (*carried_refund) = tmp_3_1908.tup3;
-  (*carried_sp) = tmp_3_1908.tup4;
-  framestatus_8_1555 = tmp_3_1908.tup5;
-end_function_1977: ;
-  return framestatus_8_1555;
+end_function_1868: ;
+  return framestatus_8_1490;
 }
 
 struct OpcodeOutcome guard_stack_StackPointer_uint16_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp, uint16_t inputs, uint8_t outputs)
 {
-  enum StackValidation validate_stack_result_2_1780;
+  enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
-    validate_stack_result_2_1780 = StackUnderflowFailure;
+    stack_validation = StackUnderflowFailure;
   } else {
-    bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
-    validate_stack_result_2_1780 = result_2_2037 ? StackOverflowFailure : StackValid;
+    bool result_2_2018 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs)));
+    stack_validation = result_2_2018 ? StackOverflowFailure : StackValid;
   }
-  switch (validate_stack_result_2_1780) {
+  switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
   case StackUnderflowFailure:
@@ -3468,14 +3168,14 @@ struct OpcodeOutcome guard_stack_StackPointer_uint16_t_uint8_t_to_struct_OpcodeO
 
 struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
 {
-  enum StackValidation validate_stack_result_2_1780;
+  enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
-    validate_stack_result_2_1780 = StackUnderflowFailure;
+    stack_validation = StackUnderflowFailure;
   } else {
-    bool result_2_2037 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
-    validate_stack_result_2_1780 = result_2_2037 ? StackOverflowFailure : StackValid;
+    bool result_2_2018 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
+    stack_validation = result_2_2018 ? StackOverflowFailure : StackValid;
   }
-  switch (validate_stack_result_2_1780) {
+  switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
   case StackUnderflowFailure:
@@ -3487,14 +3187,14 @@ struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOu
 
 struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
 {
-  enum StackValidation validate_stack_result_2_1780;
+  enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
-    validate_stack_result_2_1780 = StackUnderflowFailure;
+    stack_validation = StackUnderflowFailure;
   } else {
-    bool result_2_2037 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs)));
-    validate_stack_result_2_1780 = result_2_2037 ? StackOverflowFailure : StackValid;
+    bool result_2_2018 = (bool)(STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs)));
+    stack_validation = result_2_2018 ? StackOverflowFailure : StackValid;
   }
-  switch (validate_stack_result_2_1780) {
+  switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
   case StackUnderflowFailure:
@@ -3506,10 +3206,10 @@ struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOu
 
 struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
 {
-  enum StackValidation validate_stack_result_2_1780;
-  bool result_2_2037 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
-  validate_stack_result_2_1780 = result_2_2037 ? StackOverflowFailure : StackValid;
-  switch (validate_stack_result_2_1780) {
+  enum StackValidation stack_validation;
+  bool result_2_2018 = (bool)(STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)));
+  stack_validation = result_2_2018 ? StackOverflowFailure : StackValid;
+  switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
   case StackUnderflowFailure:

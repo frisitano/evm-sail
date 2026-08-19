@@ -3,8 +3,8 @@
 
 uint8_t * analyze_code(Bytes code, uint8_t fork)
 {
-  bool gteq_int_result_2_2469 = (bool)(fork >= Amsterdam);
-  return code_db_analyze_indexed(code, gteq_int_result_2_2469);
+  bool gteq_int_result_2_2448 = (bool)(fork >= Amsterdam);
+  return code_db_analyze_indexed(code, gteq_int_result_2_2448);
 }
 
 Bytes code_db_intern_input(Bytes bytes)

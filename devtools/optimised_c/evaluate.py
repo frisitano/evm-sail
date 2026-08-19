@@ -10,7 +10,6 @@ import json
 import os
 import platform
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -22,6 +21,7 @@ from devtools.optimised_c.build import ROOT, compilation_layout, compilation_sou
 from devtools.optimised_c.compdb import check_database, database_entries
 
 SCHEMA_VERSION = "evm-sail-extraction-quality/v1"
+EXTRACTION_PROVENANCE_SCHEMA = "evm-sail-optimised-c-extraction-provenance/v1"
 DEFAULT_GENERATED = ROOT / "build/c-optimised/generated"
 DEFAULT_OUTPUT = ROOT / "build/extraction-quality/record.json"
 DEFAULT_SUMMARY = ROOT / "build/extraction-quality/summary.md"
@@ -31,11 +31,18 @@ BASELINE_METRICS = {
     "generated_nonblank_lines": 10389,
     "distinct_temporary_identifiers": 200,
     "distinct_result_identifiers": 150,
+    "distinct_intermediate_tuple_identifiers": 310,
     "goto_keyword_tokens": 3,
 }
+
+TERMINAL_ZERO_METRICS = (
+    "distinct_temporary_identifiers",
+    "distinct_result_identifiers",
+    "distinct_intermediate_tuple_identifiers",
+)
 SAMPLE_STRATA = (
     ("prelude.c", "primitive lowering", "word_sub_word_u256_uint8_t_to_u256"),
-    ("evm/gas.c", "arithmetic/protocol", "memory_required_size"),
+    ("evm/gas.c", "arithmetic/protocol", "memory_access"),
     ("evm/transaction.c", "state transition", "process_transaction"),
     ("lib/mpt/updates.c", "recursive/data-heavy", "witness_subtree"),
     ("lib/rlp/decoding.c", "parser/failure path", "rlp_decode_word"),
@@ -107,11 +114,16 @@ def git_repository(path: Path) -> dict[str, Any]:
 
 
 def discover_sail_source(executable: Path, explicit: Path | None) -> Path:
+    selected_source = explicit
+    if selected_source is None and os.environ.get("SAIL_SOURCE"):
+        selected_source = Path(os.environ["SAIL_SOURCE"])
+    if selected_source is not None:
+        probe = run(["git", "rev-parse", "--show-toplevel"], selected_source)
+        if probe.returncode != 0:
+            raise ValueError(f"explicit Sail source is not a Git checkout: {selected_source}")
+        return Path(probe.stdout.strip()).resolve()
+
     candidates: list[Path] = []
-    if explicit is not None:
-        candidates.append(explicit)
-    if os.environ.get("SAIL_SOURCE"):
-        candidates.append(Path(os.environ["SAIL_SOURCE"]))
     # OPAM switches retain the exact source tree from which the installed
     # compiler was built at <switch>/.opam-switch/sources/sail.
     if executable.parent.name == "bin":
@@ -122,6 +134,210 @@ def discover_sail_source(executable: Path, explicit: Path | None) -> Path:
         if probe.returncode == 0:
             return Path(probe.stdout.strip()).resolve()
     raise ValueError("cannot discover the Sail compiler source checkout; pass --sail-source")
+
+
+def discover_effective_sail_executable(launcher: Path, source: Path, explicit: Path | None) -> Path:
+    """Resolve the compiled executable behind a source-tree Sail launcher."""
+    with launcher.open("rb") as stream:
+        is_script = stream.read(2) == b"#!"
+    if is_script:
+        source_build = source / "_build/install/default/bin/sail"
+        launcher_text = launcher.read_text(errors="replace")
+        executable_lines = [
+            line.strip()
+            for line in launcher_text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        recognized_source_launcher = (
+            launcher.parent == source
+            and executable_lines
+            and executable_lines[-1] == 'exec "$SAIL_DIR/_build/install/default/bin/sail" "$@"'
+            and 'export DUNE_DIR_LOCATIONS="libsail:share:$SAIL_DIR/_build/install/default/share/libsail"'
+            in executable_lines
+            and sum(line.startswith("exec ") for line in executable_lines) == 1
+        )
+        if not recognized_source_launcher:
+            raise ValueError("cannot prove the compiled Sail executable behind the launcher")
+        effective = source_build.resolve()
+    else:
+        effective = launcher
+
+    if not effective.is_file() or not os.access(effective, os.X_OK):
+        raise ValueError(f"Sail effective executable is not executable: {effective}")
+    with effective.open("rb") as stream:
+        if stream.read(2) == b"#!":
+            raise ValueError(
+                f"Sail effective executable is a script, not a compiled binary: {effective}"
+            )
+    if explicit is not None and explicit.expanduser().resolve() != effective.resolve():
+        raise ValueError(
+            "explicit Sail effective executable is not the executable proven "
+            "to be used by the launcher"
+        )
+    return effective.resolve()
+
+
+def compiler_identity(launcher: Path, effective: Path) -> dict[str, str]:
+    effective_hash = sha256(effective)
+    return {
+        "executable": str(launcher),
+        "launcher_sha256": sha256(launcher),
+        "effective_executable": str(effective),
+        "effective_binary_sha256": effective_hash,
+        # Retain the v1 field with corrected semantics for record consumers.
+        "binary_sha256": effective_hash,
+    }
+
+
+def directory_tree_identity(directory: Path) -> dict[str, Any]:
+    if not directory.is_dir():
+        raise ValueError(f"compiler resource directory is missing: {directory}")
+    files = sorted(path for path in directory.rglob("*") if path.is_file())
+    if not files:
+        raise ValueError(f"compiler resource directory is empty: {directory}")
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(directory).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(sha256(path)))
+    return {"sha256": digest.hexdigest(), "file_count": len(files)}
+
+
+def compiler_plugin_identity(plugin_directory: Path) -> dict[str, Any]:
+    tree = directory_tree_identity(plugin_directory)
+    return {
+        "plugin_directory": str(plugin_directory.resolve()),
+        "plugin_tree_sha256": tree["sha256"],
+        "plugin_file_count": tree["file_count"],
+    }
+
+
+def compiler_library_identity(library_directory: Path) -> dict[str, Any]:
+    tree = directory_tree_identity(library_directory)
+    return {
+        "library_directory": str(library_directory.resolve()),
+        "library_tree_sha256": tree["sha256"],
+        "library_file_count": tree["file_count"],
+    }
+
+
+def version_source_commit(version: str) -> str:
+    commits = re.findall(r"\b[0-9a-f]{40}\b", version)
+    if len(commits) != 1:
+        raise ValueError("Sail compiler version does not identify exactly one full source commit")
+    return cast(str, commits[0])
+
+
+def resolve_compiler_provenance(
+    sail: str, explicit_source: Path | None, explicit_effective: Path | None
+) -> tuple[Path, Path, Path, dict[str, Any]]:
+    executable_name = shutil.which(sail)
+    if executable_name is None:
+        raise ValueError(f"Sail not found: {sail}")
+    launcher = Path(executable_name).resolve()
+    source = discover_sail_source(launcher, explicit_source)
+    repository = git_repository(source)
+    effective = discover_effective_sail_executable(launcher, source, explicit_effective)
+    launcher_version = run([str(launcher), "--version"])
+    if launcher_version.returncode != 0:
+        raise ValueError("cannot read Sail compiler launcher version")
+    effective_version = run([str(effective), "--version"])
+    if effective_version.returncode != 0:
+        raise ValueError("cannot read effective Sail compiler version")
+    reported_version = launcher_version.stdout.strip()
+    effective_reported_version = effective_version.stdout.strip()
+    if reported_version != effective_reported_version:
+        raise ValueError("Sail launcher and effective executable report different versions")
+    source_commit = version_source_commit(effective_reported_version)
+    if source_commit != repository["commit"]:
+        raise ValueError("Sail compiler build metadata does not match the selected source commit")
+    identity = {
+        **compiler_identity(launcher, effective),
+        **compiler_plugin_identity(source / "_build/install/default/share/libsail/plugins"),
+        **compiler_library_identity(source / "lib"),
+        "reported_version": reported_version,
+        "effective_reported_version": effective_reported_version,
+        "source_commit": source_commit,
+    }
+    return launcher, effective, source, identity
+
+
+def generated_source_tree_identity(generated: Path) -> dict[str, Any]:
+    files = sorted(
+        {
+            *generated.glob("Makefile"),
+            *generated.glob("include/**/*.h"),
+            *generated.glob("src/**/*.c"),
+            *generated.glob("src/**/*.h"),
+            *generated.glob("src/**/sources.list"),
+        }
+    )
+    files = [path for path in files if path.is_file()]
+    if not files:
+        raise ValueError(f"optimized C extraction has no source files: {generated}")
+    digest = hashlib.sha256()
+    for path in files:
+        relative = path.relative_to(generated).as_posix()
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(sha256(path)))
+    return {"sha256": digest.hexdigest(), "file_count": len(files)}
+
+
+def load_extraction_provenance_stamp(
+    stamp_path: Path,
+    generated: Path,
+    compiler: dict[str, Any],
+    source: Path | None = None,
+) -> dict[str, Any]:
+    if not stamp_path.is_file():
+        raise ValueError(f"missing extraction provenance stamp: {stamp_path}")
+    stamp = json.loads(stamp_path.read_text())
+    if stamp.get("schema_version") != EXTRACTION_PROVENANCE_SCHEMA:
+        raise ValueError("unsupported extraction provenance stamp schema")
+    if stamp.get("compiler") != compiler:
+        raise ValueError("extraction provenance stamp compiler identity mismatch")
+    if source is not None and stamp.get("source") != str(source.resolve()):
+        raise ValueError("extraction provenance stamp Sail source mismatch")
+    if stamp.get("executed_snapshot_sha256") != compiler["effective_binary_sha256"]:
+        raise ValueError("extraction provenance stamp compiler snapshot mismatch")
+    command = stamp.get("requested_command")
+    if (
+        not isinstance(command, list)
+        or not command
+        or any(not isinstance(item, str) for item in command)
+        or command[0] != compiler["executable"]
+        or "--c-optimized-model" not in command
+    ):
+        raise ValueError("extraction provenance stamp command is invalid")
+    working_directory = stamp.get("working_directory")
+    if not isinstance(working_directory, str):
+        raise ValueError("extraction provenance stamp working directory is invalid")
+    if Path(working_directory).resolve() != ROOT:
+        raise ValueError("extraction provenance stamp working directory mismatch")
+    try:
+        output_index = command.index("--c-output-dir") + 1
+        stamped_output = Path(command[output_index])
+    except (ValueError, IndexError):
+        raise ValueError("extraction provenance stamp omits its output directory") from None
+    if not stamped_output.is_absolute():
+        stamped_output = Path(working_directory) / stamped_output
+    if stamped_output.resolve() != generated.resolve():
+        raise ValueError("extraction provenance stamp output directory mismatch")
+    try:
+        captured_at = datetime.fromisoformat(stamp["captured_at"])
+        completed_at = datetime.fromisoformat(stamp["extraction_completed_at"])
+        finalized_at = datetime.fromisoformat(stamp["finalized_at"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("extraction provenance stamp timestamps are invalid") from None
+    if any(timestamp.tzinfo is None for timestamp in (captured_at, completed_at, finalized_at)):
+        raise ValueError("extraction provenance stamp timestamps lack timezones")
+    if not captured_at <= completed_at <= finalized_at:
+        raise ValueError("extraction provenance stamp timestamps are out of order")
+    current_tree = generated_source_tree_identity(generated)
+    if stamp.get("generated_source_tree") != current_tree:
+        raise ValueError("extraction provenance stamp generated-source mismatch")
+    return cast(dict[str, Any], stamp)
 
 
 def strip_c_comments_and_literals(text: str) -> str:
@@ -177,11 +393,71 @@ def strip_c_comments_and_literals(text: str) -> str:
     return "".join(output)
 
 
+def intermediate_tuple_identifiers(text: str) -> set[str]:
+    """Find generated tuple-valued locals without counting semantic tuple ABI."""
+    code = strip_c_comments_and_literals(text)
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*|[{}();,=*]", code)
+    identifiers: set[str] = set()
+    function_depth = 0
+
+    def starts_function_body(brace_index: int) -> bool:
+        if brace_index == 0 or tokens[brace_index - 1] != ")":
+            return False
+        paren_depth = 1
+        cursor = brace_index - 2
+        while cursor >= 0:
+            if tokens[cursor] == ")":
+                paren_depth += 1
+            elif tokens[cursor] == "(":
+                paren_depth -= 1
+                if paren_depth == 0:
+                    break
+            cursor -= 1
+        return (
+            cursor > 0
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[cursor - 1]) is not None
+            and tokens[cursor - 1] not in {"if", "for", "switch", "while"}
+        )
+
+    for index, token in enumerate(tokens):
+        if token == "{":
+            if function_depth > 0:
+                function_depth += 1
+            elif starts_function_body(index):
+                function_depth = 1
+            continue
+        if token == "}":
+            function_depth = max(0, function_depth - 1)
+            continue
+        if token != "struct" or function_depth == 0 or index + 3 >= len(tokens):
+            continue
+        tuple_type, identifier, following = tokens[index + 1 : index + 4]
+        if (
+            tuple_type.startswith("tuple_")
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*_[0-9]+_[0-9]+", identifier)
+            and following in {"=", ";", ","}
+        ):
+            identifiers.add(identifier)
+    return identifiers
+
+
+def result_identifiers(text: str) -> set[str]:
+    """Find generated result names before or after semantic-name recovery."""
+    code = strip_c_comments_and_literals(text)
+    return set(
+        re.findall(
+            r"\b(?:result_[A-Za-z0-9_]+|[A-Za-z_][A-Za-z0-9_]*_result_[0-9]+_[0-9]+)\b",
+            code,
+        )
+    )
+
+
 def source_metrics(sources: list[Path]) -> dict[str, int]:
     physical = 0
     nonblank = 0
     temporaries: set[str] = set()
     results: set[str] = set()
+    intermediate_tuples: set[str] = set()
     gotos = 0
     for source in sources:
         text = source.read_text(errors="replace")
@@ -190,7 +466,8 @@ def source_metrics(sources: list[Path]) -> dict[str, int]:
         nonblank += sum(bool(line.strip()) for line in lines)
         code = strip_c_comments_and_literals(text)
         temporaries.update(re.findall(r"\b(?:z?tmp)_[A-Za-z0-9_]+\b", code))
-        results.update(re.findall(r"\bresult_[A-Za-z0-9_]+\b", code))
+        results.update(result_identifiers(text))
+        intermediate_tuples.update(intermediate_tuple_identifiers(text))
         gotos += len(re.findall(r"\bgoto\b", code))
     return {
         "manifest_translation_units": len(sources),
@@ -198,38 +475,9 @@ def source_metrics(sources: list[Path]) -> dict[str, int]:
         "generated_nonblank_lines": nonblank,
         "distinct_temporary_identifiers": len(temporaries),
         "distinct_result_identifiers": len(results),
+        "distinct_intermediate_tuple_identifiers": len(intermediate_tuples),
         "goto_keyword_tokens": gotos,
     }
-
-
-def extraction_recipe(sail_executable: Path) -> list[str]:
-    result = run(
-        [
-            "make",
-            "--no-print-directory",
-            "-n",
-            "extract-c-optimised",
-            f"SAIL={sail_executable}",
-        ]
-    )
-    if result.returncode != 0:
-        raise ValueError("cannot resolve the optimized extraction recipe from Make")
-    collecting = False
-    parts: list[str] = []
-    for line in result.stdout.splitlines():
-        stripped = line.strip()
-        if not collecting and stripped.startswith(str(sail_executable)):
-            collecting = True
-        if not collecting:
-            continue
-        continued = stripped.endswith("\\")
-        parts.append(stripped[:-1].strip() if continued else stripped)
-        if not continued:
-            break
-    command = shlex.split(" ".join(parts))
-    if not command or "--c-optimized-model" not in command:
-        raise ValueError("optimized extraction recipe did not expose its Sail command")
-    return command
 
 
 def metric_records(values: dict[str, int]) -> list[dict[str, Any]]:
@@ -238,7 +486,13 @@ def metric_records(values: dict[str, int]) -> list[dict[str, Any]]:
         "generated_physical_lines": "physical lines across manifest generated sources",
         "generated_nonblank_lines": "nonblank lines across manifest generated sources",
         "distinct_temporary_identifiers": r"distinct tokens matching (?:z?tmp)_[A-Za-z0-9_]+",
-        "distinct_result_identifiers": r"distinct tokens matching result_[A-Za-z0-9_]+",
+        "distinct_result_identifiers": (
+            "distinct tokens matching result_* or a generated *_result_<phase>_<serial> suffix"
+        ),
+        "distinct_intermediate_tuple_identifiers": (
+            "distinct function-local struct tuple_* declarations whose identifier "
+            "carries Sail's generated _<phase>_<serial> suffix"
+        ),
         "goto_keyword_tokens": "lexer-aware goto tokens outside comments and literals",
     }
     return [
@@ -306,6 +560,24 @@ def gate(
         "evidence": evidence,
         "skip_reason": skip_reason,
     }
+
+
+def terminal_zero_metric_gate(values: dict[str, int], manifest: Path) -> dict[str, Any]:
+    nonzero = {
+        metric_id: values[metric_id]
+        for metric_id in TERMINAL_ZERO_METRICS
+        if values[metric_id] != 0
+    }
+    return gate(
+        "terminal_zero_identifier_metrics",
+        "readability",
+        "readability evaluator",
+        "T0",
+        [],
+        "fail" if nonzero else "pass",
+        "distinct temporary, result, and intermediate-tuple identifiers are each exactly zero",
+        [display_path(manifest)],
+    )
 
 
 def conformance_gate(generated: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -527,11 +799,77 @@ def validate_record(record: dict[str, Any]) -> None:
     for repository in record["repositories"].values():
         if re.fullmatch(r"[0-9a-f]{40}", repository["commit"]) is None:
             raise ValueError("quality record repository commit is not a full Git SHA")
-    for field in ("binary_sha256",):
+    compiler_fields = {
+        "executable",
+        "launcher_sha256",
+        "effective_executable",
+        "effective_binary_sha256",
+        "binary_sha256",
+        "reported_version",
+        "effective_reported_version",
+        "source_commit",
+        "plugin_directory",
+        "plugin_tree_sha256",
+        "plugin_file_count",
+        "library_directory",
+        "library_tree_sha256",
+        "library_file_count",
+    }
+    missing_compiler_fields = sorted(compiler_fields - record["compiler"].keys())
+    if missing_compiler_fields:
+        raise ValueError(
+            "quality record omits compiler identity fields: " + ", ".join(missing_compiler_fields)
+        )
+    for field in (
+        "launcher_sha256",
+        "effective_binary_sha256",
+        "binary_sha256",
+        "plugin_tree_sha256",
+        "library_tree_sha256",
+    ):
         if re.fullmatch(r"[0-9a-f]{64}", record["compiler"][field]) is None:
             raise ValueError(f"quality record compiler {field} is not SHA-256")
+    if record["compiler"]["binary_sha256"] != record["compiler"]["effective_binary_sha256"]:
+        raise ValueError("quality record v1 binary hash is not the effective binary hash")
+    if (
+        not isinstance(record["compiler"]["plugin_file_count"], int)
+        or record["compiler"]["plugin_file_count"] <= 0
+    ):
+        raise ValueError("quality record compiler plugin inventory is empty")
+    if (
+        not isinstance(record["compiler"]["library_file_count"], int)
+        or record["compiler"]["library_file_count"] <= 0
+    ):
+        raise ValueError("quality record compiler library inventory is empty")
+    if record["compiler"]["source_commit"] != record["repositories"]["sail"]["commit"]:
+        raise ValueError("quality record compiler source commit does not match Sail repository")
+    for field in (
+        "executable",
+        "effective_executable",
+        "reported_version",
+        "effective_reported_version",
+    ):
+        if not isinstance(record["compiler"][field], str) or not record["compiler"][field]:
+            raise ValueError(f"quality record compiler {field} is empty")
     if re.fullmatch(r"[0-9a-f]{64}", record["extraction"]["manifest_sha256"]) is None:
         raise ValueError("quality record manifest hash is not SHA-256")
+    extraction_fields = {
+        "provenance_stamp_path",
+        "provenance_stamp_sha256",
+        "generated_source_tree",
+    }
+    if not extraction_fields.issubset(record["extraction"]):
+        raise ValueError("quality record omits extraction provenance fields")
+    if re.fullmatch(r"[0-9a-f]{64}", record["extraction"]["provenance_stamp_sha256"]) is None:
+        raise ValueError("quality record provenance stamp hash is not SHA-256")
+    tree = record["extraction"]["generated_source_tree"]
+    if (
+        not isinstance(tree, dict)
+        or re.fullmatch(r"[0-9a-f]{64}", tree.get("sha256", "")) is None
+        or not isinstance(tree.get("file_count"), int)
+        or tree["file_count"] <= 0
+    ):
+        raise ValueError("quality record generated source tree identity is invalid")
 
     for item in record["gates"]:
         if not item["owner"]:
@@ -586,7 +924,11 @@ def write_summary(path: Path, record: dict[str, Any]) -> None:
         "",
         f"- EVM Sail: `{record['repositories']['evm_sail']['commit']}`",
         f"- Sail compiler source: `{record['compiler']['source_commit']}`",
-        f"- Sail binary SHA-256: `{record['compiler']['binary_sha256']}`",
+        f"- Sail launcher SHA-256: `{record['compiler']['launcher_sha256']}`",
+        f"- Effective Sail binary: `{record['compiler']['effective_executable']}`",
+        f"- Effective Sail binary SHA-256: `{record['compiler']['effective_binary_sha256']}`",
+        f"- Effective Sail plugin tree SHA-256: `{record['compiler']['plugin_tree_sha256']}`",
+        f"- Effective Sail library tree SHA-256: `{record['compiler']['library_tree_sha256']}`",
         f"- Generated manifest SHA-256: `{record['extraction']['manifest_sha256']}`",
         "",
         "## Objective metrics",
@@ -617,35 +959,38 @@ def main() -> int:
     parser.add_argument("--operator", default=getpass.getuser())
     parser.add_argument("--sail", default=os.environ.get("SAIL", "sail"))
     parser.add_argument("--sail-source", type=Path)
+    parser.add_argument("--sail-effective-binary", type=Path)
+    parser.add_argument("--provenance-stamp", type=Path, required=True)
     parser.add_argument("--clang", default=os.environ.get("CLANG", "clang"))
     parser.add_argument("--compdb", type=Path, default=ROOT / "compile_commands.json")
     parser.add_argument("--built-library", type=Path)
     parser.add_argument("--require-pass", action="store_true")
     args = parser.parse_args()
 
-    sail_executable_name = shutil.which(args.sail)
     clang = shutil.which(args.clang)
-    if sail_executable_name is None:
-        print(f"optimized C evaluator: Sail not found: {args.sail}")
-        return 2
     if clang is None:
         print(f"optimized C evaluator: clang not found: {args.clang}")
         return 2
-    sail_executable = Path(sail_executable_name).resolve()
     generated = args.generated.resolve()
     started_at = datetime.now(UTC)
 
     try:
+        (
+            sail_executable,
+            effective_sail_executable,
+            sail_source,
+            compiler,
+        ) = resolve_compiler_provenance(args.sail, args.sail_source, args.sail_effective_binary)
+        provenance_stamp_path = args.provenance_stamp.resolve()
+        provenance_stamp = load_extraction_provenance_stamp(
+            provenance_stamp_path, generated, compiler, sail_source
+        )
         layout = compilation_layout(generated, editable_ffi=True)
         generated_sources, _ffi_sources = compilation_sources(layout)
         evm_repository = git_repository(ROOT)
-        sail_source = discover_sail_source(sail_executable, args.sail_source)
         sail_repository = git_repository(sail_source)
-        version = run([str(sail_executable), "--version"])
-        if version.returncode != 0:
-            raise ValueError("cannot read Sail compiler version")
         metric_values = source_metrics(generated_sources)
-        extraction_command = extraction_recipe(sail_executable)
+        extraction_command = provenance_stamp["requested_command"]
         conformance, findings = conformance_gate(generated)
 
         expected_compdb, generated_count = database_entries(
@@ -665,7 +1010,10 @@ def main() -> int:
         print(f"optimized C evaluator: {error}")
         return 2
 
-    artifacts = [artifact(layout.generated_manifest, "source_manifest", "Sail C backend")]
+    artifacts = [
+        artifact(provenance_stamp_path, "extraction_provenance", "build tooling"),
+        artifact(layout.generated_manifest, "source_manifest", "Sail C backend"),
+    ]
     package_manifest = layout.generated / "src/sources.list"
     if not package_manifest.is_file():
         print(f"optimized C evaluator: missing package manifest: {package_manifest}")
@@ -714,8 +1062,15 @@ def main() -> int:
         "T0",
         [],
         "pass",
-        "both repository commits, compiler binary hash, and manifest hash are present",
-        [str(ROOT), str(sail_source), display_path(layout.generated_manifest)],
+        "extraction-time stamp matches the current launcher, effective binary, source commit, and generated source tree",
+        [
+            str(ROOT),
+            str(sail_source),
+            str(sail_executable),
+            str(effective_sail_executable),
+            display_path(provenance_stamp_path),
+            display_path(layout.generated_manifest),
+        ],
     )
     metric_gate = gate(
         "objective_source_metrics",
@@ -727,6 +1082,7 @@ def main() -> int:
         "all fixed metric definitions produce values; metrics are descriptive",
         [display_path(layout.generated_manifest)],
     )
+    terminal_metric_gate = terminal_zero_metric_gate(metric_values, layout.generated_manifest)
     compdb_gate = gate(
         "compilation_database_smoke",
         "c_hygiene",
@@ -768,12 +1124,7 @@ def main() -> int:
             },
         },
         "repositories": {"evm_sail": evm_repository, "sail": sail_repository},
-        "compiler": {
-            "executable": str(sail_executable),
-            "reported_version": version.stdout.strip(),
-            "source_commit": sail_repository["commit"],
-            "binary_sha256": sha256(sail_executable),
-        },
+        "compiler": compiler,
         "extraction": {
             "profile": "optimised",
             "command": extraction_command,
@@ -781,6 +1132,9 @@ def main() -> int:
             "output_root": display_path(generated),
             "manifest_path": display_path(layout.generated_manifest),
             "manifest_sha256": sha256(layout.generated_manifest),
+            "provenance_stamp_path": display_path(provenance_stamp_path),
+            "provenance_stamp_sha256": sha256(provenance_stamp_path),
+            "generated_source_tree": provenance_stamp["generated_source_tree"],
         },
         "artifacts": artifacts,
         "samples": samples,
@@ -788,6 +1142,7 @@ def main() -> int:
             provenance_gate,
             manifest_gate,
             metric_gate,
+            terminal_metric_gate,
             conformance,
             compdb_gate,
             build_gate,

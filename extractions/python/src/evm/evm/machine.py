@@ -11,16 +11,13 @@ from .._runtime import (
 from typing import Annotated
 from evm.HostContract import (
     jumpdest_ref_contains as _host_jumpdest_ref_contains,
-    mem_clear as _host_mem_clear,
     mem_expand as _host_mem_expand,
-    mem_frame_enter as _host_mem_frame_enter,
-    mem_frame_leave as _host_mem_frame_leave,
     mem_load_word as _host_mem_load_word,
     mem_move as _host_mem_move,
     mem_store_word as _host_mem_store_word,
+    mem_view as _host_mem_view,
     mem_write_byte as _host_mem_write_byte,
     memory_keccak256 as _host_memory_keccak256,
-    operand_stack_pop_frame as _host_operand_stack_pop_frame,
 )
 from evm.prelude import (
     word,
@@ -32,6 +29,7 @@ from evm.primitives.quantities import (
     StackPointer,
     code_length,
     code_pointer,
+    memory_height,
     stack_index,
     stack_slot_count,
 )
@@ -46,11 +44,9 @@ from evm.primitives.gas import (
 from evm.primitives.bytes import (
     CalldataSlice,
     CodeRegionSliceFields,
-    EvmMemorySlice,
     EvmMemorySliceFields,
     OutputSlice,
     OutputSliceFields,
-    evm_memory_slice,
     memory_sub_slice,
     EMPTY_EVM_MEMORY_SLICE,
     EMPTY_OUTPUT_SLICE,
@@ -72,6 +68,7 @@ from evm.primitives.code import (
 from evm.host.region_access import output_slice_copy
 from evm.primitives.fork import Amsterdam
 from evm.primitives.evm import (
+    ExceptionalStateTransition,
     FrameCheckpoint,
     Message,
 )
@@ -111,28 +108,19 @@ def conserved_gas_add(available: gas, credit: gas) -> gas:
     else:
         return gas(fatal_error(FatalError.ExecutionInvalid))
 
-def refill_frame_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, state_gas_reservoir: state_gas) -> tuple[gas, state_gas, state_gas_spill]:
-    execution_profile = environment.k_execution_profile
-    profile = execution_profile.protocol
-    if (int(profile.fork) >= int(Amsterdam)):
-        refilled = conserved_gas_add(g, state_gas_spilled)
-        return (refilled, state_gas_reservoir, STATE_GAS_SPILL_ZERO)
-    else:
-        return (g, state_gas_remaining, state_gas_spilled)
-
 def frame_state_gas_used(state_gas_reservoir: state_gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill) -> frame_state_gas_delta:
     entry = state_gas_reservoir
     remaining = state_gas_remaining
     spilled = state_gas_spilled
     return (int((int(entry) - int(remaining))) + int(spilled))
 
-def exceptional_state(state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, state_gas_reservoir: state_gas, k: ExceptionKind) -> tuple[state_gas, int, FrameStatus]:
+def exceptional_state(state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, state_gas_reservoir: state_gas, k: ExceptionKind) -> ExceptionalStateTransition:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     if (int(profile.fork) >= int(Amsterdam)):
-        return (state_gas_reservoir, STATE_GAS_SPILL_ZERO, Exceptional(k))
+        return ExceptionalStateTransition(state_gas_remaining=state_gas(state_gas_reservoir), state_gas_spilled=state_gas_spill(STATE_GAS_SPILL_ZERO), status=Exceptional(k))
     else:
-        return (state_gas_remaining, state_gas_spilled, Exceptional(k))
+        return ExceptionalStateTransition(state_gas_remaining=state_gas(state_gas_remaining), state_gas_spilled=state_gas_spill(state_gas_spilled), status=Exceptional(k))
 
 def stack_height(top: StackPointer) -> stack_slot_count:
     return stack_slot_count(stack_top_height(top))
@@ -193,80 +181,91 @@ def returndata_copy_prefix(returndata: OutputSlice, dst: code_length, want: code
 def returndata_remaining(available: int, offset: int) -> Uint:
     return Uint((int(available) - int(offset)))
 
-def memory_high_water(mem: EvmMemorySlice) -> code_length:
-    memory = mem
-    length = memory.len
-    return code_length(length)
+def memory_high_water(height: code_length) -> code_length:
+    return code_length(height)
 
-def memory_reset() -> EvmMemorySlice:
-    _host_mem_clear()
-    return EMPTY_EVM_MEMORY_SLICE
-
-def memory_expand_to(mem: EvmMemorySlice, new_size: int) -> tuple[EvmMemorySliceFields, EvmMemorySlice]:
-    memory = mem
-    if (int(memory.len) < int(new_size)):
-        expanded = _host_mem_expand(new_size)
-        return (expanded, expanded)
+def memory_absolute(base: code_length, relative: code_length) -> code_length:
+    if (int(relative) <= int((int((int((1 << 32)) - 1)) - int(base)))):
+        return code_length((int(base) + int(relative)))
     else:
-        return (memory_sub_slice(memory, 0, new_size), mem)
+        return code_length(fatal_error(FatalError.ExecutionInvalid))
 
-def active_memory_slice(mem: EvmMemorySliceFields, off: int, sail_len: int) -> tuple[EvmMemorySliceFields, EvmMemorySliceFields]:
+def memory_parent_base(child_base: code_length, parent_height: code_length) -> code_length:
+    if (int(parent_height) <= int(child_base)):
+        return code_length((int(child_base) - int(parent_height)))
+    else:
+        return code_length(fatal_error(FatalError.ExecutionInvalid))
+
+def expand_memory(base: code_length, height: code_length, requested_height: code_length) -> code_length:
+    if (int(requested_height) <= int((int((int((1 << 32)) - 1)) - int(base)))):
+        if (int(height) < int(requested_height)):
+            _host_mem_expand(base, height, requested_height)
+            return code_length(requested_height)
+        else:
+            return code_length(height)
+    else:
+        return code_length(fatal_error(FatalError.ExecutionInvalid))
+
+def active_memory_slice(base: code_length, mem: code_length, off: int, sail_len: int) -> EvmMemorySliceFields:
     if ((sail_len) == (0)):
-        return (EMPTY_EVM_MEMORY_SLICE, mem)
+        return EMPTY_EVM_MEMORY_SLICE
     else:
-        (window, expanded) = memory_expand_to(mem, (int(off) + int(sail_len)))
-        return (memory_sub_slice(window, off, sail_len), expanded)
+        if (((int(mem) <= int((int((int((1 << 32)) - 1)) - int(base))))) & ((int((int(off) + int(sail_len))) <= int(mem)))):
+            window = _host_mem_view(base, mem, (int(off) + int(sail_len)))
+            return memory_sub_slice(window, off, sail_len)
+        else:
+            return fatal_error(FatalError.ExecutionInvalid)
 
-def memory_code_slice(mem: EvmMemorySliceFields, off: int, sail_len: int) -> tuple[CodeRegionSliceFields, EvmMemorySliceFields]:
+def memory_code_slice(base: code_length, mem: code_length, off: int, sail_len: int) -> CodeRegionSliceFields:
     if ((sail_len) == (0)):
-        return (EMPTY_CODE_SLICE, mem)
+        return EMPTY_CODE_SLICE
     else:
-        (window, expanded) = memory_expand_to(mem, (int(off) + int(sail_len)))
-        initcode = memory_sub_slice(window, off, sail_len)
-        return (code_db_intern_memory(initcode), expanded)
+        if (((int(mem) <= int((int((int((1 << 32)) - 1)) - int(base))))) & ((int((int(off) + int(sail_len))) <= int(mem)))):
+            window = _host_mem_view(base, mem, (int(off) + int(sail_len)))
+            initcode = memory_sub_slice(window, off, sail_len)
+            return code_db_intern_memory(initcode)
+        else:
+            return fatal_error(FatalError.ExecutionInvalid)
 
-def memory_frame_enter() -> EvmMemorySlice:
-    base = _host_mem_frame_enter()
-    return evm_memory_slice(base, 0)
-
-def memory_frame_leave(parent: EvmMemorySlice) -> EvmMemorySlice:
-    _host_mem_frame_leave()
-    return parent
-
-def suspend_frame(pc: code_length, gas_remaining: gas, stack_top: StackPointer, evm_memory: EvmMemorySlice, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, frame_refund: gas_refund, frame_status: FrameStatus, message: Message, frame_code: Code, calldata: CalldataSlice) -> tuple[FrameCheckpoint, StackPointer, EvmMemorySlice]:
+def suspend_frame(pc: code_length, gas_remaining: gas, stack_top: StackPointer, memory_base_: code_length, memory_height_: code_length, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, frame_refund: gas_refund, frame_status: FrameStatus, message: Message, frame_code: Code, calldata: CalldataSlice) -> tuple[FrameCheckpoint, StackPointer, code_length, code_length]:
     k_journal_checkpoint()
     child_stack = operand_stack_push_empty_frame()
-    child_memory = memory_frame_enter()
-    checkpoint = FrameCheckpoint(pc=code_pointer(pc), gas_remaining=gas(gas_remaining), stack_top=stack_top, state_gas_remaining=state_gas(state_gas_remaining), state_gas_spilled=state_gas_spill(state_gas_spilled), refund=frame_refund, status=frame_status, message=message, code=frame_code, calldata=calldata, memory=evm_memory)
-    return (checkpoint, child_stack, child_memory)
+    child_memory_base = memory_absolute(memory_base_, memory_height_)
+    child_memory_height = MEMORY_HEIGHT_ZERO
+    checkpoint = FrameCheckpoint(pc=code_pointer(pc), gas_remaining=gas(gas_remaining), stack_top=stack_top, state_gas_remaining=state_gas(state_gas_remaining), state_gas_spilled=state_gas_spill(state_gas_spilled), refund=frame_refund, status=frame_status, message=message, code=frame_code, calldata=calldata, memory_height=memory_height(memory_height_))
+    return (checkpoint, child_stack, child_memory_base, child_memory_height)
 
-def restore_frame(checkpoint: FrameCheckpoint) -> tuple[code_length, gas, StackPointer, EvmMemorySlice, state_gas, state_gas_spill, gas_refund, FrameStatus, Message, Code, CalldataSlice]:
-    _host_operand_stack_pop_frame()
-    memory = memory_frame_leave(checkpoint.memory)
-    return (checkpoint.pc, checkpoint.gas_remaining, checkpoint.stack_top, memory, checkpoint.state_gas_remaining, checkpoint.state_gas_spilled, checkpoint.refund, checkpoint.status, checkpoint.message, checkpoint.code, checkpoint.calldata)
+def mem_set_byte(base: code_length, off: code_length, v: Annotated[Bits, BitWidth(8)]) -> None:
+    absolute_offset = memory_absolute(base, off)
+    return _host_mem_write_byte(absolute_offset, v)
 
-def mem_set_byte(off: code_length, v: Annotated[Bits, BitWidth(8)]) -> None:
-    return _host_mem_write_byte(off, v)
+def mem_load(base: code_length, off: code_length) -> word:
+    absolute_offset = memory_absolute(base, off)
+    return word(_host_mem_load_word(absolute_offset))
 
-def mem_load(off: code_length) -> word:
-    return word(_host_mem_load_word(off))
+def mem_store(base: code_length, off: code_length, w: word) -> None:
+    absolute_offset = memory_absolute(base, off)
+    return _host_mem_store_word(absolute_offset, w)
 
-def mem_store(off: code_length, w: word) -> None:
-    return _host_mem_store_word(off, w)
-
-def mem_store_byte(off: code_length, w: word) -> None:
+def mem_store_byte(base: code_length, off: code_length, w: word) -> None:
     value = word_low_byte(w)
-    return mem_set_byte(off, value)
+    return mem_set_byte(base, off, value)
 
-def mem_mcopy(dst: code_length, src: code_length, sail_len: code_length) -> None:
+def mem_mcopy(base: code_length, dst: code_length, src: code_length, sail_len: code_length) -> None:
     if ((sail_len) != (0)):
-        return _host_mem_move(dst, src, sail_len)
+        absolute_dst = memory_absolute(base, dst)
+        absolute_src = memory_absolute(base, src)
+        return _host_mem_move(absolute_dst, absolute_src, sail_len)
     else:
         return None
 
-def mem_keccak(mem: EvmMemorySlice, sail_range_: MemoryRange) -> tuple[word, EvmMemorySlice]:
-    (bytes, expanded) = active_memory_slice(mem, sail_range_.off, sail_range_.len)
+def mem_keccak(base: code_length, mem: code_length, sail_range_: MemoryRange) -> word:
+    bytes = active_memory_slice(base, mem, sail_range_.off, sail_range_.len)
     digest = _host_memory_keccak256(bytes)
-    return (hash_to_word(digest), expanded)
+    return word(hash_to_word(digest))
 
 STACK_LIMIT: int = 1024
+
+MEMORY_HEIGHT_ZERO: int = 0
+
+MEMORY_BASE_ZERO: int = 0

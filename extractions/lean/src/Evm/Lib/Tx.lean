@@ -68,8 +68,8 @@ recovery parity. Legacy accepts `27`/`28` or an EIP-155 value binding the
 chain id; typed envelopes accept only an explicit zero-or-one parity.
 An invalid `v` rejects the block here, so an unvalidated parity is
 impossible to pass to sender recovery. -/
-/- Type quantifiers: k_ex608274_ : Nat, k_ex608273_ : Nat, 0 ≤ k_ex608273_ ∧
-  k_ex608273_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex608274_ ∧ k_ex608274_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex549174_ : Nat, k_ex549173_ : Nat, 0 ≤ k_ex549173_ ∧
+  k_ex549173_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549174_ ∧ k_ex549174_ ≤ (2 ^ 256 - 1) -/
 def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) : SailM Nat := do
   match scheme with
   | .LegacySignature =>
@@ -97,9 +97,9 @@ def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) 
 /-- Authenticates a transaction: enforce the EIP-2 low-`s` bound, recover the
 signer selected by `y_parity`, and bind it to the address derived from the
 witnessed 65-byte public key. -/
-/- Type quantifiers: k_ex608277_ : Nat, k_ex608276_ : Nat, k_ex608275_ : Nat, 0 ≤ k_ex608275_ ∧
-  k_ex608275_ ≤ 1, 0 ≤ k_ex608276_ ∧ k_ex608276_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex608277_ ∧
-  k_ex608277_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex549177_ : Nat, k_ex549176_ : Nat, k_ex549175_ : Nat, 0 ≤ k_ex549175_ ∧
+  k_ex549175_ ≤ 1, 0 ≤ k_ex549176_ ∧ k_ex549176_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex549177_ ∧
+  k_ex549177_ ≤ (2 ^ 256 - 1) -/
 def tx_auth_valid (sender : (Vector (BitVec 8) 20)) (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM Bool := do
   let high_s := (word_ult SECP_N_HALF s)
   if (high_s : Bool)

@@ -149,7 +149,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex609854_ : Bool, output_len : Nat, (source_valid_length output_len) -/
+/- Type quantifiers: k_ex550681_ : Bool, output_len : Nat, (source_valid_length output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then
@@ -166,13 +166,13 @@ def copied_result (data : CalldataSlice) : SailM PrecompileResult := do
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex609857_ : Bool -/
+/- Type quantifiers: k_ex550684_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
-  let result_word :=
+  let encoded_word :=
     if (value : Bool)
     then WORD_ONE
     else WORD_ZERO
-  let ⟨_, ⟨_, output⟩⟩ ← do (output_buffer_word result_word)
+  let ⟨_, ⟨_, output⟩⟩ ← do (output_buffer_word encoded_word)
   (pure (precompile_success ⟨_, ⟨_, output⟩⟩))
 
 /-- `ECRECOVER` (0x01): recovers the signer address; any invalid input
@@ -233,7 +233,8 @@ def run_modexp (input : CalldataSlice) : SailM PrecompileResult := do
           let bounded_base : Nat := base_len
           let bounded_exponent : Nat := exponent_len
           let bounded_modulus : Nat := modulus_len
-          let input_end : Nat := (((96 + bounded_base) + bounded_exponent) + bounded_modulus)
+          let exponent_end : Nat := ((96 + bounded_base) + bounded_exponent)
+          let input_end : Nat := (exponent_end + bounded_modulus)
           if ((ACCELERATOR_INPUT_MAX <b input_end) : Bool)
           then (pure (precompile_failure ()))
           else

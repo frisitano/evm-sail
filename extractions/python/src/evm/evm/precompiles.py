@@ -113,10 +113,10 @@ def copied_result(data: CalldataSlice) -> PrecompileResult:
 
 def boolean_result(value: bool) -> PrecompileResult:
     if value:
-        result_word = WORD_ONE
+        encoded_word = WORD_ONE
     else:
-        result_word = WORD_ZERO
-    output = output_buffer_word(result_word)
+        encoded_word = WORD_ZERO
+    output = output_buffer_word(encoded_word)
     return precompile_success(output)
 
 def precompile_active_at_fork(n: precompile_id) -> bool:
@@ -259,7 +259,8 @@ def run_modexp(input: CalldataSlice) -> PrecompileResult:
             bounded_base = base_len
             bounded_exponent = exponent_len
             bounded_modulus = modulus_len
-            input_end = (int((int((96 + int(bounded_base))) + int(bounded_exponent))) + int(bounded_modulus))
+            exponent_end = (int((96 + int(bounded_base))) + int(bounded_exponent))
+            input_end = (int(exponent_end) + int(bounded_modulus))
             if (int(ACCELERATOR_INPUT_MAX) < int(input_end)):
                 return precompile_failure()
             else:

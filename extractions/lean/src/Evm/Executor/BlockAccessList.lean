@@ -70,9 +70,9 @@ or re-encodes the list: the original source-backed slice is also the value
 hashed into the execution-payload header. -/
 
 /-- Compares one canonical `[index, word]` pair. -/
-/- Type quantifiers: k_ex611990_ : Nat, k_ex611989_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex611989_ ∧
-  k_ex611989_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex611990_ ∧ k_ex611990_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex552672_ : Nat, k_ex552671_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex552671_ ∧
+  k_ex552671_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex552672_ ∧ k_ex552672_ ≤ (2 ^ 256 - 1) -/
 def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -87,9 +87,9 @@ def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_cont
   else (pure ())
 
 /-- Compares one canonical `[index, nonce]` pair. -/
-/- Type quantifiers: k_ex612010_ : Nat, k_ex612009_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex612009_ ∧
-  k_ex612009_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex612010_ ∧ k_ex612010_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex552692_ : Nat, k_ex552691_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex552691_ ∧
+  k_ex552691_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex552692_ ∧ k_ex552692_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -105,8 +105,8 @@ def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_con
 
 /-- Compares one canonical `[index, code]` pair without materializing either
 source-backed code sequence. -/
-/- Type quantifiers: k_ex612029_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
-  ≤ k_ex612029_ ∧ k_ex612029_ ≤ (2 ^ 20 + 1) -/
+/- Type quantifiers: k_ex552711_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
+  ≤ k_ex552711_ ∧ k_ex552711_ ≤ (2 ^ 20 + 1) -/
 def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (code_hash : (Vector (BitVec 8) 32)) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -127,8 +127,8 @@ def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_cont
 
 /-- Consumes the encoded changes for one storage slot.  Each RLP pop strictly
 reduces the remaining byte length and must have one matching host event. -/
-/- Type quantifiers: _reclimit : Nat, k_ex612044_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex612044_ ∧ k_ex612044_ ≤ (2 ^ 256 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex552726_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex552726_ ∧ k_ex552726_ ≤ (2 ^ 256 - 1), 0 ≤ _reclimit -/
 def _rec_bal_validate_storage_change_values (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (slot : Nat) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
   | 0 =>
@@ -421,12 +421,12 @@ def bal_validate_accounts (cursor : (StatelessInputSliceFields k_source_off k_so
   else (_rec_bal_validate_accounts cursor (_measure + 1))
 
 /-- Validates the canonical EIP-7928 BAL directly against the host recorder. -/
-/- Type quantifiers: k_ex612226_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex552908_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
   (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ (2 ^ 30) ∧ bytes_dependentWitness1 ≤ (2 ^ 30), 0 ≤ k_ex612226_ ∧
-  k_ex612226_ ≤ (2 ^ 64 - 1) -/
+  0 ≤ (2 ^ 30) ∧ bytes_dependentWitness1 ≤ (2 ^ 30), 0 ≤ k_ex552908_ ∧
+  k_ex552908_ ≤ (2 ^ 64 - 1) -/
 def validate_block_access_list (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (block_gas_limit : Nat) : SailM Unit := do
   let bytes_dependentWitness0 := (bytes).1

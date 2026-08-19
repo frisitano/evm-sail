@@ -70,8 +70,11 @@ function decode_push_immediate(
     frame_code : Code,
     immediate_offset : code_scan_position,
     width : push_width,
-) -> (code_pointer, word) = {
-    let value = read_push(code_bytes(frame_code), immediate_offset, width);
+) -> (
+    (code_pointer, word)
+) = {
+    let bytes = code_bytes(frame_code);
+    let value = read_push(bytes, immediate_offset, width);
     (immediate_offset + width, value)
 }
 
@@ -83,12 +86,14 @@ function decode_deep_immediate(
     frame_code : Code,
     immediate_offset : code_scan_position,
     operation : DeepStackOperation,
-) -> (code_pointer, byte) = {
-    let immediate = slice_byte(code_bytes(frame_code), immediate_offset);
+) -> (
+    (code_pointer, byte)
+) = {
+    let bytes = code_bytes(frame_code);
+    let immediate = slice_byte(bytes, immediate_offset);
+    let immediate_valid = deep_stack_operation_immediate_valid(operation, immediate);
     let next_pc : code_pointer =
-        if deep_stack_operation_immediate_valid(operation, immediate)
-        then immediate_offset + 1
-        else immediate_offset;
+        if immediate_valid then immediate_offset + 1 else immediate_offset;
     (next_pc, immediate)
 }
 
@@ -102,7 +107,9 @@ function execute_push_encoded(
     immediate_offset : code_scan_position,
     execution_gas : gas,
     sp : StackPointer,
-) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
+) -> (
+    (code_pointer, gas, StackPointer, OpcodeOutcome)
+) = {
     if 95 <= opcode & opcode <= 127 then {
         let width : push_width = opcode - 95;
         let (next_pc, value) = decode_push_immediate(frame_code, immediate_offset, width);
@@ -117,20 +124,32 @@ function execute_push_encoded(
 /*! Executes one opcode from the `DUP1` through `DUP16` family. The raw-byte
     interpreter routes the family here without reproducing its index
     relationship. */
-function execute_dup_encoded(opcode : opcode, execution_gas : gas, sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
-    if 128 <= opcode & opcode <= 143 then
+function execute_dup_encoded(
+    opcode : opcode,
+    execution_gas : gas,
+    sp : StackPointer,
+) -> (
+    (gas, StackPointer, OpcodeOutcome)
+) = {
+    if 128 <= opcode & opcode <= 143 then {
         execute_dup(execution_gas, sp, opcode - 127)
-    else {
+    } else {
         let (gas_after, status_after) = execute_invalid(execution_gas);
         (gas_after, sp, status_after)
     }
 }
 
 /*! Executes one opcode from the `SWAP1` through `SWAP16` family. */
-function execute_swap_encoded(opcode : opcode, execution_gas : gas, sp : StackPointer) -> (gas, StackPointer, OpcodeOutcome) = {
-    if 144 <= opcode & opcode <= 159 then
+function execute_swap_encoded(
+    opcode : opcode,
+    execution_gas : gas,
+    sp : StackPointer,
+) -> (
+    (gas, StackPointer, OpcodeOutcome)
+) = {
+    if 144 <= opcode & opcode <= 159 then {
         execute_swap(execution_gas, sp, opcode - 143)
-    else {
+    } else {
         let (gas_after, status_after) = execute_invalid(execution_gas);
         (gas_after, sp, status_after)
     }
@@ -140,14 +159,17 @@ function execute_swap_encoded(opcode : opcode, execution_gas : gas, sp : StackPo
 function execute_log_encoded(
     carried_address : address,
     carried_is_static : bool,
+    memory_base : memory_base,
+    opcode : opcode,
     execution_gas : gas,
     sp : StackPointer,
-    memory : EvmMemorySlice,
-    opcode : opcode,
-) -> (gas, StackPointer, EvmMemorySlice, OpcodeOutcome) = {
-    if 160 <= opcode & opcode <= 164 then
-        execute_log(carried_address, carried_is_static, execution_gas, sp, memory, opcode - 160)
-    else {
+    memory : memory_height,
+) -> (
+    (gas, StackPointer, memory_height, OpcodeOutcome)
+) = {
+    if 160 <= opcode & opcode <= 164 then {
+        execute_log(carried_address, carried_is_static, memory_base, opcode - 160, execution_gas, sp, memory)
+    } else {
         let (gas_after, status_after) = execute_invalid(execution_gas);
         (gas_after, sp, memory, status_after)
     }
@@ -162,7 +184,9 @@ function execute_deep_stack_encoded(
     immediate_offset : code_scan_position,
     execution_gas : gas,
     sp : StackPointer,
-) -> (code_pointer, gas, StackPointer, OpcodeOutcome) = {
+) -> (
+    (code_pointer, gas, StackPointer, OpcodeOutcome)
+) = {
     let operation = deep_stack_operation(opcode);
     let (next_pc, immediate) = decode_deep_immediate(frame_code, immediate_offset, operation);
     let result : (gas, StackPointer, OpcodeOutcome) = match operation {
@@ -188,7 +212,8 @@ function execute_deep_stack_encoded(
     — and the remainder is a flat table. Any byte with no defined opcode
     decodes to `INVALID`. */
 function decode_simple(opcode : opcode, fork : Fork) -> ast = {
-    if not_bool(opcode_available(opcode, fork)) then {
+    let available = opcode_available(opcode, fork);
+    if not_bool(available) then {
         INVALID()
     } else if 128 <= opcode & opcode <= 143 then {
         DUP(opcode - 127)
@@ -300,10 +325,11 @@ function fetch(frame_code : Code, current : code_pointer, fork : Fork) -> (code_
         let opcode_byte = slice_byte(code, current);
         let opcode : opcode = unsigned(opcode_byte);
         let immediate_offset = current + 1;
+        let available = opcode_available(opcode, fork);
         let decoded : (code_pointer, ast) =
-            if not_bool(opcode_available(opcode, fork)) then {
-                (immediate_offset, INVALID())
-            } else if 95 <= opcode & opcode <= 127 then {
+            if not_bool(available)
+            then (immediate_offset, INVALID())
+            else if 95 <= opcode & opcode <= 127 then {
                 let size : push_width = opcode - 95;
                 let (after_immediate, value) = decode_push_immediate(frame_code, immediate_offset, size);
                 (after_immediate, PUSH(size, value))
@@ -312,8 +338,11 @@ function fetch(frame_code : Code, current : code_pointer, fork : Fork) -> (code_
                 match deep_operation {
                     NotDeepStackOperation => (immediate_offset, decode_simple(opcode, fork)),
                     operation => {
-                        let (after_instruction, immediate) =
-                            decode_deep_immediate(frame_code, immediate_offset, operation);
+                        let (after_instruction, immediate) = decode_deep_immediate(
+                            frame_code,
+                            immediate_offset,
+                            operation,
+                        );
                         let instruction : ast = match operation {
                             DeepStackDuplicate => DUPN(immediate),
                             DeepStackSwap => SWAPN(immediate),
@@ -337,32 +366,60 @@ function fetch(frame_code : Code, current : code_pointer, fork : Fork) -> (code_
 ## The run loop
 */
 val run_call : (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice, CallKind,
-) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
-)
+        code_pointer,
+        gas,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        StackPointer,
+        memory_base,
+        memory_height,
+        address,
+        address,
+        address,
+        word,
+        state_gas,
+        bool,
+        frame_depth,
+        Code,
+        CalldataSlice,
+        OutputSlice,
+        CallKind,
+    ) -> FrameTransition
 
 val run_create : (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice, CreateKind,
-) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
-)
+        code_pointer,
+        gas,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        StackPointer,
+        memory_base,
+        memory_height,
+        address,
+        address,
+        address,
+        word,
+        state_gas,
+        bool,
+        frame_depth,
+        Code,
+        CalldataSlice,
+        OutputSlice,
+        CreateKind,
+    ) -> FrameTransition
 
 val resume_frame : (
-    FrameContinuation, OutputSlice, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, state_gas,
-) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
-)
+        FrameContinuation,
+        OutputSlice,
+        memory_base,
+        gas,
+        state_gas,
+        state_gas_spill,
+        gas_refund,
+        FrameStatus,
+        state_gas,
+    ) -> FrameTransition
 
 /*! Returns the active frame's halt output. */
 function frame_output(frame_status : FrameStatus) -> OutputSlice =
@@ -372,6 +429,7 @@ function frame_output(frame_status : FrameStatus) -> OutputSlice =
         _ => EMPTY_OUTPUT_SLICE,
     }
 
+/*! A decreasing bound for the non-recursive interpreter's complete call tree. */
 type call_tree_steps = range(0, 3 * (2 * (2 ^ 64 - 1)) + 2)
 
 /*! The non-recursive step loop for one complete call tree. It executes
@@ -388,7 +446,8 @@ function interpret(
     initial_state_spill : state_gas_spill,
     initial_refund : gas_refund,
     initial_sp : StackPointer,
-    initial_memory : EvmMemorySlice,
+    initial_memory_base : memory_base,
+    initial_memory_height : memory_height,
     initial_caller : address,
     initial_address : address,
     initial_code_address : address,
@@ -398,22 +457,20 @@ function interpret(
     initial_depth : frame_depth,
     initial_code : Code,
     initial_calldata : CalldataSlice,
-) -> (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice) = {
+) -> (
+    (gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice)
+) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let fork = profile.fork;
-    let blob_fee = blob_base_fee(
-        fork,
-        profile.blob_schedule,
-        profile.excess_blob_gas_limit,
-        k_header.excess_blob_gas,
-    );
+    let blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas);
     frame_stack_reset();
     var interpreting : bool = true;
     var result : OutputSlice = EMPTY_OUTPUT_SLICE;
     var carried_pc : code_pointer = 0;
     var carried_sp : StackPointer = initial_sp;
-    var carried_memory : EvmMemorySlice = initial_memory;
+    var carried_memory_base : memory_base = initial_memory_base;
+    var carried_memory_height : memory_height = initial_memory_height;
     var carried_gas : gas = initial_gas;
     var carried_state_gas : state_gas = initial_state_gas;
     var carried_state_spill : state_gas_spill = initial_state_spill;
@@ -434,425 +491,1586 @@ function interpret(
     let initial_call_tree_gas = initial_gas + initial_state_gas;
     var call_tree_steps_remaining : call_tree_steps = 3 * initial_call_tree_gas + 2;
     while interpreting termination_measure(call_tree_steps_remaining) do {
-        if is_running(carried_status) then {
+        let running = is_running(carried_status);
+        if running then {
             let (fetched_pc, instruction) = fetch(carried_code, carried_pc, fork);
             carried_pc = fetched_pc;
             match instruction {
-                        opcode_CREATE() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                           carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                           carried_code, carried_calldata, carried_returndata, CreateByNonce);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
-                        CREATE2() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_create(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                           carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                           carried_code, carried_calldata, carried_returndata, CreateBySalt);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
-                        CALL() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                         carried_code, carried_calldata, carried_returndata, Call);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
-                        CALLCODE() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                         carried_code, carried_calldata, carried_returndata, CallCode);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
-                        DELEGATECALL() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                         carried_code, carried_calldata, carried_returndata, DelegateCall);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
-                        STATICCALL() => {
-                            let previous_address = carried_address;
-                            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                             carried_code, carried_calldata, carried_returndata) =
-                                run_call(carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory,
-                                         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                                         carried_code, carried_calldata, carried_returndata, StaticCall);
-                            carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
-                        },
+                opcode_CREATE() => {
+                    let previous_address = carried_address;
+                    let transition = run_create(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        CreateByNonce,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
+                CREATE2() => {
+                    let previous_address = carried_address;
+                    let transition = run_create(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        CreateBySalt,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
+                CALL() => {
+                    let previous_address = carried_address;
+                    let transition = run_call(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        Call,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
+                CALLCODE() => {
+                    let previous_address = carried_address;
+                    let transition = run_call(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        CallCode,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
+                DELEGATECALL() => {
+                    let previous_address = carried_address;
+                    let transition = run_call(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        DelegateCall,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
+                STATICCALL() => {
+                    let previous_address = carried_address;
+                    let transition = run_call(
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_base,
+                        carried_memory_height,
+                        carried_caller,
+                        carried_address,
+                        carried_code_address,
+                        carried_value,
+                        carried_state_gas_reservoir,
+                        carried_is_static,
+                        carried_depth,
+                        carried_code,
+                        carried_calldata,
+                        carried_returndata,
+                        StaticCall,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
+                },
                 _ => {
-                    let result : (code_pointer, gas, state_gas, state_gas_spill, gas_refund, StackPointer, EvmMemorySlice, FrameStatus) = match instruction {
-        STOP() => {
-            let status_after = execute_stop();
-            (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, status_after)
-        },
-        ADD() => {
-            let (gas_after, sp_after, status_after) = execute_add(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MUL() => {
-            let (gas_after, sp_after, status_after) = execute_mul(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SUB() => {
-            let (gas_after, sp_after, status_after) = execute_sub(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        DIV() => {
-            let (gas_after, sp_after, status_after) = execute_div(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SDIV() => {
-            let (gas_after, sp_after, status_after) = execute_sdiv(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MOD() => {
-            let (gas_after, sp_after, status_after) = execute_mod(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SMOD() => {
-            let (gas_after, sp_after, status_after) = execute_smod(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        ADDMOD() => {
-            let (gas_after, sp_after, status_after) = execute_addmod(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MULMOD() => {
-            let (gas_after, sp_after, status_after) = execute_mulmod(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        EXP() => {
-            let (gas_after, sp_after, status_after) = execute_exp(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SIGNEXTEND() => {
-            let (gas_after, sp_after, status_after) = execute_signextend(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        LT() => {
-            let (gas_after, sp_after, status_after) = execute_lt(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        GT() => {
-            let (gas_after, sp_after, status_after) = execute_gt(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SLT() => {
-            let (gas_after, sp_after, status_after) = execute_slt(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SGT() => {
-            let (gas_after, sp_after, status_after) = execute_sgt(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        EQ() => {
-            let (gas_after, sp_after, status_after) = execute_eq(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        ISZERO() => {
-            let (gas_after, sp_after, status_after) = execute_iszero(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        AND() => {
-            let (gas_after, sp_after, status_after) = execute_and(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        OR() => {
-            let (gas_after, sp_after, status_after) = execute_or(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        XOR() => {
-            let (gas_after, sp_after, status_after) = execute_xor(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        NOT() => {
-            let (gas_after, sp_after, status_after) = execute_not(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BYTE() => {
-            let (gas_after, sp_after, status_after) = execute_byte(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SHL() => {
-            let (gas_after, sp_after, status_after) = execute_shl(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SHR() => {
-            let (gas_after, sp_after, status_after) = execute_shr(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SAR() => {
-            let (gas_after, sp_after, status_after) = execute_sar(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CLZ() => {
-            let (gas_after, sp_after, status_after) = execute_clz(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        KECCAK256() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_keccak256(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        ADDRESS() => {
-            let (gas_after, sp_after, status_after) = execute_address(carried_address, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BALANCE() => {
-            let (gas_after, sp_after, status_after) = execute_balance(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        ORIGIN() => {
-            let (gas_after, sp_after, status_after) = execute_origin(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CALLER() => {
-            let (gas_after, sp_after, status_after) = execute_caller(carried_caller, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CALLVALUE() => {
-            let (gas_after, sp_after, status_after) = execute_callvalue(carried_value, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CALLDATALOAD() => {
-            let (gas_after, sp_after, status_after) = execute_calldataload(carried_calldata, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CALLDATASIZE() => {
-            let (gas_after, sp_after, status_after) = execute_calldatasize(carried_calldata, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CALLDATACOPY() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_calldatacopy(carried_calldata, carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        CODESIZE() => {
-            let (gas_after, sp_after, status_after) = execute_codesize(carried_code, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CODECOPY() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_codecopy(carried_code, carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        GASPRICE() => {
-            let (gas_after, sp_after, status_after) = execute_gasprice(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        EXTCODESIZE() => {
-            let (gas_after, sp_after, status_after) = execute_extcodesize(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        EXTCODECOPY() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_extcodecopy(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        RETURNDATASIZE() => {
-            let (gas_after, sp_after, status_after) = execute_returndatasize(carried_returndata, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        RETURNDATACOPY() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_returndatacopy(carried_returndata, carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        EXTCODEHASH() => {
-            let (gas_after, sp_after, status_after) = execute_extcodehash(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BLOCKHASH() => {
-            let (gas_after, sp_after, status_after) = execute_blockhash(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        COINBASE() => {
-            let (gas_after, sp_after, status_after) = execute_coinbase(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        TIMESTAMP() => {
-            let (gas_after, sp_after, status_after) = execute_timestamp(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        NUMBER() => {
-            let (gas_after, sp_after, status_after) = execute_number(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SLOTNUM() => {
-            let (gas_after, sp_after, status_after) = execute_slotnum(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        PREVRANDAO() => {
-            let (gas_after, sp_after, status_after) = execute_prevrandao(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        GASLIMIT() => {
-            let (gas_after, sp_after, status_after) = execute_gaslimit(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        CHAINID() => {
-            let (gas_after, sp_after, status_after) = execute_chainid(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SELFBALANCE() => {
-            let (gas_after, sp_after, status_after) = execute_selfbalance(carried_address, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BASEFEE() => {
-            let (gas_after, sp_after, status_after) = execute_basefee(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BLOBHASH() => {
-            let (gas_after, sp_after, status_after) = execute_blobhash(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        BLOBBASEFEE() => {
-            let (gas_after, sp_after, status_after) = execute_blobbasefee(
-                blob_fee,
-                carried_gas,
-                carried_sp,
-            );
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        POP() => {
-            let (gas_after, sp_after, status_after) = execute_pop(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MLOAD() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_mload(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        MSTORE() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_mstore(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        MSTORE8() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_mstore8(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        SLOAD() => {
-            let (gas_after, sp_after, status_after) = execute_sload(carried_account_context, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SSTORE() => {
-            let (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) =
-                execute_sstore(carried_account_context, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp);
-            (carried_pc, gas_after, state_gas_after, state_spill_after, refund_after, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        JUMP() => {
-            let (pc_after, gas_after, sp_after, status_after) = execute_jump(carried_code, carried_pc, carried_gas, carried_sp);
-            (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        JUMPI() => {
-            let (pc_after, gas_after, sp_after, status_after) = execute_jumpi(carried_code, carried_pc, carried_gas, carried_sp);
-            (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        PC() => {
-            let (pc_after, gas_after, sp_after, status_after) = execute_pc(carried_pc, carried_gas, carried_sp);
-            (pc_after, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MSIZE() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_msize(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        GAS() => {
-            let (gas_after, sp_after, status_after) = execute_gas(carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        JUMPDEST() => {
-            let (gas_after, status_after) = execute_jumpdest(carried_gas);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, opcode_frame_status(status_after))
-        },
-        TLOAD() => {
-            let (gas_after, sp_after, status_after) = execute_tload(carried_address, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        TSTORE() => {
-            let (gas_after, sp_after, status_after) = execute_tstore(carried_address, carried_is_static, carried_gas, carried_sp);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        MCOPY() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_mcopy(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        PUSH(n, value) => {
-            let (gas_after, sp_after, status_after) = execute_push(carried_gas, carried_sp, n, value);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        DUP(n) => {
-            let (gas_after, sp_after, status_after) = execute_dup(carried_gas, carried_sp, n);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SWAP(n) => {
-            let (gas_after, sp_after, status_after) = execute_swap(carried_gas, carried_sp, n);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        DUPN(immediate) => {
-            let (gas_after, sp_after, status_after) = execute_dupn(carried_gas, carried_sp, immediate);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        SWAPN(immediate) => {
-            let (gas_after, sp_after, status_after) = execute_swapn(carried_gas, carried_sp, immediate);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        EXCHANGE(immediate) => {
-            let (gas_after, sp_after, status_after) = execute_exchange(carried_gas, carried_sp, immediate);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, carried_memory, opcode_frame_status(status_after))
-        },
-        LOG(n) => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_log(carried_address, carried_is_static, carried_gas, carried_sp, carried_memory, n);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, opcode_frame_status(status_after))
-        },
-        opcode_CREATE() => fatal_error(ExecutionInvalid),
-        CREATE2() => fatal_error(ExecutionInvalid),
-        CALL() => fatal_error(ExecutionInvalid),
-        CALLCODE() => fatal_error(ExecutionInvalid),
-        DELEGATECALL() => fatal_error(ExecutionInvalid),
-        STATICCALL() => fatal_error(ExecutionInvalid),
-        RETURN() => {
-            let (gas_after, sp_after, memory_after, status_after) = execute_return(carried_gas, carried_sp, carried_memory);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, sp_after, memory_after, status_after)
-        },
-        REVERT() => {
-            let (gas_after, state_gas_after, state_spill_after, sp_after, memory_after, status_after) =
-                execute_revert(carried_state_gas_reservoir, carried_gas, carried_state_gas, carried_state_spill, carried_sp, carried_memory);
-            (carried_pc, gas_after, state_gas_after, state_spill_after, carried_refund, sp_after, memory_after, status_after)
-        },
-        INVALID() => {
-            let (gas_after, status_after) = execute_invalid(carried_gas);
-            (carried_pc, gas_after, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, opcode_frame_status(status_after))
-        },
-        SELFDESTRUCT() => {
-            let (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) =
-                execute_selfdestruct(carried_address, fork, carried_is_static, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp);
-            (carried_pc, gas_after, state_gas_after, state_spill_after, refund_after, sp_after, carried_memory, status_after)
-        },
+                    let result :
+                        (
+                            code_pointer,
+                            gas,
+                            state_gas,
+                            state_gas_spill,
+                            gas_refund,
+                            StackPointer,
+                            memory_height,
+                            FrameStatus,
+                        ) = match instruction {
+                        STOP() => {
+                            let status_after = execute_stop();
+                            (
+                                carried_pc,
+                                carried_gas,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                carried_sp,
+                                carried_memory_height,
+                                status_after,
+                            )
+                        },
+                        ADD() => {
+                            let (gas_after, sp_after, status_after) = execute_add(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MUL() => {
+                            let (gas_after, sp_after, status_after) = execute_mul(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SUB() => {
+                            let (gas_after, sp_after, status_after) = execute_sub(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        DIV() => {
+                            let (gas_after, sp_after, status_after) = execute_div(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SDIV() => {
+                            let (gas_after, sp_after, status_after) = execute_sdiv(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MOD() => {
+                            let (gas_after, sp_after, status_after) = execute_mod(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SMOD() => {
+                            let (gas_after, sp_after, status_after) = execute_smod(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        ADDMOD() => {
+                            let (gas_after, sp_after, status_after) = execute_addmod(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MULMOD() => {
+                            let (gas_after, sp_after, status_after) = execute_mulmod(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EXP() => {
+                            let (gas_after, sp_after, status_after) = execute_exp(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SIGNEXTEND() => {
+                            let (gas_after, sp_after, status_after) = execute_signextend(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        LT() => {
+                            let (gas_after, sp_after, status_after) = execute_lt(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        GT() => {
+                            let (gas_after, sp_after, status_after) = execute_gt(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SLT() => {
+                            let (gas_after, sp_after, status_after) = execute_slt(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SGT() => {
+                            let (gas_after, sp_after, status_after) = execute_sgt(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EQ() => {
+                            let (gas_after, sp_after, status_after) = execute_eq(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        ISZERO() => {
+                            let (gas_after, sp_after, status_after) = execute_iszero(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        AND() => {
+                            let (gas_after, sp_after, status_after) = execute_and(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        OR() => {
+                            let (gas_after, sp_after, status_after) = execute_or(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        XOR() => {
+                            let (gas_after, sp_after, status_after) = execute_xor(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        NOT() => {
+                            let (gas_after, sp_after, status_after) = execute_not(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BYTE() => {
+                            let (gas_after, sp_after, status_after) = execute_byte(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SHL() => {
+                            let (gas_after, sp_after, status_after) = execute_shl(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SHR() => {
+                            let (gas_after, sp_after, status_after) = execute_shr(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SAR() => {
+                            let (gas_after, sp_after, status_after) = execute_sar(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CLZ() => {
+                            let (gas_after, sp_after, status_after) = execute_clz(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        KECCAK256() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_keccak256(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        ADDRESS() => {
+                            let (gas_after, sp_after, status_after) = execute_address(
+                                carried_address,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BALANCE() => {
+                            let (gas_after, sp_after, status_after) = execute_balance(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        ORIGIN() => {
+                            let (gas_after, sp_after, status_after) = execute_origin(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CALLER() => {
+                            let (gas_after, sp_after, status_after) = execute_caller(
+                                carried_caller,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CALLVALUE() => {
+                            let (gas_after, sp_after, status_after) = execute_callvalue(
+                                carried_value,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CALLDATALOAD() => {
+                            let (gas_after, sp_after, status_after) = execute_calldataload(
+                                carried_calldata,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CALLDATASIZE() => {
+                            let (gas_after, sp_after, status_after) = execute_calldatasize(
+                                carried_calldata,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CALLDATACOPY() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_calldatacopy(
+                                carried_calldata,
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CODESIZE() => {
+                            let (gas_after, sp_after, status_after) = execute_codesize(
+                                carried_code,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CODECOPY() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_codecopy(
+                                carried_code,
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        GASPRICE() => {
+                            let (gas_after, sp_after, status_after) = execute_gasprice(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EXTCODESIZE() => {
+                            let (gas_after, sp_after, status_after) = execute_extcodesize(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EXTCODECOPY() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_extcodecopy(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        RETURNDATASIZE() => {
+                            let (gas_after, sp_after, status_after) = execute_returndatasize(
+                                carried_returndata,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        RETURNDATACOPY() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_returndatacopy(
+                                carried_returndata,
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EXTCODEHASH() => {
+                            let (gas_after, sp_after, status_after) = execute_extcodehash(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BLOCKHASH() => {
+                            let (gas_after, sp_after, status_after) = execute_blockhash(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        COINBASE() => {
+                            let (gas_after, sp_after, status_after) = execute_coinbase(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        TIMESTAMP() => {
+                            let (gas_after, sp_after, status_after) = execute_timestamp(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        NUMBER() => {
+                            let (gas_after, sp_after, status_after) = execute_number(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SLOTNUM() => {
+                            let (gas_after, sp_after, status_after) = execute_slotnum(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        PREVRANDAO() => {
+                            let (gas_after, sp_after, status_after) = execute_prevrandao(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        GASLIMIT() => {
+                            let (gas_after, sp_after, status_after) = execute_gaslimit(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        CHAINID() => {
+                            let (gas_after, sp_after, status_after) = execute_chainid(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SELFBALANCE() => {
+                            let (gas_after, sp_after, status_after) = execute_selfbalance(
+                                carried_address,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BASEFEE() => {
+                            let (gas_after, sp_after, status_after) = execute_basefee(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BLOBHASH() => {
+                            let (gas_after, sp_after, status_after) = execute_blobhash(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        BLOBBASEFEE() => {
+                            let (gas_after, sp_after, status_after) = execute_blobbasefee(
+                                blob_fee,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        POP() => {
+                            let (gas_after, sp_after, status_after) = execute_pop(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MLOAD() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_mload(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MSTORE() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_mstore(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MSTORE8() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_mstore8(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SLOAD() => {
+                            let (gas_after, sp_after, status_after) = execute_sload(
+                                carried_account_context,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SSTORE() => {
+                            let (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) = execute_sstore(
+                                carried_account_context,
+                                fork,
+                                carried_is_static,
+                                carried_gas,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                state_gas_after,
+                                state_spill_after,
+                                refund_after,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        JUMP() => {
+                            let (pc_after, gas_after, sp_after, status_after) = execute_jump(
+                                carried_code,
+                                carried_pc,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                pc_after,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        JUMPI() => {
+                            let (pc_after, gas_after, sp_after, status_after) = execute_jumpi(
+                                carried_code,
+                                carried_pc,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                pc_after,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        PC() => {
+                            let (pc_after, gas_after, sp_after, status_after) = execute_pc(
+                                carried_pc,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                pc_after,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MSIZE() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_msize(
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        GAS() => {
+                            let (gas_after, sp_after, status_after) = execute_gas(carried_gas, carried_sp);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        JUMPDEST() => {
+                            let (gas_after, status_after) = execute_jumpdest(carried_gas);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                carried_sp,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        TLOAD() => {
+                            let (gas_after, sp_after, status_after) = execute_tload(
+                                carried_address,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        TSTORE() => {
+                            let (gas_after, sp_after, status_after) = execute_tstore(
+                                carried_address,
+                                carried_is_static,
+                                carried_gas,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        MCOPY() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_mcopy(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        PUSH(n, value) => {
+                            let (gas_after, sp_after, status_after) = execute_push(carried_gas, carried_sp, n, value);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        DUP(n) => {
+                            let (gas_after, sp_after, status_after) = execute_dup(carried_gas, carried_sp, n);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SWAP(n) => {
+                            let (gas_after, sp_after, status_after) = execute_swap(carried_gas, carried_sp, n);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        DUPN(immediate) => {
+                            let (gas_after, sp_after, status_after) = execute_dupn(carried_gas, carried_sp, immediate);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SWAPN(immediate) => {
+                            let (gas_after, sp_after, status_after) = execute_swapn(carried_gas, carried_sp, immediate);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        EXCHANGE(immediate) => {
+                            let (gas_after, sp_after, status_after) = execute_exchange(
+                                carried_gas,
+                                carried_sp,
+                                immediate,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        LOG(n) => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_log(
+                                carried_address,
+                                carried_is_static,
+                                carried_memory_base,
+                                n,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        opcode_CREATE() => fatal_error(ExecutionInvalid),
+                        CREATE2() => fatal_error(ExecutionInvalid),
+                        CALL() => fatal_error(ExecutionInvalid),
+                        CALLCODE() => fatal_error(ExecutionInvalid),
+                        DELEGATECALL() => fatal_error(ExecutionInvalid),
+                        STATICCALL() => fatal_error(ExecutionInvalid),
+                        RETURN() => {
+                            let (gas_after, sp_after, memory_after, status_after) = execute_return(
+                                carried_memory_base,
+                                carried_gas,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                status_after,
+                            )
+                        },
+                        REVERT() => {
+                            let (gas_after, state_gas_after, state_spill_after, sp_after, memory_after, status_after) = execute_revert(
+                                carried_state_gas_reservoir,
+                                carried_memory_base,
+                                carried_gas,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_sp,
+                                carried_memory_height,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                state_gas_after,
+                                state_spill_after,
+                                carried_refund,
+                                sp_after,
+                                memory_after,
+                                status_after,
+                            )
+                        },
+                        INVALID() => {
+                            let (gas_after, status_after) = execute_invalid(carried_gas);
+                            (
+                                carried_pc,
+                                gas_after,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                carried_sp,
+                                carried_memory_height,
+                                opcode_frame_status(status_after),
+                            )
+                        },
+                        SELFDESTRUCT() => {
+                            let (gas_after, state_gas_after, state_spill_after, refund_after, sp_after, status_after) = execute_selfdestruct(
+                                carried_address,
+                                fork,
+                                carried_is_static,
+                                carried_gas,
+                                carried_state_gas,
+                                carried_state_spill,
+                                carried_refund,
+                                carried_sp,
+                            );
+                            (
+                                carried_pc,
+                                gas_after,
+                                state_gas_after,
+                                state_spill_after,
+                                refund_after,
+                                sp_after,
+                                carried_memory_height,
+                                status_after,
+                            )
+                        },
                     };
-                    (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_sp, carried_memory, carried_status) = match result {
-                        (pc_after, _, state_gas_after, state_spill_after, refund_after, sp_after, memory_after, Exceptional(kind)) => {
-                            let (state_gas_after, state_spill_after, status_after) =
-                                exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, kind);
-                            (pc_after, GAS_ZERO, state_gas_after, state_spill_after, refund_after, sp_after, memory_after, status_after)
+                    (
+                        carried_pc,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_sp,
+                        carried_memory_height,
+                        carried_status,
+                    ) = match result {
+                        (
+                            pc_after,
+                            _,
+                            state_gas_after,
+                            state_spill_after,
+                            refund_after,
+                            sp_after,
+                            memory_after,
+                            Exceptional(kind),
+                        ) => {
+                            let exceptional = exceptional_state(
+                                state_gas_after,
+                                state_spill_after,
+                                carried_state_gas_reservoir,
+                                kind,
+                            );
+                            let state_gas_after = exceptional.state_gas_remaining;
+                            let state_spill_after = exceptional.state_gas_spilled;
+                            let status_after = exceptional.status;
+                            (
+                                pc_after,
+                                GAS_ZERO,
+                                state_gas_after,
+                                state_spill_after,
+                                refund_after,
+                                sp_after,
+                                memory_after,
+                                status_after,
+                            )
                         },
                         _ => result,
                     }
                 },
             }
-
         } else {
             let output = frame_output(carried_status);
             let continuation = frame_stack_pop();
@@ -863,16 +2081,51 @@ function interpret(
                 },
                 continuation => {
                     let previous_address = carried_address;
-                    (carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_sp, carried_memory,
-                     carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                     carried_code, carried_calldata, carried_returndata) =
-                        resume_frame(continuation, output, carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, carried_state_gas_reservoir);
-                    carried_account_context = refresh_account_execution_context(carried_account_context, previous_address, carried_address)
+                    let transition = resume_frame(
+                        continuation,
+                        output,
+                        carried_memory_base,
+                        carried_gas,
+                        carried_state_gas,
+                        carried_state_spill,
+                        carried_refund,
+                        carried_status,
+                        carried_state_gas_reservoir,
+                    );
+                    carried_pc = transition.pc;
+                    carried_gas = transition.gas_remaining;
+                    carried_state_gas = transition.state_gas_remaining;
+                    carried_state_spill = transition.state_gas_spilled;
+                    carried_refund = transition.refund;
+                    carried_status = transition.status;
+                    carried_sp = transition.stack_top;
+                    carried_memory_base = transition.memory_base;
+                    carried_memory_height = transition.memory_height;
+                    carried_caller = transition.message.caller;
+                    carried_address = transition.message.address;
+                    carried_code_address = transition.message.code_address;
+                    carried_value = transition.message.value;
+                    carried_state_gas_reservoir = transition.message.state_gas_reservoir;
+                    carried_is_static = transition.message.is_static;
+                    carried_depth = transition.message.depth;
+                    carried_code = transition.code;
+                    carried_calldata = transition.calldata;
+                    carried_returndata = transition.returndata;
+                    carried_account_context = refresh_account_execution_context(
+                        carried_account_context,
+                        previous_address,
+                        carried_address,
+                    )
                 },
             }
         };
         let remaining_steps = call_tree_steps_remaining;
-        call_tree_steps_remaining = if remaining_steps == 0 then 0 else remaining_steps - 1
+        call_tree_steps_remaining =
+            if remaining_steps == 0 then {
+                0
+            } else {
+                remaining_steps - 1
+            }
     };
     (carried_gas, carried_state_gas, carried_state_spill, carried_refund, carried_status, result)
 }
@@ -986,6 +2239,8 @@ function call_stack_inputs(kind : CallKind) -> operand_stack_height =
         StaticCall => 6,
     }
 
+/*! Executes a message-call instruction through its non-entering failure paths
+    or installs the child frame and returns its initial carried machine state. */
 function run_call(
     carried_pc : code_pointer,
     carried_gas : gas,
@@ -993,7 +2248,8 @@ function run_call(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -1006,382 +2262,624 @@ function run_call(
     carried_returndata : OutputSlice,
     kind : CallKind,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) = {
-    match guard_stack(carried_sp, call_stack_inputs(kind), 1) {
+    let stack_inputs = call_stack_inputs(kind);
+    let stack_status = guard_stack(carried_sp, stack_inputs, 1);
+    match stack_status {
         Failed(halt_kind) => {
-            let (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(carried_state_gas, carried_state_spill, carried_state_gas_reservoir, halt_kind);
-            (
-                carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after,
-                carried_sp, carried_memory,
-                carried_caller, carried_address, carried_code_address, carried_value,
-                carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, carried_returndata,
-            )
+            let exceptional = exceptional_state(
+                carried_state_gas,
+                carried_state_spill,
+                carried_state_gas_reservoir,
+                halt_kind,
+            );
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
         Continue() => {
-    let pc_after : code_pointer = carried_pc;
-    var gas_after : gas = carried_gas;
-    var state_gas_after : state_gas = carried_state_gas;
-    var state_spill_after : state_gas_spill = carried_state_spill;
-    var status_after : FrameStatus = Running();
-    var sp_after : StackPointer = carried_sp;
-    var memory_after : EvmMemorySlice = carried_memory;
-    var returndata_after : OutputSlice = carried_returndata;
-    let parent_message : Message = struct {
-        caller = carried_caller,
-        address = carried_address,
-        code_address = carried_code_address,
-        value = carried_value,
-        state_gas_reservoir = carried_state_gas_reservoir,
-        is_static = carried_is_static,
-        depth = carried_depth,
-    };
-    let semantics = call_semantics(kind);
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    let current_depth = carried_depth;
-    let caller = carried_address;
-    let gas_request = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let target_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let target = word_to_address(target_word);
-    let (value, next_sp) : (word, StackPointer) =
-        if semantics.takes_value then {
-            let value = read_stack_word(sp_after);
-            (value, stack_top_retreat(sp_after, 1))
-        } else {
-            (WORD_ZERO, sp_after)
-        };
-    sp_after = next_sp;
-    let value_nonzero = word_nonzero(value);
-    let args_off_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let args_len_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let ret_off_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let ret_len_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
+            let pc_after : code_pointer = carried_pc;
+            var gas_after : gas = carried_gas;
+            var state_gas_after : state_gas = carried_state_gas;
+            var state_spill_after : state_gas_spill = carried_state_spill;
+            var status_after : FrameStatus = Running();
+            var sp_after : StackPointer = carried_sp;
+            var memory_after : memory_height = carried_memory_height;
+            var returndata_after : OutputSlice = carried_returndata;
+            let parent_message : Message = struct {
+                    caller = carried_caller,
+                    address = carried_address,
+                    code_address = carried_code_address,
+                    value = carried_value,
+                    state_gas_reservoir = carried_state_gas_reservoir,
+                    is_static = carried_is_static,
+                    depth = carried_depth,
+                };
+            let semantics = call_semantics(kind);
+            let execution_profile = k_execution_profile;
+            let profile = execution_profile.protocol;
+            let current_depth = carried_depth;
+            let caller = carried_address;
+            let gas_request = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let target_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let target = word_to_address(target_word);
+            let (value, next_sp) : (word, StackPointer) =
+                if semantics.takes_value then {
+                    let value = read_stack_word(sp_after);
+                    (value, stack_top_retreat(sp_after, 1))
+                } else {
+                    (WORD_ZERO, sp_after)
+                };
+            sp_after = next_sp;
+            let value_nonzero = word_nonzero(value);
+            let args_off_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let args_len_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let ret_off_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let ret_len_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
 
-    /* EIP-214: a value-bearing CALL inside a static context is a write and
-       raises WriteInStaticContext -- an exceptional halt that consumes all the
-       caller frame's gas. CALLCODE/DELEGATECALL/STATICCALL never trigger it
-       (CALLCODE has no static guard in the spec; the others force value = 0). */
-    if semantics.transfers_value & value_nonzero & carried_is_static then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, WriteProtection);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-
-    /* EIP-2929 access: inspect warmth without mutating state, then mark the
-       target only after the access charge has been established as payable. */
-    let warm = k_account_is_warm(target);
-    let target_cost : gas_constant = account_cost(warm);
-    let transfer_cost : gas_constant =
-        if value_nonzero then call_value_cost() else GAS_CONSTANT_ZERO;
-
-    /* Compute the mathematical endpoints before narrowing either host range.
-       Optimized C saturates only its endpoint representation, to a charge
-       which is greater than every representable live-gas value. */
-    let args_required = memory_required_size(args_off_word, args_len_word);
-    let ret_required = memory_required_size(ret_off_word, ret_len_word);
-    let required_size =
-        if args_required < ret_required then ret_required else args_required;
-    let (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size);
-    gas_after = gas_after_expansion;
-    if expansion_halt then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-
-    /* Static gas is charged before any state access: the
-       target's access + value-transfer cost is checked AFTER memory gas and BEFORE reading
-       any of the target's state. A frame that cannot afford it halts here, having
-       touched no account -- so the stateless witness need not prove the target.
-       (Resolving the EIP-7702 delegation or the empty-account check below reads
-       the target's account, which an OOG-before-access tx must never do.) */
-    let static_base : gas_cost = target_cost + transfer_cost;
-    let (static_base_halt, gas_after_static_base) = charge(gas_after, static_base);
-    gas_after = gas_after_static_base;
-    if static_base_halt then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-
-    /* The target access happens once the static charge is affordable. Mark it
-       before pricing EIP-7702's delegation target: a self-delegation therefore
-       pays one cold target access followed by one warm delegation access. */
-    k_account_mark_warm(target);
-
-    /* STATE ACCESS (only now that the static gas is covered): the EIP-7702
-       delegation designation (reads the target's code) + new-account component. */
-    let (tg_deleg, tg_target) = k_deleg_target(target);
-    let delegation_cost : gas_constant =
-        if tg_deleg then {
-            let dw = k_account_is_warm(tg_target);
-            account_cost(dw)
-        } else {
-            GAS_CONSTANT_ZERO
-        };
-    let target_empty = k_account_is_empty(target);
-    let new_account_charged = profile.fork >= Amsterdam & value_nonzero & semantics.transfers_value & target_empty;
-    let create_cost : gas_constant =
-        if profile.fork < Amsterdam & value_nonzero & semantics.transfers_value & target_empty
-        then G_newaccount
-        else GAS_CONSTANT_ZERO;
-    let additional_cost : gas_cost = delegation_cost + create_cost;
-    let (additional_cost_halt, gas_after_additional_cost) = charge(gas_after, additional_cost);
-    gas_after = gas_after_additional_cost;
-    if additional_cost_halt then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-    let stipend : gas =
-        if value_nonzero then G_callstipend else GAS_ZERO;
-
-    /* Forwarded child gas, per the EIP-150
-       calculate_message_call_gas. The EIP-150 63/64ths cap applies to the gas
-       left after the access, value-transfer, memory, and new-account costs. */
-    var base_child : gas = GAS_ZERO;
-    if profile.fork >= Amsterdam then {
-        /* Amsterdam charges execution work, then state growth, before
-           applying EIP-150 to the execution gas left for the child. */
-        if new_account_charged then {
-            let (state_gas_halt, next_gas, next_state_gas, next_state_spill) =
-                charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account);
-            gas_after = next_gas;
-            state_gas_after = next_state_gas;
-            state_spill_after = next_state_spill;
-            if state_gas_halt then {
+            /* EIP-214: a value-bearing CALL inside a static context is a write and
+               raises WriteInStaticContext -- an exceptional halt that consumes all the
+               caller frame's gas. CALLCODE/DELEGATECALL/STATICCALL never trigger it
+               (CALLCODE has no static guard in the spec; the others force value = 0). */
+            if semantics.transfers_value & value_nonzero & carried_is_static then {
                 gas_after = GAS_ZERO;
-                (state_gas_after, state_spill_after, status_after) =
-                    exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-                return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                        carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                        carried_code, carried_calldata, returndata_after)
-            }
-        };
-        base_child = call_gas_cap_word(gas_after, gas_request);
-        let (child_gas_halt, child_charged_gas) = charge(gas_after, base_child);
-        gas_after = child_charged_gas;
-        if child_gas_halt then {
-            gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                    carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                    carried_code, carried_calldata, returndata_after)
-        }
-    } else {
-        base_child = call_gas_cap_word(gas_after, gas_request);
-        let (child_gas_halt, child_charged_gas) = charge(gas_after, base_child);
-        gas_after = child_charged_gas;
-        if child_gas_halt then {
-            gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                    carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                    carried_code, carried_calldata, returndata_after)
-        }
-    };
-    if tg_deleg then {
-        k_account_mark_warm(tg_target)
-    };
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    WriteProtection,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
 
-    /* gas is now covered; message preparation loads the
-       delegate's CODE -- BEFORE the depth/balance guards below. Resolve it now
-       (flagging a missing-code witness deficiency) so an insufficient-balance
-       call to a 7702-delegated target still detects an omitted delegate-code
-       proof; an OOG call returned above and never reaches here. */
-    if tg_deleg then {
-        let delegate_key = k_code_key(tg_target);
-        let _ = code_db_resolve(delegate_key);
+            /* EIP-2929 access: inspect warmth without mutating state, then mark the
+               target only after the access charge has been established as payable. */
+            let warm = k_account_is_warm(target);
+            let target_cost : gas_constant = account_cost(warm);
+            let transfer_cost : gas_constant =
+                if value_nonzero then call_value_cost() else GAS_CONSTANT_ZERO;
 
-        /* The resolved delegate's account is read for its code, so the
-           delegate is touched (kept in the BAL account set). */
-        let _ = k_aload(tg_target)
-    };
-    let args_access = memory_access(args_off_word, args_len_word);
-    let ret_access = memory_access(ret_off_word, ret_len_word);
-    let materialized_required_size =
-        if args_access.required_size < ret_access.required_size
-        then ret_access.required_size
-        else args_access.required_size;
-    let mem1 = expand_memory(memory_after, materialized_required_size);
-    let args = args_access.range;
-    let ret = ret_access.range;
-    let child_gas : gas = conserved_gas_add(base_child, stipend);
+            /* Compute the mathematical endpoints before narrowing either host range.
+               Optimized C saturates only its endpoint representation, to a charge
+               which is greater than every representable live-gas value. */
+            let args_requested_height = memory_requested_height(args_off_word, args_len_word);
+            let ret_requested_height = memory_requested_height(ret_off_word, ret_len_word);
+            let requested_height =
+                if args_requested_height < ret_requested_height then ret_requested_height else args_requested_height;
+            let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
+            if not_bool(expansion_cost.affordable) then {
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    OutOfGas,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
+            gas_after = gas_sub(gas_after, expansion_cost.cost);
 
-    /* The target's code hash is read for every call once gas is
-     * charged, before the depth/balance guards -- so the call target is always a
-     * state access (kept in the BAL account set), including precompiles and calls
-     * that then fail the depth/balance guard below. */
-    let _ = k_aload(target);
+            /* Static gas is charged before any state access: the target's access and
+               value-transfer cost is checked after memory gas and before reading any
+               of the target's state. A frame that cannot afford it halts here, having
+               touched no account -- so the stateless witness need not prove the target.
+               (Resolving the EIP-7702 delegation or the empty-account check below reads
+               the target's account, which an OOG-before-access tx must never do.) */
+            let static_base : gas_cost = target_cost + transfer_cost;
+            if gas_after < static_base then {
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    OutOfGas,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
+            gas_after = gas_sub(gas_after, static_base);
 
-    /* call-failure guards (checked AFTER gas is charged): the depth ceiling
-       (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
-       caller's balance covering the transfer. */
-    let insufficient_balance : bool =
-        if semantics.takes_value & value_nonzero then {
-            let caller_balance = k_get_balance(caller);
-            let transfer_affordable = word_ule(value, caller_balance);
-            not_bool(transfer_affordable)
-        } else {
-            false
-        };
-    let depth_limit = sizeof(call_depth_limit);
-    if insufficient_balance | (current_depth == depth_limit) then {
-        returndata_after = returndata_clear();
-        gas_after = refund_gas(gas_after, child_gas);
-        if new_account_charged then {
-            (gas_after, state_gas_after, state_spill_after) =
-                credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
-        };
-        sp_after = stack_top_advance(sp_after, 1);
-        write_stack_word(sp_after, WORD_ZERO);
-        memory_after = mem1;
-        (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-         carried_code, carried_calldata, returndata_after)
-    } else {
-        let selected_precompile = precompile_id_for_address(target);
-        if selected_precompile != NotPrecompile then {
-            /* PRECOMPILE call. The precompile set is fork-gated (the highest is
-               0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
-               set is an ordinary code call. The precompile's input is the
-               child message's calldata: memory_after[args_off .. args_off+args_len).
-               Gas inspects the same memory source before execution. */
-            let (input_memory, mem2) = active_memory_slice(mem1, args.off, args.len);
-            let input = MemoryCalldata(input_memory);
+            /* The target access happens once the static charge is affordable. Mark it
+               before pricing EIP-7702's delegation target: a self-delegation therefore
+               pays one cold target access followed by one warm delegation access. */
+            k_account_mark_warm(target);
 
-            /* Gas is checked before execution: an unpayable/OOG precompile call
-             * must not execute (a BLAKE2F request may carry an enormous round
-             * count). Failure consumes all child gas and exposes no returndata. */
-            let precompile_charge = precompile_gas(selected_precompile, input, child_gas);
-            if precompile_charge.affordable then {
-                let used = precompile_charge.cost;
-                let result = run_precompile_slice(selected_precompile, input);
-                if result.success then {
-                    returndata_after = result.output;
+            /* STATE ACCESS (only now that the static gas is covered): the EIP-7702
+               delegation designation (reads the target's code) + new-account component. */
+            let (tg_deleg, tg_target) = k_deleg_target(target);
+            let delegation_cost : gas_constant =
+                if tg_deleg then {
+                    let dw = k_account_is_warm(tg_target);
+                    account_cost(dw)
+                } else {
+                    GAS_CONSTANT_ZERO
+                };
+            let target_empty = k_account_is_empty(target);
+            let new_account_charged =    profile.fork
+                                      >= Amsterdam
+                                      &  value_nonzero
+                                      &  semantics.transfers_value
+                                      &  target_empty;
+            let create_cost : gas_constant =
+                if profile.fork < Amsterdam & value_nonzero & semantics.transfers_value & target_empty
+                then G_newaccount
+                else GAS_CONSTANT_ZERO;
+            let additional_cost : gas_cost = delegation_cost + create_cost;
+            if gas_after < additional_cost then {
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    OutOfGas,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
+            gas_after = gas_sub(gas_after, additional_cost);
+            let stipend : gas =
+                if value_nonzero then G_callstipend else GAS_ZERO;
 
-                    /* the value transfer is part of the successful call */
+            /* Forwarded child gas, per the EIP-150
+               calculate_message_call_gas. The EIP-150 63/64ths cap applies to the gas
+               left after the access, value-transfer, memory, and new-account costs. */
+            var base_child : gas = GAS_ZERO;
+            if profile.fork >= Amsterdam then {
+                /* Amsterdam charges execution work, then state growth, before
+                   applying EIP-150 to the execution gas left for the child. */
+                if new_account_charged then {
+                    let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
+                        gas_after,
+                        state_gas_after,
+                        state_spill_after,
+                        G_amsterdam_state_new_account,
+                    );
+                    gas_after = next_gas;
+                    state_gas_after = next_state_gas;
+                    state_spill_after = next_state_spill;
+                    if state_gas_halt then {
+                        gas_after = GAS_ZERO;
+                        let exceptional = exceptional_state(
+                            state_gas_after,
+                            state_spill_after,
+                            carried_state_gas_reservoir,
+                            OutOfGas,
+                        );
+                        state_gas_after = exceptional.state_gas_remaining;
+                        state_spill_after = exceptional.state_gas_spilled;
+                        status_after = exceptional.status;
+                        return struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
+                    }
+                };
+                base_child = call_gas_cap_word(gas_after, gas_request);
+                if gas_after < base_child then {
+                    gas_after = GAS_ZERO;
+                    let exceptional = exceptional_state(
+                        state_gas_after,
+                        state_spill_after,
+                        carried_state_gas_reservoir,
+                        OutOfGas,
+                    );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
+                };
+                gas_after = gas_sub(gas_after, base_child)
+            } else {
+                base_child = call_gas_cap_word(gas_after, gas_request);
+                if gas_after < base_child then {
+                    gas_after = GAS_ZERO;
+                    let exceptional = exceptional_state(
+                        state_gas_after,
+                        state_spill_after,
+                        carried_state_gas_reservoir,
+                        OutOfGas,
+                    );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
+                };
+                gas_after = gas_sub(gas_after, base_child)
+            };
+            if tg_deleg then {
+                k_account_mark_warm(tg_target)
+            };
+
+            /* gas is now covered; message preparation loads the
+               delegate's CODE -- BEFORE the depth/balance guards below. Resolve it now
+               (flagging a missing-code witness deficiency) so an insufficient-balance
+               call to a 7702-delegated target still detects an omitted delegate-code
+               proof; an OOG call returned above and never reaches here. */
+            if tg_deleg then {
+                let delegate_key = k_code_key(tg_target);
+                let _ = code_db_resolve(delegate_key);
+
+                /* The resolved delegate's account is read for its code, so the
+                   delegate is touched (kept in the BAL account set). */
+                let _ = k_aload(tg_target)
+            };
+            let args_access = memory_access(args_off_word, args_len_word);
+            let ret_access = memory_access(ret_off_word, ret_len_word);
+            let materialized_required_size =
+                if args_access.requested_height < ret_access.requested_height
+                then ret_access.requested_height
+                else args_access.requested_height;
+            let mem1 = expand_memory(carried_memory_base, memory_after, materialized_required_size);
+            let args = args_access.range;
+            let ret = ret_access.range;
+            let child_gas : gas = conserved_gas_add(base_child, stipend);
+
+            /* The target's code hash is read for every call once gas is
+             * charged, before the depth/balance guards -- so the call target is always a
+             * state access (kept in the BAL account set), including precompiles and calls
+             * that then fail the depth/balance guard below. */
+            let _ = k_aload(target);
+
+            /* call-failure guards (checked AFTER gas is charged): the depth ceiling
+               (EIP-150, 1024 frames) and, for a value-bearing CALL/CALLCODE, the
+               caller's balance covering the transfer. */
+            let insufficient_balance : bool =
+                if semantics.takes_value & value_nonzero then {
+                    let caller_balance = k_get_balance(caller);
+                    let transfer_affordable = word_ule(value, caller_balance);
+                    not_bool(transfer_affordable)
+                } else {
+                    false
+                };
+            let depth_limit = sizeof(call_depth_limit);
+            if insufficient_balance | (current_depth == depth_limit) then {
+                returndata_after = returndata_clear();
+                gas_after = refund_gas(gas_after, child_gas);
+                if new_account_charged then {
+                    (gas_after, state_gas_after, state_spill_after) = credit_state_gas_refund(
+                        gas_after,
+                        state_gas_after,
+                        state_spill_after,
+                        G_amsterdam_state_new_account,
+                    )
+                };
+                sp_after = stack_top_advance(sp_after, 1);
+                write_stack_word(sp_after, WORD_ZERO);
+                memory_after = mem1;
+                struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            } else {
+                let selected_precompile = precompile_id_for_address(target);
+                if selected_precompile != NotPrecompile then {
+                    /* PRECOMPILE call. The precompile set is fork-gated (the highest is
+                       0x100 P256VERIFY, EIP-7951/Osaka); an address outside the active
+                       set is an ordinary code call. The precompile's input is the
+                       child message's calldata: memory_after[args_off .. args_off+args_len).
+                       Gas inspects the same memory source before execution. */
+                    let input_memory = active_memory_slice(carried_memory_base, mem1, args.off, args.len);
+                    let input = MemoryCalldata(input_memory);
+
+                    /* Gas is checked before execution: an unpayable/OOG precompile call
+                     * must not execute (a BLAKE2F request may carry an enormous round
+                     * count). Failure consumes all child gas and exposes no returndata. */
+                    let precompile_charge = precompile_gas(selected_precompile, input, child_gas);
+                    if precompile_charge.affordable then {
+                        let used = precompile_charge.cost;
+                        let result = run_precompile_slice(selected_precompile, input);
+                        if result.success then {
+                            returndata_after = result.output;
+
+                            /* the value transfer is part of the successful call */
+                            if semantics.transfers_value & value_nonzero then {
+                                k_transfer(caller, target, value)
+                            };
+                            let return_destination = memory_absolute(carried_memory_base, ret.off);
+                            returndata_copy_prefix(returndata_after, return_destination, ret.len);
+                            let unused : gas = gas_sub(child_gas, used);
+                            gas_after = refund_gas(gas_after, unused);
+                            sp_after = stack_top_advance(sp_after, 1);
+                            write_stack_word(sp_after, WORD_ONE);
+                            memory_after = mem1;
+                            struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
+                        } else {
+                            returndata_after = returndata_clear();
+                            if new_account_charged then {
+                                (gas_after, state_gas_after, state_spill_after) = credit_state_gas_refund(
+                                    gas_after,
+                                    state_gas_after,
+                                    state_spill_after,
+                                    G_amsterdam_state_new_account,
+                                )
+                            };
+                            sp_after = stack_top_advance(sp_after, 1);
+                            write_stack_word(sp_after, WORD_ZERO);
+                            memory_after = mem1;
+                            struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
+                        }
+                    } else {
+                        returndata_after = returndata_clear();
+                        if new_account_charged then {
+                            (gas_after, state_gas_after, state_spill_after) = credit_state_gas_refund(
+                                gas_after,
+                                state_gas_after,
+                                state_spill_after,
+                                G_amsterdam_state_new_account,
+                            )
+                        };
+                        sp_after = stack_top_advance(sp_after, 1);
+                        write_stack_word(sp_after, WORD_ZERO);
+                        memory_after = mem1;
+                        struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
+                    }
+                } else {
+                    /* CODE call. Snapshot the world (so a reverting child can be rolled
+                       back), then perform the CALL value transfer up front. */
+                    let child_depth : frame_depth = current_depth + 1;
+                    let child_code = executable_code(target, tg_deleg, tg_target);
+
+                    /* the child message context, by call mode:
+                       - address: target for CALL/STATICCALL; the CALLER's own address
+                         for CALLCODE/DELEGATECALL (they run target's code in place);
+                       - caller/value: inherited from the parent for DELEGATECALL,
+                         else the immediate caller and the call's value;
+                       - static: forced for STATICCALL, else inherited (a static frame
+                         stays static for all of its sub-calls). */
+                    let child_addr : address =
+                        if semantics.uses_target_address then target else caller;
+                    let child_caller : address =
+                        if semantics.inherits_caller_and_value then carried_caller else caller;
+                    let child_value : word =
+                        if semantics.inherits_caller_and_value then carried_value else value;
+                    let child_static : bool =
+                        if semantics.enters_static_context then true else carried_is_static;
+                    let bytes = active_memory_slice(carried_memory_base, mem1, args.off, args.len);
+                    let child_memory = evm_memory_slice(bytes.bytes, bytes.len);
+                    let child_calldata = MemoryCalldata(child_memory);
+                    let child_state_gas = state_gas_after;
+                    let running = Running();
+                    let (checkpoint, child_stack, child_memory_base, child_memory_height) = suspend_frame(
+                        pc_after,
+                        gas_after,
+                        sp_after,
+                        carried_memory_base,
+                        mem1,
+                        STATE_GAS_ZERO,
+                        state_spill_after,
+                        carried_refund,
+                        running,
+                        parent_message,
+                        carried_code,
+                        carried_calldata,
+                    );
+                    let call_continuation : CallContinuation = struct {
+                            checkpoint = checkpoint,
+                            return_offset = ret.off,
+                            return_length = ret.len,
+                            new_account_charged = new_account_charged,
+                        };
+                    let continuation = ResumeCall(call_continuation);
+                    frame_stack_push(continuation);
                     if semantics.transfers_value & value_nonzero then {
                         k_transfer(caller, target, value)
                     };
-                    returndata_copy_prefix(returndata_after, ret.off, ret.len);
-                    let unused : gas = gas_sub(child_gas, used);
-                    gas_after = refund_gas(gas_after, unused);
-                    sp_after = stack_top_advance(sp_after, 1);
-        write_stack_word(sp_after, WORD_ONE);
-                    memory_after = mem2;
-                    (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                     carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                     carried_code, carried_calldata, returndata_after)
-                } else {
-                    returndata_after = returndata_clear();
-                    if new_account_charged then {
-                        (gas_after, state_gas_after, state_spill_after) =
-                            credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
-                    };
-                    sp_after = stack_top_advance(sp_after, 1);
-        write_stack_word(sp_after, WORD_ZERO);
-                    memory_after = mem2;
-                    (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                     carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                     carried_code, carried_calldata, returndata_after)
+                    let child_returndata = returndata_clear();
+                    struct {
+                        pc = 0,
+                        gas_remaining = child_gas,
+                        state_gas_remaining = child_state_gas,
+                        state_gas_spilled = STATE_GAS_SPILL_ZERO,
+                        refund = GAS_REFUND_ZERO,
+                        status = running,
+                        stack_top = child_stack,
+                        memory_base = child_memory_base,
+                        memory_height = child_memory_height,
+                        message =
+                            struct {
+                                caller = child_caller,
+                                address = child_addr,
+                                code_address = target,
+                                value = child_value,
+                                state_gas_reservoir = child_state_gas,
+                                is_static = child_static,
+                                depth = child_depth,
+                            },
+                        code = child_code,
+                        calldata = child_calldata,
+                        returndata = child_returndata,
+                    }
                 }
-            } else {
-                returndata_after = returndata_clear();
-                if new_account_charged then {
-                    (gas_after, state_gas_after, state_spill_after) =
-                        credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
-                };
-                sp_after = stack_top_advance(sp_after, 1);
-        write_stack_word(sp_after, WORD_ZERO);
-                memory_after = mem2;
-                (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                 carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                 carried_code, carried_calldata, returndata_after)
             }
-        } else {
-            /* CODE call. Snapshot the world (so a reverting child can be rolled
-               back), then perform the CALL value transfer up front. */
-            let child_depth : frame_depth = current_depth + 1;
-            let child_code = executable_code(target, tg_deleg, tg_target);
-
-            /* the child message context, by call mode:
-               - address: target for CALL/STATICCALL; the CALLER's own address
-                 for CALLCODE/DELEGATECALL (they run target's code in place);
-               - caller/value: inherited from the parent for DELEGATECALL,
-                 else the immediate caller and the call's value;
-               - static: forced for STATICCALL, else inherited (a static frame
-                 stays static for all of its sub-calls). */
-            let child_addr : address =
-                if semantics.uses_target_address then target else caller;
-            let child_caller : address =
-                if semantics.inherits_caller_and_value then carried_caller else caller;
-            let child_value : word =
-                if semantics.inherits_caller_and_value then carried_value else value;
-            let child_static : bool =
-                if semantics.enters_static_context then true else carried_is_static;
-            let (bytes, mem2) = active_memory_slice(mem1, args.off, args.len);
-            let child_memory = evm_memory_slice(bytes.bytes, bytes.len);
-            let child_calldata = MemoryCalldata(child_memory);
-            let child_state_gas = state_gas_after;
-            let (checkpoint, child_stack, child_frame_memory) = suspend_frame(
-                pc_after,
-                gas_after,
-                sp_after,
-                mem2,
-                STATE_GAS_ZERO,
-                state_spill_after,
-                carried_refund,
-                Running(),
-                parent_message,
-                carried_code,
-                carried_calldata,
-            );
-            let call_continuation : CallContinuation = struct {
-                    checkpoint = checkpoint,
-                    return_offset = ret.off,
-                    return_length = ret.len,
-                    new_account_charged = new_account_charged,
-                };
-            let continuation = ResumeCall(call_continuation);
-            frame_stack_push(continuation);
-            if semantics.transfers_value & value_nonzero then {
-                k_transfer(caller, target, value)
-            };
-            let child_returndata = returndata_clear();
-            (
-                0, child_gas, child_state_gas, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, Running(),
-                child_stack, child_frame_memory,
-                child_caller, child_addr, target, child_value, child_state_gas, child_static, child_depth,
-                child_code, child_calldata, child_returndata,
-            )
-        }
-    }
         },
     }
 }
@@ -1416,6 +2914,8 @@ function create_stack_inputs(kind : CreateKind) -> operand_stack_height =
         CreateBySalt => 4,
     }
 
+/*! Executes a contract-creation instruction through its non-entering failure
+    paths or installs the initcode child frame and returns its initial state. */
 function run_create(
     carried_pc : code_pointer,
     carried_gas : gas,
@@ -1423,7 +2923,8 @@ function run_create(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -1436,283 +2937,493 @@ function run_create(
     carried_returndata : OutputSlice,
     kind : CreateKind,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) = {
-    match guard_stack(carried_sp, create_stack_inputs(kind), 1) {
+    let stack_inputs = create_stack_inputs(kind);
+    let stack_status = guard_stack(carried_sp, stack_inputs, 1);
+    match stack_status {
         Failed(halt_kind) => {
-            let (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(carried_state_gas, carried_state_spill, carried_state_gas_reservoir, halt_kind);
-            (
-                carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after,
-                carried_sp, carried_memory,
-                carried_caller, carried_address, carried_code_address, carried_value,
-                carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, carried_returndata,
-            )
+            let exceptional = exceptional_state(
+                carried_state_gas,
+                carried_state_spill,
+                carried_state_gas_reservoir,
+                halt_kind,
+            );
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
         Continue() => {
-    let pc_after : code_pointer = carried_pc;
-    var gas_after : gas = carried_gas;
-    var state_gas_after : state_gas = carried_state_gas;
-    var state_spill_after : state_gas_spill = carried_state_spill;
-    var status_after : FrameStatus = Running();
-    var sp_after : StackPointer = carried_sp;
-    var memory_after : EvmMemorySlice = carried_memory;
-    var returndata_after : OutputSlice = carried_returndata;
-    let parent_message : Message = struct {
-        caller = carried_caller,
-        address = carried_address,
-        code_address = carried_code_address,
-        value = carried_value,
-        state_gas_reservoir = carried_state_gas_reservoir,
-        is_static = carried_is_static,
-        depth = carried_depth,
-    };
-    let semantics = create_semantics(kind);
-    let execution_profile = k_execution_profile;
-    let profile = execution_profile.protocol;
-    let current_depth = carried_depth;
-    let creator = carried_address;
-    let value = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let off_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let len_word = read_stack_word(sp_after);
-    sp_after = stack_top_retreat(sp_after, 1);
-    let (salt, next_sp) : (word, StackPointer) =
-        if semantics.uses_salt then {
-            let salt = read_stack_word(sp_after);
-            (salt, stack_top_retreat(sp_after, 1))
-        } else {
-            (WORD_ZERO, sp_after)
-        };
-    sp_after = next_sp;
+            let pc_after : code_pointer = carried_pc;
+            var gas_after : gas = carried_gas;
+            var state_gas_after : state_gas = carried_state_gas;
+            var state_spill_after : state_gas_spill = carried_state_spill;
+            var status_after : FrameStatus = Running();
+            var sp_after : StackPointer = carried_sp;
+            var memory_after : memory_height = carried_memory_height;
+            var returndata_after : OutputSlice = carried_returndata;
+            let parent_message : Message = struct {
+                    caller = carried_caller,
+                    address = carried_address,
+                    code_address = carried_code_address,
+                    value = carried_value,
+                    state_gas_reservoir = carried_state_gas_reservoir,
+                    is_static = carried_is_static,
+                    depth = carried_depth,
+                };
+            let semantics = create_semantics(kind);
+            let execution_profile = k_execution_profile;
+            let profile = execution_profile.protocol;
+            let current_depth = carried_depth;
+            let creator = carried_address;
+            let value = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let off_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let len_word = read_stack_word(sp_after);
+            sp_after = stack_top_retreat(sp_after, 1);
+            let (salt, next_sp) : (word, StackPointer) =
+                if semantics.uses_salt then {
+                    let salt = read_stack_word(sp_after);
+                    (salt, stack_top_retreat(sp_after, 1))
+                } else {
+                    (WORD_ZERO, sp_after)
+                };
+            sp_after = next_sp;
 
-    /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
-       context -- it raises WriteProtection (an exceptional halt consuming all
-       remaining gas), checked before any charge or child frame. */
-    if carried_is_static then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, WriteProtection);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-    let required_size = memory_required_size(off_word, len_word);
-    let (expansion_halt, gas_after_expansion) = charge_memory_expansion(gas_after, memory_after, required_size);
-    gas_after = gas_after_expansion;
-    if expansion_halt then {
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-    let initcode_access = memory_access(off_word, len_word);
-    let mem1 = expand_memory(memory_after, initcode_access.required_size);
-    let initcode = initcode_access.range;
-
-    /* up-front charges: memory expansion over the initcode, the CREATE base
-       cost (G_create), the EIP-3860 per-initcode-word cost, and -- for CREATE2
-       only -- the keccak word cost of hashing the initcode for the address. */
-    let access_cost = create_access_cost();
-    let (access_halt, gas_after_access) = charge(gas_after, access_cost);
-    gas_after = gas_after_access;
-    if access_halt then {
-        memory_after = mem1;
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-        return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, returndata_after)
-    };
-    let initcode_word_count = memory_word_count_word(len_word);
-    if profile.fork >= Shanghai then {
-        let (initcode_charge_halt, initcode_gas) = charge_word_scaled_gas(
-            gas_after,
-            G_initcode_word,
-            initcode_word_count,
-        );
-        gas_after = initcode_gas;
-        if initcode_charge_halt then {
-            memory_after = mem1;
-            gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                    carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                    carried_code, carried_calldata, returndata_after)
-        }
-    };
-    if semantics.uses_salt then {
-        let (hashing_halt, hashing_gas) = charge_word_scaled_gas(gas_after, G_keccak_word, initcode_word_count);
-        gas_after = hashing_gas;
-        if hashing_halt then {
-            memory_after = mem1;
-            gas_after = GAS_ZERO;
-            (state_gas_after, state_spill_after, status_after) =
-                exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-            return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                    carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                    carried_code, carried_calldata, returndata_after)
-        }
-    };
-
-    /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
-       an exceptional halt. */
-    let valid_initcode_size = initcode_size_allowed(initcode.len);
-    let invalid_initcode_size = not_bool(valid_initcode_size);
-    if invalid_initcode_size then {
-        memory_after = mem1;
-        gas_after = GAS_ZERO;
-        (state_gas_after, state_spill_after, status_after) =
-            exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, InitCodeTooLarge);
-        (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-         carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-         carried_code, carried_calldata, returndata_after)
-    } else {
-        /* derive the new contract address: keccak(0xff, creator, salt,
-           keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
-        let nonce = k_get_nonce(creator);
-        var mem2 : EvmMemorySlice = mem1;
-        let new_addr : address =
-            if semantics.uses_salt then {
-                let (initcode_digest_word, hashed_mem) = mem_keccak(mem1, initcode);
-                mem2 = hashed_mem;
-                let initcode_digest = word_to_hash(initcode_digest_word);
-                k_create2_addr(creator, salt, initcode_digest)
-            } else {
-                k_create_addr(creator, nonce)
-            };
-
-        /* Before Amsterdam the child allocation is computed before the
-           early guards (and returned if they fail). Amsterdam first charges
-           any account-growth state gas, because a spill reduces the execution
-           gas to which the EIP-150 cap applies. */
-        var child_gas : gas = GAS_ZERO;
-        if profile.fork < Amsterdam then {
-            let avail = gas_after;
-            let retained_gas : gas = avail / 64;
-            child_gas = gas_sub(avail, retained_gas);
-            gas_after = retained_gas
-        };
-
-        /* early-abort guards (child gas refunded, 0 pushed, NO nonce bump): the
-           depth ceiling, the creator's balance covering the endowment, and the
-           creator nonce not already at the 2^64-1 ceiling (it must be
-           incrementable). */
-        let creator_balance = k_get_balance(creator);
-        let endowment_affordable = word_ule(value, creator_balance);
-        let insufficient_balance = not_bool(endowment_affordable);
-        let nonce_limit = sizeof(account_nonce_bound);
-        let depth_limit = sizeof(call_depth_limit);
-        if   insufficient_balance
-           | (nonce == nonce_limit)
-           | /* EIP-2681 */
-             (current_depth == depth_limit) then {
-            returndata_after = returndata_clear();
-            gas_after = 
-                if profile.fork < Amsterdam then refund_gas(gas_after, child_gas) else gas_after;
-            sp_after = stack_top_advance(sp_after, 1);
-            write_stack_word(sp_after, WORD_ZERO);
-            memory_after = mem2;
-            (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-             carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-             carried_code, carried_calldata, returndata_after)
-        } else {
-            /* warm the new address and bump the creator nonce BEFORE the child
-             * snapshot: both persist even if the initcode reverts (the
-             * the protocol runs them in the parent, before
-             * process_create_message). */
-            let child_depth : frame_depth = current_depth + 1;
-            k_account_mark_warm(new_addr);
-            let new_account_charged = (profile.fork >= Amsterdam) & k_account_is_empty(new_addr);
-            if new_account_charged then {
-                let (state_gas_halt, next_gas, next_state_gas, next_state_spill) =
-                    charge_state_gas(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account);
-                gas_after = next_gas;
-                state_gas_after = next_state_gas;
-                state_spill_after = next_state_spill;
-                if state_gas_halt then {
-                    memory_after = mem2;
-                    gas_after = GAS_ZERO;
-                    (state_gas_after, state_spill_after, status_after) =
-                        exceptional_state(state_gas_after, state_spill_after, carried_state_gas_reservoir, OutOfGas);
-                    return (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                            carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                            carried_code, carried_calldata, returndata_after)
+            /* EIP-214: CREATE/CREATE2 modifies state and is forbidden in a static
+               context -- it raises WriteProtection (an exceptional halt consuming all
+               remaining gas), checked before any charge or child frame. */
+            if carried_is_static then {
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    WriteProtection,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
                 }
             };
-            if profile.fork >= Amsterdam then {
-                let avail = gas_after;
-                let retained_gas : gas = avail / 64;
-                child_gas = gas_sub(avail, retained_gas);
-                gas_after = retained_gas
-            };
-            let occupied : bool = k_account_occupied(new_addr);
-            returndata_after = returndata_clear();
-            k_bump_nonce(creator);
-            if occupied then {
-                /* address collision (the target already has code, a nonzero
-                 * nonce, or storage): no initcode runs, 0 is pushed, and the
-                 * reserved child gas is NOT refunded (it stays deducted). */
-                if new_account_charged then {
-                    (gas_after, state_gas_after, state_spill_after) =
-                        credit_state_gas_refund(gas_after, state_gas_after, state_spill_after, G_amsterdam_state_new_account)
-                };
-                sp_after = stack_top_advance(sp_after, 1);
-                write_stack_word(sp_after, WORD_ZERO);
-                memory_after = mem2;
-                (pc_after, gas_after, state_gas_after, state_spill_after, carried_refund, status_after, sp_after, memory_after,
-                 carried_caller, carried_address, carried_code_address, carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                 carried_code, carried_calldata, returndata_after)
-            } else {
-                /* Freeze the initcode while parent memory is active, then
-                   suspend the complete parent before mutating the new account.
-                   The child frame has no calldata. */
-                let (initcode_bytes, mem3) = memory_code_slice(mem2, initcode.off, initcode.len);
-                let child_code_id = code_db_insert(initcode_bytes, profile.fork);
-                let child_code = code_db_resolve(child_code_id);
-                let child_state_gas = state_gas_after;
-                let (checkpoint, child_stack, child_frame_memory) = suspend_frame(
-                    pc_after,
-                    gas_after,
-                    sp_after,
-                    mem3,
-                    STATE_GAS_ZERO,
+            let requested_height = memory_requested_height(off_word, len_word);
+            let expansion_cost = memory_expansion_gas_cost(memory_after, requested_height, gas_after);
+            if not_bool(expansion_cost.affordable) then {
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
                     state_spill_after,
-                    carried_refund,
-                    Running(),
-                    parent_message,
-                    carried_code,
-                    carried_calldata,
+                    carried_state_gas_reservoir,
+                    OutOfGas,
                 );
-                let create_continuation : CreateContinuation = struct {
-                        checkpoint = checkpoint,
-                        address = new_addr,
-                        new_account_charged = new_account_charged,
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
+            gas_after = gas_sub(gas_after, expansion_cost.cost);
+            let initcode_access = memory_access(off_word, len_word);
+            let mem1 = expand_memory(carried_memory_base, memory_after, initcode_access.requested_height);
+            let initcode = initcode_access.range;
+
+            /* Up-front charges: memory expansion over the initcode, the CREATE base
+               cost (G_create), the EIP-3860 per-initcode-word cost, and -- for
+               CREATE2 only -- the keccak word cost of hashing the initcode for the
+               address. */
+            let access_cost = create_access_cost();
+            if gas_after < access_cost then {
+                memory_after = mem1;
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    OutOfGas,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                return struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            };
+            gas_after = gas_sub(gas_after, access_cost);
+            let initcode_word_count = memory_word_count_word(len_word);
+            if profile.fork >= Shanghai then {
+                let initcode_cost = word_scaled_gas_cost(G_initcode_word, initcode_word_count, gas_after);
+                if not_bool(initcode_cost.affordable) then {
+                    memory_after = mem1;
+                    gas_after = GAS_ZERO;
+                    let exceptional = exceptional_state(
+                        state_gas_after,
+                        state_spill_after,
+                        carried_state_gas_reservoir,
+                        OutOfGas,
+                    );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
+                };
+                gas_after = gas_sub(gas_after, initcode_cost.cost)
+            };
+            if semantics.uses_salt then {
+                let hashing_cost = word_scaled_gas_cost(G_keccak_word, initcode_word_count, gas_after);
+                if not_bool(hashing_cost.affordable) then {
+                    memory_after = mem1;
+                    gas_after = GAS_ZERO;
+                    let exceptional = exceptional_state(
+                        state_gas_after,
+                        state_spill_after,
+                        carried_state_gas_reservoir,
+                        OutOfGas,
+                    );
+                    state_gas_after = exceptional.state_gas_remaining;
+                    state_spill_after = exceptional.state_gas_spilled;
+                    status_after = exceptional.status;
+                    return struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
+                };
+                gas_after = gas_sub(gas_after, hashing_cost.cost)
+            };
+
+            /* EIP-3860: initcode longer than MAX_INITCODE_SIZE is rejected outright as
+               an exceptional halt. */
+            let valid_initcode_size = initcode_size_allowed(initcode.len);
+            let invalid_initcode_size = not_bool(valid_initcode_size);
+            if invalid_initcode_size then {
+                memory_after = mem1;
+                gas_after = GAS_ZERO;
+                let exceptional = exceptional_state(
+                    state_gas_after,
+                    state_spill_after,
+                    carried_state_gas_reservoir,
+                    InitCodeTooLarge,
+                );
+                state_gas_after = exceptional.state_gas_remaining;
+                state_spill_after = exceptional.state_gas_spilled;
+                status_after = exceptional.status;
+                struct {
+                    pc = pc_after,
+                    gas_remaining = gas_after,
+                    state_gas_remaining = state_gas_after,
+                    state_gas_spilled = state_spill_after,
+                    refund = carried_refund,
+                    status = status_after,
+                    stack_top = sp_after,
+                    memory_base = carried_memory_base,
+                    memory_height = memory_after,
+                    message = parent_message,
+                    code = carried_code,
+                    calldata = carried_calldata,
+                    returndata = returndata_after,
+                }
+            } else {
+                /* derive the new contract address: keccak(0xff, creator, salt,
+                   keccak(initcode)) for CREATE2 (EIP-1014), else rlp(creator, nonce). */
+                let nonce = k_get_nonce(creator);
+                let new_addr : address =
+                    if semantics.uses_salt then {
+                        let initcode_digest_word = mem_keccak(carried_memory_base, mem1, initcode);
+                        let initcode_digest = word_to_hash(initcode_digest_word);
+                        k_create2_addr(creator, salt, initcode_digest)
+                    } else {
+                        k_create_addr(creator, nonce)
                     };
-                let continuation = ResumeCreate(create_continuation);
-                frame_stack_push(continuation);
-                k_mark_created(new_addr); /* EIP-6780: created this tx */
-                k_clear_storage(new_addr);
-                k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
-                k_transfer(creator, new_addr, value);
-                let child_returndata = returndata_clear();
-                (
-                    0, child_gas, child_state_gas, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, Running(),
-                    child_stack, child_frame_memory,
-                    creator, new_addr, new_addr, value, child_state_gas, carried_is_static, child_depth,
-                    child_code, EMPTY_CALLDATA, child_returndata,
-                )
+
+                /* Before Amsterdam the child allocation is computed before the
+                   early guards (and returned if they fail). Amsterdam first charges
+                   any account-growth state gas, because a spill reduces the execution
+                   gas to which the EIP-150 cap applies. */
+                var child_gas : gas = GAS_ZERO;
+                if profile.fork < Amsterdam then {
+                    let avail = gas_after;
+                    let retained_gas : gas = avail / 64;
+                    child_gas = gas_sub(avail, retained_gas);
+                    gas_after = retained_gas
+                };
+
+                /* early-abort guards (child gas refunded, 0 pushed, NO nonce bump): the
+                   depth ceiling, the creator's balance covering the endowment, and the
+                   creator nonce not already at the 2^64-1 ceiling (it must be
+                   incrementable). */
+                let creator_balance = k_get_balance(creator);
+                let endowment_affordable = word_ule(value, creator_balance);
+                let insufficient_balance = not_bool(endowment_affordable);
+                let nonce_limit = sizeof(account_nonce_bound);
+                let depth_limit = sizeof(call_depth_limit);
+                if   insufficient_balance
+                   | (nonce == nonce_limit)
+                   | /* EIP-2681 */
+                     (current_depth == depth_limit) then {
+                    returndata_after = returndata_clear();
+                    gas_after =
+                        if profile.fork < Amsterdam then {
+                            refund_gas(gas_after, child_gas)
+                        } else {
+                            gas_after
+                        };
+                    sp_after = stack_top_advance(sp_after, 1);
+                    write_stack_word(sp_after, WORD_ZERO);
+                    memory_after = mem1;
+                    struct {
+                        pc = pc_after,
+                        gas_remaining = gas_after,
+                        state_gas_remaining = state_gas_after,
+                        state_gas_spilled = state_spill_after,
+                        refund = carried_refund,
+                        status = status_after,
+                        stack_top = sp_after,
+                        memory_base = carried_memory_base,
+                        memory_height = memory_after,
+                        message = parent_message,
+                        code = carried_code,
+                        calldata = carried_calldata,
+                        returndata = returndata_after,
+                    }
+                } else {
+                    /* warm the new address and bump the creator nonce BEFORE the child
+                     * snapshot: both persist even if the initcode reverts (the
+                     * the protocol runs them in the parent, before
+                     * process_create_message). */
+                    let child_depth : frame_depth = current_depth + 1;
+                    k_account_mark_warm(new_addr);
+                    var new_account_charged : bool = false;
+                    if profile.fork >= Amsterdam then {
+                        new_account_charged = k_account_is_empty(new_addr)
+                    };
+                    if new_account_charged then {
+                        let (state_gas_halt, next_gas, next_state_gas, next_state_spill) = charge_state_gas(
+                            gas_after,
+                            state_gas_after,
+                            state_spill_after,
+                            G_amsterdam_state_new_account,
+                        );
+                        gas_after = next_gas;
+                        state_gas_after = next_state_gas;
+                        state_spill_after = next_state_spill;
+                        if state_gas_halt then {
+                            memory_after = mem1;
+                            gas_after = GAS_ZERO;
+                            let exceptional = exceptional_state(
+                                state_gas_after,
+                                state_spill_after,
+                                carried_state_gas_reservoir,
+                                OutOfGas,
+                            );
+                            state_gas_after = exceptional.state_gas_remaining;
+                            state_spill_after = exceptional.state_gas_spilled;
+                            status_after = exceptional.status;
+                            return struct {
+                                pc = pc_after,
+                                gas_remaining = gas_after,
+                                state_gas_remaining = state_gas_after,
+                                state_gas_spilled = state_spill_after,
+                                refund = carried_refund,
+                                status = status_after,
+                                stack_top = sp_after,
+                                memory_base = carried_memory_base,
+                                memory_height = memory_after,
+                                message = parent_message,
+                                code = carried_code,
+                                calldata = carried_calldata,
+                                returndata = returndata_after,
+                            }
+                        }
+                    };
+                    if profile.fork >= Amsterdam then {
+                        let avail = gas_after;
+                        let retained_gas : gas = avail / 64;
+                        child_gas = gas_sub(avail, retained_gas);
+                        gas_after = retained_gas
+                    };
+                    let occupied : bool = k_account_occupied(new_addr);
+                    returndata_after = returndata_clear();
+                    k_bump_nonce(creator);
+                    if occupied then {
+                        /* address collision (the target already has code, a nonzero
+                         * nonce, or storage): no initcode runs, 0 is pushed, and the
+                         * reserved child gas is NOT refunded (it stays deducted). */
+                        if new_account_charged then {
+                            (gas_after, state_gas_after, state_spill_after) = credit_state_gas_refund(
+                                gas_after,
+                                state_gas_after,
+                                state_spill_after,
+                                G_amsterdam_state_new_account,
+                            )
+                        };
+                        sp_after = stack_top_advance(sp_after, 1);
+                        write_stack_word(sp_after, WORD_ZERO);
+                        memory_after = mem1;
+                        struct {
+                            pc = pc_after,
+                            gas_remaining = gas_after,
+                            state_gas_remaining = state_gas_after,
+                            state_gas_spilled = state_spill_after,
+                            refund = carried_refund,
+                            status = status_after,
+                            stack_top = sp_after,
+                            memory_base = carried_memory_base,
+                            memory_height = memory_after,
+                            message = parent_message,
+                            code = carried_code,
+                            calldata = carried_calldata,
+                            returndata = returndata_after,
+                        }
+                    } else {
+                        /* Freeze the initcode while parent memory is active, then
+                           suspend the complete parent before mutating the new account.
+                           The child frame has no calldata. */
+                        let initcode_bytes = memory_code_slice(carried_memory_base, mem1, initcode.off, initcode.len);
+                        let child_code_id = code_db_insert(initcode_bytes, profile.fork);
+                        let child_code = code_db_resolve(child_code_id);
+                        let child_state_gas = state_gas_after;
+                        let running = Running();
+                        let (checkpoint, child_stack, child_memory_base, child_memory_height) = suspend_frame(
+                            pc_after,
+                            gas_after,
+                            sp_after,
+                            carried_memory_base,
+                            mem1,
+                            STATE_GAS_ZERO,
+                            state_spill_after,
+                            carried_refund,
+                            running,
+                            parent_message,
+                            carried_code,
+                            carried_calldata,
+                        );
+                        let create_continuation : CreateContinuation = struct {
+                                checkpoint = checkpoint,
+                                address = new_addr,
+                                new_account_charged = new_account_charged,
+                            };
+                        let continuation = ResumeCreate(create_continuation);
+                        frame_stack_push(continuation);
+                        k_mark_created(new_addr); /* EIP-6780: created this tx */
+                        k_clear_storage(new_addr);
+                        k_bump_nonce(new_addr); /* EIP-161: a created contract starts at nonce 1 */
+                        k_transfer(creator, new_addr, value);
+                        let child_returndata = returndata_clear();
+                        struct {
+                            pc = 0,
+                            gas_remaining = child_gas,
+                            state_gas_remaining = child_state_gas,
+                            state_gas_spilled = STATE_GAS_SPILL_ZERO,
+                            refund = GAS_REFUND_ZERO,
+                            status = running,
+                            stack_top = child_stack,
+                            memory_base = child_memory_base,
+                            memory_height = child_memory_height,
+                            message =
+                                struct {
+                                    caller = creator,
+                                    address = new_addr,
+                                    code_address = new_addr,
+                                    value = value,
+                                    state_gas_reservoir = child_state_gas,
+                                    is_static = carried_is_static,
+                                    depth = child_depth,
+                                },
+                            code = child_code,
+                            calldata = EMPTY_CALLDATA,
+                            returndata = child_returndata,
+                        }
+                    }
+                }
             }
-        }
-    }
         },
     }
 }
@@ -1721,32 +3432,36 @@ function run_create(
 function resume_call(
     continuation : CallContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
     child_refund : gas_refund,
     child_status : FrameStatus,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) = {
     let checkpoint = continuation.checkpoint;
     let succeeded = frame_succeeded(child_status);
-    let (parent_pc, restored_gas, restored_sp, parent_memory, restored_state_gas, restored_state_spill,
-         restored_refund, restored_status, parent_message, parent_code, parent_calldata) = restore_frame(checkpoint);
-    var parent_gas = refund_gas(restored_gas, child_gas);
-    var parent_state_gas : state_gas = restored_state_gas;
-    var parent_state_spill : state_gas_spill = restored_state_spill;
-    (parent_state_gas, parent_state_spill) =
-        return_child_state_gas(parent_state_gas, parent_state_spill, child_state_gas, child_state_spill);
-    var parent_refund : gas_refund = restored_refund;
-    var parent_sp : StackPointer = restored_sp;
+    operand_stack_pop_frame();
+    let parent_memory_base = memory_parent_base(child_memory_base, checkpoint.memory_height);
+    var parent_gas = refund_gas(checkpoint.gas_remaining, child_gas);
+    var parent_state_gas : state_gas = checkpoint.state_gas_remaining;
+    var parent_state_spill : state_gas_spill = checkpoint.state_gas_spilled;
+    (parent_state_gas, parent_state_spill) = return_child_state_gas(
+        parent_state_gas,
+        parent_state_spill,
+        child_state_gas,
+        child_state_spill,
+    );
+    var parent_refund : gas_refund = checkpoint.refund;
+    var parent_sp : StackPointer = checkpoint.stack_top;
 
     /* Both RETURN and REVERT copy their output; exceptional halts carry the
      * empty slice. Successful effects remain, while every failure reverts to
      * the saved kernel checkpoint. */
-    returndata_copy_prefix(output, continuation.return_offset, continuation.return_length);
+    let return_destination = memory_absolute(parent_memory_base, continuation.return_offset);
+    returndata_copy_prefix(output, return_destination, continuation.return_length);
     if succeeded then {
         parent_refund = record_refund(parent_refund, child_refund);
         k_journal_commit();
@@ -1755,24 +3470,38 @@ function resume_call(
     } else {
         k_journal_revert();
         if continuation.new_account_charged then {
-            (parent_gas, parent_state_gas, parent_state_spill) =
-                credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account)
+            (parent_gas, parent_state_gas, parent_state_spill) = credit_state_gas_refund(
+                parent_gas,
+                parent_state_gas,
+                parent_state_spill,
+                G_amsterdam_state_new_account,
+            )
         };
         parent_sp = stack_top_advance(parent_sp, 1);
         write_stack_word(parent_sp, WORD_ZERO)
     };
-    (
-        parent_pc, parent_gas, parent_state_gas, parent_state_spill, parent_refund, restored_status, parent_sp, parent_memory,
-        parent_message.caller, parent_message.address, parent_message.code_address, parent_message.value,
-        parent_message.state_gas_reservoir, parent_message.is_static, parent_message.depth,
-        parent_code, parent_calldata, output,
-    )
+    struct {
+        pc = checkpoint.pc,
+        gas_remaining = parent_gas,
+        state_gas_remaining = parent_state_gas,
+        state_gas_spilled = parent_state_spill,
+        refund = parent_refund,
+        status = checkpoint.status,
+        stack_top = parent_sp,
+        memory_base = parent_memory_base,
+        memory_height = checkpoint.memory_height,
+        message = checkpoint.message,
+        code = checkpoint.code,
+        calldata = checkpoint.calldata,
+        returndata = output,
+    }
 }
 
 /*! Restores a create parent and either deploys or rolls back the child. */
 function resume_create(
     continuation : CreateContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
@@ -1780,9 +3509,7 @@ function resume_create(
     child_status : FrameStatus,
     child_state_gas_reservoir : state_gas,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
@@ -1811,23 +3538,39 @@ function resume_create(
              * exceptional creation path. Neither rule is active on
              * Frontier/Homestead in a way that reaches this branch. */
             settled_child_gas = GAS_ZERO;
-            (settled_child_state_gas, settled_child_state_spill, settled_child_status) =
-                exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, OutOfGas)
+            let exceptional = exceptional_state(
+                settled_child_state_gas,
+                settled_child_state_spill,
+                child_state_gas_reservoir,
+                OutOfGas,
+            );
+            settled_child_state_gas = exceptional.state_gas_remaining;
+            settled_child_state_spill = exceptional.state_gas_spilled;
+            settled_child_status = exceptional.status
         } else {
             let deployment_charge = code_deployment_execution_cost(deployed_length, settled_child_gas);
             if deployment_charge.affordable then {
                 let execution_deposit = deployment_charge.cost;
                 settled_child_gas = gas_sub(settled_child_gas, execution_deposit);
                 let state_deposit = code_deployment_state_cost(deployed_length);
-                let (deployment_halt, deployment_gas, deployment_state_gas, deployment_state_spill) =
-                    charge_deployment_state_gas(settled_child_gas, settled_child_state_gas, settled_child_state_spill, state_deposit);
-                settled_child_gas = deployment_gas;
-                settled_child_state_gas = deployment_state_gas;
-                settled_child_state_spill = deployment_state_spill;
+                var deployment_halt : bool = false;
+                (deployment_halt, settled_child_gas, settled_child_state_gas, settled_child_state_spill) = charge_state_gas(
+                    settled_child_gas,
+                    settled_child_state_gas,
+                    settled_child_state_spill,
+                    state_deposit,
+                );
                 if deployment_halt then {
                     settled_child_gas = GAS_ZERO;
-                    (settled_child_state_gas, settled_child_state_spill, settled_child_status) =
-                        exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, OutOfGas)
+                    let exceptional = exceptional_state(
+                        settled_child_state_gas,
+                        settled_child_state_spill,
+                        child_state_gas_reservoir,
+                        OutOfGas,
+                    );
+                    settled_child_state_gas = exceptional.state_gas_remaining;
+                    settled_child_state_spill = exceptional.state_gas_spilled;
+                    settled_child_status = exceptional.status
                 }
             } else if profile.fork < Homestead then {
                 /* Frontier consumed the remaining child gas but kept the
@@ -1837,21 +3580,35 @@ function resume_create(
                 frontier_empty_deposit = true
             } else {
                 settled_child_gas = GAS_ZERO;
-                (settled_child_state_gas, settled_child_state_spill, settled_child_status) =
-                    exceptional_state(settled_child_state_gas, settled_child_state_spill, child_state_gas_reservoir, OutOfGas)
+                let exceptional = exceptional_state(
+                    settled_child_state_gas,
+                    settled_child_state_spill,
+                    child_state_gas_reservoir,
+                    OutOfGas,
+                );
+                settled_child_state_gas = exceptional.state_gas_remaining;
+                settled_child_state_spill = exceptional.state_gas_spilled;
+                settled_child_status = exceptional.status
             }
         }
     };
-    let deploy_succeeds = initcode_succeeded & frame_succeeded(settled_child_status);
-    let (parent_pc, restored_gas, restored_sp, parent_memory, restored_state_gas, restored_state_spill,
-         restored_refund, restored_status, parent_message, parent_code, parent_calldata) = restore_frame(checkpoint);
-    var parent_gas = refund_gas(restored_gas, settled_child_gas);
-    var parent_state_gas : state_gas = restored_state_gas;
-    var parent_state_spill : state_gas_spill = restored_state_spill;
-    (parent_state_gas, parent_state_spill) =
-        return_child_state_gas(parent_state_gas, parent_state_spill, settled_child_state_gas, settled_child_state_spill);
-    var parent_refund : gas_refund = restored_refund;
-    var parent_sp : StackPointer = restored_sp;
+    var deploy_succeeds : bool = false;
+    if initcode_succeeded then {
+        deploy_succeeds = frame_succeeded(settled_child_status)
+    };
+    operand_stack_pop_frame();
+    let parent_memory_base = memory_parent_base(child_memory_base, checkpoint.memory_height);
+    var parent_gas = refund_gas(checkpoint.gas_remaining, settled_child_gas);
+    var parent_state_gas : state_gas = checkpoint.state_gas_remaining;
+    var parent_state_spill : state_gas_spill = checkpoint.state_gas_spilled;
+    (parent_state_gas, parent_state_spill) = return_child_state_gas(
+        parent_state_gas,
+        parent_state_spill,
+        settled_child_state_gas,
+        settled_child_state_spill,
+    );
+    var parent_refund : gas_refund = checkpoint.refund;
+    var parent_sp : StackPointer = checkpoint.stack_top;
 
     if deploy_succeeds then {
         parent_refund = record_refund(parent_refund, child_refund);
@@ -1866,8 +3623,12 @@ function resume_create(
     } else {
         k_journal_revert();
         if continuation.new_account_charged then {
-            (parent_gas, parent_state_gas, parent_state_spill) =
-                credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account)
+            (parent_gas, parent_state_gas, parent_state_spill) = credit_state_gas_refund(
+                parent_gas,
+                parent_state_gas,
+                parent_state_spill,
+                G_amsterdam_state_new_account,
+            )
         };
         parent_sp = stack_top_advance(parent_sp, 1);
         write_stack_word(parent_sp, WORD_ZERO)
@@ -1877,18 +3638,28 @@ function resume_create(
      * remains visible to RETURNDATA opcodes in the parent. */
     let parent_returndata =
         if initcode_succeeded then returndata_clear() else output;
-    (
-        parent_pc, parent_gas, parent_state_gas, parent_state_spill, parent_refund, restored_status, parent_sp, parent_memory,
-        parent_message.caller, parent_message.address, parent_message.code_address, parent_message.value,
-        parent_message.state_gas_reservoir, parent_message.is_static, parent_message.depth,
-        parent_code, parent_calldata, parent_returndata,
-    )
+    struct {
+        pc = checkpoint.pc,
+        gas_remaining = parent_gas,
+        state_gas_remaining = parent_state_gas,
+        state_gas_spilled = parent_state_spill,
+        refund = parent_refund,
+        status = checkpoint.status,
+        stack_top = parent_sp,
+        memory_base = parent_memory_base,
+        memory_height = checkpoint.memory_height,
+        message = checkpoint.message,
+        code = checkpoint.code,
+        calldata = checkpoint.calldata,
+        returndata = parent_returndata,
+    }
 }
 
 /*! Applies the pending operation for one completed child frame. */
 function resume_frame(
     continuation : FrameContinuation,
     output : OutputSlice,
+    child_memory_base : memory_base,
     child_gas : gas,
     child_state_gas : state_gas,
     child_state_spill : state_gas_spill,
@@ -1896,16 +3667,24 @@ function resume_frame(
     child_status : FrameStatus,
     child_state_gas_reservoir : state_gas,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) =
     match continuation {
         Empty() => fatal_error(ExecutionInvalid),
-        ResumeCall(call) => resume_call(call, output, child_gas, child_state_gas, child_state_spill, child_refund, child_status),
+        ResumeCall(call) => resume_call(
+            call,
+            output,
+            child_memory_base,
+            child_gas,
+            child_state_gas,
+            child_state_spill,
+            child_refund,
+            child_status,
+        ),
         ResumeCreate(create) => resume_create(
             create,
             output,
+            child_memory_base,
             child_gas,
             child_state_gas,
             child_state_spill,
@@ -1925,7 +3704,8 @@ function run_frame_entry_encoded(
     carried_state_spill : state_gas_spill,
     carried_refund : gas_refund,
     carried_sp : StackPointer,
-    carried_memory : EvmMemorySlice,
+    carried_memory_base : memory_base,
+    carried_memory_height : memory_height,
     carried_caller : address,
     carried_address : address,
     carried_code_address : address,
@@ -1938,57 +3718,169 @@ function run_frame_entry_encoded(
     carried_returndata : OutputSlice,
     opcode : opcode,
 ) -> (
-    code_pointer, gas, state_gas, state_gas_spill, gas_refund, FrameStatus, StackPointer, EvmMemorySlice,
-    address, address, address, word, state_gas, bool, frame_depth,
-    Code, CalldataSlice, OutputSlice,
+    FrameTransition
 ) = {
     match opcode {
         240 => run_create(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, CreateByNonce,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            CreateByNonce,
         ),
         241 => run_call(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, Call,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            Call,
         ),
         242 => run_call(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, CallCode,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            CallCode,
         ),
         244 => run_call(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, DelegateCall,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            DelegateCall,
         ),
         245 => run_create(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, CreateBySalt,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            CreateBySalt,
         ),
         250 => run_call(
-            carried_pc, carried_gas, carried_state_gas, carried_state_spill, carried_refund,
-            carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-            carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-            carried_code, carried_calldata, carried_returndata, StaticCall,
+            carried_pc,
+            carried_gas,
+            carried_state_gas,
+            carried_state_spill,
+            carried_refund,
+            carried_sp,
+            carried_memory_base,
+            carried_memory_height,
+            carried_caller,
+            carried_address,
+            carried_code_address,
+            carried_value,
+            carried_state_gas_reservoir,
+            carried_is_static,
+            carried_depth,
+            carried_code,
+            carried_calldata,
+            carried_returndata,
+            StaticCall,
         ),
         _ => {
-            let (state_gas_after, state_spill_after, status_after) = exceptional_state(
-                carried_state_gas, carried_state_spill, carried_state_gas_reservoir, InvalidOpcode,
+            let exceptional = exceptional_state(
+                carried_state_gas,
+                carried_state_spill,
+                carried_state_gas_reservoir,
+                InvalidOpcode,
             );
-            (
-                carried_pc, GAS_ZERO, state_gas_after, state_spill_after, carried_refund, status_after,
-                carried_sp, carried_memory, carried_caller, carried_address, carried_code_address,
-                carried_value, carried_state_gas_reservoir, carried_is_static, carried_depth,
-                carried_code, carried_calldata, carried_returndata,
-            )
+            let state_gas_after = exceptional.state_gas_remaining;
+            let state_spill_after = exceptional.state_gas_spilled;
+            let status_after = exceptional.status;
+            struct {
+                pc = carried_pc,
+                gas_remaining = GAS_ZERO,
+                state_gas_remaining = state_gas_after,
+                state_gas_spilled = state_spill_after,
+                refund = carried_refund,
+                status = status_after,
+                stack_top = carried_sp,
+                memory_base = carried_memory_base,
+                memory_height = carried_memory_height,
+                message =
+                    struct {
+                        caller = carried_caller,
+                        address = carried_address,
+                        code_address = carried_code_address,
+                        value = carried_value,
+                        state_gas_reservoir = carried_state_gas_reservoir,
+                        is_static = carried_is_static,
+                        depth = carried_depth,
+                    },
+                code = carried_code,
+                calldata = carried_calldata,
+                returndata = carried_returndata,
+            }
         },
     }
 }

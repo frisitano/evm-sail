@@ -172,12 +172,12 @@ def k_blobhash (index_word : Nat) : SailM Nat := do
   else (pure ZERO_WORD)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex608953_ : Nat, 0 ≤ k_ex608953_ ∧ k_ex608953_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex549868_ : Nat, 0 ≤ k_ex549868_ ∧ k_ex549868_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   (create_address a nonce)
 
 /-- The `CREATE2` address rule, in kernel form. -/
-/- Type quantifiers: k_ex608954_ : Nat, 0 ≤ k_ex608954_ ∧ k_ex608954_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex549869_ : Nat, 0 ≤ k_ex549869_ ∧ k_ex549869_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : (Vector (BitVec 8) 20)) (salt : Nat) (inithash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (create2_address a salt inithash)
 

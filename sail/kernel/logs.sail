@@ -40,8 +40,11 @@ function k_log(a : address, topics : LogTopics, data : LogData) -> unit = {
 }
 
 /*! Captures the current transaction's consecutive retained log range. */
-function read_logs() -> LogSeriesRef =
-    struct { start = logs_tx_start(), count = logs_tx_count() }
+function read_logs() -> LogSeriesRef = {
+    let start = logs_tx_start();
+    let count = logs_tx_count();
+    struct { start = start, count = count }
+}
 
 /*! Returns the source-backed payload of one retained log record. */
 function read_log_data(index : log_store_index) -> LogDataSlice = {

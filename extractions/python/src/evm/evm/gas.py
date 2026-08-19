@@ -69,7 +69,6 @@ from evm.primitives.gas import (
 )
 from evm.primitives.bytes import (
     CalldataSlice,
-    EvmMemorySlice,
     calldata_slice_length,
 )
 from evm.exceptions import (
@@ -95,7 +94,6 @@ from evm.primitives.tx import (
 from evm.evm.machine import (
     conserved_gas_add,
     memory_high_water,
-    memory_expand_to,
 )
 from evm.kernel import environment
 
@@ -191,18 +189,6 @@ def sstore_clear_refund() -> gas_constant:
     else:
         return gas_constant(R_sclear_pre_london)
 
-def charge(g: int, amount: int) -> tuple[bool, int]:
-    if (int(amount) <= int(g)):
-        return (False, (int(g) - int(amount)))
-    else:
-        return (True, GAS_ZERO)
-
-def check_execution_gas(g: int, amount: int) -> tuple[bool, int]:
-    if (int(g) < int(amount)):
-        return (True, g)
-    else:
-        return (False, g)
-
 def state_gas_spill_room(left: int) -> int:
     return (int((1 << 24)) - int(left))
 
@@ -213,36 +199,22 @@ def state_gas_spill_add(left: int, right: int) -> int:
     else:
         return fatal_error(FatalError.ExecutionInvalid)
 
-def debit_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
+def charge_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
     try:
         if ((amount) == (0)):
-            raise SailReturn((True, g, state_gas_remaining, state_gas_spilled))
+            raise SailReturn((False, g, state_gas_remaining, state_gas_spilled))
         state_left = state_gas_remaining
         if (int(amount) <= int(state_left)):
-            return (True, g, (int(state_left) - int(amount)), state_gas_spilled)
+            return (False, g, (int(state_left) - int(amount)), state_gas_spilled)
         else:
             remainder = (int(amount) - int(state_left))
             if (int(remainder) <= int(g)):
                 spilled = state_gas_spilled
-                return (True, (int(g) - int(remainder)), STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
+                return (False, (int(g) - int(remainder)), STATE_GAS_ZERO, state_gas_spill_add(spilled, remainder))
             else:
-                return (False, g, state_gas_remaining, state_gas_spilled)
+                return (True, g, state_gas_remaining, state_gas_spilled)
     except SailReturn as _sail_return:
         return _sail_return.value
-
-def charge_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
-    (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount)
-    if debited:
-        return (False, debited_gas, state_gas_remaining, state_gas_spilled)
-    else:
-        return (True, debited_gas, state_gas_remaining, state_gas_spilled)
-
-def charge_deployment_state_gas(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: int) -> tuple[bool, gas, state_gas, state_gas_spill]:
-    (debited, debited_gas, state_gas_remaining, state_gas_spilled) = debit_state_gas(g, state_gas_remaining, state_gas_spilled, amount)
-    if debited:
-        return (False, debited_gas, state_gas_remaining, state_gas_spilled)
-    else:
-        return (True, debited_gas, state_gas_remaining, state_gas_spilled)
 
 def credit_state_gas_refund(g: gas, state_gas_remaining: state_gas, state_gas_spilled: state_gas_spill, amount: state_gas_spill) -> tuple[gas, state_gas, state_gas_spill]:
     spilled = state_gas_spilled
@@ -298,7 +270,7 @@ def mem_cost(words: int) -> int:
     quadratic = sail_ediv_int(square, 512)
     return (int(linear) + int(quadratic))
 
-def memory_required_size(start: int, size: int) -> memory_expansion_charge:
+def memory_requested_height(start: int, size: int) -> memory_expansion_charge:
     if ((size) == (0)):
         return Uint(0)
     else:
@@ -306,7 +278,8 @@ def memory_required_size(start: int, size: int) -> memory_expansion_charge:
             bounded_start = start
             if (int(size) <= int((int((int((1 << 32)) - 1)) - int(bounded_start)))):
                 bounded_size = size
-                return Uint((int(bounded_start) + int(bounded_size)))
+                requested_height = (int(bounded_start) + int(bounded_size))
+                return Uint(requested_height)
             else:
                 return Uint((int((int((1 << 32)) - 1)) + 1))
         else:
@@ -320,33 +293,37 @@ def memory_access(start: int, size: int) -> MemoryAccess:
             bounded_start = start
             if (int(size) <= int((int((int((1 << 32)) - 1)) - int(bounded_start)))):
                 bounded_size = size
-                access = MemoryAccessFields(validity=MemoryAccessFieldsValidity(off=int(bounded_start), len=int(bounded_size), required=(int(bounded_start) + int(bounded_size))), range=memory_range(bounded_start, bounded_size), required_size=int((int(bounded_start) + int(bounded_size))))
+                sail_range_ = memory_range(bounded_start, bounded_size)
+                requested_height = (int(bounded_start) + int(bounded_size))
+                access = MemoryAccessFields(validity=MemoryAccessFieldsValidity(off=int(bounded_start), len=int(bounded_size), required=(int(bounded_start) + int(bounded_size))), range=sail_range_, requested_height=int(requested_height))
                 return access
             else:
                 return fatal_error(FatalError.ExecutionInvalid)
         else:
             return fatal_error(FatalError.ExecutionInvalid)
 
-def charge_memory_expansion(g: int, mem: EvmMemorySlice, required_size: int) -> tuple[bool, int]:
-    if (int(required_size) <= int((int((1 << 32)) - 1))):
-        materialized_size = required_size
+def memory_expansion_gas_cost(mem: code_length, requested_height: int, available: gas) -> GasCharge:
+    if (int(requested_height) <= int((int((1 << 32)) - 1))):
+        materialized_size = requested_height
         new_words = memory_word_count(materialized_size)
-        old_words = memory_word_count(memory_high_water(mem))
+        old_size = memory_high_water(mem)
+        old_words = memory_word_count(old_size)
         if (int(new_words) <= int(old_words)):
-            return (False, g)
+            return gas_charge(GAS_COST_ZERO)
         else:
             old_cost = mem_cost(old_words)
             new_cost = mem_cost(new_words)
             if (int(old_cost) <= int(new_cost)):
-                return charge(g, (int(new_cost) - int(old_cost)))
+                exact_cost = (int(new_cost) - int(old_cost))
+                if (int(exact_cost) <= int(available)):
+                    cost = exact_cost
+                    return gas_charge(cost)
+                else:
+                    return GAS_CHARGE_UNAFFORDABLE
             else:
-                return (False, g)
+                return gas_charge(GAS_COST_ZERO)
     else:
-        return (True, GAS_ZERO)
-
-def expand_memory(mem: EvmMemorySlice, required_size: code_length) -> EvmMemorySlice:
-    (_, expanded) = memory_expand_to(mem, required_size)
-    return expanded
+        return GAS_CHARGE_UNAFFORDABLE
 
 def account_cost(warm: bool) -> gas_constant:
     execution_profile = environment.k_execution_profile
@@ -495,7 +472,11 @@ def modexp_gas(input: CalldataSlice, available: gas) -> GasCharge:
             maxlen = ml
         whole_words = sail_ediv_int(maxlen, 8)
         partial_word_bytes = sail_tmod_int(maxlen, 8)
-        words = (int(whole_words) + int((0 if ((partial_word_bytes) == (0)) else 1)))
+        if ((partial_word_bytes) == (0)):
+            trailing_word = 0
+        else:
+            trailing_word = 1
+        words = (int(whole_words) + int(trailing_word))
         if osaka:
             product_limit_value = available
         else:
@@ -574,6 +555,7 @@ def modexp_gas(input: CalldataSlice, available: gas) -> GasCharge:
                 count = (int((16 * int(bounded_extra))) + int(high_bits))
             else:
                 pre_osaka_limit = (int((3 * int(available))) + 2)
+                extra_limit = 0
                 extra_limit = sail_ediv_int(pre_osaka_limit, 8)
                 extra_unaffordable = (int(extra) > int(extra_limit))
                 if extra_unaffordable:
@@ -759,7 +741,15 @@ def legacy_sstore_costs(original: word, current: word, new_value: word, cold: bo
             if original_is_zero:
                 clear_delta = 0
             else:
-                clear_delta = (int(((0 - int(clear_refund)) if current_is_zero else 0)) + int((clear_refund if new_value_is_zero else 0)))
+                if current_is_zero:
+                    withdrawn_clear_refund = (0 - int(clear_refund))
+                else:
+                    withdrawn_clear_refund = 0
+                if new_value_is_zero:
+                    awarded_clear_refund = clear_refund
+                else:
+                    awarded_clear_refund = 0
+                clear_delta = (int(withdrawn_clear_refund) + int(awarded_clear_refund))
             if ((original) == (new_value)):
                 if original_is_zero:
                     reset_delta = (int(G_sset) - int(G_warm_access))
@@ -812,51 +802,67 @@ def sstore_costs(original: word, current: word, new_value: word, cold: bool) -> 
     else:
         return legacy_sstore_costs(original, current, new_value, cold)
 
-def charge_word_scaled_gas(g: gas, per_unit: gas_constant, units: word) -> tuple[bool, gas]:
+def word_scaled_gas_cost(per_unit: gas_constant, units: word, available: gas) -> GasCharge:
     try:
         if ((((per_unit) == (0))) | (((units) == (0)))):
-            raise SailReturn((False, g))
-        if (int(units) <= int(g)):
+            raise SailReturn(gas_charge(GAS_COST_ZERO))
+        if (int(units) <= int(available)):
             affordable_units = units
             exact_cost = (int(per_unit) * int(affordable_units))
-            if (int(exact_cost) <= int(g)):
+            if (int(exact_cost) <= int(available)):
                 cost = exact_cost
-                return charge(g, cost)
+                return gas_charge(cost)
             else:
-                return (True, g)
+                return GAS_CHARGE_UNAFFORDABLE
         else:
-            return (True, g)
+            return GAS_CHARGE_UNAFFORDABLE
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def charge_memory_word_gas(g: gas, base: gas_constant, per_word: gas_constant, size: word) -> tuple[bool, gas]:
-    (base_halt, base_gas) = charge(g, base)
-    if base_halt:
-        return (True, base_gas)
+def memory_word_gas_cost(base: gas_constant, per_word: gas_constant, size: word, available: gas) -> GasCharge:
+    if (int(base) > int(available)):
+        return GAS_CHARGE_UNAFFORDABLE
     else:
+        after_base = (int(available) - int(base))
         words = memory_word_count_word(size)
-        return charge_word_scaled_gas(base_gas, per_word, words)
-
-def charge_keccak_gas(g: gas, size: word) -> tuple[bool, gas]:
-    return charge_memory_word_gas(g, G_keccak, G_keccak_word, size)
-
-def charge_copy_gas(g: gas, size: word) -> tuple[bool, gas]:
-    return charge_memory_word_gas(g, GAS_CONSTANT_ZERO, G_copy_word, size)
-
-def charge_log_gas(g: gas, num_topics: log_topic_count, size: word) -> tuple[bool, gas]:
-    (base_halt, base_gas) = charge(g, G_log)
-    if base_halt:
-        return (True, base_gas)
-    else:
-        topic_cost = (int(G_logtopic) * int(num_topics))
-        (topics_halt, topics_gas) = charge(base_gas, topic_cost)
-        if topics_halt:
-            return (True, topics_gas)
+        variable = word_scaled_gas_cost(per_word, words, after_base)
+        if variable.affordable:
+            exact_cost = (int(base) + int(variable.cost))
+            if (int(exact_cost) <= int(available)):
+                cost = exact_cost
+                return gas_charge(cost)
+            else:
+                return GAS_CHARGE_UNAFFORDABLE
         else:
-            return charge_word_scaled_gas(topics_gas, G_logdata, size)
+            return GAS_CHARGE_UNAFFORDABLE
+
+def keccak_gas_cost(size: word, available: gas) -> GasCharge:
+    return memory_word_gas_cost(G_keccak, G_keccak_word, size, available)
+
+def copy_gas_cost(size: word, available: gas) -> GasCharge:
+    return memory_word_gas_cost(GAS_CONSTANT_ZERO, G_copy_word, size, available)
+
+def log_gas_cost(num_topics: log_topic_count, size: word, available: gas) -> GasCharge:
+    topic_cost = (int(G_logtopic) * int(num_topics))
+    fixed_cost = (int(G_log) + int(topic_cost))
+    if (int(fixed_cost) > int(available)):
+        return GAS_CHARGE_UNAFFORDABLE
+    else:
+        after_fixed = (int(available) - int(fixed_cost))
+        variable = word_scaled_gas_cost(G_logdata, size, after_fixed)
+        if variable.affordable:
+            exact_cost = (int(fixed_cost) + int(variable.cost))
+            if (int(exact_cost) <= int(available)):
+                cost = exact_cost
+                return gas_charge(cost)
+            else:
+                return GAS_CHARGE_UNAFFORDABLE
+        else:
+            return GAS_CHARGE_UNAFFORDABLE
 
 def exp_gas(exponent: word) -> gas_cost:
-    return gas_cost((int((int(G_expbyte) * int(word_byte_length(exponent)))) + int(G_exp)))
+    exponent_bytes = word_byte_length(exponent)
+    return gas_cost((int((int(G_expbyte) * int(exponent_bytes))) + int(G_exp)))
 
 def transaction_initcode_gas(byte_len: transaction_byte_length) -> transaction_initcode_cost:
     execution_profile = environment.k_execution_profile

@@ -45,11 +45,18 @@ typedef uint8_t ztrie_path_len;
 // type abbreviation trie_path_cursor
 typedef uint8_t ztrie_path_cursor;
 
+
+#ifndef SAIL_U128_DEFINED
+#define SAIL_U128_DEFINED
+typedef struct { uint64_t limbs[2]; } u128;
+#endif
+
+
 // type abbreviation transaction_state_gas_used
-typedef sail_int ztransaction_state_gas_used;
+typedef u128 ztransaction_state_gas_used;
 
 // type abbreviation transaction_state_gas_delta
-typedef sail_int ztransaction_state_gas_delta;
+typedef __int128 ztransaction_state_gas_delta;
 
 // type abbreviation transaction_item_count
 typedef uint32_t ztransaction_item_count;
@@ -76,7 +83,13 @@ typedef uint32_t zstateless_input_pointer;
 typedef uint32_t zstate_gas_spill;
 
 // type abbreviation state_gas_delta
-typedef sail_int zstate_gas_delta;
+typedef __int128 zstate_gas_delta;
+
+// type abbreviation state_gas
+typedef uint64_t zstate_gas;
+
+// type abbreviation stack_slot_count
+typedef uint16_t zstack_slot_count;
 
 // type abbreviation stack_operation_index
 typedef uint8_t zstack_operation_index;
@@ -133,22 +146,25 @@ typedef uint8_t zopcode;
 typedef uint64_t znibble;
 
 // type abbreviation modexp_product
-typedef sail_int zmodexp_product;
+typedef u256 zmodexp_product;
 
 // type abbreviation modexp_pre_osaka_extra
-typedef sail_int zmodexp_pre_osaka_extra;
+typedef uint64_t zmodexp_pre_osaka_extra;
 
 // type abbreviation modexp_osaka_extra
-typedef sail_int zmodexp_osaka_extra;
+typedef uint64_t zmodexp_osaka_extra;
 
 // type abbreviation modexp_factor
-typedef sail_int zmodexp_factor;
-
-// type abbreviation memory_pointer
-typedef uint32_t zmemory_pointer;
+typedef u128 zmodexp_factor;
 
 // type abbreviation memory_length
 typedef uint32_t zmemory_length;
+
+// type abbreviation memory_height
+typedef uint32_t zmemory_height;
+
+// type abbreviation memory_base
+typedef uint32_t zmemory_base;
 
 // type abbreviation log_topic_count
 typedef uint8_t zlog_topic_count;
@@ -157,10 +173,10 @@ typedef uint8_t zlog_topic_count;
 typedef uint64_t zlog_store_index;
 
 // type abbreviation linear_gas_variable_product
-typedef sail_int zlinear_gas_variable_product;
+typedef u128 zlinear_gas_variable_product;
 
 // type abbreviation linear_gas_product
-typedef sail_int zlinear_gas_product;
+typedef u128 zlinear_gas_product;
 
 // type abbreviation jump_table_index
 typedef uint64_t zjump_table_index;
@@ -182,20 +198,23 @@ typedef struct { uint8_t bytes[32]; } fixed_bytes_32;
 // type abbreviation hash
 typedef fixed_bytes_32 zhash;
 
+// type abbreviation gas_refund_delta
+typedef int16_t zgas_refund_delta;
+
 // type abbreviation gas_refund
 typedef __int128 zgas_refund;
 
 // type abbreviation gas_cost
-typedef sail_int zgas_cost;
+typedef uint64_t zgas_cost;
 
 // type abbreviation gas_constant
 typedef uint16_t zgas_constant;
 
 // type abbreviation gas
-typedef sail_int zgas;
+typedef uint64_t zgas;
 
 // type abbreviation frame_state_gas_delta
-typedef sail_int zframe_state_gas_delta;
+typedef __int128 zframe_state_gas_delta;
 
 // type abbreviation frame_depth
 typedef uint16_t zframe_depth;
@@ -223,6 +242,9 @@ typedef uint32_t zcode_length;
 // type abbreviation chain_identifier
 typedef uint64_t zchain_identifier;
 
+// type abbreviation call_tree_steps
+typedef u128 zcall_tree_steps;
+
 // type abbreviation byte
 typedef uint64_t zbyte;
 
@@ -233,13 +255,13 @@ typedef uint64_t zbranch_mask;
 typedef uint16_t zbranch_content_length;
 
 // type abbreviation bls_msm_tail_product
-typedef sail_int zbls_msm_tail_product;
+typedef uint64_t zbls_msm_tail_product;
 
 // type abbreviation bls_msm_product
-typedef sail_int zbls_msm_product;
+typedef u128 zbls_msm_product;
 
 // type abbreviation bls_msm_coefficient
-typedef sail_int zbls_msm_coefficient;
+typedef uint32_t zbls_msm_coefficient;
 
 // type abbreviation bls_discount
 typedef uint16_t zbls_discount;
@@ -534,9 +556,9 @@ struct zTransactionGasAllowanceFields {
 struct zTransactionCosts {
   u256 zblob_fee;
   uint32_t zblob_gas;
-  sail_int zcalldata_floor;
-  sail_int zintrinsic_execution;
-  sail_int zintrinsic_state;
+  uint64_t zcalldata_floor;
+  uint64_t zintrinsic_execution;
+  uint64_t zintrinsic_state;
   u256 zupfront;
 };
 
@@ -626,8 +648,14 @@ typedef struct zStatelessInputSliceFields zStatelessInputSliceAtLeast;
 // type abbreviation StatelessInputSlice
 typedef struct zStatelessInputSliceFields zStatelessInputSlice;
 
-// type abbreviation StackTop
-typedef uint64_t zStackTop;
+// enum StackValidation
+enum zStackValidation { zStackValid, zStackUnderflowFailure, zStackOverflowFailure };
+
+// struct StackPointer
+struct zStackPointer {
+  uint16_t zheight;
+  uint64_t zstorage;
+};
 
 // struct SszContainerCursor
 struct zSszzContainerCursor {
@@ -637,9 +665,9 @@ struct zSszzContainerCursor {
 
 // struct SstoreCosts
 struct zSstoreCosts {
-  sail_int zexecution;
+  uint64_t zexecution;
   __int128 zrefund;
-  sail_int zstate_charge;
+  uint64_t zstate_charge;
   uint32_t zstate_credit;
 };
 
@@ -794,7 +822,7 @@ struct zMessage {
   fixed_bytes_20 zcode_address;
   uint16_t zdepth;
   bool zis_static;
-  sail_int zstate_gas_reservoir;
+  uint64_t zstate_gas_reservoir;
   u256 zvalue;
 };
 
@@ -810,7 +838,7 @@ typedef struct zMemoryRangeFields zMemoryRange;
 // struct MemoryAccessFields
 struct zMemoryAccessFields {
   struct zMemoryRangeFields zrange;
-  uint32_t zrequired_sizze;
+  uint32_t zrequested_height;
 };
 
 // type abbreviation LogsBloomRef
@@ -892,9 +920,9 @@ typedef struct zLogDataSliceFields zLogDataSlice;
 
 // struct IntrinsicGasCost
 struct zIntrinsicGasCost {
-  sail_int zcalldata_floor;
-  sail_int zexecution;
-  sail_int zstate;
+  uint64_t zcalldata_floor;
+  uint64_t zexecution;
+  uint64_t zstate;
 };
 
 // struct InlineNode
@@ -1040,7 +1068,7 @@ struct zGasLimitsFields {
 // struct GasCharge
 struct zGasCharge {
   bool zaffordable;
-  sail_int zcost;
+  uint64_t zcost;
 };
 
 // type abbreviation Fork
@@ -1052,6 +1080,17 @@ enum zFatalError { zInvalidConfig, zHeaderChainBroken, zRlpDecode, zInvalidSigna
 // enum ExceptionKind
 enum zExceptionKind { zStackUnderflow, zStackOverflow, zOutOfGas, zInvalidOpcode, zInvalidJump, zStaticViolation, zCallDepthExceeded, zInsufficientBalance, zWriteProtection, zInitCodeTooLarge, zNonceOverflow, zAddressCollision };
 
+// union OpcodeOutcome
+enum kind_zOpcodeOutcome { Kind_zContinue, Kind_zFailed };
+
+struct zOpcodeOutcome {
+  enum kind_zOpcodeOutcome kind;
+  union {
+    struct { unit zContinue; };
+    struct { enum zExceptionKind zFailed; };
+  } variants;
+};
+
 // union FrameStatus
 enum kind_zFrameStatus { Kind_zExceptional, Kind_zHalted, Kind_zRunning };
 
@@ -1062,6 +1101,13 @@ struct zFrameStatus {
     struct { struct zHaltKind zHalted; };
     struct { unit zRunning; };
   } variants;
+};
+
+// struct ExceptionalStateTransition
+struct zExceptionalStateTransition {
+  uint64_t zstate_gas_remaining;
+  uint32_t zstate_gas_spilled;
+  struct zFrameStatus zstatus;
 };
 
 // struct EvmMemorySliceFields
@@ -1132,18 +1178,34 @@ struct zCalldataSlice {
   } variants;
 };
 
-// struct FrameCheckpoint
-struct zFrameCheckpoint {
-  uint16_t zcall_depth;
+// struct FrameTransition
+struct zFrameTransition {
   struct zCalldataSlice zcalldata;
   struct zCodeFields zcode;
-  sail_int zgas_remaining;
-  struct zEvmMemorySliceFields zmemory;
+  uint64_t zgas_remaining;
+  uint32_t zmemory_base;
+  uint32_t zmemory_height;
   struct zMessage zmessage;
   uint32_t zpc;
   __int128 zrefund;
-  uint64_t zstack_top;
-  sail_int zstate_gas_remaining;
+  struct zOutputSliceFields zreturndata;
+  struct zStackPointer zstack_top;
+  uint64_t zstate_gas_remaining;
+  uint32_t zstate_gas_spilled;
+  struct zFrameStatus zstatus;
+};
+
+// struct FrameCheckpoint
+struct zFrameCheckpoint {
+  struct zCalldataSlice zcalldata;
+  struct zCodeFields zcode;
+  uint64_t zgas_remaining;
+  uint32_t zmemory_height;
+  struct zMessage zmessage;
+  uint32_t zpc;
+  __int128 zrefund;
+  struct zStackPointer zstack_top;
+  uint64_t zstate_gas_remaining;
   uint32_t zstate_gas_spilled;
   struct zFrameStatus zstatus;
 };
@@ -1271,13 +1333,6 @@ struct zBlockHeader {
   fixed_bytes_32 zstate_root;
   uint64_t ztimestamp;
 };
-
-
-#ifndef SAIL_U128_DEFINED
-#define SAIL_U128_DEFINED
-typedef struct { uint64_t limbs[2]; } u128;
-#endif
-
 
 // struct BlockGasUsageFields
 struct zBlockGasUsageFields {
@@ -1482,6 +1537,9 @@ struct zAccountInfo {
   fixed_bytes_32 zstorage_root;
 };
 
+// struct AccountExecutionContext
+struct zAccountExecutionContext {fixed_bytes_20 zaddress;};
+
 // struct Account
 struct zAccount {
   bool zcreated;
@@ -1611,12 +1669,6 @@ typedef struct { uint64_t limbs[5]; } u320;
 #endif
 
 
-// struct tuple_(%bool, %struct z__sail_c_repr_fixed_bytes(20))
-struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 {
-  bool ztup0;
-  fixed_bytes_20 ztup1;
-};
-
 #ifndef SAIL_FIXED_VECTOR_ZZ5FVECZ8256ZCZ0Z5BV8Z9_DEFINED
 #define SAIL_FIXED_VECTOR_ZZ5FVECZ8256ZCZ0Z5BV8Z9_DEFINED
 typedef struct zz5fvecz8256zCz0z5bv8z9 {
@@ -1646,34 +1698,30 @@ struct ztuple_z8z5boolzCz0z5u8zCz0z5u64z9 {
   uint64_t ztup2;
 };
 
-// struct tuple_(%struct z__sail_c_repr_u256, %bv64)
-struct ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5bv64z9 {
-  u256 ztup0;
-  uint64_t ztup1;
-};
-
-// struct tuple_(%struct zEvmMemorySliceFields, %struct zEvmMemorySliceFields)
-struct ztuple_z8z5structz0zzEvmMemorySliceFieldszCz0z5structz0zzEvmMemorySliceFieldsz9 {
-  struct zEvmMemorySliceFields ztup0;
-  struct zEvmMemorySliceFields ztup1;
-};
-
-// struct tuple_(%struct zCodeRegionSliceFields, %struct zEvmMemorySliceFields)
-struct ztuple_z8z5structz0zzCodeRegionSliceFieldszCz0z5structz0zzEvmMemorySliceFieldsz9 {
-  struct zCodeRegionSliceFields ztup0;
-  struct zEvmMemorySliceFields ztup1;
-};
-
-// struct tuple_(%struct z__sail_c_repr_u256, %struct zEvmMemorySliceFields)
-struct ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5structz0zzEvmMemorySliceFieldsz9 {
-  u256 ztup0;
-  struct zEvmMemorySliceFields ztup1;
-};
-
-// struct tuple_(%bool, %i)
-struct ztuple_z8z5boolzCz0z5iz9 {
+// struct tuple_(%bool, %struct z__sail_c_repr_fixed_bytes(20))
+struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 {
   bool ztup0;
-  sail_int ztup1;
+  fixed_bytes_20 ztup1;
+};
+
+// struct tuple_(%u64, %u64, %u32)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+};
+
+// struct tuple_(%u64, %u64, %u8)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u8z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint8_t ztup2;
+};
+
+// struct tuple_(%u64, %u32)
+struct ztuple_z8z5u64zCz0z5u32z9 {
+  uint64_t ztup0;
+  uint32_t ztup1;
 };
 
 #ifndef SAIL_FIXED_VECTOR_ZZ5FVECZ8128ZCZ0Z5U16Z9_DEFINED
@@ -1696,58 +1744,218 @@ struct ztuple_z8z5u8zCz0z5u8z9 {
   uint8_t ztup1;
 };
 
-// struct tuple_(%u32, %bv64, %struct zEvmMemorySliceFields, %i)
-struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 {
+// struct tuple_(%u64, %union zOpcodeOutcome)
+struct ztuple_z8z5u64zCz0z5unionz0zzOpcodeOutcomez9 {
+  uint64_t ztup0;
+  struct zOpcodeOutcome ztup1;
+};
+
+// struct tuple_(%u8, %union zOpcodeOutcome)
+struct ztuple_z8z5u8zCz0z5unionz0zzOpcodeOutcomez9 {
+  uint8_t ztup0;
+  struct zOpcodeOutcome ztup1;
+};
+
+// struct tuple_(%u32, %u64, %union zOpcodeOutcome)
+struct ztuple_z8z5u32zCz0z5u64zCz0z5unionz0zzOpcodeOutcomez9 {
   uint32_t ztup0;
   uint64_t ztup1;
-  struct zEvmMemorySliceFields ztup2;
-  sail_int ztup3;
+  struct zOpcodeOutcome ztup2;
 };
 
-// struct tuple_(%u32, %i)
-struct ztuple_z8z5u32zCz0z5iz9 {
+// struct tuple_(%u32, %u8, %union zOpcodeOutcome)
+struct ztuple_z8z5u32zCz0z5u8zCz0z5unionz0zzOpcodeOutcomez9 {
   uint32_t ztup0;
-  sail_int ztup1;
+  uint8_t ztup1;
+  struct zOpcodeOutcome ztup2;
 };
 
-// struct tuple_(%union zLogTopics, %bv64)
-struct ztuple_z8z5unionz0zzLogTopicszCz0z5bv64z9 {
+// struct tuple_(%union zLogTopics, %struct zStackPointer)
+struct ztuple_z8z5unionz0zzLogTopicszCz0z5structz0zzStackPointerz9 {
   struct zLogTopics ztup0;
-  uint64_t ztup1;
+  struct zStackPointer ztup1;
 };
 
-// struct tuple_(%bv64, %i)
-struct ztuple_z8z5bv64zCz0z5iz9 {
+// struct tuple_(%u64, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
   uint64_t ztup0;
-  sail_int ztup1;
+  struct zStackPointer ztup1;
+  struct zOpcodeOutcome ztup2;
 };
 
-// struct tuple_(%bv64, %struct zEvmMemorySliceFields, %i)
-struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 {
+// struct tuple_(%u8, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u8zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
+  uint8_t ztup0;
+  struct zStackPointer ztup1;
+  struct zOpcodeOutcome ztup2;
+};
+
+// struct tuple_(%u64, %struct zStackPointer, %u32, %union zOpcodeOutcome)
+struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 {
   uint64_t ztup0;
-  struct zEvmMemorySliceFields ztup1;
-  sail_int ztup2;
+  struct zStackPointer ztup1;
+  uint32_t ztup2;
+  struct zOpcodeOutcome ztup3;
 };
 
-// struct tuple_(%u32, %bv64, %i)
-struct ztuple_z8z5u32zCz0z5bv64zCz0z5iz9 {
-  uint32_t ztup0;
+// struct tuple_(%u8, %struct zStackPointer, %u32, %union zOpcodeOutcome)
+struct ztuple_z8z5u8zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 {
+  uint8_t ztup0;
+  struct zStackPointer ztup1;
+  uint32_t ztup2;
+  struct zOpcodeOutcome ztup3;
+};
+
+// struct tuple_(%u64, %u64, %u32, %i128, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
+  uint64_t ztup0;
   uint64_t ztup1;
-  sail_int ztup2;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  struct zOpcodeOutcome ztup5;
 };
 
-// struct tuple_(%u32, %union zast)
-struct ztuple_z8z5u32zCz0z5unionz0zzastz9 {
-  uint32_t ztup0;
-  struct zast ztup1;
+// struct tuple_(%bool, %u64, %u64, %u32)
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 {
+  bool ztup0;
+  uint64_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
 };
 
-// struct tuple_(%u8, %bv64, %struct zEvmMemorySliceFields, %i)
-struct ztuple_z8z5u8zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 {
+// struct tuple_(%u8, %u64, %u32, %i128, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u8zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
   uint8_t ztup0;
   uint64_t ztup1;
-  struct zEvmMemorySliceFields ztup2;
-  sail_int ztup3;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  struct zOpcodeOutcome ztup5;
+};
+
+// struct tuple_(%u32, %u64, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u32zCz0z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
+  uint32_t ztup0;
+  uint64_t ztup1;
+  struct zStackPointer ztup2;
+  struct zOpcodeOutcome ztup3;
+};
+
+// struct tuple_(%u32, %u8, %struct zStackPointer, %union zOpcodeOutcome)
+struct ztuple_z8z5u32zCz0z5u8zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 {
+  uint32_t ztup0;
+  uint8_t ztup1;
+  struct zStackPointer ztup2;
+  struct zOpcodeOutcome ztup3;
+};
+
+// struct tuple_(%u64, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint64_t ztup0;
+  struct zStackPointer ztup1;
+  uint32_t ztup2;
+  struct zFrameStatus ztup3;
+};
+
+// struct tuple_(%u8, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u8zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint8_t ztup0;
+  struct zStackPointer ztup1;
+  uint32_t ztup2;
+  struct zFrameStatus ztup3;
+};
+
+// struct tuple_(%u64, %u64, %u32, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  struct zStackPointer ztup3;
+  uint32_t ztup4;
+  struct zFrameStatus ztup5;
+};
+
+// struct tuple_(%u8, %u64, %u32, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u8zCz0z5u64zCz0z5u32zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint8_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  struct zStackPointer ztup3;
+  uint32_t ztup4;
+  struct zFrameStatus ztup5;
+};
+
+// struct tuple_(%u64, %u64, %u32, %i128, %struct zStackPointer, %union zFrameStatus)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzFrameStatusz9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  struct zFrameStatus ztup5;
+};
+
+// struct tuple_(%u8, %u64, %u32, %i128, %struct zStackPointer, %union zFrameStatus)
+struct ztuple_z8z5u8zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzFrameStatusz9 {
+  uint8_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  struct zFrameStatus ztup5;
+};
+
+// struct tuple_(%bool, %u8, %u64, %u32)
+struct ztuple_z8z5boolzCz0z5u8zCz0z5u64zCz0z5u32z9 {
+  bool ztup0;
+  uint8_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
+};
+
+// struct tuple_(%u64, %u64, %u32, %i128, %struct zStackPointer, %u32, %u32)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  uint32_t ztup5;
+  uint32_t ztup6;
+};
+
+// struct tuple_(%u64, %u64, %u8, %i128, %struct zStackPointer, %u32, %u32)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u8zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint8_t ztup2;
+  __int128 ztup3;
+  struct zStackPointer ztup4;
+  uint32_t ztup5;
+  uint32_t ztup6;
+};
+
+// struct tuple_(%u64, %u64, %u32, %i128, %union zFrameStatus, %struct zOutputSliceFields)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
+  __int128 ztup3;
+  struct zFrameStatus ztup4;
+  struct zOutputSliceFields ztup5;
+};
+
+// struct tuple_(%struct zTransactionPreparation, %u64, %u64, %u32, %struct z__sail_c_repr_fixed_bytes(20), %struct z__sail_c_repr_fixed_bytes(20), %struct zCodeFields, %union zCalldataSlice)
+struct ztuple_z8z5structz0zzTransactionPreparationzCz0z5u64zCz0z5u64zCz0z5u32zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zzCodeFieldszCz0z5unionz0zzCalldataSlicez9 {
+  struct zTransactionPreparation ztup0;
+  uint64_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
+  fixed_bytes_20 ztup4;
+  fixed_bytes_20 ztup5;
+  struct zCodeFields ztup6;
+  struct zCalldataSlice ztup7;
 };
 
 // struct tuple_(%bool, %struct zTriePath)
@@ -1850,6 +2058,56 @@ typedef struct zz5fvecz82zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 {
 } zz5fvecz82zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9;
 #endif
 
+// struct tuple_(%bool, %u64, %u8, %u32)
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u8zCz0z5u32z9 {
+  bool ztup0;
+  uint64_t ztup1;
+  uint8_t ztup2;
+  uint32_t ztup3;
+};
+
+// struct tuple_(%u32, %bv8)
+struct ztuple_z8z5u32zCz0z5bv8z9 {
+  uint32_t ztup0;
+  uint64_t ztup1;
+};
+
+// struct tuple_(%u32, %struct z__sail_c_repr_u256)
+struct ztuple_z8z5u32zCz0z5structz0zz__sail_c_repr_u256z9 {
+  uint32_t ztup0;
+  u256 ztup1;
+};
+
+// struct tuple_(%u32, %union zast)
+struct ztuple_z8z5u32zCz0z5unionz0zzastz9 {
+  uint32_t ztup0;
+  struct zast ztup1;
+};
+
+// struct tuple_(%u32, %u8, %u64, %u32, %i128, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u32zCz0z5u8zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint32_t ztup0;
+  uint8_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
+  __int128 ztup4;
+  struct zStackPointer ztup5;
+  uint32_t ztup6;
+  struct zFrameStatus ztup7;
+};
+
+// struct tuple_(%u32, %u64, %u64, %u32, %i128, %struct zStackPointer, %u32, %union zFrameStatus)
+struct ztuple_z8z5u32zCz0z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 {
+  uint32_t ztup0;
+  uint64_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
+  __int128 ztup4;
+  struct zStackPointer ztup5;
+  uint32_t ztup6;
+  struct zFrameStatus ztup7;
+};
+
 #ifndef SAIL_VECTOR_ZZ5VECZ8Z5STRUCTZ0ZZ__SAIL_C_REPR_FIXED_BYTESZ832Z9Z9_DEFINED
 #define SAIL_VECTOR_ZZ5VECZ8Z5STRUCTZ0ZZ__SAIL_C_REPR_FIXED_BYTESZ832Z9Z9_DEFINED
 struct zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 {
@@ -1858,6 +2116,32 @@ struct zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 {
 };
 typedef struct zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9;
 #endif
+
+// struct tuple_(%struct zTransactionPreparation, %u8, %u64, %u32, %struct z__sail_c_repr_fixed_bytes(20), %struct z__sail_c_repr_fixed_bytes(20), %struct zCodeFields, %union zCalldataSlice)
+struct ztuple_z8z5structz0zzTransactionPreparationzCz0z5u8zCz0z5u64zCz0z5u32zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zzCodeFieldszCz0z5unionz0zzCalldataSlicez9 {
+  struct zTransactionPreparation ztup0;
+  uint8_t ztup1;
+  uint64_t ztup2;
+  uint32_t ztup3;
+  fixed_bytes_20 ztup4;
+  fixed_bytes_20 ztup5;
+  struct zCodeFields ztup6;
+  struct zCalldataSlice ztup7;
+};
+
+// struct tuple_(%struct z__sail_c_repr_u256, %struct zStackPointer)
+struct ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5structz0zzStackPointerz9 {
+  u256 ztup0;
+  struct zStackPointer ztup1;
+};
+
+// struct tuple_(%struct zFrameCheckpoint, %struct zStackPointer, %u32, %u32)
+struct ztuple_z8z5structz0zzFrameCheckpointzCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 {
+  struct zFrameCheckpoint ztup0;
+  struct zStackPointer ztup1;
+  uint32_t ztup2;
+  uint32_t ztup3;
+};
 
 bool zneq_bool(bool zx, bool zy);
 
@@ -2049,7 +2333,7 @@ void create_letbind_11(void);
 void kill_letbind_11(void);
 
 
-void zgas_charge(struct zGasCharge *rop, sail_int zcost);
+struct zGasCharge zgas_charge(uint64_t zcost);
 
 void create_letbind_12(void);
 void kill_letbind_12(void);
@@ -2087,13 +2371,13 @@ void create_letbind_20(void);
 void kill_letbind_20(void);
 
 
-uint32_t zcalldata_slice_length(struct zCalldataSlice zs);
-
-uint32_t zstateless_input_slice_length(struct zStatelessInputSliceFields zs);
-
 void create_letbind_21(void);
 void kill_letbind_21(void);
 
+
+uint32_t zcalldata_slice_length(struct zCalldataSlice zs);
+
+uint32_t zstateless_input_slice_length(struct zStatelessInputSliceFields zs);
 
 void create_letbind_22(void);
 void kill_letbind_22(void);
@@ -2107,15 +2391,15 @@ void create_letbind_24(void);
 void kill_letbind_24(void);
 
 
+void create_letbind_25(void);
+void kill_letbind_25(void);
+
+
 struct zStatelessInputSliceFields zstateless_input_slice(uint32_t zoff, uint32_t zlen);
 
 struct zEvmMemorySliceFields zevm_memory_slice(uint32_t zoff, uint32_t zlen);
 
 struct zLogDataSliceFields zlog_data_slice(uint32_t zoff, uint32_t zlen);
-
-void create_letbind_25(void);
-void kill_letbind_25(void);
-
 
 void create_letbind_26(void);
 void kill_letbind_26(void);
@@ -2141,6 +2425,10 @@ void create_letbind_31(void);
 void kill_letbind_31(void);
 
 
+void create_letbind_32(void);
+void kill_letbind_32(void);
+
+
 struct zStatelessInputSliceFields zstateless_input_sub_slice(struct zStatelessInputSliceFields zs, uint32_t zoff, uint32_t zlen);
 
 struct zScratchSliceFields zscratch_sub_slice(struct zScratchSliceFields zs, uint32_t zoff, uint32_t zlen);
@@ -2151,16 +2439,16 @@ struct zStatelessInputSliceFields zstateless_input_slice_suffix(struct zStateles
 
 struct zScratchSliceFields zscratch_slice_suffix(struct zScratchSliceFields zs, uint32_t zoff);
 
-void create_letbind_32(void);
-void kill_letbind_32(void);
+void create_letbind_33(void);
+void kill_letbind_33(void);
 
 
 struct zCodeRegionSliceFields zcode_slice(struct zCodeRegionSliceFields zbytes);
 
 struct zCodeRegionSliceFields zvalidated_code_slice(struct zCodeRegionSliceFields zbytes);
 
-void create_letbind_33(void);
-void kill_letbind_33(void);
+void create_letbind_34(void);
+void kill_letbind_34(void);
 
 
 enum zDeepStackOperation zdeep_stack_operation(uint8_t zopcode);
@@ -2175,8 +2463,8 @@ struct zCodeFields zanalyzzed_code(struct zCodeRegionSliceFields zbytes, uint64_
 
 struct zCodeRegionSliceFields zcode_bytes(struct zCodeFields zcode);
 
-void create_letbind_34(void);
-void kill_letbind_34(void);
+void create_letbind_35(void);
+void kill_letbind_35(void);
 
 
 uint64_t zstateless_input_slice_byte(struct zStatelessInputSliceFields zs, uint32_t zoff);
@@ -2225,7 +2513,7 @@ unit zcode_slice_copy_word_offset(struct zCodeRegionSliceFields zs, uint32_t zds
 
 unit zcalldata_slice_copy_word_offset(struct zCalldataSlice zs, uint32_t zdst, u256 zoff, uint32_t zlen);
 
-uint32_t zscratch_begin(unit z3zE4573);
+uint32_t zscratch_begin(unit z3zE5102);
 
 uint32_t zscratch_reserve(uint32_t zlen);
 
@@ -2251,31 +2539,27 @@ struct zScratchSliceFields zscratch_finish(uint32_t zstart);
 
 unit zscratch_rewind(uint32_t zmark);
 
-unit zscratch_reset(unit z3zE4568);
-
-void create_letbind_35(void);
-void kill_letbind_35(void);
-
+unit zscratch_reset(unit z3zE5097);
 
 void create_letbind_36(void);
 void kill_letbind_36(void);
 
 
-fixed_bytes_32 zcalldata_sha256(struct zCalldataSlice zinput);
-
 void create_letbind_37(void);
 void kill_letbind_37(void);
 
+
+fixed_bytes_32 zcalldata_sha256(struct zCalldataSlice zinput);
 
 void create_letbind_38(void);
 void kill_letbind_38(void);
 
 
-struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 zecrecover_addr(fixed_bytes_32 zh, uint8_t zyparity, u256 zr, u256 zs);
-
 void create_letbind_39(void);
 void kill_letbind_39(void);
 
+
+struct zAddressResult zecrecover_addr(fixed_bytes_32 zh, uint8_t zyparity, u256 zr, u256 zs);
 
 void create_letbind_40(void);
 void kill_letbind_40(void);
@@ -2341,6 +2625,10 @@ void create_letbind_55(void);
 void kill_letbind_55(void);
 
 
+void create_letbind_56(void);
+void kill_letbind_56(void);
+
+
 struct zProtocolProfileFields zpack_protocol_profile(struct zProtocolProfileFields zprofile);
 
 struct zGasLimitsFields zgas_limits_for(struct zProtocolProfileFields zprofile, uint64_t zblock_limit);
@@ -2350,10 +2638,6 @@ struct zExecutionProfileFields zexecution_profile_for(struct zProtocolProfileFie
 struct zProtocolProfileFields zschema_protocol_profile(uint64_t zschema_fork);
 
 bool zschema_protocol_profile_forwards_matches(uint64_t zschema_fork);
-
-void create_letbind_56(void);
-void kill_letbind_56(void);
-
 
 void create_letbind_57(void);
 void kill_letbind_57(void);
@@ -2415,24 +2699,28 @@ void create_letbind_71(void);
 void kill_letbind_71(void);
 
 
+void create_letbind_72(void);
+void kill_letbind_72(void);
+
+
 struct zAccount zaccount_from_info(struct zAccountInfo zinfo);
 
 uint64_t ztx_envelope_type(enum zTxType zt);
 
 struct zTxTypeSemantics ztx_type_semantics(enum zTxType zt);
 
-void create_letbind_72(void);
-void kill_letbind_72(void);
-
-
 void create_letbind_73(void);
 void kill_letbind_73(void);
 
 
-struct zAuthorizzationListRefFields zauthorizzation_list_ref(struct zStatelessInputSliceFields zencoded, uint32_t zcount);
-
 void create_letbind_74(void);
 void kill_letbind_74(void);
+
+
+struct zAuthorizzationListRefFields zauthorizzation_list_ref(struct zStatelessInputSliceFields zencoded, uint32_t zcount);
+
+void create_letbind_75(void);
+void kill_letbind_75(void);
 
 
 struct zTransactionFields zpack_transaction(struct zTransactionFields ztx);
@@ -2445,8 +2733,8 @@ struct zReceiptFields zreceipt_fields(uint64_t z_limit, uint64_t z_regular_limit
 
 struct zReceiptFields zreceipt_within(uint64_t zlimit, uint64_t zregular_limit, enum zTxType ztx_type, bool zsuccess, uint64_t zgas_used, uint64_t zexecution_gas, uint64_t zstate_gas, struct zLogSeriesRef zlogs);
 
-void create_letbind_75(void);
-void kill_letbind_75(void);
+void create_letbind_76(void);
+void kill_letbind_76(void);
 
 
 bool zlogs_bloom_equal(fixed_bytes_256 za, fixed_bytes_256 zb);
@@ -2455,8 +2743,8 @@ fixed_bytes_256 zlogs_bloom_from_ref(struct zStatelessInputSliceFields zreferenc
 
 bool zlogs_bloom_matches_ref(fixed_bytes_256 zcomputed, struct zStatelessInputSliceFields zreference);
 
-void create_letbind_76(void);
-void kill_letbind_76(void);
+void create_letbind_77(void);
+void kill_letbind_77(void);
 
 
 struct zTxEnvFields ztx_env(fixed_bytes_20 zorigin, u256 zgas_price, struct zBlobHashesFields zblob_hashes);
@@ -2467,8 +2755,8 @@ struct zTxValidityFields ztx_validity_fields(fixed_bytes_20 zsender, uint64_t zn
 
 struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_fields(uint64_t zlimit, uint64_t zregular, uint64_t zcalldata_floor, uint64_t zremaining, uint64_t zstate_used);
 
-void create_letbind_77(void);
-void kill_letbind_77(void);
+void create_letbind_78(void);
+void kill_letbind_78(void);
 
 
 struct zCodeRegionSliceFields zcode_db_intern_input(struct zStatelessInputSliceFields zbytes);
@@ -2479,12 +2767,12 @@ struct zCodeRegionSliceFields zcode_db_intern_output(struct zOutputSliceFields z
 
 struct zCodeFields zcode_db_resolve(fixed_bytes_32 zcode_hash);
 
-void create_letbind_78(void);
-void kill_letbind_78(void);
-
-
 void create_letbind_79(void);
 void kill_letbind_79(void);
+
+
+void create_letbind_80(void);
+void kill_letbind_80(void);
 
 
 uint32_t zsszz_u32_at(struct zStatelessInputSliceFields zinput, uint32_t zoffset);
@@ -2496,10 +2784,6 @@ uint32_t zsszz_offset_to_source_pointer(uint32_t zvalue);
 uint64_t zdecode_sszz_uint(struct zStatelessInputSliceFields zinput, uint32_t zoffset);
 
 uint8_t zsszz_u256_index(uint8_t zindex);
-
-void create_letbind_80(void);
-void kill_letbind_80(void);
-
 
 void create_letbind_81(void);
 void kill_letbind_81(void);
@@ -2515,6 +2799,10 @@ void kill_letbind_83(void);
 
 void create_letbind_84(void);
 void kill_letbind_84(void);
+
+
+void create_letbind_85(void);
+void kill_letbind_85(void);
 
 
 uint32_t zrlp_scratch_small_length(uint8_t zvalue);
@@ -2613,12 +2901,12 @@ fixed_bytes_20 zcreate2_address(fixed_bytes_20 zsender, u256 zsalt, fixed_bytes_
 
 u256 zlegacy_sig_chain_id(u256 zv);
 
-void create_letbind_85(void);
-void kill_letbind_85(void);
-
-
 void create_letbind_86(void);
 void kill_letbind_86(void);
+
+
+void create_letbind_87(void);
+void kill_letbind_87(void);
 
 
 fixed_bytes_32 ztx_signing_hash(enum zTxType zt, struct zStatelessInputSliceFields zcontent_src, u256 zv);
@@ -2629,8 +2917,8 @@ uint8_t ztx_signature_parity(uint64_t zchain_id, enum zTxSignatureScheme zscheme
 
 bool ztx_auth_valid(fixed_bytes_20 zsender, fixed_bytes_32 zh, uint8_t zparity, u256 zr, u256 zs);
 
-void create_letbind_87(void);
-void kill_letbind_87(void);
+void create_letbind_88(void);
+void kill_letbind_88(void);
 
 
 struct zStatelessInputSliceFields ztransaction_rlp_content(struct zRlpFieldRef zf);
@@ -2641,12 +2929,12 @@ struct zAccessListDecode zdecode_access_list_entries(struct zStatelessInputSlice
 
 struct zAccessListRef zdecode_access_list(struct zRlpFieldRef zf);
 
-void create_letbind_88(void);
-void kill_letbind_88(void);
-
-
 void create_letbind_89(void);
 void kill_letbind_89(void);
+
+
+void create_letbind_90(void);
+void kill_letbind_90(void);
 
 
 struct zBlobHashesFields zdecode_blob_hashes(struct zRlpFieldRef zf, uint8_t zlimit);
@@ -2679,6 +2967,16 @@ struct zTransactionFields zdecode_set_code_tx(struct zStatelessInputSliceFields 
 
 struct zTransactionFields zrlp_decode_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, uint8_t zblob_limit);
 
+struct zStackPointer zstack_reset(unit z3zE4749);
+
+struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4747);
+
+uint16_t zstack_top_height(struct zStackPointer ztop);
+
+u256 zstack_slot_read(struct zStackPointer ztop, uint16_t zindex);
+
+unit zstack_slot_write(struct zStackPointer ztop, uint16_t zindex, u256 zvalue);
+
 struct zOutputSliceFields zfreezze_memory_output(struct zEvmMemorySliceFields zdata);
 
 struct zOutputSliceFields zfreezze_input_output(struct zStatelessInputSliceFields zdata);
@@ -2691,7 +2989,7 @@ struct zOutputSliceFields zoutput_buffer_words(u256 zfirst, u256 zsecond);
 
 u256 zk_env(enum zEnvField zf);
 
-fixed_bytes_20 zk_coinbase(unit z3zE4201);
+fixed_bytes_20 zk_coinbase(unit z3zE4729);
 
 u256 zblockhash_word_distance(u256 zcurrent, u256 znumber);
 
@@ -2735,12 +3033,12 @@ unit zk_log_data(struct zLogData zdata);
 
 unit zk_log(fixed_bytes_20 za, struct zLogTopics ztopics, struct zLogData zdata);
 
-struct zLogSeriesRef zread_logs(unit z3zE4158);
+struct zLogSeriesRef zread_logs(unit z3zE4686);
 
 struct zLogDataSliceFields zread_log_data(uint64_t zindex);
 
-void create_letbind_90(void);
-void kill_letbind_90(void);
+void create_letbind_91(void);
+void kill_letbind_91(void);
 
 
 uint64_t zbloom_bit_mask(uint8_t zbit_to_set);
@@ -2823,117 +3121,63 @@ bool zk_was_created(fixed_bytes_20 za);
 
 unit zk_zzero_balance(fixed_bytes_20 za);
 
-unit zk_journal_checkpoint(unit z3zE4092);
+unit zk_journal_checkpoint(unit z3zE4620);
 
 unit zk_set_header(struct zBlockHeader zh);
 
 unit zk_set_tx(struct zTxEnvFields zenv);
 
-unit zk_tx_reset(unit z3zE4086);
+unit zk_tx_reset(unit z3zE4614);
 
 struct zTransactionMergeSemantics ztransaction_merge_semantics(uint8_t zfork);
 
 bool zaccount_deleted_at_tx_end(struct zTransactionMergeSemantics zsemantics, struct zAccount zacc);
 
-unit zk_tx_merge(unit z3zE4052);
+unit zk_tx_merge(unit z3zE4580);
 
-unit zk_journal_revert(unit z3zE4051);
+unit zk_journal_revert(unit z3zE4579);
 
-unit zk_journal_commit(unit z3zE4050);
+unit zk_journal_commit(unit z3zE4578);
 
 __int128 zvalidated_refund_add(__int128 zleft, __int128 zright);
 
-unit zrecord_refund(__int128 zdelta);
+__int128 zrecord_refund(__int128 zrefund, __int128 zdelta);
 
-uint32_t zframe_code_len(unit z3zE4048);
+uint32_t zframe_code_len(struct zCodeFields zframe_code);
 
-bool zframe_jumpdest_valid(uint32_t zdest);
-
-void create_letbind_91(void);
-void kill_letbind_91(void);
-
-
-void zconserved_gas_add(sail_int *rop, sail_int zleft, sail_int zright);
-
-void zrefill_frame_state_gas(sail_int *rop, sail_int zg);
-
-void zframe_state_gas_used(sail_int *rop, unit z3zE4045);
-
-void zexc_halt(sail_int *rop, sail_int zg, enum zExceptionKind zk);
-
-uint16_t zstack_height(uint64_t ztop);
-
-u256 zpeek(uint64_t ztop, uint16_t zn);
-
-uint64_t zpush_word(uint64_t ztop, u256 zw);
-
-uint64_t zpush_gas(uint64_t ztop, sail_int zvalue);
-
-struct ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5bv64z9 zpop(uint64_t ztop);
-
-unit zstack_set(uint64_t ztop, uint16_t zn, u256 zw);
-
-bool zis_running(unit z3zE4033);
-
-unit zcalldata_install(struct zCalldataSlice zdata);
-
-unit zreturndata_clear(unit z3zE4032);
-
-uint32_t zreturndata_sizze(unit z3zE4031);
-
-unit zreturndata_copy(uint32_t zdst, uint32_t zoff, uint32_t zlen);
-
-unit zreturndata_copy_prefix(uint32_t zdst, uint32_t zwant);
-
-uint32_t zreturndata_remaining(uint32_t zavailable, uint32_t zoffset);
-
-void zvalidated_returndata_copy(sail_int *rop, sail_int zg, uint32_t zdst, u256 zsource_offset, u256 zlength);
-
-void zreturndata_copy_words(sail_int *rop, sail_int zg, uint32_t zdst, u256 zsource_offset, u256 zlength);
-
-uint32_t zmemory_high_water(struct zEvmMemorySliceFields zmem);
-
-unit zmemory_reset(unit z3zE4026);
-
-struct ztuple_z8z5structz0zzEvmMemorySliceFieldszCz0z5structz0zzEvmMemorySliceFieldsz9 zmemory_expand_to(struct zEvmMemorySliceFields zmem, uint32_t znew_sizze);
-
-struct ztuple_z8z5structz0zzEvmMemorySliceFieldszCz0z5structz0zzEvmMemorySliceFieldsz9 zactive_memory_slice(struct zEvmMemorySliceFields zmem, uint32_t zoff, uint32_t zlen);
-
-struct ztuple_z8z5structz0zzCodeRegionSliceFieldszCz0z5structz0zzEvmMemorySliceFieldsz9 zmemory_code_slice(struct zEvmMemorySliceFields zmem, uint32_t zoff, uint32_t zlen);
-
-struct zEvmMemorySliceFields zmemory_frame_enter(unit z3zE4014);
-
-unit zmemory_frame_leave(struct zEvmMemorySliceFields zparent);
-
-void zsuspend_frame(struct zFrameCheckpoint *rop, unit z3zE4009);
-
-unit zrestore_frame(struct zFrameCheckpoint zcheckpoint);
-
-unit zmem_set_byte(uint32_t zoff, uint64_t zv);
-
-u256 zmem_load(uint32_t zoff);
-
-unit zmem_store(uint32_t zoff, u256 zw);
-
-unit zmem_store_byte(uint32_t zoff, u256 zw);
-
-unit zmem_mcopy(uint32_t zdst, uint32_t zsrc, uint32_t zlen);
-
-struct ztuple_z8z5structz0zz__sail_c_repr_u256zCz0z5structz0zzEvmMemorySliceFieldsz9 zmem_keccak(struct zEvmMemorySliceFields zmem, struct zMemoryRangeFields zrange);
+bool zframe_jumpdest_valid(struct zCodeFields zframe_code, uint32_t zdest);
 
 void create_letbind_92(void);
 void kill_letbind_92(void);
 
 
-u256 zprotocol_word(u256 zvalue);
+uint64_t zconserved_gas_add(uint64_t zavailable, uint64_t zcredit);
 
-u256 zfake_exponential_word(struct zBlobScheduleFields zschedule, uint32_t znumerator);
+__int128 zframe_state_gas_used(uint64_t zstate_gas_reservoir, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled);
 
-u256 zblob_base_fee(struct zProtocolProfileFields zprofile, uint32_t zexcess_blob_gas);
+void zexceptional_state(struct zExceptionalStateTransition *rop, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint64_t zstate_gas_reservoir, enum zExceptionKind zk);
 
-uint32_t zblock_blob_gas_add(uint8_t zmaximum_count, uint32_t zaccumulated, uint32_t ztransaction);
+uint16_t zstack_height(struct zStackPointer ztop);
 
-uint32_t znext_excess_blob_gas(struct zProtocolProfileFields zprofile, uint32_t zparent_excess_blob_gas, uint32_t zparent_blob_gas_used, u256 zparent_base_fee_per_gas);
+u256 zread_stack_word(struct zStackPointer zsp);
+
+unit zwrite_stack_word(struct zStackPointer zsp, u256 zvalue);
+
+unit zstack_set(struct zStackPointer ztop, uint16_t zn, u256 zw);
+
+bool zis_running(struct zFrameStatus zframe_status);
+
+struct zOutputSliceFields zreturndata_clear(unit z3zE4571);
+
+uint32_t zreturndata_sizze(struct zOutputSliceFields zreturndata);
+
+unit zreturndata_copy(struct zOutputSliceFields zreturndata, uint32_t zdst, uint32_t zoff, uint32_t zlen);
+
+unit zreturndata_copy_prefix(struct zOutputSliceFields zreturndata, uint32_t zdst, uint32_t zwant);
+
+uint32_t zreturndata_remaining(uint32_t zavailable, uint32_t zoffset);
+
+uint32_t zmemory_high_water(uint32_t zheight);
 
 void create_letbind_93(void);
 void kill_letbind_93(void);
@@ -2943,9 +3187,41 @@ void create_letbind_94(void);
 void kill_letbind_94(void);
 
 
+uint32_t zmemory_absolute(uint32_t zbase, uint32_t zrelative);
+
+uint32_t zmemory_parent_base(uint32_t zchild_base, uint32_t zparent_height);
+
+uint32_t zexpand_memory(uint32_t zbase, uint32_t zheight, uint32_t zrequested_height);
+
+struct zEvmMemorySliceFields zactive_memory_slice(uint32_t zbase, uint32_t zmem, uint32_t zoff, uint32_t zlen);
+
+struct zCodeRegionSliceFields zmemory_code_slice(uint32_t zbase, uint32_t zmem, uint32_t zoff, uint32_t zlen);
+
+unit zmem_set_byte(uint32_t zbase, uint32_t zoff, uint64_t zv);
+
+u256 zmem_load(uint32_t zbase, uint32_t zoff);
+
+unit zmem_store(uint32_t zbase, uint32_t zoff, u256 zw);
+
+unit zmem_store_byte(uint32_t zbase, uint32_t zoff, u256 zw);
+
+unit zmem_mcopy(uint32_t zbase, uint32_t zdst, uint32_t zsrc, uint32_t zlen);
+
+u256 zmem_keccak(uint32_t zbase, uint32_t zmem, struct zMemoryRangeFields zrange);
+
 void create_letbind_95(void);
 void kill_letbind_95(void);
 
+
+u256 zprotocol_word(u256 zvalue);
+
+u256 zfake_exponential_word(struct zBlobScheduleFields zschedule, uint32_t znumerator);
+
+u256 zblob_base_fee(uint8_t zfork, struct zBlobScheduleFields zschedule, uint32_t zlimit, uint32_t zexcess_blob_gas);
+
+uint32_t zblock_blob_gas_add(uint8_t zmaximum_count, uint32_t zaccumulated, uint32_t ztransaction);
+
+uint32_t znext_excess_blob_gas(struct zProtocolProfileFields zprofile, uint32_t zparent_excess_blob_gas, uint32_t zparent_blob_gas_used, u256 zparent_base_fee_per_gas);
 
 void create_letbind_96(void);
 void kill_letbind_96(void);
@@ -3107,60 +3383,6 @@ void create_letbind_135(void);
 void kill_letbind_135(void);
 
 
-uint16_t zsstore_clear_refund(unit z3zE3980);
-
-void zcharge(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, sail_int zamount);
-
-void zcheck_execution_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, sail_int zamount);
-
-uint32_t zstate_gas_spill_room(uint32_t zleft);
-
-uint32_t zstate_gas_spill_add(uint32_t zleft, sail_int zright);
-
-void zdebit_state_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, sail_int zamount);
-
-void zcharge_state_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, sail_int zamount);
-
-void zcharge_deployment_state_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, sail_int zamount);
-
-void zcredit_state_gas_refund(sail_int *rop, sail_int zg, uint32_t zamount);
-
-unit zreturn_child_state_gas(sail_int zchild_remaining, uint32_t zchild_spilled);
-
-void zrefund_gas(sail_int *rop, sail_int zg, sail_int zamount);
-
-void zgas_sub(sail_int *rop, sail_int zleft, sail_int zright);
-
-u256 zmemory_word_count_word(u256 zbyte_len);
-
-void zmem_cost(sail_int *rop, sail_int zwords);
-
-struct zMemoryAccessFields zmemory_access(u256 zstart, u256 zsizze);
-
-struct zEvmMemorySliceFields zexpand_memory(struct zEvmMemorySliceFields zmem, uint32_t zrequired_sizze);
-
-uint16_t zaccount_cost(bool zwarm);
-
-uint16_t zexternal_code_read_cost(unit z3zE3948);
-
-uint16_t zsload_cost(bool zwarm);
-
-uint16_t zcall_value_cost(unit z3zE3947);
-
-uint16_t zcreate_access_cost(unit z3zE3946);
-
-void zcode_deployment_execution_cost(struct zGasCharge *rop, uint32_t zbyte_len, sail_int zavailable);
-
-void zcode_deployment_state_cost(sail_int *rop, uint32_t zbyte_len);
-
-u256 zpc_word(struct zCalldataSlice zinput, uint32_t zstart, uint8_t zbyte_count);
-
-u256 zpc_word_after_declared_field(struct zCalldataSlice zinput, uint32_t zprefix, u256 zdeclared_length, uint8_t zbyte_count);
-
-uint32_t zpc_blake2_rounds(struct zCalldataSlice zinput);
-
-void zmodexp_gas(struct zGasCharge *rop, struct zCalldataSlice zinput, sail_int zavailable);
-
 void create_letbind_136(void);
 void kill_letbind_136(void);
 
@@ -3169,31 +3391,47 @@ void create_letbind_137(void);
 void kill_letbind_137(void);
 
 
-void zprecompile_gas(struct zGasCharge *rop, enum zPrecompileId znum, struct zCalldataSlice zinput, sail_int zavailable);
-
-uint16_t zamsterdam_storage_access_cost(bool zcold);
-
-void zsstore_sentry_cost(sail_int *rop, bool zcold);
-
-void zlegacy_sstore_costs(struct zSstoreCosts *rop, u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
-
-void zamsterdam_sstore_costs(struct zSstoreCosts *rop, u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
-
-void zsstore_costs(struct zSstoreCosts *rop, u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
-
-void zcharge_memory_word_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint16_t zbase, uint16_t zper_word, u256 zsizze);
-
-void zcharge_keccak_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, u256 zsizze);
-
-void zcharge_copy_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, u256 zsizze);
-
-uint32_t ztransaction_initcode_gas(uint32_t zbyte_len);
-
-void zcall_gas_cap_word(sail_int *rop, sail_int zavailable, u256 zrequested);
-
 void create_letbind_138(void);
 void kill_letbind_138(void);
 
+
+uint16_t zsstore_clear_refund(unit z3zE4551);
+
+uint32_t zstate_gas_spill_room(uint32_t zleft);
+
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 zcredit_state_gas_refund(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint32_t zamount);
+
+struct ztuple_z8z5u64zCz0z5u32z9 zreturn_child_state_gas(uint64_t zparent_remaining, uint32_t zparent_spilled, uint64_t zchild_remaining, uint32_t zchild_spilled);
+
+uint64_t zrefund_gas(uint64_t zg, uint64_t zamount);
+
+uint64_t zgas_sub(uint64_t zleft, uint64_t zright);
+
+u256 zmemory_word_count_word(u256 zbyte_len);
+
+struct zMemoryAccessFields zmemory_access(u256 zstart, u256 zsizze);
+
+uint16_t zaccount_cost(bool zwarm);
+
+uint16_t zexternal_code_read_cost(unit z3zE4531);
+
+uint16_t zsload_cost(bool zwarm);
+
+uint16_t zcall_value_cost(unit z3zE4530);
+
+uint16_t zcreate_access_cost(unit z3zE4529);
+
+struct zGasCharge zcode_deployment_execution_cost(uint32_t zbyte_len, uint64_t zavailable);
+
+uint64_t zcode_deployment_state_cost(uint32_t zbyte_len);
+
+u256 zpc_word(struct zCalldataSlice zinput, uint32_t zstart, uint8_t zbyte_count);
+
+u256 zpc_word_after_declared_field(struct zCalldataSlice zinput, uint32_t zprefix, u256 zdeclared_length, uint8_t zbyte_count);
+
+uint32_t zpc_blake2_rounds(struct zCalldataSlice zinput);
+
+struct zGasCharge zmodexp_gas(struct zCalldataSlice zinput, uint64_t zavailable);
 
 void create_letbind_139(void);
 void kill_letbind_139(void);
@@ -3202,6 +3440,34 @@ void kill_letbind_139(void);
 void create_letbind_140(void);
 void kill_letbind_140(void);
 
+
+struct zGasCharge zprecompile_gas(enum zPrecompileId znum, struct zCalldataSlice zinput, uint64_t zavailable);
+
+uint16_t zamsterdam_storage_access_cost(bool zcold);
+
+uint64_t zsstore_sentry_cost(bool zcold);
+
+struct zSstoreCosts zlegacy_sstore_costs(u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
+
+struct zSstoreCosts zamsterdam_sstore_costs(u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
+
+struct zSstoreCosts zsstore_costs(u256 zoriginal, u256 zcurrent, u256 znew_value, bool zcold);
+
+struct zGasCharge zword_scaled_gas_cost(uint16_t zper_unit, u256 zunits, uint64_t zavailable);
+
+struct zGasCharge zmemory_word_gas_cost(uint16_t zbase, uint16_t zper_word, u256 zsizze, uint64_t zavailable);
+
+struct zGasCharge zkeccak_gas_cost(u256 zsizze, uint64_t zavailable);
+
+struct zGasCharge zcopy_gas_cost(u256 zsizze, uint64_t zavailable);
+
+struct zGasCharge zlog_gas_cost(uint8_t znum_topics, u256 zsizze, uint64_t zavailable);
+
+uint64_t zexp_gas(u256 zexponent);
+
+uint32_t ztransaction_initcode_gas(uint32_t zbyte_len);
+
+uint64_t zcall_gas_cap_word(uint64_t zavailable, u256 zrequested);
 
 void create_letbind_141(void);
 void kill_letbind_141(void);
@@ -3375,9 +3641,21 @@ void create_letbind_183(void);
 void kill_letbind_183(void);
 
 
+void create_letbind_184(void);
+void kill_letbind_184(void);
+
+
+void create_letbind_185(void);
+void kill_letbind_185(void);
+
+
+void create_letbind_186(void);
+void kill_letbind_186(void);
+
+
 struct zPrecompileResult zprecompile_success(struct zOutputSliceFields zoutput);
 
-struct zPrecompileResult zprecompile_failure(unit z3zE3840);
+struct zPrecompileResult zprecompile_failure(unit z3zE4441);
 
 struct zPrecompileResult zcopied_result(struct zCalldataSlice zdata);
 
@@ -3425,231 +3703,199 @@ uint8_t zdecode_single_stack_index(uint64_t zimmediate);
 
 struct ztuple_z8z5u16zCz0z5u16z9 zdecode_exchange_stack_indices(uint64_t zimmediate);
 
-void zrun_call(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, enum zCallKind zkind, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zopcode_frame_status(struct zFrameStatus *rop, struct zOpcodeOutcome zresult);
 
-void zrun_create(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, enum zCreateKind zkind, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zguard_static(struct ztuple_z8z5u64zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zg, bool zis_static);
 
-fixed_bytes_20 zself_addr(unit z3zE3754);
+void zdo_jump(struct ztuple_z8z5u32zCz0z5u64zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zpc_in, uint64_t zg, struct zCodeFields zframe_code, u256 zdestination_value);
 
-void zguard_static(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg);
+void zguard_stack(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint16_t zinputs, uint16_t zoutputs);
 
-void zdo_jump(struct ztuple_z8z5u32zCz0z5iz9 *rop, uint32_t zpc_in, sail_int zg, u256 zdestination_value);
+void zpop_log_topics(struct ztuple_z8z5unionz0zzLogTopicszCz0z5structz0zzStackPointerz9 *rop, uint8_t zcount, struct zStackPointer zsp_in);
 
-void zpop_log_topics(struct ztuple_z8z5unionz0zzLogTopicszCz0z5bv64z9 *rop, uint8_t zcount, uint64_t ztop);
+void zexecute_add(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_add(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_mul(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_mul(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sub(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_sub(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_div(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_div(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sdiv(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_sdiv(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_mod(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_mod(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_smod(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_smod(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_addmod(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_addmod(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_mulmod(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_mulmod(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_exp(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_exp(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_signextend(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_signextend(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_lt(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_lt(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_gt(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_gt(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_slt(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_slt(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sgt(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_sgt(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_eq(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_eq(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_iszzero(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_iszzero(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_and(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_and(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_or(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_or(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_xor(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_xor(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_not(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_not(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_byte(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_byte(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_shl(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_shl(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_shr(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_shr(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sar(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_sar(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_clzz(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_clzz(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_keccak256(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_keccak256(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_address(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_address, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_address(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_origin(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_origin(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_caller(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_caller, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_caller(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_callvalue(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, u256 zcarried_value, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_callvalue(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_gasprice(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_gasprice(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_calldatasizze(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCalldataSlice zcarried_calldata, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_calldatasizze(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_calldataload(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCalldataSlice zcarried_calldata, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_calldataload(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_calldatacopy(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCalldataSlice zcarried_calldata, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_calldatacopy(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_codesizze(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCodeFields zcarried_code, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_codesizze(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_codecopy(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCodeFields zcarried_code, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_codecopy(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_balance(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_balance(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_selfbalance(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_address, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_selfbalance(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_extcodesizze(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_extcodesizze(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_extcodecopy(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_extcodecopy(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_extcodehash(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_extcodehash(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_returndatasizze(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zOutputSliceFields zcarried_returndata, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_returndatasizze(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_returndatacopy(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zOutputSliceFields zcarried_returndata, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_returndatacopy(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_blockhash(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_blockhash(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_coinbase(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_coinbase(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_timestamp(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_timestamp(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_number(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_number(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_slotnum(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_slotnum(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_prevrandao(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_prevrandao(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_gaslimit(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_gaslimit(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_chainid(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_chainid(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_basefee(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_basefee(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_blobbasefee(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, u256 zblob_fee, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_blobbasefee(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_blobhash(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_blobhash(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_pop(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_pop(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_mload(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_mload(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_mstore(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_mstore(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_mstore8(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_mstore8(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_msizze(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_msizze(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_mcopy(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_mcopy(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+struct zAccountExecutionContext zaccount_execution_context(fixed_bytes_20 zaddress);
 
-void zexecute_sload(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+struct zAccountExecutionContext zrefresh_account_execution_context(struct zAccountExecutionContext zcontext, fixed_bytes_20 zprevious_address, fixed_bytes_20 znext_address);
 
-void zexecute_sstore(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sload(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zAccountExecutionContext zcontext, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_tload(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_sstore(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zAccountExecutionContext zcontext, uint8_t zfork, bool zcarried_is_static, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_sp);
 
-void zexecute_tstore(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_tload(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_address, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_jump(struct ztuple_z8z5u32zCz0z5bv64zCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, sail_int zg);
+void zexecute_tstore(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_address, bool zcarried_is_static, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_jumpi(struct ztuple_z8z5u32zCz0z5bv64zCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, sail_int zg);
+void zexecute_jump(struct ztuple_z8z5u32zCz0z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCodeFields zcarried_code, uint32_t zcarried_pc, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_pc(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, sail_int zg);
+void zexecute_jumpi(struct ztuple_z8z5u32zCz0z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, struct zCodeFields zcarried_code, uint32_t zcarried_pc, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_gas(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+void zexecute_pc(struct ztuple_z8z5u32zCz0z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint32_t zcarried_pc, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_jumpdest(sail_int *rop, sail_int zg);
+void zexecute_gas(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp);
 
-void zexecute_push(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint8_t zn, u256 zv, uint64_t ztop, sail_int zg);
+void zexecute_jumpdest(struct ztuple_z8z5u64zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas);
 
-void zexecute_swap(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint8_t zn, uint64_t ztop, sail_int zg);
+void zexecute_push(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint8_t zn, u256 zv);
 
-void zexecute_dupn(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t zimmediate, uint64_t ztop, sail_int zg);
+void zexecute_dupn(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint64_t zimmediate);
 
-void zexecute_swapn(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t zimmediate, uint64_t ztop, sail_int zg);
+void zexecute_swapn(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint64_t zimmediate);
 
-void zexecute_exchange(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t zimmediate, uint64_t ztop, sail_int zg);
+void zexecute_exchange(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint64_t zimmediate);
 
-void zexecute_log(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint8_t zn, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_stop(struct zFrameStatus *rop, unit z3zE3292);
 
-unit zexecute_stop(unit z3zE2999);
+void zexecute_return(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_return(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_revert(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 *rop, uint64_t zcarried_state_gas_reservoir, uint32_t zmemory_base, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
-void zexecute_revert(struct ztuple_z8z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zexecute_invalid(struct ztuple_z8z5u64zCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas);
 
-void zexecute_invalid(sail_int *rop, sail_int zg);
+void zexecute_selfdestruct(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5unionz0zzFrameStatusz9 *rop, fixed_bytes_20 zcarried_address, uint8_t zfork, bool zcarried_is_static, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_sp);
 
-void zexecute_selfdestruct(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint64_t ztop, sail_int zg);
+bool zopcode_available(uint8_t zopcode, uint8_t zfork);
 
-void zexecute_create(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+void zresume_frame(struct zFrameTransition *rop, struct zFrameContinuation zcontinuation, struct zOutputSliceFields zoutput, uint32_t zchild_memory_base, uint64_t zchild_gas, uint64_t zchild_state_gas, uint32_t zchild_state_spill, __int128 zchild_refund, struct zFrameStatus zchild_status, uint64_t zchild_state_gas_reservoir);
 
-void zexecute_create2(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
+struct zOutputSliceFields zframe_output(struct zFrameStatus zframe_status);
 
-void zexecute_call(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-void zexecute_callcode(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-void zexecute_delegatecall(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-void zexecute_staticcall(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-struct ztuple_z8z5u16zCz0z5u16z9 zopcode_stack_effect(struct zast zop);
-
-void zexecute_opcode(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, struct zast zop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-void zexecute(struct ztuple_z8z5u32zCz0z5bv64zCz0z5structz0zzEvmMemorySliceFieldszCz0z5iz9 *rop, struct zast zop, uint32_t zpc_in, uint64_t ztop, struct zEvmMemorySliceFields zmem, sail_int zg);
-
-void zdecode_simple(struct zast *rop, uint8_t zopcode);
-
-void zfetch(struct ztuple_z8z5u32zCz0z5unionz0zzastz9 *rop, uint32_t zcurrent);
-
-unit zresume_frame(struct zFrameContinuation zcontinuation, struct zOutputSliceFields zoutput);
-
-struct zOutputSliceFields zframe_output(unit z3zE2031);
-
-struct zOutputSliceFields zinterpret(unit z3zE2014);
-
-bool zframe_succeeded(unit z3zE2008);
+bool zframe_succeeded(struct zFrameStatus zframe_status);
 
 struct zCodeFields zexecutable_code(fixed_bytes_20 ztarget, bool zdele, fixed_bytes_20 zdtgt);
 
 struct zCallSemantics zcall_semantics(enum zCallKind zkind);
 
+uint16_t zcall_stack_inputs(enum zCallKind zkind);
+
 struct zCreateSemantics zcreate_semantics(enum zCreateKind zkind);
 
-unit zresume_call(struct zCallContinuation zcontinuation, struct zOutputSliceFields zoutput);
+uint16_t zcreate_stack_inputs(enum zCreateKind zkind);
 
-unit zresume_create(struct zCreateContinuation zcontinuation, struct zOutputSliceFields zoutput);
+void zresume_call(struct zFrameTransition *rop, struct zCallContinuation zcontinuation, struct zOutputSliceFields zoutput, uint32_t zchild_memory_base, uint64_t zchild_gas, uint64_t zchild_state_gas, uint32_t zchild_state_spill, __int128 zchild_refund, struct zFrameStatus zchild_status);
 
-void create_letbind_184(void);
-void kill_letbind_184(void);
-
-
-void create_letbind_185(void);
-void kill_letbind_185(void);
-
-
-void create_letbind_186(void);
-void kill_letbind_186(void);
-
+void zresume_create(struct zFrameTransition *rop, struct zCreateContinuation zcontinuation, struct zOutputSliceFields zoutput, uint32_t zchild_memory_base, uint64_t zchild_gas, uint64_t zchild_state_gas, uint32_t zchild_state_spill, __int128 zchild_refund, struct zFrameStatus zchild_status, uint64_t zchild_state_gas_reservoir);
 
 void create_letbind_187(void);
 void kill_letbind_187(void);
@@ -3715,27 +3961,39 @@ void create_letbind_202(void);
 void kill_letbind_202(void);
 
 
+void create_letbind_203(void);
+void kill_letbind_203(void);
+
+
+void create_letbind_204(void);
+void kill_letbind_204(void);
+
+
+void create_letbind_205(void);
+void kill_letbind_205(void);
+
+
 struct zCodeRegionSliceFields ztransaction_initcode_slice(struct zStatelessInputSliceFields zinput);
 
 uint64_t zcalldata_cost(struct zStatelessInputSliceFields zinput);
+
+uint64_t zlegacy_intrinsic_gas(struct zTransactionFields ztx);
 
 uint64_t zlegacy_calldata_floor(struct zStatelessInputSliceFields zinput);
 
 uint16_t zamsterdam_recipient_execution_cost(struct zTransactionFields ztx);
 
-void zintrinsic_gas(struct zIntrinsicGasCost *rop, struct zTransactionFields ztx);
+struct zIntrinsicGasCost zintrinsic_gas(struct zTransactionFields ztx);
 
 u320 ztransaction_blob_fee(u256 zblob_price, uint32_t zblob_gas);
 
 void ztransaction_upfront_cost(sail_int *rop, u256 zmax_fee, uint64_t zgas_limit, u256 zvalue, u256 zmax_blob_fee, uint32_t zblob_gas);
 
-void ztransaction_costs(struct zTransactionCosts *rop, struct zProtocolProfileFields zprofile, struct zTransactionFields ztx, uint64_t zgas_limit, uint32_t zexcess_blob_gas);
+struct zTransactionCosts ztransaction_costs(struct zProtocolProfileFields zprofile, struct zTransactionFields ztx, uint64_t zgas_limit, uint32_t zexcess_blob_gas);
 
-struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot(struct zTransactionInitialGasFields zinitial, sail_int zexecution, sail_int zstate, sail_int zstate_delta);
+struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot(struct zTransactionInitialGasFields zinitial, uint64_t zexecution, uint64_t zstate, __int128 zstate_delta);
 
 struct zTransactionGasAllowanceFields ztransaction_gas_allowance_fields(uint64_t zvalue, uint64_t z_total_limit, uint64_t zregular_limit);
-
-struct zTransactionInitialGasFields ztransaction_initial_gas(struct zTransactionGasAllowanceFields zallowance, sail_int zintrinsic_execution, sail_int zintrinsic_state, sail_int zcalldata_floor);
 
 uint16_t zprocess_auth(struct zAuthorizzation zau);
 
@@ -3745,9 +4003,9 @@ uint64_t zprocess_auth_cursor(struct zPreparedAuthorizzationList zauthorizzation
 
 uint64_t zprocess_auth_list(struct zPreparedAuthorizzationList zauthorizzations);
 
-bool zprocess_amsterdam_auth(struct zAuthorizzation zau, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zprocess_amsterdam_auth(struct zAuthorizzation zau, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill);
 
-bool zprocess_amsterdam_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zprocess_amsterdam_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value, uint64_t zgas, uint64_t zstate_gas, uint32_t zstate_spill);
 
 unit zwarm_access_list_keys(struct zStatelessInputSliceFields zcursor, fixed_bytes_20 zaddr);
 
@@ -3761,13 +4019,11 @@ struct zTxValidityFields zcheck_transaction_validity(struct zTransactionFields z
 
 struct zTxUpfrontResult zapply_transaction_upfront_effects(struct zTransactionFields ztx, struct zTxValidityFields zv, struct zPreparedAuthorizzationList zauthorizzations);
 
-unit zenter_transaction_frame(struct zTxValidityFields zv);
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 zenter_transaction_frame(struct zTxValidityFields zv);
 
-struct zTransactionPreparation zprepare_amsterdam_transaction_dispatch(struct zTransactionFields ztx, struct zTxValidityFields zv, struct zTxUpfrontResult zupfront);
+void zrun_create_transaction_frame(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, struct zTransactionFields ztx, fixed_bytes_20 zsender, uint64_t znonce_before, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_stack, uint32_t zcarried_memory_base, uint32_t zcarried_memory_height, struct zCodeFields zcarried_code, struct zCalldataSlice zcarried_calldata, uint64_t zstate_gas_reservoir);
 
-unit zrun_create_transaction_frame(struct zTransactionFields ztx, fixed_bytes_20 zsender, uint64_t znonce_before);
-
-unit zrun_call_transaction_frame(struct zTransactionFields ztx, fixed_bytes_20 zsender, bool zdelegated);
+void zrun_call_transaction_frame(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, struct zTransactionFields ztx, fixed_bytes_20 zsender, bool zdelegated, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_stack, uint32_t zcarried_memory_base, uint32_t zcarried_memory_height, fixed_bytes_20 zcarried_code_address, struct zCodeFields zcarried_code, struct zCalldataSlice zcarried_calldata, uint64_t zstate_gas_reservoir);
 
 struct zTxFrameResultFields zrun_legacy_transaction_frame(struct zTransactionFields ztx, struct zTxValidityFields zv);
 
@@ -3781,8 +4037,8 @@ struct zReceiptFields zsettle_transaction(struct zTransactionFields ztx, struct 
 
 struct zReceiptFields zprocess_transaction(struct zTransactionFields ztx, struct zTransactionGasAllowanceFields zallowance);
 
-void create_letbind_203(void);
-void kill_letbind_203(void);
+void create_letbind_206(void);
+void kill_letbind_206(void);
 
 
 uint8_t zpath_len(struct zTriePath zpath);
@@ -3815,8 +4071,8 @@ struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zhex_prefix_decode_ref(struct z
 
 struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zscratch_hex_prefix_decode_ref(struct zScratchRlpFieldRef zf);
 
-void create_letbind_204(void);
-void kill_letbind_204(void);
+void create_letbind_207(void);
+void kill_letbind_207(void);
 
 
 struct zInlineNode zinline_node_from_scratch_slice(struct zScratchSliceFields zbytes);
@@ -3873,8 +4129,8 @@ void zmerge_ext_node(struct zNodeRef *rop, struct zTriePath zprefix, struct zSta
 
 void zmerge_ext_ref(struct zNodeRef *rop, struct zTriePath zprefix, struct zNodeRef zchildref);
 
-void create_letbind_205(void);
-void kill_letbind_205(void);
+void create_letbind_208(void);
+void kill_letbind_208(void);
 
 
 void ztrie_update_source_next(struct zTrieUpdateFetch *rop, struct zTrieUpdateSource zsource);
@@ -3889,7 +4145,7 @@ void ztrie_updates_rebase(struct zTrieUpdateCursor *rop, struct zTrieUpdateCurso
 
 void ztrie_updates_descend(struct zTrieUpdateCursor *rop, struct zTrieUpdateCursor zupdates);
 
-void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1346);
+void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1326);
 
 void ztrie_leaf(struct zTrieItem *rop, struct zTriePath zpath, struct zTrieLeafValue zvalue);
 
@@ -3901,7 +4157,7 @@ void ztrie_branch(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef
 
 void ztrie_subtree(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef zchildref);
 
-void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1332);
+void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1312);
 
 void ztrie_children_add(struct zTrieChildren *rop, struct zTrieChildren zchildren, struct zTriePath zprefix, uint64_t zindex, struct zTrieItem zchild);
 
@@ -3961,23 +4217,11 @@ void znext_storage_trie_update(struct zTrieUpdateFetch *rop, fixed_bytes_20 zadd
 
 void zaccount_trie_update(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *rop, struct zAcctTrieEntry ztrie_entry);
 
-void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1103);
+void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1083);
 
-fixed_bytes_32 zcompute_state_root(unit z3zE1098);
+fixed_bytes_32 zcompute_state_root(unit z3zE1078);
 
 unit zvalidation_debug_capture_block_gas(uint64_t z_actual, uint64_t z_expected, uint64_t z_execution, uint64_t z_state);
-
-void create_letbind_206(void);
-void kill_letbind_206(void);
-
-
-void create_letbind_207(void);
-void kill_letbind_207(void);
-
-
-void create_letbind_208(void);
-void kill_letbind_208(void);
-
 
 void create_letbind_209(void);
 void kill_letbind_209(void);
@@ -4235,6 +4479,18 @@ void create_letbind_272(void);
 void kill_letbind_272(void);
 
 
+void create_letbind_273(void);
+void kill_letbind_273(void);
+
+
+void create_letbind_274(void);
+void kill_letbind_274(void);
+
+
+void create_letbind_275(void);
+void kill_letbind_275(void);
+
+
 uint32_t zsszz_offset_table_position(uint32_t zindex);
 
 struct zBoundedSszzListCursor zsszz_list_cursor(struct zBoundedSszzListRef zitems);
@@ -4261,8 +4517,8 @@ unit zindex_witness_codes_cursor(struct zBoundedSszzListCursor zcursor);
 
 unit zindex_witness_codes(struct zBoundedSszzListRef zcodes);
 
-void create_letbind_273(void);
-void kill_letbind_273(void);
+void create_letbind_276(void);
+void kill_letbind_276(void);
 
 
 uint8_t znext_parent_header_field(uint8_t zindex);
@@ -4321,7 +4577,7 @@ unit zreceipt_record_append(struct zReceiptFields zr, u128 zcumulative_gas_used)
 
 fixed_bytes_32 zindexed_receipt_trie_root(struct zReceiptRecordsRef zreceipts);
 
-uint32_t zreceipt_store_begin(unit z3zE914);
+uint32_t zreceipt_store_begin(unit z3zE894);
 
 struct ztuple_z8z5structz0zzScratchSliceFieldszCz0z5structz0zzScratchSliceFieldsz9 zreceipt_record_pop(struct zScratchSliceFields zrecords);
 
@@ -4330,18 +4586,6 @@ unit zreceipt_store_append(struct zReceiptFields zreceipt, u128 zcumulative_gas_
 fixed_bytes_32 zreceipt_store_root(uint32_t zrecords_start, uint32_t zcount);
 
 bool zblock_logs_bloom_matches(struct zLogSeriesRef zlogs, struct zStatelessInputSliceFields zreference);
-
-void create_letbind_274(void);
-void kill_letbind_274(void);
-
-
-void create_letbind_275(void);
-void kill_letbind_275(void);
-
-
-void create_letbind_276(void);
-void kill_letbind_276(void);
-
 
 void create_letbind_277(void);
 void kill_letbind_277(void);
@@ -4443,7 +4687,19 @@ void create_letbind_301(void);
 void kill_letbind_301(void);
 
 
-unit zenter_system_call_frame(fixed_bytes_20 ztgt, struct zCalldataSlice zinput);
+void create_letbind_302(void);
+void kill_letbind_302(void);
+
+
+void create_letbind_303(void);
+void kill_letbind_303(void);
+
+
+void create_letbind_304(void);
+void kill_letbind_304(void);
+
+
+void zrun_system_call_frame(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, fixed_bytes_20 ztgt, struct zCodeFields zcode, struct zCalldataSlice zinput, uint32_t zmemory_base);
 
 unit zsystem_call(fixed_bytes_20 ztgt, fixed_bytes_32 zinput);
 
@@ -4493,11 +4749,11 @@ unit zvalidate_block_access_list(struct zStatelessInputSliceFields zbytes, uint6
 
 struct zBlockGasUsageFields zblock_gas_usage_empty(uint64_t z_limit);
 
-void create_letbind_302(void);
-void kill_letbind_302(void);
+void create_letbind_305(void);
+void kill_letbind_305(void);
 
 
-unit zrun_block_start_system_calls(unit z3zE792);
+unit zrun_block_start_system_calls(unit z3zE795);
 
 struct zBlockExecutionResult zexecute_block_transactions(struct zBoundedSszzListRef ztransactions, struct zStatelessInputSliceFields zpublic_keys, struct zStatelessInputSliceFields zexpected_deposits);
 
@@ -4537,18 +4793,6 @@ unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStateles
 
 unit zvalidate_executed_block(struct zBlock zblock, struct zBlockExecutionResult zresult);
 
-void create_letbind_303(void);
-void kill_letbind_303(void);
-
-
-void create_letbind_304(void);
-void kill_letbind_304(void);
-
-
-void create_letbind_305(void);
-void kill_letbind_305(void);
-
-
 void create_letbind_306(void);
 void kill_letbind_306(void);
 
@@ -4556,8 +4800,6 @@ void kill_letbind_306(void);
 void create_letbind_307(void);
 void kill_letbind_307(void);
 
-
-unit zverify_stateless_payload(struct zStatelessInputRef zinput_ref);
 
 void create_letbind_308(void);
 void kill_letbind_308(void);
@@ -4570,6 +4812,8 @@ void kill_letbind_309(void);
 void create_letbind_310(void);
 void kill_letbind_310(void);
 
+
+unit zverify_stateless_payload(struct zStatelessInputRef zinput_ref);
 
 void create_letbind_311(void);
 void kill_letbind_311(void);
@@ -4755,6 +4999,18 @@ void create_letbind_356(void);
 void kill_letbind_356(void);
 
 
+void create_letbind_357(void);
+void kill_letbind_357(void);
+
+
+void create_letbind_358(void);
+void kill_letbind_358(void);
+
+
+void create_letbind_359(void);
+void kill_letbind_359(void);
+
+
 fixed_bytes_32 zsszz_zzero_hash(uint8_t zlevel);
 
 uint32_t zhtr_leaf_capacity(uint8_t zdepth);
@@ -4817,8 +5073,8 @@ fixed_bytes_32 zhtr_execution_requests(struct zStatelessInputRef zinput_ref);
 
 fixed_bytes_32 zhtr_new_payload_request(struct zStatelessInputRef zinput_ref);
 
-void create_letbind_357(void);
-void kill_letbind_357(void);
+void create_letbind_360(void);
+void kill_letbind_360(void);
 
 
 unit zresult_prefix(fixed_bytes_32 zroot, bool zsuccess);
@@ -4827,9 +5083,9 @@ unit zcommit_validation_result(fixed_bytes_32 zroot, bool zsuccess, struct zStat
 
 unit zwrite_validation_result(struct zStatelessInputRef zinput_ref, bool zsuccess);
 
-unit zmain(unit z3zE441);
+unit zmain(unit z3zE444);
 
-unit zinitializze_registers(unit z3zE440);
+unit zinitializze_registers(unit z3zE443);
 
 struct zPrecompileResult zaccelerator_result_bool_uint16_t_to_struct_zzPrecompileResult(bool zsuccess, uint16_t zoutput_len);
 
@@ -4871,9 +5127,9 @@ bool zbls_g2_padding_struct_zzCalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_va
 
 bool zbls_g2_padding_struct_zzCalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(struct zCalldataSlice zinput, uint8_t zbase, uint16_t zstride, uint8_t zcount);
 
-void zbls_msm_gas_zzzz5fveczz8128zzCzz0zz5u16zz9_uint16_t_uint16_t_uint32_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, zz5fvecz8128zCz0z5u16z9 ztable, uint16_t zbase, uint16_t zmaxd, uint32_t zk, sail_int zavailable);
+struct zGasCharge zbls_msm_gas_zzzz5fveczz8128zzCzz0zz5u16zz9_uint16_t_uint16_t_uint32_t_uint64_t_to_struct_zzGasCharge(zz5fvecz8128zCz0z5u16z9 ztable, uint16_t zbase, uint16_t zmaxd, uint32_t zk, uint64_t zavailable);
 
-void zbls_msm_gas_zzzz5fveczz8128zzCzz0zz5u16zz9_uint16_t_uint16_t_uint32_t_sail_int_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, zz5fvecz8128zCz0z5u16z9 ztable, uint16_t zbase, uint16_t zmaxd, uint32_t zk, sail_int zavailable);
+struct zGasCharge zbls_msm_gas_zzzz5fveczz8128zzCzz0zz5u16zz9_uint16_t_uint16_t_uint32_t_uint64_t_to_struct_zzGasCharge_variant_2(zz5fvecz8128zCz0z5u16z9 ztable, uint16_t zbase, uint16_t zmaxd, uint32_t zk, uint64_t zavailable);
 
 uint16_t zbranch_content_length_add(uint16_t zcurrent, uint8_t zaddition);
 
@@ -4887,27 +5143,11 @@ u256 zcalldata_slice_load_struct_zzCalldataSlice_uint8_t_to_u256_variant_3(struc
 
 void zcalldata_sub_slice(struct zCalldataSlice *rop, struct zCalldataSlice zs, uint8_t zoff, uint8_t zlen);
 
-void zcharge_sail_int_u320_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, u320 zamount);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zcharge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5u64zzCzz0zz5u64zzCzz0zz5u32zz9(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint32_t zamount);
 
-void zcharge_sail_int_uint16_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint16_t zamount);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zcharge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5u64zzCzz0zz5u64zzCzz0zz5u32zz9_variant_2(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint32_t zamount);
 
-void zcharge_sail_int_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint32_t zamount);
-
-void zcharge_sail_int_uint8_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint8_t zamount);
-
-void zcharge_log_gas(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint8_t znum_topics, u256 zsizze);
-
-void zcharge_memory_word_gas_sail_int_uint16_t_uint8_t_u256_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint16_t zbase, uint8_t zper_word, u256 zsizze);
-
-void zcharge_state_gas_sail_int_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint32_t zamount);
-
-void zcharge_word_scaled_gas_sail_int_uint16_t_u256_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint16_t zper_unit, u256 zunits);
-
-void zcharge_word_scaled_gas_sail_int_uint8_t_u256_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint8_t zper_unit, u256 zunits);
-
-void zcharge_word_scaled_gas_sail_int_uint8_t_u256_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9_variant_2(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint8_t zper_unit, u256 zunits);
-
-void zcheck_execution_gas_sail_int_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint32_t zamount);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zcharge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5u64zzCzz0zz5u64zzCzz0zz5u32zz9(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint64_t zamount);
 
 fixed_bytes_32 zcode_db_insert_struct_zzCodeRegionSliceFields_uint8_t_to_fixed_bytes_32(struct zCodeRegionSliceFields zcode, uint8_t zfork);
 
@@ -4919,13 +5159,15 @@ uint32_t zcompute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t
 
 uint8_t zcompute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint8_t_to_uint8_t(uint8_t zfork, uint8_t ztarget, uint8_t zmaximum, uint8_t zdenominator);
 
-void zconserved_gas_add_sail_int_uint32_t_to_sail_int(sail_int *rop, sail_int zleft, uint32_t zright);
+uint64_t zconserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t zavailable, uint32_t zcredit);
 
-void zdebit_state_gas_sail_int_uint32_t_to_struct_zztuple_zz8zz5boolzzCzz0zz5izz9(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint32_t zamount);
+struct zGasCharge zcopy_gas_cost_u256_uint64_t_to_struct_zzGasCharge(u256 zsizze, uint64_t zavailable);
 
 uint8_t zdecode_blob_hash_items_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_uint8_t(struct zStatelessInputSliceFields zcursor, uint8_t zlimit, uint8_t zcount);
 
 uint8_t zdecode_blob_hash_items_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_uint8_t_variant_2(struct zStatelessInputSliceFields zcursor, uint8_t zlimit, uint8_t zcount);
+
+struct ztuple_z8z5u32zCz0z5bv8z9 zdecode_deep_immediate(struct zCodeFields zframe_code, uint32_t zimmediate_offset, enum zDeepStackOperation zoperation);
 
 void zdecode_input_branch_node_struct_zzStatelessInputSliceFields_uint8_t_zzzz5fveczz816zzCzz0zz5unionzz0zzzzNodeRefzz9_to_struct_zzInputTrieNode(struct zInputTrieNode *rop, struct zStatelessInputSliceFields zcursor, uint8_t zindex, zz5fvecz816zCz0z5unionz0zzNodeRefz9 zchildren);
 
@@ -4935,11 +5177,15 @@ struct zParentHeaderFields zdecode_parent_header_fields_struct_zzStatelessInputS
 
 struct zParentHeaderFields zdecode_parent_header_fields_struct_zzStatelessInputSliceFields_uint8_t_struct_zzParentHeaderFields_to_struct_zzParentHeaderFields_variant_2(struct zStatelessInputSliceFields zcursor, uint8_t zfield_index, struct zParentHeaderFields zfields);
 
+struct ztuple_z8z5u32zCz0z5structz0zz__sail_c_repr_u256z9 zdecode_push_immediate(struct zCodeFields zframe_code, uint32_t zimmediate_offset, uint8_t zwidth);
+
 void zdecode_scratch_branch_node_struct_zzScratchSliceFields_uint8_t_zzzz5fveczz816zzCzz0zz5unionzz0zzzzNodeRefzz9_to_struct_zzScratchTrieNode(struct zScratchTrieNode *rop, struct zScratchSliceFields zcursor, uint8_t zindex, zz5fvecz816zCz0z5unionz0zzNodeRefz9 zchildren);
 
 void zdecode_scratch_branch_node_struct_zzScratchSliceFields_uint8_t_zzzz5fveczz816zzCzz0zz5unionzz0zzzzNodeRefzz9_to_struct_zzScratchTrieNode_variant_2(struct zScratchTrieNode *rop, struct zScratchSliceFields zcursor, uint8_t zindex, zz5fvecz816zCz0z5unionz0zzNodeRefz9 zchildren);
 
 uint64_t zdecode_scratch_uint(struct zScratchSliceFields zinput, uint8_t zoffset);
+
+void zdecode_simple(struct zast *rop, uint8_t zopcode, uint8_t zfork);
 
 uint64_t zdecode_sszz_uint_struct_zzStatelessInputSliceFields_uint16_t_to_uint64_t(struct zStatelessInputSliceFields zinput, uint16_t zoffset);
 
@@ -4969,51 +5215,77 @@ uint64_t zdecode_sszz_uint_struct_zzStatelessInputSliceFields_uint8_t_to_uint64_
 
 bool zdeployed_code_sizze_allowed(uint32_t zsizze);
 
-struct zEvmMemorySliceFields zevm_memory_slice_uint32_t_uint8_t_to_struct_zzEvmMemorySliceFields(uint32_t zoff, uint8_t zlen);
+void zexecute_dup(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint8_t zn);
 
-void zexecute_dup(struct ztuple_z8z5bv64zCz0z5iz9 *rop, uint8_t zn, uint64_t ztop, sail_int zg);
+void zexecute_log(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzOpcodeOutcomez9 *rop, fixed_bytes_20 zcarried_address, bool zcarried_is_static, uint32_t zmemory_base, uint8_t zn, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
+
+void zexecute_swap(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint8_t zn);
 
 struct zExecutionProfileFields zexecution_profile_for_struct_zzProtocolProfileFields_uint8_t_to_struct_zzExecutionProfileFields(struct zProtocolProfileFields zprotocol, uint8_t zblock_limit);
 
-uint32_t zexp_gas(u256 zexponent);
+void zfetch(struct ztuple_z8z5u32zCz0z5unionz0zzastz9 *rop, struct zCodeFields zframe_code, uint32_t zcurrent, uint8_t zfork);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_2(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_3(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_3(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_4(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_4(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_5(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_5(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_6(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_6(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_7(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_7(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint16_t_sail_int_to_struct_zzGasCharge_variant_8(struct zGasCharge *rop, uint16_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint16_t_uint64_t_to_struct_zzGasCharge_variant_8(uint16_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint32_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint32_t zcost, sail_int zavailable);
+struct zGasCharge zfixed_precompile_gas_uint32_t_uint64_t_to_struct_zzGasCharge(uint32_t zcost, uint64_t zavailable);
 
-void zfixed_precompile_gas_uint8_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint8_t zcost, sail_int zavailable);
-
-void zgas_charge_uint16_t_to_struct_zzGasCharge(struct zGasCharge *rop, uint16_t zcost);
-
-void zgas_charge_uint32_t_to_struct_zzGasCharge(struct zGasCharge *rop, uint32_t zcost);
-
-void zgas_charge_uint32_t_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, uint32_t zcost);
-
-void zgas_charge_uint64_t_to_struct_zzGasCharge(struct zGasCharge *rop, uint64_t zcost);
-
-void zgas_charge_uint64_t_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, uint64_t zcost);
-
-void zgas_charge_uint64_t_to_struct_zzGasCharge_variant_3(struct zGasCharge *rop, uint64_t zcost);
-
-void zgas_charge_uint64_t_to_struct_zzGasCharge_variant_4(struct zGasCharge *rop, uint64_t zcost);
-
-void zgas_charge_uint8_t_to_struct_zzGasCharge(struct zGasCharge *rop, uint8_t zcost);
+struct zGasCharge zfixed_precompile_gas_uint8_t_uint64_t_to_struct_zzGasCharge(uint8_t zcost, uint64_t zavailable);
 
 struct zGasLimitsFields zgas_limits_for_struct_zzProtocolProfileFields_uint8_t_to_struct_zzGasLimitsFields(struct zProtocolProfileFields zprofile, uint8_t zblock_limit);
+
+uint64_t zgas_sub_uint64_t_uint16_t_to_uint64_t(uint64_t zleft, uint16_t zright);
+
+uint64_t zgas_sub_uint64_t_uint32_t_to_uint64_t(uint64_t zleft, uint32_t zright);
+
+void zguard_stack_struct_zzStackPointer_uint16_t_uint8_t_to_struct_zzOpcodeOutcome(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint16_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint16_t_uint8_t_to_struct_zzOpcodeOutcome_variant_2(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint16_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_2(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_3(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_4(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_5(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_6(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_7(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_8(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_9(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_10(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_11(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_12(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_13(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_14(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_15(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
+
+void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_16(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
 
 fixed_bytes_32 zhtr_bytelist_struct_zzStatelessInputSliceFields_uint32_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint32_t zlimit_bytes);
 
@@ -5311,21 +5583,23 @@ fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_u
 
 bool zinitcode_sizze_allowed(uint32_t zsizze);
 
+void zinterpret_uint32_t_uint8_t_uint8_t___int128_struct_zzStackPointer_uint32_t_uint32_t_fixed_bytes_20_fixed_bytes_20_fixed_bytes_20_u256_uint8_t_bool_uint8_t_struct_zzCodeFields_struct_zzCalldataSlice_to_struct_zztuple_zz8zz5u64zzCzz0zz5u64zzCzz0zz5u32zzCzz0zz5i128zzCzz0zz5unionzz0zzzzFrameStatuszzCzz0zz5structzz0zzzzOutputSliceFieldszz9(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, uint32_t zinitial_gas, uint8_t zinitial_state_gas, uint8_t zinitial_state_spill, __int128 zinitial_refund, struct zStackPointer zinitial_sp, uint32_t zinitial_memory_base, uint32_t zinitial_memory_height, fixed_bytes_20 zinitial_caller, fixed_bytes_20 zinitial_address, fixed_bytes_20 zinitial_code_address, u256 zinitial_value, uint8_t zinitial_state_gas_reservoir, bool zinitial_is_static, uint8_t zinitial_depth, struct zCodeFields zinitial_code, struct zCalldataSlice zinitial_calldata);
+
+void zinterpret_uint64_t_uint64_t_uint32_t___int128_struct_zzStackPointer_uint32_t_uint32_t_fixed_bytes_20_fixed_bytes_20_fixed_bytes_20_u256_uint64_t_bool_uint8_t_struct_zzCodeFields_struct_zzCalldataSlice_to_struct_zztuple_zz8zz5u64zzCzz0zz5u64zzCzz0zz5u32zzCzz0zz5i128zzCzz0zz5unionzz0zzzzFrameStatuszzCzz0zz5structzz0zzzzOutputSliceFieldszz9(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, uint64_t zinitial_gas, uint64_t zinitial_state_gas, uint32_t zinitial_state_spill, __int128 zinitial_refund, struct zStackPointer zinitial_sp, uint32_t zinitial_memory_base, uint32_t zinitial_memory_height, fixed_bytes_20 zinitial_caller, fixed_bytes_20 zinitial_address, fixed_bytes_20 zinitial_code_address, u256 zinitial_value, uint64_t zinitial_state_gas_reservoir, bool zinitial_is_static, uint8_t zinitial_depth, struct zCodeFields zinitial_code, struct zCalldataSlice zinitial_calldata);
+
 unit zk_add_balance_fixed_bytes_20_u128_to_unit(fixed_bytes_20 za, u128 zv);
 
 unit zk_add_balance_fixed_bytes_20_uint64_t_to_unit(fixed_bytes_20 za, uint64_t zv);
 
-u128 zlegacy_intrinsic_gas(struct zTransactionFields ztx);
+struct zGasCharge zlinear_gas_uint16_t_uint16_t_uint32_t_uint64_t_to_struct_zzGasCharge(uint16_t zbase, uint16_t zper_unit, uint32_t zunits, uint64_t zavailable);
 
-void zlinear_gas_uint16_t_uint16_t_uint32_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint16_t zbase, uint16_t zper_unit, uint32_t zunits, sail_int zavailable);
+struct zGasCharge zlinear_gas_uint16_t_uint16_t_uint32_t_uint64_t_to_struct_zzGasCharge_variant_2(uint16_t zbase, uint16_t zper_unit, uint32_t zunits, uint64_t zavailable);
 
-void zlinear_gas_uint16_t_uint16_t_uint32_t_sail_int_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, uint16_t zbase, uint16_t zper_unit, uint32_t zunits, sail_int zavailable);
+struct zGasCharge zlinear_gas_uint16_t_uint8_t_uint32_t_uint64_t_to_struct_zzGasCharge(uint16_t zbase, uint8_t zper_unit, uint32_t zunits, uint64_t zavailable);
 
-void zlinear_gas_uint16_t_uint8_t_uint32_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint16_t zbase, uint8_t zper_unit, uint32_t zunits, sail_int zavailable);
+struct zGasCharge zlinear_gas_uint8_t_uint8_t_uint32_t_uint64_t_to_struct_zzGasCharge(uint8_t zbase, uint8_t zper_unit, uint32_t zunits, uint64_t zavailable);
 
-void zlinear_gas_uint8_t_uint8_t_uint32_t_sail_int_to_struct_zzGasCharge(struct zGasCharge *rop, uint8_t zbase, uint8_t zper_unit, uint32_t zunits, sail_int zavailable);
-
-void zlinear_gas_uint8_t_uint8_t_uint32_t_sail_int_to_struct_zzGasCharge_variant_2(struct zGasCharge *rop, uint8_t zbase, uint8_t zper_unit, uint32_t zunits, sail_int zavailable);
+struct zGasCharge zlinear_gas_uint8_t_uint8_t_uint32_t_uint64_t_to_struct_zzGasCharge_variant_2(uint8_t zbase, uint8_t zper_unit, uint32_t zunits, uint64_t zavailable);
 
 uint64_t zlog_data_byte(struct zLogDataSliceFields zs, uint8_t zoff);
 
@@ -5337,17 +5611,21 @@ struct zLogDataSliceFields zlog_data_sub_slice_struct_zzLogDataSliceFields_uint1
 
 struct zLogDataSliceFields zlog_data_sub_slice_struct_zzLogDataSliceFields_uint8_t_uint8_t_to_struct_zzLogDataSliceFields(struct zLogDataSliceFields zs, uint8_t zoff, uint8_t zlen);
 
-uint64_t zmem_cost_uint32_t_to_uint64_t(uint32_t zwords);
+uint64_t zmem_cost(uint32_t zwords);
 
 struct zMemoryAccessFields zmemory_access_u256_u256_to_struct_zzMemoryAccessFields(u256 zstart, u256 zsizze);
 
-void zmemory_expansion_cost(sail_int *rop, struct zEvmMemorySliceFields zmem, u320 zrequired_sizze);
+struct zMemoryAccessFields zmemory_access_u256_u256_to_struct_zzMemoryAccessFields_variant_2(u256 zstart, u256 zsizze);
+
+struct zGasCharge zmemory_expansion_gas_cost(uint32_t zmem, u320 zrequested_height, uint64_t zavailable);
 
 struct zMemoryRangeFields zmemory_range_uint8_t_uint8_t_to_struct_zzMemoryRangeFields(uint8_t zoff, uint8_t zlen);
 
-u320 zmemory_required_sizze_u256_u256_to_u320(u256 zstart, u256 zsizze);
+u320 zmemory_requested_height_u256_u256_to_u320(u256 zstart, u256 zsizze);
 
-u320 zmemory_required_sizze_u256_u256_to_u320_variant_2(u256 zstart, u256 zsizze);
+u320 zmemory_requested_height_u256_u256_to_u320_variant_2(u256 zstart, u256 zsizze);
+
+u320 zmemory_requested_height_u256_u256_to_u320_variant_3(u256 zstart, u256 zsizze);
 
 uint64_t zmemory_slice_byte_struct_zzEvmMemorySliceFields_uint8_t_to_uint64_t(struct zEvmMemorySliceFields zs, uint8_t zoff);
 
@@ -5371,15 +5649,17 @@ bool zmemory_slice_strided_zzero_value_struct_zzEvmMemorySliceFields_uint8_t_uin
 
 bool zmemory_slice_strided_zzero_value_struct_zzEvmMemorySliceFields_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(struct zEvmMemorySliceFields zs, uint8_t zstart, uint8_t zstride, uint8_t zwidth, uint8_t zcount);
 
-struct zEvmMemorySliceFields zmemory_sub_slice_struct_zzEvmMemorySliceFields_uint8_t_uint32_t_to_struct_zzEvmMemorySliceFields(struct zEvmMemorySliceFields zs, uint8_t zoff, uint32_t zlen);
-
 struct zEvmMemorySliceFields zmemory_sub_slice_struct_zzEvmMemorySliceFields_uint8_t_uint8_t_to_struct_zzEvmMemorySliceFields(struct zEvmMemorySliceFields zs, uint8_t zoff, uint8_t zlen);
-
-void zmemory_word_count_u320_to_sail_int(sail_int *rop, u320 zbyte_len);
 
 uint16_t zmemory_word_count_uint32_t_to_uint16_t(uint32_t zbyte_len);
 
 uint32_t zmemory_word_count_uint32_t_to_uint32_t(uint32_t zbyte_len);
+
+u256 zmemory_word_count_word_u256_to_u256(u256 zbyte_len);
+
+struct zGasCharge zmemory_word_gas_cost_uint16_t_uint16_t_u256_uint64_t_to_struct_zzGasCharge(uint16_t zbase, uint16_t zper_word, u256 zsizze, uint64_t zavailable);
+
+struct zGasCharge zmemory_word_gas_cost_uint16_t_uint8_t_u256_uint64_t_to_struct_zzGasCharge(uint16_t zbase, uint8_t zper_word, u256 zsizze, uint64_t zavailable);
 
 fixed_bytes_32 zmerkleizze_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zdepth);
 
@@ -5637,7 +5917,7 @@ u256 zpc_word_struct_zzCalldataSlice_uint8_t_uint8_t_to_u256_variant_4(struct zC
 
 u256 zpc_word_after_declared_field_struct_zzCalldataSlice_uint8_t_u256_uint8_t_to_u256(struct zCalldataSlice zinput, uint8_t zprefix, u256 zdeclared_length, uint8_t zbyte_count);
 
-u256 zpeek_uint64_t_uint8_t_to_u256(uint64_t ztop, uint8_t zn);
+void zprepare_amsterdam_transaction_dispatch(struct ztuple_z8z5structz0zzTransactionPreparationzCz0z5u64zCz0z5u64zCz0z5u32zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zzCodeFieldszCz0z5unionz0zzCalldataSlicez9 *rop, struct zTransactionFields ztx, struct zTxValidityFields zv, struct zTxUpfrontResult zupfront, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill);
 
 void zprepared_authorizzation_tail(struct zPreparedAuthorizzationList *rop, struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount);
 
@@ -5645,7 +5925,7 @@ u256 zread_push(struct zCodeRegionSliceFields zcode, uint32_t zoffset, uint8_t z
 
 unit zreceipt_record_write_length(uint32_t zvalue);
 
-unit zrecord_refund_uint16_t_to_unit(uint16_t zdelta);
+__int128 zrecord_refund___int128_uint16_t_to___int128(__int128 zrefund, uint16_t zdelta);
 
 struct zRlpEncoder zrlp_encoder_begin_uint16_t_to_struct_zzRlpEncoder(uint16_t zexpected_len);
 
@@ -5800,6 +6080,10 @@ unit zrlp_write_uint_word_uint64_t_to_unit(uint64_t zw);
 unit zrlp_write_uint_word_uint8_t_to_unit(uint8_t zw);
 
 unit zrlp_write_uint_word_uint8_t_to_unit_variant_2(uint8_t zw);
+
+void zrun_call(struct zFrameTransition *rop, uint32_t zcarried_pc, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_base, uint32_t zcarried_memory_height, fixed_bytes_20 zcarried_caller, fixed_bytes_20 zcarried_address, fixed_bytes_20 zcarried_code_address, u256 zcarried_value, uint64_t zcarried_state_gas_reservoir, bool zcarried_is_static, uint16_t zcarried_depth, struct zCodeFields zcarried_code, struct zCalldataSlice zcarried_calldata, struct zOutputSliceFields zcarried_returndata, enum zCallKind zkind);
+
+void zrun_create(struct zFrameTransition *rop, uint32_t zcarried_pc, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill, __int128 zcarried_refund, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_base, uint32_t zcarried_memory_height, fixed_bytes_20 zcarried_caller, fixed_bytes_20 zcarried_address, fixed_bytes_20 zcarried_code_address, u256 zcarried_value, uint64_t zcarried_state_gas_reservoir, bool zcarried_is_static, uint16_t zcarried_depth, struct zCodeFields zcarried_code, struct zCalldataSlice zcarried_calldata, struct zOutputSliceFields zcarried_returndata, enum zCreateKind zkind);
 
 uint64_t zscratch_byte_struct_zzScratchSliceFields_uint8_t_to_uint64_t(struct zScratchSliceFields zs, uint8_t zoff);
 
@@ -6043,9 +6327,37 @@ fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_11(uint8_t zle
 
 fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_12(uint8_t zlevel);
 
-unit zstack_set_uint64_t_uint8_t_u256_to_unit(uint64_t ztop, uint8_t zn, u256 zw);
+unit zstack_set_struct_zzStackPointer_uint8_t_u256_to_unit(struct zStackPointer ztop, uint8_t zn, u256 zw);
+
+unit zstack_set_struct_zzStackPointer_uint8_t_u256_to_unit_variant_2(struct zStackPointer ztop, uint8_t zn, u256 zw);
+
+unit zstack_set_struct_zzStackPointer_uint8_t_u256_to_unit_variant_3(struct zStackPointer ztop, uint8_t zn, u256 zw);
+
+u256 zstack_slot_read_struct_zzStackPointer_uint8_t_to_u256(struct zStackPointer ztop, uint8_t zindex);
+
+u256 zstack_slot_read_struct_zzStackPointer_uint8_t_to_u256_variant_2(struct zStackPointer ztop, uint8_t zindex);
+
+u256 zstack_slot_read_struct_zzStackPointer_uint8_t_to_u256_variant_3(struct zStackPointer ztop, uint8_t zindex);
+
+u256 zstack_slot_read_struct_zzStackPointer_uint8_t_to_u256_variant_4(struct zStackPointer ztop, uint8_t zindex);
+
+u256 zstack_slot_read_struct_zzStackPointer_uint8_t_to_u256_variant_5(struct zStackPointer ztop, uint8_t zindex);
+
+unit zstack_slot_write_struct_zzStackPointer_uint8_t_u256_to_unit(struct zStackPointer ztop, uint8_t zindex, u256 zvalue);
+
+struct zStackPointer zstack_top_advance(struct zStackPointer ztop, uint8_t zcount);
+
+struct zStackPointer zstack_top_retreat(struct zStackPointer ztop, uint8_t zcount);
+
+uint32_t zstate_gas_spill_add_uint32_t___int128_to_uint32_t(uint32_t zleft, __int128 zright);
+
+uint32_t zstate_gas_spill_add_uint32_t_int64_t_to_uint32_t(uint32_t zleft, int64_t zright);
+
+uint32_t zstate_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(uint32_t zleft, int64_t zright);
 
 uint32_t zstate_gas_spill_add_uint32_t_uint32_t_to_uint32_t(uint32_t zleft, uint32_t zright);
+
+uint32_t zstate_gas_spill_room_uint32_t_to_uint32_t(uint32_t zleft);
 
 uint64_t zstateless_input_slice_byte_struct_zzStatelessInputSliceFields_uint16_t_to_uint64_t(struct zStatelessInputSliceFields zs, uint16_t zoff);
 
@@ -6109,7 +6421,13 @@ struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessI
 
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields_variant_5(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
 
+void zsuspend_frame(struct ztuple_z8z5structz0zzFrameCheckpointzCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 *rop, uint32_t zpc, uint64_t zgas_remaining, struct zStackPointer zstack_top, uint32_t zmemory_base, uint32_t zmemory_height, uint8_t zstate_gas_remaining, uint32_t zstate_gas_spilled, __int128 zframe_refund, struct zFrameStatus zframe_status, struct zMessage zmessage, struct zCodeFields zframe_code, struct zCalldataSlice zcalldata);
+
 struct zTransactionGasAllowanceFields ztransaction_gas_allowance(uint64_t zvalue, uint64_t ztotal_limit, uint64_t zregular_limit);
+
+struct zTransactionInitialGasFields ztransaction_initial_gas(struct zTransactionGasAllowanceFields zallowance, uint64_t zintrinsic_execution, uint64_t zintrinsic_state, uint64_t zcalldata_floor);
+
+struct zTransactionInitialGasFields ztransaction_initial_gas_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_zzTransactionInitialGasFields(uint64_t ztotal, uint64_t zregular, uint64_t zintrinsic_execution, uint64_t zintrinsic_state, uint64_t zcalldata_floor, uint64_t zexecution, uint8_t zstate);
 
 void ztrie_child_ref_struct_zzTrieItem_uint8_t_to_struct_zzNodeRef(struct zNodeRef *rop, struct zTrieItem zit, uint8_t zdepth);
 
@@ -6118,6 +6436,10 @@ void ztrie_child_ref_struct_zzTrieItem_uint8_t_to_struct_zzNodeRef_variant_2(str
 struct zStatelessInputSliceFields ztrie_walk_struct_zzStatelessInputSliceFields_struct_zzTriePath_uint8_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields znode, struct zTriePath zkey, uint8_t zpos);
 
 struct zStatelessInputSliceFields ztrie_walk_struct_zzStatelessInputSliceFields_struct_zzTriePath_uint8_t_to_struct_zzStatelessInputSliceFields_variant_2(struct zStatelessInputSliceFields znode, struct zTriePath zkey, uint8_t zpos);
+
+struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_struct_zzTransactionInitialGasFields_uint64_t_uint64_t___int128_to_struct_zzTxFrameGasSnapshotFields(struct zTransactionInitialGasFields zinitial, uint64_t zexecution, uint64_t zstate, __int128 zstate_delta);
+
+struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_struct_zzTransactionInitialGasFields_uint8_t_uint8_t___int128_to_struct_zzTxFrameGasSnapshotFields(struct zTransactionInitialGasFields zinitial, uint8_t zexecution, uint8_t zstate, __int128 zstate_delta);
 
 struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_zzTxFrameGasSnapshotFields(uint64_t zlimit, uint64_t zregular, uint64_t zcalldata_floor, uint64_t zremaining, uint8_t zstate_used);
 
@@ -6149,7 +6471,21 @@ uint32_t zvalidate_auth_tuples_struct_zzStatelessInputSliceFields_uint32_t_to_ui
 
 uint32_t zvalidate_auth_tuples_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t(struct zStatelessInputSliceFields zcursor, uint8_t zcount);
 
-void zvalidate_stack(struct ztuple_z8z5boolzCz0z5iz9 *rop, sail_int zg, uint64_t ztop, uint16_t zinputs, uint16_t zoutputs);
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint16_t_uint16_t_to_enum_zzStackValidation(struct zStackPointer ztop, uint16_t zinputs, uint16_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint16_t_uint8_t_to_enum_zzStackValidation(struct zStackPointer ztop, uint16_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation_variant_2(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation_variant_3(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation_variant_4(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation_variant_5(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
+
+enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint8_t_uint8_t_to_enum_zzStackValidation_variant_6(struct zStackPointer ztop, uint8_t zinputs, uint8_t zoutputs);
 
 __int128 zvalidated_refund_add___int128_uint16_t_to___int128(__int128 zleft, uint16_t zright);
 
@@ -6189,6 +6525,8 @@ uint8_t zword_byte_length_uint8_t_to_uint8_t_variant_2(uint8_t zvalue);
 
 u256 zword_div_word_u256_u256_to_u256(u256 zdividend, u256 zdivisor);
 
+u256 zword_div_word_u256_u256_to_u256_variant_2(u256 zdividend, u256 zdivisor);
+
 u256 zword_div_word_u256_uint8_t_to_u256(u256 zdividend, uint8_t zdivisor);
 
 bool zword_is_zzero_u128_to_bool(u128 zw);
@@ -6204,6 +6542,8 @@ uint64_t zword_low_byte_uint64_t_to_uint64_t(uint64_t zvalue);
 uint64_t zword_low_byte_uint8_t_to_uint64_t(uint8_t zvalue);
 
 u256 zword_mod_word_u256_u256_to_u256(u256 zdividend, u256 zdivisor);
+
+u256 zword_mod_word_u256_u256_to_u256_variant_2(u256 zdividend, u256 zdivisor);
 
 u256 zword_mul_word_u256_uint16_t_to_u256(u256 za, uint16_t zb);
 
@@ -6224,6 +6564,8 @@ u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_2(uint32_t zvalue);
 u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_3(uint32_t zvalue);
 
 u256 zword_of_nat_byte_count_uint64_t_to_u256(uint64_t zvalue);
+
+u256 zword_of_nat_byte_count_uint64_t_to_u256_variant_2(uint64_t zvalue);
 
 u256 zword_of_nat_byte_count_uint8_t_to_u256(uint8_t zvalue);
 
@@ -6258,6 +6600,10 @@ u256 zword_of_source_byte_count_uint8_t_to_u256(uint8_t zvalue);
 u256 zword_of_source_byte_count_uint8_t_to_u256_variant_2(uint8_t zvalue);
 
 u256 zword_of_source_byte_count_uint8_t_to_u256_variant_3(uint8_t zvalue);
+
+struct zGasCharge zword_scaled_gas_cost_uint8_t_u256_uint64_t_to_struct_zzGasCharge(uint8_t zper_unit, u256 zunits, uint64_t zavailable);
+
+struct zGasCharge zword_scaled_gas_cost_uint8_t_u256_uint64_t_to_struct_zzGasCharge_variant_2(uint8_t zper_unit, u256 zunits, uint64_t zavailable);
 
 u256 zword_shift_left_u256_uint8_t_to_u256(u256 zvalue, uint8_t zamount);
 
@@ -6300,45 +6646,6 @@ extern struct zTxEnvFields zk_tx;
 
 // register zk_current_transaction_epoch
 extern uint32_t zk_current_transaction_epoch;
-
-// register zpc
-extern uint32_t zpc;
-
-// register zgas_remaining
-extern sail_int zgas_remaining;
-
-// register zstack_top
-extern uint64_t zstack_top;
-
-// register zstate_gas_remaining
-extern sail_int zstate_gas_remaining;
-
-// register zstate_gas_spilled
-extern uint32_t zstate_gas_spilled;
-
-// register zframe_refund
-extern __int128 zframe_refund;
-
-// register zframe_status
-extern struct zFrameStatus zframe_status;
-
-// register zmessage
-extern struct zMessage zmessage;
-
-// register zcall_depth
-extern uint16_t zcall_depth;
-
-// register zframe_code
-extern struct zCodeFields zframe_code;
-
-// register zcalldata
-extern struct zCalldataSlice zcalldata;
-
-// register zreturndata
-extern struct zOutputSliceFields zreturndata;
-
-// register zevm_memory
-extern struct zEvmMemorySliceFields zevm_memory;
 
 
 

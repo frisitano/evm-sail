@@ -22,8 +22,9 @@ from evm.primitives.quantities import (
     account_nonce,
     code_pointer,
     frame_depth,
+    memory_base,
+    memory_height,
     memory_length,
-    memory_pointer,
 )
 from evm.primitives.gas import (
     gas,
@@ -34,7 +35,7 @@ from evm.primitives.gas import (
 )
 from evm.primitives.bytes import (
     CalldataSlice,
-    EvmMemorySlice,
+    OutputSlice,
 )
 from evm.exceptions import ExceptionKind
 from evm.evm.halt import FrameStatus
@@ -268,6 +269,36 @@ class Message:
     is_static: bool
     depth: frame_depth
 
+_FrameTransition_memory_base_type: TypeAlias = memory_base
+_FrameTransition_memory_height_type: TypeAlias = memory_height
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class FrameTransition:
+    pc: code_pointer
+    gas_remaining: gas
+    state_gas_remaining: state_gas
+    state_gas_spilled: state_gas_spill
+    refund: gas_refund
+    status: FrameStatus
+    stack_top: StackPointer
+    memory_base: _FrameTransition_memory_base_type
+    memory_height: _FrameTransition_memory_height_type
+    message: Message
+    code: Code
+    calldata: CalldataSlice
+    returndata: OutputSlice
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((-(199 * ((2 ** 64) - 1))) <= int(self.refund) <= (199 * ((2 ** 64) - 1)))):
+            raise ValueError("FrameTransition.refund violates Sail type range(- (199 * (2 ^ 64 - 1)), (199 * (2 ^ 64 - 1)))")
+        return self
+
+@dataclass(slots=True)
+class ExceptionalStateTransition:
+    state_gas_remaining: state_gas
+    state_gas_spilled: state_gas_spill
+    status: FrameStatus
+
 class OpcodeOutcome:
     pass
 
@@ -279,6 +310,7 @@ class Continue(OpcodeOutcome):
 class Failed(OpcodeOutcome):
     value: ExceptionKind
 
+_FrameCheckpoint_memory_height_type: TypeAlias = memory_height
 @pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
 class FrameCheckpoint:
     pc: code_pointer
@@ -291,7 +323,7 @@ class FrameCheckpoint:
     message: Message
     code: Code
     calldata: CalldataSlice
-    memory: EvmMemorySlice
+    memory_height: _FrameCheckpoint_memory_height_type
 
     @model_validator(mode="after")
     def validate(self) -> Self:
@@ -302,7 +334,7 @@ class FrameCheckpoint:
 @dataclass(slots=True)
 class CallContinuation:
     checkpoint: FrameCheckpoint
-    return_offset: memory_pointer
+    return_offset: memory_base
     return_length: memory_length
     new_account_charged: bool
 

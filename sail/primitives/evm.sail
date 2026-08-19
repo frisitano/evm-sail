@@ -542,9 +542,40 @@ struct Message = {
     depth : frame_depth,
 }
 
+/*! The complete carried state installed after entering or resuming a frame.
+    Named fields replace the former positional 19-tuple at this cold semantic
+    boundary; the optimized interpreter immediately unpacks the record into
+    its hot scalar locals. */
+struct FrameTransition = {
+    pc : code_pointer,
+    gas_remaining : gas,
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+    refund : gas_refund,
+    status : FrameStatus,
+    stack_top : StackPointer,
+    memory_base : memory_base,
+    memory_height : memory_height,
+    message : Message,
+    code : Code,
+    calldata : CalldataSlice,
+    returndata : OutputSlice,
+}
+
+/*! State installed when an executing frame enters an exceptional halt.
+    Keeping the normalized Amsterdam state-gas values together prevents the
+    transition from being represented as an anonymous positional tuple. */
+struct ExceptionalStateTransition = {
+    state_gas_remaining : state_gas,
+    state_gas_spilled : state_gas_spill,
+    status : FrameStatus,
+}
+
 /*! Lightweight result of one opcode handler. */
 union OpcodeOutcome = {
+    /*! Continue executing the active frame. */
     Continue : unit,
+    /*! Stop the active opcode path with the given exceptional halt. */
     Failed : ExceptionKind,
 }
 
@@ -563,13 +594,13 @@ struct FrameCheckpoint = {
     message : Message,
     code : Code,
     calldata : CalldataSlice,
-    memory : EvmMemorySlice,
+    memory_height : memory_height,
 }
 
 /*! The suspended parent information needed after a message call returns. */
 struct CallContinuation = {
     checkpoint : FrameCheckpoint,
-    return_offset : memory_pointer,
+    return_offset : memory_base,
     return_length : memory_length,
     /* Amsterdam NEW_ACCOUNT state gas paid for the child target. */
     new_account_charged : bool,

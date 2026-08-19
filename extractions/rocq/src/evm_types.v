@@ -2037,21 +2037,21 @@ Instance dummy_storage_generation : Inhabited (storage_generation) := {
 Definition storage_generation_valid (x : storage_generation) : Prop :=
 0 <= x.(storage_generation_value) /\ x.(storage_generation_value) <= (2 ^ 32 - 1).
 
-Record memory_pointer := { memory_pointer_value : Z; }.
-Arguments memory_pointer : clear implicits.
+Record memory_base_typ := { memory_base_value : Z; }.
+Arguments memory_base_typ : clear implicits.
 #[export]
-Instance Decidable_eq_memory_pointer : EqDecision memory_pointer.
+Instance Decidable_eq_memory_base_typ : EqDecision memory_base_typ.
    intros [x0].
    intros [y0].
   cmp_record_field x0 y0.
 left; subst; reflexivity.
 Defined.
 #[export]
-Instance Countable_memory_pointer : Countable memory_pointer.
+Instance Countable_memory_base_typ : Countable memory_base_typ.
 refine {|
-  encode x := encode (memory_pointer_value x);
+  encode x := encode (memory_base_value x);
   decode x := '(x0) ← decode x;
-              mret (Build_memory_pointer x0)
+              mret (Build_memory_base_typ x0)
 |}.
 abstract (
   intros [x0];
@@ -2059,16 +2059,16 @@ abstract (
   reflexivity).
 Defined.
 
-Notation "{[ r 'with' 'memory_pointer_value' := e ]}" :=
-  {| memory_pointer_value := e |} (at level 1, only parsing).
+Notation "{[ r 'with' 'memory_base_value' := e ]}" :=
+  {| memory_base_value := e |} (at level 1, only parsing).
 #[export]
-Instance dummy_memory_pointer : Inhabited (memory_pointer) := {
-  inhabitant := {| memory_pointer_value := inhabitant
+Instance dummy_memory_base_typ : Inhabited (memory_base_typ) := {
+  inhabitant := {| memory_base_value := inhabitant
 |} }.
 
 
-Definition memory_pointer_valid (x : memory_pointer) : Prop :=
-0 <= x.(memory_pointer_value) /\ x.(memory_pointer_value) <= (2 ^ 32 - 1).
+Definition memory_base_typ_valid (x : memory_base_typ) : Prop :=
+0 <= x.(memory_base_value) /\ x.(memory_base_value) <= (2 ^ 32 - 1).
 
 Record memory_length := { memory_length_value : Z; }.
 Arguments memory_length : clear implicits.
@@ -2102,6 +2102,8 @@ Instance dummy_memory_length : Inhabited (memory_length) := {
 
 Definition memory_length_valid (x : memory_length) : Prop :=
 0 <= x.(memory_length_value) /\ x.(memory_length_value) <= (2 ^ 32 - 1).
+
+Definition memory_height_typ : Type := memory_length.
 
 Definition memory_expansion_proof_gas_ceiling : Z := (2 ^ 64 - 1).
 #[export] Hint Unfold memory_expansion_proof_gas_ceiling : sail.
@@ -2180,7 +2182,7 @@ Definition MemoryRange : Type := {len & {off & (MemoryRangeFields off len)}}%typ
 Record MemoryAccessFields {off : Z} {len : Z} {required : Z}
 (*memory_access_relation off len required*) := {
   MemoryAccessFields_range : MemoryRangeFields off len;
-  MemoryAccessFields_required_size : Z;
+  MemoryAccessFields_requested_height : Z;
 }.
 Arguments MemoryAccessFields : clear implicits.
 #[export]
@@ -2196,7 +2198,7 @@ Defined.
 Instance Countable_MemoryAccessFields {off : Z} {len : Z} {required : Z}
   (*memory_access_relation off len required*) : Countable (MemoryAccessFields off len required).
 refine {|
-  encode x := encode (MemoryAccessFields_range x, MemoryAccessFields_required_size x);
+  encode x := encode (MemoryAccessFields_range x, MemoryAccessFields_requested_height x);
   decode x := '(x0, x1) ← decode x;
               mret (Build_MemoryAccessFields off len required x0 x1)
 |}.
@@ -2209,7 +2211,7 @@ Defined.
 Notation "{[ r 'with' 'MemoryAccessFields_range' := e ]}" :=
   match r with Build_MemoryAccessFields _ _ _ _ (_ as f1) =>
     Build_MemoryAccessFields _ _ _ e f1 end (at level 1).
-Notation "{[ r 'with' 'MemoryAccessFields_required_size' := e ]}" :=
+Notation "{[ r 'with' 'MemoryAccessFields_requested_height' := e ]}" :=
   match r with Build_MemoryAccessFields _ _ _ (_ as f0) _ =>
     Build_MemoryAccessFields _ _ _ f0 e end (at level 1).
 #[export]
@@ -2217,7 +2219,7 @@ Instance dummy_MemoryAccessFields {off : Z} {len : Z} {required : Z}
   (*memory_access_relation off len required*) : Inhabited (MemoryAccessFields off len required) := {
   inhabitant := {|
     MemoryAccessFields_range := inhabitant;
-    MemoryAccessFields_required_size := inhabitant
+    MemoryAccessFields_requested_height := inhabitant
 |} }.
 
 
@@ -7578,6 +7580,158 @@ Instance dummy_Message : Inhabited (Message) := {
 |} }.
 
 
+Record FrameTransition := {
+  FrameTransition_pc : code_pointer;
+  FrameTransition_gas_remaining : gas_typ;
+  FrameTransition_state_gas_remaining : state_gas_typ;
+  FrameTransition_state_gas_spilled : state_gas_spill;
+  FrameTransition_refund : gas_refund;
+  FrameTransition_status : FrameStatus;
+  FrameTransition_stack_top : StackPointer;
+  FrameTransition_memory_base : memory_base_typ;
+  FrameTransition_memory_height : memory_height_typ;
+  FrameTransition_message : Message;
+  FrameTransition_code : Code;
+  FrameTransition_calldata : CalldataSlice;
+  FrameTransition_returndata : OutputSlice;
+}.
+Arguments FrameTransition : clear implicits.
+#[export]
+Instance Decidable_eq_FrameTransition : EqDecision FrameTransition.
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11 y12].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+  cmp_record_field x5 y5.
+  cmp_record_field x6 y6.
+  cmp_record_field x7 y7.
+  cmp_record_field x8 y8.
+  cmp_record_field x9 y9.
+  cmp_record_field x10 y10.
+  cmp_record_field x11 y11.
+  cmp_record_field x12 y12.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_FrameTransition : Countable FrameTransition.
+refine {|
+  encode x := encode (FrameTransition_pc x, FrameTransition_gas_remaining x, FrameTransition_state_gas_remaining x, FrameTransition_state_gas_spilled x, FrameTransition_refund x, FrameTransition_status x, FrameTransition_stack_top x, FrameTransition_memory_base x, FrameTransition_memory_height x, FrameTransition_message x, FrameTransition_code x, FrameTransition_calldata x, FrameTransition_returndata x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12) ← decode x;
+              mret (Build_FrameTransition x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'FrameTransition_pc' := e ]}" :=
+  match r with Build_FrameTransition _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_gas_remaining' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_state_gas_remaining' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_state_gas_spilled' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_refund' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_status' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_stack_top' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_memory_base' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_memory_height' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_message' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_code' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_calldata' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 end (at level 1).
+Notation "{[ r 'with' 'FrameTransition_returndata' := e ]}" :=
+  match r with Build_FrameTransition (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ =>
+    Build_FrameTransition f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e end (at level 1).
+#[export]
+Instance dummy_FrameTransition : Inhabited (FrameTransition) := {
+  inhabitant := {|
+    FrameTransition_pc := inhabitant;
+    FrameTransition_gas_remaining := inhabitant;
+    FrameTransition_state_gas_remaining := inhabitant;
+    FrameTransition_state_gas_spilled := inhabitant;
+    FrameTransition_refund := inhabitant;
+    FrameTransition_status := inhabitant;
+    FrameTransition_stack_top := inhabitant;
+    FrameTransition_memory_base := inhabitant;
+    FrameTransition_memory_height := inhabitant;
+    FrameTransition_message := inhabitant;
+    FrameTransition_code := inhabitant;
+    FrameTransition_calldata := inhabitant;
+    FrameTransition_returndata := inhabitant
+|} }.
+
+
+Record ExceptionalStateTransition := {
+  ExceptionalStateTransition_state_gas_remaining : state_gas_typ;
+  ExceptionalStateTransition_state_gas_spilled : state_gas_spill;
+  ExceptionalStateTransition_status : FrameStatus;
+}.
+Arguments ExceptionalStateTransition : clear implicits.
+#[export]
+Instance Decidable_eq_ExceptionalStateTransition : EqDecision ExceptionalStateTransition.
+   intros [x0 x1 x2].
+   intros [y0 y1 y2].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_ExceptionalStateTransition : Countable ExceptionalStateTransition.
+refine {|
+  encode x := encode (ExceptionalStateTransition_state_gas_remaining x, ExceptionalStateTransition_state_gas_spilled x, ExceptionalStateTransition_status x);
+  decode x := '(x0, x1, x2) ← decode x;
+              mret (Build_ExceptionalStateTransition x0 x1 x2)
+|}.
+abstract (
+  intros [x0 x1 x2];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'ExceptionalStateTransition_state_gas_remaining' := e ]}" :=
+  match r with Build_ExceptionalStateTransition _ (_ as f1) (_ as f2) =>
+    Build_ExceptionalStateTransition e f1 f2 end (at level 1).
+Notation "{[ r 'with' 'ExceptionalStateTransition_state_gas_spilled' := e ]}" :=
+  match r with Build_ExceptionalStateTransition (_ as f0) _ (_ as f2) =>
+    Build_ExceptionalStateTransition f0 e f2 end (at level 1).
+Notation "{[ r 'with' 'ExceptionalStateTransition_status' := e ]}" :=
+  match r with Build_ExceptionalStateTransition (_ as f0) (_ as f1) _ =>
+    Build_ExceptionalStateTransition f0 f1 e end (at level 1).
+#[export]
+Instance dummy_ExceptionalStateTransition : Inhabited (ExceptionalStateTransition) := {
+  inhabitant := {|
+    ExceptionalStateTransition_state_gas_remaining := inhabitant;
+    ExceptionalStateTransition_state_gas_spilled := inhabitant;
+    ExceptionalStateTransition_status := inhabitant
+|} }.
+
+
 Inductive OpcodeOutcome :=
 | Continue : unit -> OpcodeOutcome
 | Failed : ExceptionKind -> OpcodeOutcome.
@@ -7621,7 +7775,7 @@ Record FrameCheckpoint := {
   FrameCheckpoint_message : Message;
   FrameCheckpoint_code : Code;
   FrameCheckpoint_calldata : CalldataSlice;
-  FrameCheckpoint_memory : EvmMemorySlice;
+  FrameCheckpoint_memory_height : memory_height_typ;
 }.
 Arguments FrameCheckpoint : clear implicits.
 #[export]
@@ -7644,7 +7798,7 @@ Defined.
 #[export]
 Instance Countable_FrameCheckpoint : Countable FrameCheckpoint.
 refine {|
-  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_stack_top x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory x);
+  encode x := encode (FrameCheckpoint_pc x, FrameCheckpoint_gas_remaining x, FrameCheckpoint_stack_top x, FrameCheckpoint_state_gas_remaining x, FrameCheckpoint_state_gas_spilled x, FrameCheckpoint_refund x, FrameCheckpoint_status x, FrameCheckpoint_message x, FrameCheckpoint_code x, FrameCheckpoint_calldata x, FrameCheckpoint_memory_height x);
   decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) ← decode x;
               mret (Build_FrameCheckpoint x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10)
 |}.
@@ -7684,7 +7838,7 @@ Notation "{[ r 'with' 'FrameCheckpoint_code' := e ]}" :=
 Notation "{[ r 'with' 'FrameCheckpoint_calldata' := e ]}" :=
   match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) =>
     Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 end (at level 1).
-Notation "{[ r 'with' 'FrameCheckpoint_memory' := e ]}" :=
+Notation "{[ r 'with' 'FrameCheckpoint_memory_height' := e ]}" :=
   match r with Build_FrameCheckpoint (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ =>
     Build_FrameCheckpoint f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e end (at level 1).
 #[export]
@@ -7700,13 +7854,13 @@ Instance dummy_FrameCheckpoint : Inhabited (FrameCheckpoint) := {
     FrameCheckpoint_message := inhabitant;
     FrameCheckpoint_code := inhabitant;
     FrameCheckpoint_calldata := inhabitant;
-    FrameCheckpoint_memory := inhabitant
+    FrameCheckpoint_memory_height := inhabitant
 |} }.
 
 
 Record CallContinuation := {
   CallContinuation_checkpoint : FrameCheckpoint;
-  CallContinuation_return_offset : memory_pointer;
+  CallContinuation_return_offset : memory_base_typ;
   CallContinuation_return_length : memory_length;
   CallContinuation_new_account_charged : bool;
 }.

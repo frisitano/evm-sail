@@ -1,6 +1,5 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.Quantities
 import Evm.Primitives.Bytes
 import Evm.Exceptions
 import Evm.Primitives.Fork
@@ -445,8 +444,7 @@ def apply_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 4))) : SailM Unit :
         let (withdrawal_ref, tail) ← do (ssz_fixed_list_pop rest WD_SIZE)
         let rest : (BoundedSszListRef (2 ^ 4)) := tail
         let withdrawal ← do (decode_withdrawal withdrawal_ref)
-        let amount := (word_of_withdrawal_amount withdrawal.amount)
-        let amount_in_wei := (alu_mul amount 1000000000)
+        let amount_in_wei := (withdrawal.amount *i 1000000000)
         (k_add_balance withdrawal.address amount_in_wei)
         (pure rest)
     (pure loop_vars) ) : SailM (BoundedSszListRef (2 ^ 4)) )

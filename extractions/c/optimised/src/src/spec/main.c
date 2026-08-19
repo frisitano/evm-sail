@@ -28,8 +28,8 @@ void evmsail_model_init(void)
   create_letbind_57();
   create_letbind_58();
   create_letbind_73();
-  create_letbind_206();
-  create_letbind_274();
+  create_letbind_208();
+  create_letbind_276();
   scratch_arena = EMPTY_SCRATCH_SLICE;
   k_parent_state_root = ZERO_HASH;
   k_n_headers = (uint16_t)UINT8_C(0);

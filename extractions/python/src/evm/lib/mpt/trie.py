@@ -134,12 +134,11 @@ def updates_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: TriePath,
                 fatal_error(FatalError.WitnessDeficient)
             match update.change:
                 case TrieDelete(None):
-                    subtree = lib_mpt_updates.trie_empty_subtree()
+                    return (lib_mpt_updates.trie_empty_subtree(), next)
                 case TriePut(value):
-                    subtree = lib_mpt_updates.trie_scratch_leaf(update.key, value)
+                    return (lib_mpt_updates.trie_scratch_leaf(update.key, value), next)
                 case _:
                     raise SailMatchFailure("no Sail match clause applied")
-            return (subtree, next)
         else:
             next_cursor = (int(cursor) + 1)
             children = lib_mpt_updates.trie_children_empty()
@@ -194,12 +193,11 @@ def overlay_leaf_subtree(updates: lib_mpt_updates.TrieUpdateCursor, prefix: Trie
                 fatal_error(FatalError.WitnessDeficient)
             match update.change:
                 case TrieDelete(None):
-                    subtree = lib_mpt_updates.trie_empty_subtree()
+                    return (lib_mpt_updates.trie_empty_subtree(), next)
                 case TriePut(updated):
-                    subtree = lib_mpt_updates.trie_scratch_leaf(key, updated)
+                    return (lib_mpt_updates.trie_scratch_leaf(key, updated), next)
                 case _:
                     raise SailMatchFailure("no Sail match clause applied")
-            return (subtree, next)
         else:
             return (lib_mpt_updates.trie_input_leaf(key, value), updates)
     else:
@@ -340,9 +338,10 @@ def witness_subtree(node: StatelessInputSlice, prefix: TriePath, updates: lib_mp
                         child_path = path_single(nib)
                         child_prefix = path_concat(prefix, child_path)
                         childref = sail_vector_access(children, i, False)
+                        present = False
                         match childref:
                             case EmptyRef(None):
-                                present = False
+                                pass
                             case _:
                                 present = True
                         update_pending = update_under_current_prefix(remaining)

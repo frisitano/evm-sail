@@ -22,6 +22,7 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     if poststate != header.state_root then {
         fatal_error(InvalidStateRoot)
     };
+
     /* Receipts/commitments phase: the receipts-root comparison, the logs
        bloom check, and block-access-list validation accumulate into the same
        `receipts_root` tag as the receipts-trie reduction performed in
@@ -73,6 +74,7 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
     let executed = execute_block_body(block.body, input_ref);
 
     cycle_scope_end(active_stage);
+
     /* Receipts-trie reduction under the `receipts_root` phase tag, as a
        sibling of the `execute_block` phase.  The optimized receipt store
        reads its own C arena and ignores the start pointer, and block-end

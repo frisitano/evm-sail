@@ -174,7 +174,7 @@ def rlp_input_slice_size (data : (StatelessInputSliceFields k_off k_len)) : Sail
 
 /-- Returns the materializable RLP width of a byte slice after its caller has
 selected the backing region and loaded the first byte. -/
-/- Type quantifiers: k_ex607727_ : Nat, 0 ≤ k_ex607727_ ∧ k_ex607727_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex548627_ : Nat, 0 ≤ k_ex548627_ ∧ k_ex548627_ ≤ (2 ^ 32 - 1) -/
 def rlp_materialized_slice_size (length : Nat) (first : (BitVec 8)) : SailM Nat := do
   if (((length == 1) && ((BitVec.access first 7) == 0#1)) : Bool)
   then (pure 1)

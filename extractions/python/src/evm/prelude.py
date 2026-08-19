@@ -293,8 +293,10 @@ def word_abs(value: word) -> word:
         return word(value)
 
 def word_slt(a: word, b: word) -> bool:
-    a_neg = ((word_bit(a, 255)) == (Bits(1, 0b1)))
-    b_neg = ((word_bit(b, 255)) == (Bits(1, 0b1)))
+    a_sign = word_bit(a, 255)
+    b_sign = word_bit(b, 255)
+    a_neg = ((a_sign) == (Bits(1, 0b1)))
+    b_neg = ((b_sign) == (Bits(1, 0b1)))
     if a_neg:
         if b_neg:
             return word_ult(a, b)
@@ -445,8 +447,8 @@ def alu_byte(i: word, x: word) -> word:
         index = i
         shift = (int((31 - int(index))) * 8)
         shifted = word_shift_right(x, shift)
-        result_byte = word_low_byte(shifted)
-        return word(int(result_byte))
+        low_byte = word_low_byte(shifted)
+        return word(int(low_byte))
     else:
         return word(WORD_ZERO)
 

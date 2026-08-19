@@ -8,17 +8,18 @@
 #ifndef SAIL_U256_DEFINED
 #define SAIL_U256_DEFINED
 typedef struct {
-    uint64_t limbs[4];
+  uint64_t limbs[4];
 } u256;
 #endif
 
 typedef struct {
-    u256 *storage;
-    uint16_t height;
+  u256 *storage;
+  uint16_t height;
 } StackPointer;
 
-static inline bool eq_StackPointer(StackPointer lhs, StackPointer rhs) {
-    return lhs.storage == rhs.storage && lhs.height == rhs.height;
+static inline bool eq_StackPointer(StackPointer lhs, StackPointer rhs)
+{
+  return lhs.storage == rhs.storage && lhs.height == rhs.height;
 }
 
 StackPointer stack_reset(void);

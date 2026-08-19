@@ -63,7 +63,7 @@ the CREATE address codec. -/
 
 /-- The `CREATE2` address (EIP-1014): the low 20 bytes of
 `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
-/- Type quantifiers: k_ex608262_ : Nat, 0 ≤ k_ex608262_ ∧ k_ex608262_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex549162_ : Nat, 0 ≤ k_ex549162_ ∧ k_ex549162_ ≤ (2 ^ 256 - 1) -/
 def create2_address (sender : (Vector (BitVec 8) 20)) (salt : Nat) (init_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   let mark ← do (scratch_reserve 85)
   (scratch_push_byte 0xFF#8)

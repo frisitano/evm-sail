@@ -110,7 +110,9 @@ def k_log(a: address, topics: LogTopics, data: LogData) -> None:
     return k_log_data(data)
 
 def read_logs() -> LogSeriesRef:
-    return LogSeriesRef(start=log_store_index(_host_logs_tx_start()), count=log_store_index(_host_logs_tx_count()))
+    start = _host_logs_tx_start()
+    count = _host_logs_tx_count()
+    return LogSeriesRef(start=log_store_index(start), count=log_store_index(count))
 
 def read_log_data(index: log_store_index) -> LogDataSlice:
     off = _host_log_data_offset(index)
@@ -132,14 +134,14 @@ def bloom_set_bit(bloom: LogsBloom, bit_to_set: bloom_bit_index) -> LogsBloom:
         natural_byte = quotient
     else:
         if not (False):
-            raise SailError("sail/kernel/logs.sail:72.24-72.25")
+            raise SailError("sail/kernel/logs.sail:75.24-75.25")
         raise SailExit(None)
     remainder = sail_tmod_int(bit_to_set, 8)
     if (int(remainder) <= 7):
         bit_in_byte = remainder
     else:
         if not (False):
-            raise SailError("sail/kernel/logs.sail:80.24-80.25")
+            raise SailError("sail/kernel/logs.sail:83.24-83.25")
         raise SailExit(None)
     mask = bloom_bit_mask(bit_in_byte)
     out = sail_vector_update(out, natural_byte, ((sail_vector_access(out, natural_byte, False)) | (mask)), False)

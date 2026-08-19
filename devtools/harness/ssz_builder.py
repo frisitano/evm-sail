@@ -8,15 +8,13 @@ The devtools.harness.cli module
 one JSON response per stdout line ({"input": hex[, "expected": hex]} or
 {"err": msg}).
 
-A fully VALID single-tx block is built by
-executing the case through the in-process EELS t8n (blockchain mode): t8n runs
-the reference STF, fills every header commitment from the results, builds the
-execution witness, serializes the SszStatelessInput, AND runs the reference
-stateless guest (run_stateless_guest) over those exact bytes -- returning the
-byte-exact expected SszStatelessValidationResult alongside the input. t8n itself
-asserts the result validates (successful_validation) unless the tx was rejected,
-so a builder bug cannot silently produce an invalid-but-agreeing pair. Two
-things make validity achievable from a bare state test:
+A fully VALID single-tx block is built by executing the case through the
+in-process EELS t8n (blockchain mode). t8n runs the reference STF and fills
+every header commitment from the results. The narrow v0.6.2 adapter then runs
+EELS run_stateless_guest over its native three-request-list input, appends the
+two known-empty EIP-8282 request lists, and carries the independent reference
+validation verdict into the expanded output with its recomputed request root.
+Two things make validity achievable from a bare state test:
   - the canonical system-contract predeploys are injected into the alloc
     (_PREDEPLOYS): Amsterdam's CHECKED block-end system calls reject any block
     whose 7002/7251/8282 predeploys are absent, which would silently collapse the
@@ -311,8 +309,18 @@ def _quantity_bytes32(value):
     return Bytes32(_hi(value).to_bytes(32, "big"))
 
 
-def _build_historical_guest(case):
-    """Build a fork-correct shared SSZ input from a historical state test."""
+def _serialize_v062_pair(stateless_input, successful_validation, fork_name):
+    from devtools.harness.v062_compat import serialize_v062_pair
+
+    return serialize_v062_pair(
+        stateless_input,
+        successful_validation,
+        _fixture_protocol_fork(fork_name),
+    )
+
+
+def _build_state_test_guest(case):
+    """Build a fork-correct shared SSZ input from one state-test case."""
     from ethereum.crypto.hash import Hash32
     from ethereum.forks.amsterdam.execution_engine.requests import (
         decode_execution_requests,
@@ -325,14 +333,6 @@ def _build_historical_guest(case):
     from ethereum.forks.amsterdam.stateless import (
         ExecutionWitness,
         StatelessInput,
-        StatelessValidationResult,
-        compute_new_payload_request_root,
-    )
-    from ethereum.forks.amsterdam.stateless_guest import (
-        serialize_stateless_output,
-    )
-    from ethereum.forks.amsterdam.stateless_host import (
-        serialize_stateless_input,
     )
     from ethereum.forks.amsterdam.transactions import (
         BlobTransaction,
@@ -521,99 +521,21 @@ def _build_historical_guest(case):
         chain_config=_fixture_chain_config(fork_name, chain_id),
         public_keys=(Bytes(public_key),),
     )
-    expected = StatelessValidationResult(
-        new_payload_request_root=compute_new_payload_request_root(stateless_input),
-        successful_validation=(result.block_exception is None and not t8n.txs.rejected_txs),
-        chain_config=stateless_input.chain_config,
+    return _serialize_v062_pair(
+        stateless_input,
+        result.block_exception is None and not t8n.txs.rejected_txs,
+        fork_name,
     )
-    encoded_input = bytearray(serialize_stateless_input(stateless_input))
-    encoded_input[0] = int(_fixture_protocol_fork(fork_name))
-    return bytes(encoded_input), bytes(serialize_stateless_output(expected))
 
 
 def build_guest(case):
     """case: {env, pre, tx, fork, idx} -> (input_bytes, expected_output_bytes).
-    Amsterdam only (the stateless guest is Amsterdam-locked); the expected bytes
-    are the EELS reference guest's SszStatelessValidationResult over the SAME
-    input, so the model guest is gated byte-exact against the reference."""
-    if case["fork"] != "Amsterdam":
-        return _build_historical_guest(case)
-
-    env, pre, tx, idx = case["env"], case["pre"], case["tx"], case["idx"]
-    chain_id = _hi(env.get("currentChainId", "0x1"))
-    fk = _fork("amsterdam")
-    number = _hi(env.get("currentNumber", "0x1"))
-
-    # Inject any missing system-contract predeploys (see _PREDEPLOYS): the block
-    # must be genuinely valid, and Amsterdam's checked block-end system calls
-    # reject a block whose predeploys are absent. A test that carries its own
-    # copy keeps it.
-    have = {a.lower() for a in pre}
-    pre = dict(pre)
-    for addr, acct in _PREDEPLOYS.items():
-        if addr not in have:
-            pre[addr] = acct
-
-    root_hex, _ = prestate_mpt.build(pre)
-    pre_root = bytes.fromhex(root_hex[2:])
-
-    # Parent blob-gas parameters: prefer the fixture's parent values; else invert
-    # currentExcessBlobGas through the schedule (excess = E + target, used = 0
-    # => calc(parent) = E); else zeros. The SAME values go to t8n's env and into
-    # the synthesized parent header, so t8n's header excess and the reference
-    # verifier's expectation agree by construction.
-    if "parentExcessBlobGas" in env or "parentBlobGasUsed" in env:
-        p_excess = _hi(env.get("parentExcessBlobGas", "0x0"))
-        p_used = _hi(env.get("parentBlobGasUsed", "0x0"))
-    elif "currentExcessBlobGas" in env:
-        p_excess = _hi(env["currentExcessBlobGas"]) + _blob_target(fk)
-        p_used = 0
-    else:
-        p_excess = p_used = 0
-    # The parent's base fee IS the block's (parent gas_used at target keeps the
-    # EIP-1559 expectation unchanged); a fixture parentBaseFee is deliberately
-    # ignored -- the reference derives the block's base fee from OUR parent.
-    base_fee = _hi(env.get("currentBaseFee", "0x0"))
-    gas_limit = _hi(env.get("currentGasLimit", "0x0"))
-    block_headers, block_hashes = _ancestor_headers(
-        fk, pre_root, number, p_excess, p_used, base_fee, gas_limit
-    )
-
-    randao = env.get("currentRandom", env.get("currentDifficulty", "0x0"))
-    t8n_env = {
-        "currentCoinbase": env["currentCoinbase"],
-        "currentGasLimit": env.get("currentGasLimit", "0x0"),
-        "currentNumber": hex(number),
-        "currentTimestamp": env.get("currentTimestamp", "0x0"),
-        "currentRandom": randao,
-        "currentBaseFee": hex(base_fee),
-        "parentBaseFee": hex(base_fee),
-        "parentExcessBlobGas": hex(p_excess),
-        "parentBlobGasUsed": hex(p_used),
-        "parentBeaconBlockRoot": "0x" + Z32.hex(),
-        "slotNumber": hex(number),
-        "withdrawals": [],
-        "blockHeaders": block_headers,
-        "blockHashes": block_hashes,
-    }
-    stdin_json = {"alloc": pre, "env": t8n_env, "txs": [_t8n_tx(tx, idx, chain_id)]}
-
-    global _T8N_CACHE
-    if _T8N_CACHE is None:
-        _T8N_CACHE = ForkCache()
-    t8n = T8N(
-        _t8n_options(chain_id), io.StringIO(), io.StringIO(json.dumps(stdin_json)), _T8N_CACHE
-    )
-    t8n.run_blockchain_test()
-    r = t8n.result
-    inp = getattr(r, "stateless_input_bytes", None)
-    outp = getattr(r, "stateless_output_bytes", None)
-    if inp is None or outp is None:
-        raise RuntimeError(
-            f"t8n produced no stateless pair (block_exception={r.block_exception!r},"
-            f" rejected={t8n.txs.rejected_txs!r})"
-        )
-    return bytes(inp), bytes(outp)
+    The model guest is Amsterdam-locked, but historical state tests are lifted
+    into an Amsterdam stateless input after their fork-specific EELS transition.
+    The expected validation verdict comes from EELS run_stateless_guest; the
+    isolated v0.6.2 adapter accounts for the two additional empty request lists
+    and their changed SSZ request root."""
+    return _build_state_test_guest(case)
 
 
 def _serve():
