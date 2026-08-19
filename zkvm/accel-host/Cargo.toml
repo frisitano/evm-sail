@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 sha3 = "0.10"                 # Keccak-256 (Ethereum)
-sha2 = "0.10"                 # SHA-256 (precompile 0x02)
+sha2 = "0.11"                 # SHA-256 (precompile 0x02)
 ripemd = "0.2"                # RIPEMD-160 (precompile 0x03)
 k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }   # ecrecover (0x01)
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }   # secp256r1 (0x100)
