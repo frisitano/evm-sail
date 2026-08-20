@@ -64,6 +64,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-python-tools
+      - name: Install and identify Z3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3
+          version="$(z3 --version | awk '{print $3}')"
+          test "${version%%.*}" = "$SOLVER_Z3_SUPPORTED_MAJOR"
+          z3 --version
       - uses: ./.github/actions/setup-sail
 
   sail:

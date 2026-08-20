@@ -52,6 +52,7 @@ pub unsafe extern "C" fn zkvm_secp256k1_ecrecover(
     output: *mut u8,
 ) -> i32 {
     use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
+    use k256::elliptic_curve::scalar::IsHigh;
     let msg = slice(msg, 32);
     let sigb = slice(sig, 64);
     let signature = match Signature::from_slice(sigb) {
@@ -69,10 +70,12 @@ pub unsafe extern "C" fn zkvm_secp256k1_ecrecover(
     // from the low-s-normalized signature with the recovery id's y-parity bit
     // flipped yields the SAME public key -- and passes the low-s verify. Apply
     // this equivalence when s is high; the result is identical for low-s inputs.
-    let (signature, recid) = match signature.normalize_s() {
-        Some(low_s) => (low_s, recid ^ 1), // s was high: use n-s and flip y-parity
-        None => (signature, recid),        // s already low: unchanged
+    let recid = if bool::from(signature.s().is_high()) {
+        recid ^ 1
+    } else {
+        recid
     };
+    let signature = signature.normalize_s();
     let rid = match RecoveryId::from_byte(recid) {
         Some(r) => r,
         None => return ZKVM_EFAIL,
@@ -82,7 +85,7 @@ pub unsafe extern "C" fn zkvm_secp256k1_ecrecover(
         Err(_) => return ZKVM_EFAIL,
     };
     // standard output is the 64-byte uncompressed pubkey X||Y (no 0x04 prefix)
-    let pt = vk.to_encoded_point(false);
+    let pt = vk.to_sec1_point(false);
     let bytes = pt.as_bytes();
     if bytes.len() != 65 {
         return ZKVM_EFAIL;
@@ -574,7 +577,6 @@ pub unsafe extern "C" fn zkvm_secp256k1_verify(
     verified: *mut bool,
 ) -> i32 {
     use k256::ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
-    use k256::EncodedPoint;
     let msg = slice(msg, 32);
     let signature = match Signature::from_slice(slice(sig, 64)) {
         Ok(s) => s,
@@ -584,11 +586,7 @@ pub unsafe extern "C" fn zkvm_secp256k1_verify(
     let mut enc = [0u8; 65];
     enc[0] = 0x04;
     enc[1..].copy_from_slice(pk);
-    let point = match EncodedPoint::from_bytes(enc) {
-        Ok(p) => p,
-        Err(_) => return ZKVM_EFAIL,
-    };
-    let vk = match VerifyingKey::from_encoded_point(&point) {
+    let vk = match VerifyingKey::from_sec1_bytes(&enc) {
         Ok(v) => v,
         Err(_) => return ZKVM_EFAIL,
     };

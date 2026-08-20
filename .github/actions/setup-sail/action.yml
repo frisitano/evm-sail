@@ -200,11 +200,11 @@ runs:
           echo "::error::sail_lsp was not installed onto PATH"
           exit 1
         fi
-        if ! opam pin list --short | grep -Fxq libsail; then
+        if ! opam pin list --short --color=never | grep -Fxq libsail; then
           echo "::error::libsail is not pinned to the configured compiler source"
           exit 1
         fi
-        if ! opam list --installed --short | grep -Fxq libsail; then
+        if ! opam list --installed --short --color=never | grep -Fxq libsail; then
           echo "::error::the pinned libsail dependency is not installed"
           exit 1
         fi

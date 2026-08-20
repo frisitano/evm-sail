@@ -15,7 +15,7 @@ sail_repository = "rems-project/lean-sail"
 sail_commit = "79b4d08505af29d88b3918f32d29840fae1fa191"
 
 [rocq]
-version = "9.2.0"
+version = "9.0.0"
 ocaml = "5.2.0"
 
 [solver]

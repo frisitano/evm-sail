@@ -19,10 +19,10 @@ empty cursor, [operand_stack_pop_frame][] releases it on return (the
 parent's cursor is restored from its frame checkpoint), and
 [stack_reset][] returns the base frame's empty cursor per transaction.
 
-The EVM layer ([push_word][] / [pop][] in the machine module) enforces the
-depth bounds through [validate_stack][] before a handler body runs and
-charges nothing here — this is pure mechanism, so the slot and cursor
-axioms perform no re-checks.
+The EVM layer accesses slots through [read_stack_word][] /
+[write_stack_word][] and enforces the depth bounds through
+[validate_stack][] before a handler body runs. It charges nothing here —
+this is pure mechanism, so the slot and cursor axioms perform no re-checks.
 
 !!! note "Non-normative"
     This page documents the model's host interface — internal contracts
