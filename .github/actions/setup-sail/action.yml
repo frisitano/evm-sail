@@ -137,6 +137,7 @@ runs:
         fi
         echo "$prefix/bin" >> "$GITHUB_PATH"
         echo "SAIL_PREFIX=$prefix" >> "$GITHUB_ENV"
+        echo "SAIL_SOURCE=$GITHUB_WORKSPACE/.sail-compiler" >> "$GITHUB_ENV"
 
     - name: Verify the installed compiler
       shell: bash
