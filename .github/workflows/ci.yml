@@ -200,7 +200,8 @@ jobs:
           path: sail_smt_cache
           key: z3-${{ steps.z3.outputs.version }}-memo${{ env.SOLVER_Z3_MEMO_SCHEMA }}-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
       - uses: ./.github/actions/setup-sail
-      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }} rocq-stdpp
+      - run: opam repo add coq-released https://coq.inria.fr/opam/released
+      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }} rocq-stdpp.${{ env.ROCQ_STDPP }}
       - run: make verify-rocq
 
   python-model:
