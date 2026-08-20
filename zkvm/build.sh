@@ -134,9 +134,10 @@ if [ "$EVM_INLINE_ATTR" = on ]; then
   CONST_TABLE_FLAGS+=(--c-inline-attr)
 fi
 # Emit __always_inline__ on $[c_inline]-annotated generated C declarations and
-# definitions.  Full LTO then exposes those bodies to the threaded interpreter
-# without first duplicating them throughout Sail's JIB graph.
-EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-on}"
+# definitions only when explicitly requested.  The default modular build sees
+# declarations before bodies in separate translation units, where compilers
+# cannot satisfy the attribute even when the final link uses LTO.
+EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-off}"
 case "$EVM_ALWAYS_INLINE_ATTR" in
   off|on) ;;
   *) echo "error: EVM_ALWAYS_INLINE_ATTR must be off or on" >&2; exit 2 ;;

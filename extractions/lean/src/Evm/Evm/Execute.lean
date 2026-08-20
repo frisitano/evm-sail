@@ -74,11 +74,10 @@ open AcctBlockIterResult
 
 /-! # Opcode semantics
 
-The single-step transition function of the EVM (Yellow Paper §9): given
-the decoded opcode, [execute][] charges its gas, consumes its stack
-operands, and produces its result or effect. One match arm per opcode,
-grouped by family (arithmetic, bitwise, keccak, environment, block,
-stack/memory, storage, flow, push/dup/swap, log, system).
+The interpreter [interpret][] dispatches each decoded opcode to a handler
+that charges its gas, consumes its stack operands, and produces its result
+or effect. The handlers are grouped by family (arithmetic, bitwise, keccak,
+environment, block, stack/memory, storage, flow, push/dup/swap, log, system).
 
 Handlers follow the state-passing convention (YP μ′ = Ξ(μ)): each takes
 only the carried values it uses and returns the same values in the same order. Decoded
@@ -90,10 +89,10 @@ Pure compute is done here; every world effect is a kernel syscall
 via the kernel's returned warm bit (EIP-2929), decides whether an effect
 happens, and issues the syscall only for real effects (a no-op `SSTORE`
 charges gas but issues no host write). Memory-touching opcodes pay the
-quadratic expansion cost via [memory_expansion_cost][] before acting.
+quadratic expansion cost via [memory_expansion_gas_cost][] before acting.
 Sub-calls and creates delegate to [run_call][] / [run_create][], which
 install a child frame and save its parent continuation. The non-recursive
-opcode bodies live in [execute_opcode][]. -/
+opcode bodies are the `execute_*` functions below. -/
 
 /-- Converts a non-terminal opcode result into the corresponding frame status. -/
 def opcode_frame_status (result : OpcodeOutcome) : FrameStatus :=

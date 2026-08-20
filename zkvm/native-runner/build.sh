@@ -123,7 +123,11 @@ esac
 if [ "$EVM_INLINE_ATTR" = on ]; then
   CONST_TABLE_FLAGS+=(--c-inline-attr)
 fi
-EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-on}"
+# The generated package is compiled as separate translation units.  An
+# always_inline declaration cannot be satisfied when its body lives in another
+# unit, so keep the C attribute opt-in; --c-inline-attr still performs Sail/JIB
+# call-site inlining by default.
+EVM_ALWAYS_INLINE_ATTR="${EVM_ALWAYS_INLINE_ATTR:-off}"
 case "$EVM_ALWAYS_INLINE_ATTR" in
   off|on) ;;
   *) echo "error: EVM_ALWAYS_INLINE_ATTR must be off or on" >&2; exit 2 ;;
@@ -296,7 +300,7 @@ else
     done
     while IFS= read -r callback; do
       PRESERVE_FLAGS+=(--c-preserve "$callback")
-    done < <(rg -o --no-filename 'execute_[A-Za-z0-9_]+' \
+    done < <(grep -oE 'execute_[A-Za-z0-9_]+' \
       "$MODEL_FFI/src/evm/interpreter.c" | sort -u)
   fi
 fi
