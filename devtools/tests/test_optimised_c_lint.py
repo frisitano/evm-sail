@@ -41,3 +41,34 @@ def test_read_baseline_normalizes_existing_keys(tmp_path: Path) -> None:
     assert read_baseline(baseline_path) == {
         key.replace("_8_", "_worker_").replace(" (aka 'unsigned long long')", "")
     }
+
+
+def test_reserved_identifier_checks_are_portable(tmp_path: Path) -> None:
+    baseline_path = tmp_path / "baseline.json"
+    message = (
+        "declaration uses identifier '__sail_c_repr_u256_8_1793', which is a reserved identifier"
+    )
+    baseline_path.write_text(
+        json.dumps(
+            [
+                "\0".join(
+                    (
+                        "generated.c",
+                        "340",
+                        "10",
+                        "bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,-warnings-as-errors",
+                        message,
+                    )
+                )
+            ]
+        )
+    )
+    compiler_finding = Finding(
+        path="generated.c",
+        line=340,
+        column=10,
+        check="-Wreserved-identifier",
+        message=message.replace("_8_", "_6_"),
+    )
+
+    assert finding_key(compiler_finding) in read_baseline(baseline_path)

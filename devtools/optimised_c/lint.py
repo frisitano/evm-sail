@@ -110,9 +110,19 @@ def normalize_message(message: str) -> str:
     return GENERATED_WORKER_ID.sub("_worker_", message)
 
 
+def normalize_check(check: str, message: str) -> str:
+    """Canonicalize diagnostics emitted under equivalent Clang check names."""
+    if "reserved identifier" in message and (
+        check == "-Wreserved-identifier" or "reserved-identifier" in check
+    ):
+        return "reserved-identifier"
+    return check
+
+
 def normalize_finding_key(key: str) -> str:
     fields = key.split("\0")
     if len(fields) == 5:
+        fields[-2] = normalize_check(fields[-2], fields[-1])
         fields[-1] = normalize_message(fields[-1])
     return "\0".join(fields)
 
@@ -123,7 +133,7 @@ def finding_key(finding: Finding) -> str:
             finding.path,
             str(finding.line),
             str(finding.column),
-            finding.check,
+            normalize_check(finding.check, finding.message),
             normalize_message(finding.message),
         )
     )

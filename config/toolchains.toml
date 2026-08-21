@@ -17,6 +17,7 @@ sail_commit = "79b4d08505af29d88b3918f32d29840fae1fa191"
 [rocq]
 version = "9.0.0"
 stdpp = "1.13.0"
+sail_stdpp = "0.20.2"
 ocaml = "5.2.0"
 
 [solver]
