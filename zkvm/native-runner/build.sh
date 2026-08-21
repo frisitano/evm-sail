@@ -233,6 +233,7 @@ case "$EVM_LTO" in
 esac
 CFLAGS=(-O"$EVM_OPT_LEVEL" -Wno-error=implicit-function-declaration)
 if [ "$EVM_LTO" = on ]; then CFLAGS+=(-flto); fi
+if [ "${EVM_PIC:-off}" = on ]; then CFLAGS+=(-fPIC); fi
 MODEL_CFLAGS=()
 if [ "$EVM_BUILD_MODE" = standard ]; then
   GMP_CFLAGS=()

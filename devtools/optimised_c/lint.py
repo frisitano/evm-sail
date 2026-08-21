@@ -33,6 +33,8 @@ DIAGNOSTIC = re.compile(
     r"^(?P<path>.*?):(?P<line>\d+):(?P<column>\d+): "
     r"(?P<severity>warning|error): (?P<message>.*?)(?: \[(?P<check>[^]]+)\])?$"
 )
+TYPEDEF_ALIAS = re.compile(r" \(aka '[^']+'\)")
+GENERATED_WORKER_ID = re.compile(r"_\d+_")
 
 
 @dataclass(frozen=True, order=True)
@@ -102,6 +104,19 @@ def cleanup_pass(finding: Finding) -> str:
     return PASS_ORDER[10]
 
 
+def normalize_message(message: str) -> str:
+    """Remove host- and worker-specific spelling from generated diagnostics."""
+    message = TYPEDEF_ALIAS.sub("", message)
+    return GENERATED_WORKER_ID.sub("_worker_", message)
+
+
+def normalize_finding_key(key: str) -> str:
+    fields = key.split("\0")
+    if len(fields) == 5:
+        fields[-1] = normalize_message(fields[-1])
+    return "\0".join(fields)
+
+
 def finding_key(finding: Finding) -> str:
     return "\0".join(
         (
@@ -109,7 +124,7 @@ def finding_key(finding: Finding) -> str:
             str(finding.line),
             str(finding.column),
             finding.check,
-            finding.message,
+            normalize_message(finding.message),
         )
     )
 
@@ -120,7 +135,7 @@ def read_baseline(path: Path | None) -> set[str]:
     value = json.loads(path.read_text())
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"lint baseline must be a JSON array of strings: {path}")
-    return set(value)
+    return {normalize_finding_key(item) for item in value}
 
 
 def stable_analyzer_checkers(clang: str) -> list[str]:
