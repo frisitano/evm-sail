@@ -107,14 +107,17 @@ def cleanup_pass(finding: Finding) -> str:
 def normalize_message(message: str) -> str:
     """Remove host- and worker-specific spelling from generated diagnostics."""
     message = TYPEDEF_ALIAS.sub("", message)
+    identifier = re.search(r"identifier '([^']+)'", message)
+    if identifier is not None and (
+        "reserved identifier" in message or "is reserved because" in message
+    ):
+        message = f"identifier '{identifier.group(1)}' is reserved"
     return GENERATED_WORKER_ID.sub("_worker_", message)
 
 
 def normalize_check(check: str, message: str) -> str:
     """Canonicalize diagnostics emitted under equivalent Clang check names."""
-    if "reserved identifier" in message and (
-        check == "-Wreserved-identifier" or "reserved-identifier" in check
-    ):
+    if check == "-Wreserved-identifier" or "reserved-identifier" in check:
         return "reserved-identifier"
     return check
 

@@ -39,7 +39,9 @@ def test_read_baseline_normalizes_existing_keys(tmp_path: Path) -> None:
     baseline_path.write_text(json.dumps([key]))
 
     assert read_baseline(baseline_path) == {
-        key.replace("_8_", "_worker_").replace(" (aka 'unsigned long long')", "")
+        key.replace("-Wreserved-identifier", "reserved-identifier")
+        .replace("_8_", "_worker_")
+        .replace(" (aka 'unsigned long long')", "")
     }
 
 
@@ -68,7 +70,7 @@ def test_reserved_identifier_checks_are_portable(tmp_path: Path) -> None:
         line=340,
         column=10,
         check="-Wreserved-identifier",
-        message=message.replace("_8_", "_6_"),
+        message=("identifier '__sail_c_repr_u256_6_1793' is reserved because it starts with '__'"),
     )
 
     assert finding_key(compiler_finding) in read_baseline(baseline_path)
