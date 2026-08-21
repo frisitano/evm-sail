@@ -30,13 +30,14 @@ else
   EVM_OPT_LEVEL="${EVM_OPT_LEVEL:-2}"
   EVM_LTO="${EVM_LTO:-off}"
 fi
-export EVM_OPT_LEVEL EVM_LTO
+EVM_PIC=on
+export EVM_OPT_LEVEL EVM_LTO EVM_PIC
 "$HERE/build.sh"
 
 CC="${CC:-cc}"
 ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/extractions/c"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
-OPT_FLAGS=(-O"$EVM_OPT_LEVEL")
+OPT_FLAGS=(-O"$EVM_OPT_LEVEL" -fPIC)
 if [ "$EVM_LTO" = on ]; then OPT_FLAGS+=(-flto); fi
 CFLAGS=("${OPT_FLAGS[@]}" -Wno-error=implicit-function-declaration)
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi

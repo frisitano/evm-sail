@@ -64,6 +64,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-python-tools
+      - name: Install and identify Z3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3
+          version="$(z3 --version | awk '{print $3}')"
+          test "${version%%.*}" = "$SOLVER_Z3_SUPPORTED_MAJOR"
+          z3 --version
       - uses: ./.github/actions/setup-sail
 
   sail:
@@ -193,7 +200,8 @@ jobs:
           path: sail_smt_cache
           key: z3-${{ steps.z3.outputs.version }}-memo${{ env.SOLVER_Z3_MEMO_SCHEMA }}-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
       - uses: ./.github/actions/setup-sail
-      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }}
+      - run: opam repo add coq-released https://coq.inria.fr/opam/released
+      - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }} rocq-stdpp.${{ env.ROCQ_STDPP }} rocq-sail-stdpp.${{ env.ROCQ_SAIL_STDPP }}
       - run: make verify-rocq
 
   python-model:
