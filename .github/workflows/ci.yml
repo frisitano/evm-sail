@@ -53,7 +53,7 @@ jobs:
       - uses: ./.github/actions/setup-python-tools
       - name: Resolve pinned toolchains
         run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"
-      - uses: ocaml/setup-ocaml@605a7e998e76e035b82c14d618a6e1010732c4ce # v3
+      - uses: ocaml/setup-ocaml@f92e0606b7ae4873dd1238465ea4bf6f8e40d85c # v3
         with:
           ocaml-compiler: ${{ env.ROCQ_OCAML }}
       - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }}
