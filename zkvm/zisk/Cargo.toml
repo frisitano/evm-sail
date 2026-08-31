@@ -6,7 +6,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.13.0", default-features = false, features = [
+ere-platform-zisk = { git = "https://github.com/eth-act/ere", tag = "v0.16.3", default-features = false, features = [
     "inputcpy",
 ] }
 
