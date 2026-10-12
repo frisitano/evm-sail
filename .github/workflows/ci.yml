@@ -53,7 +53,7 @@ jobs:
       - uses: ./.github/actions/setup-python-tools
       - name: Resolve pinned toolchains
         run: uv run --frozen python -m devtools.toolchains --github-env >> "$GITHUB_ENV"
-      - uses: ocaml/setup-ocaml@605a7e998e76e035b82c14d618a6e1010732c4ce # v3
+      - uses: ocaml/setup-ocaml@93303b622b2522e4411e295f9e77411a24912ac7 # v3
         with:
           ocaml-compiler: ${{ env.ROCQ_OCAML }}
       - run: opam install -y rocq-prover.${{ env.ROCQ_VERSION }}
@@ -265,7 +265,7 @@ jobs:
       - run: make verify-corpus
       - name: Upload corpus failure log
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: corpus-failure-log
           path: build/logs/corpus.log
