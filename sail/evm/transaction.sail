@@ -1516,7 +1516,7 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
         state_spill_after = STATE_GAS_SPILL_ZERO;
         return struct {
             success = false,
-            gas = tx_frame_gas_snapshot(initial_gas, GAS_ZERO, STATE_GAS_ZERO, FRAME_STATE_GAS_DELTA_ZERO),
+            gas = tx_frame_gas_snapshot(initial_gas, GAS_ZERO, state_gas_after, FRAME_STATE_GAS_DELTA_ZERO),
             refund = GAS_REFUND_ZERO,
         }
     };
