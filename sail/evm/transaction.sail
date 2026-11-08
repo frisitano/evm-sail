@@ -48,8 +48,7 @@ type authorization_refund = range(
 let AMSTERDAM_TX_BASE : int(12000) = 12000
 let AMSTERDAM_CREATE_ACCESS : int(12000) = 12000
 let AMSTERDAM_COLD_ACCOUNT_ACCESS : int(3000) = 3000
-let AMSTERDAM_TX_VALUE_COST : int(4244) = 4244
-let AMSTERDAM_TRANSFER_LOG_COST : int(1756) = 1756
+let AMSTERDAM_TX_VALUE_COST : int(6000) = 6000
 let AMSTERDAM_ACCESS_LIST_ADDRESS : int(2900) = 2900
 let AMSTERDAM_ACCESS_LIST_SLOT : int(2000) = 2000
 let AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : int(1280) = 1280
@@ -136,21 +135,18 @@ function legacy_calldata_floor(input : TransactionInputSlice) -> transaction_cal
 }
 
 /*! The maximum Amsterdam recipient-side intrinsic execution charge. */
-type amsterdam_recipient_cost = range(0, 13756)
+type amsterdam_recipient_cost = range(0, 12000)
 
-/*! Computes Amsterdam execution-gas charges for recipient access, value
-    transfer, and contract creation. */
+/*! Computes Amsterdam execution-gas charges for recipient access and value
+    transfer, or for contract creation. The value-transfer charge also covers
+    the transfer log (EIP-2780), and a creation pays no value surcharge. */
 function amsterdam_recipient_execution_cost(tx : Transaction) -> amsterdam_recipient_cost = {
     let transfers_value = word_nonzero(tx.value);
     if tx.is_create then {
-        if transfers_value then {
-            AMSTERDAM_CREATE_ACCESS + AMSTERDAM_TRANSFER_LOG_COST
-        } else {
-            AMSTERDAM_CREATE_ACCESS
-        }
+        AMSTERDAM_CREATE_ACCESS
     } else if tx.recipient != tx.sender then {
         if transfers_value then {
-            AMSTERDAM_COLD_ACCOUNT_ACCESS + AMSTERDAM_TX_VALUE_COST + AMSTERDAM_TRANSFER_LOG_COST
+            AMSTERDAM_COLD_ACCOUNT_ACCESS + AMSTERDAM_TX_VALUE_COST
         } else {
             AMSTERDAM_COLD_ACCOUNT_ACCESS
         }
