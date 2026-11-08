@@ -46,12 +46,12 @@ type authorization_refund = range(
     authorization_refund_per_item * transaction_length_bound,
 )
 let AMSTERDAM_TX_BASE : int(12000) = 12000
-let AMSTERDAM_CREATE_ACCESS : int(11000) = 11000
+let AMSTERDAM_CREATE_ACCESS : int(12000) = 12000
 let AMSTERDAM_COLD_ACCOUNT_ACCESS : int(3000) = 3000
 let AMSTERDAM_TX_VALUE_COST : int(4244) = 4244
 let AMSTERDAM_TRANSFER_LOG_COST : int(1756) = 1756
-let AMSTERDAM_ACCESS_LIST_ADDRESS : int(3000) = 3000
-let AMSTERDAM_ACCESS_LIST_SLOT : int(3000) = 3000
+let AMSTERDAM_ACCESS_LIST_ADDRESS : int(2900) = 2900
+let AMSTERDAM_ACCESS_LIST_SLOT : int(2000) = 2000
 let AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : int(1280) = 1280
 let AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : int(2048) = 2048
 let AMSTERDAM_AUTH_BASE : int(7816) = 7816
@@ -136,7 +136,7 @@ function legacy_calldata_floor(input : TransactionInputSlice) -> transaction_cal
 }
 
 /*! The maximum Amsterdam recipient-side intrinsic execution charge. */
-type amsterdam_recipient_cost = range(0, 12756)
+type amsterdam_recipient_cost = range(0, 13756)
 
 /*! Computes Amsterdam execution-gas charges for recipient access, value
     transfer, and contract creation. */

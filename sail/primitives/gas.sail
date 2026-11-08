@@ -208,8 +208,9 @@ type gas_refund = range(
 
 let GAS_REFUND_ZERO : gas_refund = 0
 
-/*! EIP-8037's `SSTORE` storage-clear refund. */
-type amsterdam_storage_clear_refund : Int = 12480
+/*! The Amsterdam `SSTORE` storage-clear refund: 96% of the storage write plus
+    the cold storage access (EIP-8038). */
+type amsterdam_storage_clear_refund : Int = 11616
 
 /*! One EIP-8037 `SSTORE` transition's signed refund delta. A transition either
     establishes the storage-clear refund or withdraws the one an earlier write

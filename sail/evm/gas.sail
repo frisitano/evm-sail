@@ -291,11 +291,11 @@ let G_initcode_word : int(2) = 2 /* EIP-3860 (per word of initcode)            *
  * constants retain their unit in the name: execution costs debit
  * `gas_remaining`; state costs debit the frame's state-gas reservoir. */
 let G_amsterdam_cold_account_access : gas_constant = 3000
-let G_amsterdam_cold_storage_access : gas_constant = 3000
+let G_amsterdam_cold_storage_access : gas_constant = 2100
 let G_amsterdam_storage_write : gas_constant = 10000
-let G_amsterdam_account_write : gas_constant = 8000
-let G_amsterdam_call_value : gas_constant = 10300
-let G_amsterdam_create_access : gas_constant = 11000
+let G_amsterdam_account_write : gas_constant = 9000
+let G_amsterdam_call_value : gas_constant = 11300
+let G_amsterdam_create_access : gas_constant = 12000
 let G_amsterdam_state_byte : gas_constant = 1530
 let G_amsterdam_state_storage_set : state_gas_spill = 97920
 let G_amsterdam_state_new_account : state_gas_spill = 183600
