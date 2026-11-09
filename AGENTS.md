@@ -370,12 +370,22 @@ rtk uv run --frozen python -m devtools.harness.cli --build optimized --limit 1 -
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
-Run the complete retained corpus with parallel native workers:
+Run the complete retained corpus with parallel native workers and compare it
+with the known failures:
 
 ```sh
-rtk uv run --frozen python -m devtools.harness.cli --build optimized --jobs 8 --quiet \
-  zkvm/.fixtures/current-v062-full
+rtk make verify-corpus
 ```
+
+`make verify-corpus` is the complete-corpus gate. It passes only if the failing
+cases equal `config/corpora/tests-zkevm-known-failures.toml` exactly and the
+number of cases run equals the manifest's `embedded_cases`. Each entry names
+the fixture file (relative to the corpus directory), the case id and the
+failure category (`diff`, `runerr`, `builderr` or `noref`). A new failure, a
+listed case that passes again and a listed case that fails differently each
+fail the run and are named in its output. Delete an entry in the commit that
+fixes the case; add an entry only for a failure that is understood and
+accepted, never to silence a regression.
 
 The same fixture can drive the real RISC-V guest on Spike or the production
 ZisK guest:

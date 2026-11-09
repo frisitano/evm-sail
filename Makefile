@@ -70,6 +70,7 @@ GENERATED_ROOT       ?= build/generated
 EEST_CORPUS         ?= zkvm/.fixtures/current-v062-full
 EEST_CORPUS_CACHE   ?= $(abspath .agent-tmp/corpus-cache)
 EEST_CORPUS_MANIFEST := config/corpora/tests-zkevm.toml
+EEST_KNOWN_FAILURES := config/corpora/tests-zkevm-known-failures.toml
 CONTRACT_CANARIES    := config/canaries/contracts.toml
 PUBLIC_TARGETS       := config/public-targets.toml
 ROCQ_CANARIES        := config/canaries/rocq.toml
@@ -266,7 +267,7 @@ help:
 	@echo "  make ffi-clang-format-check - require handwritten FFI C to match .clang-format"
 	@echo "  make rocq-contracts-check - compile the hand-maintained Rocq extern contract"
 	@echo "  make eest-provision - provision and authenticate the pinned EEST corpus"
-	@echo "  make verify-corpus  - run the complete corpus on the optimized native model"
+	@echo "  make verify-corpus  - run the complete corpus on the optimized native model; the failing cases must equal the known-failures list"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
 	@echo "  make extract        - run all maintained model extractions"
@@ -316,7 +317,8 @@ eest-verify:
 
 verify-corpus: eest-provision
 	$(PYTHON) -m devtools.build_support run-command --log build/logs/corpus.log -- \
-		$(PYTHON) -m devtools.harness.cli --build optimized --jobs $${EEST_JOBS:-8} --quiet $(EEST_CORPUS)
+		$(PYTHON) -m devtools.harness.cli --build optimized --jobs $${EEST_JOBS:-8} --quiet \
+		--known-failures $(EEST_KNOWN_FAILURES) --corpus-manifest $(EEST_CORPUS_MANIFEST) $(EEST_CORPUS)
 
 memory-regression-test:
 	SAIL="$(SAIL)" $(PYTHON) -m devtools.tests.test_memory_frames

@@ -1,0 +1,11 @@
+# Corpus cases the optimized guest is known to fail. `make verify-corpus`
+# passes only if its failing cases equal this list exactly: a new failure, a
+# listed case that passes again, or a listed case that fails differently
+# fails the run, and the run names each. Remove a case when it is fixed.
+#
+# An entry names the fixture file relative to the corpus directory, the case
+# id within it (as printed on the harness `FAIL` line), and the failure
+# category: `diff` (output differs from the reference), `runerr` (the guest
+# raised), `builderr` or `noref`.
+schema_version = 1
+cases = []

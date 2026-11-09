@@ -292,12 +292,12 @@ Run the conformance suite against the workspace-local
 ```sh
 uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --limit 1 --quiet \
   zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-uv run --frozen python -m devtools.harness.cli --build optimized --jobs 12 --quiet \
-  zkvm/.fixtures/current-v062-full
+make verify-corpus
 ```
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
-guest. `--debug` prints an on-demand native post-run state dump on failure;
+guest; `make verify-corpus` runs the whole corpus and also requires the failing
+cases to equal `config/corpora/tests-zkevm-known-failures.toml`. `--debug` prints an on-demand native post-run state dump on failure;
 `--profile` enables optional zkVM cycle scopes without embedding them in normal
 builds. `--zisk` builds the optimised, input-agnostic ZisK ELF and runs the
 same fixtures through `ziskemu`. The emulator version must match the `ziskos`
