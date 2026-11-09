@@ -202,6 +202,7 @@ BLOCK_ERRORS = [
     "InvalidExecutionRequests",
     "InvalidVersionedHashes",
     "WitnessDeficient",
+    "NumericOverflow",
 ]
 
 VALIDATION_SCOPES = [
