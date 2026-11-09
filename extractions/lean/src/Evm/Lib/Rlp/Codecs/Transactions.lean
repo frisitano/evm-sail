@@ -69,8 +69,8 @@ The EIP-2718 transaction envelope decoder: per-envelope destructuring into
 the [Transaction][type-Transaction] type (one walk, against each
 envelope's exact field shape), plus the EIP-2930 access-list
 and EIP-7702 authorization-tuple decoders. Standalone and purely
-structural: the envelope and public key are immutable stateless-input
-spans; the signature rules and the cryptography live in their own modules. -/
+structural: the envelope is an immutable stateless-input span; the
+signature rules and the cryptography live in their own modules. -/
 
 /- Type quantifiers: atom_address_bound : Nat, atom_slot_bound : Nat, (source_valid_length atom_address_bound)
   ∧ (source_valid_length atom_slot_bound) -/
@@ -197,9 +197,9 @@ abbrev BLOB_HASH_LENGTH : Nat := 32
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex549349_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex423993_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex549349_ ∧ k_ex549349_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex423993_ ∧ k_ex423993_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -453,25 +453,15 @@ def rlp_decode_gas (f : (RlpFieldRef k_source_off k_source_len k_content_len)) :
 /-- Decodes the payload fields of a legacy transaction. Kept separate from
 the envelope dispatcher so extraction backends compile each transaction
 shape as an independent function. -/
-/- Type quantifiers: pubkey_dependentWitness1 : Nat, pubkey_dependentWitness0 : Nat, tx_dependentWitness1
-  : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ tx_dependentWitness0 ∧
+/- Type quantifiers: tx_dependentWitness1 : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ tx_dependentWitness0 ∧
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30), 0 ≤ pubkey_dependentWitness0
-  ∧
-  0 ≤ pubkey_dependentWitness1 ∧
-  (pubkey_dependentWitness0 + pubkey_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (pubkey : (Sigma fun
-  (tx_dependentWitness0 : Nat) =>
-  (Sigma fun (tx_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields tx_dependentWitness0 tx_dependentWitness1)))) (sender : (Vector (BitVec 8) 20)) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
-  let pubkey_dependentWitness0 := (pubkey).1
-  let pubkey_dependentWitness1 := ((pubkey).2).1
-  let pubkey := ((pubkey).2).2
   let ⟨_, ⟨_, nonce_f⟩⟩ ← do (rlp_decode_item fields)
   let fields := (rlp_cursor_advance fields nonce_f.source.len)
   let ⟨_, ⟨_, gp_f⟩⟩ ← do (rlp_decode_item fields)
@@ -498,7 +488,7 @@ def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span nonce_f v_f)
   let signing_hash ← do (tx_signing_hash LegacyTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := LegacyTx,
-          sender := sender,
+          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := 0,
@@ -515,32 +505,21 @@ def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
           max_priority_fee := gp,
           authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
-          pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
           sig_v := v,
           sig_r := ← (rlp_decode_u256 r_f),
           sig_s := ← (rlp_decode_u256 s_f) })
 
 /-- Decodes the payload fields of an EIP-2930 transaction. -/
-/- Type quantifiers: pubkey_dependentWitness1 : Nat, pubkey_dependentWitness0 : Nat, tx_dependentWitness1
-  : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ tx_dependentWitness0 ∧
+/- Type quantifiers: tx_dependentWitness1 : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ tx_dependentWitness0 ∧
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30), 0 ≤ pubkey_dependentWitness0
-  ∧
-  0 ≤ pubkey_dependentWitness1 ∧
-  (pubkey_dependentWitness0 + pubkey_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (pubkey : (Sigma fun
-  (tx_dependentWitness0 : Nat) =>
-  (Sigma fun (tx_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields tx_dependentWitness0 tx_dependentWitness1)))) (sender : (Vector (BitVec 8) 20)) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
-  let pubkey_dependentWitness0 := (pubkey).1
-  let pubkey_dependentWitness1 := ((pubkey).2).1
-  let pubkey := ((pubkey).2).2
   let ⟨_, ⟨_, chain_f⟩⟩ ← do (rlp_decode_item fields)
   let fields := (rlp_cursor_advance fields chain_f.source.len)
   let ⟨_, ⟨_, nonce_f⟩⟩ ← do (rlp_decode_item fields)
@@ -572,7 +551,7 @@ def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash AccessListTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := AccessListTx,
-          sender := sender,
+          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -589,32 +568,21 @@ def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
           max_priority_fee := gp,
           authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
-          pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
           sig_v := v,
           sig_r := ← (rlp_decode_u256 r_f),
           sig_s := ← (rlp_decode_u256 s_f) })
 
 /-- Decodes the payload fields of an EIP-1559 transaction. -/
-/- Type quantifiers: pubkey_dependentWitness1 : Nat, pubkey_dependentWitness0 : Nat, tx_dependentWitness1
-  : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ tx_dependentWitness0 ∧
+/- Type quantifiers: tx_dependentWitness1 : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ tx_dependentWitness0 ∧
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30), 0 ≤ pubkey_dependentWitness0
-  ∧
-  0 ≤ pubkey_dependentWitness1 ∧
-  (pubkey_dependentWitness0 + pubkey_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (pubkey : (Sigma fun
-  (tx_dependentWitness0 : Nat) =>
-  (Sigma fun (tx_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields tx_dependentWitness0 tx_dependentWitness1)))) (sender : (Vector (BitVec 8) 20)) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
-  let pubkey_dependentWitness0 := (pubkey).1
-  let pubkey_dependentWitness1 := ((pubkey).2).1
-  let pubkey := ((pubkey).2).2
   let ⟨_, ⟨_, chain_f⟩⟩ ← do (rlp_decode_item fields)
   let fields := (rlp_cursor_advance fields chain_f.source.len)
   let ⟨_, ⟨_, nonce_f⟩⟩ ← do (rlp_decode_item fields)
@@ -647,7 +615,7 @@ def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash FeeMarketTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := FeeMarketTx,
-          sender := sender,
+          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -664,32 +632,22 @@ def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
           max_priority_fee := ← (rlp_decode_u256 mp_f),
           authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
-          pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
           sig_v := v,
           sig_r := ← (rlp_decode_u256 r_f),
           sig_s := ← (rlp_decode_u256 s_f) })
 
 /-- Decodes the payload fields of an EIP-4844 transaction. -/
-/- Type quantifiers: pubkey_dependentWitness1 : Nat, pubkey_dependentWitness0 : Nat, tx_dependentWitness1
-  : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len : Nat, blob_limit : Nat, (source_valid_range k_source_off k_source_len)
-  ∧ (transaction_blob_limit_value blob_limit), 0 ≤ tx_dependentWitness0 ∧
+/- Type quantifiers: tx_dependentWitness1 : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len
+  : Nat, blob_limit : Nat, (source_valid_range k_source_off k_source_len) ∧
+  (transaction_blob_limit_value blob_limit), 0 ≤ tx_dependentWitness0 ∧
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30), 0 ≤ pubkey_dependentWitness0
-  ∧
-  0 ≤ pubkey_dependentWitness1 ∧
-  (pubkey_dependentWitness0 + pubkey_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (pubkey : (Sigma fun
-  (tx_dependentWitness0 : Nat) =>
-  (Sigma fun (tx_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields tx_dependentWitness0 tx_dependentWitness1)))) (blob_limit : Nat) (sender : (Vector (BitVec 8) 20)) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields blob_limit) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (blob_limit : Nat) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields blob_limit) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
-  let pubkey_dependentWitness0 := (pubkey).1
-  let pubkey_dependentWitness1 := ((pubkey).2).1
-  let pubkey := ((pubkey).2).2
   let ⟨_, ⟨_, chain_f⟩⟩ ← do (rlp_decode_item fields)
   let fields := (rlp_cursor_advance fields chain_f.source.len)
   let ⟨_, ⟨_, nonce_f⟩⟩ ← do (rlp_decode_item fields)
@@ -727,7 +685,7 @@ def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash BlobTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := BlobTx,
-          sender := sender,
+          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -744,32 +702,21 @@ def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
           max_priority_fee := ← (rlp_decode_u256 mp_f),
           authorizations := ⟨_, (EMPTY_AUTHORIZATION_LIST_REF).2⟩,
           blob_hashes := blob_hashes,
-          pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
           sig_v := v,
           sig_r := ← (rlp_decode_u256 r_f),
           sig_s := ← (rlp_decode_u256 s_f) })
 
 /-- Decodes the payload fields of an EIP-7702 transaction. -/
-/- Type quantifiers: pubkey_dependentWitness1 : Nat, pubkey_dependentWitness0 : Nat, tx_dependentWitness1
-  : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ tx_dependentWitness0 ∧
+/- Type quantifiers: tx_dependentWitness1 : Nat, tx_dependentWitness0 : Nat, k_source_off : Nat, k_source_len
+  : Nat, (source_valid_range k_source_off k_source_len), 0 ≤ tx_dependentWitness0 ∧
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30), 0 ≤ pubkey_dependentWitness0
-  ∧
-  0 ≤ pubkey_dependentWitness1 ∧
-  (pubkey_dependentWitness0 + pubkey_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+  0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (pubkey : (Sigma fun
-  (tx_dependentWitness0 : Nat) =>
-  (Sigma fun (tx_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields tx_dependentWitness0 tx_dependentWitness1)))) (sender : (Vector (BitVec 8) 20)) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
-  let pubkey_dependentWitness0 := (pubkey).1
-  let pubkey_dependentWitness1 := ((pubkey).2).1
-  let pubkey := ((pubkey).2).2
   let ⟨_, ⟨_, chain_f⟩⟩ ← do (rlp_decode_item fields)
   let fields := (rlp_cursor_advance fields chain_f.source.len)
   let ⟨_, ⟨_, nonce_f⟩⟩ ← do (rlp_decode_item fields)
@@ -807,7 +754,7 @@ def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash SetCodeTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := SetCodeTx,
-          sender := sender,
+          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := nonce,
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -824,23 +771,17 @@ def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
           max_priority_fee := ← (rlp_decode_u256 mp_f),
           authorizations := ⟨_, authorizations⟩,
           blob_hashes := EMPTY_BLOB_HASHES,
-          pubkey := ⟨_, ⟨_, pubkey⟩⟩,
           signing_hash := signing_hash,
           sig_v := v,
           sig_r := ← (rlp_decode_u256 r_f),
           sig_s := ← (rlp_decode_u256 s_f) })
 
-/- Type quantifiers: k_tx_off : Nat, k_tx_len : Nat, k_public_key_off : Nat, blob_limit : Nat, (source_valid_range k_tx_off k_tx_len)
+/- Type quantifiers: k_tx_off : Nat, k_tx_len : Nat, blob_limit : Nat, (source_valid_range k_tx_off k_tx_len)
   ∧
   0 ≤ k_tx_len ∧
-  k_tx_len ≤ transaction_length_bound ∧
-  (source_valid_range k_public_key_off 65) ∧ (transaction_blob_limit_value blob_limit) -/
-def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (pubkey : (StatelessInputSliceFields k_public_key_off 65)) (blob_limit : Nat) : SailM (Sigma
+  k_tx_len ≤ transaction_length_bound ∧ (transaction_blob_limit_value blob_limit) -/
+def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (blob_limit : Nat) : SailM (Sigma
   fun (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit)) := do
-  let public_key_body := (stateless_input_sub_slice pubkey 1 PUBLIC_KEY_BODY_LENGTH)
-  let public_key_hash ← do (stateless_input_keccak256 ⟨_, ⟨_, public_key_body⟩⟩)
-  let public_key_word := (hash_to_word public_key_hash)
-  let sender := (word_to_address public_key_word)
   let tx_length := k_tx_len
   let b0 ← (( do
     if ((tx_length == 0) : Bool)
@@ -888,31 +829,26 @@ def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (pubkey :
   match tx_type with
   | .LegacyTx =>
     (do
-      let decoded ← do
-        (decode_legacy_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ sender fields)
+      let decoded ← do (decode_legacy_tx ⟨_, ⟨_, tx⟩⟩ fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))
   | .AccessListTx =>
     (do
-      let decoded ← do
-        (decode_access_list_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ sender fields)
+      let decoded ← do (decode_access_list_tx ⟨_, ⟨_, tx⟩⟩ fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))
   | .FeeMarketTx =>
     (do
-      let decoded ← do
-        (decode_fee_market_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ sender fields)
+      let decoded ← do (decode_fee_market_tx ⟨_, ⟨_, tx⟩⟩ fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))
   | .BlobTx =>
     (do
-      let decoded ← do
-        (decode_blob_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ blob_limit sender fields)
+      let decoded ← do (decode_blob_tx ⟨_, ⟨_, tx⟩⟩ blob_limit fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))
   | .SetCodeTx =>
     (do
-      let decoded ← do
-        (decode_set_code_tx ⟨_, ⟨_, tx⟩⟩ ⟨_, ⟨_, pubkey⟩⟩ sender fields)
+      let decoded ← do (decode_set_code_tx ⟨_, ⟨_, tx⟩⟩ fields)
       (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
         (TransactionFields k_syn_blob_limit)))))

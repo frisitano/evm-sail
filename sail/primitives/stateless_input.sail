@@ -6,11 +6,11 @@ The decoded semantic input. Its block body remains source-backed:
 transactions and withdrawals are decoded only when a consumer reaches the
 corresponding SSZ list element.
 */
-/*! The guest's decoded input: the execution payload and the chain
-    configuration it executes under. */
+/*! The guest's decoded input: the execution payload and the chain id it
+    executes under. */
 struct StatelessInput = {
     payload : ExecutionPayload,
-    chain_config : ChainConfig,
+    chain_id : chain_identifier,
 }
 
 /*! Authenticated facts about the parent block that validation rules

@@ -1,61 +1,48 @@
 /*md
 # The public output
 
-The guest's public output: the `hash_tree_root` of the new-payload
-request, the validation verdict, and the echoed chain configuration.
+The guest's public output, the 43-byte `StatelessValidationResult`: the
+`hash_tree_root` of the new-payload request, the validation verdict, the
+chain id, and the schema id of the decoded input. An undecodable input
+publishes the all-zero sentinel.
 */
 
-let RESULT_METADATA_LENGTH : int(5) = 5
+/*! The width of the `StatelessValidationResult`: the request root, the
+    verdict byte, the `uint64` chain id, and the `uint16` schema id. */
+let RESULT_LENGTH : int(43) = 43
 
-/*! Writes the request root and validation metadata prefix. */
-function write_prefix(root : hash, success : bool) -> unit = {
+/*! Serializes and commits the public validation result exactly once. */
+function commit_validation_result(
+    root : hash,
+    success : bool,
+    chain_id : chain_identifier,
+    schema_id : bits(16),
+) -> (
+    unit
+) = {
+    let start = scratch_reserve(RESULT_LENGTH);
     scratch_push_b256(root, WORD_BYTE_LENGTH);
     let success_byte : byte =
         if success then 0x01 else 0x00;
     scratch_push_byte(success_byte);
-    scratch_push_byte(0x25);
-    scratch_push_byte(0x00);
-    scratch_push_byte(0x00);
-    scratch_push_byte(0x00)
-}
-
-/*! Serializes and commits the public validation result exactly once. */
-function commit_validation_result(root : hash, success : bool, chain_config : StatelessInputSlice) -> unit = {
-    let fixed_length = WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH;
-    let output_length = scratch_length_add(fixed_length, chain_config.len);
-    let start = scratch_reserve(output_length);
-    write_prefix(root, success);
-    scratch_push_slice(chain_config);
+    var identity = htr_uint(chain_id);
+    identity[8] = schema_id[7 .. 0];
+    identity[9] = schema_id[15 .. 8];
+    scratch_push_b256(identity, 10);
     let output = scratch_finish(start);
     let written = public_output_write(output);
     assert(written, "public output write")
 }
 
 /*! Emits the full public output for a decoded input: the request root
-    computed from the input itself, the verdict, and the input's chain
-    configuration echoed byte for byte. */
+    computed from the input itself, the verdict, and the input's chain id and
+    schema id. */
 function write_validation_result(input_ref : StatelessInputRef, success : bool) -> unit = {
     let root = htr_new_payload_request(input_ref);
-    commit_validation_result(root, success, input_ref.chain_config)
+    commit_validation_result(root, success, input_ref.chain_id, STATELESS_SCHEMA_ID)
 }
 
 /*! Emits the failure output for an undecodable input: a zero root, a
-    false verdict, and a default configuration frame. */
-function write_invalid_result() -> unit = {
-    let start = scratch_reserve(24);
-    var default_chain_config = ZERO_HASH;
-    default_chain_config[8] = 0x0c;
-    default_chain_config[12] = 0x04;
-    default_chain_config[16] = 0x08;
-    default_chain_config[20] = 0x08;
-    scratch_push_b256(default_chain_config, 24);
-    let chain_config = scratch_finish(start);
-    let fixed_length = WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH;
-    let output_length = scratch_length_add(fixed_length, chain_config.len);
-    let output_start = scratch_reserve(output_length);
-    write_prefix(ZERO_HASH, false);
-    scratch_push_slice(chain_config);
-    let output = scratch_finish(output_start);
-    let written = public_output_write(output);
-    assert(written, "public output write")
-}
+    false verdict, and a zero chain id and schema id. */
+function write_invalid_result() -> unit =
+    commit_validation_result(ZERO_HASH, false, 0, 0x0000)

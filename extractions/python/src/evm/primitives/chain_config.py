@@ -3,29 +3,15 @@
 from __future__ import annotations
 
 from .._runtime import (
-    BitWidth,
-    Bits,
     IntegerRange,
 )
-from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 from pydantic import ConfigDict, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from typing_extensions import Self
-from evm.primitives.quantities import chain_identifier
 from evm.primitives.gas import SYSTEM_CALL_GAS_LIMIT
 from evm.primitives.fork import (
-    Berlin,
-    London,
-    ArrowGlacier,
-    GrayGlacier,
-    Paris,
-    Shanghai,
     Cancun,
-    Prague,
-    Osaka,
-    BPO1,
-    BPO2,
     Amsterdam,
 )
 
@@ -223,52 +209,9 @@ ExecutionProfile: TypeAlias = ExecutionProfileFields
 def execution_profile_for(protocol: ProtocolProfileFields, block_limit: int) -> ExecutionProfileFields:
     return ExecutionProfileFields(validity=ExecutionProfileFieldsValidity(fork=protocol.validity.fork, target=protocol.validity.target, maximum=protocol.validity.maximum, denominator=protocol.validity.denominator, code_limit=protocol.validity.code_limit, initcode_limit=protocol.validity.initcode_limit, profile_total_limit=protocol.validity.transaction_total_gas_limit, profile_regular_limit=protocol.validity.transaction_regular_gas_limit, transaction_blob_limit=protocol.validity.transaction_blob_limit, refund_divisor=protocol.validity.refund_divisor, block_limit=int(block_limit), transaction_total_limit=(int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit), transaction_regular_limit=((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) if ((int(block_limit) if (int(block_limit) < protocol.validity.transaction_total_gas_limit) else protocol.validity.transaction_total_gas_limit) < protocol.validity.transaction_regular_gas_limit) else protocol.validity.transaction_regular_gas_limit)), protocol=protocol, gas=gas_limits_for(protocol, block_limit))
 
-def schema_protocol_profile(schema_fork: Annotated[Bits, BitWidth(8)]) -> ProtocolProfile:
-    match schema_fork:
-        case _sail_bits_pattern_0 if _sail_bits_pattern_0 == Bits(8, 0b00001010):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=5, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=0, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=2), fork=int(Berlin), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Berlin, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=0, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=2)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_1 if _sail_bits_pattern_1 == Bits(8, 0b00001011):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=6, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=0, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=5), fork=int(London), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(London, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=0, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_2 if _sail_bits_pattern_2 == Bits(8, 0b00001100):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=7, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=0, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=5), fork=int(ArrowGlacier), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(ArrowGlacier, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=0, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_3 if _sail_bits_pattern_3 == Bits(8, 0b00001101):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=8, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=0, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=5), fork=int(GrayGlacier), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(GrayGlacier, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=0, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_4 if _sail_bits_pattern_4 == Bits(8, 0b00001110):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=9, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=0, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=5), fork=int(Paris), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Paris, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=0, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_5 if _sail_bits_pattern_5 == Bits(8, 0b00001111):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=10, target=0, maximum=0, denominator=1, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=0, refund_divisor=5), fork=int(Shanghai), blob_schedule=blob_schedule(0, 0, 1), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Shanghai, 0, 0, 1)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=0, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_6 if _sail_bits_pattern_6 == Bits(8, 0b00010000):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=11, target=3, maximum=6, denominator=3338477, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=6, refund_divisor=5), fork=int(Cancun), blob_schedule=blob_schedule(3, 6, 3338477), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Cancun, 3, 6, 3338477)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=6, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_7 if _sail_bits_pattern_7 == Bits(8, 0b00010001):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=12, target=6, maximum=9, denominator=5007716, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=((2 ** 64) - 1), transaction_blob_limit=9, refund_divisor=5), fork=int(Prague), blob_schedule=blob_schedule(6, 9, 5007716), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Prague, 6, 9, 5007716)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((int((1 << 64)) - 1)), transaction_blob_limit=9, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_8 if _sail_bits_pattern_8 == Bits(8, 0b00010010):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=13, target=6, maximum=9, denominator=5007716, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=(2 ** 24), transaction_regular_gas_limit=(2 ** 24), transaction_blob_limit=6, refund_divisor=5), fork=int(Osaka), blob_schedule=blob_schedule(6, 9, 5007716), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Osaka, 6, 9, 5007716)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((1 << 24)), transaction_regular_gas_limit=int((1 << 24)), transaction_blob_limit=6, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_9 if _sail_bits_pattern_9 == Bits(8, 0b00010011):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=14, target=10, maximum=15, denominator=8346193, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=(2 ** 24), transaction_regular_gas_limit=(2 ** 24), transaction_blob_limit=6, refund_divisor=5), fork=int(BPO1), blob_schedule=blob_schedule(10, 15, 8346193), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(BPO1, 10, 15, 8346193)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((1 << 24)), transaction_regular_gas_limit=int((1 << 24)), transaction_blob_limit=6, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _sail_bits_pattern_10 if _sail_bits_pattern_10 == Bits(8, 0b00010100):
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=15, target=14, maximum=21, denominator=11684671, code_limit=24576, initcode_limit=49152, transaction_total_gas_limit=(2 ** 24), transaction_regular_gas_limit=(2 ** 24), transaction_blob_limit=6, refund_divisor=5), fork=int(BPO2), blob_schedule=blob_schedule(14, 21, 11684671), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(BPO2, 14, 21, 11684671)), deployed_code_size_limit=24576, initcode_size_limit=49152, transaction_total_gas_limit=int((1 << 24)), transaction_regular_gas_limit=int((1 << 24)), transaction_blob_limit=6, refund_divisor=5)
-            return pack_protocol_profile(profile)
-        case _:
-            profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=16, target=14, maximum=21, denominator=11684671, code_limit=65536, initcode_limit=131072, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=(2 ** 24), transaction_blob_limit=6, refund_divisor=5), fork=int(Amsterdam), blob_schedule=blob_schedule(14, 21, 11684671), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Amsterdam, 14, 21, 11684671)), deployed_code_size_limit=65536, initcode_size_limit=131072, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((1 << 24)), transaction_blob_limit=6, refund_divisor=5)
-            return pack_protocol_profile(profile)
-
-def schema_protocol_profile_forwards_matches(schema_fork: Annotated[Bits, BitWidth(8)]) -> bool:
-    return ((((schema_fork) == (Bits(8, 0b00001010)))) | (((((schema_fork) == (Bits(8, 0b00001011)))) | (((((schema_fork) == (Bits(8, 0b00001100)))) | (((((schema_fork) == (Bits(8, 0b00001101)))) | (((((schema_fork) == (Bits(8, 0b00001110)))) | (((((schema_fork) == (Bits(8, 0b00001111)))) | (((((schema_fork) == (Bits(8, 0b00010000)))) | (((((schema_fork) == (Bits(8, 0b00010001)))) | (((((schema_fork) == (Bits(8, 0b00010010)))) | (((((schema_fork) == (Bits(8, 0b00010011)))) | (((((schema_fork) == (Bits(8, 0b00010100)))) | (((schema_fork) == (Bits(8, 0b00010101)))))))))))))))))))))))))
-
-@dataclass(slots=True)
-class ChainConfig:
-    chain_id: chain_identifier
-
-DEFAULT_PROTOCOL_PROFILE: ProtocolProfileFields = schema_protocol_profile(Bits(8, 0b00010101))
+DEFAULT_PROTOCOL_PROFILE: ProtocolProfileFields
+profile = ProtocolProfileFields(validity=ProtocolProfileFieldsValidity(fork=16, target=14, maximum=21, denominator=11684671, code_limit=65536, initcode_limit=131072, transaction_total_gas_limit=((2 ** 64) - 1), transaction_regular_gas_limit=(2 ** 24), transaction_blob_limit=6, refund_divisor=5), fork=int(Amsterdam), blob_schedule=blob_schedule(14, 21, 11684671), excess_blob_gas_limit=int(compute_profile_excess_blob_gas_limit(Amsterdam, 14, 21, 11684671)), deployed_code_size_limit=65536, initcode_size_limit=131072, transaction_total_gas_limit=int((int((1 << 64)) - 1)), transaction_regular_gas_limit=int((1 << 24)), transaction_blob_limit=6, refund_divisor=5)
+_sail_value_0 = pack_protocol_profile(profile)
+DEFAULT_PROTOCOL_PROFILE = _sail_value_0
 
 DEFAULT_EXECUTION_PROFILE: ExecutionProfileFields = execution_profile_for(DEFAULT_PROTOCOL_PROFILE, 0)

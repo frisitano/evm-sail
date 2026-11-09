@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Run focused EVM-memory regressions through both native C backends.
 
+Disabled (see the Makefile): the blocks are built through the v0.6.2
+state-test synthesis, which the v21 guest rejects.
+
 The fixture is generated in the workspace temporary directory. The harness
 asks EELS to build the matching Amsterdam block and reference output, so this
 test does not retain or hand-author an expected state root.

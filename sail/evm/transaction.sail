@@ -46,12 +46,11 @@ type authorization_refund = range(
     authorization_refund_per_item * transaction_length_bound,
 )
 let AMSTERDAM_TX_BASE : int(12000) = 12000
-let AMSTERDAM_CREATE_ACCESS : int(11000) = 11000
+let AMSTERDAM_CREATE_ACCESS : int(12000) = 12000
 let AMSTERDAM_COLD_ACCOUNT_ACCESS : int(3000) = 3000
-let AMSTERDAM_TX_VALUE_COST : int(4244) = 4244
-let AMSTERDAM_TRANSFER_LOG_COST : int(1756) = 1756
-let AMSTERDAM_ACCESS_LIST_ADDRESS : int(3000) = 3000
-let AMSTERDAM_ACCESS_LIST_SLOT : int(3000) = 3000
+let AMSTERDAM_TX_VALUE_COST : int(6000) = 6000
+let AMSTERDAM_ACCESS_LIST_ADDRESS : int(2900) = 2900
+let AMSTERDAM_ACCESS_LIST_SLOT : int(2000) = 2000
 let AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : int(1280) = 1280
 let AMSTERDAM_ACCESS_LIST_SLOT_FLOOR : int(2048) = 2048
 let AMSTERDAM_AUTH_BASE : int(7816) = 7816
@@ -136,21 +135,18 @@ function legacy_calldata_floor(input : TransactionInputSlice) -> transaction_cal
 }
 
 /*! The maximum Amsterdam recipient-side intrinsic execution charge. */
-type amsterdam_recipient_cost = range(0, 12756)
+type amsterdam_recipient_cost = range(0, 12000)
 
-/*! Computes Amsterdam execution-gas charges for recipient access, value
-    transfer, and contract creation. */
+/*! Computes Amsterdam execution-gas charges for recipient access and value
+    transfer, or for contract creation. The value-transfer charge also covers
+    the transfer log (EIP-2780), and a creation pays no value surcharge. */
 function amsterdam_recipient_execution_cost(tx : Transaction) -> amsterdam_recipient_cost = {
     let transfers_value = word_nonzero(tx.value);
     if tx.is_create then {
-        if transfers_value then {
-            AMSTERDAM_CREATE_ACCESS + AMSTERDAM_TRANSFER_LOG_COST
-        } else {
-            AMSTERDAM_CREATE_ACCESS
-        }
+        AMSTERDAM_CREATE_ACCESS
     } else if tx.recipient != tx.sender then {
         if transfers_value then {
-            AMSTERDAM_COLD_ACCOUNT_ACCESS + AMSTERDAM_TX_VALUE_COST + AMSTERDAM_TRANSFER_LOG_COST
+            AMSTERDAM_COLD_ACCOUNT_ACCESS + AMSTERDAM_TX_VALUE_COST
         } else {
             AMSTERDAM_COLD_ACCOUNT_ACCESS
         }
@@ -809,12 +805,10 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     (price, priority)
 }
 
-/*! Transaction validity (YP §6.2). First
-    authenticates the witnessed public key against the signature over the
-    signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
-    invalid regardless of the verdict — then applies the per-envelope
+/*! Transaction validity (YP §6.2). Applies the per-envelope
     validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
-    EIP-3607, EIP-7825) and derives the effective prices. */
+    EIP-3607, EIP-7825) and derives the effective prices. The sender was
+    recovered from the signature when the envelope was decoded. */
 val check_transaction_validity : forall 'total 'regular,
                                    0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound. (
         Transaction,
@@ -825,16 +819,6 @@ function check_transaction_validity(tx, allowance) = {
     let profile = execution_profile.protocol;
     let tx_semantics = tx_type_semantics(tx.tx_type);
 
-    /* Sender authentication: `v` selects the recovered signer, which must be
-       the address derived from the witnessed public key. A forged key or bad
-       v/r/s makes the whole BLOCK invalid, regardless of the validity verdict
-       below. */
-    let parity = tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v);
-    let authenticated = tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s);
-    let invalid_signature = not_bool(authenticated);
-    if invalid_signature then {
-        fatal_error(InvalidSignature)
-    };
     let gas_limit = allowance.total;
 
     /* effective gas price (EIP-1559) */
@@ -1532,7 +1516,7 @@ function run_amsterdam_transaction_frame(tx, v, upfront, authorizations) = {
         state_spill_after = STATE_GAS_SPILL_ZERO;
         return struct {
             success = false,
-            gas = tx_frame_gas_snapshot(initial_gas, GAS_ZERO, STATE_GAS_ZERO, FRAME_STATE_GAS_DELTA_ZERO),
+            gas = tx_frame_gas_snapshot(initial_gas, GAS_ZERO, state_gas_after, FRAME_STATE_GAS_DELTA_ZERO),
             refund = GAS_REFUND_ZERO,
         }
     };

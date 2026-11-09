@@ -5,7 +5,6 @@ from __future__ import annotations
 from .._runtime import (
     Bits,
     Bytes20,
-    sail_ediv_int,
 )
 from dataclasses import dataclass
 from typing import TypeAlias
@@ -28,8 +27,8 @@ from evm.primitives.gas import block_gas
 from evm.primitives.bytes import (
     StatelessInputSlice,
     stateless_input_slice_length,
-    stateless_input_sub_slice,
     stateless_input_slice_suffix,
+    WORD_BYTE_LENGTH,
 )
 from evm.exceptions import (
     FatalError,
@@ -38,6 +37,10 @@ from evm.exceptions import (
 from evm.primitives.ssz import (
     TransactionListRef,
     WithdrawalListRef,
+)
+from evm.host.region_access import (
+    stateless_input_slice_load,
+    stateless_input_slice_load_n,
 )
 from evm.primitives.fork import (
     Paris,
@@ -51,6 +54,7 @@ from evm.primitives.system import (
     HISTORY_STORAGE_ADDR,
 )
 from evm.primitives.tx import (
+    BlobHashesFields,
     LogSeriesRef,
     log_store_index,
     log_store_index_add,
@@ -73,7 +77,6 @@ from evm.lib.ssz.stateless_input import (
     decode_withdrawal,
     decode_transaction,
     WD_SIZE,
-    PUBLIC_KEY_LENGTH,
 )
 from evm.executor.receipts import (
     receipt_store_begin,
@@ -146,15 +149,25 @@ def run_block_start_system_calls() -> None:
     else:
         return None
 
-def execute_block_transactions(transactions: TransactionListRef, public_keys: StatelessInputSlice, expected_deposits: StatelessInputSlice) -> BlockExecutionResult:
+def consume_versioned_hashes(blob_hashes: BlobHashesFields, index: int, expected: StatelessInputSlice) -> StatelessInputSlice:
+    if (int(blob_hashes.count) <= int(index)):
+        return expected
+    else:
+        if (int(WORD_BYTE_LENGTH) <= int(expected.len)):
+            expected_fields = expected
+        else:
+            expected_fields = fatal_error(FatalError.InvalidVersionedHashes)
+        hash_offset = (int((33 * int(index))) + 1)
+        actual = stateless_input_slice_load_n(blob_hashes.bytes, hash_offset, WORD_BYTE_LENGTH)
+        next = stateless_input_slice_load(expected_fields, 0)
+        if ((actual) != (next)):
+            fatal_error(FatalError.InvalidVersionedHashes)
+        return consume_versioned_hashes(blob_hashes, (int(index) + 1), stateless_input_slice_suffix(expected_fields, WORD_BYTE_LENGTH))
+
+def execute_block_transactions(transactions: TransactionListRef, expected_deposits: StatelessInputSlice, expected_versioned_hashes: StatelessInputSlice) -> BlockExecutionResult:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     gas_limits = execution_profile.gas
-    public_keys_length = public_keys.len
-    public_key_length = PUBLIC_KEY_LENGTH
-    public_key_count_value = sail_ediv_int(public_keys_length, public_key_length)
-    if ((((public_key_count_value) != (transactions.count))) | (((public_keys_length) != ((int(public_key_count_value) * int(public_key_length)))))):
-        fatal_error(FatalError.WitnessDeficient)
     gas_limit = gas_limits.block_limit
     gas_usage = block_gas_usage_empty(gas_limit)
     blob_gas_acc = 0
@@ -164,8 +177,8 @@ def execute_block_transactions(transactions: TransactionListRef, public_keys: St
     transaction_logs_count = _host_logs_tx_count()
     logs_start = log_store_index_add(transaction_logs_start, transaction_logs_count)
     remaining_deposits = expected_deposits
+    remaining_versioned_hashes = expected_versioned_hashes
     cursor = ssz_list_cursor(transactions)
-    keys = public_keys
     initial_cursor_empty = ssz_list_cursor_empty(cursor)
     cursor_has_item = (not (initial_cursor_empty))
     while True:
@@ -174,14 +187,8 @@ def execute_block_transactions(transactions: TransactionListRef, public_keys: St
         i = cursor.index
         (transaction, next) = ssz_list_pop(cursor)
         cursor = next
-        keys_fields = keys
-        if (int(public_key_length) <= int(keys_fields.len)):
-            keys_fields = keys_fields
-        else:
-            keys_fields = fatal_error(FatalError.WitnessDeficient)
-        public_key = stateless_input_sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH)
-        keys = stateless_input_slice_suffix(keys_fields, public_key_length)
-        tx = decode_transaction(transaction, public_key)
+        tx = decode_transaction(transaction)
+        remaining_versioned_hashes = consume_versioned_hashes(tx.blob_hashes, 0, remaining_versioned_hashes)
         environment.k_current_transaction_epoch = (int(i) + 1)
         if ((i) == (0)):
             tx0_to = Bytes20(tx.recipient)
@@ -220,6 +227,9 @@ def execute_block_transactions(transactions: TransactionListRef, public_keys: St
                 blob_gas_acc = next_blob_gas
         cursor_empty = ssz_list_cursor_empty(cursor)
         cursor_has_item = (not (cursor_empty))
+    remaining_hashes = remaining_versioned_hashes
+    if ((remaining_hashes.len) != (0)):
+        fatal_error(FatalError.InvalidVersionedHashes)
     remaining_deposits_length = stateless_input_slice_length(remaining_deposits)
     if (((int(profile.fork) >= int(Prague))) & (((remaining_deposits_length) != (0)))):
         fatal_error(FatalError.InvalidExecutionRequests)
@@ -267,7 +277,7 @@ def execute_block_body(body: BlockBody, input_ref: StatelessInputRef) -> BlockEx
     environment.k_current_transaction_epoch = 0
     _host_warm_reset(environment.k_current_transaction_epoch)
     run_block_start_system_calls()
-    result = execute_block_transactions(body.transactions, input_ref.public_keys, input_ref.deposits)
+    result = execute_block_transactions(body.transactions, input_ref.deposits, input_ref.versioned_hashes)
     post_tx_index = (int(body.transactions.count) + 1)
     environment.k_current_transaction_epoch = post_tx_index
     _host_warm_reset(environment.k_current_transaction_epoch)

@@ -1,9 +1,9 @@
 /*
- * Optimized hash_tree_root for SszNewPayloadRequest.
+ * Optimized hash_tree_root for NewPayloadRequest.
  *
  * This translation unit is linked only into optimized C builds. It consumes
  * the already validated StatelessInputRef slices directly and keeps only an
- * O(depth) Merkle frontier. Fixed field offsets are compile-time constants
+ * O(depth) Merkle frontier per progressive subtree. Fixed field offsets are compile-time constants
  * within the AtLeast-typed payload spans, and item spans are exact by
  * construction, so only genuinely input-dependent shapes are checked here.
  * The readable Sail equations in lib/htr.sail remain the standard
@@ -12,6 +12,7 @@
 #include "evmsail/prelude.h"
 
 #include "evmsail/host/region_access.h"
+#include "evmsail/spec/exceptions.h"
 #include "evmsail/spec/lib/ssz/stateless_input.h"
 #include "primitives/value.h"
 #include "zkvm_accelerators.h"
@@ -116,6 +117,11 @@ static const htr_root htr_zero_hashes[HTR_MAX_DEPTH + 1] = {
      0x12, 0xb1, 0x61, 0x99, 0xdc, 0x15, 0x8e, 0x23, 0xb5, 0x44},
 };
 
+/* EIP-7495 active-fields chunks: the first 19 (execution payload) and the
+ * first 5 (execution requests) fields active, packed little-endian by bit. */
+static const htr_root htr_payload_active_fields = {0xff, 0xff, 0x07};
+static const htr_root htr_requests_active_fields = {0x1f};
+
 static void htr_hash_pair(const htr_root left, const htr_root right, htr_root out)
 {
   uint8_t pair[64];
@@ -125,10 +131,9 @@ static void htr_hash_pair(const htr_root left, const htr_root right, htr_root ou
   memcpy(pair, left, 32);
   memcpy(pair + 32, right, 32);
   if (zkvm_sha256(pair, sizeof(pair), &digest) != ZKVM_EOK) {
-    memset(out, 0, sizeof(htr_root));
-  } else {
-    memcpy(out, &digest, sizeof digest);
+    fatal_error(WitnessDeficient);
   }
+  memcpy(out, &digest, sizeof digest);
 }
 
 /* Every caller's depth is at most HTR_MAX_DEPTH and every caller's leaf
@@ -194,6 +199,68 @@ static void htr_merkleize(const htr_root *leaves, uint64_t count, unsigned depth
   htr_accumulator_root(&acc, out);
 }
 
+/* EIP-7916 `merkleize_progressive`: the leaves fill subtrees of 1, 4, 16, ...
+ * leaves, and each subtree root is chained to the merkleization of the rest,
+ * with an empty rest being the zero chunk. The subtree roots are held until
+ * the chain is folded from the right. A leaf beyond the deepest supported
+ * subtree fails closed. */
+typedef int (*htr_leaf_fn)(const void *context, uint64_t index, htr_root out);
+
+static int htr_progressive(uint64_t count, htr_leaf_fn leaf, const void *context, htr_root out)
+{
+  htr_root subtree_roots[HTR_MAX_DEPTH / 2 + 1];
+  unsigned subtrees = 0;
+  unsigned depth = 0;
+  uint64_t index = 0;
+  while (index < count) {
+    if (depth > HTR_MAX_DEPTH) {
+      return 0;
+    }
+    const uint64_t remaining = count - index;
+    const uint64_t capacity = UINT64_C(1) << depth;
+    const uint64_t take = remaining < capacity ? remaining : capacity;
+    struct htr_accumulator acc;
+    htr_accumulator_init(&acc, depth);
+    for (uint64_t i = 0; i < take; i++) {
+      htr_root leaf_root;
+      if (!leaf(context, index + i, leaf_root)) {
+        return 0;
+      }
+      htr_accumulator_push(&acc, leaf_root);
+    }
+    htr_accumulator_root(&acc, subtree_roots[subtrees++]);
+    index += take;
+    depth += 2;
+  }
+  htr_root chain = {0};
+  while (subtrees > 0) {
+    htr_root parent;
+    htr_hash_pair(subtree_roots[--subtrees], chain, parent);
+    memcpy(chain, parent, 32);
+  }
+  memcpy(out, chain, 32);
+  return 1;
+}
+
+static int htr_array_leaf(const void *context, uint64_t index, htr_root out)
+{
+  memcpy(out, ((const htr_root *)context)[index], 32);
+  return 1;
+}
+
+/* A progressive container merkleizes one chunk per field and mixes in its
+ * active-fields chunk (EIP-7495); every field of the containers hashed here
+ * is active. */
+static void htr_progressive_container(const htr_root *leaves, uint64_t count,
+                                      const htr_root active_fields, htr_root out)
+{
+  htr_root fields_root;
+  if (!htr_progressive(count, htr_array_leaf, leaves, fields_root)) {
+    fatal_error(WitnessDeficient);
+  }
+  htr_hash_pair(fields_root, active_fields, out);
+}
+
 static void htr_mix_in_length(const htr_root root, uint64_t len, htr_root out)
 {
   htr_root length;
@@ -241,6 +308,37 @@ static int htr_bytelist(const uint8_t *bytes, uint64_t len, uint64_t limit_bytes
   htr_root root;
   const uint64_t capacity_chunks = (limit_bytes + 31) / 32;
   htr_bytes_root(bytes, len, htr_clog2(capacity_chunks), root);
+  htr_mix_in_length(root, len, out);
+  return 1;
+}
+
+struct htr_bytes_context {
+  const uint8_t *bytes;
+  uint64_t len;
+};
+
+static int htr_chunk_leaf(const void *context, uint64_t index, htr_root out)
+{
+  const struct htr_bytes_context *source = (const struct htr_bytes_context *)context;
+  const uint64_t off = index * 32;
+  const uint64_t available = source->len - off;
+  memset(out, 0, 32);
+  memcpy(out, source->bytes + off, (size_t)(available < 32 ? available : 32));
+  return 1;
+}
+
+/* `ProgressiveByteList`: the progressive chunk tree with the length mixed in.
+ * The byte-list limit remains the model's capacity for input lengths. */
+static int htr_progressive_bytelist(const uint8_t *bytes, uint64_t len, htr_root out)
+{
+  if (len > EVMSAIL_HTR_BYTE_LIST_LIMIT) {
+    return 0;
+  }
+  const struct htr_bytes_context source = {.bytes = bytes, .len = len};
+  htr_root root;
+  if (!htr_progressive((len + 31) / 32, htr_chunk_leaf, &source, root)) {
+    return 0;
+  }
   htr_mix_in_length(root, len, out);
   return 1;
 }
@@ -345,18 +443,18 @@ enum htr_item_kind {
 
 static const struct {
   uint32_t item_size;
-  uint8_t depth;
+  uint32_t max_count;
 } htr_list_layout[] = {
-    [HTR_ITEM_DEPOSIT] = {192, 13},
-    [HTR_ITEM_WITHDRAWAL_REQUEST] = {76, 4},
-    [HTR_ITEM_CONSOLIDATION_REQUEST] = {116, 1},
-    [HTR_ITEM_BUILDER_DEPOSIT_REQUEST] = {184, 6},
-    [HTR_ITEM_BUILDER_EXIT_REQUEST] = {68, 4},
+    [HTR_ITEM_DEPOSIT] = {192, UINT32_C(1) << 25},
+    [HTR_ITEM_WITHDRAWAL_REQUEST] = {76, UINT32_C(1) << 25},
+    [HTR_ITEM_CONSOLIDATION_REQUEST] = {116, UINT32_C(1) << 25},
+    [HTR_ITEM_BUILDER_DEPOSIT_REQUEST] = {184, UINT32_C(1) << 25},
+    [HTR_ITEM_BUILDER_EXIT_REQUEST] = {68, UINT32_C(1) << 25},
     /* Transaction items are variable-width; the driver walks the offset
      * table instead of a fixed stride. */
-    [HTR_ITEM_TRANSACTION] = {0, 20},
-    [HTR_ITEM_WITHDRAWAL] = {44, 4},
-    [HTR_ITEM_VERSIONED_HASH] = {32, 12},
+    [HTR_ITEM_TRANSACTION] = {0, UINT32_C(1) << 20},
+    [HTR_ITEM_WITHDRAWAL] = {44, UINT32_C(1) << 20},
+    [HTR_ITEM_VERSIONED_HASH] = {32, UINT32_C(1) << 25},
 };
 
 static int htr_item_root(enum htr_item_kind kind, const uint8_t *bytes, htr_root out)
@@ -389,31 +487,39 @@ static int htr_item_root(enum htr_item_kind kind, const uint8_t *bytes, htr_root
   return 0;
 }
 
-/* One init -> push -> root -> mix_in_length driver for all list roots.
- * `count` is within 2^depth at every call: request lists are checked by
- * htr_request_list, transactions and withdrawals are bounded by their Sail
- * list-reference types, and versioned hashes by MAX_BLOB_COMMITMENTS. */
+struct htr_list_context {
+  enum htr_item_kind kind;
+  Bytes span;
+  uint64_t count;
+};
+
+static int htr_list_leaf(const void *context, uint64_t i, htr_root out)
+{
+  const struct htr_list_context *list = (const struct htr_list_context *)context;
+  if (list->kind == HTR_ITEM_TRANSACTION) {
+    const uint64_t table_off = i * 4;
+    const uint64_t start = htr_load_u32(list->span.bytes + table_off);
+    const uint64_t stop =
+        i + 1 < list->count ? htr_load_u32(list->span.bytes + table_off + 4) : list->span.len;
+    return start <= stop && stop <= list->span.len &&
+           htr_progressive_bytelist(list->span.bytes + start, stop - start, out);
+  }
+  return htr_item_root(list->kind, list->span.bytes + (i * htr_list_layout[list->kind].item_size),
+                       out);
+}
+
+/* One progressive -> mix_in_length driver for all list roots. `count` is
+ * within the model's capacity for the list at every call: request lists are
+ * checked by htr_request_list, transactions and withdrawals are bounded by
+ * their Sail list-reference types, and versioned hashes by
+ * MAX_BLOB_COMMITMENTS. */
 static int htr_list_root(enum htr_item_kind kind, Bytes span, uint64_t count, htr_root out)
 {
-  struct htr_accumulator acc;
-  htr_accumulator_init(&acc, htr_list_layout[kind].depth);
-  for (uint64_t i = 0; i < count; i++) {
-    htr_root item;
-    if (kind == HTR_ITEM_TRANSACTION) {
-      const uint64_t table_off = i * 4;
-      const uint64_t start = htr_load_u32(span.bytes + table_off);
-      const uint64_t stop = i + 1 < count ? htr_load_u32(span.bytes + table_off + 4) : span.len;
-      if (start > stop || stop > span.len ||
-          !htr_bytelist(span.bytes + start, stop - start, EVMSAIL_HTR_BYTE_LIST_LIMIT, item)) {
-        return 0;
-      }
-    } else if (!htr_item_root(kind, span.bytes + (i * htr_list_layout[kind].item_size), item)) {
-      return 0;
-    }
-    htr_accumulator_push(&acc, item);
-  }
+  const struct htr_list_context list = {.kind = kind, .span = span, .count = count};
   htr_root root;
-  htr_accumulator_root(&acc, root);
+  if (!htr_progressive(count, htr_list_leaf, &list, root)) {
+    return 0;
+  }
   htr_mix_in_length(root, count, out);
   return 1;
 }
@@ -424,7 +530,7 @@ static int htr_request_list(enum htr_item_kind kind, Bytes span, htr_root out)
 {
   const uint64_t item_size = htr_list_layout[kind].item_size;
   const uint64_t count = span.len / item_size;
-  if (span.len % item_size != 0 || count > (UINT64_C(1) << htr_list_layout[kind].depth)) {
+  if (span.len % item_size != 0 || count > htr_list_layout[kind].max_count) {
     return 0;
   }
   return htr_list_root(kind, span, count, out);
@@ -454,11 +560,11 @@ static int htr_execution_payload(const struct StatelessInputRef *input, htr_root
                      leaves[13]) ||
       !htr_list_root(HTR_ITEM_WITHDRAWAL, input->withdrawals.bytes, input->withdrawals.count,
                      leaves[14]) ||
-      !htr_bytelist(input->block_access_list.bytes, input->block_access_list.len,
-                    EVMSAIL_HTR_BYTE_LIST_LIMIT, leaves[17])) {
+      !htr_progressive_bytelist(input->block_access_list.bytes, input->block_access_list.len,
+                                leaves[17])) {
     return 0;
   }
-  htr_merkleize(leaves, 19, 5, out);
+  htr_progressive_container(leaves, 19, htr_payload_active_fields, out);
   return 1;
 }
 
@@ -473,20 +579,23 @@ static int htr_execution_requests(const struct StatelessInputRef *input, htr_roo
       !htr_request_list(HTR_ITEM_BUILDER_EXIT_REQUEST, input->builder_exit_requests, leaves[4])) {
     return 0;
   }
-  htr_merkleize(leaves, 5, 3, out);
+  htr_progressive_container(leaves, 5, htr_requests_active_fields, out);
   return 1;
 }
 
+/* A shape the model cannot hash is a deficient input, as in lib/htr.sail:
+ * it fails closed rather than yielding a root. */
 bytes32 htr_new_payload_request(struct StatelessInputRef input_ref)
 {
   htr_root leaves[4] = {{0}};
   htr_root root = {0};
-  if (htr_execution_payload(&input_ref, leaves[0]) &&
-      htr_list_root(HTR_ITEM_VERSIONED_HASH, input_ref.versioned_hashes,
-                    input_ref.versioned_hashes.len / 32, leaves[1]) &&
-      htr_execution_requests(&input_ref, leaves[3])) {
-    htr_bytes32(input_ref.new_payload_request.bytes + 8, leaves[2]);
-    htr_merkleize(leaves, 4, 2, root);
+  if (!htr_execution_payload(&input_ref, leaves[0]) ||
+      !htr_list_root(HTR_ITEM_VERSIONED_HASH, input_ref.versioned_hashes,
+                     input_ref.versioned_hashes.len / 32, leaves[1]) ||
+      !htr_execution_requests(&input_ref, leaves[3])) {
+    fatal_error(WitnessDeficient);
   }
+  htr_bytes32(input_ref.new_payload_request.bytes + 8, leaves[2]);
+  htr_merkleize(leaves, 4, 2, root);
   return hash_from_be_bytes(root);
 }

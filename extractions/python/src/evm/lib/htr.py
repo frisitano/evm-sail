@@ -239,6 +239,40 @@ def merkleize(leaves: list[hash], depth: htr_depth) -> hash:
     else:
         return Bytes32(fatal_error(FatalError.WitnessDeficient))
 
+def htr_progressive_next_depth(remaining: htr_leaf_count, depth: htr_depth) -> htr_depth:
+    if ((remaining) == (0)):
+        return htr_depth(depth)
+    else:
+        if (int((int(depth) + 2)) <= 25):
+            return htr_depth((int(depth) + 2))
+        else:
+            return htr_depth(fatal_error(FatalError.WitnessDeficient))
+
+def merkleize_progressive_from(leaves: list[hash], start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = merkleize_vector_subtree(leaves, start, take, depth)
+        right_root = merkleize_progressive_from(leaves, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
+def merkleize_progressive(leaves: list[hash]) -> hash:
+    count = len(leaves)
+    return Bytes32(merkleize_progressive_from(leaves, 0, count, 0))
+
+def mix_in_active_fields(root: hash, active_fields: hash) -> hash:
+    return Bytes32(_host_sha256_pair(root, active_fields))
+
 def htr_uint(v: ssz_uint) -> hash:
     bytes = ZERO_HASH
     bytes = Bytes32(sail_vector_update(bytes, 0, Bits(8, int(v) >> 0), False))
@@ -385,6 +419,24 @@ def htr_bytes_root(bytes: StatelessInputSlice, depth: htr_depth) -> hash:
     else:
         return Bytes32(fatal_error(FatalError.WitnessDeficient))
 
+def htr_bytes_progressive_subtree(bytes: StatelessInputSlice, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = htr_bytes_subtree(bytes, start, take, depth)
+        right_root = htr_bytes_progressive_subtree(bytes, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_bytevector(bytes: StatelessInputSlice) -> hash:
     chunks = htr_chunk_count(bytes.len)
     depth = clog2(chunks)
@@ -419,6 +471,11 @@ def htr_bytelist(bytes: StatelessInputSlice, limit_bytes: int) -> hash:
     root = htr_bytes_root(bytes, depth)
     return Bytes32(mix_in_length(root, bytes.len))
 
+def htr_progressive_bytelist(bytes: StatelessInputSlice) -> hash:
+    count = htr_chunk_count(bytes.len)
+    root = htr_bytes_progressive_subtree(bytes, 0, count, 0)
+    return Bytes32(mix_in_length(root, bytes.len))
+
 def htr_withdrawal(withdrawal: StatelessInputSliceFields) -> hash:
     index_root = htr_ssz_uint(withdrawal, WD_INDEX)
     validator_root = htr_ssz_uint(withdrawal, WD_VALIDATOR_INDEX)
@@ -433,7 +490,7 @@ def htr_transactions_subtree(transactions: TransactionListRef, start: int, count
         if ((depth) == (0)):
             if ((count) == (1)):
                 transaction = ssz_list_at(transactions, start)
-                return Bytes32(htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT))
+                return Bytes32(htr_progressive_bytelist(transaction))
             else:
                 return Bytes32(fatal_error(FatalError.WitnessDeficient))
         else:
@@ -451,9 +508,27 @@ def htr_transactions_subtree(transactions: TransactionListRef, start: int, count
             right_root = htr_transactions_subtree(transactions, (int(start) + int(half)), right_count, child_depth)
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
+def htr_transactions_progressive(transactions: TransactionListRef, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = htr_transactions_subtree(transactions, start, take, depth)
+        right_root = htr_transactions_progressive(transactions, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_transactions(transactions: TransactionListRef) -> hash:
     count = transactions.count
-    root = htr_transactions_subtree(transactions, 0, count, 20)
+    root = htr_transactions_progressive(transactions, 0, count, 0)
     return Bytes32(mix_in_length(root, transactions.count))
 
 def htr_withdrawals_subtree(withdrawals: WithdrawalListRef, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
@@ -481,9 +556,27 @@ def htr_withdrawals_subtree(withdrawals: WithdrawalListRef, start: int, count: h
             right_root = htr_withdrawals_subtree(withdrawals, (int(start) + int(half)), right_count, child_depth)
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
+def htr_withdrawals_progressive(withdrawals: WithdrawalListRef, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = htr_withdrawals_subtree(withdrawals, start, take, depth)
+        right_root = htr_withdrawals_progressive(withdrawals, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_withdrawals(withdrawals: WithdrawalListRef) -> hash:
     count = withdrawals.count
-    root = htr_withdrawals_subtree(withdrawals, 0, count, 4)
+    root = htr_withdrawals_progressive(withdrawals, 0, count, 0)
     return Bytes32(mix_in_length(root, withdrawals.count))
 
 def htr_execution_payload(input_ref: StatelessInputRef) -> hash:
@@ -505,9 +598,10 @@ def htr_execution_payload(input_ref: StatelessInputRef) -> hash:
     withdrawals_root = htr_withdrawals(input_ref.withdrawals)
     blob_gas_used_root = htr_ssz_uint(payload, PL_BLOB_GAS_USED)
     excess_blob_gas_root = htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS)
-    block_access_list_root = htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT)
+    block_access_list_root = htr_progressive_bytelist(input_ref.block_access_list)
     slot_number_root = htr_ssz_uint(payload, PL_SLOT_NUMBER)
-    return Bytes32(merkleize([parent_hash_root, fee_recipient_root, state_root, receipts_root, logs_bloom_root, prev_randao_root, block_number_root, gas_limit_root, gas_used_root, timestamp_root, extra_data_root, base_fee_root, block_hash_root, transactions_root, withdrawals_root, blob_gas_used_root, excess_blob_gas_root, block_access_list_root, slot_number_root], 5))
+    fields_root = merkleize_progressive([parent_hash_root, fee_recipient_root, state_root, receipts_root, logs_bloom_root, prev_randao_root, block_number_root, gas_limit_root, gas_used_root, timestamp_root, extra_data_root, base_fee_root, block_hash_root, transactions_root, withdrawals_root, blob_gas_used_root, excess_blob_gas_root, block_access_list_root, slot_number_root])
+    return Bytes32(mix_in_active_fields(fields_root, HTR_PAYLOAD_ACTIVE_FIELDS))
 
 def htr_versioned_hashes_subtree(versioned_hashes: StatelessInputSlice, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
     if ((count) == (0)):
@@ -533,10 +627,28 @@ def htr_versioned_hashes_subtree(versioned_hashes: StatelessInputSlice, start: i
             right_root = htr_versioned_hashes_subtree(versioned_hashes, (int(start) + int(half)), right_count, child_depth)
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
+def htr_versioned_hashes_progressive(versioned_hashes: StatelessInputSlice, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = htr_versioned_hashes_subtree(versioned_hashes, start, take, depth)
+        right_root = htr_versioned_hashes_progressive(versioned_hashes, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_versioned_hashes(versioned_hashes: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, (1 << 12))
+    items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, (1 << 25))
     count = items.count
-    root = htr_versioned_hashes_subtree(versioned_hashes, 0, count, 12)
+    root = htr_versioned_hashes_progressive(versioned_hashes, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_deposit(deposit: StatelessInputSliceFields) -> hash:
@@ -642,34 +754,52 @@ def htr_requests_subtree(requests: StatelessInputSlice, kind: HtrRequestKind, st
             right_root = htr_requests_subtree(requests, kind, (int(start) + int(half)), right_count, child_depth)
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
+def htr_requests_progressive(requests: StatelessInputSlice, kind: HtrRequestKind, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        left_root = htr_requests_subtree(requests, kind, start, take, depth)
+        right_root = htr_requests_progressive(requests, kind, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_deposits(deposits: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, (1 << 13))
+    items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, (1 << 25))
     count = items.count
-    root = htr_requests_subtree(deposits, HtrRequestKind.HtrDeposit, 0, count, 13)
+    root = htr_requests_progressive(deposits, HtrRequestKind.HtrDeposit, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_withdrawal_requests(requests: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(requests, HTR_WITHDRAWAL_REQUEST_LENGTH, (1 << 4))
+    items = ssz_bounded_fixed_list_ref(requests, HTR_WITHDRAWAL_REQUEST_LENGTH, (1 << 25))
     count = items.count
-    root = htr_requests_subtree(requests, HtrRequestKind.HtrWithdrawalRequest, 0, count, 4)
+    root = htr_requests_progressive(requests, HtrRequestKind.HtrWithdrawalRequest, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_consolidation_requests(requests: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(requests, HTR_CONSOLIDATION_REQUEST_LENGTH, (1 << 1))
+    items = ssz_bounded_fixed_list_ref(requests, HTR_CONSOLIDATION_REQUEST_LENGTH, (1 << 25))
     count = items.count
-    root = htr_requests_subtree(requests, HtrRequestKind.HtrConsolidationRequest, 0, count, 1)
+    root = htr_requests_progressive(requests, HtrRequestKind.HtrConsolidationRequest, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_builder_deposit_requests(requests: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_DEPOSIT_LENGTH, (1 << 6))
+    items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_DEPOSIT_LENGTH, (1 << 25))
     count = items.count
-    root = htr_requests_subtree(requests, HtrRequestKind.HtrBuilderDepositRequest, 0, count, 6)
+    root = htr_requests_progressive(requests, HtrRequestKind.HtrBuilderDepositRequest, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_builder_exit_requests(requests: StatelessInputSlice) -> hash:
-    items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, (1 << 4))
+    items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, (1 << 25))
     count = items.count
-    root = htr_requests_subtree(requests, HtrRequestKind.HtrBuilderExitRequest, 0, count, 4)
+    root = htr_requests_progressive(requests, HtrRequestKind.HtrBuilderExitRequest, 0, count, 0)
     return Bytes32(mix_in_length(root, items.count))
 
 def htr_execution_requests(input_ref: StatelessInputRef) -> hash:
@@ -678,7 +808,8 @@ def htr_execution_requests(input_ref: StatelessInputRef) -> hash:
     consolidation_requests = htr_consolidation_requests(input_ref.consolidation_requests)
     builder_deposit_requests = htr_builder_deposit_requests(input_ref.builder_deposit_requests)
     builder_exit_requests = htr_builder_exit_requests(input_ref.builder_exit_requests)
-    return Bytes32(merkleize([deposits, withdrawal_requests, consolidation_requests, builder_deposit_requests, builder_exit_requests], 3))
+    fields_root = merkleize_progressive([deposits, withdrawal_requests, consolidation_requests, builder_deposit_requests, builder_exit_requests])
+    return Bytes32(mix_in_active_fields(fields_root, HTR_REQUESTS_ACTIVE_FIELDS))
 
 def htr_new_payload_request(input_ref: StatelessInputRef) -> hash:
     payload_root = htr_execution_payload(input_ref)
@@ -784,3 +915,7 @@ SSZ_ZERO_HASH_23: hash = Bytes32(hash_from_bits(Bits(256, 0b11100111000111110000
 SSZ_ZERO_HASH_24: hash = Bytes32(hash_from_bits(Bits(256, 0b0011000100100000011011111010100000001010010100001011101101101010101111100010100100001000010100000101100011110001011000100001001000100001001010100110000011101110110010001111000001001001111111101100101110010010110110001100100011100000101010000100101111000000)))
 
 SSZ_ZERO_HASH_25: hash = Bytes32(hash_from_bits(Bits(256, 0b0010000100110101001010111111111011001011111011011101110111101001100100111000001110011111011000010100110000111101101011000000101000111110111000110111010101000011111110011011010000010010101100010110000110011001110111000001010110001110001000111011010101000100)))
+
+HTR_PAYLOAD_ACTIVE_FIELDS: hash = Bytes32(hash_from_bits(Bits(256, 0b1111111111111111000001110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))
+
+HTR_REQUESTS_ACTIVE_FIELDS: hash = Bytes32(hash_from_bits(Bits(256, 0b0001111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)))

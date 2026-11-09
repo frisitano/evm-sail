@@ -11,7 +11,6 @@ source. Concrete container layouts belong in their decoder modules.
 /*! The width of one entry in an SSZ variable-field offset table
     (`uint32`, little-endian). */
 let SSZ_OFF_BYTES : int(4) = 4
-let SSZ_UINT_BYTES : int(8) = 8
 
 /* Container decoders establish that the complete fixed-width field lies in
  * the input before calling these scalar readers. */

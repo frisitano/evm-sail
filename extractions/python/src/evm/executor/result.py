@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from .._runtime import (
+    BitWidth,
     Bits,
     Bytes32,
     IntegerRange,
     SailError,
+    sail_vector_subrange,
     sail_vector_update,
 )
 from typing import Annotated
@@ -17,40 +19,35 @@ from evm.prelude import (
     hash,
     ZERO_HASH,
 )
-from evm.primitives.bytes import (
-    StatelessInputSlice,
-    WORD_BYTE_LENGTH,
-)
+from evm.primitives.quantities import chain_identifier
+from evm.primitives.bytes import WORD_BYTE_LENGTH
 from evm.kernel.scratch import (
-    scratch_length_add,
     scratch_reserve,
     scratch_push_byte,
-    stateless_input_scratch_push_slice,
-    scratch_scratch_push_slice,
     scratch_push_b256,
     scratch_finish,
 )
-from evm.lib.ssz.stateless_input import StatelessInputRef
-from evm.lib.htr import htr_new_payload_request
+from evm.lib.ssz.stateless_input import (
+    StatelessInputRef,
+    STATELESS_SCHEMA_ID,
+)
+from evm.lib.htr import (
+    htr_uint,
+    htr_new_payload_request,
+)
 
-def write_prefix(root: hash, success: bool) -> None:
+def commit_validation_result(root: hash, success: bool, chain_id: chain_identifier, schema_id: Annotated[Bits, BitWidth(16)]) -> None:
+    start = scratch_reserve(RESULT_LENGTH)
     scratch_push_b256(root, WORD_BYTE_LENGTH)
     if success:
         success_byte = Bits(8, 0b00000001)
     else:
         success_byte = Bits(8, 0b00000000)
     scratch_push_byte(success_byte)
-    scratch_push_byte(Bits(8, 0b00100101))
-    scratch_push_byte(Bits(8, 0b00000000))
-    scratch_push_byte(Bits(8, 0b00000000))
-    return scratch_push_byte(Bits(8, 0b00000000))
-
-def commit_validation_result(root: hash, success: bool, chain_config: StatelessInputSlice) -> None:
-    fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
-    output_length_ = scratch_length_add(fixed_length, chain_config.len)
-    start = scratch_reserve(output_length_)
-    write_prefix(root, success)
-    stateless_input_scratch_push_slice(chain_config)
+    identity = htr_uint(chain_id)
+    identity = Bytes32(sail_vector_update(identity, 8, sail_vector_subrange(schema_id, 7, 0, False), False))
+    identity = Bytes32(sail_vector_update(identity, 9, sail_vector_subrange(schema_id, 15, 8, False), False))
+    scratch_push_b256(identity, 10)
     output = scratch_finish(start)
     written = _host_public_output_write(output)
     if not (written):
@@ -59,26 +56,9 @@ def commit_validation_result(root: hash, success: bool, chain_config: StatelessI
 
 def write_validation_result(input_ref: StatelessInputRef, success: bool) -> None:
     root = htr_new_payload_request(input_ref)
-    return commit_validation_result(root, success, input_ref.chain_config)
+    return commit_validation_result(root, success, input_ref.chain_id, STATELESS_SCHEMA_ID)
 
 def write_invalid_result() -> None:
-    start = scratch_reserve(24)
-    default_chain_config = ZERO_HASH
-    default_chain_config = Bytes32(sail_vector_update(default_chain_config, 8, Bits(8, 0b00001100), False))
-    default_chain_config = Bytes32(sail_vector_update(default_chain_config, 12, Bits(8, 0b00000100), False))
-    default_chain_config = Bytes32(sail_vector_update(default_chain_config, 16, Bits(8, 0b00001000), False))
-    default_chain_config = Bytes32(sail_vector_update(default_chain_config, 20, Bits(8, 0b00001000), False))
-    scratch_push_b256(default_chain_config, 24)
-    chain_config = scratch_finish(start)
-    fixed_length = (int(WORD_BYTE_LENGTH) + int(RESULT_METADATA_LENGTH))
-    output_length_ = scratch_length_add(fixed_length, chain_config.len)
-    output_start = scratch_reserve(output_length_)
-    write_prefix(ZERO_HASH, False)
-    scratch_scratch_push_slice(chain_config)
-    output = scratch_finish(output_start)
-    written = _host_public_output_write(output)
-    if not (written):
-        raise SailError("public output write")
-    return None
+    return commit_validation_result(ZERO_HASH, False, 0, Bits(16, 0b0000000000000000))
 
-RESULT_METADATA_LENGTH: Annotated[int, IntegerRange(5, 5)] = 5
+RESULT_LENGTH: Annotated[int, IntegerRange(43, 43)] = 43

@@ -8,8 +8,10 @@ precomputed zero root at that depth, or the hash of its two children. Source
 references are indexed only when recursion reaches a live leaf, so no leaf
 list or explicit Merkle frontier is materialized.
 */
-/*! The largest Merkle depth required by the supported execution-layer SSZ
-    schemas. ByteList[2^30] is the widest one, with 2^25 chunks. */
+/*! The largest Merkle depth of a supported execution-layer SSZ subtree. A
+    progressive tree chains subtrees of depth 0, 2, 4, ..., so the deepest
+    (depth 24) bounds a progressive list at 22,369,621 chunks (about 715 MB
+    of bytes); a longer list fails closed. */
 type htr_depth = range(0, 25)
 /*! A leaf count in any supported execution-layer SSZ Merkle tree. */
 type htr_leaf_count = range(0, 33554432)
@@ -176,6 +178,73 @@ function merkleize(leaves, depth) = {
         fatal_error(WitnessDeficient)
     }
 }
+
+/*md
+## The progressive merkleization
+
+EIP-7916 `ProgressiveList` and EIP-7495 `ProgressiveContainer` merkleize
+their chunks as a right-leaning chain of subtrees whose capacities grow by a
+factor of four (1, 4, 16, ...); an empty remainder is the zero chunk. Every
+subtree is the ordinary fixed-depth merkleization of its slice of leaves, so
+the per-type `*_subtree` equations below are reused unchanged.
+*/
+/*! The depth of the next progressive subtree. A remainder beyond the deepest
+    supported subtree is not representable and fails closed. */
+function htr_progressive_next_depth(remaining : htr_leaf_count, depth : htr_depth) -> htr_depth =
+    if remaining == 0 then {
+        depth
+    } else if depth + 2 <= 25 then {
+        depth + 2
+    } else {
+        fatal_error(WitnessDeficient)
+    }
+
+/*! `merkleize_progressive` of a fixed leaf vector, from leaf `start`. */
+val merkleize_progressive_from : forall 'n 'start, 1 <= 'n & 'n <= 32 & 0 <= 'start. (
+        vector('n, dec, hash),
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+
+function merkleize_progressive_from(leaves, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = merkleize_vector_subtree(leaves, start, take, depth);
+        let right_root = merkleize_progressive_from(leaves, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure merkleize_progressive_from(leaves, start, count, depth) = count
+
+/*! `merkleize_progressive` of a fixed leaf vector (EIP-7916). */
+val merkleize_progressive : forall 'n, 1 <= 'n & 'n <= 32. vector('n, dec, hash) -> hash
+function merkleize_progressive(leaves) = {
+    let count : htr_leaf_count = length(leaves);
+    merkleize_progressive_from(leaves, 0, count, 0)
+}
+
+/*! The EIP-7495 active-fields chunk of a progressive container whose first 19
+    fields are all active (the execution payload). */
+let HTR_PAYLOAD_ACTIVE_FIELDS : hash = hash_from_bits(
+    0xffff070000000000000000000000000000000000000000000000000000000000,
+)
+/*! The active-fields chunk of a progressive container whose first five fields
+    are all active (the execution requests). */
+let HTR_REQUESTS_ACTIVE_FIELDS : hash = hash_from_bits(
+    0x1f00000000000000000000000000000000000000000000000000000000000000,
+)
+
+/*! `mix_in_active_fields` (EIP-7495). */
+function mix_in_active_fields(root : hash, active_fields : hash) -> hash =
+    sha256_pair(root, active_fields)
 
 /* ---- basic types and byte sequences ----------------------------------- */
 
@@ -350,6 +419,31 @@ function htr_bytes_root(bytes : StatelessInputSlice, depth : htr_depth) -> hash 
     }
 }
 
+/*! Recursively merkleizes the live chunk prefix of a byte span as a
+    progressive tree. */
+val htr_bytes_progressive_subtree : forall 'start, 0 <= 'start. (
+        StatelessInputSlice,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_bytes_progressive_subtree(bytes, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = htr_bytes_subtree(bytes, start, take, depth);
+        let right_root = htr_bytes_progressive_subtree(bytes, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure htr_bytes_progressive_subtree(bytes, start, count, depth) = count
+
 /*md
 ## Helpers
 */
@@ -410,6 +504,14 @@ function htr_bytelist(bytes, limit_bytes) = {
     mix_in_length(root, bytes.len)
 }
 
+/*! `hash_tree_root` of a `ProgressiveByteList` (progressive chunk tree,
+    length mixed in). */
+function htr_progressive_bytelist(bytes : StatelessInputSlice) -> hash = {
+    let count = htr_chunk_count(bytes.len);
+    let root = htr_bytes_progressive_subtree(bytes, 0, count, 0);
+    mix_in_length(root, bytes.len)
+}
+
 /*md
 ## The execution payload
 */
@@ -430,7 +532,7 @@ function htr_transactions_subtree(transactions, start, count, depth) =
     } else if depth == 0 then {
         if count == 1 then {
             let transaction = ssz_list_at(transactions, start);
-            htr_bytelist(transaction, HTR_BYTE_LIST_LIMIT)
+            htr_progressive_bytelist(transaction)
         } else {
             fatal_error(WitnessDeficient)
         }
@@ -448,11 +550,36 @@ function htr_transactions_subtree(transactions, start, count, depth) =
 
 termination_measure htr_transactions_subtree(transactions, start, count, depth) = depth
 
+/*! Recursively merkleizes a range of transaction roots as a progressive
+    tree. */
+val htr_transactions_progressive : forall 'start, 0 <= 'start. (
+        TransactionListRef,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_transactions_progressive(transactions, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = htr_transactions_subtree(transactions, start, take, depth);
+        let right_root = htr_transactions_progressive(transactions, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure htr_transactions_progressive(transactions, start, count, depth) = count
+
 /*! `hash_tree_root` of the transactions list
-    (`List[ByteList[2^30], 2^20]`). */
+    (`ProgressiveList[ProgressiveByteList]`). */
 function htr_transactions(transactions : TransactionListRef) -> hash = {
     let count : htr_leaf_count = transactions.count;
-    let root = htr_transactions_subtree(transactions, 0, count, 20);
+    let root = htr_transactions_progressive(transactions, 0, count, 0);
     mix_in_length(root, transactions.count)
 }
 
@@ -482,14 +609,41 @@ function htr_withdrawals_subtree(withdrawals, start, count, depth) =
 
 termination_measure htr_withdrawals_subtree(withdrawals, start, count, depth) = depth
 
-/*! `hash_tree_root` of the withdrawals list (`List[SszWithdrawal, 16]`). */
+/*! Recursively merkleizes a range of withdrawal roots as a progressive
+    tree. */
+val htr_withdrawals_progressive : forall 'start, 0 <= 'start. (
+        WithdrawalListRef,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_withdrawals_progressive(withdrawals, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = htr_withdrawals_subtree(withdrawals, start, take, depth);
+        let right_root = htr_withdrawals_progressive(withdrawals, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure htr_withdrawals_progressive(withdrawals, start, count, depth) = count
+
+/*! `hash_tree_root` of the withdrawals list
+    (`ProgressiveList[Withdrawal]`). */
 function htr_withdrawals(withdrawals : WithdrawalListRef) -> hash = {
     let count : htr_leaf_count = withdrawals.count;
-    let root = htr_withdrawals_subtree(withdrawals, 0, count, 4);
+    let root = htr_withdrawals_progressive(withdrawals, 0, count, 0);
     mix_in_length(root, withdrawals.count)
 }
 
-/*! `hash_tree_root` of the `SszExecutionPayload` (19 fields, depth 5). */
+/*! `hash_tree_root` of the `ExecutionPayload` (a progressive container of 19
+    active fields). */
 function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let payload = input_ref.execution_payload;
     let parent_hash_root = htr_ssz_bytes32(payload, 0);
@@ -509,9 +663,9 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
     let withdrawals_root = htr_withdrawals(input_ref.withdrawals);
     let blob_gas_used_root = htr_ssz_uint(payload, PL_BLOB_GAS_USED);
     let excess_blob_gas_root = htr_ssz_uint(payload, PL_EXCESS_BLOB_GAS);
-    let block_access_list_root = htr_bytelist(input_ref.block_access_list, HTR_BYTE_LIST_LIMIT);
+    let block_access_list_root = htr_progressive_bytelist(input_ref.block_access_list);
     let slot_number_root = htr_ssz_uint(payload, PL_SLOT_NUMBER);
-    merkleize(
+    let fields_root = merkleize_progressive(
         [
             parent_hash_root,
             fee_recipient_root,
@@ -533,8 +687,8 @@ function htr_execution_payload(input_ref : StatelessInputRef) -> hash = {
             block_access_list_root,
             slot_number_root,
         ],
-        5,
-    )
+    );
+    mix_in_active_fields(fields_root, HTR_PAYLOAD_ACTIVE_FIELDS)
 }
 
 /*! Recursively merkleizes a range of fixed-width versioned hashes. */
@@ -567,11 +721,36 @@ function htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) =
 
 termination_measure htr_versioned_hashes_subtree(versioned_hashes, start, count, depth) = depth
 
-/*! `hash_tree_root` of the versioned hashes (`List[Bytes32, 4096]`). */
+/*! Recursively merkleizes a range of fixed-width versioned hashes as a
+    progressive tree. */
+val htr_versioned_hashes_progressive : forall 'start, 0 <= 'start. (
+        StatelessInputSlice,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_versioned_hashes_progressive(versioned_hashes, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = htr_versioned_hashes_subtree(versioned_hashes, start, take, depth);
+        let right_root = htr_versioned_hashes_progressive(versioned_hashes, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure htr_versioned_hashes_progressive(versioned_hashes, start, count, depth) = count
+
+/*! `hash_tree_root` of the versioned hashes (`ProgressiveList[Bytes32]`). */
 function htr_versioned_hashes(versioned_hashes : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, sizeof(blob_commitment_count_bound));
     let count : htr_leaf_count = items.count;
-    let root = htr_versioned_hashes_subtree(versioned_hashes, 0, count, 12);
+    let root = htr_versioned_hashes_progressive(versioned_hashes, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
@@ -720,15 +899,42 @@ function htr_requests_subtree(requests, kind, start, count, depth) =
 
 termination_measure htr_requests_subtree(requests, kind, start, count, depth) = depth
 
-/*! `hash_tree_root` of the deposit-request list (depth 13). */
+/*! Recursively merkleizes a range of fixed-width execution-request roots as a
+    progressive tree. */
+val htr_requests_progressive : forall 'start, 0 <= 'start. (
+        StatelessInputSlice,
+        HtrRequestKind,
+        int('start),
+        htr_leaf_count,
+        htr_depth,
+    ) -> hash
+function htr_requests_progressive(requests, kind, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root = htr_requests_subtree(requests, kind, start, take, depth);
+        let right_root = htr_requests_progressive(requests, kind, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+
+termination_measure htr_requests_progressive(requests, kind, start, count, depth) = count
+
+/*! `hash_tree_root` of the deposit-request list
+    (`ProgressiveList[DepositRequest]`). */
 function htr_deposits(deposits : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, sizeof(deposit_request_count_bound));
     let count : htr_leaf_count = items.count;
-    let root = htr_requests_subtree(deposits, HtrDeposit, 0, count, 13);
+    let root = htr_requests_progressive(deposits, HtrDeposit, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
-/*! `hash_tree_root` of the withdrawal-request list (depth 4). */
+/*! `hash_tree_root` of the withdrawal-request list. */
 function htr_withdrawal_requests(requests : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(
         requests,
@@ -736,11 +942,11 @@ function htr_withdrawal_requests(requests : StatelessInputSlice) -> hash = {
         sizeof(withdrawal_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    let root = htr_requests_subtree(requests, HtrWithdrawalRequest, 0, count, 4);
+    let root = htr_requests_progressive(requests, HtrWithdrawalRequest, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
-/*! `hash_tree_root` of the consolidation-request list (depth 1). */
+/*! `hash_tree_root` of the consolidation-request list. */
 function htr_consolidation_requests(requests : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(
         requests,
@@ -748,11 +954,11 @@ function htr_consolidation_requests(requests : StatelessInputSlice) -> hash = {
         sizeof(consolidation_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    let root = htr_requests_subtree(requests, HtrConsolidationRequest, 0, count, 1);
+    let root = htr_requests_progressive(requests, HtrConsolidationRequest, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
-/*! `hash_tree_root` of the builder-deposit-request list (depth 6). */
+/*! `hash_tree_root` of the builder-deposit-request list. */
 function htr_builder_deposit_requests(requests : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(
         requests,
@@ -760,32 +966,33 @@ function htr_builder_deposit_requests(requests : StatelessInputSlice) -> hash = 
         sizeof(builder_deposit_request_count_bound),
     );
     let count : htr_leaf_count = items.count;
-    let root = htr_requests_subtree(requests, HtrBuilderDepositRequest, 0, count, 6);
+    let root = htr_requests_progressive(requests, HtrBuilderDepositRequest, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
-/*! `hash_tree_root` of the builder-exit-request list (depth 4). */
+/*! `hash_tree_root` of the builder-exit-request list. */
 function htr_builder_exit_requests(requests : StatelessInputSlice) -> hash = {
     let items = ssz_bounded_fixed_list_ref(requests, HTR_BUILDER_EXIT_LENGTH, sizeof(builder_exit_request_count_bound));
     let count : htr_leaf_count = items.count;
-    let root = htr_requests_subtree(requests, HtrBuilderExitRequest, 0, count, 4);
+    let root = htr_requests_progressive(requests, HtrBuilderExitRequest, 0, count, 0);
     mix_in_length(root, items.count)
 }
 
-/*! `hash_tree_root` of the `SszExecutionRequests` container. */
+/*! `hash_tree_root` of the `ExecutionRequests` (a progressive container of
+    five active fields). */
 function htr_execution_requests(input_ref : StatelessInputRef) -> hash = {
     let deposits = htr_deposits(input_ref.deposits);
     let withdrawal_requests = htr_withdrawal_requests(input_ref.withdrawal_requests);
     let consolidation_requests = htr_consolidation_requests(input_ref.consolidation_requests);
     let builder_deposit_requests = htr_builder_deposit_requests(input_ref.builder_deposit_requests);
     let builder_exit_requests = htr_builder_exit_requests(input_ref.builder_exit_requests);
-    merkleize(
+    let fields_root = merkleize_progressive(
         [deposits, withdrawal_requests, consolidation_requests, builder_deposit_requests, builder_exit_requests],
-        3,
-    )
+    );
+    mix_in_active_fields(fields_root, HTR_REQUESTS_ACTIVE_FIELDS)
 }
 
-/*! `hash_tree_root` of the `SszNewPayloadRequest` (4 fields, depth 2) —
+/*! `hash_tree_root` of the `NewPayloadRequest` (4 fields, depth 2) —
     the commitment the guest proves its input against. */
 function htr_new_payload_request(input_ref : StatelessInputRef) -> hash = {
     let payload_root = htr_execution_payload(input_ref);

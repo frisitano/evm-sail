@@ -24,7 +24,7 @@ ceiling.
 
 /*! The maximum block gas limit admitted by the execution-payload SSZ
     `uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
-    Amsterdam `SszExecutionPayload.gas_limit`. */
+    Amsterdam `ExecutionPayload.gas_limit`. */
 type block_gas_limit_bound : Int = ssz_uint_bound
 
 /*! EIP-7928 charges one BAL item against each 2,000 units of block gas. */
@@ -208,8 +208,9 @@ type gas_refund = range(
 
 let GAS_REFUND_ZERO : gas_refund = 0
 
-/*! EIP-8037's `SSTORE` storage-clear refund. */
-type amsterdam_storage_clear_refund : Int = 12480
+/*! The Amsterdam `SSTORE` storage-clear refund: 96% of the storage write plus
+    the cold storage access (EIP-8038). */
+type amsterdam_storage_clear_refund : Int = 11616
 
 /*! One EIP-8037 `SSTORE` transition's signed refund delta. A transition either
     establishes the storage-clear refund or withdraws the one an earlier write

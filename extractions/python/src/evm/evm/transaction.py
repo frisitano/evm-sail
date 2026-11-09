@@ -52,7 +52,6 @@ from evm.primitives.gas import (
     state_gas_spill,
     STATE_GAS_SPILL_ZERO,
     GAS_ZERO,
-    STATE_GAS_ZERO,
     GAS_REFUND_ZERO,
     FRAME_STATE_GAS_DELTA_ZERO,
 )
@@ -136,10 +135,6 @@ from evm.lib.rlp.decoding import (
     rlp_cursor_advance,
     rlp_cursor_expect_end,
     rlp_decode_word,
-)
-from evm.lib.tx import (
-    tx_signature_parity,
-    tx_auth_valid,
 )
 from evm.lib.rlp.codecs.transactions import (
     prepare_authorizations,
@@ -292,7 +287,7 @@ def legacy_calldata_floor(input: TransactionInputSlice) -> transaction_calldata_
 
 class amsterdam_recipient_cost(Unsigned):
     LOWER = 0
-    UPPER = 12756
+    UPPER = 12000
 
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
@@ -300,14 +295,11 @@ class amsterdam_recipient_cost(Unsigned):
 def amsterdam_recipient_execution_cost(tx: Transaction) -> amsterdam_recipient_cost:
     transfers_value = word_nonzero(tx.value)
     if tx.is_create:
-        if transfers_value:
-            return amsterdam_recipient_cost((int(AMSTERDAM_CREATE_ACCESS) + int(AMSTERDAM_TRANSFER_LOG_COST)))
-        else:
-            return amsterdam_recipient_cost(AMSTERDAM_CREATE_ACCESS)
+        return amsterdam_recipient_cost(AMSTERDAM_CREATE_ACCESS)
     else:
         if ((tx.recipient) != (tx.sender)):
             if transfers_value:
-                return amsterdam_recipient_cost((int((int(AMSTERDAM_COLD_ACCOUNT_ACCESS) + int(AMSTERDAM_TX_VALUE_COST))) + int(AMSTERDAM_TRANSFER_LOG_COST)))
+                return amsterdam_recipient_cost((int(AMSTERDAM_COLD_ACCOUNT_ACCESS) + int(AMSTERDAM_TX_VALUE_COST)))
             else:
                 return amsterdam_recipient_cost(AMSTERDAM_COLD_ACCOUNT_ACCESS)
         else:
@@ -608,11 +600,6 @@ def check_transaction_validity(tx: Transaction, allowance: TransactionGasAllowan
     execution_profile = kernel_environment.k_execution_profile
     profile = execution_profile.protocol
     tx_semantics = tx_type_semantics(tx.tx_type)
-    parity = tx_signature_parity(kernel_environment.k_chain_id, tx_semantics.signature, tx.sig_v)
-    authenticated = tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s)
-    invalid_signature = (not (authenticated))
-    if invalid_signature:
-        fatal_error(FatalError.InvalidSignature)
     gas_limit = allowance.total
     (eff_gas_price, eff_priority_fee) = eff_gas_price_for(kernel_environment.k_header.base_fee, tx.max_fee, tx.max_priority_fee)
     sender = tx.sender
@@ -976,7 +963,7 @@ def run_amsterdam_transaction_frame(tx: Transaction, v: TxValidityFields, upfron
             k_journal_revert()
             state_gas_after = preparation_reservoir
             state_spill_after = STATE_GAS_SPILL_ZERO
-            raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, GAS_ZERO, STATE_GAS_ZERO, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
+            raise SailReturn(TxFrameResultFields(validity=TxFrameResultFieldsValidity(limit=v.validity.limit, regular=v.validity.regular), success=False, gas=tx_frame_gas_snapshot(initial_gas, GAS_ZERO, state_gas_after, FRAME_STATE_GAS_DELTA_ZERO), refund=GAS_REFUND_ZERO))
         k_journal_checkpoint()
         if tx.is_create:
             (tup__0, tup__1, tup__2, tup__3, tup__4, tup__5) = run_create_transaction_frame(tx, v.sender, v.nonce_before, gas_after, state_gas_after, state_spill_after, refund_after, entered_stack, entered_memory_base, entered_memory, prepared_code, prepared_calldata, execution_reservoir)
@@ -1101,17 +1088,15 @@ PER_EMPTY_ACCOUNT: Annotated[int, IntegerRange(25000, 25000)] = 25000
 
 AMSTERDAM_TX_BASE: Annotated[int, IntegerRange(12000, 12000)] = 12000
 
-AMSTERDAM_CREATE_ACCESS: Annotated[int, IntegerRange(11000, 11000)] = 11000
+AMSTERDAM_CREATE_ACCESS: Annotated[int, IntegerRange(12000, 12000)] = 12000
 
 AMSTERDAM_COLD_ACCOUNT_ACCESS: Annotated[int, IntegerRange(3000, 3000)] = 3000
 
-AMSTERDAM_TX_VALUE_COST: Annotated[int, IntegerRange(4244, 4244)] = 4244
+AMSTERDAM_TX_VALUE_COST: Annotated[int, IntegerRange(6000, 6000)] = 6000
 
-AMSTERDAM_TRANSFER_LOG_COST: Annotated[int, IntegerRange(1756, 1756)] = 1756
+AMSTERDAM_ACCESS_LIST_ADDRESS: Annotated[int, IntegerRange(2900, 2900)] = 2900
 
-AMSTERDAM_ACCESS_LIST_ADDRESS: Annotated[int, IntegerRange(3000, 3000)] = 3000
-
-AMSTERDAM_ACCESS_LIST_SLOT: Annotated[int, IntegerRange(3000, 3000)] = 3000
+AMSTERDAM_ACCESS_LIST_SLOT: Annotated[int, IntegerRange(2000, 2000)] = 2000
 
 AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR: Annotated[int, IntegerRange(1280, 1280)] = 1280
 

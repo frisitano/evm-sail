@@ -1,6 +1,5 @@
 import Evm.Flow
 import Evm.Prelude
-import Evm.Primitives.Bytes
 import Evm.Exceptions
 import Evm.Kernel.Scratch
 import Evm.Primitives.Tx
@@ -64,9 +63,7 @@ open AcctBlockIterResult
 
 The signature semantics of transactions, between the crypto core
 (secp recovery and the curve constants) and the envelope decoder:
-the signing preimage hashes, the per-envelope `v`-range rule, and sender
-authentication — binding the witnessed public key to a transaction's
-signature, called from transaction validity. -/
+the signing preimage hashes and the per-envelope `v`-range rule. -/
 
 /-- The chain id encoded in a legacy signature with `v >= 35`
 (EIP-155). -/
@@ -77,18 +74,16 @@ def legacy_sig_chain_id (v : Nat) : Nat :=
 
 abbrev LEGACY_SIGNATURE_SUFFIX_LENGTH : Nat := 2
 
-abbrev PUBLIC_KEY_BODY_LENGTH : Nat := 64
-
 /-- The transaction signing-preimage hash. `content_src` spans the RLP of
 the pre-signature fields in the witness and is copied once into the final
 contiguous preimage; legacy EIP-155 transactions append
 `(chain_id, 0, 0)`, typed transactions prepend the type byte as a
 domain separator (EIP-2718). -/
-/- Type quantifiers: k_ex549170_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
+/- Type quantifiers: k_ex423814_ : Nat, content_src_dependentWitness1 : Nat, content_src_dependentWitness0
   : Nat, 0 ≤ content_src_dependentWitness0 ∧
   0 ≤ content_src_dependentWitness1 ∧
   (content_src_dependentWitness0 + content_src_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex549170_ ∧ k_ex549170_ ≤ (2 ^ 256 - 1) -/
+  k_ex423814_ ∧ k_ex423814_ ≤ (2 ^ 256 - 1) -/
 def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (v : Nat) : SailM (Vector (BitVec 8) 32) := do
   let content_src_dependentWitness0 := (content_src).1
@@ -139,8 +134,8 @@ def tx_signing_hash (t : TxType) (content_src : (Sigma fun (k_off : Nat) =>
 
 /-- The EIP-7702 authorization signing hash:
 `keccak256(0x05 || rlp([chain_id, address, nonce]))`. -/
-/- Type quantifiers: k_ex549172_ : Nat, k_ex549171_ : Nat, 0 ≤ k_ex549171_ ∧
-  k_ex549171_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex549172_ ∧ k_ex549172_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex423816_ : Nat, k_ex423815_ : Nat, 0 ≤ k_ex423815_ ∧
+  k_ex423815_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex423816_ ∧ k_ex423816_ ≤ (2 ^ 64 - 1) -/
 def auth_signing_hash (chain_id : Nat) (addr : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 32) := do
   let chain_id_length := (rlp_uint_word_size chain_id)
   let address_length := (rlp_addr_size ())

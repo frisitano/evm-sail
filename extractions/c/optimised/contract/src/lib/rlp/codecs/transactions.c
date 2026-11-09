@@ -323,12 +323,11 @@ static bool decode_common_fields(struct TransactionFields *result, const rlp_ite
   return true;
 }
 
-struct TransactionFields decode_transaction(Bytes transaction, Bytes public_key, uint8_t blob_limit)
+struct TransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit)
 {
   struct TransactionFields result;
   memset(&result, 0, sizeof(result));
   result.raw = transaction;
-  result.pubkey = public_key;
 
   const uint8_t *tx_bytes = transaction.bytes;
   if (transaction.len == 0) {
@@ -354,12 +353,6 @@ struct TransactionFields decode_transaction(Bytes transaction, Bytes public_key,
     decode_failure(RlpDecode, "optimized transaction fields");
   }
 
-  const Bytes public_key_body = {
-      .bytes = public_key.bytes + 1,
-      .len = 64,
-  };
-  const bytes32 sender_hash = host_keccak_stateless_input(public_key_body);
-  result.sender = hash_low_address(&sender_hash);
   result.tx_type = (enum TxType)type;
 
   const rlp_item *nonce = tx_field(f, layout->nonce);

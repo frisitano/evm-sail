@@ -250,7 +250,7 @@ jobs:
         run: uv run --frozen python -m devtools.corpus cache-key --github-output >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: zkvm/.fixtures/current-v062-full
+          path: zkvm/.fixtures/current-v2106-full
           key: ${{ runner.os }}-${{ steps.corpus-key.outputs.key }}
       - name: Restore native runner dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

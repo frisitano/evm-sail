@@ -240,7 +240,6 @@ from .primitives.chain_config import (
     BlobSchedule as BlobSchedule,
     BlobScheduleFields as BlobScheduleFields,
     BlobScheduleFieldsValidity as BlobScheduleFieldsValidity,
-    ChainConfig as ChainConfig,
     ExecutionProfile as ExecutionProfile,
     ExecutionProfileFields as ExecutionProfileFields,
     ExecutionProfileFieldsValidity as ExecutionProfileFieldsValidity,
