@@ -109,8 +109,8 @@ def self_addr (message : Message) : (Vector (BitVec 8) 20) :=
 `STATICCALL` frame halts exceptionally on the carried gas.
 State-changing opcodes call this first; `true` means already
 halted. -/
-/- Type quantifiers: k_ex550730_ : Bool, k_ex550729_ : Nat, 0 ≤ k_ex550729_ ∧
-  k_ex550729_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425332_ : Bool, k_ex425331_ : Nat, 0 ≤ k_ex425331_ ∧
+  k_ex425331_ ≤ (2 ^ 64 - 1) -/
 def guard_static (g : Nat) (is_static : Bool) : (Nat × OpcodeOutcome) :=
   if (is_static : Bool)
   then (GAS_ZERO, (Failed WriteProtection))
@@ -121,13 +121,13 @@ and land on a `JUMPDEST` (the precomputed valid-destination set,
 YP §9.4.3); otherwise an invalid-jump exceptional halt. PUSH-data
 bytes that happen to equal `0x5b` are not valid. Returns the next
 program counter and the carried gas. -/
-/- Type quantifiers: k_ex550740_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
-  : Nat, k_ex550735_ : Nat, k_ex550734_ : Nat, 0 ≤ k_ex550734_ ∧ k_ex550734_ ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550735_ ∧ k_ex550735_ ≤ (2 ^ 64 - 1), 0 ≤ frame_code_dependentWitness0 ∧
+/- Type quantifiers: k_ex425342_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
+  : Nat, k_ex425337_ : Nat, k_ex425336_ : Nat, 0 ≤ k_ex425336_ ∧ k_ex425336_ ≤ (2 ^ 32 - 1), 0
+  ≤ k_ex425337_ ∧ k_ex425337_ ≤ (2 ^ 64 - 1), 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550740_ ∧ k_ex550740_ ≤ (2 ^ 256 - 1) -/
+  k_ex425342_ ∧ k_ex425342_ ≤ (2 ^ 256 - 1) -/
 def do_jump (pc_in : Nat) (g : Nat) (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (destination_value : Nat) : SailM (Nat × Nat × OpcodeOutcome) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -147,8 +147,8 @@ def do_jump (pc_in : Nat) (g : Nat) (frame_code : (Sigma fun (k_off : Nat) =>
 /-- Establishes an opcode's local stack precondition before gas charging or
 any instruction side effect. The caller supplies the opcode's constant
 Yellow Paper `(delta, alpha)` values. -/
-/- Type quantifiers: k_ex550742_ : Nat, k_ex550741_ : Nat, 0 ≤ k_ex550741_ ∧
-  k_ex550741_ ≤ 1024, 0 ≤ k_ex550742_ ∧ k_ex550742_ ≤ 1024 -/
+/- Type quantifiers: k_ex425344_ : Nat, k_ex425343_ : Nat, 0 ≤ k_ex425343_ ∧
+  k_ex425343_ ≤ 1024, 0 ≤ k_ex425344_ ∧ k_ex425344_ ≤ 1024 -/
 def guard_stack (carried_sp : StackPointer) (inputs : Nat) (outputs : Nat) : OpcodeOutcome :=
   let stack_validation := (validate_stack carried_sp inputs outputs)
   match stack_validation with
@@ -157,7 +157,7 @@ def guard_stack (carried_sp : StackPointer) (inputs : Nat) (outputs : Nat) : Opc
   | .StackOverflowFailure => (Failed StackOverflow)
 
 /-- Pops `count` log topics from the stack into its bounded representation. -/
-/- Type quantifiers: k_ex550743_ : Nat, 0 ≤ k_ex550743_ ∧ k_ex550743_ ≤ 4 -/
+/- Type quantifiers: k_ex425345_ : Nat, 0 ≤ k_ex425345_ ∧ k_ex425345_ ≤ 4 -/
 def pop_log_topics (count : Nat) (sp_in : StackPointer) : SailM (LogTopics × StackPointer) := do
   let sp := sp_in
   match count with
@@ -197,7 +197,7 @@ def pop_log_topics (count : Nat) (sp_in : StackPointer) : SailM (LogTopics × St
   | _ => (pure ((LogTopics0 ()), sp))
 
 /-- Implements `ADD`. -/
-/- Type quantifiers: k_ex550744_ : Nat, 0 ≤ k_ex550744_ ∧ k_ex550744_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425346_ : Nat, 0 ≤ k_ex425346_ ∧ k_ex425346_ ≤ (2 ^ 64 - 1) -/
 def execute_add (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -220,7 +220,7 @@ def execute_add (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `MUL`. -/
-/- Type quantifiers: k_ex550745_ : Nat, 0 ≤ k_ex550745_ ∧ k_ex550745_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425347_ : Nat, 0 ≤ k_ex425347_ ∧ k_ex425347_ ≤ (2 ^ 64 - 1) -/
 def execute_mul (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -243,7 +243,7 @@ def execute_mul (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `SUB`. -/
-/- Type quantifiers: k_ex550746_ : Nat, 0 ≤ k_ex550746_ ∧ k_ex550746_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425348_ : Nat, 0 ≤ k_ex425348_ ∧ k_ex425348_ ≤ (2 ^ 64 - 1) -/
 def execute_sub (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -266,7 +266,7 @@ def execute_sub (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements unsigned `DIV`. -/
-/- Type quantifiers: k_ex550747_ : Nat, 0 ≤ k_ex550747_ ∧ k_ex550747_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425349_ : Nat, 0 ≤ k_ex425349_ ∧ k_ex425349_ ≤ (2 ^ 64 - 1) -/
 def execute_div (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -289,7 +289,7 @@ def execute_div (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements signed `SDIV`. -/
-/- Type quantifiers: k_ex550748_ : Nat, 0 ≤ k_ex550748_ ∧ k_ex550748_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425350_ : Nat, 0 ≤ k_ex425350_ ∧ k_ex425350_ ≤ (2 ^ 64 - 1) -/
 def execute_sdiv (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -312,7 +312,7 @@ def execute_sdiv (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat ×
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements unsigned `MOD`. -/
-/- Type quantifiers: k_ex550749_ : Nat, 0 ≤ k_ex550749_ ∧ k_ex550749_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425351_ : Nat, 0 ≤ k_ex425351_ ∧ k_ex425351_ ≤ (2 ^ 64 - 1) -/
 def execute_mod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -335,7 +335,7 @@ def execute_mod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements signed `SMOD`. -/
-/- Type quantifiers: k_ex550750_ : Nat, 0 ≤ k_ex550750_ ∧ k_ex550750_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425352_ : Nat, 0 ≤ k_ex425352_ ∧ k_ex425352_ ≤ (2 ^ 64 - 1) -/
 def execute_smod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -358,7 +358,7 @@ def execute_smod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat ×
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `ADDMOD`. -/
-/- Type quantifiers: k_ex550751_ : Nat, 0 ≤ k_ex550751_ ∧ k_ex550751_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425353_ : Nat, 0 ≤ k_ex425353_ ∧ k_ex425353_ ≤ (2 ^ 64 - 1) -/
 def execute_addmod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 3 1)
   if ((match stack_status with
@@ -383,7 +383,7 @@ def execute_addmod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `MULMOD`. -/
-/- Type quantifiers: k_ex550752_ : Nat, 0 ≤ k_ex550752_ ∧ k_ex550752_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425354_ : Nat, 0 ≤ k_ex425354_ ∧ k_ex425354_ ≤ (2 ^ 64 - 1) -/
 def execute_mulmod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 3 1)
   if ((match stack_status with
@@ -408,7 +408,7 @@ def execute_mulmod (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `EXP`, including exponent-dependent gas. -/
-/- Type quantifiers: k_ex550753_ : Nat, 0 ≤ k_ex550753_ ∧ k_ex550753_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425355_ : Nat, 0 ≤ k_ex425355_ ∧ k_ex425355_ ≤ (2 ^ 64 - 1) -/
 def execute_exp (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -432,7 +432,7 @@ def execute_exp (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `SIGNEXTEND`. -/
-/- Type quantifiers: k_ex550754_ : Nat, 0 ≤ k_ex550754_ ∧ k_ex550754_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425356_ : Nat, 0 ≤ k_ex425356_ ∧ k_ex425356_ ≤ (2 ^ 64 - 1) -/
 def execute_signextend (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -455,7 +455,7 @@ def execute_signextend (carried_gas : Nat) (carried_sp : StackPointer) : SailM (
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements unsigned `LT`. -/
-/- Type quantifiers: k_ex550755_ : Nat, 0 ≤ k_ex550755_ ∧ k_ex550755_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425357_ : Nat, 0 ≤ k_ex425357_ ∧ k_ex425357_ ≤ (2 ^ 64 - 1) -/
 def execute_lt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -478,7 +478,7 @@ def execute_lt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × S
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements unsigned `GT`. -/
-/- Type quantifiers: k_ex550756_ : Nat, 0 ≤ k_ex550756_ ∧ k_ex550756_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425358_ : Nat, 0 ≤ k_ex425358_ ∧ k_ex425358_ ≤ (2 ^ 64 - 1) -/
 def execute_gt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -501,7 +501,7 @@ def execute_gt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × S
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements signed `SLT`. -/
-/- Type quantifiers: k_ex550757_ : Nat, 0 ≤ k_ex550757_ ∧ k_ex550757_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425359_ : Nat, 0 ≤ k_ex425359_ ∧ k_ex425359_ ≤ (2 ^ 64 - 1) -/
 def execute_slt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -524,7 +524,7 @@ def execute_slt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements signed `SGT`. -/
-/- Type quantifiers: k_ex550758_ : Nat, 0 ≤ k_ex550758_ ∧ k_ex550758_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425360_ : Nat, 0 ≤ k_ex425360_ ∧ k_ex425360_ ≤ (2 ^ 64 - 1) -/
 def execute_sgt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -547,7 +547,7 @@ def execute_sgt (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `EQ`. -/
-/- Type quantifiers: k_ex550759_ : Nat, 0 ≤ k_ex550759_ ∧ k_ex550759_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425361_ : Nat, 0 ≤ k_ex425361_ ∧ k_ex425361_ ≤ (2 ^ 64 - 1) -/
 def execute_eq (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -570,7 +570,7 @@ def execute_eq (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × S
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `ISZERO`. -/
-/- Type quantifiers: k_ex550760_ : Nat, 0 ≤ k_ex550760_ ∧ k_ex550760_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425362_ : Nat, 0 ≤ k_ex425362_ ∧ k_ex425362_ ≤ (2 ^ 64 - 1) -/
 def execute_iszero (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -590,7 +590,7 @@ def execute_iszero (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat 
           (pure (gas, carried_sp, (Continue ())))))
 
 /-- Implements bitwise `AND`. -/
-/- Type quantifiers: k_ex550761_ : Nat, 0 ≤ k_ex550761_ ∧ k_ex550761_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425363_ : Nat, 0 ≤ k_ex425363_ ∧ k_ex425363_ ≤ (2 ^ 64 - 1) -/
 def execute_and (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -613,7 +613,7 @@ def execute_and (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements bitwise `OR`. -/
-/- Type quantifiers: k_ex550762_ : Nat, 0 ≤ k_ex550762_ ∧ k_ex550762_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425364_ : Nat, 0 ≤ k_ex425364_ ∧ k_ex425364_ ≤ (2 ^ 64 - 1) -/
 def execute_or (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -636,7 +636,7 @@ def execute_or (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × S
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements bitwise `XOR`. -/
-/- Type quantifiers: k_ex550763_ : Nat, 0 ≤ k_ex550763_ ∧ k_ex550763_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425365_ : Nat, 0 ≤ k_ex425365_ ∧ k_ex425365_ ≤ (2 ^ 64 - 1) -/
 def execute_xor (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -659,7 +659,7 @@ def execute_xor (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements bitwise `NOT`. -/
-/- Type quantifiers: k_ex550764_ : Nat, 0 ≤ k_ex550764_ ∧ k_ex550764_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425366_ : Nat, 0 ≤ k_ex425366_ ∧ k_ex425366_ ≤ (2 ^ 64 - 1) -/
 def execute_not (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -679,7 +679,7 @@ def execute_not (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, carried_sp, (Continue ())))))
 
 /-- Implements `BYTE`. -/
-/- Type quantifiers: k_ex550765_ : Nat, 0 ≤ k_ex550765_ ∧ k_ex550765_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425367_ : Nat, 0 ≤ k_ex425367_ ∧ k_ex425367_ ≤ (2 ^ 64 - 1) -/
 def execute_byte (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -702,7 +702,7 @@ def execute_byte (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat ×
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements logical left shift `SHL` (EIP-145). -/
-/- Type quantifiers: k_ex550766_ : Nat, 0 ≤ k_ex550766_ ∧ k_ex550766_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425368_ : Nat, 0 ≤ k_ex425368_ ∧ k_ex425368_ ≤ (2 ^ 64 - 1) -/
 def execute_shl (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -725,7 +725,7 @@ def execute_shl (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements logical right shift `SHR` (EIP-145). -/
-/- Type quantifiers: k_ex550767_ : Nat, 0 ≤ k_ex550767_ ∧ k_ex550767_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425369_ : Nat, 0 ≤ k_ex425369_ ∧ k_ex425369_ ≤ (2 ^ 64 - 1) -/
 def execute_shr (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -748,7 +748,7 @@ def execute_shr (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements arithmetic right shift `SAR` (EIP-145). -/
-/- Type quantifiers: k_ex550768_ : Nat, 0 ≤ k_ex550768_ ∧ k_ex550768_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425370_ : Nat, 0 ≤ k_ex425370_ ∧ k_ex425370_ ≤ (2 ^ 64 - 1) -/
 def execute_sar (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -771,7 +771,7 @@ def execute_sar (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements count-leading-zeroes `CLZ` (EIP-7939). -/
-/- Type quantifiers: k_ex550769_ : Nat, 0 ≤ k_ex550769_ ∧ k_ex550769_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425371_ : Nat, 0 ≤ k_ex425371_ ∧ k_ex425371_ ≤ (2 ^ 64 - 1) -/
 def execute_clz (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -791,9 +791,9 @@ def execute_clz (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, carried_sp, (Continue ())))))
 
 /-- Implements `KECCAK256` over an expanded memory range. -/
-/- Type quantifiers: k_ex550772_ : Nat, k_ex550771_ : Nat, k_ex550770_ : Nat, 0 ≤ k_ex550770_ ∧
-  k_ex550770_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550771_ ∧ k_ex550771_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550772_ ∧ k_ex550772_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425374_ : Nat, k_ex425373_ : Nat, k_ex425372_ : Nat, 0 ≤ k_ex425372_ ∧
+  k_ex425372_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425373_ ∧ k_ex425373_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425374_ ∧ k_ex425374_ ≤ (2 ^ 32 - 1) -/
 def execute_keccak256 (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 1)
   if ((match stack_status with
@@ -830,7 +830,7 @@ def execute_keccak256 (memory_base : Nat) (carried_gas : Nat) (carried_sp : Stac
               (pure (gas, sp, memory, (Continue ()))))))
 
 /-- Implements `ADDRESS`. -/
-/- Type quantifiers: k_ex550773_ : Nat, 0 ≤ k_ex550773_ ∧ k_ex550773_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425375_ : Nat, 0 ≤ k_ex425375_ ∧ k_ex425375_ ≤ (2 ^ 64 - 1) -/
 def execute_address (carried_address : (Vector (BitVec 8) 20)) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -851,7 +851,7 @@ def execute_address (carried_address : (Vector (BitVec 8) 20)) (carried_gas : Na
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `ORIGIN`. -/
-/- Type quantifiers: k_ex550774_ : Nat, 0 ≤ k_ex550774_ ∧ k_ex550774_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425376_ : Nat, 0 ≤ k_ex425376_ ∧ k_ex425376_ ≤ (2 ^ 64 - 1) -/
 def execute_origin (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -872,7 +872,7 @@ def execute_origin (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CALLER`. -/
-/- Type quantifiers: k_ex550775_ : Nat, 0 ≤ k_ex550775_ ∧ k_ex550775_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425377_ : Nat, 0 ≤ k_ex425377_ ∧ k_ex425377_ ≤ (2 ^ 64 - 1) -/
 def execute_caller (carried_caller : (Vector (BitVec 8) 20)) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -893,8 +893,8 @@ def execute_caller (carried_caller : (Vector (BitVec 8) 20)) (carried_gas : Nat)
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CALLVALUE`. -/
-/- Type quantifiers: k_ex550777_ : Nat, k_ex550776_ : Nat, 0 ≤ k_ex550776_ ∧
-  k_ex550776_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550777_ ∧ k_ex550777_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425379_ : Nat, k_ex425378_ : Nat, 0 ≤ k_ex425378_ ∧
+  k_ex425378_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex425379_ ∧ k_ex425379_ ≤ (2 ^ 64 - 1) -/
 def execute_callvalue (carried_value : Nat) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -914,7 +914,7 @@ def execute_callvalue (carried_value : Nat) (carried_gas : Nat) (carried_sp : St
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `GASPRICE`. -/
-/- Type quantifiers: k_ex550778_ : Nat, 0 ≤ k_ex550778_ ∧ k_ex550778_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425380_ : Nat, 0 ≤ k_ex425380_ ∧ k_ex425380_ ≤ (2 ^ 64 - 1) -/
 def execute_gasprice (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -935,7 +935,7 @@ def execute_gasprice (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Na
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CALLDATASIZE`. -/
-/- Type quantifiers: k_ex550779_ : Nat, 0 ≤ k_ex550779_ ∧ k_ex550779_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425381_ : Nat, 0 ≤ k_ex425381_ ∧ k_ex425381_ ≤ (2 ^ 64 - 1) -/
 def execute_calldatasize (carried_calldata : CalldataSlice) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -958,7 +958,7 @@ def execute_calldatasize (carried_calldata : CalldataSlice) (carried_gas : Nat) 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CALLDATALOAD`. -/
-/- Type quantifiers: k_ex550780_ : Nat, 0 ≤ k_ex550780_ ∧ k_ex550780_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425382_ : Nat, 0 ≤ k_ex425382_ ∧ k_ex425382_ ≤ (2 ^ 64 - 1) -/
 def execute_calldataload (carried_calldata : CalldataSlice) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -981,9 +981,9 @@ def execute_calldataload (carried_calldata : CalldataSlice) (carried_gas : Nat) 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CALLDATACOPY`. -/
-/- Type quantifiers: k_ex550783_ : Nat, k_ex550782_ : Nat, k_ex550781_ : Nat, 0 ≤ k_ex550781_ ∧
-  k_ex550781_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550782_ ∧ k_ex550782_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550783_ ∧ k_ex550783_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425385_ : Nat, k_ex425384_ : Nat, k_ex425383_ : Nat, 0 ≤ k_ex425383_ ∧
+  k_ex425383_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425384_ ∧ k_ex425384_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425385_ ∧ k_ex425385_ ≤ (2 ^ 32 - 1) -/
 def execute_calldatacopy (carried_calldata : CalldataSlice) (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 3 0)
   if ((match stack_status with
@@ -1029,12 +1029,12 @@ def execute_calldatacopy (carried_calldata : CalldataSlice) (memory_base : Nat) 
                   (pure (gas, sp, memory, (Continue ())))))))
 
 /-- Implements `CODESIZE`. -/
-/- Type quantifiers: k_ex550791_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+/- Type quantifiers: k_ex425393_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
   : Nat, 0 ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550791_ ∧ k_ex550791_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex425393_ ∧ k_ex425393_ ≤ (2 ^ 64 - 1) -/
 def execute_codesize (carried_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let carried_code_dependentWitness0 := (carried_code).1
@@ -1060,13 +1060,13 @@ def execute_codesize (carried_code : (Sigma fun (k_off : Nat) =>
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CODECOPY`. -/
-/- Type quantifiers: k_ex550801_ : Nat, k_ex550800_ : Nat, k_ex550799_ : Nat, carried_code_dependentWitness1
+/- Type quantifiers: k_ex425403_ : Nat, k_ex425402_ : Nat, k_ex425401_ : Nat, carried_code_dependentWitness1
   : Nat, carried_code_dependentWitness0 : Nat, 0 ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550799_ ∧ k_ex550799_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550800_ ∧
-  k_ex550800_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550801_ ∧ k_ex550801_ ≤ (2 ^ 32 - 1) -/
+  ≤ k_ex425401_ ∧ k_ex425401_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425402_ ∧
+  k_ex425402_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425403_ ∧ k_ex425403_ ≤ (2 ^ 32 - 1) -/
 def execute_codecopy (carried_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let carried_code_dependentWitness0 := (carried_code).1
@@ -1118,7 +1118,7 @@ def execute_codecopy (carried_code : (Sigma fun (k_off : Nat) =>
                   (pure (gas, sp, memory, (Continue ())))))))
 
 /-- Implements `BALANCE`, including warm/cold account access. -/
-/- Type quantifiers: k_ex550802_ : Nat, 0 ≤ k_ex550802_ ∧ k_ex550802_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425404_ : Nat, 0 ≤ k_ex425404_ ∧ k_ex425404_ ≤ (2 ^ 64 - 1) -/
 def execute_balance (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1145,7 +1145,7 @@ def execute_balance (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `SELFBALANCE`. -/
-/- Type quantifiers: k_ex550803_ : Nat, 0 ≤ k_ex550803_ ∧ k_ex550803_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425405_ : Nat, 0 ≤ k_ex425405_ ∧ k_ex425405_ ≤ (2 ^ 64 - 1) -/
 def execute_selfbalance (carried_address : (Vector (BitVec 8) 20)) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1166,7 +1166,7 @@ def execute_selfbalance (carried_address : (Vector (BitVec 8) 20)) (carried_gas 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `EXTCODESIZE`, including warm/cold account access. -/
-/- Type quantifiers: k_ex550804_ : Nat, 0 ≤ k_ex550804_ ∧ k_ex550804_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425406_ : Nat, 0 ≤ k_ex425406_ ∧ k_ex425406_ ≤ (2 ^ 64 - 1) -/
 def execute_extcodesize (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1195,9 +1195,9 @@ def execute_extcodesize (carried_gas : Nat) (carried_sp : StackPointer) : SailM 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `EXTCODECOPY`, including access and copy gas. -/
-/- Type quantifiers: k_ex550807_ : Nat, k_ex550806_ : Nat, k_ex550805_ : Nat, 0 ≤ k_ex550805_ ∧
-  k_ex550805_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550806_ ∧ k_ex550806_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550807_ ∧ k_ex550807_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425409_ : Nat, k_ex425408_ : Nat, k_ex425407_ : Nat, 0 ≤ k_ex425407_ ∧
+  k_ex425407_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425408_ ∧ k_ex425408_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425409_ ∧ k_ex425409_ ≤ (2 ^ 32 - 1) -/
 def execute_extcodecopy (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 4 0)
   if ((match stack_status with
@@ -1249,7 +1249,7 @@ def execute_extcodecopy (memory_base : Nat) (carried_gas : Nat) (carried_sp : St
                   (pure (gas, sp, memory, (Continue ())))))))
 
 /-- Implements `EXTCODEHASH`, including warm/cold account access. -/
-/- Type quantifiers: k_ex550808_ : Nat, 0 ≤ k_ex550808_ ∧ k_ex550808_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425410_ : Nat, 0 ≤ k_ex425410_ ∧ k_ex425410_ ≤ (2 ^ 64 - 1) -/
 def execute_extcodehash (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1277,11 +1277,11 @@ def execute_extcodehash (carried_gas : Nat) (carried_sp : StackPointer) : SailM 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `RETURNDATASIZE`. -/
-/- Type quantifiers: k_ex550815_ : Nat, carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
+/- Type quantifiers: k_ex425417_ : Nat, carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
   : Nat, 0 ≤ carried_returndata_dependentWitness0 ∧
   0 ≤ carried_returndata_dependentWitness1 ∧
   (carried_returndata_dependentWitness0 + carried_returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550815_ ∧ k_ex550815_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex425417_ ∧ k_ex425417_ ≤ (2 ^ 64 - 1) -/
 def execute_returndatasize (carried_returndata : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let carried_returndata_dependentWitness0 := (carried_returndata).1
@@ -1307,12 +1307,12 @@ def execute_returndatasize (carried_returndata : (Sigma fun (k_off : Nat) =>
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements bounds-checked `RETURNDATACOPY`. -/
-/- Type quantifiers: k_ex550824_ : Nat, k_ex550823_ : Nat, k_ex550822_ : Nat, carried_returndata_dependentWitness1
+/- Type quantifiers: k_ex425426_ : Nat, k_ex425425_ : Nat, k_ex425424_ : Nat, carried_returndata_dependentWitness1
   : Nat, carried_returndata_dependentWitness0 : Nat, 0 ≤ carried_returndata_dependentWitness0 ∧
   0 ≤ carried_returndata_dependentWitness1 ∧
   (carried_returndata_dependentWitness0 + carried_returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550822_ ∧ k_ex550822_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550823_ ∧
-  k_ex550823_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550824_ ∧ k_ex550824_ ≤ (2 ^ 32 - 1) -/
+  ≤ k_ex425424_ ∧ k_ex425424_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425425_ ∧
+  k_ex425425_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425426_ ∧ k_ex425426_ ≤ (2 ^ 32 - 1) -/
 def execute_returndatacopy (carried_returndata : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let carried_returndata_dependentWitness0 := (carried_returndata).1
@@ -1373,7 +1373,7 @@ def execute_returndatacopy (carried_returndata : (Sigma fun (k_off : Nat) =>
           else (pure (GAS_ZERO, sp, memory, (Failed InvalidOpcode)))))
 
 /-- Implements `BLOCKHASH`. -/
-/- Type quantifiers: k_ex550825_ : Nat, 0 ≤ k_ex550825_ ∧ k_ex550825_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425427_ : Nat, 0 ≤ k_ex425427_ ∧ k_ex425427_ ≤ (2 ^ 64 - 1) -/
 def execute_blockhash (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1397,7 +1397,7 @@ def execute_blockhash (carried_gas : Nat) (carried_sp : StackPointer) : SailM (N
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `COINBASE`. -/
-/- Type quantifiers: k_ex550826_ : Nat, 0 ≤ k_ex550826_ ∧ k_ex550826_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425428_ : Nat, 0 ≤ k_ex425428_ ∧ k_ex425428_ ≤ (2 ^ 64 - 1) -/
 def execute_coinbase (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1418,7 +1418,7 @@ def execute_coinbase (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Na
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `TIMESTAMP`. -/
-/- Type quantifiers: k_ex550827_ : Nat, 0 ≤ k_ex550827_ ∧ k_ex550827_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425429_ : Nat, 0 ≤ k_ex425429_ ∧ k_ex425429_ ≤ (2 ^ 64 - 1) -/
 def execute_timestamp (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1439,7 +1439,7 @@ def execute_timestamp (carried_gas : Nat) (carried_sp : StackPointer) : SailM (N
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `NUMBER`. -/
-/- Type quantifiers: k_ex550828_ : Nat, 0 ≤ k_ex550828_ ∧ k_ex550828_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425430_ : Nat, 0 ≤ k_ex425430_ ∧ k_ex425430_ ≤ (2 ^ 64 - 1) -/
 def execute_number (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1460,7 +1460,7 @@ def execute_number (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `SLOTNUM`. -/
-/- Type quantifiers: k_ex550829_ : Nat, 0 ≤ k_ex550829_ ∧ k_ex550829_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425431_ : Nat, 0 ≤ k_ex425431_ ∧ k_ex425431_ ≤ (2 ^ 64 - 1) -/
 def execute_slotnum (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1481,7 +1481,7 @@ def execute_slotnum (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `PREVRANDAO`. -/
-/- Type quantifiers: k_ex550830_ : Nat, 0 ≤ k_ex550830_ ∧ k_ex550830_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425432_ : Nat, 0 ≤ k_ex425432_ ∧ k_ex425432_ ≤ (2 ^ 64 - 1) -/
 def execute_prevrandao (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1502,7 +1502,7 @@ def execute_prevrandao (carried_gas : Nat) (carried_sp : StackPointer) : SailM (
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `GASLIMIT`. -/
-/- Type quantifiers: k_ex550831_ : Nat, 0 ≤ k_ex550831_ ∧ k_ex550831_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425433_ : Nat, 0 ≤ k_ex425433_ ∧ k_ex425433_ ≤ (2 ^ 64 - 1) -/
 def execute_gaslimit (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1523,7 +1523,7 @@ def execute_gaslimit (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Na
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `CHAINID`. -/
-/- Type quantifiers: k_ex550832_ : Nat, 0 ≤ k_ex550832_ ∧ k_ex550832_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425434_ : Nat, 0 ≤ k_ex425434_ ∧ k_ex425434_ ≤ (2 ^ 64 - 1) -/
 def execute_chainid (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1544,7 +1544,7 @@ def execute_chainid (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `BASEFEE`. -/
-/- Type quantifiers: k_ex550833_ : Nat, 0 ≤ k_ex550833_ ∧ k_ex550833_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425435_ : Nat, 0 ≤ k_ex425435_ ∧ k_ex425435_ ≤ (2 ^ 64 - 1) -/
 def execute_basefee (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1565,8 +1565,8 @@ def execute_basefee (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `BLOBBASEFEE`. -/
-/- Type quantifiers: k_ex550835_ : Nat, k_ex550834_ : Nat, 0 ≤ k_ex550834_ ∧
-  k_ex550834_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550835_ ∧ k_ex550835_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425437_ : Nat, k_ex425436_ : Nat, 0 ≤ k_ex425436_ ∧
+  k_ex425436_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex425437_ ∧ k_ex425437_ ≤ (2 ^ 64 - 1) -/
 def execute_blobbasefee (blob_fee : Nat) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1586,7 +1586,7 @@ def execute_blobbasefee (blob_fee : Nat) (carried_gas : Nat) (carried_sp : Stack
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `BLOBHASH`. -/
-/- Type quantifiers: k_ex550836_ : Nat, 0 ≤ k_ex550836_ ∧ k_ex550836_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425438_ : Nat, 0 ≤ k_ex425438_ ∧ k_ex425438_ ≤ (2 ^ 64 - 1) -/
 def execute_blobhash (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1609,7 +1609,7 @@ def execute_blobhash (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Na
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `POP`. -/
-/- Type quantifiers: k_ex550837_ : Nat, 0 ≤ k_ex550837_ ∧ k_ex550837_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425439_ : Nat, 0 ≤ k_ex425439_ ∧ k_ex425439_ ≤ (2 ^ 64 - 1) -/
 def execute_pop (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 0)
   if ((match stack_status with
@@ -1629,9 +1629,9 @@ def execute_pop (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements `MLOAD`. -/
-/- Type quantifiers: k_ex550840_ : Nat, k_ex550839_ : Nat, k_ex550838_ : Nat, 0 ≤ k_ex550838_ ∧
-  k_ex550838_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550839_ ∧ k_ex550839_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550840_ ∧ k_ex550840_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425442_ : Nat, k_ex425441_ : Nat, k_ex425440_ : Nat, 0 ≤ k_ex425440_ ∧
+  k_ex425440_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425441_ ∧ k_ex425441_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425442_ ∧ k_ex425442_ ≤ (2 ^ 32 - 1) -/
 def execute_mload (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1666,9 +1666,9 @@ def execute_mload (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPoi
               (pure (gas, sp, memory, (Continue ()))))))
 
 /-- Implements `MSTORE`. -/
-/- Type quantifiers: k_ex550843_ : Nat, k_ex550842_ : Nat, k_ex550841_ : Nat, 0 ≤ k_ex550841_ ∧
-  k_ex550841_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550842_ ∧ k_ex550842_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550843_ ∧ k_ex550843_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425445_ : Nat, k_ex425444_ : Nat, k_ex425443_ : Nat, 0 ≤ k_ex425443_ ∧
+  k_ex425443_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425444_ ∧ k_ex425444_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425445_ ∧ k_ex425445_ ≤ (2 ^ 32 - 1) -/
 def execute_mstore (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 0)
   if ((match stack_status with
@@ -1703,9 +1703,9 @@ def execute_mstore (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPo
               (pure (gas, sp, memory, (Continue ()))))))
 
 /-- Implements `MSTORE8`. -/
-/- Type quantifiers: k_ex550846_ : Nat, k_ex550845_ : Nat, k_ex550844_ : Nat, 0 ≤ k_ex550844_ ∧
-  k_ex550844_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550845_ ∧ k_ex550845_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550846_ ∧ k_ex550846_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425448_ : Nat, k_ex425447_ : Nat, k_ex425446_ : Nat, 0 ≤ k_ex425446_ ∧
+  k_ex425446_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425447_ ∧ k_ex425447_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425448_ ∧ k_ex425448_ ≤ (2 ^ 32 - 1) -/
 def execute_mstore8 (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 0)
   if ((match stack_status with
@@ -1739,8 +1739,8 @@ def execute_mstore8 (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackP
               (pure (gas, sp, memory, (Continue ()))))))
 
 /-- Implements `MSIZE`. -/
-/- Type quantifiers: k_ex550848_ : Nat, k_ex550847_ : Nat, 0 ≤ k_ex550847_ ∧
-  k_ex550847_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550848_ ∧ k_ex550848_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425450_ : Nat, k_ex425449_ : Nat, 0 ≤ k_ex425449_ ∧
+  k_ex425449_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425450_ ∧ k_ex425450_ ≤ (2 ^ 32 - 1) -/
 def execute_msize (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -1763,9 +1763,9 @@ def execute_msize (carried_gas : Nat) (carried_sp : StackPointer) (carried_memor
           (pure (gas, sp, carried_memory_height, (Continue ())))))
 
 /-- Implements overlapping memory copy `MCOPY` (EIP-5656). -/
-/- Type quantifiers: k_ex550851_ : Nat, k_ex550850_ : Nat, k_ex550849_ : Nat, 0 ≤ k_ex550849_ ∧
-  k_ex550849_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550850_ ∧ k_ex550850_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550851_ ∧ k_ex550851_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425453_ : Nat, k_ex425452_ : Nat, k_ex425451_ : Nat, 0 ≤ k_ex425451_ ∧
+  k_ex425451_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425452_ ∧ k_ex425452_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425453_ ∧ k_ex425453_ ≤ (2 ^ 32 - 1) -/
 def execute_mcopy (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 3 0)
   if ((match stack_status with
@@ -1834,7 +1834,7 @@ def refresh_account_execution_context (context : AccountExecutionContext) (previ
   else (account_execution_context next_address)
 
 /-- Implements `SLOAD`, including warm/cold access gas. -/
-/- Type quantifiers: k_ex550852_ : Nat, 0 ≤ k_ex550852_ ∧ k_ex550852_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425454_ : Nat, 0 ≤ k_ex425454_ ∧ k_ex425454_ ≤ (2 ^ 64 - 1) -/
 def execute_sload (context : AccountExecutionContext) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1860,7 +1860,7 @@ def execute_sload (context : AccountExecutionContext) (carried_gas : Nat) (carri
           (pure (gas, sp, (Continue ())))))
 
 /- Type quantifiers: carried_refund : Int, carried_state_spill : Nat, carried_state_gas : Nat, carried_gas
-  : Nat, k_ex550854_ : Bool, fork : Nat, 0 ≤ fork ∧ fork ≤ 16, 0 ≤ carried_gas ∧
+  : Nat, k_ex425456_ : Bool, fork : Nat, 0 ≤ fork ∧ fork ≤ 16, 0 ≤ carried_gas ∧
   carried_gas ≤ (2 ^ 64 - 1), 0 ≤ carried_state_gas ∧ carried_state_gas ≤ (2 ^ 64 - 1), 0
   ≤ carried_state_spill ∧ carried_state_spill ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤
   carried_refund ∧ carried_refund ≤ (199 * (2 ^ 64 - 1)) -/
@@ -1957,7 +1957,7 @@ def execute_sstore (context : AccountExecutionContext) (fork : Nat) (carried_is_
                       (pure (gas, state_gas, state_spill, refund, sp, (Continue ()))))))))
 
 /-- Implements transient-storage load `TLOAD` (EIP-1153). -/
-/- Type quantifiers: k_ex550859_ : Nat, 0 ≤ k_ex550859_ ∧ k_ex550859_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425461_ : Nat, 0 ≤ k_ex425461_ ∧ k_ex425461_ ≤ (2 ^ 64 - 1) -/
 def execute_tload (carried_address : (Vector (BitVec 8) 20)) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 1 1)
   if ((match stack_status with
@@ -1980,8 +1980,8 @@ def execute_tload (carried_address : (Vector (BitVec 8) 20)) (carried_gas : Nat)
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements transient-storage write `TSTORE` (EIP-1153). -/
-/- Type quantifiers: k_ex550861_ : Nat, k_ex550860_ : Bool, 0 ≤ k_ex550861_ ∧
-  k_ex550861_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425463_ : Nat, k_ex425462_ : Bool, 0 ≤ k_ex425463_ ∧
+  k_ex425463_ ≤ (2 ^ 64 - 1) -/
 def execute_tstore (carried_address : (Vector (BitVec 8) 20)) (carried_is_static : Bool) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 2 0)
   if ((match stack_status with
@@ -2017,13 +2017,13 @@ def execute_tstore (carried_address : (Vector (BitVec 8) 20)) (carried_is_static
               (pure (gas, sp, (Continue ()))))))
 
 /-- Implements unconditional `JUMP`. -/
-/- Type quantifiers: k_ex550870_ : Nat, k_ex550869_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+/- Type quantifiers: k_ex425472_ : Nat, k_ex425471_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
   : Nat, 0 ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550869_ ∧ k_ex550869_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550870_ ∧
-  k_ex550870_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex425471_ ∧ k_ex425471_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425472_ ∧
+  k_ex425472_ ≤ (2 ^ 64 - 1) -/
 def execute_jump (carried_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_pc : Nat) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × Nat × StackPointer × OpcodeOutcome) := do
   let carried_code_dependentWitness0 := (carried_code).1
@@ -2054,13 +2054,13 @@ def execute_jump (carried_code : (Sigma fun (k_off : Nat) =>
           (pure (pc, gas, sp, status))))
 
 /-- Implements conditional `JUMPI`. -/
-/- Type quantifiers: k_ex550879_ : Nat, k_ex550878_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+/- Type quantifiers: k_ex425481_ : Nat, k_ex425480_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
   : Nat, 0 ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex550878_ ∧ k_ex550878_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550879_ ∧
-  k_ex550879_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex425480_ ∧ k_ex425480_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425481_ ∧
+  k_ex425481_ ≤ (2 ^ 64 - 1) -/
 def execute_jumpi (carried_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_pc : Nat) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × Nat × StackPointer × OpcodeOutcome) := do
   let carried_code_dependentWitness0 := (carried_code).1
@@ -2101,8 +2101,8 @@ def execute_jumpi (carried_code : (Sigma fun (k_off : Nat) =>
 
 /-- Implements `PC`, returning the current opcode position from the
 carried, already-advanced program counter. -/
-/- Type quantifiers: k_ex550881_ : Nat, k_ex550880_ : Nat, 0 ≤ k_ex550880_ ∧
-  k_ex550880_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550881_ ∧ k_ex550881_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425483_ : Nat, k_ex425482_ : Nat, 0 ≤ k_ex425482_ ∧
+  k_ex425482_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425483_ ∧ k_ex425483_ ≤ (2 ^ 64 - 1) -/
 def execute_pc (carried_pc : Nat) (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -2124,7 +2124,7 @@ def execute_pc (carried_pc : Nat) (carried_gas : Nat) (carried_sp : StackPointer
 
 /-- Implements `GAS`, returning the carried gas remaining after its own
 charge. -/
-/- Type quantifiers: k_ex550882_ : Nat, 0 ≤ k_ex550882_ ∧ k_ex550882_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425484_ : Nat, 0 ≤ k_ex425484_ ∧ k_ex425484_ ≤ (2 ^ 64 - 1) -/
 def execute_gas (carried_gas : Nat) (carried_sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -2153,9 +2153,9 @@ def execute_jumpdest (carried_gas : Nat) : (Nat × OpcodeOutcome) :=
     (gas, (Continue ())))
 
 /-- Implements the `PUSH0` through `PUSH32` family. -/
-/- Type quantifiers: k_ex550886_ : Nat, k_ex550885_ : Nat, k_ex550884_ : Nat, 0 ≤ k_ex550884_ ∧
-  k_ex550884_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550885_ ∧ k_ex550885_ ≤ 32, 0 ≤ k_ex550886_ ∧
-  k_ex550886_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex425488_ : Nat, k_ex425487_ : Nat, k_ex425486_ : Nat, 0 ≤ k_ex425486_ ∧
+  k_ex425486_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425487_ ∧ k_ex425487_ ≤ 32, 0 ≤ k_ex425488_ ∧
+  k_ex425488_ ≤ (2 ^ 256 - 1) -/
 def execute_push (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) (v : Nat) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp 0 1)
   if ((match stack_status with
@@ -2178,8 +2178,8 @@ def execute_push (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) (v : 
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements the `DUP1` through `DUP16` family. -/
-/- Type quantifiers: k_ex550888_ : Nat, k_ex550887_ : Nat, 0 ≤ k_ex550887_ ∧
-  k_ex550887_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex550888_ ∧ k_ex550888_ ≤ 16 -/
+/- Type quantifiers: k_ex425490_ : Nat, k_ex425489_ : Nat, 0 ≤ k_ex425489_ ∧
+  k_ex425489_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex425490_ ∧ k_ex425490_ ≤ 16 -/
 def execute_dup (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp n (n + 1))
   if ((match stack_status with
@@ -2199,8 +2199,8 @@ def execute_dup (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) : Sail
           (pure (gas, sp, (Continue ())))))
 
 /-- Implements the `SWAP1` through `SWAP16` family. -/
-/- Type quantifiers: k_ex550890_ : Nat, k_ex550889_ : Nat, 0 ≤ k_ex550889_ ∧
-  k_ex550889_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex550890_ ∧ k_ex550890_ ≤ 16 -/
+/- Type quantifiers: k_ex425492_ : Nat, k_ex425491_ : Nat, 0 ≤ k_ex425491_ ∧
+  k_ex425491_ ≤ (2 ^ 64 - 1), 1 ≤ k_ex425492_ ∧ k_ex425492_ ≤ 16 -/
 def execute_swap (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp (n + 1) (n + 1))
   if ((match stack_status with
@@ -2221,7 +2221,7 @@ def execute_swap (carried_gas : Nat) (carried_sp : StackPointer) (n : Nat) : Sai
           (pure (gas, carried_sp, (Continue ())))))
 
 /-- Implements immediate deep-stack duplication `DUPN`. -/
-/- Type quantifiers: k_ex550891_ : Nat, 0 ≤ k_ex550891_ ∧ k_ex550891_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425493_ : Nat, 0 ≤ k_ex425493_ ∧ k_ex425493_ ≤ (2 ^ 64 - 1) -/
 def execute_dupn (carried_gas : Nat) (carried_sp : StackPointer) (immediate : (BitVec 8)) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let valid_immediate := (deep_stack_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -2247,7 +2247,7 @@ def execute_dupn (carried_gas : Nat) (carried_sp : StackPointer) (immediate : (B
               (pure (gas, sp, (Continue ()))))))
 
 /-- Implements immediate deep-stack exchange `SWAPN`. -/
-/- Type quantifiers: k_ex550892_ : Nat, 0 ≤ k_ex550892_ ∧ k_ex550892_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425494_ : Nat, 0 ≤ k_ex425494_ ∧ k_ex425494_ ≤ (2 ^ 64 - 1) -/
 def execute_swapn (carried_gas : Nat) (carried_sp : StackPointer) (immediate : (BitVec 8)) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let valid_immediate := (deep_stack_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -2274,7 +2274,7 @@ def execute_swapn (carried_gas : Nat) (carried_sp : StackPointer) (immediate : (
               (pure (gas, carried_sp, (Continue ()))))))
 
 /-- Implements immediate pairwise deep-stack `EXCHANGE`. -/
-/- Type quantifiers: k_ex550893_ : Nat, 0 ≤ k_ex550893_ ∧ k_ex550893_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex425495_ : Nat, 0 ≤ k_ex425495_ ∧ k_ex425495_ ≤ (2 ^ 64 - 1) -/
 def execute_exchange (carried_gas : Nat) (carried_sp : StackPointer) (immediate : (BitVec 8)) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   let valid_immediate := (exchange_immediate_valid immediate)
   if ((! valid_immediate) : Bool)
@@ -2301,10 +2301,10 @@ def execute_exchange (carried_gas : Nat) (carried_sp : StackPointer) (immediate 
               (pure (gas, carried_sp, (Continue ()))))))
 
 /-- Implements the `LOG0` through `LOG4` family. -/
-/- Type quantifiers: k_ex550898_ : Nat, k_ex550897_ : Nat, k_ex550896_ : Nat, k_ex550895_ : Nat, k_ex550894_
-  : Bool, 0 ≤ k_ex550895_ ∧ k_ex550895_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550896_ ∧
-  k_ex550896_ ≤ 4, 0 ≤ k_ex550897_ ∧ k_ex550897_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550898_ ∧
-  k_ex550898_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425500_ : Nat, k_ex425499_ : Nat, k_ex425498_ : Nat, k_ex425497_ : Nat, k_ex425496_
+  : Bool, 0 ≤ k_ex425497_ ∧ k_ex425497_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425498_ ∧
+  k_ex425498_ ≤ 4, 0 ≤ k_ex425499_ ∧ k_ex425499_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425500_ ∧
+  k_ex425500_ ≤ (2 ^ 32 - 1) -/
 def execute_log (carried_address : (Vector (BitVec 8) 20)) (carried_is_static : Bool) (memory_base : Nat) (n : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   let stack_status := (guard_stack carried_sp (n + 2) 0)
   if ((match stack_status with
@@ -2367,9 +2367,9 @@ def execute_stop (_ : Unit) : FrameStatus :=
   (Halted reason)
 
 /-- Implements successful `RETURN`. -/
-/- Type quantifiers: k_ex550901_ : Nat, k_ex550900_ : Nat, k_ex550899_ : Nat, 0 ≤ k_ex550899_ ∧
-  k_ex550899_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550900_ ∧ k_ex550900_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550901_ ∧ k_ex550901_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425503_ : Nat, k_ex425502_ : Nat, k_ex425501_ : Nat, 0 ≤ k_ex425501_ ∧
+  k_ex425501_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425502_ ∧ k_ex425502_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex425503_ ∧ k_ex425503_ ≤ (2 ^ 32 - 1) -/
 def execute_return (memory_base : Nat) (carried_gas : Nat) (carried_sp : StackPointer) (carried_memory_height : Nat) : SailM (Nat × StackPointer × Nat × FrameStatus) := do
   let stack_status := (guard_stack carried_sp 2 0)
   if ((match stack_status with
@@ -2462,7 +2462,7 @@ def execute_invalid (carried_gas : Nat) : (Nat × OpcodeOutcome) :=
   (carried_gas, (Failed InvalidOpcode))
 
 /- Type quantifiers: carried_refund : Int, carried_state_spill : Nat, carried_state_gas : Nat, carried_gas
-  : Nat, k_ex550910_ : Bool, fork : Nat, 0 ≤ fork ∧ fork ≤ 16, 0 ≤ carried_gas ∧
+  : Nat, k_ex425512_ : Bool, fork : Nat, 0 ≤ fork ∧ fork ≤ 16, 0 ≤ carried_gas ∧
   carried_gas ≤ (2 ^ 64 - 1), 0 ≤ carried_state_gas ∧ carried_state_gas ≤ (2 ^ 64 - 1), 0
   ≤ carried_state_spill ∧ carried_state_spill ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤
   carried_refund ∧ carried_refund ≤ (199 * (2 ^ 64 - 1)) -/

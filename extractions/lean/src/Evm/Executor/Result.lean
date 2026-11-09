@@ -1,6 +1,7 @@
 import Evm.Prelude
 import Evm.Primitives.Bytes
 import Evm.Kernel.Scratch
+import Evm.Lib.Ssz.StatelessInput
 import Evm.Lib.Htr
 
 set_option maxHeartbeats 1_000_000_000
@@ -59,68 +60,45 @@ open AcctBlockIterResult
 
 /-! # The public output
 
-The guest's public output: the `hash_tree_root` of the new-payload
-request, the validation verdict, and the echoed chain configuration. -/
+The guest's public output, the 43-byte `StatelessValidationResult`: the
+`hash_tree_root` of the new-payload request, the validation verdict, the
+chain id, and the schema id of the decoded input. An undecodable input
+publishes the all-zero sentinel. -/
 
-abbrev RESULT_METADATA_LENGTH : Nat := 5
+/-- The width of the `StatelessValidationResult`: the request root, the
+verdict byte, the `uint64` chain id, and the `uint16` schema id. -/
+abbrev RESULT_LENGTH : Nat := 43
 
-/-- Writes the request root and validation metadata evm_prefix. -/
-/- Type quantifiers: k_ex553282_ : Bool -/
-def write_prefix (root : (Vector (BitVec 8) 32)) (success : Bool) : SailM Unit := do
+/-- Serializes and commits the public validation result exactly once. -/
+/- Type quantifiers: k_ex428010_ : Nat, k_ex428009_ : Bool, 0 ≤ k_ex428010_ ∧
+  k_ex428010_ ≤ (2 ^ 64 - 1) -/
+def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (chain_id : Nat) (schema_id : (BitVec 16)) : SailM Unit := do
+  let start ← do (scratch_reserve RESULT_LENGTH)
   (scratch_push_b256 root WORD_BYTE_LENGTH)
   let success_byte : (BitVec 8) :=
     if (success : Bool)
     then 0x01#8
     else 0x00#8
   (scratch_push_byte success_byte)
-  (scratch_push_byte 0x25#8)
-  (scratch_push_byte 0x00#8)
-  (scratch_push_byte 0x00#8)
-  (scratch_push_byte 0x00#8)
-
-/-- Serializes and commits the public validation result exactly once. -/
-/- Type quantifiers: chain_config_dependentWitness1 : Nat, chain_config_dependentWitness0 : Nat, k_ex553285_
-  : Bool, 0 ≤ chain_config_dependentWitness0 ∧
-  0 ≤ chain_config_dependentWitness1 ∧
-  (chain_config_dependentWitness0 + chain_config_dependentWitness1) ≤ (2 ^ 32 - 1) -/
-def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (chain_config : (Sigma
-  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM Unit := do
-  let chain_config_dependentWitness0 := (chain_config).1
-  let chain_config_dependentWitness1 := ((chain_config).2).1
-  let chain_config := ((chain_config).2).2
-  let fixed_length := (WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH)
-  let output_length ← do (scratch_length_add fixed_length chain_config.len)
-  let start ← do (scratch_reserve output_length)
-  (write_prefix root success)
-  (stateless_input_scratch_push_slice ⟨_, ⟨_, chain_config⟩⟩)
+  let identity := (htr_uint chain_id)
+  let identity : (Vector (BitVec 8) 32) :=
+    (vectorUpdate identity 8 (Sail.BitVec.extractLsb schema_id 7 0))
+  let identity : (Vector (BitVec 8) 32) :=
+    (vectorUpdate identity 9 (Sail.BitVec.extractLsb schema_id 15 8))
+  (scratch_push_b256 identity 10)
   let ⟨_, ⟨_, output⟩⟩ ← do (scratch_finish start)
   let written ← do (public_output_write ⟨_, ⟨_, output⟩⟩)
   assert written "public output write"
 
 /-- Emits the full public output for a decoded input: the request root
-computed from the input itself, the verdict, and the input's chain
-configuration echoed byte for byte. -/
-/- Type quantifiers: k_ex553290_ : Bool -/
+computed from the input itself, the verdict, and the input's chain id and
+schema id. -/
+/- Type quantifiers: k_ex428011_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let root ← do (htr_new_payload_request input_ref)
-  (commit_validation_result root success input_ref.chain_config)
+  (commit_validation_result root success input_ref.chain_id STATELESS_SCHEMA_ID)
 
 /-- Emits the failure output for an undecodable input: a zero root, a
-false verdict, and a default configuration frame. -/
+false verdict, and a zero chain id and schema id. -/
 def write_invalid_result (_ : Unit) : SailM Unit := do
-  let start ← do (scratch_reserve 24)
-  let default_chain_config := ZERO_HASH
-  let default_chain_config : (Vector (BitVec 8) 32) := (vectorUpdate default_chain_config 8 0x0C#8)
-  let default_chain_config : (Vector (BitVec 8) 32) := (vectorUpdate default_chain_config 12 0x04#8)
-  let default_chain_config : (Vector (BitVec 8) 32) := (vectorUpdate default_chain_config 16 0x08#8)
-  let default_chain_config : (Vector (BitVec 8) 32) := (vectorUpdate default_chain_config 20 0x08#8)
-  (scratch_push_b256 default_chain_config 24)
-  let ⟨_, ⟨_, chain_config⟩⟩ ← do (scratch_finish start)
-  let fixed_length := (WORD_BYTE_LENGTH + RESULT_METADATA_LENGTH)
-  let output_length ← do (scratch_length_add fixed_length chain_config.len)
-  let output_start ← do (scratch_reserve output_length)
-  (write_prefix ZERO_HASH false)
-  (scratch_scratch_push_slice ⟨_, ⟨_, chain_config⟩⟩)
-  let ⟨_, ⟨_, output⟩⟩ ← do (scratch_finish output_start)
-  let written ← do (public_output_write ⟨_, ⟨_, output⟩⟩)
-  assert written "public output write"
+  (commit_validation_result ZERO_HASH false 0 0x0000#16)

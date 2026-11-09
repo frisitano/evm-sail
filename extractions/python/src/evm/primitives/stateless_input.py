@@ -9,15 +9,15 @@ from evm.prelude import (
 )
 from evm.primitives.quantities import (
     blob_gas_used,
+    chain_identifier,
     excess_blob_gas,
 )
-from evm.primitives.chain_config import ChainConfig
 from evm.primitives.block import ExecutionPayload
 
 @dataclass(slots=True)
 class StatelessInput:
     payload: ExecutionPayload
-    chain_config: ChainConfig
+    chain_id: chain_identifier
 
 @dataclass(slots=True)
 class WitnessContext:

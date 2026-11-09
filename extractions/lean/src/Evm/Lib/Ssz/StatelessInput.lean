@@ -6,9 +6,11 @@ import Evm.Host.RegionAccess
 import Evm.Kernel.Scratch
 import Evm.Primitives.Fork
 import Evm.Primitives.ChainConfig
+import Evm.Primitives.Tx
 import Evm.Host.Code
 import Evm.Lib.Ssz.Ssz
 import Evm.Lib.Rlp.Decoding
+import Evm.Lib.Tx
 import Evm.Lib.Rlp.Codecs.Transactions
 import Evm.Kernel.Environment
 import Evm.Kernel.Lifecycle
@@ -69,7 +71,7 @@ open AcctBlockIterResult
 
 /-! # The stateless input decoder
 
-Materialized references into the concrete `SszStatelessInput` wire format
+Materialized references into the concrete `StatelessInput` wire format
 and the stateless guest decoder. The layout constants transcribe the SSZ
 schema; the decoder resolves every variable region once and hands
 consumers explicit source spans. -/
@@ -78,13 +80,14 @@ consumers explicit source spans. -/
 follows. -/
 abbrev SSZ_BODY : Nat := 2
 
+/-- The only admitted schema id: Amsterdam (fork `0x15`), revision `0x01`. -/
+def STATELESS_SCHEMA_ID : (BitVec 16) := 0x1501#16
+
 abbrev IN_NPR_OFF : Nat := 0
 
 abbrev IN_WITNESS_OFF : Nat := 4
 
-abbrev IN_CHAIN_CONFIG_OFF : Nat := 8
-
-abbrev IN_PUBLIC_KEYS_OFF : Nat := 12
+abbrev IN_CHAIN_ID : Nat := 8
 
 abbrev NPR_PAYLOAD_OFF : Nat := 0
 
@@ -150,15 +153,15 @@ abbrev WD_ADDRESS : Nat := 16
 
 abbrev WD_AMOUNT : Nat := 36
 
-abbrev CC_CHAIN_ID : Nat := 0
+abbrev REQ_DEPOSIT_SIZE : Nat := 192
 
-abbrev CC_ACTIVE_FORK_OFF : Nat := 8
+abbrev REQ_WITHDRAWAL_REQUEST_SIZE : Nat := 76
 
-abbrev FC_ACTIVATION_OFF : Nat := 0
+abbrev REQ_CONSOLIDATION_REQUEST_SIZE : Nat := 116
 
-abbrev FA_BLOCK_NUMBER_OFF : Nat := 0
+abbrev REQ_BUILDER_DEPOSIT_SIZE : Nat := 184
 
-abbrev FA_TIMESTAMP_OFF : Nat := 4
+abbrev REQ_BUILDER_EXIT_SIZE : Nat := 68
 
 abbrev WIT_STATE_OFF : Nat := 0
 
@@ -178,23 +181,17 @@ abbrev EXECUTION_REQUESTS_FIXED_LENGTH : Nat := 20
 
 abbrev EXECUTION_WITNESS_FIXED_LENGTH : Nat := 12
 
-abbrev PUBLIC_KEY_LENGTH : Nat := 65
-
-abbrev CHAIN_CONFIG_HEADER_LENGTH : Nat := 12
-
-abbrev CHAIN_CONFIG_MIN_LENGTH : Nat := 24
-
 def MAX_EXTRA_DATA_LENGTH : Nat := (2 ^i 5)
 
 def MAX_TRANSACTION_LENGTH : Nat := (2 ^i 30)
 
 def MAX_TRANSACTIONS_PER_PAYLOAD : Nat := (2 ^i 20)
 
-def MAX_WITHDRAWALS_PER_PAYLOAD : Nat := (2 ^i 4)
+def MAX_WITHDRAWALS_PER_PAYLOAD : Nat := (2 ^i 20)
 
 def MAX_BLOCK_ACCESS_LIST_LENGTH : Nat := (2 ^i 30)
 
-def MAX_BLOB_COMMITMENTS_PER_BLOCK : Nat := (2 ^i 12)
+def MAX_BLOB_COMMITMENTS_PER_BLOCK : Nat := (2 ^i 25)
 
 def MAX_WITNESS_NODES : Nat := (2 ^i 22)
 
@@ -207,8 +204,6 @@ def MAX_WITNESS_CODE_LENGTH : Nat := (2 ^i 16)
 def MAX_WITNESS_HEADERS : Nat := (2 ^i 8)
 
 def MAX_WITNESS_HEADER_LENGTH : Nat := (2 ^i 10)
-
-def MAX_PUBLIC_KEYS : Nat := (2 ^i 15)
 
 /-- Returns the byte position of an entry in a `uint32` SSZ offset table. -/
 /- Type quantifiers: index : Nat, 0 ≤ index ∧ index ≤ (2 ^ 30 - 1) -/
@@ -315,6 +310,45 @@ def ssz_list_at (items : (BoundedSszListRef k_maximum)) (index : Nat) : SailM (S
     (do
       (fatal_error InvalidConfig))
 
+/-- Checks every remaining element of a variable-element list against its
+per-item byte limit and offset ordering. -/
+/- Type quantifiers: _reclimit : Nat, k_maximum : Nat, (source_valid_length k_maximum) ∧
+  k_maximum ≤ (2 ^ 30 - 1), 0 ≤ _reclimit -/
+def _rec_ssz_validate_variable_list_cursor (cursor : (BoundedSszListCursor k_maximum)) (_reclimit : Nat) : SailM Unit := do
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      let cursor_empty := (ssz_list_cursor_empty cursor)
+      if (cursor_empty : Bool)
+      then (pure ())
+      else
+        (do
+          let (_, next) ← do (ssz_list_pop cursor)
+          (_rec_ssz_validate_variable_list_cursor next _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Checks every remaining element of a variable-element list against its
+per-item byte limit and offset ordering. -/
+/- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) ∧ k_maximum ≤ (2 ^ 30 - 1) -/
+def ssz_validate_variable_list_cursor (cursor : (BoundedSszListCursor k_maximum)) : SailM Unit := do
+  let _measure := ((cursor.items.count -i cursor.index) : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_ssz_validate_variable_list_cursor cursor (_measure + 1))
+
+/-- Checks every element of a variable-element list, as decoding the enclosing
+SSZ container does: an over-long element makes the whole input
+undecodable. -/
+/- Type quantifiers: k_maximum : Nat, (source_valid_length k_maximum) ∧ k_maximum ≤ (2 ^ 30 - 1) -/
+def ssz_validate_variable_list (items : (BoundedSszListRef k_maximum)) : SailM Unit := do
+  let cursor ← do (ssz_list_cursor items)
+  (ssz_validate_variable_list_cursor cursor)
+
 /- Type quantifiers: k_maximum : Nat, item_size : Nat, index : Nat, (source_valid_length k_maximum)
   ∧ (source_valid_length item_size) ∧ 0 ≤ index -/
 def ssz_fixed_list_at (items : (BoundedSszListRef k_maximum)) (index : Nat) (item_size : Nat) : SailM (Sigma
@@ -394,7 +428,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex552153_ : Nat, 0 ≤ k_ex552153_ ∧ k_ex552153_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex426779_ : Nat, 0 ≤ k_ex426779_ ∧ k_ex426779_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -431,8 +465,8 @@ def ssz_finish (cursor : SszContainerCursor) : SailM (Sigma fun (k_off : Nat) =>
       (fatal_error InvalidConfig))
 
 /-- Constructs a variable-item list with its SSZ count and per-item byte
-limits attached. Item lengths are checked lazily when reached, before a
-consumer can construct any narrower optimized value. -/
+limits attached. Item lengths are checked eagerly by
+[ssz_validate_variable_list][] before decoding returns. -/
 /- Type quantifiers: bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, maximum_count :
   Nat, maximum_item_length : Nat, (source_valid_length maximum_count) ∧
   (source_valid_length maximum_item_length), 0 ≤ bytes_dependentWitness0 ∧
@@ -524,18 +558,13 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
     (Sigma fun (input_dependentWitness0 : Nat) =>
     (Sigma fun (input_dependentWitness1 : Nat) =>
     (StatelessInputSliceFields input_dependentWitness0 input_dependentWitness1))) )
-  let schema_version ← do (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 1)
-  if ((schema_version != 0x01#8) : Bool)
+  let schema_id ← (( do
+    (pure ((← (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 0)) +++ (← (stateless_input_slice_byte
+            ⟨_, ⟨_, input_fields⟩⟩ 1)))) ) : SailM (BitVec 16) )
+  if ((schema_id != STATELESS_SCHEMA_ID) : Bool)
   then (fatal_error InvalidConfig)
   else (pure ())
-  let schema_fork ← do (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 0)
-  let schema_matches := (schema_protocol_profile_forwards_matches schema_fork)
-  let schema_mismatch := (! schema_matches)
-  if (schema_mismatch : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_fork : Nat) =>
+  let protocol : (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
     (Sigma fun (k_denominator : Nat) =>
@@ -546,7 +575,19 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_transaction_blob_limit : Nat) =>
     (Sigma fun (k_refund_divisor : Nat) =>
     (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))))))))))) :=
-    ((schema_protocol_profile schema_fork) : (Sigma fun (k_fork : Nat) =>
+    ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((DEFAULT_PROTOCOL_PROFILE).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
+    fun (k_fork : Nat) =>
+    (Sigma fun (k_target : Nat) =>
+    (Sigma fun (k_maximum : Nat) =>
+    (Sigma fun (k_denominator : Nat) =>
+    (Sigma fun (k_code_limit : Nat) =>
+    (Sigma fun (k_initcode_limit : Nat) =>
+    (Sigma fun (k_transaction_total_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
+    (Sigma fun (k_transaction_blob_limit : Nat) =>
+    (Sigma fun (k_refund_divisor : Nat) =>
+    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))) : (Sigma
+    fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
     (Sigma fun (k_denominator : Nat) =>
@@ -566,10 +607,8 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
     (ssz_u32 ⟨_, ⟨_, body⟩⟩ new_payload_request_position)
   let witness_position := (ssz_field_offset container_start IN_WITNESS_OFF)
   let witness_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ witness_position)
-  let chain_config_position := (ssz_field_offset container_start IN_CHAIN_CONFIG_OFF)
-  let chain_config_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ chain_config_position)
-  let public_keys_position := (ssz_field_offset container_start IN_PUBLIC_KEYS_OFF)
-  let public_keys_offset ← do (ssz_u32 ⟨_, ⟨_, body⟩⟩ public_keys_position)
+  let chain_id_position := (ssz_field_offset container_start IN_CHAIN_ID)
+  let chain_id ← (( do (decode_ssz_uint ⟨_, ⟨_, body⟩⟩ chain_id_position) ) : SailM Nat )
   let body_fixed_length := STATELESS_INPUT_BODY_FIXED_LENGTH
   if ((new_payload_request_offset != body_fixed_length) : Bool)
   then (fatal_error InvalidConfig)
@@ -579,13 +618,9 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
     (ssz_take body_cursor witness_offset)
   let ⟨_, ⟨_, new_payload_request⟩⟩ ← do
     (ssz_container_bytes new_payload_request_bytes NEW_PAYLOAD_REQUEST_FIXED_LENGTH)
-  let (execution_witness_bytes, body_after_witness) ← do
-    (ssz_take body_after_payload_request chain_config_offset)
+  let ⟨_, ⟨_, execution_witness_bytes⟩⟩ ← do (ssz_finish body_after_payload_request)
   let ⟨_, ⟨_, execution_witness⟩⟩ ← do
-    (ssz_container_bytes execution_witness_bytes EXECUTION_WITNESS_FIXED_LENGTH)
-  let (chain_config, body_after_chain_config) ← do
-    (ssz_take body_after_witness public_keys_offset)
-  let ⟨_, ⟨_, public_keys⟩⟩ ← do (ssz_finish body_after_chain_config)
+    (ssz_container_bytes ⟨_, ⟨_, execution_witness_bytes⟩⟩ EXECUTION_WITNESS_FIXED_LENGTH)
   let npr_start : Nat := 0
   let payload_position := (ssz_field_offset npr_start NPR_PAYLOAD_OFF)
   let payload_offset ← do (ssz_u32 ⟨_, ⟨_, new_payload_request⟩⟩ payload_position)
@@ -728,18 +763,23 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
   let witness_headers ← do
     (ssz_bounded_variable_list_ref ⟨_, ⟨_, witness_header_bytes⟩⟩ MAX_WITNESS_HEADERS
       MAX_WITNESS_HEADER_LENGTH)
-  let public_key_bytes := public_keys.len
-  let public_key_length := PUBLIC_KEY_LENGTH
-  let public_key_count := (public_key_bytes / public_key_length)
-  if ((public_key_bytes != (public_key_count *i public_key_length)) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  if ((MAX_PUBLIC_KEYS <b public_key_count) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
   let _ ← do
     (ssz_bounded_fixed_list_ref versioned_hashes WORD_BYTE_LENGTH MAX_BLOB_COMMITMENTS_PER_BLOCK)
-  (pure { protocol := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩,
+  let _ ← do (ssz_bounded_fixed_list_ref deposits REQ_DEPOSIT_SIZE (2 ^i 25))
+  let _ ← do
+    (ssz_bounded_fixed_list_ref withdrawal_requests REQ_WITHDRAWAL_REQUEST_SIZE (2 ^i 25))
+  let _ ← do
+    (ssz_bounded_fixed_list_ref consolidation_requests REQ_CONSOLIDATION_REQUEST_SIZE (2 ^i 25))
+  let _ ← do
+    (ssz_bounded_fixed_list_ref builder_deposit_requests REQ_BUILDER_DEPOSIT_SIZE (2 ^i 25))
+  let _ ← do
+    (ssz_bounded_fixed_list_ref ⟨_, ⟨_, builder_exit_requests⟩⟩ REQ_BUILDER_EXIT_SIZE
+      (2 ^i 25))
+  (ssz_validate_variable_list transactions)
+  (ssz_validate_variable_list witness_state)
+  (ssz_validate_variable_list witness_codes)
+  (ssz_validate_variable_list witness_headers)
+  (pure { protocol := protocol,
           new_payload_request := ⟨_, ⟨_, new_payload_request⟩⟩,
           execution_payload := ⟨_, ⟨_, execution_payload⟩⟩,
           versioned_hashes := versioned_hashes,
@@ -755,8 +795,7 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
           witness_state := witness_state,
           witness_codes := witness_codes,
           witness_headers := witness_headers,
-          chain_config := chain_config,
-          public_keys := ⟨_, ⟨_, public_keys⟩⟩ })
+          chain_id := chain_id })
 
 /-- The EIP-7685 per-type request digest:
 `sha256(request_type ‖ request_data)`. -/
@@ -878,8 +917,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex552224_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex552224_ ∧ k_ex552224_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex426850_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex426850_ ∧ k_ex426850_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1395,122 +1434,37 @@ def decode_withdrawal (withdrawal : (Sigma fun (k_off : Nat) =>
           address := ← (ssz_addr ⟨_, ⟨_, withdrawal⟩⟩ WD_ADDRESS),
           amount := ← (decode_ssz_uint ⟨_, ⟨_, withdrawal⟩⟩ WD_AMOUNT) })
 
-/-- Decodes the `SszChainConfig` at `cc`: the chain id (`u64` at 0) and
-the active Amsterdam `SszForkConfig` activation.
-The activation point (optional block number / timestamp, `List[u64,1]`
-each) must be reached by this payload: at least one bound set, none
-exceeding the payload's — a future activation invalidates the block. -/
-/- Type quantifiers: k_ex552332_ : Nat, k_ex552331_ : Nat, cc_dependentWitness1 : Nat, cc_dependentWitness0
-  : Nat, 0 ≤ cc_dependentWitness0 ∧
-  0 ≤ cc_dependentWitness1 ∧ (cc_dependentWitness0 + cc_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex552331_ ∧ k_ex552331_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex552332_ ∧
-  k_ex552332_ ≤ (2 ^ 64 - 1) -/
-def decode_chain_config (cc : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (number : Nat) (timestamp : Nat) : SailM ChainConfig := do
-  let cc_dependentWitness0 := (cc).1
-  let cc_dependentWitness1 := ((cc).2).1
-  let cc := ((cc).2).2
-  let cc_length := cc.len
-  let header_length := CHAIN_CONFIG_HEADER_LENGTH
-  let minimum_length := CHAIN_CONFIG_MIN_LENGTH
-  if ((cc_length <b header_length) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  let f_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ CC_ACTIVE_FORK_OFF)
-  if (((f_offset != 12) || (cc_length <b minimum_length)) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  let f : Nat := 12
-  let activation_position := (ssz_field_offset f FC_ACTIVATION_OFF)
-  let activation_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ activation_position)
-  if ((activation_offset != 4) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  let activation_start : Nat := 16
-  let activation_fixed_end : Nat := 24
-  let a : Nat := 16
-  let block_number_position := (ssz_field_offset a FA_BLOCK_NUMBER_OFF)
-  let block_number_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ block_number_position)
-  let timestamp_position := (ssz_field_offset a FA_TIMESTAMP_OFF)
-  let timestamp_offset ← do (ssz_u32 ⟨_, ⟨_, cc⟩⟩ timestamp_position)
-  let block_number_start ← (( do
-    if ((block_number_offset ≤b (cc_length -i activation_start)) : Bool)
-    then (pure (activation_start + block_number_offset))
-    else (fatal_error InvalidConfig) ) : SailM Nat )
-  let timestamp_start ← (( do
-    if ((timestamp_offset ≤b (cc_length -i activation_start)) : Bool)
-    then (pure (activation_start + timestamp_offset))
-    else (fatal_error InvalidConfig) ) : SailM Nat )
-  if ((activation_fixed_end != block_number_start) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  if ((timestamp_start <b block_number_start) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  if ((cc_length <b timestamp_start) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  let bn_length := (timestamp_start -i block_number_start)
-  let ts_length := (cc_length -i timestamp_start)
-  if ((((bn_length != 0) && (bn_length != SSZ_UINT_BYTES)) || ((ts_length != 0) && (ts_length != SSZ_UINT_BYTES))) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  if (((bn_length == 0) && (ts_length == 0)) : Bool)
-  then (fatal_error InvalidConfig)
-  else (pure ())
-  if ((bn_length == SSZ_UINT_BYTES) : Bool)
-  then
-    (do
-      let activation_block ← (( do (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ block_number_start) ) :
-        SailM Nat )
-      if ((number <b activation_block) : Bool)
-      then (fatal_error InvalidConfig)
-      else (pure ()))
-  else (pure ())
-  if ((ts_length == SSZ_UINT_BYTES) : Bool)
-  then
-    (do
-      let activation_timestamp ← (( do (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ timestamp_start) ) :
-        SailM Nat )
-      if ((timestamp <b activation_timestamp) : Bool)
-      then (fatal_error InvalidConfig)
-      else (pure ()))
-  else (pure ())
-  (pure { chain_id := ← (decode_ssz_uint ⟨_, ⟨_, cc⟩⟩ CC_CHAIN_ID) })
-
-/-- Decodes the semantic payload structure — header, chain config, body
+/-- Decodes the semantic payload structure — header, chain id, body
 references — without touching an encoded transaction or withdrawal
 element, and installs the header and chain parameters in the kernel. -/
 def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInput := do
   let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
   let header ← do (decode_block_header_ssz input_ref)
-  let chain_config ← do
-    (decode_chain_config input_ref.chain_config header.number header.timestamp)
   (k_set_header header)
-  writeReg k_chain_id chain_config.chain_id
+  writeReg k_chain_id input_ref.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex611445_ : Nat) =>
-    (Sigma fun (k_ex611446_ : Nat) =>
-    (Sigma fun (k_ex611447_ : Nat) =>
-    (Sigma fun (k_ex611448_ : Nat) =>
-    (Sigma fun (k_ex611449_ : Nat) =>
-    (Sigma fun (k_ex611450_ : Nat) =>
-    (Sigma fun (k_ex611451_ : Nat) =>
-    (Sigma fun (k_ex611452_ : Nat) =>
-    (Sigma fun (k_ex611453_ : Nat) =>
-    (Sigma fun (k_ex611454_ : Nat) =>
-    (Sigma fun (k_ex611455_ : Nat) =>
-    (ExecutionProfileFields k_ex611445_ k_ex611446_ k_ex611447_ k_ex611448_ k_ex611449_ k_ex611450_ k_ex611451_ k_ex611452_ k_ex611453_ k_ex611454_ k_ex611455_ (if ( k_ex611455_
-    < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_) (if ( (if ( k_ex611455_ < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_)
-    < k_ex611452_  : Bool) then (if ( k_ex611455_ < k_ex611451_  : Bool) then k_ex611455_ else k_ex611451_) else k_ex611452_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex468260_ : Nat) =>
+    (Sigma fun (k_ex468261_ : Nat) =>
+    (Sigma fun (k_ex468262_ : Nat) =>
+    (Sigma fun (k_ex468263_ : Nat) =>
+    (Sigma fun (k_ex468264_ : Nat) =>
+    (Sigma fun (k_ex468265_ : Nat) =>
+    (Sigma fun (k_ex468266_ : Nat) =>
+    (Sigma fun (k_ex468267_ : Nat) =>
+    (Sigma fun (k_ex468268_ : Nat) =>
+    (Sigma fun (k_ex468269_ : Nat) =>
+    (Sigma fun (k_ex468270_ : Nat) =>
+    (ExecutionProfileFields k_ex468260_ k_ex468261_ k_ex468262_ k_ex468263_ k_ex468264_ k_ex468265_ k_ex468266_ k_ex468267_ k_ex468268_ k_ex468269_ k_ex468270_ (if ( k_ex468270_
+    < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_) (if ( (if ( k_ex468270_ < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_)
+    < k_ex468267_  : Bool) then (if ( k_ex468270_ < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_) else k_ex468267_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,
                                              body := { transactions := input_ref.transactions,
                                                        withdrawals := input_ref.withdrawals,
                                                        block_access_list := input_ref.block_access_list } } }),
-          chain_config := chain_config })
+          chain_id := input_ref.chain_id })
 
 /-- Indexes the source-backed witness (nodes, codes, headers) and
 installs its authenticated parent-state anchor; no witness list is
@@ -1523,9 +1477,19 @@ def index_execution_witness (input_ref : StatelessInputRef) : SailM WitnessConte
   writeReg k_parent_state_root witness.parent_state_root
   (pure witness)
 
-/- Type quantifiers: k_transaction_off : Nat, k_transaction_len : Nat, k_public_key_off : Nat, (source_valid_range k_transaction_off k_transaction_len)
-  ∧ (source_valid_range k_public_key_off 65) -/
-def decode_transaction (transaction : (StatelessInputSliceFields k_transaction_off k_transaction_len)) (public_key : (StatelessInputSliceFields k_public_key_off 65)) : SailM (Sigma
+/-- Fills in the sender of a structurally decoded transaction by recovering it
+from the signature material captured at decode. -/
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+def recover_transaction_sender (tx : (TransactionFields k_blob_limit)) : SailM (Sigma fun
+  (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit)) := do
+  let tx_semantics := (tx_type_semantics tx.tx_type)
+  let parity ← do (tx_signature_parity (← readReg k_chain_id) tx_semantics.signature tx.sig_v)
+  let sender ← do (tx_recover_sender tx.signing_hash parity tx.sig_r tx.sig_s)
+  (pure ((pack_transaction { tx with sender := sender }) : (Sigma fun (k_syn_blob_limit : Nat) =>
+    (TransactionFields k_syn_blob_limit))))
+
+/- Type quantifiers: k_transaction_off : Nat, k_transaction_len : Nat, (source_valid_range k_transaction_off k_transaction_len) -/
+def decode_transaction (transaction : (StatelessInputSliceFields k_transaction_off k_transaction_len)) : SailM (Sigma
   fun (k_blob_limit : Nat) => (TransactionFields k_blob_limit)) := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -1533,7 +1497,8 @@ def decode_transaction (transaction : (StatelessInputSliceFields k_transaction_o
   if _sailIf0 : ((k_transaction_len ≤b (2 ^i 30)) : Bool) = true
   then
     (do
-      (rlp_decode_tx transaction public_key profile.transaction_blob_limit))
+      let ⟨_, decoded⟩ ← do (rlp_decode_tx transaction profile.transaction_blob_limit)
+      (recover_transaction_sender decoded))
   else
     (do
       (fatal_error InvalidConfig))

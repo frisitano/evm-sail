@@ -44,8 +44,9 @@ class FatalError(UintEnum):
     BlockAccessListTooLarge = Uint(16)
     InvalidBlockAccessList = Uint(17)
     InvalidExecutionRequests = Uint(18)
-    WitnessDeficient = Uint(19)
-    NumericOverflow = Uint(20)
+    InvalidVersionedHashes = Uint(19)
+    WitnessDeficient = Uint(20)
+    NumericOverflow = Uint(21)
 
 def fatal_error(_reason: FatalError) -> Any:
     raise SailExit(None)

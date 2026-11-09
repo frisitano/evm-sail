@@ -226,7 +226,6 @@ class TransactionFields:
     max_priority_fee: word
     authorizations: AuthorizationListRef
     blob_hashes: BlobHashesFields
-    pubkey: StatelessInputSlice
     signing_hash: hash
     sig_v: word
     sig_r: word

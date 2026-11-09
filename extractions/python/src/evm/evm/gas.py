@@ -947,15 +947,15 @@ G_initcode_word: Annotated[int, IntegerRange(2, 2)] = 2
 
 G_amsterdam_cold_account_access: int = 3000
 
-G_amsterdam_cold_storage_access: int = 3000
+G_amsterdam_cold_storage_access: int = 2100
 
 G_amsterdam_storage_write: int = 10000
 
-G_amsterdam_account_write: int = 8000
+G_amsterdam_account_write: int = 9000
 
-G_amsterdam_call_value: int = 10300
+G_amsterdam_call_value: int = 11300
 
-G_amsterdam_create_access: int = 11000
+G_amsterdam_create_access: int = 12000
 
 G_amsterdam_state_byte: int = 1530
 
@@ -965,7 +965,7 @@ G_amsterdam_state_new_account: int = 183600
 
 G_amsterdam_state_auth_base: int = 35190
 
-R_amsterdam_storage_clear: int = 12480
+R_amsterdam_storage_clear: int = 11616
 
 G_sstore_sentry: int = 2301
 

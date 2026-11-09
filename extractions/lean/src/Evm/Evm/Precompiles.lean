@@ -149,7 +149,7 @@ def precompile_failure (_ : Unit) : PrecompileResult :=
   { success := false,
     output := ⟨_, ⟨_, EMPTY_OUTPUT_SLICE⟩⟩ }
 
-/- Type quantifiers: k_ex550681_ : Bool, output_len : Nat, (source_valid_length output_len) -/
+/- Type quantifiers: k_ex425283_ : Bool, output_len : Nat, (source_valid_length output_len) -/
 def accelerator_result (success : Bool) (output_len : Nat) : PrecompileResult :=
   if (success : Bool)
   then
@@ -166,7 +166,7 @@ def copied_result (data : CalldataSlice) : SailM PrecompileResult := do
   else (pure (precompile_failure ()))
 
 /-- A 32-byte `0`/`1` result word (pairing checks). -/
-/- Type quantifiers: k_ex550684_ : Bool -/
+/- Type quantifiers: k_ex425286_ : Bool -/
 def boolean_result (value : Bool) : SailM PrecompileResult := do
   let encoded_word :=
     if (value : Bool)

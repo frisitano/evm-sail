@@ -2,6 +2,7 @@ import Evm.Flow
 import Evm.Prelude
 import Evm.Primitives.Bytes
 import Evm.Exceptions
+import Evm.Host.RegionAccess
 import Evm.Primitives.Fork
 import Evm.Primitives.System
 import Evm.Primitives.Tx
@@ -103,38 +104,113 @@ def run_block_start_system_calls (_ : Unit) : SailM Unit := do
   then (system_call HISTORY_STORAGE_ADDR (← readReg k_header).parent_hash)
   else (pure ())
 
+/- Type quantifiers: _reclimit : Nat, expected_dependentWitness1 : Nat, expected_dependentWitness0 :
+  Nat, k_limit : Nat, index : Nat, (transaction_blob_limit_value k_limit) ∧ 0 ≤ index, 0 ≤
+  expected_dependentWitness0 ∧
+  0 ≤ expected_dependentWitness1 ∧
+  (expected_dependentWitness0 + expected_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ _reclimit -/
+def _rec_consume_versioned_hashes (blob_hashes : (BlobHashesFields k_limit)) (index : Nat) (expected : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (_reclimit : Nat) : SailM (Sigma
+  fun (expected_dependentWitness0 : Nat) =>
+  (Sigma fun (expected_dependentWitness1 : Nat) =>
+  (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))) := do
+  let expected_dependentWitness0 := (expected).1
+  let expected_dependentWitness1 := ((expected).2).1
+  let expected := ((expected).2).2
+  match _reclimit with
+  | 0 =>
+    (do
+      assert false "recursion limit reached"
+      throw Error.Exit)
+  | _reclimit_pred + 1 =>
+    (do
+      if _sailIf0 : ((blob_hashes.count ≤b index) : Bool) = true
+      then
+        (pure ((⟨_, ⟨_, expected⟩⟩ : (Sigma fun (expected_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1)))) : (Sigma
+          fun (expected_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1)))))
+      else
+        (do
+          let ⟨_, ⟨_, expected_fields⟩⟩ ← (( do
+            if _sailIf1 : ((WORD_BYTE_LENGTH ≤b expected.len) : Bool) = true
+            then
+              (pure ((⟨_, ⟨_, expected⟩⟩ : (Sigma fun (expected_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1)))) : (Sigma
+                fun (expected_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1)))))
+            else
+              (do
+                (fatal_error InvalidVersionedHashes)) ) : SailM
+            (Sigma fun (expected_dependentWitness0 : Nat) =>
+            (Sigma fun (expected_dependentWitness1 : Nat) =>
+            (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))) )
+          let hash_offset : Nat := ((33 *i index) + 1)
+          let actual ← do
+            (stateless_input_slice_load_n blob_hashes.bytes hash_offset WORD_BYTE_LENGTH)
+          let next ← do (stateless_input_slice_load ⟨_, ⟨_, expected_fields⟩⟩ 0)
+          if ((actual != next) : Bool)
+          then (fatal_error InvalidVersionedHashes)
+          else (pure ())
+          (_rec_consume_versioned_hashes blob_hashes (index + 1)
+            ⟨_, ⟨_, (stateless_input_slice_suffix expected_fields WORD_BYTE_LENGTH)⟩⟩
+            _reclimit_pred)))
+termination_by _reclimit
+decreasing_by all_goals exact Nat.lt_succ_self _
+
+/- Type quantifiers: expected_dependentWitness1 : Nat, expected_dependentWitness0 : Nat, k_limit :
+  Nat, index : Nat, (transaction_blob_limit_value k_limit) ∧ 0 ≤ index, 0 ≤
+  expected_dependentWitness0 ∧
+  0 ≤ expected_dependentWitness1 ∧
+  (expected_dependentWitness0 + expected_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def consume_versioned_hashes (blob_hashes : (BlobHashesFields k_limit)) (index : Nat) (expected : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Sigma
+  fun (expected_dependentWitness0 : Nat) =>
+  (Sigma fun (expected_dependentWitness1 : Nat) =>
+  (StatelessInputSliceFields expected_dependentWitness0 expected_dependentWitness1))) := do
+  let expected_dependentWitness0 := (expected).1
+  let expected_dependentWitness1 := ((expected).2).1
+  let expected := ((expected).2).2
+  let _measure := ((blob_hashes.count -i index) : Int)
+  if _sailIf0 : ((_measure <b 0) : Bool) = true
+  then
+    (do
+      throw Error.Exit)
+  else
+    (do
+      (_rec_consume_versioned_hashes blob_hashes index ⟨_, ⟨_, expected⟩⟩ (_measure + 1)))
+
 /-- Executes the block's transactions in order, enforcing per-tx
 applicability and block gas/blob-gas availability (EIP-7778 block-gas
 accounting), accumulating receipts. -/
-/- Type quantifiers: expected_deposits_dependentWitness1 : Nat, expected_deposits_dependentWitness0
-  : Nat, public_keys_dependentWitness1 : Nat, public_keys_dependentWitness0 : Nat, 0 ≤
-  public_keys_dependentWitness0 ∧
-  0 ≤ public_keys_dependentWitness1 ∧
-  (public_keys_dependentWitness0 + public_keys_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
+/- Type quantifiers: expected_versioned_hashes_dependentWitness1 : Nat, expected_versioned_hashes_dependentWitness0
+  : Nat, expected_deposits_dependentWitness1 : Nat, expected_deposits_dependentWitness0 : Nat, 0 ≤
   expected_deposits_dependentWitness0 ∧
   0 ≤ expected_deposits_dependentWitness1 ∧
-  (expected_deposits_dependentWitness0 + expected_deposits_dependentWitness1) ≤ (2 ^ 32 - 1) -/
-def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (public_keys : (Sigma
-  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (expected_deposits : (Sigma
-  fun (public_keys_dependentWitness0 : Nat) =>
-  (Sigma fun (public_keys_dependentWitness1 : Nat) =>
-  (StatelessInputSliceFields public_keys_dependentWitness0 public_keys_dependentWitness1)))) : SailM BlockExecutionResult := do
-  let public_keys_dependentWitness0 := (public_keys).1
-  let public_keys_dependentWitness1 := ((public_keys).2).1
-  let public_keys := ((public_keys).2).2
+  (expected_deposits_dependentWitness0 + expected_deposits_dependentWitness1) ≤ (2 ^ 32 - 1), 0
+  ≤ expected_versioned_hashes_dependentWitness0 ∧
+  0 ≤ expected_versioned_hashes_dependentWitness1 ∧
+  (expected_versioned_hashes_dependentWitness0 + expected_versioned_hashes_dependentWitness1) ≤
+  (2 ^ 32 - 1) -/
+def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (expected_deposits : (Sigma
+  fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (expected_versioned_hashes : (Sigma
+  fun (expected_deposits_dependentWitness0 : Nat) =>
+  (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
+  (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : SailM BlockExecutionResult := do
   let expected_deposits_dependentWitness0 := (expected_deposits).1
   let expected_deposits_dependentWitness1 := ((expected_deposits).2).1
   let expected_deposits := ((expected_deposits).2).2
+  let expected_versioned_hashes_dependentWitness0 := (expected_versioned_hashes).1
+  let expected_versioned_hashes_dependentWitness1 := ((expected_versioned_hashes).2).1
+  let expected_versioned_hashes := ((expected_versioned_hashes).2).2
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
   let gas_limits := execution_profile.gas
-  let public_keys_length := public_keys.len
-  let public_key_length := PUBLIC_KEY_LENGTH
-  let public_key_count_value := (public_keys_length / public_key_length)
-  if (((public_key_count_value != transactions.count) || (public_keys_length != (public_key_count_value *i public_key_length))) : Bool)
-  then (fatal_error WitnessDeficient)
-  else (pure ())
   let gas_limit := gas_limits.block_limit
   let gas_usage : (Sigma fun (k_execution : Nat) =>
     (Sigma fun (k_state : Nat) =>
@@ -152,65 +228,39 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
   let transaction_logs_start ← do (logs_tx_start ())
   let transaction_logs_count ← do (logs_tx_count ())
   let logs_start ← do (log_store_index_add transaction_logs_start transaction_logs_count)
-  let remaining_deposits : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
-    ((⟨_, ⟨_, expected_deposits⟩⟩ : (Sigma fun (expected_deposits_dependentWitness0 : Nat)
-    =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-    fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+  let remaining_deposits : (Sigma fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))) :=
+    ((⟨_, ⟨_, expected_deposits⟩⟩ : (Sigma fun
+    (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))) : (Sigma
+    fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))))
+  let remaining_versioned_hashes : (Sigma fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))) :=
+    ((⟨_, ⟨_, expected_versioned_hashes⟩⟩ : (Sigma fun
+    (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))) : (Sigma
+    fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))))
   let cursor ← do (ssz_list_cursor transactions)
-  let keys : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
-    ((⟨_, ⟨_, public_keys⟩⟩ : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-    fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
   let initial_cursor_empty := (ssz_list_cursor_empty cursor)
   let cursor_has_item : Bool := (! initial_cursor_empty)
-  let (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) ← (( do
-    let loop_vars ← whileFuelM (fuel :=(cursor.items.count -i cursor.index)) (fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) => (pure cursor_has_item)) (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to)
-      fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, keys, remaining_deposits, tx0_to) => do
+  let (blob_gas_acc, cursor, cursor_has_item, gas_usage, remaining_deposits, remaining_versioned_hashes, tx0_to) ← (( do
+    let loop_vars ← whileFuelM (fuel :=(cursor.items.count -i cursor.index)) (fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, remaining_deposits, remaining_versioned_hashes, tx0_to) => (pure cursor_has_item)) (blob_gas_acc, cursor, cursor_has_item, gas_usage, remaining_deposits, remaining_versioned_hashes, tx0_to)
+      fun (blob_gas_acc, cursor, cursor_has_item, gas_usage, remaining_deposits, remaining_versioned_hashes, tx0_to) => do
         assert true "loop dummy assert"
         let i := cursor.index
         let (transaction, next) ← do (ssz_list_pop cursor)
         let cursor : (BoundedSszListCursor (2 ^ 20)) := next
-        let ⟨_, ⟨_, keys_fields⟩⟩ := keys
-        let ⟨_, ⟨_, keys_fields⟩⟩ ← (( do
-          if _sailIf0 : ((public_key_length ≤b keys_fields.len) : Bool) = true
-          then
-            (pure ((⟨_, ⟨_, keys_fields⟩⟩ : (Sigma fun
-              (expected_deposits_dependentWitness0 : Nat) =>
-              (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-              (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-              fun (expected_deposits_dependentWitness0 : Nat) =>
-              (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-              (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))
-          else
-            (do
-              (fatal_error WitnessDeficient)) ) : SailM
-          (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))
-          )
-        let public_key := (stateless_input_sub_slice keys_fields 0 PUBLIC_KEY_LENGTH)
-        let keys : (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) :=
-          ((⟨_, ⟨_, (stateless_input_slice_suffix keys_fields public_key_length)⟩⟩ : (Sigma
-          fun (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-          fun (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
-        let ⟨_, tx⟩ ← do (decode_transaction ((transaction).2).2 public_key)
+        let ⟨_, tx⟩ ← do (decode_transaction ((transaction).2).2)
+        let ⟨_, ⟨_, remaining_versioned_hashes⟩⟩ ←
+          (consume_versioned_hashes tx.blob_hashes 0 remaining_versioned_hashes)
         writeReg k_current_transaction_epoch (i + 1)
         let tx0_to : (Vector (BitVec 8) 20) :=
           if ((i == 0) : Bool)
@@ -235,9 +285,9 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
                       (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
                 else
                   (do
                     let tx_blob_gas : Nat := ((2 ^i 17) *i tx.blob_hashes.count)
@@ -270,28 +320,28 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
                       (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), ((⟨_, ⟨_, remaining_deposits⟩⟩ : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))) : (Sigma
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
                 ) : SailM
                 (Nat × (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
                 (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
-                (expected_deposits_dependentWitness0 : Nat) =>
-                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+                (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))))
                 )
               (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
                 (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
-                fun (expected_deposits_dependentWitness0 : Nat) =>
-                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
           else
             (do
               let (blob_gas_acc, gas_usage, remaining_deposits) ← (( do
@@ -303,9 +353,9 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
                       (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
                 else
                   (do
                     let tx_blob_gas : Nat := ((2 ^i 17) *i tx.blob_hashes.count)
@@ -339,49 +389,49 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
                           (authenticate_deposit_logs receipt.logs remaining_deposits))
                       else
                         (pure (remaining_deposits : (Sigma fun
-                          (expected_deposits_dependentWitness0 : Nat) =>
-                          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))
+                          (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                          (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                          (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))
                       ) : SailM
-                      (Sigma fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))
+                      (Sigma fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))
                       )
                     let blob_gas_acc : Nat := next_blob_gas
                     (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                       (Sigma fun (k_state : Nat) =>
                       (Sigma fun (k_receipts : Nat) =>
                       (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), ((⟨_, ⟨_, remaining_deposits⟩⟩ : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))) : (Sigma
-                      fun (expected_deposits_dependentWitness0 : Nat) =>
-                      (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                      (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))) : (Sigma
+                      fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                      (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                      (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
                 ) : SailM
                 (Nat × (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
                 (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
-                (expected_deposits_dependentWitness0 : Nat) =>
-                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+                (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))))
                 )
               (pure ((blob_gas_acc : Nat), (gas_usage : (Sigma fun (k_execution : Nat) =>
                 (Sigma fun (k_state : Nat) =>
                 (Sigma fun (k_receipts : Nat) =>
                 (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
-                fun (expected_deposits_dependentWitness0 : Nat) =>
-                (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-                (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))))))
+                fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+                (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+                (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))))))
           ) : SailM
           (Nat × (Sigma fun (k_execution : Nat) =>
           (Sigma fun (k_state : Nat) =>
           (Sigma fun (k_receipts : Nat) =>
           (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma fun
-          (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))))
+          (expected_versioned_hashes_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))))
           )
         let cursor_empty := (ssz_list_cursor_empty cursor)
         let cursor_has_item : Bool := (! cursor_empty)
@@ -389,24 +439,31 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
           fun (k_execution : Nat) =>
           (Sigma fun (k_state : Nat) =>
           (Sigma fun (k_receipts : Nat) =>
-          (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (keys : (Sigma fun
-          (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))), (remaining_deposits : (Sigma
-          fun (expected_deposits_dependentWitness0 : Nat) =>
-          (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-          (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1)))), (tx0_to : (Vector (BitVec 8) 20))))
+          (BlockGasUsageFields gas_limit k_execution k_state k_receipts))))), (remaining_deposits : (Sigma
+          fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))), ((⟨_, ⟨_, remaining_versioned_hashes⟩⟩ : (Sigma
+          fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))) : (Sigma
+          fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+          (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+          (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1)))), (tx0_to : (Vector (BitVec 8) 20))))
     (pure loop_vars) ) : SailM
     (Nat × (BoundedSszListCursor (2 ^ 20)) × Bool × (Sigma fun (k_execution : Nat) =>
     (Sigma fun (k_state : Nat) =>
     (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields gas_limit k_execution k_state k_receipts)))) × (Sigma
-    fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Sigma
-    fun (expected_deposits_dependentWitness0 : Nat) =>
-    (Sigma fun (expected_deposits_dependentWitness1 : Nat) =>
-    (StatelessInputSliceFields expected_deposits_dependentWitness0 expected_deposits_dependentWitness1))) × (Vector (BitVec 8) 20))
+    fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))) × (Sigma
+    fun (expected_versioned_hashes_dependentWitness0 : Nat) =>
+    (Sigma fun (expected_versioned_hashes_dependentWitness1 : Nat) =>
+    (StatelessInputSliceFields expected_versioned_hashes_dependentWitness0 expected_versioned_hashes_dependentWitness1))) × (Vector (BitVec 8) 20))
     )
+  let ⟨_, ⟨_, remaining_hashes⟩⟩ := remaining_versioned_hashes
+  if ((remaining_hashes.len != 0) : Bool)
+  then (fatal_error InvalidVersionedHashes)
+  else (pure ())
   let remaining_deposits_length := (stateless_input_slice_length remaining_deposits)
   if (((profile.fork ≥b Prague) && (remaining_deposits_length != 0)) : Bool)
   then (fatal_error InvalidExecutionRequests)
@@ -435,19 +492,19 @@ def execute_block_transactions (transactions : (BoundedSszListRef (2 ^ 20))) (pu
 
 /-- Credits every withdrawal's recipient with its amount in gwei
 (EIP-4895); withdrawals cannot fail and charge no gas. -/
-def apply_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 4))) : SailM Unit := do
+def apply_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 20))) : SailM Unit := do
   let rest := withdrawals
   let rest ← (( do
     let loop_vars ← whileFuelM (fuel :=rest.count) (fun rest => (pure (rest.count != 0))) rest
       fun rest => do
         assert true "loop dummy assert"
         let (withdrawal_ref, tail) ← do (ssz_fixed_list_pop rest WD_SIZE)
-        let rest : (BoundedSszListRef (2 ^ 4)) := tail
+        let rest : (BoundedSszListRef (2 ^ 20)) := tail
         let withdrawal ← do (decode_withdrawal withdrawal_ref)
         let amount_in_wei := (withdrawal.amount *i 1000000000)
         (k_add_balance withdrawal.address amount_in_wei)
         (pure rest)
-    (pure loop_vars) ) : SailM (BoundedSszListRef (2 ^ 4)) )
+    (pure loop_vars) ) : SailM (BoundedSszListRef (2 ^ 20)) )
   (pure ())
 
 /-- The block-end state effects: withdrawals (Shanghai+, EIP-4895), the
@@ -481,7 +538,7 @@ def execute_block_body (body : BlockBody) (input_ref : StatelessInputRef) : Sail
   (warm_reset (← readReg k_current_transaction_epoch))
   (run_block_start_system_calls ())
   let result ← do
-    (execute_block_transactions body.transactions input_ref.public_keys input_ref.deposits)
+    (execute_block_transactions body.transactions input_ref.deposits input_ref.versioned_hashes)
   let post_tx_index := (body.transactions.count + 1)
   writeReg k_current_transaction_epoch post_tx_index
   (warm_reset (← readReg k_current_transaction_epoch))

@@ -103,9 +103,9 @@ def num_of_ExceptionKind (arg_ : ExceptionKind) : Nat :=
 
 def undefined_FatalError (_ : Unit) : SailM FatalError := do
   (internal_pick
-    [InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, WitnessDeficient, NumericOverflow])
+    [InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, InvalidVersionedHashes, WitnessDeficient, NumericOverflow])
 
-/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 20 -/
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 21 -/
 def FatalError_of_num (arg_ : Nat) : FatalError :=
   match arg_ with
   | 0 => InvalidConfig
@@ -127,7 +127,8 @@ def FatalError_of_num (arg_ : Nat) : FatalError :=
   | 16 => BlockAccessListTooLarge
   | 17 => InvalidBlockAccessList
   | 18 => InvalidExecutionRequests
-  | 19 => WitnessDeficient
+  | 19 => InvalidVersionedHashes
+  | 20 => WitnessDeficient
   | _ => NumericOverflow
 
 def num_of_FatalError (arg_ : FatalError) : Nat :=
@@ -151,8 +152,9 @@ def num_of_FatalError (arg_ : FatalError) : Nat :=
   | .BlockAccessListTooLarge => 16
   | .InvalidBlockAccessList => 17
   | .InvalidExecutionRequests => 18
-  | .WitnessDeficient => 19
-  | .NumericOverflow => 20
+  | .InvalidVersionedHashes => 19
+  | .WitnessDeficient => 20
+  | .NumericOverflow => 21
 
 /- Type quantifiers: k_a : Type -/
 def fatal_error (_reason : FatalError) : SailM k_a := do

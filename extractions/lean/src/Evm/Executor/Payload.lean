@@ -78,7 +78,7 @@ def transaction_trie_root (txs : (BoundedSszListRef (2 ^ 20))) : SailM (Vector (
 
 /-- The withdrawals-trie root (EIP-4895): leaf `i` holds
 `rlp(withdrawal_i)`, keyed by `rlp(i)`. -/
-def withdrawals_trie_root (wds : (BoundedSszListRef (2 ^ 4))) : SailM (Vector (BitVec 8) 32) := do
+def withdrawals_trie_root (wds : (BoundedSszListRef (2 ^ 20))) : SailM (Vector (BitVec 8) 32) := do
   let source := (IndexedWithdrawals wds)
   (indexed_trie_root source)
 
