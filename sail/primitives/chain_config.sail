@@ -2,10 +2,10 @@
 /*md
 # Chain configuration
 
-The decoded `SszChainConfig`. Its activation point is validated while decoding,
-so the resulting value only carries the chain id. The schema prefix selects the
-protocol profile, so neither the fork identifier nor its blob schedule is
-repeated inside the SSZ body. Pure data — no registers, no externs.
+The protocol profile the guest executes under: Amsterdam with its blob
+schedule, fixed by the model. The stateless input's schema id admits only this
+profile and its SSZ body carries just the chain id. Pure data — no registers,
+no externs.
 */
 /*! The base-fee update fractions used by some supported blob schedule. */
 type blob_fee_update_fraction_parameter('denominator : Int) -> Bool =
@@ -713,476 +713,43 @@ val execution_profile_for : forall 'fork 'target 'maximum 'denominator 'code_lim
 function execution_profile_for(protocol, block_limit) =
     struct { protocol = protocol, gas = gas_limits_for(protocol, block_limit) }
 
-/*! The schema's stable fork byte selects one complete protocol profile. The
-    branches are the sole table of admitted schema/profile combinations. */
-function schema_protocol_profile(schema_fork : byte) -> ProtocolProfile =
-    match schema_fork {
-        0x0a => {
-            let profile = struct {
-                    fork = Berlin,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Berlin,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(inactive_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(pre_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        berlin_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        inactive_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        pre_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x0b => {
-            let profile = struct {
-                    fork = London,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            London,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(inactive_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        london_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        inactive_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x0c => {
-            let profile = struct {
-                    fork = ArrowGlacier,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            ArrowGlacier,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(inactive_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        arrow_glacier_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        inactive_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x0d => {
-            let profile = struct {
-                    fork = GrayGlacier,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            GrayGlacier,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(inactive_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        gray_glacier_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        inactive_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x0e => {
-            let profile = struct {
-                    fork = Paris,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Paris,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(inactive_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        paris_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        inactive_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x0f => {
-            let profile = struct {
-                    fork = Shanghai,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Shanghai,
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(blob_schedule_inactive_count),
-                            sizeof(inactive_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(blob_schedule_inactive_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        shanghai_fork_value,
-                        blob_schedule_inactive_count,
-                        blob_schedule_inactive_count,
-                        inactive_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        blob_schedule_inactive_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x10 => {
-            let profile = struct {
-                    fork = Cancun,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(cancun_blob_target_count),
-                            sizeof(cancun_blob_max_count),
-                            sizeof(cancun_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Cancun,
-                            sizeof(cancun_blob_target_count),
-                            sizeof(cancun_blob_max_count),
-                            sizeof(cancun_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(cancun_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        first_blob_fork_value,
-                        cancun_blob_target_count,
-                        cancun_blob_max_count,
-                        cancun_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        cancun_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x11 => {
-            let profile = struct {
-                    fork = Prague,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(prague_blob_target_count),
-                            sizeof(prague_blob_max_count),
-                            sizeof(prague_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Prague,
-                            sizeof(prague_blob_target_count),
-                            sizeof(prague_blob_max_count),
-                            sizeof(prague_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_blob_limit = sizeof(prague_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        prague_fork_value,
-                        prague_blob_target_count,
-                        prague_blob_max_count,
-                        prague_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        ssz_uint_bound,
-                        ssz_uint_bound,
-                        prague_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x12 => {
-            let profile = struct {
-                    fork = Osaka,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(prague_blob_target_count),
-                            sizeof(prague_blob_max_count),
-                            sizeof(prague_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Osaka,
-                            sizeof(prague_blob_target_count),
-                            sizeof(prague_blob_max_count),
-                            sizeof(prague_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_blob_limit = sizeof(cancun_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        osaka_fork_value,
-                        prague_blob_target_count,
-                        prague_blob_max_count,
-                        prague_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        eip7825_transaction_gas_limit,
-                        eip7825_transaction_gas_limit,
-                        cancun_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x13 => {
-            let profile = struct {
-                    fork = BPO1,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(bpo1_blob_target_count),
-                            sizeof(bpo1_blob_max_count),
-                            sizeof(bpo1_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            BPO1,
-                            sizeof(bpo1_blob_target_count),
-                            sizeof(bpo1_blob_max_count),
-                            sizeof(bpo1_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_blob_limit = sizeof(cancun_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        bpo1_fork_value,
-                        bpo1_blob_target_count,
-                        bpo1_blob_max_count,
-                        bpo1_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        eip7825_transaction_gas_limit,
-                        eip7825_transaction_gas_limit,
-                        cancun_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        0x14 => {
-            let profile = struct {
-                    fork = BPO2,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(bpo2_blob_target_count),
-                            sizeof(bpo2_blob_max_count),
-                            sizeof(bpo2_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            BPO2,
-                            sizeof(bpo2_blob_target_count),
-                            sizeof(bpo2_blob_max_count),
-                            sizeof(bpo2_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(pre_amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(pre_amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_blob_limit = sizeof(cancun_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        bpo2_fork_value,
-                        bpo2_blob_target_count,
-                        bpo2_blob_max_count,
-                        bpo2_blob_fee_update_fraction,
-                        pre_amsterdam_deployed_code_size_limit,
-                        pre_amsterdam_initcode_size_limit,
-                        eip7825_transaction_gas_limit,
-                        eip7825_transaction_gas_limit,
-                        cancun_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-        _ => {
-            let profile = struct {
-                    fork = Amsterdam,
-                    blob_schedule =
-                        blob_schedule(
-                            sizeof(bpo2_blob_target_count),
-                            sizeof(bpo2_blob_max_count),
-                            sizeof(bpo2_blob_fee_update_fraction),
-                        ),
-                    excess_blob_gas_limit =
-                        compute_profile_excess_blob_gas_limit(
-                            Amsterdam,
-                            sizeof(bpo2_blob_target_count),
-                            sizeof(bpo2_blob_max_count),
-                            sizeof(bpo2_blob_fee_update_fraction),
-                        ),
-                    deployed_code_size_limit = sizeof(amsterdam_deployed_code_size_limit),
-                    initcode_size_limit = sizeof(amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
-                    transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
-                    transaction_blob_limit = sizeof(cancun_blob_max_count),
-                    refund_divisor = sizeof(post_london_refund_divisor),
-                } :
-                    ProtocolProfileFields(
-                        amsterdam_fork_value,
-                        bpo2_blob_target_count,
-                        bpo2_blob_max_count,
-                        bpo2_blob_fee_update_fraction,
-                        amsterdam_deployed_code_size_limit,
-                        amsterdam_initcode_size_limit,
-                        ssz_uint_bound,
-                        eip7825_transaction_gas_limit,
-                        cancun_blob_max_count,
-                        post_london_refund_divisor,
-                    );
-            pack_protocol_profile(profile)
-        },
-    }
-
-/*! Whether a schema fork byte has a protocol-profile branch. */
-function schema_protocol_profile_forwards_matches(schema_fork : byte) -> bool =
-      (schema_fork == 0x0a)
-    | (schema_fork == 0x0b)
-    | (schema_fork == 0x0c)
-    | (schema_fork == 0x0d)
-    | (schema_fork == 0x0e)
-    | (schema_fork == 0x0f)
-    | (schema_fork == 0x10)
-    | (schema_fork == 0x11)
-    | (schema_fork == 0x12)
-    | (schema_fork == 0x13)
-    | (schema_fork == 0x14)
-    | (schema_fork == 0x15)
-
-/*! The Amsterdam mapping entry initializes the kernel before input decoding. */
-let DEFAULT_PROTOCOL_PROFILE : ProtocolProfile = schema_protocol_profile(0x15)
-let DEFAULT_EXECUTION_PROFILE : ExecutionProfile = execution_profile_for(DEFAULT_PROTOCOL_PROFILE, 0)
-
-/*! The decoded chain configuration for the executing payload. */
-struct ChainConfig = {
-    chain_id : chain_identifier,
+/*! The Amsterdam protocol profile: the sole schema the guest admits. It also
+    initializes the kernel before input decoding. */
+let DEFAULT_PROTOCOL_PROFILE : ProtocolProfile = {
+    let profile = struct {
+            fork = Amsterdam,
+            blob_schedule =
+                blob_schedule(
+                    sizeof(bpo2_blob_target_count),
+                    sizeof(bpo2_blob_max_count),
+                    sizeof(bpo2_blob_fee_update_fraction),
+                ),
+            excess_blob_gas_limit =
+                compute_profile_excess_blob_gas_limit(
+                    Amsterdam,
+                    sizeof(bpo2_blob_target_count),
+                    sizeof(bpo2_blob_max_count),
+                    sizeof(bpo2_blob_fee_update_fraction),
+                ),
+            deployed_code_size_limit = sizeof(amsterdam_deployed_code_size_limit),
+            initcode_size_limit = sizeof(amsterdam_initcode_size_limit),
+            transaction_total_gas_limit = sizeof(ssz_uint_bound),
+            transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
+            transaction_blob_limit = sizeof(cancun_blob_max_count),
+            refund_divisor = sizeof(post_london_refund_divisor),
+        } :
+            ProtocolProfileFields(
+                amsterdam_fork_value,
+                bpo2_blob_target_count,
+                bpo2_blob_max_count,
+                bpo2_blob_fee_update_fraction,
+                amsterdam_deployed_code_size_limit,
+                amsterdam_initcode_size_limit,
+                ssz_uint_bound,
+                eip7825_transaction_gas_limit,
+                cancun_blob_max_count,
+                post_london_refund_divisor,
+            );
+    pack_protocol_profile(profile)
 }
+let DEFAULT_EXECUTION_PROFILE : ExecutionProfile = execution_profile_for(DEFAULT_PROTOCOL_PROFILE, 0)

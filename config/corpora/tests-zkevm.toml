@@ -3,22 +3,22 @@ extractor_schema = 1
 
 [corpus]
 name = "tests-zkevm"
-version = "v0.6.2"
+version = "v21.0.6"
 
 [source]
-tag = "tests-zkevm@v0.6.2"
-commit = "e5a8caf1b8055e4d805c7fb169edfa710914b7da"
+tag = "tests-zkevm@v21.0.6"
+commit = "59c1473ddfba341babaeca1c97a50e996f639a0b"
 t8n_version = "2.19.0"
-generation_args = 'fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n 8'
+generation_args = 'fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n auto'
 
 [archive]
-url = "https://github.com/ethereum/execution-specs/releases/download/tests-zkevm%40v0.6.2/fixtures_zkevm.tar.gz"
-sha256 = "cf9395b2cb1a87c195fd827ea03dce65a37c6036bb182441da28e7b0f6d45f40"
+url = "https://github.com/ethereum/execution-specs/releases/download/tests-zkevm%40v21.0.6/fixtures_zkevm.tar.gz"
+sha256 = "3a1051fb20272e4aaad58d8f78204123e281e4e0e935ddc8f71364535cae5b73"
 root = "fixtures"
 include_directories = ["blockchain_tests", "blockchain_tests_engine"]
 
 [inventory]
 # Digest schema 1 hashes each included JSON path and its SHA-256 in sorted order.
-tree_sha256 = "881def9621d54b043ab49de56b9d019024eeac9ed3fef298d6ff081af5aa22d9"
-json_files = 6333
-embedded_cases = 26104
+tree_sha256 = "ae4e674b74fe04e08efcaae31e5c71a2fbb9e1b69cf3ec1c5f86275a38509b37"
+json_files = 6904
+embedded_cases = 67685

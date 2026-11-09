@@ -101,6 +101,17 @@ static bool variable_list_ref(Bytes bytes, uint32_t maximum_count, uint32_t maxi
   if (count > maximum_count) {
     return false;
   }
+  /* Decoding the enclosing container rejects a list with an over-long or
+   * out-of-order element, so every element is checked here rather than when
+   * it is reached. */
+  for (uint32_t i = 0; i < count; ++i) {
+    const uint32_t start = load_le_u32(bytes.bytes + (size_t)i * 4);
+    const uint32_t stop =
+        i + 1 < count ? load_le_u32(bytes.bytes + (size_t)(i + 1) * 4) : bytes.len;
+    if (start > stop || stop > bytes.len || stop - start > maximum_item_length) {
+      return false;
+    }
+  }
   result->bytes = bytes;
   result->count = count;
   result->max_item_length = maximum_item_length;
@@ -133,45 +144,47 @@ struct StatelessInputRef decode_stateless_input_ref(Bytes input)
     EXECUTION_PAYLOAD_FIXED_LENGTH = 540,
     EXECUTION_REQUESTS_FIXED_LENGTH = 20,
     EXECUTION_WITNESS_FIXED_LENGTH = 12,
-    SSZ_PUBLIC_KEY_LENGTH = 65,
     WITHDRAWAL_LENGTH = 44,
+    DEPOSIT_LENGTH = 192,
+    WITHDRAWAL_REQUEST_LENGTH = 76,
+    CONSOLIDATION_REQUEST_LENGTH = 116,
+    BUILDER_DEPOSIT_LENGTH = 184,
+    BUILDER_EXIT_LENGTH = 68,
   };
   const uint32_t MAX_TRANSACTIONS = UINT32_C(1) << 20;
   const uint32_t MAX_TRANSACTION_LENGTH = UINT32_C(1) << 30;
-  const uint32_t MAX_WITHDRAWALS = UINT32_C(1) << 4;
+  const uint32_t MAX_WITHDRAWALS = UINT32_C(1) << 20;
   const uint32_t MAX_EXTRA_DATA_LENGTH = UINT32_C(1) << 5;
   const uint32_t MAX_BLOCK_ACCESS_LIST_LENGTH = UINT32_C(1) << 30;
-  const uint32_t MAX_BLOB_COMMITMENTS = UINT32_C(1) << 12;
+  const uint32_t MAX_BLOB_COMMITMENTS = UINT32_C(1) << 25;
+  const uint32_t MAX_REQUESTS = UINT32_C(1) << 25;
   const uint32_t MAX_WITNESS_NODES = UINT32_C(1) << 22;
   const uint32_t MAX_WITNESS_NODE_LENGTH = UINT32_C(1) << 10;
   const uint32_t MAX_WITNESS_CODES = UINT32_C(1) << 18;
   const uint32_t MAX_WITNESS_CODE_LENGTH = UINT32_C(1) << 16;
   const uint32_t MAX_WITNESS_HEADERS = UINT32_C(1) << 8;
   const uint32_t MAX_WITNESS_HEADER_LENGTH = UINT32_C(1) << 10;
-  const uint32_t MAX_PUBLIC_KEYS = UINT32_C(1) << 15;
 
   struct StatelessInputRef result;
   memset(&result, 0, sizeof(result));
   const uint8_t *source = input.bytes;
-  if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH || source[1] != 0x01 ||
-      source[0] < 0x0a || source[0] > 0x15) {
+  if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH || source[0] != 0x15 ||
+      source[1] != 0x01) {
     fatal_error(InvalidConfig);
   }
-  result.protocol = schema_protocol_profile(source[0]);
+  result.protocol = DEFAULT_PROTOCOL_PROFILE;
 
   const Bytes body = source_span(input, SSZ_BODY, input.len);
   const uint8_t *body_source = source + SSZ_BODY;
   const uint32_t body_length = body.len;
-  const uint32_t body_offsets[4] = {load_le_u32(body_source), load_le_u32(body_source + 4),
-                                    load_le_u32(body_source + 8), load_le_u32(body_source + 12)};
-  if (!offsets_ordered(body_offsets, 4, BODY_FIXED_LENGTH, body_length)) {
+  const uint32_t body_offsets[2] = {load_le_u32(body_source), load_le_u32(body_source + 4)};
+  if (!offsets_ordered(body_offsets, 2, BODY_FIXED_LENGTH, body_length)) {
     fatal_error(InvalidConfig);
   }
+  result.chain_id = load_le_u64(body_source + 8);
 
   result.new_payload_request = source_span(body, body_offsets[0], body_offsets[1]);
-  const Bytes witness = source_span(body, body_offsets[1], body_offsets[2]);
-  result.chain_config = source_span(body, body_offsets[2], body_offsets[3]);
-  result.public_keys = source_span(body, body_offsets[3], body_length);
+  const Bytes witness = source_span(body, body_offsets[1], body_length);
 
   if (result.new_payload_request.len < NEW_PAYLOAD_REQUEST_FIXED_LENGTH) {
     fatal_error(InvalidConfig);
@@ -253,12 +266,17 @@ struct StatelessInputRef decode_stateless_input_ref(Bytes input)
     fatal_error(InvalidConfig);
   }
 
-  if (result.public_keys.len % SSZ_PUBLIC_KEY_LENGTH != 0 ||
-      result.public_keys.len / SSZ_PUBLIC_KEY_LENGTH > MAX_PUBLIC_KEYS) {
-    fatal_error(InvalidConfig);
-  }
+  /* Every fixed-width list must tile its span exactly. */
   struct BoundedSszListRef ignored;
-  if (!fixed_list_ref(result.versioned_hashes, 32, MAX_BLOB_COMMITMENTS, &ignored)) {
+  if (!fixed_list_ref(result.versioned_hashes, 32, MAX_BLOB_COMMITMENTS, &ignored) ||
+      !fixed_list_ref(result.deposits, DEPOSIT_LENGTH, MAX_REQUESTS, &ignored) ||
+      !fixed_list_ref(result.withdrawal_requests, WITHDRAWAL_REQUEST_LENGTH, MAX_REQUESTS,
+                      &ignored) ||
+      !fixed_list_ref(result.consolidation_requests, CONSOLIDATION_REQUEST_LENGTH, MAX_REQUESTS,
+                      &ignored) ||
+      !fixed_list_ref(result.builder_deposit_requests, BUILDER_DEPOSIT_LENGTH, MAX_REQUESTS,
+                      &ignored) ||
+      !fixed_list_ref(result.builder_exit_requests, BUILDER_EXIT_LENGTH, MAX_REQUESTS, &ignored)) {
     fatal_error(InvalidConfig);
   }
   fatal_error_set_input(result);

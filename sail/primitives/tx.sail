@@ -176,6 +176,8 @@ type transaction_initcode_cost = range(0, 2 * div(transaction_length_bound + 31,
 struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
   /* EIP-2718 envelope type (the discriminant) */
   tx_type : TxType,
+  /* the signer recovered from the signature; the structural decode leaves
+     ZERO_ADDRESS until recovery fills it */
   sender : address, nonce : word,
   /* typed-envelope chain id; 0 for legacy txs */
   chain_id : chain_identifier,
@@ -198,9 +200,6 @@ struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_
   authorizations : AuthorizationListRef,
   /* source-backed EIP-4844 BLOBHASH operands */
   blob_hashes : BlobHashesFields('blob_limit),
-  /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
-     derived address must equal the signer recovered at execution */
-  pubkey : StatelessInputSlice,
   /* keccak of the signing preimage (EIP-155 / EIP-2718 domain applied),
      computed structurally at decode */
   signing_hash : hash,

@@ -186,7 +186,7 @@ sail/        the specification (evm.sail_project defines the single build)
       codecs/           address, tx, receipt, header, BAL, state codecs
     ssz/
       ssz.sail         generic source-backed SSZ readers and list navigation
-      stateless_input.sail concrete SszStatelessInput refs and decoder
+      stateless_input.sail concrete StatelessInput refs and decoder
     htr.sail           SSZ hash-tree-root computation
     mpt/               generic MPT implementation
       primitives.sail  trie paths + hex-prefix encoding
@@ -206,10 +206,8 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
              whole-operation refinements
 devtools/    handwritten Python and developer tooling: devtools/harness/cli.py drives
              main.sail in-process and gates its canonical output byte-exactly
-             against EELS. State tests are materialized as valid stateless
-             blocks by the in-process t8n, then adapted only by appending the
-             two known-empty v0.6.2 request lists and recomputing their root;
-             the EELS guest supplies the independent validation verdict.
+             against EELS. State-test synthesis is pinned to the v0.6.2 EELS
+             schema and is not supported with the v21 guest.
              benchmarks/, docs/, and optimised_c/ own the other repository
              developer utilities
 extractions/ one directory per target, each with contract/ (the axiom or ABI
@@ -287,11 +285,11 @@ whitespace, no tabs, final newline); `make fmt-check` enforces that every
 `make fmt` reformats in place.
 
 Run the conformance suite against the workspace-local
-`tests-zkevm@v0.6.2` corpus:
+`tests-zkevm@v21.0.6` corpus:
 
 ```sh
 uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 make verify-corpus
 ```
 
@@ -306,7 +304,7 @@ binary is not at `~/.zisk/bin/ziskemu`:
 
 ```sh
 ZISKEMU=/path/to/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The crypto

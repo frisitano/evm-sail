@@ -6,8 +6,8 @@ The EIP-2718 transaction envelope decoder: per-envelope destructuring into
 the [Transaction][type-Transaction] type (one walk, against each
 envelope's exact field shape), plus the EIP-2930 access-list
 and EIP-7702 authorization-tuple decoders. Standalone and purely
-structural: the envelope and public key are immutable stateless-input
-spans; the signature rules and the cryptography live in their own modules.
+structural: the envelope is an immutable stateless-input span; the
+signature rules and the cryptography live in their own modules.
 */
 /*! A decoded access list and the counts needed for intrinsic gas. */
 struct AccessListDecode('address_bound : Int, 'slot_bound : Int),
@@ -382,8 +382,6 @@ function rlp_decode_gas forall 'source_off 'source_len 'content_len,
     shape as an independent function. */
 function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
-    pubkey : StatelessInputSlice,
-    sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     TransactionFields(blob_schedule_inactive_count)
@@ -415,7 +413,7 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
     let signing_hash = tx_signing_hash(LegacyTx, signing_span, v);
     struct {
         tx_type = LegacyTx,
-        sender = sender,
+        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = 0,
@@ -430,7 +428,6 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
         max_priority_fee = gp,
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
-        pubkey = pubkey,
         signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
@@ -441,8 +438,6 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
 /*! Decodes the payload fields of an EIP-2930 transaction. */
 function decode_access_list_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
-    pubkey : StatelessInputSlice,
-    sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     TransactionFields(blob_schedule_inactive_count)
@@ -479,7 +474,7 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
     let signing_hash = tx_signing_hash(AccessListTx, signing_span, v);
     struct {
         tx_type = AccessListTx,
-        sender = sender,
+        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -494,7 +489,6 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
         max_priority_fee = gp,
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
-        pubkey = pubkey,
         signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
@@ -505,8 +499,6 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
 /*! Decodes the payload fields of an EIP-1559 transaction. */
 function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
-    pubkey : StatelessInputSlice,
-    sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     TransactionFields(blob_schedule_inactive_count)
@@ -544,7 +536,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
     let signing_hash = tx_signing_hash(FeeMarketTx, signing_span, v);
     struct {
         tx_type = FeeMarketTx,
-        sender = sender,
+        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -559,7 +551,6 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
         max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = EMPTY_BLOB_HASHES,
-        pubkey = pubkey,
         signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
@@ -571,9 +562,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
 function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
                           source_valid_range('source_off, 'source_len) & transaction_blob_limit_value('blob_limit). (
     tx : TransactionInputSlice,
-    pubkey : StatelessInputSlice,
     blob_limit : int('blob_limit),
-    sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     TransactionFields('blob_limit)
@@ -616,7 +605,7 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
     let signing_hash = tx_signing_hash(BlobTx, signing_span, v);
     struct {
         tx_type = BlobTx,
-        sender = sender,
+        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -631,7 +620,6 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
         max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = EMPTY_AUTHORIZATION_LIST_REF,
         blob_hashes = blob_hashes,
-        pubkey = pubkey,
         signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
@@ -642,8 +630,6 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
 /*! Decodes the payload fields of an EIP-7702 transaction. */
 function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('source_off, 'source_len). (
     tx : TransactionInputSlice,
-    pubkey : StatelessInputSlice,
-    sender : address,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
     TransactionFields(blob_schedule_inactive_count)
@@ -686,7 +672,7 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     let signing_hash = tx_signing_hash(SetCodeTx, signing_span, v);
     struct {
         tx_type = SetCodeTx,
-        sender = sender,
+        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = nonce,
         chain_id = rlp_decode_uint64(chain_f),
@@ -701,7 +687,6 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
         max_priority_fee = rlp_decode_u256(mp_f),
         authorizations = authorizations,
         blob_hashes = EMPTY_BLOB_HASHES,
-        pubkey = pubkey,
         signing_hash = signing_hash,
         sig_v = v,
         sig_r = rlp_decode_u256(r_f),
@@ -711,12 +696,10 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
 
 /*! Decodes one transaction from its raw envelope bytes — standalone and
     purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
-    source); `pubkey` the 65-byte witness public key (`0x04 ++ X ++ Y`)
-    claimed for its sender. The sender derives from the key
-    (`keccak256(X ‖ Y)[12:]`) and the signature material (signing hash,
-    `v`/`r`/`s`, the key itself) is captured on the transaction;
-    authentication happens at execution ([tx_auth_valid][]). No trust
-    decision and no fee derivation happens here.
+    source). The signature material (signing hash, `v`/`r`/`s`) is captured
+    on the transaction and the sender is left as `ZERO_ADDRESS`; the caller
+    recovers it from that material. No trust decision and no fee derivation
+    happens here.
 
     A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is
     the type byte (`0x01` EIP-2930, `0x02` EIP-1559, `0x03` EIP-4844,
@@ -725,23 +708,17 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     unknown type byte or wrong arity is undecodable. The data field is
     never materialized: `input_src` carries its (source, offset, length)
     span, bound as the transaction input only when the tx runs. */
-val rlp_decode_tx : forall 'tx_off 'tx_len 'public_key_off 'blob_limit,
+val rlp_decode_tx : forall 'tx_off 'tx_len 'blob_limit,
                          source_valid_range('tx_off, 'tx_len)
                       &  0
                       <= 'tx_len
                       &  'tx_len
                       <= transaction_length_bound
-                      &  source_valid_range('public_key_off, 65)
                       &  transaction_blob_limit_value('blob_limit). (
         StatelessInputSliceFields('tx_off, 'tx_len),
-        StatelessInputSliceFields('public_key_off, 65),
         int('blob_limit),
     ) -> Transaction
-function rlp_decode_tx(tx, pubkey, blob_limit) = {
-    let public_key_body = sub_slice(pubkey, 1, PUBLIC_KEY_BODY_LENGTH);
-    let public_key_hash = keccak256(public_key_body);
-    let public_key_word = hash_to_word(public_key_hash);
-    let sender = word_to_address(public_key_word);
+function rlp_decode_tx(tx, blob_limit) = {
     let tx_length = tx.len;
     let b0 : byte =
         if tx_length == 0 then fatal_error(RlpDecode) else slice_byte(tx, 0);
@@ -763,23 +740,23 @@ function rlp_decode_tx(tx, pubkey, blob_limit) = {
     };
     match tx_type {
         LegacyTx => {
-            let decoded = decode_legacy_tx(tx, pubkey, sender, fields);
+            let decoded = decode_legacy_tx(tx, fields);
             pack_transaction(decoded)
         },
         AccessListTx => {
-            let decoded = decode_access_list_tx(tx, pubkey, sender, fields);
+            let decoded = decode_access_list_tx(tx, fields);
             pack_transaction(decoded)
         },
         FeeMarketTx => {
-            let decoded = decode_fee_market_tx(tx, pubkey, sender, fields);
+            let decoded = decode_fee_market_tx(tx, fields);
             pack_transaction(decoded)
         },
         BlobTx => {
-            let decoded = decode_blob_tx(tx, pubkey, blob_limit, sender, fields);
+            let decoded = decode_blob_tx(tx, blob_limit, fields);
             pack_transaction(decoded)
         },
         SetCodeTx => {
-            let decoded = decode_set_code_tx(tx, pubkey, sender, fields);
+            let decoded = decode_set_code_tx(tx, fields);
             pack_transaction(decoded)
         },
     }

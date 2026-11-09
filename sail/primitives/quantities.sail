@@ -29,7 +29,7 @@ type account_nonce = range(0, account_nonce_bound)
 
 /*! Largest value represented by an SSZ `uint64`. This is a wire-schema
     constraint, sourced from the consensus `ExecutionPayload` container and
-    the Amsterdam `SszExecutionPayload`, rather than an implementation word
+    the Amsterdam `ExecutionPayload`, rather than an implementation word
     size. */
 type ssz_uint_bound : Int = 2 ^ 64 - 1
 

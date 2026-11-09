@@ -3,18 +3,17 @@
 
 Architecture: the Sail model is built ONCE into a shared library and driven
 IN-PROCESS via ctypes (devtools.harness.guest). Each fixture case is serialized
-to the SSZ SszStatelessInput (devtools.harness.ssz_builder, under the
+to the SSZ StatelessInput (devtools.harness.ssz_builder, under the
 execution-specs venv) and fed
 to main.sail's full-block validator, gated BYTE-EXACT against the EELS
 reference. Two input
 sources, auto-detected per fixture file:
   - state tests: ssz_builder executes the case through the in-process EELS t8n
-    and reference guest. The pinned EELS schema's three request lists are
-    extended with the two known-empty v0.6.2 builder lists; only the request
-    root is recomputed, while the reference guest supplies the validation
-    verdict;
-  - blockchain/stateless fixtures already carrying statelessInputBytes /
+    and reference guest. This synthesis is pinned to the v0.6.2 EELS schema and
+    is NOT supported with the v21 guest (which accepts only schema id 0x1501);
+  - blockchain and engine fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
+    The 43-byte StatelessValidationResult is compared as opaque bytes.
 Four execution vehicles: the native in-process ctypes lib (default), the
 generated Python extraction (--python), the REAL RISC-V guest ELF on Spike
 (--spike), or the production ZisK ELF on ziskemu (--zisk). Both ELF vehicles
@@ -150,7 +149,7 @@ EXECSPECS_PY = os.environ.get(
     "EXECSPECS_PY", os.path.join(EXECSPECS_ROOT, ".venv", "bin", "python3")
 )
 
-# Persistent SSZ SszStatelessInput builder (devtools.harness.ssz_builder --serve), run under the
+# Persistent SSZ StatelessInput builder (devtools.harness.ssz_builder --serve), run under the
 # execution-specs venv (it owns the stateless SSZ types + serializer + t8n). One
 # case JSON per line in, one JSON response per line out ({"input": hex[,
 # "expected": hex]} or {"err": msg}).
@@ -179,7 +178,7 @@ def _serve_request(payload):
 
 
 def build_guest_pair(case):
-    """case -> (input bytes, expected SszStatelessValidationResult bytes): a fully
+    """case -> (input bytes, expected StatelessValidationResult bytes): a fully
     VALID Amsterdam block built by the in-process EELS t8n, plus the reference
     guest's byte-exact expected output over that exact input."""
     resp = _serve_request(
@@ -197,22 +196,25 @@ def build_guest_pair(case):
 
 
 def collect_stateless(path):
-    """Blockchain/stateless fixture blocks carrying statelessInputBytes:
-    [(cid, input_bytes, expected_bytes|None)]. Empty for state-test files."""
+    """Blockchain and engine fixture entries carrying statelessInputBytes:
+    [(cid, input_bytes, expected_bytes|None)]. Blockchain fixtures carry them
+    on `blocks`, engine fixtures on `engineNewPayloads`. Empty for state-test
+    files."""
     out = []
     for name, t in fixture_items(path):
-        for i, b in enumerate(t.get("blocks", [])):
-            sib = b.get("statelessInputBytes")
-            if not sib:
-                continue
-            want = b.get("statelessOutputBytes")
-            out.append(
-                (
-                    f"{name.split('::')[-1]}#{i}",
-                    bytes.fromhex(sib.removeprefix("0x")),
-                    bytes.fromhex(want.removeprefix("0x")) if want else None,
+        for key, tag in (("blocks", "#"), ("engineNewPayloads", "#engine")):
+            for i, b in enumerate(t.get(key, [])):
+                sib = b.get("statelessInputBytes")
+                if not sib:
+                    continue
+                want = b.get("statelessOutputBytes")
+                out.append(
+                    (
+                        f"{name.split('::')[-1]}{tag}{i}",
+                        bytes.fromhex(sib.removeprefix("0x")),
+                        bytes.fromhex(want.removeprefix("0x")) if want else None,
+                    )
                 )
-            )
     return out
 
 
@@ -473,8 +475,9 @@ def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
-    mode and narrow v0.6.2 request-schema adapter. Pass criterion: the guest's
-    output bytes EQUAL the adapted reference output.
+    mode. State-test synthesis is pinned to the v0.6.2 EELS schema and is not
+    supported with the v21 guest. Pass criterion: the guest's output bytes
+    EQUAL the reference output.
     Backend: native in-process ctypes, the generated Python extraction,
     executable Lean extraction, the real RISC-V ELF on Spike, or the production
     ZisK ELF on ziskemu."""

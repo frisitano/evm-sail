@@ -2,7 +2,7 @@
 /*md
 # The stateless input decoder
 
-Materialized references into the concrete `SszStatelessInput` wire format
+Materialized references into the concrete `StatelessInput` wire format
 and the stateless guest decoder. The layout constants transcribe the SSZ
 schema; the decoder resolves every variable region once and hands
 consumers explicit source spans.
@@ -17,26 +17,29 @@ by container.
     follows. */
 let SSZ_BODY : int(2) = 2
 
-/* SszStatelessInput: 4 variable fields, offset table at body+{0,4,8,12}. */
+/*! The only admitted schema id: Amsterdam (fork `0x15`), revision `0x01`. */
+let STATELESS_SCHEMA_ID : bits(16) = 0x1501
+
+/* StatelessInput: two variable fields (offset table at body+{0,4}) and the
+ * fixed `uint64` chain id at body+8. */
 let IN_NPR_OFF : int(0) = 0
 let IN_WITNESS_OFF : int(4) = 4
-let IN_CHAIN_CONFIG_OFF : int(8) = 8
-let IN_PUBLIC_KEYS_OFF : int(12) = 12
+let IN_CHAIN_ID : int(8) = 8
 
-/* SszNewPayloadRequest. */
+/* NewPayloadRequest. */
 let NPR_PAYLOAD_OFF : int(0) = 0
 let NPR_VHASHES_OFF : int(4) = 4
 let NPR_BEACON_ROOT : int(8) = 8
 let NPR_REQUESTS_OFF : int(40) = 40
 
-/* SszExecutionRequests. */
+/* ExecutionRequests. */
 let REQ_DEPOSITS_OFF : int(0) = 0
 let REQ_WITHDRAWALS_OFF : int(4) = 4
 let REQ_CONSOLIDATIONS_OFF : int(8) = 8
 let REQ_BUILDER_DEPOSITS_OFF : int(12) = 12
 let REQ_BUILDER_EXITS_OFF : int(16) = 16
 
-/* SszExecutionPayload fixed-region field offsets. */
+/* ExecutionPayload fixed-region field offsets. */
 let PL_FEE_RECIPIENT : int(32) = 32
 let PL_STATE_ROOT : int(52) = 52
 let PL_RECEIPTS_ROOT : int(84) = 84
@@ -56,21 +59,21 @@ let PL_EXCESS_BLOB_GAS : int(520) = 520
 let PL_BAL_OFF : int(528) = 528
 let PL_SLOT_NUMBER : int(532) = 532
 
-/* SszWithdrawal fixed element layout. */
+/* Withdrawal fixed element layout. */
 let WD_SIZE : int(44) = 44
 let WD_INDEX : int(0) = 0
 let WD_VALIDATOR_INDEX : int(8) = 8
 let WD_ADDRESS : int(16) = 16
 let WD_AMOUNT : int(36) = 36
 
-/* SszChainConfig and nested fork activation layouts. */
-let CC_CHAIN_ID : int(0) = 0
-let CC_ACTIVE_FORK_OFF : int(8) = 8
-let FC_ACTIVATION_OFF : int(0) = 0
-let FA_BLOCK_NUMBER_OFF : int(0) = 0
-let FA_TIMESTAMP_OFF : int(4) = 4
+/* Fixed element widths of the execution-request lists. */
+let REQ_DEPOSIT_SIZE : int(192) = 192
+let REQ_WITHDRAWAL_REQUEST_SIZE : int(76) = 76
+let REQ_CONSOLIDATION_REQUEST_SIZE : int(116) = 116
+let REQ_BUILDER_DEPOSIT_SIZE : int(184) = 184
+let REQ_BUILDER_EXIT_SIZE : int(68) = 68
 
-/* SszExecutionWitness. */
+/* ExecutionWitness. */
 let WIT_STATE_OFF : int(0) = 0
 let WIT_CODES_OFF : int(4) = 4
 let WIT_HEADERS_OFF : int(8) = 8
@@ -81,12 +84,11 @@ let NEW_PAYLOAD_REQUEST_FIXED_LENGTH : int(44) = 44
 let EXECUTION_PAYLOAD_FIXED_LENGTH : int(540) = 540
 let EXECUTION_REQUESTS_FIXED_LENGTH : int(20) = 20
 let EXECUTION_WITNESS_FIXED_LENGTH : int(12) = 12
-let PUBLIC_KEY_LENGTH : int(65) = 65
-let CHAIN_CONFIG_HEADER_LENGTH : int(12) = 12
-let CHAIN_CONFIG_MIN_LENGTH : int(24) = 24
 
-/* Amsterdam stateless-input SSZ schema bounds. They are protocol/schema
- * limits, not capacities chosen by the C backend. */
+/* Amsterdam stateless-input SSZ schema bounds. The extra-data, witness item
+ * and witness header-count limits are protocol/schema limits. The other
+ * collections are progressive lists without a schema limit, so their counts
+ * are capacities chosen by the model, not by the C backend. */
 let MAX_EXTRA_DATA_LENGTH : range(extra_data_length_bound, extra_data_length_bound) = sizeof(extra_data_length_bound)
 let MAX_TRANSACTION_LENGTH : range(transaction_length_bound, transaction_length_bound) = sizeof(
     transaction_length_bound
@@ -115,7 +117,6 @@ let MAX_WITNESS_HEADERS : range(witness_header_count_bound, witness_header_count
 let MAX_WITNESS_HEADER_LENGTH : range(witness_header_length_bound, witness_header_length_bound) = sizeof(
     witness_header_length_bound
 )
-let MAX_PUBLIC_KEYS : range(public_key_count_bound, public_key_count_bound) = sizeof(public_key_count_bound)
 
 /*! Returns the byte position of an entry in a `uint32` SSZ offset table. */
 function ssz_offset_table_position(index : ssz_offset_index) -> ssz_offset = {
@@ -216,6 +217,36 @@ function ssz_list_at forall ('maximum : Int) ('index : Int),
     }
 }
 
+/*! Checks every remaining element of a variable-element list against its
+    per-item byte limit and offset ordering. */
+function ssz_validate_variable_list_cursor forall ('maximum : Int),
+                                             source_valid_length('maximum) & 'maximum <= 2 ^ 30 - 1. (cursor :
+    BoundedSszListCursor('maximum)) -> (
+    unit
+) = {
+    let cursor_empty = ssz_list_cursor_empty(cursor);
+    if cursor_empty then {
+        return ()
+    };
+    let (_, next) = ssz_list_pop(cursor);
+    ssz_validate_variable_list_cursor(next)
+}
+
+/* Proof-only: one collection cursor position is consumed per recursive call. */
+termination_measure ssz_validate_variable_list_cursor(cursor) =
+    cursor.items.count - cursor.index
+
+/*! Checks every element of a variable-element list, as decoding the enclosing
+    SSZ container does: an over-long element makes the whole input
+    undecodable. */
+function ssz_validate_variable_list forall ('maximum : Int), source_valid_length('maximum) & 'maximum <= 2 ^ 30 - 1. (items :
+    BoundedSszListRef('maximum)) -> (
+    unit
+) = {
+    let cursor = ssz_list_cursor(items);
+    ssz_validate_variable_list_cursor(cursor)
+}
+
 /*! Returns an item from a fixed-stride SSZ list reference. */
 val ssz_fixed_list_at : forall 'maximum 'item_size 'index,
                           source_valid_length('maximum) & source_valid_length('item_size) & 0 <= 'index. (
@@ -280,8 +311,7 @@ struct StatelessInputRef = {
     witness_state : WitnessNodeListRef,
     witness_codes : WitnessCodeListRef,
     witness_headers : WitnessHeaderListRef,
-    chain_config : StatelessInputSlice,
-    public_keys : StatelessInputSlice,
+    chain_id : chain_identifier,
 }
 
 /*! Retains a successfully checked fixed-region bound in the slice type. */
@@ -345,8 +375,8 @@ function ssz_finish(cursor : SszContainerCursor) -> StatelessInputSlice = {
 }
 
 /*! Constructs a variable-item list with its SSZ count and per-item byte
-    limits attached. Item lengths are checked lazily when reached, before a
-    consumer can construct any narrower optimized value. */
+    limits attached. Item lengths are checked eagerly by
+    [ssz_validate_variable_list][] before decoding returns. */
 function ssz_bounded_variable_list_ref forall ('maximum : Int) ('item_length : Int),
                                          source_valid_length('maximum) & source_valid_length('item_length). (
     bytes : StatelessInputSlice,
@@ -405,17 +435,11 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let body_offset_value = SSZ_BODY;
     let input_fields : StatelessInputSliceAtLeast(18) =
         if fixed_length <= input.len then input else fatal_error(InvalidConfig);
-    let schema_version = slice_byte(input_fields, 1);
-    if schema_version != 0x01 then {
+    let schema_id : bits(16) = slice_byte(input_fields, 0) @ slice_byte(input_fields, 1);
+    if schema_id != STATELESS_SCHEMA_ID then {
         fatal_error(InvalidConfig)
     };
-    let schema_fork = slice_byte(input_fields, 0);
-    let schema_matches = schema_protocol_profile_forwards_matches(schema_fork);
-    let schema_mismatch = not_bool(schema_matches);
-    if schema_mismatch then {
-        fatal_error(InvalidConfig)
-    };
-    let protocol : ProtocolProfile = schema_protocol_profile(schema_fork);
+    let protocol : ProtocolProfile = DEFAULT_PROTOCOL_PROFILE;
     let body_bytes = slice_suffix(input_fields, body_offset_value);
     let body = ssz_container_bytes(body_bytes, STATELESS_INPUT_BODY_FIXED_LENGTH);
     let container_start : int(0) = 0;
@@ -424,10 +448,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let new_payload_request_offset = ssz_u32(body, new_payload_request_position);
     let witness_position = ssz_field_offset(container_start, IN_WITNESS_OFF);
     let witness_offset = ssz_u32(body, witness_position);
-    let chain_config_position = ssz_field_offset(container_start, IN_CHAIN_CONFIG_OFF);
-    let chain_config_offset = ssz_u32(body, chain_config_position);
-    let public_keys_position = ssz_field_offset(container_start, IN_PUBLIC_KEYS_OFF);
-    let public_keys_offset = ssz_u32(body, public_keys_position);
+    let chain_id_position = ssz_field_offset(container_start, IN_CHAIN_ID);
+    let chain_id : chain_identifier = decode_ssz_uint(body, chain_id_position);
     let body_fixed_length = STATELESS_INPUT_BODY_FIXED_LENGTH;
     if new_payload_request_offset != body_fixed_length then {
         fatal_error(InvalidConfig)
@@ -435,10 +457,8 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
     let body_cursor = ssz_container_cursor(body, STATELESS_INPUT_BODY_FIXED_LENGTH);
     let (new_payload_request_bytes, body_after_payload_request) = ssz_take(body_cursor, witness_offset);
     let new_payload_request = ssz_container_bytes(new_payload_request_bytes, NEW_PAYLOAD_REQUEST_FIXED_LENGTH);
-    let (execution_witness_bytes, body_after_witness) = ssz_take(body_after_payload_request, chain_config_offset);
+    let execution_witness_bytes = ssz_finish(body_after_payload_request);
     let execution_witness = ssz_container_bytes(execution_witness_bytes, EXECUTION_WITNESS_FIXED_LENGTH);
-    let (chain_config, body_after_chain_config) = ssz_take(body_after_witness, public_keys_offset);
-    let public_keys = ssz_finish(body_after_chain_config);
 
     let npr_start : int(0) = 0;
     let payload_position = ssz_field_offset(npr_start, NPR_PAYLOAD_OFF);
@@ -543,16 +563,32 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
         MAX_WITNESS_HEADER_LENGTH,
     );
 
-    let public_key_bytes = public_keys.len;
-    let public_key_length = PUBLIC_KEY_LENGTH;
-    let public_key_count = public_key_bytes / public_key_length;
-    if public_key_bytes != public_key_count * public_key_length then {
-        fatal_error(InvalidConfig)
-    };
-    if MAX_PUBLIC_KEYS < public_key_count then {
-        fatal_error(InvalidConfig)
-    };
     let _ = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, MAX_BLOB_COMMITMENTS_PER_BLOCK);
+    let _ = ssz_bounded_fixed_list_ref(deposits, REQ_DEPOSIT_SIZE, sizeof(deposit_request_count_bound));
+    let _ = ssz_bounded_fixed_list_ref(
+        withdrawal_requests,
+        REQ_WITHDRAWAL_REQUEST_SIZE,
+        sizeof(withdrawal_request_count_bound),
+    );
+    let _ = ssz_bounded_fixed_list_ref(
+        consolidation_requests,
+        REQ_CONSOLIDATION_REQUEST_SIZE,
+        sizeof(consolidation_request_count_bound),
+    );
+    let _ = ssz_bounded_fixed_list_ref(
+        builder_deposit_requests,
+        REQ_BUILDER_DEPOSIT_SIZE,
+        sizeof(builder_deposit_request_count_bound),
+    );
+    let _ = ssz_bounded_fixed_list_ref(
+        builder_exit_requests,
+        REQ_BUILDER_EXIT_SIZE,
+        sizeof(builder_exit_request_count_bound),
+    );
+    ssz_validate_variable_list(transactions);
+    ssz_validate_variable_list(witness_state);
+    ssz_validate_variable_list(witness_codes);
+    ssz_validate_variable_list(witness_headers);
 
     struct {
         protocol = protocol,
@@ -571,8 +607,7 @@ function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInp
         witness_state = witness_state,
         witness_codes = witness_codes,
         witness_headers = witness_headers,
-        chain_config = chain_config,
-        public_keys = public_keys,
+        chain_id = chain_id,
     }
 }
 
@@ -623,6 +658,7 @@ function index_witness_codes_cursor(cursor : WitnessCodeListCursor) -> unit = {
     if cursor_empty then {
         return ()
     };
+
     let (code, next) = ssz_list_pop(cursor);
 
     /* The witness envelope permits code blobs up to 2^16 bytes
@@ -930,90 +966,14 @@ function decode_withdrawal(withdrawal : StatelessInputSlice) -> Withdrawal = {
     }
 }
 
-/*! Decodes the `SszChainConfig` at `cc`: the chain id (`u64` at 0) and
-    the active Amsterdam `SszForkConfig` activation.
-    The activation point (optional block number / timestamp, `List[u64,1]`
-    each) must be reached by this payload: at least one bound set, none
-    exceeding the payload's — a future activation invalidates the block. */
-function decode_chain_config(
-    cc : StatelessInputSlice,
-    number : block_number,
-    timestamp : block_timestamp,
-) -> (
-    ChainConfig
-) = {
-    let cc_length = cc.len;
-    let header_length = CHAIN_CONFIG_HEADER_LENGTH;
-    let minimum_length = CHAIN_CONFIG_MIN_LENGTH;
-    if cc_length < header_length then {
-        fatal_error(InvalidConfig)
-    };
-    let f_offset = ssz_u32(cc, CC_ACTIVE_FORK_OFF);
-    if (f_offset != 12) | (cc_length < minimum_length) then {
-        fatal_error(InvalidConfig)
-    };
-    let f : int(12) = 12;
-    let activation_position = ssz_field_offset(f, FC_ACTIVATION_OFF);
-    let activation_offset = ssz_u32(cc, activation_position);
-    if activation_offset != 4 then {
-        fatal_error(InvalidConfig)
-    };
-    let activation_start : int(16) = 16;
-    let activation_fixed_end : int(24) = 24;
-    let a : int(16) = 16;
-    let block_number_position = ssz_field_offset(a, FA_BLOCK_NUMBER_OFF);
-    let block_number_offset = ssz_u32(cc, block_number_position);
-    let timestamp_position = ssz_field_offset(a, FA_TIMESTAMP_OFF);
-    let timestamp_offset = ssz_u32(cc, timestamp_position);
-    let block_number_start : stateless_input_pointer =
-        if block_number_offset <= cc_length - activation_start
-        then activation_start + block_number_offset
-        else fatal_error(InvalidConfig);
-    let timestamp_start : stateless_input_pointer =
-        if timestamp_offset <= cc_length - activation_start
-        then activation_start + timestamp_offset
-        else fatal_error(InvalidConfig);
-    if activation_fixed_end != block_number_start then {
-        fatal_error(InvalidConfig)
-    };
-    if timestamp_start < block_number_start then {
-        fatal_error(InvalidConfig)
-    };
-    if cc_length < timestamp_start then {
-        fatal_error(InvalidConfig)
-    };
-    let bn_length = timestamp_start - block_number_start;
-    let ts_length = cc_length - timestamp_start;
-    if ((bn_length != 0) & (bn_length != SSZ_UINT_BYTES)) | ((ts_length != 0) & (ts_length != SSZ_UINT_BYTES)) then {
-        fatal_error(InvalidConfig)
-    };
-    if (bn_length == 0) & (ts_length == 0) then {
-        fatal_error(InvalidConfig)
-    };
-    if bn_length == SSZ_UINT_BYTES then {
-        let activation_block : block_number = decode_ssz_uint(cc, block_number_start);
-        if number < activation_block then {
-            fatal_error(InvalidConfig)
-        }
-    };
-    if ts_length == SSZ_UINT_BYTES then {
-        let activation_timestamp : block_timestamp = decode_ssz_uint(cc, timestamp_start);
-        if timestamp < activation_timestamp then {
-            fatal_error(InvalidConfig)
-        }
-    };
-    struct { chain_id = decode_ssz_uint(cc, CC_CHAIN_ID) }
-}
-
-/*! Decodes the semantic payload structure — header, chain config, body
+/*! Decodes the semantic payload structure — header, chain id, body
     references — without touching an encoded transaction or withdrawal
     element, and installs the header and chain parameters in the kernel. */
 function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput = {
     let payload = input_ref.execution_payload;
     let header = decode_block_header_ssz(input_ref);
-    let chain_config = decode_chain_config(input_ref.chain_config, header.number, header.timestamp);
     k_set_header(header);
-    k_chain_id = chain_config.chain_id;
+    k_chain_id = input_ref.chain_id;
     k_execution_profile = execution_profile_for(input_ref.protocol, header.gas_limit);
     struct {
         payload =
@@ -1030,7 +990,7 @@ function decode_stateless_input(input_ref : StatelessInputRef) -> StatelessInput
                             },
                     },
             },
-        chain_config = chain_config,
+        chain_id = input_ref.chain_id,
     }
 }
 
@@ -1046,18 +1006,31 @@ function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContex
     witness
 }
 
-/*! Decodes one transaction envelope with its witnessed public key. */
-val decode_transaction : forall 'transaction_off 'transaction_len 'public_key_off,
-                           source_valid_range('transaction_off, 'transaction_len) &
-                               source_valid_range('public_key_off, 65). (
-        StatelessInputSliceFields('transaction_off, 'transaction_len),
-        StatelessInputSliceFields('public_key_off, 65),
+/*! Fills in the sender of a structurally decoded transaction by recovering it
+    from the signature material captured at decode. */
+function recover_transaction_sender forall 'blob_limit, transaction_blob_limit_value('blob_limit). (tx :
+    TransactionFields('blob_limit)) -> (
+    Transaction
+) = {
+    let tx_semantics = tx_type_semantics(tx.tx_type);
+    let parity = tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v);
+    let sender = tx_recover_sender(tx.signing_hash, parity, tx.sig_r, tx.sig_s);
+    pack_transaction({ tx with sender = sender })
+}
+
+/*! Decodes one transaction envelope and recovers its sender from the
+    signature. */
+val decode_transaction : forall 'transaction_off 'transaction_len,
+                           source_valid_range('transaction_off, 'transaction_len). StatelessInputSliceFields(
+        'transaction_off,
+        'transaction_len,
     ) -> Transaction
-function decode_transaction(transaction, public_key) = {
+function decode_transaction(transaction) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     if transaction.len <= sizeof(transaction_length_bound) then {
-        rlp_decode_tx(transaction, public_key, profile.transaction_blob_limit)
+        let decoded = rlp_decode_tx(transaction, profile.transaction_blob_limit);
+        recover_transaction_sender(decoded)
     } else {
         fatal_error(InvalidConfig)
     }

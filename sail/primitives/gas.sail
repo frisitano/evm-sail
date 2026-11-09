@@ -24,7 +24,7 @@ ceiling.
 
 /*! The maximum block gas limit admitted by the execution-payload SSZ
     `uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
-    Amsterdam `SszExecutionPayload.gas_limit`. */
+    Amsterdam `ExecutionPayload.gas_limit`. */
 type block_gas_limit_bound : Int = ssz_uint_bound
 
 /*! EIP-7928 charges one BAL item against each 2,000 units of block gas. */

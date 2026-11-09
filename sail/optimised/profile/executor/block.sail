@@ -2,7 +2,6 @@
 
 function execute_block_transactions(
     transactions : TransactionListRef,
-    public_keys : StatelessInputSlice,
     expected_deposits : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
@@ -10,13 +9,6 @@ function execute_block_transactions(
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let gas_limits = execution_profile.gas;
-    let public_keys_length = public_keys.len;
-    let public_key_length = PUBLIC_KEY_LENGTH;
-    let public_key_count_value = public_keys_length / public_key_length;
-    if (public_key_count_value != transactions.count) |
-        (public_keys_length != public_key_count_value * public_key_length) then {
-        fatal_error(WitnessDeficient)
-    };
     let (gas_limit as 'gas_limit) = gas_limits.block_limit;
     var gas_usage : BlockGasUsageFor('gas_limit) = block_gas_usage_empty(gas_limit);
     var blob_gas_acc : blob_gas_used = 0;
@@ -30,18 +22,12 @@ function execute_block_transactions(
     let logs_start = log_store_index_add(logs_tx_start(), logs_tx_count());
     var remaining_deposits : StatelessInputSlice = expected_deposits;
     var cursor = ssz_list_cursor(transactions);
-    var keys : StatelessInputSlice = public_keys;
     while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let i = cursor.index;
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
-        let keys_fields = keys;
-        let keys_fields : StatelessInputSliceAtLeast(65) =
-            if public_key_length <= keys_fields.len then keys_fields else fatal_error(WitnessDeficient);
-        let public_key = sub_slice(keys_fields, 0, PUBLIC_KEY_LENGTH);
-        keys = slice_suffix(keys_fields, public_key_length);
         cycle_scope_start(10);
-        let tx = decode_transaction(transaction, public_key);
+        let tx = decode_transaction(transaction);
         cycle_scope_end(10);
         k_current_transaction_epoch = i + 1;
         if i == 0 then {
@@ -129,7 +115,7 @@ function execute_block_body(body : BlockBody, input_ref : StatelessInputRef) -> 
     run_block_start_system_calls();
     cycle_scope_end(8);
     cycle_scope_start(9);
-    let result = execute_block_transactions(body.transactions, input_ref.public_keys, input_ref.deposits);
+    let result = execute_block_transactions(body.transactions, input_ref.deposits);
     cycle_scope_end(9);
     let post_tx_index = body.transactions.count + 1;
     k_current_transaction_epoch = post_tx_index;

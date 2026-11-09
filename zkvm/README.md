@@ -14,15 +14,14 @@ semantics wired up.
 ```
 $ cd ..
 $ uv run --frozen python -m devtools.harness.cli --spike --limit 1 --quiet \
-    zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+    zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
-The gate diffs the guest's canonical SSZ `SszStatelessValidationResult` BYTE-EXACT
-against the EELS reference: any EEST state test is executed through the
-in-process EELS t8n (`devtools/harness/ssz_builder.py`), which produces a fully VALID
-Amsterdam block input AND the reference guest's expected output bytes over that
-exact input (fixtures already carrying `statelessInputBytes`/
-`statelessOutputBytes` run directly). The same harness drives the native
+The gate diffs the guest's canonical SSZ `StatelessValidationResult` BYTE-EXACT
+against the EELS reference: fixtures carrying `statelessInputBytes`/
+`statelessOutputBytes` run directly. State-test synthesis
+(`devtools/harness/ssz_builder.py`) is pinned to the v0.6.2 EELS schema and is not
+supported with the v21 guest. The same harness drives the native
 in-process build (drop `--spike`), so the RISC-V guest and the native reference
 are held to the identical oracle.
 
@@ -34,14 +33,14 @@ freestanding FFI path — not merely that they link.
 
 The guest is a **stateless validator** matching `ethereum/execution-specs`
 (`projects/zkevm`, `forks/amsterdam` `stateless_*`): it reads a schema-prefixed SSZ
-`SszStatelessInput` from `read_input`, executes the block against an **execution
+`StatelessInput` from `read_input`, executes the block against an **execution
 witness** (a secure-trie node db keyed by `keccak(node)`), recomputes the post-state
 root and checks it commits to `payload.state_root`, computes
 `new_payload_request_root = hash_tree_root(NewPayloadRequest)` (SSZ/SHA-256), and emits
-the canonical `SszStatelessValidationResult` via `write_output`.
+the canonical `StatelessValidationResult` via `write_output`.
 
 ```
-$ VEC=<raw SszStatelessInput file> ./build.sh run
+$ VEC=<raw StatelessInput file> ./build.sh run
 successful_validation=1          # public output byte 32
 --- spike exit code: 0 ---
 ```
@@ -196,9 +195,9 @@ VEC=<input.ssz> ./build.sh run     # build if needed, supply input, run on spike
 ## Scope / follow-ups
 
 * **Block-from-input**: DONE — the block + execution witness are deserialized from the
-  canonical schema-prefixed SSZ `SszStatelessInput` in the private input, and the guest
+  canonical schema-prefixed SSZ `StatelessInput` in the private input, and the guest
   validates an arbitrary input block statelessly. Remaining refinements: block_hash
-  recompute, sender-from-`public_keys`, non-empty execution requests, lazy
+  recompute, non-empty execution requests, lazy
   arbitrary-access witness reads.
 * **All crypto goes through the `c-interface-accelerators` standard.** keccak256, sha256,
   ripemd160, secp256k1, and the EVM precompiles share one boundary: the vendored standard

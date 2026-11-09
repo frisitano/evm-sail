@@ -31,4 +31,4 @@ uv run --frozen python -m devtools.optimised_c.check --help
 The root `Makefile` exposes the supported quality gates. `python-tools-check`
 runs Ruff lint and format checks, strict mypy, and pytest. Fixture execution is
 kept separate as `python-tools-fixture-smoke` because it builds and runs the
-model against the retained v0.6.2 corpus.
+model against the retained v21.0.6 corpus.

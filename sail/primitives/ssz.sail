@@ -5,49 +5,49 @@
 Source-backed SSZ collections: list references and cursors that decode
 elements only when a consumer reaches them.
 */
-/* The SSZ schema bounds are powers of two because these fields are List
+/* The SSZ bounds are powers of two because these fields are list
  * capacities, not largest valid indices. A list may contain exactly its
- * declared maximum number of elements. */
-/*! Maximum transactions in the execution-payload SSZ list. Provenance:
-    Bellatrix `MAX_TRANSACTIONS_PER_PAYLOAD` and Amsterdam
-    `SszExecutionPayload.transactions`. */
+ * declared maximum number of elements. The payload and witness lists are
+ * progressive lists without a schema limit, so their bounds are the model's
+ * capacities. */
+/*! Maximum transactions in the execution-payload SSZ list. */
 type transaction_count_bound : Int = 2 ^ 20
-/*! Maximum withdrawals in the execution-payload SSZ list. Provenance:
-    Capella `MAX_WITHDRAWALS_PER_PAYLOAD` and Amsterdam
-    `SszExecutionPayload.withdrawals`. */
-type withdrawal_count_bound : Int = 2 ^ 4
-/*! Maximum blob commitments in the stateless-input SSZ list. */
-type blob_commitment_count_bound : Int = 2 ^ 12
+/*! Maximum withdrawals in the execution-payload SSZ list, the same capacity
+    as the transactions: both are keyed into an indexed trie. */
+type withdrawal_count_bound : Int = 2 ^ 20
+/*! Maximum blob commitments in the stateless-input SSZ list: the model's
+    capacity. The hash-tree-root computation merkleizes at most 22,369,621
+    leaves (the thirteen progressive subtrees of 1, 4, ..., 4^12 leaves), so a
+    longer list is rejected there. */
+type blob_commitment_count_bound : Int = 2 ^ 25
 /*! Maximum witness trie nodes in the stateless-input SSZ list. */
 type witness_node_count_bound : Int = 2 ^ 22
 /*! Maximum witness code entries in the stateless-input SSZ list. */
 type witness_code_count_bound : Int = 2 ^ 18
 /*! Maximum witness headers in the stateless-input SSZ list. */
 type witness_header_count_bound : Int = 2 ^ 8
-/*! Maximum witnessed public keys in the stateless-input SSZ list. */
-type public_key_count_bound : Int = 2 ^ 15
-/*! Maximum deposit requests in their stateless-input SSZ list. */
-type deposit_request_count_bound : Int = 2 ^ 13
+/*! Maximum deposit requests in their stateless-input SSZ list: the model's
+    capacity, bounded by the same hash-tree-root leaf limit as the blob
+    commitments. */
+type deposit_request_count_bound : Int = 2 ^ 25
 /*! Maximum withdrawal requests in their stateless-input SSZ list. */
-type withdrawal_request_count_bound : Int = 2 ^ 4
+type withdrawal_request_count_bound : Int = 2 ^ 25
 /*! Maximum consolidation requests in their stateless-input SSZ list. */
-type consolidation_request_count_bound : Int = 2 ^ 1
+type consolidation_request_count_bound : Int = 2 ^ 25
 /*! Maximum builder deposit requests in their stateless-input SSZ list. */
-type builder_deposit_request_count_bound : Int = 2 ^ 6
+type builder_deposit_request_count_bound : Int = 2 ^ 25
 /*! Maximum builder exit requests in their stateless-input SSZ list. */
-type builder_exit_request_count_bound : Int = 2 ^ 4
+type builder_exit_request_count_bound : Int = 2 ^ 25
 
 /*! Maximum byte length of execution-payload extra data. Provenance:
     consensus `MAX_EXTRA_DATA_BYTES` and Amsterdam
-    `SszExecutionPayload.extra_data`. */
+    `ExecutionPayload.extra_data`. */
 type extra_data_length_bound : Int = 2 ^ 5
 /*! Maximum byte length of one encoded transaction envelope. Provenance:
-    Amsterdam `MAX_BYTES_PER_TRANSACTION` in
-    `SszExecutionPayload.transactions`. */
+    Bellatrix `MAX_BYTES_PER_TRANSACTION`. */
 type transaction_length_bound : Int = 2 ^ 30
-/*! Maximum byte length of the block access list. Provenance: Amsterdam
-    `SszExecutionPayload.block_access_list` uses
-    `ByteList[MAX_BYTES_PER_TRANSACTION]`. */
+/*! Maximum byte length of the block access list, the same capacity as one
+    transaction envelope. */
 type block_access_list_length_bound : Int = 2 ^ 30
 /*! Maximum byte length of one witnessed trie node. */
 type witness_node_length_bound : Int = 2 ^ 10

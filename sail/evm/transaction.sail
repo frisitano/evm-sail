@@ -809,12 +809,10 @@ function eff_gas_price_for(base_fee : word, max_fee : word, max_priority_fee : w
     (price, priority)
 }
 
-/*! Transaction validity (YP §6.2). First
-    authenticates the witnessed public key against the signature over the
-    signing hash — a forged key or bad `v`/`r`/`s` makes the whole block
-    invalid regardless of the verdict — then applies the per-envelope
+/*! Transaction validity (YP §6.2). Applies the per-envelope
     validity rules (nonce, balance, intrinsic gas, fee caps, blob rules,
-    EIP-3607, EIP-7825) and derives the effective prices. */
+    EIP-3607, EIP-7825) and derives the effective prices. The sender was
+    recovered from the signature when the envelope was decoded. */
 val check_transaction_validity : forall 'total 'regular,
                                    0 <= 'regular & 'regular <= 'total & 'total <= block_gas_limit_bound. (
         Transaction,
@@ -825,16 +823,6 @@ function check_transaction_validity(tx, allowance) = {
     let profile = execution_profile.protocol;
     let tx_semantics = tx_type_semantics(tx.tx_type);
 
-    /* Sender authentication: `v` selects the recovered signer, which must be
-       the address derived from the witnessed public key. A forged key or bad
-       v/r/s makes the whole BLOCK invalid, regardless of the validity verdict
-       below. */
-    let parity = tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v);
-    let authenticated = tx_auth_valid(tx.sender, tx.signing_hash, parity, tx.sig_r, tx.sig_s);
-    let invalid_signature = not_bool(authenticated);
-    if invalid_signature then {
-        fatal_error(InvalidSignature)
-    };
     let gas_limit = allowance.total;
 
     /* effective gas price (EIP-1559) */

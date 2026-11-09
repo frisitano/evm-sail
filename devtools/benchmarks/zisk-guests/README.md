@@ -80,7 +80,7 @@ uv run --frozen python -m devtools.benchmarks.zisk \
   --dashboard-only \
   --dashboard-dir book/docs/assets/generated/performance \
   --output-dir .agent-tmp/zisk-dashboard-run \
-  zkvm/.fixtures/current-v062-full
+  zkvm/.fixtures/current-v2106-full
 
 make docs-site
 ```

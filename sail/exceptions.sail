@@ -48,7 +48,7 @@ flow. A valid block reaches the normal success output.
 /*! The reason a block fails validation; one variant per violated
     block-validity rule. */
 enum FatalError = {
-    /* chain config: wrong fork / inactive activation */
+    /* a malformed stateless-input envelope or unsupported schema id */
     InvalidConfig,
     /* witness ancestor headers not contiguous */
     HeaderChainBroken,

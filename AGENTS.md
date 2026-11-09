@@ -205,15 +205,12 @@ duplicating instructions elsewhere.
 - `devtools/harness/cli.py` is the SINGLE fixture harness for the single executable
   entry, built ONCE as a shared library and driven IN-PROCESS via ctypes
   (`devtools/harness/guest.py`). Each case is serialized to the SSZ
-  `SszStatelessInput` (`devtools/harness/ssz_builder.py`, under the
+  `StatelessInput` (`devtools/harness/ssz_builder.py`, under the
   execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
-  EELS reference. State-test cases are executed through the in-process EELS
-  t8n, which builds a fully VALID single-tx block input and invokes
-  `run_stateless_guest`. The pinned EELS schema's three request lists are
-  extended with the two known-empty v0.6.2 builder lists; the adapter
-  recomputes only the request root and preserves the reference guest's
-  validation verdict. Fixtures that already carry
+  EELS reference. State-test synthesis (`ssz_builder.py`, `v062_compat*.py`)
+  is pinned to the v0.6.2 EELS schema and is not supported with the v21
+  guest, which accepts only schema id `0x1501`. Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is
@@ -344,30 +341,30 @@ rtk make c-optimised
 `make fmt-check` may surface pre-existing formatting drift. Do not format
 unrelated files unless that is part of the requested task.
 
-## tests-zkevm v0.6.2 Fixture Corpus
+## tests-zkevm v21.0.6 Fixture Corpus
 
 The only retained fixture corpus is
-`zkvm/.fixtures/current-v062-full/`. It is ignored by git and workspace-local;
+`zkvm/.fixtures/current-v2106-full/`. It is ignored by git and workspace-local;
 do not assume it exists in a fresh checkout.
 
-- Source: `tests-zkevm@v0.6.2`, commit
-  `e5a8caf1b8055e4d805c7fb169edfa710914b7da`.
-- Generated 2026-07-19 with `t8n = 2.19.0` using
-  `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n 8`.
+- Source: `tests-zkevm@v21.0.6`, commit
+  `59c1473ddfba341babaeca1c97a50e996f639a0b`.
+- Generated 2026-10-19 with `t8n = 2.19.0` using
+  `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n auto`.
 - Layout: `blockchain_tests/` and `blockchain_tests_engine/`, each containing
   Amsterdam and BPO2-to-Amsterdam transition fixtures.
-- Inventory: 6,333 JSON files containing 26,104 embedded
+- Inventory: 6,904 JSON files containing 67,685 embedded
   `statelessInputBytes`/`statelessOutputBytes` pairs.
 
 There are no checked-in smoke, EELS subset, historical state-test, or older
-zkevm fixture sets. Do not recreate or use pre-v0.6.2 corpora as aligned
+zkevm fixture sets. Do not recreate or use pre-v21.0.6 corpora as aligned
 evidence.
 
 Run one native embedded fixture from the repository root:
 
 ```sh
 rtk uv run --frozen python -m devtools.harness.cli --build optimized --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 Run the complete retained corpus with parallel native workers and compare it
@@ -392,12 +389,13 @@ ZisK guest:
 
 ```sh
 rtk uv run --frozen python -m devtools.harness.cli --spike --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 rtk env ZISKEMU=/path/to/matching/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The ELF is built once without fixture input; each embedded
 `statelessInputBytes` value is supplied at runtime through `extractions/c/zkvm_io.h`.
-Use `--rebuild` after generated C or FFI changes. A complete v0.6.2 result has
-not yet been recorded here; do not reuse pass counts from deleted corpora.
+Use `--rebuild` after generated C or FFI changes. The recorded v21.0.6 result
+is `make verify-corpus` matching `config/corpora/tests-zkevm-known-failures.toml`
+exactly; do not reuse pass counts from other corpora.

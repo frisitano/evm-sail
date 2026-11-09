@@ -165,8 +165,8 @@ def _run(lib, inp):
 
 
 def run_once_guest(inp):
-    """Wipe state, run one SszStatelessInput through main.sail, returning its
-    canonical SSZ SszStatelessValidationResult bytes."""
+    """Wipe state, run one StatelessInput through main.sail, returning its
+    canonical SSZ StatelessValidationResult bytes."""
     lib = _guest if _guest is not None else load_guest()
     return _run(lib, inp)
 
