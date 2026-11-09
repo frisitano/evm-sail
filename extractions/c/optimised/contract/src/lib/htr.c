@@ -12,6 +12,7 @@
 #include "evmsail/prelude.h"
 
 #include "evmsail/host/region_access.h"
+#include "evmsail/spec/exceptions.h"
 #include "evmsail/spec/lib/ssz/stateless_input.h"
 #include "primitives/value.h"
 #include "zkvm_accelerators.h"
@@ -125,10 +126,9 @@ static void htr_hash_pair(const htr_root left, const htr_root right, htr_root ou
   memcpy(pair, left, 32);
   memcpy(pair + 32, right, 32);
   if (zkvm_sha256(pair, sizeof(pair), &digest) != ZKVM_EOK) {
-    memset(out, 0, sizeof(htr_root));
-  } else {
-    memcpy(out, &digest, sizeof digest);
+    fatal_error(WitnessDeficient);
   }
+  memcpy(out, &digest, sizeof digest);
 }
 
 /* Every caller's depth is at most HTR_MAX_DEPTH and every caller's leaf
@@ -477,16 +477,19 @@ static int htr_execution_requests(const struct StatelessInputRef *input, htr_roo
   return 1;
 }
 
+/* A shape the model cannot hash is a deficient input, as in lib/htr.sail:
+ * it fails closed rather than yielding a root. */
 bytes32 htr_new_payload_request(struct StatelessInputRef input_ref)
 {
   htr_root leaves[4] = {{0}};
   htr_root root = {0};
-  if (htr_execution_payload(&input_ref, leaves[0]) &&
-      htr_list_root(HTR_ITEM_VERSIONED_HASH, input_ref.versioned_hashes,
-                    input_ref.versioned_hashes.len / 32, leaves[1]) &&
-      htr_execution_requests(&input_ref, leaves[3])) {
-    htr_bytes32(input_ref.new_payload_request.bytes + 8, leaves[2]);
-    htr_merkleize(leaves, 4, 2, root);
+  if (!htr_execution_payload(&input_ref, leaves[0]) ||
+      !htr_list_root(HTR_ITEM_VERSIONED_HASH, input_ref.versioned_hashes,
+                     input_ref.versioned_hashes.len / 32, leaves[1]) ||
+      !htr_execution_requests(&input_ref, leaves[3])) {
+    fatal_error(WitnessDeficient);
   }
+  htr_bytes32(input_ref.new_payload_request.bytes + 8, leaves[2]);
+  htr_merkleize(leaves, 4, 2, root);
   return hash_from_be_bytes(root);
 }
