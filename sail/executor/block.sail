@@ -115,12 +115,38 @@ function run_block_start_system_calls() -> unit = {
     }
 }
 
+/*! Consumes a transaction's EIP-4844 versioned hashes from the front of the
+    request's versioned hashes, rejecting any mismatch, and returns the
+    unconsumed rest. The request lists exactly the blob transactions' hashes
+    in order. */
+val consume_versioned_hashes : forall 'limit 'index, transaction_blob_limit_value('limit) & 0 <= 'index. (
+        BlobHashesFields('limit),
+        int('index),
+        StatelessInputSlice,
+    ) -> StatelessInputSlice
+function consume_versioned_hashes(blob_hashes, index, expected) =
+    if blob_hashes.count <= index then {
+        expected
+    } else {
+        let expected_fields : StatelessInputSliceAtLeast(32) =
+            if WORD_BYTE_LENGTH <= expected.len then expected else fatal_error(InvalidVersionedHashes);
+        let hash_offset : source_pointer = 33 * index + 1;
+        let actual = slice_load_n(blob_hashes.bytes, hash_offset, WORD_BYTE_LENGTH);
+        let next = slice_load(expected_fields, 0);
+        if actual != next then {
+            fatal_error(InvalidVersionedHashes)
+        };
+        consume_versioned_hashes(blob_hashes, index + 1, slice_suffix(expected_fields, WORD_BYTE_LENGTH))
+    }
+termination_measure consume_versioned_hashes(blob_hashes, index, expected) = blob_hashes.count - index
+
 /*! Executes the block's transactions in order, enforcing per-tx
     applicability and block gas/blob-gas availability (EIP-7778 block-gas
     accounting), accumulating receipts. */
 function execute_block_transactions(
     transactions : TransactionListRef,
     expected_deposits : StatelessInputSlice,
+    expected_versioned_hashes : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
@@ -136,6 +162,7 @@ function execute_block_transactions(
     let transaction_logs_count = logs_tx_count();
     let logs_start = log_store_index_add(transaction_logs_start, transaction_logs_count);
     var remaining_deposits : StatelessInputSlice = expected_deposits;
+    var remaining_versioned_hashes : StatelessInputSlice = expected_versioned_hashes;
     var cursor = ssz_list_cursor(transactions);
     let initial_cursor_empty = ssz_list_cursor_empty(cursor);
     var cursor_has_item : bool = not_bool(initial_cursor_empty);
@@ -144,6 +171,7 @@ function execute_block_transactions(
         let (transaction, next) = ssz_list_pop(cursor);
         cursor = next;
         let tx = decode_transaction(transaction);
+        remaining_versioned_hashes = consume_versioned_hashes(tx.blob_hashes, 0, remaining_versioned_hashes);
         k_current_transaction_epoch = i + 1;
         if i == 0 then {
             tx0_to = tx.recipient
@@ -198,6 +226,10 @@ function execute_block_transactions(
 
         let cursor_empty = ssz_list_cursor_empty(cursor);
         cursor_has_item = not_bool(cursor_empty)
+    };
+    let remaining_hashes = remaining_versioned_hashes;
+    if remaining_hashes.len != 0 then {
+        fatal_error(InvalidVersionedHashes)
     };
     let remaining_deposits_length = region_slice_length(remaining_deposits);
     if (profile.fork >= Prague) & (remaining_deposits_length != 0) then {
@@ -265,7 +297,7 @@ function execute_block_body(body : BlockBody, input_ref : StatelessInputRef) -> 
     k_current_transaction_epoch = 0;
     warm_reset(k_current_transaction_epoch);
     run_block_start_system_calls();
-    let result = execute_block_transactions(body.transactions, input_ref.deposits);
+    let result = execute_block_transactions(body.transactions, input_ref.deposits, input_ref.versioned_hashes);
     let post_tx_index = body.transactions.count + 1;
     k_current_transaction_epoch = post_tx_index;
     warm_reset(k_current_transaction_epoch);

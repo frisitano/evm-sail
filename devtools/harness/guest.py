@@ -200,6 +200,7 @@ BLOCK_ERRORS = [
     "BlockAccessListTooLarge",
     "InvalidBlockAccessList",
     "InvalidExecutionRequests",
+    "InvalidVersionedHashes",
     "WitnessDeficient",
 ]
 

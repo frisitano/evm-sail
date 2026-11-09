@@ -86,6 +86,8 @@ enum FatalError = {
     InvalidBlockAccessList,
     /* reconstructed EIP-7685 request bytes mismatch */
     InvalidExecutionRequests,
+    /* the request's versioned hashes != the blob transactions' hashes */
+    InvalidVersionedHashes,
     /* a missing/inconsistent proof node (thrown at use) */
     WitnessDeficient,
     /* an exact protocol integer exceeds its bounded execution representation */

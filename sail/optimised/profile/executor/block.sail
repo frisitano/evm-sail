@@ -3,6 +3,7 @@
 function execute_block_transactions(
     transactions : TransactionListRef,
     expected_deposits : StatelessInputSlice,
+    expected_versioned_hashes : StatelessInputSlice,
 ) -> (
     BlockExecutionResult
 ) = {
@@ -21,6 +22,7 @@ function execute_block_transactions(
     let _ = receipt_store_begin();
     let logs_start = log_store_index_add(logs_tx_start(), logs_tx_count());
     var remaining_deposits : StatelessInputSlice = expected_deposits;
+    var remaining_versioned_hashes : StatelessInputSlice = expected_versioned_hashes;
     var cursor = ssz_list_cursor(transactions);
     while not_bool(ssz_list_cursor_empty(cursor)) termination_measure(cursor.items.count - cursor.index) do {
         let i = cursor.index;
@@ -29,6 +31,7 @@ function execute_block_transactions(
         cycle_scope_start(10);
         let tx = decode_transaction(transaction);
         cycle_scope_end(10);
+        remaining_versioned_hashes = consume_versioned_hashes(tx.blob_hashes, 0, remaining_versioned_hashes);
         k_current_transaction_epoch = i + 1;
         if i == 0 then {
             tx0_to = tx.recipient
@@ -78,6 +81,10 @@ function execute_block_transactions(
             blob_gas_acc = next_blob_gas
         }
     };
+    let remaining_hashes = remaining_versioned_hashes;
+    if remaining_hashes.len != 0 then {
+        fatal_error(InvalidVersionedHashes)
+    };
     if (profile.fork >= Prague) & (region_slice_length(remaining_deposits) != 0) then {
         fatal_error(InvalidExecutionRequests)
     };
@@ -115,7 +122,7 @@ function execute_block_body(body : BlockBody, input_ref : StatelessInputRef) -> 
     run_block_start_system_calls();
     cycle_scope_end(8);
     cycle_scope_start(9);
-    let result = execute_block_transactions(body.transactions, input_ref.deposits);
+    let result = execute_block_transactions(body.transactions, input_ref.deposits, input_ref.versioned_hashes);
     cycle_scope_end(9);
     let post_tx_index = body.transactions.count + 1;
     k_current_transaction_epoch = post_tx_index;
