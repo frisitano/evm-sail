@@ -384,7 +384,7 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
     tx : TransactionInputSlice,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    TransactionFields(blob_schedule_inactive_count)
+    DecodedTransactionFields(blob_schedule_inactive_count)
 ) = {
     let nonce_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, nonce_f.source.len);
@@ -413,7 +413,6 @@ function decode_legacy_tx forall 'source_off 'source_len, source_valid_range('so
     let signing_hash = tx_signing_hash(LegacyTx, signing_span, v);
     struct {
         tx_type = LegacyTx,
-        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = 0,
@@ -440,7 +439,7 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
     tx : TransactionInputSlice,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    TransactionFields(blob_schedule_inactive_count)
+    DecodedTransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -474,7 +473,6 @@ function decode_access_list_tx forall 'source_off 'source_len, source_valid_rang
     let signing_hash = tx_signing_hash(AccessListTx, signing_span, v);
     struct {
         tx_type = AccessListTx,
-        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -501,7 +499,7 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
     tx : TransactionInputSlice,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    TransactionFields(blob_schedule_inactive_count)
+    DecodedTransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -536,7 +534,6 @@ function decode_fee_market_tx forall 'source_off 'source_len, source_valid_range
     let signing_hash = tx_signing_hash(FeeMarketTx, signing_span, v);
     struct {
         tx_type = FeeMarketTx,
-        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -565,7 +562,7 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
     blob_limit : int('blob_limit),
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    TransactionFields('blob_limit)
+    DecodedTransactionFields('blob_limit)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -605,7 +602,6 @@ function decode_blob_tx forall 'source_off 'source_len 'blob_limit,
     let signing_hash = tx_signing_hash(BlobTx, signing_span, v);
     struct {
         tx_type = BlobTx,
-        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = rlp_decode_u256(nonce_f),
         chain_id = rlp_decode_uint64(chain_f),
@@ -632,7 +628,7 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     tx : TransactionInputSlice,
     fields : RlpCursor('source_off, 'source_len),
 ) -> (
-    TransactionFields(blob_schedule_inactive_count)
+    DecodedTransactionFields(blob_schedule_inactive_count)
 ) = {
     let chain_f = rlp_decode_item(fields);
     let fields = rlp_cursor_advance(fields, chain_f.source.len);
@@ -672,7 +668,6 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
     let signing_hash = tx_signing_hash(SetCodeTx, signing_span, v);
     struct {
         tx_type = SetCodeTx,
-        sender = ZERO_ADDRESS,
         raw = tx,
         nonce = nonce,
         chain_id = rlp_decode_uint64(chain_f),
@@ -697,8 +692,8 @@ function decode_set_code_tx forall 'source_off 'source_len, source_valid_range('
 /*! Decodes one transaction from its raw envelope bytes — standalone and
     purely structural. `tx` is the EIP-2718 envelope as a byte slice (any
     source). The signature material (signing hash, `v`/`r`/`s`) is captured
-    on the transaction and the sender is left as `ZERO_ADDRESS`; the caller
-    recovers it from that material. No trust decision and no fee derivation
+    on sender-free structural data; the caller recovers the sender before
+    constructing an executable transaction. No trust decision and no fee derivation
     happens here.
 
     A leading byte `≥ 0xc0` is a legacy (type-0) RLP list; otherwise it is
@@ -717,7 +712,7 @@ val rlp_decode_tx : forall 'tx_off 'tx_len 'blob_limit,
                       &  transaction_blob_limit_value('blob_limit). (
         StatelessInputSliceFields('tx_off, 'tx_len),
         int('blob_limit),
-    ) -> Transaction
+    ) -> DecodedTransaction
 function rlp_decode_tx(tx, blob_limit) = {
     let tx_length = tx.len;
     let b0 : byte =
@@ -741,23 +736,23 @@ function rlp_decode_tx(tx, blob_limit) = {
     match tx_type {
         LegacyTx => {
             let decoded = decode_legacy_tx(tx, fields);
-            pack_transaction(decoded)
+            pack_decoded_transaction(decoded)
         },
         AccessListTx => {
             let decoded = decode_access_list_tx(tx, fields);
-            pack_transaction(decoded)
+            pack_decoded_transaction(decoded)
         },
         FeeMarketTx => {
             let decoded = decode_fee_market_tx(tx, fields);
-            pack_transaction(decoded)
+            pack_decoded_transaction(decoded)
         },
         BlobTx => {
             let decoded = decode_blob_tx(tx, blob_limit, fields);
-            pack_transaction(decoded)
+            pack_decoded_transaction(decoded)
         },
         SetCodeTx => {
             let decoded = decode_set_code_tx(tx, fields);
-            pack_transaction(decoded)
+            pack_decoded_transaction(decoded)
         },
     }
 }

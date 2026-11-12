@@ -210,8 +210,8 @@ def word_sub_word (left : Nat) (right : Nat) : Nat :=
     ((maximum - (right - left)) + 1))
 
 /-- Bitwise conjunction of two words. -/
-/- Type quantifiers: k_ex420015_ : Nat, k_ex420014_ : Nat, 0 ≤ k_ex420014_ ∧
-  k_ex420014_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420015_ ∧ k_ex420015_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421137_ : Nat, k_ex421136_ : Nat, 0 ≤ k_ex421136_ ∧
+  k_ex421136_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421137_ ∧ k_ex421137_ ≤ (2 ^ 256 - 1) -/
 def word_and (left : Nat) (right : Nat) : Nat :=
   let left_bits := (get_slice_int 256 left 0)
   let right_bits := (get_slice_int 256 right 0)
@@ -220,8 +220,8 @@ def word_and (left : Nat) (right : Nat) : Nat :=
   (u256 result)
 
 /-- Bitwise disjunction of two words. -/
-/- Type quantifiers: k_ex420017_ : Nat, k_ex420016_ : Nat, 0 ≤ k_ex420016_ ∧
-  k_ex420016_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420017_ ∧ k_ex420017_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421139_ : Nat, k_ex421138_ : Nat, 0 ≤ k_ex421138_ ∧
+  k_ex421138_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421139_ ∧ k_ex421139_ ≤ (2 ^ 256 - 1) -/
 def word_or (left : Nat) (right : Nat) : Nat :=
   let left_bits := (get_slice_int 256 left 0)
   let right_bits := (get_slice_int 256 right 0)
@@ -230,8 +230,8 @@ def word_or (left : Nat) (right : Nat) : Nat :=
   (u256 result)
 
 /-- Bitwise exclusive-or of two words. -/
-/- Type quantifiers: k_ex420019_ : Nat, k_ex420018_ : Nat, 0 ≤ k_ex420018_ ∧
-  k_ex420018_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420019_ ∧ k_ex420019_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421141_ : Nat, k_ex421140_ : Nat, 0 ≤ k_ex421140_ ∧
+  k_ex421140_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421141_ ∧ k_ex421141_ ≤ (2 ^ 256 - 1) -/
 def word_xor (left : Nat) (right : Nat) : Nat :=
   let left_bits := (get_slice_int 256 left 0)
   let right_bits := (get_slice_int 256 right 0)
@@ -247,8 +247,8 @@ def word_not (value : Nat) : Nat :=
   let result := (BitVec.toNatInt result_bits)
   (u256 result)
 
-/- Type quantifiers: k_ex420022_ : Nat, k_ex420021_ : Nat, 0 ≤ k_ex420021_ ∧
-  k_ex420021_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420022_ ∧ k_ex420022_ ≤ 255 -/
+/- Type quantifiers: k_ex421144_ : Nat, k_ex421143_ : Nat, 0 ≤ k_ex421143_ ∧
+  k_ex421143_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421144_ ∧ k_ex421144_ ≤ 255 -/
 def word_bit (value : Nat) (index : Nat) : (BitVec 1) :=
   (BitVec.access (get_slice_int 256 value 0) index)
 
@@ -264,7 +264,7 @@ def word_shift_right_one (value : Nat) : Nat :=
   (u256 shifted)
 
 /-- `1` if the condition holds, else `0` — the EVM boolean convention. -/
-/- Type quantifiers: k_ex420024_ : Bool -/
+/- Type quantifiers: k_ex421146_ : Bool -/
 def word_of_bool (b : Bool) : Nat :=
   if (b : Bool)
   then WORD_ONE
@@ -346,8 +346,8 @@ def word_greater_than_word (left : Nat) (right : Nat) : Bool :=
   (left >b right)
 
 /-- Shifts a word left by a bounded count, yielding zero at the width. -/
-/- Type quantifiers: k_ex420027_ : Nat, k_ex420026_ : Nat, 0 ≤ k_ex420026_ ∧
-  k_ex420026_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420027_ ∧ k_ex420027_ ≤ 256 -/
+/- Type quantifiers: k_ex421149_ : Nat, k_ex421148_ : Nat, 0 ≤ k_ex421148_ ∧
+  k_ex421148_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421149_ ∧ k_ex421149_ ≤ 256 -/
 def word_shift_left (value : Nat) (amount : Nat) : Nat :=
   let value_bits := (get_slice_int 256 value 0)
   let shifted_bits := (value_bits <<< amount)
@@ -355,8 +355,8 @@ def word_shift_left (value : Nat) (amount : Nat) : Nat :=
   (u256 shifted)
 
 /-- Shifts a word right logically by a bounded count. -/
-/- Type quantifiers: k_ex420029_ : Nat, k_ex420028_ : Nat, 0 ≤ k_ex420028_ ∧
-  k_ex420028_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420029_ ∧ k_ex420029_ ≤ 256 -/
+/- Type quantifiers: k_ex421151_ : Nat, k_ex421150_ : Nat, 0 ≤ k_ex421150_ ∧
+  k_ex421150_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421151_ ∧ k_ex421151_ ≤ 256 -/
 def word_shift_right (value : Nat) (amount : Nat) : Nat :=
   let value_bits := (get_slice_int 256 value 0)
   let shifted_bits := (value_bits >>> amount)
@@ -370,8 +370,8 @@ def word_byte_length (value : Nat) : Nat :=
   else (Nat.div (bit_length + 7) 8)
 
 /-- Shifts a two's-complement word right while extending its sign bit. -/
-/- Type quantifiers: k_ex420031_ : Nat, k_ex420030_ : Nat, 0 ≤ k_ex420030_ ∧
-  k_ex420030_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420031_ ∧ k_ex420031_ ≤ 256 -/
+/- Type quantifiers: k_ex421153_ : Nat, k_ex421152_ : Nat, 0 ≤ k_ex421152_ ∧
+  k_ex421152_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421153_ ∧ k_ex421153_ ≤ 256 -/
 def word_arithmetic_shift_right (value : Nat) (amount : Nat) : Nat :=
   let shifted := (word_shift_right value amount)
   let sign_bit := (word_bit value 255)
@@ -407,8 +407,8 @@ def word_abs (value : Nat) : Nat :=
 
 /-- Signed (two's-complement) 256-bit less-than: sign bits decide when they
 differ, otherwise the unsigned order applies. -/
-/- Type quantifiers: k_ex420035_ : Nat, k_ex420034_ : Nat, 0 ≤ k_ex420034_ ∧
-  k_ex420034_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420035_ ∧ k_ex420035_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421157_ : Nat, k_ex421156_ : Nat, 0 ≤ k_ex421156_ ∧
+  k_ex421156_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421157_ ∧ k_ex421157_ ≤ (2 ^ 256 - 1) -/
 def word_slt (a : Nat) (b : Nat) : Bool :=
   let a_sign := (word_bit a 255)
   let b_sign := (word_bit b 255)
@@ -428,8 +428,8 @@ def word_slt (a : Nat) (b : Nat) : Bool :=
 def alu_add (a : Nat) (b : Nat) : Nat :=
   (word_add_word a b)
 
-/- Type quantifiers: k_ex420038_ : Nat, k_ex420037_ : Nat, 0 ≤ k_ex420037_ ∧
-  k_ex420037_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420038_ ∧ k_ex420038_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421160_ : Nat, k_ex421159_ : Nat, 0 ≤ k_ex421159_ ∧
+  k_ex421159_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421160_ ∧ k_ex421160_ ≤ (2 ^ 256 - 1) -/
 def alu_sub (a : Nat) (b : Nat) : Nat :=
   (word_sub_word a b)
 
@@ -439,21 +439,21 @@ def alu_mul (a : Nat) (b : Nat) : Nat :=
 
 /-- `DIV`: unsigned Euclidean division; division by zero yields `0`
 (YP Appendix H). -/
-/- Type quantifiers: k_ex420040_ : Nat, k_ex420039_ : Nat, 0 ≤ k_ex420039_ ∧
-  k_ex420039_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420040_ ∧ k_ex420040_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421162_ : Nat, k_ex421161_ : Nat, 0 ≤ k_ex421161_ ∧
+  k_ex421161_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421162_ ∧ k_ex421162_ ≤ (2 ^ 256 - 1) -/
 def alu_div (a : Nat) (b : Nat) : Nat :=
   (word_div_word a b)
 
 /-- `MOD`: unsigned modulus; a zero modulus yields `0`. -/
-/- Type quantifiers: k_ex420042_ : Nat, k_ex420041_ : Nat, 0 ≤ k_ex420041_ ∧
-  k_ex420041_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420042_ ∧ k_ex420042_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421164_ : Nat, k_ex421163_ : Nat, 0 ≤ k_ex421163_ ∧
+  k_ex421163_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421164_ ∧ k_ex421164_ ≤ (2 ^ 256 - 1) -/
 def alu_mod (a : Nat) (b : Nat) : Nat :=
   (word_mod_word a b)
 
 /-- `SDIV`: signed division, truncating toward zero; division by zero
 yields `0`. -/
-/- Type quantifiers: k_ex420044_ : Nat, k_ex420043_ : Nat, 0 ≤ k_ex420043_ ∧
-  k_ex420043_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420044_ ∧ k_ex420044_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421166_ : Nat, k_ex421165_ : Nat, 0 ≤ k_ex421165_ ∧
+  k_ex421165_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421166_ ∧ k_ex421166_ ≤ (2 ^ 256 - 1) -/
 def alu_sdiv (a : Nat) (b : Nat) : Nat :=
   let divisor_is_zero := (word_is_zero b)
   if (divisor_is_zero : Bool)
@@ -470,8 +470,8 @@ def alu_sdiv (a : Nat) (b : Nat) : Nat :=
 
 /-- `SMOD`: signed remainder, with the sign of the dividend; a zero modulus
 yields `0`. -/
-/- Type quantifiers: k_ex420046_ : Nat, k_ex420045_ : Nat, 0 ≤ k_ex420045_ ∧
-  k_ex420045_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420046_ ∧ k_ex420046_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421168_ : Nat, k_ex421167_ : Nat, 0 ≤ k_ex421167_ ∧
+  k_ex421167_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421168_ ∧ k_ex421168_ ≤ (2 ^ 256 - 1) -/
 def alu_smod (a : Nat) (b : Nat) : Nat :=
   let modulus_is_zero := (word_is_zero b)
   if (modulus_is_zero : Bool)
@@ -505,8 +505,8 @@ def alu_mulmod (a : Nat) (b : Nat) (n : Nat) : Nat :=
 
 /-- `EXP` via square-and-multiply over the 256 exponent bits, reduced
 modulo 2^256 at every step. -/
-/- Type quantifiers: k_ex420048_ : Nat, k_ex420047_ : Nat, 0 ≤ k_ex420047_ ∧
-  k_ex420047_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420048_ ∧ k_ex420048_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421170_ : Nat, k_ex421169_ : Nat, 0 ≤ k_ex421169_ ∧
+  k_ex421169_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421170_ ∧ k_ex421170_ ≤ (2 ^ 256 - 1) -/
 def alu_exp (base : Nat) (exponent : Nat) : SailM Nat := do
   let result : Nat := WORD_ONE
   let b : Nat := base
@@ -542,8 +542,8 @@ def alu_exp (base : Nat) (exponent : Nat) : SailM Nat := do
 /-- `SIGNEXTEND(byte_index, value)`: sign-extends `value` from byte
 `byte_index` (0 = least significant); indices ≥ 31 leave the value
 unchanged. -/
-/- Type quantifiers: k_ex420050_ : Nat, k_ex420049_ : Nat, 0 ≤ k_ex420049_ ∧
-  k_ex420049_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420050_ ∧ k_ex420050_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421172_ : Nat, k_ex421171_ : Nat, 0 ≤ k_ex421171_ ∧
+  k_ex421171_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421172_ ∧ k_ex421172_ ≤ (2 ^ 256 - 1) -/
 def alu_signextend (byte_index : Nat) (value : Nat) : Nat :=
   if ((byte_index <b 32) : Bool)
   then
@@ -564,35 +564,35 @@ def alu_signextend (byte_index : Nat) (value : Nat) : Nat :=
   else value
 
 /-- `LT`: `1` when `a` is strictly below `b`, unsigned. -/
-/- Type quantifiers: k_ex420052_ : Nat, k_ex420051_ : Nat, 0 ≤ k_ex420051_ ∧
-  k_ex420051_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420052_ ∧ k_ex420052_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421174_ : Nat, k_ex421173_ : Nat, 0 ≤ k_ex421173_ ∧
+  k_ex421173_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421174_ ∧ k_ex421174_ ≤ (2 ^ 256 - 1) -/
 def alu_lt (a : Nat) (b : Nat) : Nat :=
   let result := (word_ult a b)
   (word_of_bool result)
 
 /-- `GT`: `1` when `a` is strictly above `b`, unsigned. -/
-/- Type quantifiers: k_ex420054_ : Nat, k_ex420053_ : Nat, 0 ≤ k_ex420053_ ∧
-  k_ex420053_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420054_ ∧ k_ex420054_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421176_ : Nat, k_ex421175_ : Nat, 0 ≤ k_ex421175_ ∧
+  k_ex421175_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421176_ ∧ k_ex421176_ ≤ (2 ^ 256 - 1) -/
 def alu_gt (a : Nat) (b : Nat) : Nat :=
   let result := (word_ult b a)
   (word_of_bool result)
 
 /-- `SLT`: `1` when `a` is strictly below `b`, two's-complement signed. -/
-/- Type quantifiers: k_ex420056_ : Nat, k_ex420055_ : Nat, 0 ≤ k_ex420055_ ∧
-  k_ex420055_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420056_ ∧ k_ex420056_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421178_ : Nat, k_ex421177_ : Nat, 0 ≤ k_ex421177_ ∧
+  k_ex421177_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421178_ ∧ k_ex421178_ ≤ (2 ^ 256 - 1) -/
 def alu_slt (a : Nat) (b : Nat) : Nat :=
   let result := (word_slt a b)
   (word_of_bool result)
 
 /-- `SGT`: `1` when `a` is strictly above `b`, two's-complement signed. -/
-/- Type quantifiers: k_ex420058_ : Nat, k_ex420057_ : Nat, 0 ≤ k_ex420057_ ∧
-  k_ex420057_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420058_ ∧ k_ex420058_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421180_ : Nat, k_ex421179_ : Nat, 0 ≤ k_ex421179_ ∧
+  k_ex421179_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421180_ ∧ k_ex421180_ ≤ (2 ^ 256 - 1) -/
 def alu_sgt (a : Nat) (b : Nat) : Nat :=
   let result := (word_slt b a)
   (word_of_bool result)
 
-/- Type quantifiers: k_ex420060_ : Nat, k_ex420059_ : Nat, 0 ≤ k_ex420059_ ∧
-  k_ex420059_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420060_ ∧ k_ex420060_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421182_ : Nat, k_ex421181_ : Nat, 0 ≤ k_ex421181_ ∧
+  k_ex421181_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421182_ ∧ k_ex421182_ ≤ (2 ^ 256 - 1) -/
 def alu_eq (a : Nat) (b : Nat) : Nat :=
   (word_of_bool (a == b))
 
@@ -602,18 +602,18 @@ def alu_iszero (a : Nat) : Nat :=
   let result := (word_is_zero a)
   (word_of_bool result)
 
-/- Type quantifiers: k_ex420063_ : Nat, k_ex420062_ : Nat, 0 ≤ k_ex420062_ ∧
-  k_ex420062_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420063_ ∧ k_ex420063_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421185_ : Nat, k_ex421184_ : Nat, 0 ≤ k_ex421184_ ∧
+  k_ex421184_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421185_ ∧ k_ex421185_ ≤ (2 ^ 256 - 1) -/
 def alu_and (a : Nat) (b : Nat) : Nat :=
   (word_and a b)
 
-/- Type quantifiers: k_ex420065_ : Nat, k_ex420064_ : Nat, 0 ≤ k_ex420064_ ∧
-  k_ex420064_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420065_ ∧ k_ex420065_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421187_ : Nat, k_ex421186_ : Nat, 0 ≤ k_ex421186_ ∧
+  k_ex421186_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421187_ ∧ k_ex421187_ ≤ (2 ^ 256 - 1) -/
 def alu_or (a : Nat) (b : Nat) : Nat :=
   (word_or a b)
 
-/- Type quantifiers: k_ex420067_ : Nat, k_ex420066_ : Nat, 0 ≤ k_ex420066_ ∧
-  k_ex420066_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420067_ ∧ k_ex420067_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421189_ : Nat, k_ex421188_ : Nat, 0 ≤ k_ex421188_ ∧
+  k_ex421188_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421189_ ∧ k_ex421189_ ≤ (2 ^ 256 - 1) -/
 def alu_xor (a : Nat) (b : Nat) : Nat :=
   (word_xor a b)
 
@@ -623,8 +623,8 @@ def alu_not (a : Nat) : Nat :=
 
 /-- `BYTE(i, x)`: the `i`-th most-significant byte of `x` (0 = MSB);
 indices ≥ 32 yield `0`. -/
-/- Type quantifiers: k_ex420070_ : Nat, k_ex420069_ : Nat, 0 ≤ k_ex420069_ ∧
-  k_ex420069_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420070_ ∧ k_ex420070_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421192_ : Nat, k_ex421191_ : Nat, 0 ≤ k_ex421191_ ∧
+  k_ex421191_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421192_ ∧ k_ex421192_ ≤ (2 ^ 256 - 1) -/
 def alu_byte (i : Nat) (x : Nat) : Nat :=
   if ((i <b 32) : Bool)
   then
@@ -636,24 +636,24 @@ def alu_byte (i : Nat) (x : Nat) : Nat :=
   else WORD_ZERO
 
 /-- `SHL`: logical left shift; amounts ≥ 256 yield `0`. -/
-/- Type quantifiers: k_ex420072_ : Nat, k_ex420071_ : Nat, 0 ≤ k_ex420071_ ∧
-  k_ex420071_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420072_ ∧ k_ex420072_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421194_ : Nat, k_ex421193_ : Nat, 0 ≤ k_ex421193_ ∧
+  k_ex421193_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421194_ ∧ k_ex421194_ ≤ (2 ^ 256 - 1) -/
 def alu_shl (shift_amt : Nat) (v : Nat) : Nat :=
   if ((shift_amt <b 256) : Bool)
   then (word_shift_left v shift_amt)
   else WORD_ZERO
 
 /-- `SHR`: logical right shift; amounts ≥ 256 yield `0`. -/
-/- Type quantifiers: k_ex420074_ : Nat, k_ex420073_ : Nat, 0 ≤ k_ex420073_ ∧
-  k_ex420073_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420074_ ∧ k_ex420074_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421196_ : Nat, k_ex421195_ : Nat, 0 ≤ k_ex421195_ ∧
+  k_ex421195_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421196_ ∧ k_ex421196_ ≤ (2 ^ 256 - 1) -/
 def alu_shr (shift_amt : Nat) (v : Nat) : Nat :=
   if ((shift_amt <b 256) : Bool)
   then (word_shift_right v shift_amt)
   else WORD_ZERO
 
 /-- `SAR`: arithmetic (sign-propagating) right shift. -/
-/- Type quantifiers: k_ex420076_ : Nat, k_ex420075_ : Nat, 0 ≤ k_ex420075_ ∧
-  k_ex420075_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex420076_ ∧ k_ex420076_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex421198_ : Nat, k_ex421197_ : Nat, 0 ≤ k_ex421197_ ∧
+  k_ex421197_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421198_ ∧ k_ex421198_ ≤ (2 ^ 256 - 1) -/
 def alu_sar (shift_amt : Nat) (v : Nat) : Nat :=
   if ((shift_amt <b 256) : Bool)
   then (word_arithmetic_shift_right v shift_amt)

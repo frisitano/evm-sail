@@ -297,7 +297,7 @@ PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList 
   return authorizations;
 }
 
-static bool decode_common_fields(struct TransactionFields *result, const rlp_item *nonce,
+static bool decode_common_fields(struct DecodedTransactionFields *result, const rlp_item *nonce,
                                  const rlp_item *gas, const rlp_item *recipient,
                                  const rlp_item *value, const rlp_item *data, const rlp_item *v,
                                  const rlp_item *r, const rlp_item *s, bool nonce_is_u64)
@@ -323,9 +323,9 @@ static bool decode_common_fields(struct TransactionFields *result, const rlp_ite
   return true;
 }
 
-struct TransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit)
+struct DecodedTransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit)
 {
-  struct TransactionFields result;
+  struct DecodedTransactionFields result;
   memset(&result, 0, sizeof(result));
   result.raw = transaction;
 

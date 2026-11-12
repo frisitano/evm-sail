@@ -124,12 +124,12 @@ def analyze_code_from (code : (Sigma fun (k_off : Nat) =>
 /-- The PUSH-aware `JUMPDEST` analysis (YP §9.4.3): PUSH immediate bytes
 are data even when they contain `0x5b`. The completed bitmap remains a
 first-class Sail value; the host never scans opcodes. -/
-/- Type quantifiers: k_ex423046_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex424199_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex423046_
-  ∧ k_ex423046_ ≤ 16 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex424199_
+  ∧ k_ex424199_ ≤ 16 -/
 def analyze_code (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
@@ -145,12 +145,12 @@ def analyze_code (code : (Sigma fun (k_off : Nat) =>
       (pure table))
 
 /-- Analyzes and stores code, returning its content hash. -/
-/- Type quantifiers: k_ex423053_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex424206_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex423053_
-  ∧ k_ex423053_ ≤ 16 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex424206_
+  ∧ k_ex424206_ ≤ 16 -/
 def code_db_insert (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (fork : Nat) : SailM (Vector (BitVec 8) 32) := do
   let code_dependentWitness0 := (code).1

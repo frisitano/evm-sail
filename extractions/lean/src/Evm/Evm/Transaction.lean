@@ -315,7 +315,7 @@ def transaction_upfront_cost (max_fee : Nat) (gas_limit : Nat) (value : Nat) (ma
 
 /-- Computes transaction costs as mathematical naturals, narrowing only the
 externally observable word-valued results. -/
-/- Type quantifiers: k_ex425780_ : Nat, k_ex425779_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
+/- Type quantifiers: k_ex426933_ : Nat, k_ex426932_ : Nat, tx_dependentWitness0 : Nat, profile_dependentWitness9
   : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7 : Nat, profile_dependentWitness6
   : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4 : Nat, profile_dependentWitness3
   : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1 : Nat, profile_dependentWitness0
@@ -400,8 +400,8 @@ externally observable word-valued results. -/
   profile_dependentWitness6 = (2 ^ 64 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
   profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5, tx_dependentWitness0 = 0 ∨
-  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex425779_ ∧
-  k_ex425779_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425780_ ∧ k_ex425780_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
+  tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex426932_ ∧
+  k_ex426932_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex426933_ ∧ k_ex426933_ ≤ (256 * 11684671 + 21 * 2 ^ 17) -/
 def transaction_costs (profile : (Sigma fun (k_fork : Nat) =>
   (Sigma fun (k_target : Nat) =>
   (Sigma fun (k_maximum : Nat) =>
@@ -666,8 +666,8 @@ def process_auth (au : Authorization) : SailM Nat := do
 decoded authorization count proves this guard unreachable in valid input;
 spelling it at the narrowing boundary keeps proof extraction independent
 of the Rocq backend's treatment of existential range indices. -/
-/- Type quantifiers: k_ex425848_ : Nat, k_ex425847_ : Nat, 0 ≤ k_ex425847_ ∧
-  k_ex425847_ ≤ 12500, 0 ≤ k_ex425848_ ∧ k_ex425848_ ≤ (12500 * 2 ^ 30) -/
+/- Type quantifiers: k_ex427001_ : Nat, k_ex427000_ : Nat, 0 ≤ k_ex427000_ ∧
+  k_ex427000_ ≤ 12500, 0 ≤ k_ex427001_ ∧ k_ex427001_ ≤ (12500 * 2 ^ 30) -/
 def authorization_refund_add (item : Nat) (accumulated : Nat) : SailM Nat := do
   let bound := (12500 *i (2 ^i 30))
   if ((accumulated ≤b (bound - item)) : Bool)
@@ -712,9 +712,9 @@ def process_auth_list (authorizations : PreparedAuthorizationList) : SailM Nat :
 execution-gas and state-gas components. Tuple-local signature and chain
 checks precede all authority-state reads; a valid tuple warms its authority
 before checking code and nonce, as required by EIP-7702. -/
-/- Type quantifiers: k_ex425856_ : Nat, k_ex425855_ : Nat, k_ex425854_ : Nat, k_ex425853_ : Bool, 0
-  ≤ k_ex425854_ ∧ k_ex425854_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425855_ ∧
-  k_ex425855_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex425856_ ∧ k_ex425856_ ≤ (2 ^ 24) -/
+/- Type quantifiers: k_ex427009_ : Nat, k_ex427008_ : Nat, k_ex427007_ : Nat, k_ex427006_ : Bool, 0
+  ≤ k_ex427007_ ∧ k_ex427007_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427008_ ∧
+  k_ex427008_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427009_ ∧ k_ex427009_ ≤ (2 ^ 24) -/
 def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) : SailM (Bool × Nat × Nat × Nat) := SailME.run do
   let gas_after : Nat := carried_gas
   let state_gas_after : Nat := carried_state_gas
@@ -810,7 +810,7 @@ def process_amsterdam_auth (au : Authorization) (sender : (Vector (BitVec 8) 20)
     (Bool × Nat × Nat × Nat) (Nat × Nat × Nat) )
   (pure (true, gas_after, state_gas_after, state_spill_after))
 
-/- Type quantifiers: _reclimit : Nat, state_spill : Nat, state_gas : Nat, gas : Nat, k_ex425858_ :
+/- Type quantifiers: _reclimit : Nat, state_spill : Nat, state_gas : Nat, gas : Nat, k_ex427011_ :
   Bool, count : Nat, 0 ≤ count ∧ count ≤ ((2 ^ 24) / 7816), 0 ≤ gas ∧ gas ≤ (2 ^ 64 - 1), 0
   ≤ state_gas ∧ state_gas ≤ (2 ^ 64 - 1), 0 ≤ state_spill ∧ state_spill ≤ (2 ^ 24), 0
   ≤ _reclimit -/
@@ -839,7 +839,7 @@ def _rec_process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationLi
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: state_spill : Nat, state_gas : Nat, gas : Nat, k_ex425864_ : Bool, count : Nat, 0
+/- Type quantifiers: state_spill : Nat, state_gas : Nat, gas : Nat, k_ex427017_ : Bool, count : Nat, 0
   ≤ count ∧ count ≤ ((2 ^ 24) / 7816), 0 ≤ gas ∧ gas ≤ (2 ^ 64 - 1), 0 ≤ state_gas ∧
   state_gas ≤ (2 ^ 64 - 1), 0 ≤ state_spill ∧ state_spill ≤ (2 ^ 24) -/
 def process_amsterdam_auth_cursor (authorizations : PreparedAuthorizationList) (count : Nat) (sender : (Vector (BitVec 8) 20)) (current_target : (Vector (BitVec 8) 20)) (transfers_value : Bool) (gas : Nat) (state_gas : Nat) (state_spill : Nat) : SailM (Bool × Nat × Nat × Nat) := do
@@ -953,9 +953,9 @@ EIP-2930 transactions carry a single `gas_price`, passed as
 `(gas_price, gas_price − base_fee)`. The priority is clamped at 0 so
 an invalid sub-base-fee price (rejected later by validity) never
 underflows. -/
-/- Type quantifiers: k_ex425926_ : Nat, k_ex425925_ : Nat, k_ex425924_ : Nat, 0 ≤ k_ex425924_ ∧
-  k_ex425924_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex425925_ ∧ k_ex425925_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex425926_ ∧ k_ex425926_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex427079_ : Nat, k_ex427078_ : Nat, k_ex427077_ : Nat, 0 ≤ k_ex427077_ ∧
+  k_ex427077_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex427078_ ∧ k_ex427078_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex427079_ ∧ k_ex427079_ ≤ (2 ^ 256 - 1) -/
 def eff_gas_price_for (base_fee : Nat) (max_fee : Nat) (max_priority_fee : Nat) : (Nat × Nat) :=
   let max_fee_below_base := (word_ule max_fee base_fee)
   let price : Nat :=
@@ -1195,7 +1195,7 @@ def undefined_TransactionPreparation (_ : Unit) : SailM TransactionPreparation :
 the code selected for execution. This phase deliberately performs no
 revertible account mutation: its state-gas charges are therefore refilled
 if the subsequently dispatched frame fails. -/
-/- Type quantifiers: k_ex426011_ : Nat, k_ex426010_ : Nat, k_ex426009_ : Nat, v_dependentWitness6 :
+/- Type quantifiers: k_ex427164_ : Nat, k_ex427163_ : Nat, k_ex427162_ : Nat, v_dependentWitness6 :
   Nat, v_dependentWitness5 : Nat, v_dependentWitness4 : Nat, v_dependentWitness3 : Nat, v_dependentWitness2
   : Nat, v_dependentWitness1 : Nat, v_dependentWitness0 : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0
   = 0 ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ v_dependentWitness2 ∧
@@ -1209,8 +1209,8 @@ if the subsequently dispatched frame fails. -/
   0 ≤ v_dependentWitness6 ∧
   (v_dependentWitness5 + v_dependentWitness6 + v_dependentWitness2 + v_dependentWitness3) =
   v_dependentWitness0 ∧ v_dependentWitness5 ≤ (v_dependentWitness1 - v_dependentWitness2), 0 ≤
-  k_ex426009_ ∧ k_ex426009_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex426010_ ∧ k_ex426010_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex426011_ ∧ k_ex426011_ ≤ (2 ^ 24) -/
+  k_ex427162_ ∧ k_ex427162_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427163_ ∧ k_ex427163_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex427164_ ∧ k_ex427164_ ≤ (2 ^ 24) -/
 def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (v : (Sigma fun (k_limit : Nat) =>
   (Sigma fun (k_regular : Nat) =>
@@ -1341,19 +1341,19 @@ def prepare_amsterdam_transaction_dispatch (tx : (Sigma fun (k_blob_limit : Nat)
 from `(sender, nonce_before)`, fails outright on an address collision
 (all gas consumed, no initcode runs — EIP-684/EIP-7610), and
 otherwise deploys via the initcode path. -/
-/- Type quantifiers: k_ex426031_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
-  : Nat, k_ex426026_ : Nat, k_ex426025_ : Nat, k_ex426024_ : Int, k_ex426023_ : Nat, k_ex426022_ :
-  Nat, k_ex426021_ : Nat, k_ex426020_ : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0
-  ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex426020_ ∧
-  k_ex426020_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex426021_ ∧ k_ex426021_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex426022_ ∧ k_ex426022_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex426023_ ∧ k_ex426023_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
-  ≤ k_ex426024_ ∧ k_ex426024_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex426025_ ∧
-  k_ex426025_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex426026_ ∧ k_ex426026_ ≤ (2 ^ 32 - 1), 0 ≤
+/- Type quantifiers: k_ex427184_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+  : Nat, k_ex427179_ : Nat, k_ex427178_ : Nat, k_ex427177_ : Int, k_ex427176_ : Nat, k_ex427175_ :
+  Nat, k_ex427174_ : Nat, k_ex427173_ : Nat, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0
+  ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex427173_ ∧
+  k_ex427173_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427174_ ∧ k_ex427174_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex427175_ ∧ k_ex427175_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427176_ ∧ k_ex427176_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex427177_ ∧ k_ex427177_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex427178_ ∧
+  k_ex427178_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex427179_ ∧ k_ex427179_ ≤ (2 ^ 32 - 1), 0 ≤
   carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex426031_ ∧ k_ex426031_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex427184_ ∧ k_ex427184_ ≤ (2 ^ 64 - 1) -/
 def run_create_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (nonce_before : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) (carried_refund : Int) (carried_stack : StackPointer) (carried_memory_base : Nat) (carried_memory_height : Nat) (carried_code : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_calldata : CalldataSlice) (state_gas_reservoir : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
@@ -1564,18 +1564,18 @@ runs a direct recipient precompile or interprets the selected code. At
 Amsterdam the preparation phase has already resolved and charged a
 recipient delegation; a delegated recipient never dispatches a precompile
 directly. -/
-/- Type quantifiers: k_ex426051_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
-  : Nat, k_ex426046_ : Nat, k_ex426045_ : Nat, k_ex426044_ : Int, k_ex426043_ : Nat, k_ex426042_ :
-  Nat, k_ex426041_ : Nat, k_ex426040_ : Bool, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0
-  ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex426041_ ∧
-  k_ex426041_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex426042_ ∧ k_ex426042_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex426043_ ∧ k_ex426043_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex426044_ ∧
-  k_ex426044_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex426045_ ∧ k_ex426045_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex426046_ ∧ k_ex426046_ ≤ (2 ^ 32 - 1), 0 ≤ carried_code_dependentWitness0 ∧
+/- Type quantifiers: k_ex427204_ : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0
+  : Nat, k_ex427199_ : Nat, k_ex427198_ : Nat, k_ex427197_ : Int, k_ex427196_ : Nat, k_ex427195_ :
+  Nat, k_ex427194_ : Nat, k_ex427193_ : Bool, tx_dependentWitness0 : Nat, tx_dependentWitness0 = 0
+  ∨ tx_dependentWitness0 = 6 ∨ tx_dependentWitness0 = 9, 0 ≤ k_ex427194_ ∧
+  k_ex427194_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex427195_ ∧ k_ex427195_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex427196_ ∧ k_ex427196_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex427197_ ∧
+  k_ex427197_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex427198_ ∧ k_ex427198_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex427199_ ∧ k_ex427199_ ≤ (2 ^ 32 - 1), 0 ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ carried_code_dependentWitness1 ∧ (carried_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex426051_ ∧ k_ex426051_ ≤ (2 ^ 64 - 1) -/
+  ≤ k_ex427204_ ∧ k_ex427204_ ≤ (2 ^ 64 - 1) -/
 def run_call_transaction_frame (tx : (Sigma fun (k_blob_limit : Nat) =>
   (TransactionFields k_blob_limit))) (sender : (Vector (BitVec 8) 20)) (delegated : Bool) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) (carried_refund : Int) (carried_stack : StackPointer) (carried_memory_base : Nat) (carried_memory_height : Nat) (carried_code_address : (Vector (BitVec 8) 20)) (carried_code : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_calldata : CalldataSlice) (state_gas_reservoir : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma

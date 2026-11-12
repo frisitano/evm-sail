@@ -97,28 +97,28 @@ def operand_stack_push_empty_frame (_ : Unit) : SailM StackPointer := do
 def stack_top_height (top : StackPointer) : Nat :=
   top.height
 
-/- Type quantifiers: k_ex424376_ : Nat, 0 ≤ k_ex424376_ ∧ k_ex424376_ ≤ 1023 -/
+/- Type quantifiers: k_ex425529_ : Nat, 0 ≤ k_ex425529_ ∧ k_ex425529_ ≤ 1023 -/
 def stack_slot_read (top : StackPointer) (index : Nat) : SailM Nat := do
   (stack_slot_read_host top.storage index)
 
-/- Type quantifiers: k_ex424378_ : Nat, k_ex424377_ : Nat, 0 ≤ k_ex424377_ ∧
-  k_ex424377_ ≤ 1023, 0 ≤ k_ex424378_ ∧ k_ex424378_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex425531_ : Nat, k_ex425530_ : Nat, 0 ≤ k_ex425530_ ∧
+  k_ex425530_ ≤ 1023, 0 ≤ k_ex425531_ ∧ k_ex425531_ ≤ (2 ^ 256 - 1) -/
 def stack_slot_write (top : StackPointer) (index : Nat) (value : Nat) : SailM Unit := do
   (stack_slot_write_host top.storage index value)
 
-/- Type quantifiers: k_ex424379_ : Nat, 0 ≤ k_ex424379_ ∧ k_ex424379_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex425532_ : Nat, 0 ≤ k_ex425532_ ∧ k_ex425532_ ≤ (2 ^ 256 - 1) -/
 def stack_slot_write_next (top : StackPointer) (value : Nat) : SailM Unit := do
   (stack_slot_write_next_host top.storage value)
 
 /-- Advances a stack cursor by `count` slots and refreshes its semantic height. -/
-/- Type quantifiers: k_ex424380_ : Nat, 0 ≤ k_ex424380_ ∧ k_ex424380_ ≤ 1024 -/
+/- Type quantifiers: k_ex425533_ : Nat, 0 ≤ k_ex425533_ ∧ k_ex425533_ ≤ 1024 -/
 def stack_top_advance (top : StackPointer) (count : Nat) : SailM StackPointer := do
   let storage ← do (stack_top_advance_host top.storage count)
   (pure { storage := storage,
           height := ← (stack_top_height_host storage) })
 
 /-- Retreats a stack cursor by `count` slots and refreshes its semantic height. -/
-/- Type quantifiers: k_ex424381_ : Nat, 0 ≤ k_ex424381_ ∧ k_ex424381_ ≤ 1024 -/
+/- Type quantifiers: k_ex425534_ : Nat, 0 ≤ k_ex425534_ ∧ k_ex425534_ ≤ 1024 -/
 def stack_top_retreat (top : StackPointer) (count : Nat) : SailM StackPointer := do
   let storage ← do (stack_top_retreat_host top.storage count)
   (pure { storage := storage,

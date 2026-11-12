@@ -16,8 +16,7 @@ from ..._runtime import (
     sail_tmod_int,
     sail_vector_append,
 )
-from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Annotated, TypeAlias
 from evm.HostContract import (
     ancestor_hash_write as _host_ancestor_hash_write,
@@ -55,6 +54,7 @@ from evm.primitives.quantities import (
 from evm.primitives.gas import (
     block_gas,
     block_gas_limit,
+    transaction_gas,
 )
 from evm.primitives.bytes import (
     StatelessInputSlice,
@@ -100,8 +100,10 @@ from evm.primitives.chain_config import (
     DEFAULT_PROTOCOL_PROFILE,
 )
 from evm.primitives.tx import (
+    DecodedTransactionFields,
     Transaction,
     TransactionFields,
+    TransactionFieldsValidity,
     tx_type_semantics,
     pack_transaction,
 )
@@ -708,11 +710,12 @@ def index_execution_witness(input_ref: StatelessInputRef) -> WitnessContext:
     environment.k_parent_state_root = Bytes32(witness.parent_state_root)
     return witness
 
-def recover_transaction_sender(tx: TransactionFields) -> TransactionFields:
+def recover_transaction_sender(tx: DecodedTransactionFields) -> TransactionFields:
     tx_semantics = tx_type_semantics(tx.tx_type)
     parity = tx_signature_parity(environment.k_chain_id, tx_semantics.signature, tx.sig_v)
     sender = tx_recover_sender(tx.signing_hash, parity, tx.sig_r, tx.sig_s)
-    return pack_transaction(replace(deepcopy(tx), sender=address(sender)))
+    recovered = TransactionFields(validity=TransactionFieldsValidity(blob_limit=tx.validity.blob_limit), tx_type=tx.tx_type, sender=address(sender), nonce=word(tx.nonce), chain_id=chain_identifier(tx.chain_id), gas_limit=transaction_gas(tx.gas_limit), is_create=tx.is_create, recipient=address(tx.recipient), value=word(tx.value), raw=tx.raw, input_src=tx.input_src, access_list=tx.access_list, max_fee=word(tx.max_fee), max_blob_fee=word(tx.max_blob_fee), max_priority_fee=word(tx.max_priority_fee), authorizations=tx.authorizations, blob_hashes=tx.blob_hashes, signing_hash=hash(tx.signing_hash), sig_v=word(tx.sig_v), sig_r=word(tx.sig_r), sig_s=word(tx.sig_s))
+    return pack_transaction(recovered)
 
 def decode_transaction(transaction: StatelessInputSliceFields) -> Transaction:
     execution_profile = environment.k_execution_profile

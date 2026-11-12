@@ -109,8 +109,8 @@ def SECP_N_HALF : word :=
 
 /-- Recovers the signer address from `(h, y_parity, r, s)`, returning
 recovery success and the recovered address (used by EIP-7702). -/
-/- Type quantifiers: k_ex421451_ : Nat, k_ex421450_ : Nat, k_ex421449_ : Nat, 0 ≤ k_ex421449_ ∧
-  k_ex421449_ ≤ 1, 0 ≤ k_ex421450_ ∧ k_ex421450_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex421451_ ∧
-  k_ex421451_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex422573_ : Nat, k_ex422572_ : Nat, k_ex422571_ : Nat, 0 ≤ k_ex422571_ ∧
+  k_ex422571_ ≤ 1, 0 ≤ k_ex422572_ ∧ k_ex422572_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex422573_ ∧
+  k_ex422573_ ≤ (2 ^ 256 - 1) -/
 def ecrecover_addr (h : (Vector (BitVec 8) 32)) (yparity : Nat) (r : Nat) (s : Nat) : SailM AddressResult := do
   (host_ecrecover h yparity r s)

@@ -169,15 +169,52 @@ type transaction_calldata_floor_cost = range(0, 40 * transaction_length_bound + 
 /*! The greatest EIP-3860 initcode charge admitted by an SSZ transaction. */
 type transaction_initcode_cost = range(0, 2 * div(transaction_length_bound + 31, 32))
 
-/*! A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
+/*! Structural envelope data. It carries signature material but has no sender
+    and cannot be passed to transaction execution. */
+struct DecodedTransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
+    tx_type : TxType,
+    nonce : word,
+    chain_id : chain_identifier,
+    gas_limit : transaction_gas,
+    is_create : bool,
+    recipient : address,
+    value : word,
+    raw : StatelessInputSlice,
+    input_src : TransactionInputSlice,
+    access_list : AccessListRef,
+    max_fee : word,
+    max_blob_fee : word,
+    max_priority_fee : word,
+    authorizations : AuthorizationListRef,
+    blob_hashes : BlobHashesFields('blob_limit),
+    signing_hash : hash,
+    sig_v : word,
+    sig_r : word,
+    sig_s : word,
+}
+
+/*! A structural envelope retaining the admitted blob-count limit. */
+type DecodedTransaction = {
+    'blob_limit,
+    transaction_blob_limit_value('blob_limit).
+    DecodedTransactionFields('blob_limit)
+}
+
+/*! Packs structural data without creating an executable transaction. */
+function pack_decoded_transaction forall 'blob_limit, transaction_blob_limit_value('blob_limit). (tx :
+    DecodedTransactionFields('blob_limit)) -> (
+    DecodedTransaction
+) =
+    tx
+
+/*! A sender-recovered transaction. Covers the EIP-2718 typed envelopes 0–4:
     legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
     (blob), and EIP-7702 (set code); the type-specific fields are
     validity-relevant per their EIP. */
 struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
   /* EIP-2718 envelope type (the discriminant) */
   tx_type : TxType,
-  /* the signer recovered from the signature; the structural decode leaves
-     ZERO_ADDRESS until recovery fills it */
+  /* the signer recovered from the signature before execution */
   sender : address, nonce : word,
   /* typed-envelope chain id; 0 for legacy txs */
   chain_id : chain_identifier,

@@ -1884,7 +1884,36 @@ abbrev transaction_calldata_floor_cost := Nat
 /-- The greatest EIP-3860 initcode charge admitted by an SSZ transaction. -/
 abbrev transaction_initcode_cost := Nat
 
-/-- A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
+/-- Structural envelope data. It carries signature material but has no sender
+and cannot be passed to transaction execution. -/
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+structure DecodedTransactionFields (k_blob_limit : Nat) where
+  tx_type : TxType
+  nonce : word
+  chain_id : chain_identifier
+  gas_limit : transaction_gas
+  is_create : Bool
+  recipient : address
+  value : word
+  raw : StatelessInputSlice
+  input_src : TransactionInputSlice
+  access_list : AccessListRef
+  max_fee : word
+  max_blob_fee : word
+  max_priority_fee : word
+  authorizations : AuthorizationListRef
+  blob_hashes : (BlobHashesFields k_blob_limit)
+  signing_hash : hash
+  sig_v : word
+  sig_r : word
+  sig_s : word
+  deriving BEq, Inhabited, Repr
+
+/-- A structural envelope retaining the admitted blob-count limit. -/
+abbrev DecodedTransaction :=
+  (Sigma fun (k_blob_limit : Nat) => (DecodedTransactionFields k_blob_limit))
+
+/-- A sender-recovered transaction. Covers the EIP-2718 typed envelopes 0–4:
 legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
 (blob), and EIP-7702 (set code); the type-specific fields are
 validity-relevant per their EIP. -/

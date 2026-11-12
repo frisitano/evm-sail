@@ -66,16 +66,16 @@ from evm.primitives.tx import (
     AuthorizationListRef,
     BlobHashesFields,
     BlobHashesFieldsValidity,
+    DecodedTransactionFields,
+    DecodedTransactionFieldsValidity,
     PreparedAuthorizationList,
-    TransactionFields,
-    TransactionFieldsValidity,
     TransactionInputSlice,
     TxType,
     prepared_authorization_count,
     transaction_byte_length,
     transaction_item_count,
     authorization_list_ref,
-    pack_transaction,
+    pack_decoded_transaction,
     EMPTY_BLOB_HASHES,
     EMPTY_ACCESS_LIST_REF,
     EMPTY_AUTHORIZATION_LIST_REF,
@@ -296,7 +296,7 @@ def tx_sig_span(first: RlpFieldRef, signature: RlpFieldRef) -> StatelessInputSli
 def rlp_decode_gas(f: RlpFieldRef) -> block_gas:
     return block_gas(rlp_decode_uint64(f))
 
-def decode_legacy_tx(tx: TransactionInputSlice, fields: RlpCursor) -> TransactionFields:
+def decode_legacy_tx(tx: TransactionInputSlice, fields: RlpCursor) -> DecodedTransactionFields:
     nonce_f = rlp_decode_item(fields)
     fields = rlp_cursor_advance(fields, nonce_f.source.len)
     gp_f = rlp_decode_item(fields)
@@ -322,9 +322,9 @@ def decode_legacy_tx(tx: TransactionInputSlice, fields: RlpCursor) -> Transactio
     recipient = word_to_address(recipient_word)
     signing_span = tx_sig_span(nonce_f, v_f)
     signing_hash = tx_signing_hash(TxType.LegacyTx, signing_span, v)
-    return TransactionFields(validity=TransactionFieldsValidity(blob_limit=0), tx_type=TxType.LegacyTx, sender=address(ZERO_ADDRESS), raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(0), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=EMPTY_ACCESS_LIST_REF, max_fee=word(gp), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(gp), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
+    return DecodedTransactionFields(validity=DecodedTransactionFieldsValidity(blob_limit=0), tx_type=TxType.LegacyTx, raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(0), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=EMPTY_ACCESS_LIST_REF, max_fee=word(gp), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(gp), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
 
-def decode_access_list_tx(tx: TransactionInputSlice, fields: RlpCursor) -> TransactionFields:
+def decode_access_list_tx(tx: TransactionInputSlice, fields: RlpCursor) -> DecodedTransactionFields:
     chain_f = rlp_decode_item(fields)
     fields = rlp_cursor_advance(fields, chain_f.source.len)
     nonce_f = rlp_decode_item(fields)
@@ -355,9 +355,9 @@ def decode_access_list_tx(tx: TransactionInputSlice, fields: RlpCursor) -> Trans
     recipient = word_to_address(recipient_word)
     signing_span = tx_sig_span(chain_f, v_f)
     signing_hash = tx_signing_hash(TxType.AccessListTx, signing_span, v)
-    return TransactionFields(validity=TransactionFieldsValidity(blob_limit=0), tx_type=TxType.AccessListTx, sender=address(ZERO_ADDRESS), raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(gp), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(gp), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
+    return DecodedTransactionFields(validity=DecodedTransactionFieldsValidity(blob_limit=0), tx_type=TxType.AccessListTx, raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(gp), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(gp), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
 
-def decode_fee_market_tx(tx: TransactionInputSlice, fields: RlpCursor) -> TransactionFields:
+def decode_fee_market_tx(tx: TransactionInputSlice, fields: RlpCursor) -> DecodedTransactionFields:
     chain_f = rlp_decode_item(fields)
     fields = rlp_cursor_advance(fields, chain_f.source.len)
     nonce_f = rlp_decode_item(fields)
@@ -389,9 +389,9 @@ def decode_fee_market_tx(tx: TransactionInputSlice, fields: RlpCursor) -> Transa
     recipient = word_to_address(recipient_word)
     signing_span = tx_sig_span(chain_f, v_f)
     signing_hash = tx_signing_hash(TxType.FeeMarketTx, signing_span, v)
-    return TransactionFields(validity=TransactionFieldsValidity(blob_limit=0), tx_type=TxType.FeeMarketTx, sender=address(ZERO_ADDRESS), raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
+    return DecodedTransactionFields(validity=DecodedTransactionFieldsValidity(blob_limit=0), tx_type=TxType.FeeMarketTx, raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
 
-def decode_blob_tx(tx: TransactionInputSlice, blob_limit: int, fields: RlpCursor) -> TransactionFields:
+def decode_blob_tx(tx: TransactionInputSlice, blob_limit: int, fields: RlpCursor) -> DecodedTransactionFields:
     chain_f = rlp_decode_item(fields)
     fields = rlp_cursor_advance(fields, chain_f.source.len)
     nonce_f = rlp_decode_item(fields)
@@ -428,9 +428,9 @@ def decode_blob_tx(tx: TransactionInputSlice, blob_limit: int, fields: RlpCursor
     recipient = word_to_address(recipient_word)
     signing_span = tx_sig_span(chain_f, v_f)
     signing_hash = tx_signing_hash(TxType.BlobTx, signing_span, v)
-    return TransactionFields(validity=TransactionFieldsValidity(blob_limit=int(blob_limit)), tx_type=TxType.BlobTx, sender=address(ZERO_ADDRESS), raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(rlp_decode_u256(mbf_f)), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=blob_hashes, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
+    return DecodedTransactionFields(validity=DecodedTransactionFieldsValidity(blob_limit=int(blob_limit)), tx_type=TxType.BlobTx, raw=tx, nonce=word(rlp_decode_u256(nonce_f)), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(rlp_decode_u256(mbf_f)), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=EMPTY_AUTHORIZATION_LIST_REF, blob_hashes=blob_hashes, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
 
-def decode_set_code_tx(tx: TransactionInputSlice, fields: RlpCursor) -> TransactionFields:
+def decode_set_code_tx(tx: TransactionInputSlice, fields: RlpCursor) -> DecodedTransactionFields:
     chain_f = rlp_decode_item(fields)
     fields = rlp_cursor_advance(fields, chain_f.source.len)
     nonce_f = rlp_decode_item(fields)
@@ -467,9 +467,9 @@ def decode_set_code_tx(tx: TransactionInputSlice, fields: RlpCursor) -> Transact
     recipient = word_to_address(recipient_word)
     signing_span = tx_sig_span(chain_f, v_f)
     signing_hash = tx_signing_hash(TxType.SetCodeTx, signing_span, v)
-    return TransactionFields(validity=TransactionFieldsValidity(blob_limit=0), tx_type=TxType.SetCodeTx, sender=address(ZERO_ADDRESS), raw=tx, nonce=word(nonce), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=authorizations, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
+    return DecodedTransactionFields(validity=DecodedTransactionFieldsValidity(blob_limit=0), tx_type=TxType.SetCodeTx, raw=tx, nonce=word(nonce), chain_id=chain_identifier(rlp_decode_uint64(chain_f)), gas_limit=transaction_gas(rlp_decode_gas(gas_f)), is_create=((to_f.content_len) == (0)), recipient=address(recipient), value=word(rlp_decode_u256(value_f)), input_src=tx_input_span(data_f), access_list=access_list, max_fee=word(rlp_decode_u256(mf_f)), max_blob_fee=word(ZERO_WORD), max_priority_fee=word(rlp_decode_u256(mp_f)), authorizations=authorizations, blob_hashes=EMPTY_BLOB_HASHES, signing_hash=hash(signing_hash), sig_v=word(v), sig_r=word(rlp_decode_u256(r_f)), sig_s=word(rlp_decode_u256(s_f)))
 
-def rlp_decode_tx(tx: StatelessInputSliceFields, blob_limit: int) -> TransactionFields:
+def rlp_decode_tx(tx: StatelessInputSliceFields, blob_limit: int) -> DecodedTransactionFields:
     tx_length = tx.len
     if ((tx_length) == (0)):
         b0 = fatal_error(FatalError.RlpDecode)
@@ -505,19 +505,19 @@ def rlp_decode_tx(tx: StatelessInputSliceFields, blob_limit: int) -> Transaction
     match tx_type:
         case TxType.LegacyTx:
             decoded = decode_legacy_tx(tx, fields)
-            return pack_transaction(decoded)
+            return pack_decoded_transaction(decoded)
         case TxType.AccessListTx:
             decoded = decode_access_list_tx(tx, fields)
-            return pack_transaction(decoded)
+            return pack_decoded_transaction(decoded)
         case TxType.FeeMarketTx:
             decoded = decode_fee_market_tx(tx, fields)
-            return pack_transaction(decoded)
+            return pack_decoded_transaction(decoded)
         case TxType.BlobTx:
             decoded = decode_blob_tx(tx, blob_limit, fields)
-            return pack_transaction(decoded)
+            return pack_decoded_transaction(decoded)
         case TxType.SetCodeTx:
             decoded = decode_set_code_tx(tx, fields)
-            return pack_transaction(decoded)
+            return pack_decoded_transaction(decoded)
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 

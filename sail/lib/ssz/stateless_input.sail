@@ -1009,13 +1009,35 @@ function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContex
 /*! Fills in the sender of a structurally decoded transaction by recovering it
     from the signature material captured at decode. */
 function recover_transaction_sender forall 'blob_limit, transaction_blob_limit_value('blob_limit). (tx :
-    TransactionFields('blob_limit)) -> (
+    DecodedTransactionFields('blob_limit)) -> (
     Transaction
 ) = {
     let tx_semantics = tx_type_semantics(tx.tx_type);
     let parity = tx_signature_parity(k_chain_id, tx_semantics.signature, tx.sig_v);
     let sender = tx_recover_sender(tx.signing_hash, parity, tx.sig_r, tx.sig_s);
-    pack_transaction({ tx with sender = sender })
+    let recovered : TransactionFields('blob_limit) = struct {
+            tx_type = tx.tx_type,
+            sender = sender,
+            nonce = tx.nonce,
+            chain_id = tx.chain_id,
+            gas_limit = tx.gas_limit,
+            is_create = tx.is_create,
+            recipient = tx.recipient,
+            value = tx.value,
+            raw = tx.raw,
+            input_src = tx.input_src,
+            access_list = tx.access_list,
+            max_fee = tx.max_fee,
+            max_blob_fee = tx.max_blob_fee,
+            max_priority_fee = tx.max_priority_fee,
+            authorizations = tx.authorizations,
+            blob_hashes = tx.blob_hashes,
+            signing_hash = tx.signing_hash,
+            sig_v = tx.sig_v,
+            sig_r = tx.sig_r,
+            sig_s = tx.sig_s,
+        };
+    pack_transaction(recovered)
 }
 
 /*! Decodes one transaction envelope and recovers its sender from the

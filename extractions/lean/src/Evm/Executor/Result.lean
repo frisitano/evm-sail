@@ -70,8 +70,8 @@ verdict byte, the `uint64` chain id, and the `uint16` schema id. -/
 abbrev RESULT_LENGTH : Nat := 43
 
 /-- Serializes and commits the public validation result exactly once. -/
-/- Type quantifiers: k_ex428010_ : Nat, k_ex428009_ : Bool, 0 ≤ k_ex428010_ ∧
-  k_ex428010_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex429163_ : Nat, k_ex429162_ : Bool, 0 ≤ k_ex429163_ ∧
+  k_ex429163_ ≤ (2 ^ 64 - 1) -/
 def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (chain_id : Nat) (schema_id : (BitVec 16)) : SailM Unit := do
   let start ← do (scratch_reserve RESULT_LENGTH)
   (scratch_push_b256 root WORD_BYTE_LENGTH)
@@ -93,7 +93,7 @@ def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (c
 /-- Emits the full public output for a decoded input: the request root
 computed from the input itself, the verdict, and the input's chain id and
 schema id. -/
-/- Type quantifiers: k_ex428011_ : Bool -/
+/- Type quantifiers: k_ex429164_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let root ← do (htr_new_payload_request input_ref)
   (commit_validation_result root success input_ref.chain_id STATELESS_SCHEMA_ID)

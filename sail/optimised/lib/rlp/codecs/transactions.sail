@@ -10,7 +10,7 @@ val decode_transaction_envelope = impure { c: "decode_transaction" } : forall 't
                                                                          &  transaction_blob_limit_value('blob_limit). (
         StatelessInputSliceFields('tx_off, 'tx_len),
         int('blob_limit),
-    ) -> Transaction
+    ) -> DecodedTransaction
 
 function rlp_decode_tx(tx, blob_limit) =
     decode_transaction_envelope(tx, blob_limit)

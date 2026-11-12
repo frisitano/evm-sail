@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-struct TransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit);
+struct DecodedTransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit);
 PreparedAuthorizationList prepare_authorizations(struct AuthorizationListRefFields authorizations);
 struct Authorization prepared_authorization_head(PreparedAuthorizationList authorizations);
 PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList authorizations,

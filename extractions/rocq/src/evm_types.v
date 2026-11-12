@@ -6256,6 +6256,172 @@ Instance dummy_transaction_initcode_cost : Inhabited (transaction_initcode_cost)
 Definition transaction_initcode_cost_valid (x : transaction_initcode_cost) : Prop :=
 0 <= x.(transaction_initcode_cost_value) /\ x.(transaction_initcode_cost_value) <= (2 * e_div (transaction_length_bound + 31) 32).
 
+Record DecodedTransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) := {
+  DecodedTransactionFields_tx_type : TxType;
+  DecodedTransactionFields_nonce : word;
+  DecodedTransactionFields_chain_id : chain_identifier;
+  DecodedTransactionFields_gas_limit : transaction_gas;
+  DecodedTransactionFields_is_create : bool;
+  DecodedTransactionFields_recipient : address_typ;
+  DecodedTransactionFields_value : word;
+  DecodedTransactionFields_raw : StatelessInputSlice;
+  DecodedTransactionFields_input_src : TransactionInputSlice;
+  DecodedTransactionFields_access_list : AccessListRef;
+  DecodedTransactionFields_max_fee : word;
+  DecodedTransactionFields_max_blob_fee : word;
+  DecodedTransactionFields_max_priority_fee : word;
+  DecodedTransactionFields_authorizations : AuthorizationListRef;
+  DecodedTransactionFields_blob_hashes : BlobHashesFields blob_limit;
+  DecodedTransactionFields_signing_hash : hash;
+  DecodedTransactionFields_sig_v : word;
+  DecodedTransactionFields_sig_r : word;
+  DecodedTransactionFields_sig_s : word;
+}.
+Arguments DecodedTransactionFields : clear implicits.
+#[export]
+Instance Decidable_eq_DecodedTransactionFields {blob_limit : Z}
+  (*transaction_blob_limit_value blob_limit*) : EqDecision (DecodedTransactionFields blob_limit).
+   intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18].
+   intros [y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11 y12 y13 y14 y15 y16 y17 y18].
+  cmp_record_field x0 y0.
+  cmp_record_field x1 y1.
+  cmp_record_field x2 y2.
+  cmp_record_field x3 y3.
+  cmp_record_field x4 y4.
+  cmp_record_field x5 y5.
+  cmp_record_field x6 y6.
+  cmp_record_field x7 y7.
+  cmp_record_field x8 y8.
+  cmp_record_field x9 y9.
+  cmp_record_field x10 y10.
+  cmp_record_field x11 y11.
+  cmp_record_field x12 y12.
+  cmp_record_field x13 y13.
+  cmp_record_field x14 y14.
+  cmp_record_field x15 y15.
+  cmp_record_field x16 y16.
+  cmp_record_field x17 y17.
+  cmp_record_field x18 y18.
+left; subst; reflexivity.
+Defined.
+#[export]
+Instance Countable_DecodedTransactionFields {blob_limit : Z}
+  (*transaction_blob_limit_value blob_limit*) : Countable (DecodedTransactionFields blob_limit).
+refine {|
+  encode x := encode (DecodedTransactionFields_tx_type x, DecodedTransactionFields_nonce x, DecodedTransactionFields_chain_id x, DecodedTransactionFields_gas_limit x, DecodedTransactionFields_is_create x, DecodedTransactionFields_recipient x, DecodedTransactionFields_value x, DecodedTransactionFields_raw x, DecodedTransactionFields_input_src x, DecodedTransactionFields_access_list x, DecodedTransactionFields_max_fee x, DecodedTransactionFields_max_blob_fee x, DecodedTransactionFields_max_priority_fee x, DecodedTransactionFields_authorizations x, DecodedTransactionFields_blob_hashes x, DecodedTransactionFields_signing_hash x, DecodedTransactionFields_sig_v x, DecodedTransactionFields_sig_r x, DecodedTransactionFields_sig_s x);
+  decode x := '(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18) ← decode x;
+              mret (Build_DecodedTransactionFields blob_limit x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18)
+|}.
+abstract (
+  intros [x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18];
+  rewrite decode_encode;
+  reflexivity).
+Defined.
+
+Notation "{[ r 'with' 'DecodedTransactionFields_tx_type' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ _ (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ e f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_nonce' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) _ (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 e f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_chain_id' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) _ (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 e f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_gas_limit' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) _ (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 e f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_is_create' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) _ (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 e f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_recipient' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) _ (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 e f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_value' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) _ (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 e f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_raw' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) _ (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 e f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_input_src' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) _ (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 e f9 f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_access_list' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) _ (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 e f10 f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_max_fee' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) _ (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 e f11 f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_max_blob_fee' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) _ (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 e f12 f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_max_priority_fee' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) _ (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 e f13 f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_authorizations' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) _ (_ as f14) (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 e f14 f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_blob_hashes' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) _ (_ as f15) (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e f15 f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_signing_hash' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) _ (_ as f16) (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 e f16 f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_sig_v' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) _ (_ as f17) (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 e f17 f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_sig_r' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) _ (_ as f18) =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 e f18
+      end (at level 1).
+Notation "{[ r 'with' 'DecodedTransactionFields_sig_s' := e ]}" :=
+  match r with Build_DecodedTransactionFields _ (_ as f0) (_ as f1) (_ as f2) (_ as f3) (_ as f4) (_ as f5) (_ as f6) (_ as f7) (_ as f8) (_ as f9) (_ as f10) (_ as f11) (_ as f12) (_ as f13) (_ as f14) (_ as f15) (_ as f16) (_ as f17) _ =>
+    Build_DecodedTransactionFields _ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 e
+      end (at level 1).
+#[export]
+Instance dummy_DecodedTransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*)
+  : Inhabited (DecodedTransactionFields blob_limit) := {
+  inhabitant := {|
+    DecodedTransactionFields_tx_type := inhabitant;
+    DecodedTransactionFields_nonce := inhabitant;
+    DecodedTransactionFields_chain_id := inhabitant;
+    DecodedTransactionFields_gas_limit := inhabitant;
+    DecodedTransactionFields_is_create := inhabitant;
+    DecodedTransactionFields_recipient := inhabitant;
+    DecodedTransactionFields_value := inhabitant;
+    DecodedTransactionFields_raw := inhabitant;
+    DecodedTransactionFields_input_src := inhabitant;
+    DecodedTransactionFields_access_list := inhabitant;
+    DecodedTransactionFields_max_fee := inhabitant;
+    DecodedTransactionFields_max_blob_fee := inhabitant;
+    DecodedTransactionFields_max_priority_fee := inhabitant;
+    DecodedTransactionFields_authorizations := inhabitant;
+    DecodedTransactionFields_blob_hashes := inhabitant;
+    DecodedTransactionFields_signing_hash := inhabitant;
+    DecodedTransactionFields_sig_v := inhabitant;
+    DecodedTransactionFields_sig_r := inhabitant;
+    DecodedTransactionFields_sig_s := inhabitant
+|} }.
+
+
+Definition DecodedTransaction : Type := {blob_limit & (DecodedTransactionFields blob_limit)}%type.
+
 Record TransactionFields {blob_limit : Z} (*transaction_blob_limit_value blob_limit*) := {
   TransactionFields_tx_type : TxType;
   TransactionFields_sender : address_typ;

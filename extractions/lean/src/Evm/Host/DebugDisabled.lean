@@ -79,7 +79,7 @@ def validation_debug_capture_block_gas (_actual : Nat) (_expected : Nat) (_execu
 
 /-- Records the failing validation stage and reason for host
 inspection; a later record overwrites an earlier one. -/
-/- Type quantifiers: k_ex426651_ : Nat, 0 ≤ k_ex426651_ ∧ k_ex426651_ ≤ 255 -/
+/- Type quantifiers: k_ex427804_ : Nat, 0 ≤ k_ex427804_ ∧ k_ex427804_ ≤ 255 -/
 def validation_debug_record (_stage : Nat) (_reason : FatalError) : Unit :=
   ()
 

@@ -130,9 +130,9 @@ def k_get_code_size (a : (Vector (BitVec 8) 20)) : SailM Nat := do
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex424612_ : Nat, k_ex424611_ : Nat, k_ex424610_ : Nat, 0 ≤ k_ex424610_ ∧
-  k_ex424610_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex424611_ ∧ k_ex424611_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex424612_ ∧ k_ex424612_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex425765_ : Nat, k_ex425764_ : Nat, k_ex425763_ : Nat, 0 ≤ k_ex425763_ ∧
+  k_ex425763_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425764_ ∧ k_ex425764_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex425765_ ∧ k_ex425765_ ≤ (2 ^ 32 - 1) -/
 def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let code_key ← do (k_code_key a)
   let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_key)

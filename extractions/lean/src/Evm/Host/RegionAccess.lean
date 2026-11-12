@@ -266,10 +266,10 @@ def calldata_slice_load (s : CalldataSlice) (off : Nat) : SailM Nat := do
 
 /-- Loads the word at a 256-bit offset of a stateless-input span; offsets at
 or past the slice end yield the zero word. -/
-/- Type quantifiers: k_ex421194_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
+/- Type quantifiers: k_ex422316_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
   s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421194_ ∧ k_ex421194_ ≤ (2 ^ 256 - 1) -/
+  k_ex422316_ ∧ k_ex422316_ ≤ (2 ^ 256 - 1) -/
 def stateless_input_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (off : Nat) : SailM Nat := do
   let s_dependentWitness0 := (s).1
@@ -281,10 +281,10 @@ def stateless_input_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
 
 /-- Loads the word at a 256-bit offset of an EVM memory span; offsets at or
 past the slice end yield the zero word. -/
-/- Type quantifiers: k_ex421201_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
+/- Type quantifiers: k_ex422323_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
   s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421201_ ∧ k_ex421201_ ≤ (2 ^ 256 - 1) -/
+  k_ex422323_ ∧ k_ex422323_ ≤ (2 ^ 256 - 1) -/
 def memory_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (off : Nat) : SailM Nat := do
   let s_dependentWitness0 := (s).1
@@ -296,10 +296,10 @@ def memory_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
 
 /-- Loads the word at a 256-bit offset of a code-region span; offsets at or
 past the slice end yield the zero word. -/
-/- Type quantifiers: k_ex421208_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
+/- Type quantifiers: k_ex422330_ : Nat, s_dependentWitness1 : Nat, s_dependentWitness0 : Nat, 0 ≤
   s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421208_ ∧ k_ex421208_ ≤ (2 ^ 256 - 1) -/
+  k_ex422330_ ∧ k_ex422330_ ≤ (2 ^ 256 - 1) -/
 def code_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (off : Nat) : SailM Nat := do
   let s_dependentWitness0 := (s).1
@@ -311,7 +311,7 @@ def code_slice_load_word_offset (s : (Sigma fun (k_off : Nat) =>
 
 /-- Loads the word at a 256-bit offset of calldata from either provenance;
 offsets at or past the slice end yield the zero word. -/
-/- Type quantifiers: k_ex421209_ : Nat, 0 ≤ k_ex421209_ ∧ k_ex421209_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex422331_ : Nat, 0 ≤ k_ex422331_ ∧ k_ex422331_ ≤ (2 ^ 256 - 1) -/
 def calldata_slice_load_word_offset (s : CalldataSlice) (off : Nat) : SailM Nat := do
   match s with
   | .InputCalldata ⟨_, ⟨_, bytes⟩⟩ =>
@@ -410,11 +410,11 @@ def output_slice_copy (s : (Sigma fun (k_syn_off : Nat) =>
 /-- Copies `len` bytes at a 256-bit offset of a stateless-input span into EVM
 memory at `dst`; an offset at or past the slice end zero-fills the
 destination. -/
-/- Type quantifiers: k_ex421260_ : Nat, k_ex421259_ : Nat, k_ex421258_ : Nat, s_dependentWitness1 :
+/- Type quantifiers: k_ex422382_ : Nat, k_ex422381_ : Nat, k_ex422380_ : Nat, s_dependentWitness1 :
   Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421258_ ∧ k_ex421258_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex421259_ ∧ k_ex421259_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex421260_ ∧ k_ex421260_ ≤ (2 ^ 32 - 1) -/
+  k_ex422380_ ∧ k_ex422380_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex422381_ ∧ k_ex422381_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex422382_ ∧ k_ex422382_ ≤ (2 ^ 32 - 1) -/
 def stateless_input_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let s_dependentWitness0 := (s).1
@@ -427,11 +427,11 @@ def stateless_input_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
 /-- Copies `len` bytes at a 256-bit offset of an EVM memory span into EVM
 memory at `dst`; an offset at or past the slice end zero-fills the
 destination. -/
-/- Type quantifiers: k_ex421269_ : Nat, k_ex421268_ : Nat, k_ex421267_ : Nat, s_dependentWitness1 :
+/- Type quantifiers: k_ex422391_ : Nat, k_ex422390_ : Nat, k_ex422389_ : Nat, s_dependentWitness1 :
   Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421267_ ∧ k_ex421267_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex421268_ ∧ k_ex421268_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex421269_ ∧ k_ex421269_ ≤ (2 ^ 32 - 1) -/
+  k_ex422389_ ∧ k_ex422389_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex422390_ ∧ k_ex422390_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex422391_ ∧ k_ex422391_ ≤ (2 ^ 32 - 1) -/
 def memory_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (EvmMemorySliceFields k_off k_len)))) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let s_dependentWitness0 := (s).1
@@ -444,11 +444,11 @@ def memory_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
 /-- Copies `len` bytes at a 256-bit offset of a code-region span into EVM
 memory at `dst`; an offset at or past the slice end zero-fills the
 destination. -/
-/- Type quantifiers: k_ex421278_ : Nat, k_ex421277_ : Nat, k_ex421276_ : Nat, s_dependentWitness1 :
+/- Type quantifiers: k_ex422400_ : Nat, k_ex422399_ : Nat, k_ex422398_ : Nat, s_dependentWitness1 :
   Nat, s_dependentWitness0 : Nat, 0 ≤ s_dependentWitness0 ∧
   0 ≤ s_dependentWitness1 ∧ (s_dependentWitness0 + s_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex421276_ ∧ k_ex421276_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex421277_ ∧ k_ex421277_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex421278_ ∧ k_ex421278_ ≤ (2 ^ 32 - 1) -/
+  k_ex422398_ ∧ k_ex422398_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex422399_ ∧ k_ex422399_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex422400_ ∧ k_ex422400_ ≤ (2 ^ 32 - 1) -/
 def code_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let s_dependentWitness0 := (s).1
@@ -461,9 +461,9 @@ def code_slice_copy_word_offset (s : (Sigma fun (k_off : Nat) =>
 /-- Copies `len` bytes at a 256-bit offset of calldata from either provenance
 into EVM memory at `dst`; an offset at or past the slice end zero-fills
 the destination. -/
-/- Type quantifiers: k_ex421281_ : Nat, k_ex421280_ : Nat, k_ex421279_ : Nat, 0 ≤ k_ex421279_ ∧
-  k_ex421279_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex421280_ ∧ k_ex421280_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex421281_ ∧ k_ex421281_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex422403_ : Nat, k_ex422402_ : Nat, k_ex422401_ : Nat, 0 ≤ k_ex422401_ ∧
+  k_ex422401_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex422402_ ∧ k_ex422402_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex422403_ ∧ k_ex422403_ ≤ (2 ^ 32 - 1) -/
 def calldata_slice_copy_word_offset (s : CalldataSlice) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   match s with
   | .InputCalldata ⟨_, ⟨_, bytes⟩⟩ =>

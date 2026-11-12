@@ -428,7 +428,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex426779_ : Nat, 0 ≤ k_ex426779_ ∧ k_ex426779_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex427932_ : Nat, 0 ≤ k_ex427932_ ∧ k_ex427932_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -917,8 +917,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex426850_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex426850_ ∧ k_ex426850_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex428003_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex428003_ ∧ k_ex428003_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1444,20 +1444,20 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
   writeReg k_chain_id input_ref.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex468260_ : Nat) =>
-    (Sigma fun (k_ex468261_ : Nat) =>
-    (Sigma fun (k_ex468262_ : Nat) =>
-    (Sigma fun (k_ex468263_ : Nat) =>
-    (Sigma fun (k_ex468264_ : Nat) =>
-    (Sigma fun (k_ex468265_ : Nat) =>
-    (Sigma fun (k_ex468266_ : Nat) =>
-    (Sigma fun (k_ex468267_ : Nat) =>
-    (Sigma fun (k_ex468268_ : Nat) =>
-    (Sigma fun (k_ex468269_ : Nat) =>
-    (Sigma fun (k_ex468270_ : Nat) =>
-    (ExecutionProfileFields k_ex468260_ k_ex468261_ k_ex468262_ k_ex468263_ k_ex468264_ k_ex468265_ k_ex468266_ k_ex468267_ k_ex468268_ k_ex468269_ k_ex468270_ (if ( k_ex468270_
-    < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_) (if ( (if ( k_ex468270_ < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_)
-    < k_ex468267_  : Bool) then (if ( k_ex468270_ < k_ex468266_  : Bool) then k_ex468270_ else k_ex468266_) else k_ex468267_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex469420_ : Nat) =>
+    (Sigma fun (k_ex469421_ : Nat) =>
+    (Sigma fun (k_ex469422_ : Nat) =>
+    (Sigma fun (k_ex469423_ : Nat) =>
+    (Sigma fun (k_ex469424_ : Nat) =>
+    (Sigma fun (k_ex469425_ : Nat) =>
+    (Sigma fun (k_ex469426_ : Nat) =>
+    (Sigma fun (k_ex469427_ : Nat) =>
+    (Sigma fun (k_ex469428_ : Nat) =>
+    (Sigma fun (k_ex469429_ : Nat) =>
+    (Sigma fun (k_ex469430_ : Nat) =>
+    (ExecutionProfileFields k_ex469420_ k_ex469421_ k_ex469422_ k_ex469423_ k_ex469424_ k_ex469425_ k_ex469426_ k_ex469427_ k_ex469428_ k_ex469429_ k_ex469430_ (if ( k_ex469430_
+    < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_) (if ( (if ( k_ex469430_ < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_)
+    < k_ex469427_  : Bool) then (if ( k_ex469430_ < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_) else k_ex469427_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,
@@ -1480,12 +1480,33 @@ def index_execution_witness (input_ref : StatelessInputRef) : SailM WitnessConte
 /-- Fills in the sender of a structurally decoded transaction by recovering it
 from the signature material captured at decode. -/
 /- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
-def recover_transaction_sender (tx : (TransactionFields k_blob_limit)) : SailM (Sigma fun
+def recover_transaction_sender (tx : (DecodedTransactionFields k_blob_limit)) : SailM (Sigma fun
   (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit)) := do
   let tx_semantics := (tx_type_semantics tx.tx_type)
   let parity ← do (tx_signature_parity (← readReg k_chain_id) tx_semantics.signature tx.sig_v)
   let sender ← do (tx_recover_sender tx.signing_hash parity tx.sig_r tx.sig_s)
-  (pure ((pack_transaction { tx with sender := sender }) : (Sigma fun (k_syn_blob_limit : Nat) =>
+  let recovered : (TransactionFields k_blob_limit) :=
+    { tx_type := tx.tx_type,
+      sender := sender,
+      nonce := tx.nonce,
+      chain_id := tx.chain_id,
+      gas_limit := tx.gas_limit,
+      is_create := tx.is_create,
+      recipient := tx.recipient,
+      value := tx.value,
+      raw := tx.raw,
+      input_src := tx.input_src,
+      access_list := tx.access_list,
+      max_fee := tx.max_fee,
+      max_blob_fee := tx.max_blob_fee,
+      max_priority_fee := tx.max_priority_fee,
+      authorizations := tx.authorizations,
+      blob_hashes := tx.blob_hashes,
+      signing_hash := tx.signing_hash,
+      sig_v := tx.sig_v,
+      sig_r := tx.sig_r,
+      sig_s := tx.sig_s }
+  (pure ((pack_transaction recovered) : (Sigma fun (k_syn_blob_limit : Nat) =>
     (TransactionFields k_syn_blob_limit))))
 
 /- Type quantifiers: k_transaction_off : Nat, k_transaction_len : Nat, (source_valid_range k_transaction_off k_transaction_len) -/

@@ -197,9 +197,9 @@ abbrev BLOB_HASH_LENGTH : Nat := 32
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex423993_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex425146_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex423993_ ∧ k_ex423993_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex425146_ ∧ k_ex425146_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -458,7 +458,7 @@ shape as an independent function. -/
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (DecodedTransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
@@ -488,7 +488,6 @@ def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span nonce_f v_f)
   let signing_hash ← do (tx_signing_hash LegacyTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := LegacyTx,
-          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := 0,
@@ -516,7 +515,7 @@ def decode_legacy_tx (tx : (Sigma fun (k_off : Nat) =>
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (DecodedTransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
@@ -551,7 +550,6 @@ def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash AccessListTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := AccessListTx,
-          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -579,7 +577,7 @@ def decode_access_list_tx (tx : (Sigma fun (k_off : Nat) =>
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (DecodedTransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
@@ -615,7 +613,6 @@ def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash FeeMarketTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := FeeMarketTx,
-          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -644,7 +641,7 @@ def decode_fee_market_tx (tx : (Sigma fun (k_off : Nat) =>
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (blob_limit : Nat) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields blob_limit) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (blob_limit : Nat) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (DecodedTransactionFields blob_limit) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
@@ -685,7 +682,6 @@ def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash BlobTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := BlobTx,
-          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := ← (rlp_decode_u256 nonce_f),
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -713,7 +709,7 @@ def decode_blob_tx (tx : (Sigma fun (k_off : Nat) =>
   0 ≤ tx_dependentWitness1 ∧ (tx_dependentWitness0 + tx_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ tx_dependentWitness1 ∧ tx_dependentWitness1 ≤ (2 ^ 30) -/
 def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (TransactionFields 0) := do
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (fields : (StatelessInputSliceFields k_source_off k_source_len)) : SailM (DecodedTransactionFields 0) := do
   let tx_dependentWitness0 := (tx).1
   let tx_dependentWitness1 := ((tx).2).1
   let tx := ((tx).2).2
@@ -754,7 +750,6 @@ def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
   let ⟨_, ⟨_, signing_span⟩⟩ := (tx_sig_span chain_f v_f)
   let signing_hash ← do (tx_signing_hash SetCodeTx ⟨_, ⟨_, signing_span⟩⟩ v)
   (pure { tx_type := SetCodeTx,
-          sender := ZERO_ADDRESS,
           raw := ⟨_, ⟨_, tx⟩⟩,
           nonce := nonce,
           chain_id := ← (rlp_decode_uint64 chain_f),
@@ -781,7 +776,7 @@ def decode_set_code_tx (tx : (Sigma fun (k_off : Nat) =>
   0 ≤ k_tx_len ∧
   k_tx_len ≤ transaction_length_bound ∧ (transaction_blob_limit_value blob_limit) -/
 def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (blob_limit : Nat) : SailM (Sigma
-  fun (k_syn_blob_limit : Nat) => (TransactionFields k_syn_blob_limit)) := do
+  fun (k_syn_blob_limit : Nat) => (DecodedTransactionFields k_syn_blob_limit)) := do
   let tx_length := k_tx_len
   let b0 ← (( do
     if ((tx_length == 0) : Bool)
@@ -830,25 +825,25 @@ def rlp_decode_tx (tx : (StatelessInputSliceFields k_tx_off k_tx_len)) (blob_lim
   | .LegacyTx =>
     (do
       let decoded ← do (decode_legacy_tx ⟨_, ⟨_, tx⟩⟩ fields)
-      (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
-        (TransactionFields k_syn_blob_limit)))))
+      (pure ((pack_decoded_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
+        (DecodedTransactionFields k_syn_blob_limit)))))
   | .AccessListTx =>
     (do
       let decoded ← do (decode_access_list_tx ⟨_, ⟨_, tx⟩⟩ fields)
-      (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
-        (TransactionFields k_syn_blob_limit)))))
+      (pure ((pack_decoded_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
+        (DecodedTransactionFields k_syn_blob_limit)))))
   | .FeeMarketTx =>
     (do
       let decoded ← do (decode_fee_market_tx ⟨_, ⟨_, tx⟩⟩ fields)
-      (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
-        (TransactionFields k_syn_blob_limit)))))
+      (pure ((pack_decoded_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
+        (DecodedTransactionFields k_syn_blob_limit)))))
   | .BlobTx =>
     (do
       let decoded ← do (decode_blob_tx ⟨_, ⟨_, tx⟩⟩ blob_limit fields)
-      (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
-        (TransactionFields k_syn_blob_limit)))))
+      (pure ((pack_decoded_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
+        (DecodedTransactionFields k_syn_blob_limit)))))
   | .SetCodeTx =>
     (do
       let decoded ← do (decode_set_code_tx ⟨_, ⟨_, tx⟩⟩ fields)
-      (pure ((pack_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
-        (TransactionFields k_syn_blob_limit)))))
+      (pure ((pack_decoded_transaction decoded) : (Sigma fun (k_syn_blob_limit : Nat) =>
+        (DecodedTransactionFields k_syn_blob_limit)))))
