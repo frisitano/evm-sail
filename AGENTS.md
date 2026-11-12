@@ -208,9 +208,17 @@ duplicating instructions elsewhere.
   `StatelessInput` (`devtools/harness/ssz_builder.py`, under the
   execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
-  EELS reference. State-test synthesis (`ssz_builder.py`, `v062_compat*.py`)
-  is pinned to the v0.6.2 EELS schema and is not supported with the v21
-  guest, which accepts only schema id `0x1501`. Fixtures that already carry
+  EELS reference. State-test synthesis (`ssz_builder.py`) uses the blockchain
+  filler at EELS `59c1473ddfba341babaeca1c97a50e996f639a0b`, matching
+  schema `0x1501`. Set `EXECSPECS_ROOT` and `EXECSPECS_PY` to that checkout
+  and its locked test environment (`uv sync --frozen --group test`). The
+  obsolete v0.6.2 adapters and handwritten witness builder are removed.
+  `make memory-regression-test` runs the focused memory cases on both C
+  backends. Synthesis currently accepts Amsterdam secret-key transactions;
+  raw signed state-test envelopes and historical forks fail explicitly.
+  `make sender-regression-test` runs the pinned signature and chain-ID cases
+  on both native backends without a known-failure allowance.
+  Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is

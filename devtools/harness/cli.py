@@ -190,6 +190,7 @@ def build_guest_pair(case):
             "idx": case["idx"],
             "config": case["config"],
             "txbytes": case["txbytes"],
+            "expected_post": case["post"],
         }
     )
     return bytes.fromhex(resp["input"]), bytes.fromhex(resp["expected"])

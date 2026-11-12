@@ -206,8 +206,8 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
              whole-operation refinements
 devtools/    handwritten Python and developer tooling: devtools/harness/cli.py drives
              main.sail in-process and gates its canonical output byte-exactly
-             against EELS. State-test synthesis is pinned to the v0.6.2 EELS
-             schema and is not supported with the v21 guest.
+             against EELS. Amsterdam state-test synthesis uses the pinned v21
+             EELS blockchain filler, including its witnesses and SSZ serializer.
              benchmarks/, docs/, and optimised_c/ own the other repository
              developer utilities
 extractions/ one directory per target, each with contract/ (the axiom or ABI
@@ -292,6 +292,27 @@ uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --lim
   zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 make verify-corpus
 ```
+
+Run focused memory regressions against both native C backends with:
+
+```sh
+EXECSPECS_ROOT=/path/to/execution-specs \
+EXECSPECS_PY=/path/to/execution-specs/.venv/bin/python make memory-regression-test
+```
+
+The execution-specs checkout must be at
+`59c1473ddfba341babaeca1c97a50e996f639a0b` (`tests-zkevm@v21.0.6`),
+with its locked test environment installed using `uv sync --frozen --group test`.
+The filler generates the full blockchain fixture and supplies unmodified
+stateless input/output bytes. The obsolete v0.6.2 request adapter and handwritten
+witness builder have been removed. Synthesis currently accepts Amsterdam
+secret-key transactions; raw signed state-test envelopes and historical forks
+remain unsupported and fail explicitly. Embedded corpus inputs remain usable.
+
+`make sender-regression-test` runs the pinned malformed `v/r/s` cases for
+envelopes 0–4, unrecoverable signatures, and chain-ID mismatch fixtures against
+both native backends without a known-failure allowance. This focused gate does
+not cover historical signature rules or every signing-domain mutation.
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
 guest; `make verify-corpus` runs the whole corpus and also requires the failing

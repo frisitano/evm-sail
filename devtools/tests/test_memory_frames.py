@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Run focused EVM-memory regressions through both native C backends.
 
-Disabled (see the Makefile): the blocks are built through the v0.6.2
-state-test synthesis, which the v21 guest rejects.
-
 The fixture is generated in the workspace temporary directory. The harness
 asks EELS to build the matching Amsterdam block and reference output, so this
 test does not retain or hand-author an expected state root.
@@ -20,9 +17,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EELS_REVISION = "3f2859dc162243997f9f460fea5451a7ce7011b5"
-DEFAULT_EELS_ROOT = ROOT.parents[2] / "execution-specs" / ".worktrees" / "evm-sail-v062"
-DEFAULT_EELS_PY = ROOT.parents[2] / "execution-specs" / ".venv" / "bin" / "python3"
+EELS_REVISION = "59c1473ddfba341babaeca1c97a50e996f639a0b"
+DEFAULT_EELS_ROOT = ROOT.parent / "execution-specs"
 
 SENDER = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 SECRET_KEY = "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
@@ -170,7 +166,11 @@ def account(code: bytes = b"") -> dict[str, object]:
     }
 
 
-def fixture_case(target: int, code_accounts: dict[int, bytes]) -> dict[str, object]:
+def fixture_case(
+    target: int,
+    code_accounts: dict[int, bytes],
+    expected_post: dict[str, object] | None = None,
+) -> dict[str, object]:
     pre = {f"0x{address:040x}": account(code) for address, code in code_accounts.items()}
     pre[SENDER] = {
         "nonce": "0x00",
@@ -204,7 +204,11 @@ def fixture_case(target: int, code_accounts: dict[int, bytes]) -> dict[str, obje
         },
         # The harness needs only the indexed case selector here. EELS derives
         # the authoritative post-state and byte-exact stateless output.
-        "post": {"Amsterdam": [{"indexes": {"data": 0, "gas": 0, "value": 0}, "state": {}}]},
+        "post": {
+            "Amsterdam": [
+                {"indexes": {"data": 0, "gas": 0, "value": 0}, "state": expected_post or {}}
+            ]
+        },
         "config": {"chainid": "0x01"},
     }
 
@@ -220,8 +224,19 @@ def build_fixture() -> dict[str, object]:
     }
     return {
         "memory/lower-access-after-growth": fixture_case(LOWER, lower_accounts),
-        "memory/lower-create-initcode-after-growth": fixture_case(CREATE_TARGET, create_accounts),
-        "memory/nested-frames-and-resume": fixture_case(PARENT, frame_accounts),
+        "memory/lower-create-initcode-after-growth": fixture_case(
+            CREATE_TARGET,
+            create_accounts,
+            {f"0x{CREATE_TARGET:040x}": {"storage": {"0x00": "0x01"}}},
+        ),
+        "memory/nested-frames-and-resume": fixture_case(
+            PARENT,
+            frame_accounts,
+            {
+                f"0x{PARENT:040x}": {"storage": {hex(slot): "0x01" for slot in range(7)}},
+                f"0x{SIBLING_CHECK:040x}": {"storage": {"0x00": "0x01"}},
+            },
+        ),
     }
 
 
@@ -230,7 +245,7 @@ def harness_environment() -> dict[str, str]:
     root = Path(environment.get("EXECSPECS_ROOT", DEFAULT_EELS_ROOT)).resolve()
     # Preserve the venv's python symlink: resolving it selects the underlying
     # base interpreter and drops the venv site-packages.
-    interpreter = Path(os.path.abspath(environment.get("EXECSPECS_PY", DEFAULT_EELS_PY)))
+    interpreter = Path(os.path.abspath(environment.get("EXECSPECS_PY", root / ".venv/bin/python")))
     if not interpreter.is_file() or not (root / "src").is_dir():
         raise RuntimeError(
             "memory regressions require the compatible execution-specs checkout; "
@@ -250,7 +265,7 @@ def harness_environment() -> dict[str, str]:
         raise RuntimeError(
             f"incompatible execution-specs revision at {root}: got {revision}, "
             f"expected {EELS_REVISION}. Set EXECSPECS_ROOT and EXECSPECS_PY "
-            "to the pinned v0.6.2-compatible checkout"
+            "to the pinned v21-compatible checkout"
         )
     environment["EXECSPECS_ROOT"] = str(root)
     environment["EXECSPECS_PY"] = str(interpreter)
@@ -273,12 +288,6 @@ def main() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     builds = args.build or ["standard", "optimized"]
     environment = harness_environment()
-    subprocess.run(
-        [environment["EXECSPECS_PY"], "-m", "devtools.harness.v062_compat_probe"],
-        cwd=ROOT,
-        env=environment,
-        check=True,
-    )
     with tempfile.TemporaryDirectory(prefix="memory-frames.", dir=temp_root) as directory:
         fixture_path = Path(directory) / "memory_frames.json"
         fixture_path.write_text(json.dumps(build_fixture(), indent=2) + "\n")

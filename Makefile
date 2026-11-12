@@ -241,7 +241,7 @@ help:
 	@echo "  make runtime-test   - differential-test the bounded Sail C runtime"
 	@echo "  make clear-z3-memo  - remove the persistent Sail/Z3 type-check cache"
 	@echo "  make eest-smoke     - run one embedded tests-zkevm@v21.0.6 fixture"
-	@echo "  make memory-regression-test - disabled: needs state-test synthesis, unsupported with the v21 guest"
+	@echo "  make memory-regression-test - v21 memory regressions on both native backends (requires pinned EELS)"
 	@echo "  make c-spec         - generate and compile-check the specification C model"
 	@echo "  make c-optimised    - generate and compile-check the optimized C model"
 	@echo "  make c-optimised-compdb - write and smoke-check root clangd metadata"
@@ -320,12 +320,20 @@ verify-corpus: eest-provision
 		$(PYTHON) -m devtools.harness.cli --build optimized --jobs $${EEST_JOBS:-8} --quiet \
 		--known-failures $(EEST_KNOWN_FAILURES) --corpus-manifest $(EEST_CORPUS_MANIFEST) $(EEST_CORPUS)
 
-# Disabled: the test builds its blocks through the v0.6.2 state-test synthesis
-# (devtools.harness.ssz_builder), whose inputs the v21 guest rejects: it admits
-# only schema id 0x1501. Re-enable it once synthesis targets the v21 schema.
 memory-regression-test:
-	@echo "memory-regression-test is disabled: it builds v0.6.2 inputs, which the v21 guest does not accept" >&2
-	@exit 1
+	$(PYTHON) -m devtools.tests.test_memory_frames
+
+# Pinned malformed-signature and signing-domain fixtures, with no allowlist.
+sender-regression-test: eest-provision
+	@for backend in standard optimized; do \
+		$(PYTHON) -m devtools.harness.cli --build $$backend --quiet \
+		$(EEST_CORPUS)/blockchain_tests/for_amsterdam/frontier/validation/transaction/bad_v_r_s.json \
+		$(EEST_CORPUS)/blockchain_tests/for_amsterdam/frontier/validation/transaction/unrecoverable_signature.json \
+		$(EEST_CORPUS)/blockchain_tests/for_amsterdam/amsterdam/eip8025_optional_proofs/witness_validation_chain_id/validation_wrong_chain_id_legacy_signature.json \
+		$(EEST_CORPUS)/blockchain_tests/for_amsterdam/london/eip1559_fee_market_change/tx_type/invalid_chain_id.json || exit $$?; \
+	done
+
+.PHONY: sender-regression-test
 
 check-contracts:
 	$(PYTHON_CONFIG) -m devtools.canaries --config $(CONTRACT_CANARIES) --root .
