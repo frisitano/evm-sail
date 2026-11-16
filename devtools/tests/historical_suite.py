@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -52,6 +54,22 @@ def verify_audit(report: dict[str, object], group: str, limits: dict[str, object
         or report["exported_rows"] != expected["source_cases"] - len(allowed)
     ):
         raise RuntimeError(f"{group}: historical inventory/provenance audit failed")
+
+
+def verify_export(log: Path, status: int, total: int, missing: int) -> None:
+    """A later replay cannot erase an export-time model or worker failure."""
+    transcript = log.read_text()
+    summaries = re.findall(r"^=== (\d+)/(\d+) passed.*$", transcript, re.MULTILINE)
+    categories = re.findall(r"^fail categories: (.+)$", transcript, re.MULTILINE)
+    expected_categories = {"builderr": missing} if missing else {}
+    actual_categories = ast.literal_eval(categories[0]) if len(categories) == 1 else {}
+    if (
+        status != int(missing > 0)
+        or summaries != [(str(total - missing), str(total))]
+        or len(categories) != int(missing > 0)
+        or actual_categories != expected_categories
+    ):
+        raise RuntimeError(f"export failed; see {log}")
 
 
 def main() -> None:
@@ -150,36 +168,67 @@ def main() -> None:
             ],
         ),
     ):
+        fill_identity = {
+            "eels_revision": EELS_REVISION,
+            "selection": identity["selection"],
+            "arguments": selection,
+        }
+        filled = root / f"filled-{group}.json"
         completed = cache / f"{group}.json"
         if completed.exists():
             saved = json.loads(completed.read_text())
             fixture_dir = Path(saved["directory"])
+            sources = Path(saved["source_directory"])
+            export_status = saved["export_status"]
             if (
-                tree_digest(fixture_dir / "source/state_tests", "*.json") != saved["sources"]
+                tree_digest(sources, "*.json") != saved["sources"]
                 or tree_digest(fixture_dir / "ssz", "*.jsonl") != saved["exports"]
             ):
                 raise RuntimeError(f"{completed}: cached fixtures changed; use a new --directory")
         else:
             # Failed attempts remain available for inspection; never append to old exports.
             fixture_dir = Path(tempfile.mkdtemp(prefix=f"{group}-", dir=cache))
-            require(
-                [
-                    str(specs / ".venv/bin/fill"),
-                    *selection,
-                    "-m",
-                    "state_test",
-                    "-n",
-                    str(args.jobs),
-                    "--no-html",
-                    "--output",
-                    str(fixture_dir / "source"),
-                    "tests",
-                ],
-                cwd=specs,
-                env=env,
-                log=fixture_dir / "fill.log",
-            )
-            status = run(
+            if filled.exists():
+                saved_fill = json.loads(filled.read_text())
+                sources = Path(saved_fill["directory"])
+                if (
+                    saved_fill["identity"] != fill_identity
+                    or tree_digest(sources, "*.json") != saved_fill["sources"]
+                ):
+                    raise RuntimeError(
+                        f"{filled}: generated sources changed; use a new --directory"
+                    )
+            else:
+                sources = fixture_dir / "source/state_tests"
+                require(
+                    [
+                        str(specs / ".venv/bin/fill"),
+                        *selection,
+                        "-m",
+                        "state_test",
+                        "-n",
+                        str(args.jobs),
+                        "--no-html",
+                        "--output",
+                        str(fixture_dir / "source"),
+                        "tests",
+                    ],
+                    cwd=specs,
+                    env=env,
+                    log=fixture_dir / "fill.log",
+                )
+                filled.write_text(
+                    json.dumps(
+                        {
+                            "directory": str(sources),
+                            "identity": fill_identity,
+                            "sources": tree_digest(sources, "*.json"),
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
+            export_status = run(
                 [
                     sys.executable,
                     "-m",
@@ -191,14 +240,19 @@ def main() -> None:
                     "--quiet",
                     "--save-synthesized",
                     str(fixture_dir / "ssz"),
-                    str(fixture_dir / "source/state_tests"),
+                    str(sources),
                 ],
                 cwd=REPO_ROOT,
                 env=env,
                 log=fixture_dir / "export.log",
             )
-            if status not in (0, 1):
-                raise RuntimeError(f"{group}: export crashed; inspect {fixture_dir}")
+        expected = limits[group]
+        verify_export(
+            fixture_dir / "export.log",
+            export_status,
+            expected["source_cases"],
+            len(expected["conversion_limits"]),
+        )
         report = fixture_dir / "audit.json"
         status = run(
             [
@@ -207,7 +261,7 @@ def main() -> None:
                 "devtools.tests.audit_synthesized",
                 str(fixture_dir / "ssz"),
                 "--sources",
-                str(fixture_dir / "source/state_tests"),
+                str(sources),
                 "--report",
                 str(report),
             ],
@@ -241,7 +295,9 @@ def main() -> None:
                 {
                     "directory": str(fixture_dir),
                     "identity": identity,
-                    "sources": tree_digest(fixture_dir / "source/state_tests", "*.json"),
+                    "source_directory": str(sources),
+                    "export_status": export_status,
+                    "sources": tree_digest(sources, "*.json"),
                     "exports": tree_digest(fixture_dir / "ssz", "*.jsonl"),
                 },
                 indent=2,

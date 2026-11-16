@@ -619,15 +619,21 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
         flags += ["--fail-limit", str(args.fail_limit)]
 
     def run_shard(shard):
-        return subprocess.run(
-            [sys.executable, "-m", "devtools.harness.cli", *shard, *flags],
-            capture_output=True,
-            text=True,
-        )
+        # Large fixture inventories (especially absolute paths) exceed ARG_MAX.
+        # argparse reads one argument per line, preserving spaces in paths.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".args") as inputs:
+            inputs.write("\n".join(shard) + "\n")
+            inputs.flush()
+            return subprocess.run(
+                [sys.executable, "-m", "devtools.harness.cli", "@" + inputs.name, *flags],
+                capture_output=True,
+                text=True,
+            )
 
     npass = ntotal = 0
     cats: dict[str, int] = {}
     rc = 0
+    abnormal_worker = False
     with cf.ThreadPoolExecutor(n) as ex:
         futs = {ex.submit(run_shard, sh): i for i, sh in enumerate(shards)}
         for fut in cf.as_completed(futs):
@@ -640,10 +646,15 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
                     print(ln)
             m = re.search(r"=== (\d+)/(\d+) passed", out)
             if m:
+                expected_status = 0 if int(m.group(1)) == int(m.group(2)) > 0 else 1
+                if r.returncode != expected_status:
+                    abnormal_worker = True
+                    print(f"[shard {futs[fut] + 1}/{n} unexpected exit status {r.returncode}]")
                 npass += int(m.group(1))
                 ntotal += int(m.group(2))
                 print(f"[shard {futs[fut] + 1}/{n} done: {m.group(1)}/{m.group(2)}]")
             else:
+                abnormal_worker = True
                 rc = 1
                 if r.returncode < 0:
                     import signal
@@ -668,11 +679,11 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
     if cats:
         print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
     status = corpus_verdict(args, ntotal, npass)
-    return 1 if (rc or status) else 0
+    return 2 if abnormal_worker else 1 if (rc or status) else 0
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(fromfile_prefix_chars="@")
     ap.add_argument("files", nargs="+")
     ap.add_argument("--fork", default=None)
     ap.add_argument(

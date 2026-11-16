@@ -54,16 +54,50 @@ class CorpusVerdictTests(unittest.TestCase):
         self.assertEqual(self.run_shards([self.shard(8, 8), self.shard(4, 4)]), 1)
 
     def test_failed_worker_with_success_summary(self) -> None:
-        self.assertEqual(self.run_shards([self.shard(8, 8, 1), self.shard(5, 5)]), 1)
+        self.assertEqual(self.run_shards([self.shard(8, 8, 1), self.shard(5, 5)]), 2)
 
     def test_worker_dies_without_summary(self) -> None:
         self.assertEqual(
             self.run_shards([subprocess.CompletedProcess([], -9, "", ""), self.shard(5, 5)]),
-            1,
+            2,
         )
 
+    def test_abnormal_worker_after_failure_summary(self) -> None:
+        self.assertEqual(self.run_shards([self.shard(7, 8, 2), self.shard(5, 5)]), 2)
+
+    def test_shards_use_argument_files_preserving_spaces(self) -> None:
+        from pathlib import Path
+
+        observed: list[str] = []
+
+        def worker(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            self.assertTrue(command[3].startswith("@"))
+            observed.extend(Path(command[3][1:]).read_text().splitlines())
+            return self.shard(13, 13)
+
+        args = Namespace(
+            jobs=1,
+            quiet=True,
+            verbose=False,
+            profile=False,
+            lean=False,
+            python=False,
+            build_mode="optimized",
+            save_synthesized=None,
+            fork=None,
+            limit=0,
+            timeout=None,
+            fail_limit=0,
+            corpus_manifest="manifest.toml",
+            expected_cases=13,
+        )
+        files = ["/a long path/" + "x" * 200 + str(i) + ".json" for i in range(2000)]
+        with patch("devtools.harness.cli.subprocess.run", side_effect=worker):
+            self.assertEqual(cli.run_sharded(files, args), 0)
+        self.assertEqual(observed, files)
+
     def test_empty_run(self) -> None:
-        self.assertEqual(self.run_shards([self.shard(0, 0)], expected=0), 1)
+        self.assertEqual(self.run_shards([self.shard(0, 0, 1)], expected=0), 1)
 
 
 if __name__ == "__main__":

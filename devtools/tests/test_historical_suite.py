@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from devtools.harness.ssz_builder import EELS_REVISION
 from devtools.tests import historical_suite
-from devtools.tests.historical_suite import verify_audit
+from devtools.tests.historical_suite import verify_audit, verify_export
 
 
 class HistoricalSuiteAuditTests(unittest.TestCase):
@@ -29,8 +29,10 @@ class HistoricalSuiteAuditTests(unittest.TestCase):
             cache = root / "cache"
             (cache / "execution-specs").mkdir(parents=True)
             commands: list[list[str]] = []
+            fail_export = True
 
             def command(argv: list[str], *, cwd: Path, env: dict[str, str], log: Path) -> int:
+                nonlocal fail_export
                 commands.append(argv)
                 if log.name == "fill.log":
                     source = log.parent / "source/state_tests"
@@ -40,6 +42,13 @@ class HistoricalSuiteAuditTests(unittest.TestCase):
                     exports = log.parent / "ssz"
                     exports.mkdir()
                     (exports / "fixture.jsonl").write_text("{}\n")
+                    if fail_export:
+                        fail_export = False
+                        log.write_text(
+                            "=== 0/1 passed (optimized guest, byte-exact) ===\nfail categories: {'diff': 1}\n"
+                        )
+                        return 1
+                    log.write_text("=== 1/1 passed (optimized guest, byte-exact) === [4 jobs]\n")
                 elif log.name == "audit.log":
                     (log.parent / "audit.json").write_text(
                         json.dumps(
@@ -59,11 +68,17 @@ class HistoricalSuiteAuditTests(unittest.TestCase):
                 patch.object(historical_suite, "run", side_effect=command),
                 patch(
                     "devtools.tests.historical_suite.subprocess.check_output",
-                    side_effect=[EELS_REVISION, ""] * 2,
+                    side_effect=[EELS_REVISION, ""] * 3,
                 ),
                 patch.object(sys, "argv", ["historical_suite", "--directory", str(cache)]),
             ):
+                with self.assertRaises(RuntimeError):
+                    historical_suite.main()
+                commands.clear()
                 historical_suite.main()
+                # The failed model export does not erase completed reference
+                # generation: only the extra group still needs a fill.
+                self.assertEqual(sum("--output" in c for c in commands), 1)
                 commands.clear()
                 historical_suite.main()
             rebuilds = [c for c in commands if "-c" in c and "load_guest(rebuild=True" in c[2]]
@@ -73,6 +88,30 @@ class HistoricalSuiteAuditTests(unittest.TestCase):
             self.assertEqual(
                 [c[c.index("--build") + 1] for c in replays], ["standard", "optimized"] * 2
             )
+
+    def test_export_rejects_model_failures_and_abnormal_workers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            log = Path(temporary) / "export.log"
+            good = "=== 2/3 passed (optimized guest, byte-exact) === [4 jobs]\nfail categories: {'builderr': 1}\n"
+            log.write_text(good)
+            verify_export(log, 1, 3, 1)
+            for transcript, status in (
+                (good, 2),
+                (good, -9),
+                (good, 0),
+                (good.replace("'builderr'", "'diff'"), 1),
+                (good.replace("'builderr'", "'runerr'"), 1),
+                (good.replace("'builderr'", "'noref'"), 1),
+                (good.replace("2/3", "1/3"), 1),
+                (good + good, 1),
+                ("Traceback: worker startup failed", 1),
+            ):
+                log.write_text(transcript)
+                with (
+                    self.subTest(status=status, transcript=transcript),
+                    self.assertRaises(RuntimeError),
+                ):
+                    verify_export(log, status, 3, 1)
 
     def test_only_documented_missing_conversions_are_accepted(self) -> None:
         limits: dict[str, object] = {
