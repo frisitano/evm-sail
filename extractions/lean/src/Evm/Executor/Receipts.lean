@@ -345,8 +345,8 @@ def indexed_receipt_trie_root (receipts : ReceiptRecordsRef) : SailM (Vector (Bi
 
 /-- Computes the canonical receipts root over the retained records after the
 last transaction has executed, then releases the retained region. -/
-/- Type quantifiers: k_ex577021_ : Nat, k_ex577020_ : Nat, 0 ≤ k_ex577020_ ∧
-  k_ex577020_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex577021_ ∧ k_ex577021_ ≤ (2 ^ 20) -/
+/- Type quantifiers: k_ex582067_ : Nat, k_ex582066_ : Nat, 0 ≤ k_ex582066_ ∧
+  k_ex582066_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex582067_ ∧ k_ex582067_ ≤ (2 ^ 20) -/
 def receipt_store_root (records_start : Nat) (count : Nat) : SailM (Vector (BitVec 8) 32) := do
   let ⟨_, ⟨_, records⟩⟩ ← do (scratch_finish records_start)
   let root ← do

@@ -123,4 +123,3 @@ uint32_t scratch_reserve_uint8_t_to_uint32_t(uint8_t len)
   }
   return arena.len;
 }
-

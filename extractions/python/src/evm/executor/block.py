@@ -273,7 +273,8 @@ def apply_block_end_state(body: BlockBody) -> None:
 def execute_block_body(body: BlockBody, input_ref: StatelessInputRef) -> BlockExecutionResult:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
-    _host_bal_reset()
+    if (int(profile.fork) >= int(Amsterdam)):
+        _host_bal_reset()
     environment.k_current_transaction_epoch = 0
     _host_warm_reset(environment.k_current_transaction_epoch)
     run_block_start_system_calls()

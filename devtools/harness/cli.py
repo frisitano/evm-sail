@@ -24,7 +24,7 @@ zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 Usage:
     uv run --frozen python -m devtools.harness.cli <test.json|dir> [...] [--fork F] [--limit N]
             [--build standard|optimized] [--python|--spike|--zisk] [--rebuild]
-            [--verbose] [--debug] [--known-failures FILE] [--corpus-manifest FILE]
+            [--verbose] [--debug] [--corpus-manifest FILE]
 Requires `sail` on PATH and a C compiler; devtools.harness.ssz_builder runs under the
 execution-specs venv (EXECSPECS_PY).
 """
@@ -45,13 +45,6 @@ from typing import Protocol
 from devtools.build_support import BuildSupportError
 from devtools.corpus import load_manifest
 from devtools.harness import guest as dump_state
-from devtools.harness.known_failures import (
-    compare_known_failures,
-    format_comparison,
-    known_failure_keys,
-    load_known_failures,
-    parse_failure,
-)
 from devtools.paths import REPO_ROOT, temporary_root
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -448,38 +441,13 @@ def output_matches(got, expected, zisk=False):
     return got[: len(expected)] == expected and not any(got[len(expected) :])
 
 
-def fixture_relative_path(path, roots):
-    """A fixture path relative to the corpus directory it was found under."""
-    for root in roots:
-        prefix = root.rstrip(os.sep) + os.sep
-        if path.startswith(prefix):
-            return path[len(prefix) :]
-    return path
-
-
-def corpus_verdict(args, ntotal, npass, failures):
-    """The exit status of a corpus run, given its failures as
-    [(fixture path, case id, category)].
-
-    Without --known-failures every case must pass. With it, the failing
-    cases must equal the list exactly. With --corpus-manifest the number of
-    cases run must equal the pinned corpus inventory."""
-    status = 0 if ntotal != 0 else 1
+def corpus_verdict(args, ntotal, npass):
+    """Require every case to pass and, when supplied, the pinned inventory."""
+    status = 0 if ntotal > 0 and npass == ntotal else 1
     if args.expected_cases is not None and ntotal != args.expected_cases:
         print(
             f"=== case count: ran {ntotal}, {args.corpus_manifest} pins {args.expected_cases} ==="
         )
-        status = 1
-    if args.known_failure_cases is not None:
-        failing = known_failure_keys(
-            (fixture_relative_path(path, args.corpus_roots), cid, category)
-            for path, cid, category in failures
-        )
-        comparison = compare_known_failures(failing, args.known_failure_cases)
-        print(format_comparison(comparison, args.known_failures, len(args.known_failure_cases)))
-        if not comparison.matches:
-            status = 1
-    elif npass != ntotal:
         status = 1
     return status
 
@@ -488,8 +456,7 @@ def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
     built into fork-selected blocks + reference outputs by ssz_builder
-    mode. State-test synthesis is pinned to the v0.6.2 EELS schema and is not
-    supported with the v21 guest. Pass criterion: the guest's output bytes
+    mode using the pinned v21 EELS environment. Pass criterion: the guest's output bytes
     EQUAL the reference output.
     Backend: native in-process ctypes, the generated Python extraction,
     executable Lean extraction, the real RISC-V ELF on Spike, or the production
@@ -519,7 +486,6 @@ def run_fixtures(files, args):
         )
         backend = FunctionGuest(dump_state.run_once_guest)
     npass = ntotal = 0
-    failures: list[tuple[str, str, str]] = []
     fail_reasons: dict[str, int] = {}
     printed_fails = 0
     suppressed_fails = 0
@@ -528,7 +494,6 @@ def run_fixtures(files, args):
         """Count one failing case; print its FAIL line unless --fail-limit
         suppresses it. Returns whether the line was printed."""
         nonlocal printed_fails, suppressed_fails
-        failures.append((f, cid, category))
         fail_reasons[category] = fail_reasons.get(category, 0) + 1
         if args.fail_limit > 0 and printed_fails >= args.fail_limit:
             suppressed_fails += 1
@@ -616,7 +581,7 @@ def run_fixtures(files, args):
         print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
     if fail_reasons:
         print("fail categories:", dict(sorted(fail_reasons.items(), key=lambda x: -x[1])))
-    sys.exit(corpus_verdict(args, ntotal, npass, failures))
+    sys.exit(corpus_verdict(args, ntotal, npass))
 
 
 def run_sharded(files: list[str], args: argparse.Namespace) -> int:
@@ -661,20 +626,18 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
         )
 
     npass = ntotal = 0
-    failures: list[tuple[str, str, str]] = []
     cats: dict[str, int] = {}
     rc = 0
     with cf.ThreadPoolExecutor(n) as ex:
         futs = {ex.submit(run_shard, sh): i for i, sh in enumerate(shards)}
         for fut in cf.as_completed(futs):
             r = fut.result()
+            if r.returncode != 0:
+                rc = 1
             out = r.stdout + r.stderr
             for ln in out.splitlines():
                 if ln.startswith("FAIL"):
                     print(ln)
-                failure = parse_failure(ln)
-                if failure is not None:
-                    failures.append(failure)
             m = re.search(r"=== (\d+)/(\d+) passed", out)
             if m:
                 npass += int(m.group(1))
@@ -704,11 +667,7 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
     )
     if cats:
         print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
-    status = corpus_verdict(args, ntotal, npass, failures)
-    if args.known_failure_cases is not None and len(failures) != ntotal - npass:
-        # Every failure must be attributable to a fixture and case to be compared.
-        print(f"=== {ntotal - npass} failures but {len(failures)} FAIL lines parsed ===")
-        status = 1
+    status = corpus_verdict(args, ntotal, npass)
     return 1 if (rc or status) else 0
 
 
@@ -792,12 +751,6 @@ def main() -> None:
         "--debug and --rebuild (rebuild once with --jobs 1 first)",
     )
     ap.add_argument(
-        "--known-failures",
-        metavar="FILE",
-        help="pass iff the failing (fixture, case, category) triples equal the "
-        "list in this TOML file (see config/corpora); needs unlimited FAIL lines",
-    )
-    ap.add_argument(
         "--corpus-manifest",
         metavar="FILE",
         help="require the number of cases run to equal the embedded_cases "
@@ -815,17 +768,11 @@ def main() -> None:
         ap.error("--profile is not available for the Lean extraction")
     if args.debug and (args.spike or args.zisk or args.python):
         ap.error("--debug is available only for native and Lean runs")
-    if args.known_failures and (args.limit or args.fail_limit):
-        ap.error("--known-failures needs a full run: omit --limit and --fail-limit")
-    args.corpus_roots = [p for p in args.files if os.path.isdir(p)]
-    if args.known_failures and not args.corpus_roots:
-        ap.error("--known-failures needs the corpus directory: its entries are relative to it")
-    # Load both inputs before the run so a malformed one fails at once.
-    args.known_failure_cases = None
+    if args.corpus_manifest and args.limit:
+        ap.error("--corpus-manifest needs a full run: omit --limit")
+    # Validate the inventory before starting the run.
     args.expected_cases = None
     try:
-        if args.known_failures:
-            args.known_failure_cases = load_known_failures(Path(args.known_failures))
         if args.corpus_manifest:
             args.expected_cases = load_manifest(Path(args.corpus_manifest)).expected_cases
     except BuildSupportError as error:

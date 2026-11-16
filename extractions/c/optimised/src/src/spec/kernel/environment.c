@@ -29,28 +29,23 @@ u256 k_env(enum EnvField f)
 {
   struct TxEnvFields active_tx = k_tx;
   switch (f) {
-  case F_Number:
-  {
+  case F_Number: {
     uint64_t number = word_of_block_number((k_header.number));
     return u256_uint64_t_to_u256(number);
   }
-  case F_Timestamp:
-  {
+  case F_Timestamp: {
     uint64_t timestamp = word_of_block_timestamp((k_header.timestamp));
     return u256_uint64_t_to_u256(timestamp);
   }
-  case F_Coinbase:
-  {
+  case F_Coinbase: {
     return address_to_word((k_header.fee_recipient));
   }
   case F_BaseFee:
     return k_header.base_fee;
-  case F_ChainId:
-  {
+  case F_ChainId: {
     return u256_uint64_t_to_u256((word_of_chain_identifier(k_chain_id)));
   }
-  case F_GasLimit:
-  {
+  case F_GasLimit: {
     return u256_uint64_t_to_u256((k_header.gas_limit));
   }
   case F_PrevRandao:
@@ -59,8 +54,7 @@ u256 k_env(enum EnvField f)
     return address_to_word(active_tx.origin);
   case F_GasPrice:
     return active_tx.gas_price;
-  case F_SlotNumber:
-  {
+  case F_SlotNumber: {
     uint64_t slot_number = word_of_slot_number((k_header.slot_number));
     return u256_uint64_t_to_u256(slot_number);
   }
@@ -100,7 +94,11 @@ u256 k_blobhash(u256 index_word)
 {
   struct TxEnvFields active_tx = k_tx;
   if (u256_lt_u64(index_word, active_tx.blob_hashes.count)) {
-    return stateless_input_slice_load_n(active_tx.blob_hashes.bytes, (((uint32_t)UINT16_C(33) * (uint32_t)(uint16_t)(uint8_t)u256_to_u64_unchecked(index_word)) + (uint32_t)UINT16_C(1)), WORD_BYTE_LENGTH);
+    return stateless_input_slice_load_n(
+        active_tx.blob_hashes.bytes,
+        (((uint32_t)UINT16_C(33) * (uint32_t)(uint16_t)(uint8_t)u256_to_u64_unchecked(index_word)) +
+         (uint32_t)UINT16_C(1)),
+        WORD_BYTE_LENGTH);
   }
   return ZERO_WORD;
 }
@@ -114,4 +112,3 @@ bytes20 k_create2_addr(bytes20 a, u256 salt, bytes32 inithash)
 {
   return create2_address_(a, salt, inithash);
 }
-

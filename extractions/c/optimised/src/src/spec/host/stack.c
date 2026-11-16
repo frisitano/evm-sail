@@ -45,4 +45,3 @@ StackPointer stack_top_retreat_(StackPointer top, uint8_t count)
 {
   return stack_top_retreat(top, (uint16_t)count);
 }
-

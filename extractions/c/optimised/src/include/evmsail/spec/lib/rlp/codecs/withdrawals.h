@@ -11,7 +11,6 @@ extern "C" {
 
 Bytes withdrawal_rlp(Bytes withdrawal);
 
-
 #ifdef __cplusplus
 }
 #endif

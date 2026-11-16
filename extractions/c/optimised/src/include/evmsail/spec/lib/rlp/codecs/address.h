@@ -11,7 +11,6 @@ extern "C" {
 
 bytes20 create_address(bytes20 sender, uint64_t nonce);
 
-
 #ifdef __cplusplus
 }
 #endif

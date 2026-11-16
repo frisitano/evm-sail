@@ -67,4 +67,3 @@ Bytes output_buffer_slice_uint8_t_to_Bytes(uint8_t len)
 {
   return output_buffer_slice((uint32_t)len);
 }
-

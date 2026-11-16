@@ -85,8 +85,14 @@ static uint32_t bal_active_storage_history = BAL_NO_HISTORY;
 static uint32_t bal_active_field_history = BAL_NO_HISTORY;
 static enum bal_stream_phase bal_stream_phase = BAL_STREAM_ACCOUNT;
 
-void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count)
+bool bal_recording_enabled;
+
+void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count, bool enabled)
 {
+  bal_recording_enabled = enabled;
+  if (!enabled) {
+    return;
+  }
   WORKSPACE_BIND(bal_storage_history, GUEST_BAL_STORAGE_CHANGES);
   WORKSPACE_BIND(bal_balance_history, GUEST_BAL_BALANCE_CHANGES);
   WORKSPACE_BIND(bal_nonce_histories, GUEST_BAL_NONCE_CHANGES);
@@ -105,11 +111,17 @@ void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_c
  * allocation-wide clearing pass. */
 void bal_account_schema_initialize(AccountId id)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_accounts[id].block_epoch = 0;
 }
 
 void bal_storage_schema_initialize(StorageId id)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_storage[id].block_epoch = 0;
 }
 
@@ -168,12 +180,18 @@ static BalHistoryRow *bal_append_history(BalHistoryRow *rows, uint32_t *length, 
 
 void bal_note_account_touch(AccountId account_id)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
 }
 
 void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id, StorageId storage_id,
                              const u256 before, const u256 value)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
   bal_storage_activate(account_id, storage_id);
   BalStorageState *bal = &bal_storage[storage_id];
@@ -191,6 +209,9 @@ void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id, S
 
 void bal_note_storage_touch(AccountId account_id, StorageId storage_id)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
   bal_storage_activate(account_id, storage_id);
   bal_storage[storage_id].read = 1;
@@ -199,6 +220,9 @@ void bal_note_storage_touch(AccountId account_id, StorageId storage_id)
 void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, const u256 before,
                              const u256 value)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   const bool continuing = account->balance_tail != BAL_NO_HISTORY &&
@@ -214,6 +238,9 @@ void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, c
 
 void bal_note_nonce_change(uint64_t transaction_epoch, AccountId account_id, uint64_t nonce)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   BalHistoryRow *row =
@@ -224,6 +251,9 @@ void bal_note_nonce_change(uint64_t transaction_epoch, AccountId account_id, uin
 
 void bal_note_code_change(uint64_t transaction_epoch, AccountId account_id, bytes32 code_hash)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
   BalHistoryRow *row =

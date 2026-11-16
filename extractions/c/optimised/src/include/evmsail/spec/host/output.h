@@ -35,7 +35,6 @@ Bytes output_buffer_slice_uint32_t_to_Bytes(uint32_t len);
 
 Bytes output_buffer_slice_uint8_t_to_Bytes(uint8_t len);
 
-
 #ifdef __cplusplus
 }
 #endif

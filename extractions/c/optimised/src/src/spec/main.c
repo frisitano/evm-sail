@@ -60,4 +60,3 @@ void evmsail_model_init(void)
   k_current_transaction_epoch = (uint32_t)UINT8_C(0);
   initialize_registers();
 }
-

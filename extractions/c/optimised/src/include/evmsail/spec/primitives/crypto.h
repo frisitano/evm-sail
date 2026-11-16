@@ -37,16 +37,11 @@ struct AddressResult ecrecover_addr(bytes32 h, uint8_t yparity, u256 r, u256 s);
 
 extern const bytes32 KECCAK_EMPTY;
 
-
 extern const bytes32 EMPTY_TRIE_ROOT;
-
 
 extern const u256 SECP_N_FULL;
 
-
 extern const u256 SECP_N_HALF;
-
-
 
 #ifdef __cplusplus
 }

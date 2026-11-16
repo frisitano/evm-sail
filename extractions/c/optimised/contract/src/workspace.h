@@ -2,6 +2,7 @@
 #define GUEST_WORKSPACE_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -121,7 +122,8 @@ void workspace_begin_run(void);
 void workspace_begin_witness_nodes(void);
 void workspace_seal_witness_nodes(void);
 void workspace_prepare_execution(uint32_t account_count, uint32_t storage_count,
-                                 uint32_t expected_bal_entries, uint32_t transaction_count);
+                                 uint32_t expected_bal_entries, uint32_t transaction_count,
+                                 bool record_block_accesses);
 
 /* Workspace-owned modules bind their stable backing regions at the lifecycle
  * boundaries above. These are initialization hooks, not part of the Sail ABI. */

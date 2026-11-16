@@ -24,4 +24,3 @@ bool block_logs_bloom_matches_(Bytes reference)
 {
   return block_logs_bloom_matches(reference);
 }
-

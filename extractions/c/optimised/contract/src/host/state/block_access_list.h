@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+extern bool bal_recording_enabled;
+
 void bal_prepare_iter(void);
 
 enum bal_iter_tag {

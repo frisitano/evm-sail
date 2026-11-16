@@ -13,7 +13,6 @@ uint8_t tx_signature_parity(uint64_t chain_id, enum TxSignatureScheme scheme, u2
 
 bytes20 tx_recover_sender(bytes32 h, uint8_t parity, u256 r, u256 s);
 
-
 #ifdef __cplusplus
 }
 #endif

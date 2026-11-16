@@ -13,7 +13,6 @@ void validate_executed_block(struct Block block, struct BlockExecutionResult res
 
 void verify_stateless_payload(struct StatelessInputRef input_ref);
 
-
 #ifdef __cplusplus
 }
 #endif

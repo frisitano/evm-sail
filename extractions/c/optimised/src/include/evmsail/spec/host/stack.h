@@ -35,12 +35,12 @@ void stack_slot_write_(StackPointer top, uint16_t index, u256 value);
 
 u256 stack_slot_read_StackPointer_uint8_t_to_u256(StackPointer top, uint8_t index);
 
-void stack_slot_write_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t index, u256 value);
+void stack_slot_write_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t index,
+                                                        u256 value);
 
 StackPointer stack_top_advance_(StackPointer top, uint8_t count);
 
 StackPointer stack_top_retreat_(StackPointer top, uint8_t count);
-
 
 #ifdef __cplusplus
 }

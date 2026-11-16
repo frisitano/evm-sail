@@ -70,13 +70,20 @@ function k_sload(a : address, s : word) -> StorageValue = {
     require_historical_state_access(a, Some(s));
     let key = storage_key(a, s);
     let tx_value = storage_tx_get(key);
+    let execution_profile = k_execution_profile;
     match tx_value {
         StorageTxHit(value) => return value,
         StorageTxCleared(_) => {
-            bal_storage_read(a, s);
+            if execution_profile.protocol.fork >= Amsterdam then {
+                bal_storage_read(a, s)
+            };
             return struct { curr = ZERO_WORD, orig = ZERO_WORD }
         },
-        StorageTxMiss(_) => bal_storage_read(a, s),
+        StorageTxMiss(_) => {
+            if execution_profile.protocol.fork >= Amsterdam then {
+                bal_storage_read(a, s)
+            }
+        },
     };
 
     let block_value = storage_block_get(key);

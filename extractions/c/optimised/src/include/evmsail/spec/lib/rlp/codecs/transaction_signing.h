@@ -11,7 +11,6 @@ extern "C" {
 
 u256 legacy_sig_chain_id(u256 v);
 
-
 #ifdef __cplusplus
 }
 #endif

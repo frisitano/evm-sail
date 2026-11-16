@@ -43,7 +43,6 @@ void k_add_balance_bytes20_u128_to_unit(bytes20 a, u128 v);
 
 void k_add_balance_bytes20_uint64_t_to_unit(bytes20 a, uint64_t v);
 
-
 #ifdef __cplusplus
 }
 #endif

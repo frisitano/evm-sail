@@ -20,11 +20,17 @@ uint16_t decode_exchange_stack_indices(uint64_t immediate, uint16_t *restrict fi
   if (!(exchange_immediate_valid(immediate))) {
     __builtin_trap();
   }
-  if ((uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))) < (uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0)))) {
-    (*field_0_8_1427) = ((uint16_t)UINT8_C(1) + (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))));
-    return ((uint16_t)UINT8_C(1) + (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0))));
+  if ((uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))) <
+      (uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0)))) {
+    (*field_0_8_1427) =
+        ((uint16_t)UINT8_C(1) +
+         (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))));
+    return ((uint16_t)UINT8_C(1) +
+            (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0))));
   }
-  (*field_0_8_1427) = ((uint16_t)UINT8_C(1) + (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0))));
-  return ((uint16_t)UINT8_C(29) - (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))));
+  (*field_0_8_1427) =
+      ((uint16_t)UINT8_C(1) +
+       (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(0))));
+  return ((uint16_t)UINT8_C(29) -
+          (uint16_t)(uint8_t)(UINT64_C(0xF) & ((immediate ^ UINT64_C(0x8F)) >> UINT8_C(4))));
 }
-

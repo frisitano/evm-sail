@@ -37,7 +37,6 @@ uint32_t ssz_u32(Bytes input, uint8_t offset);
 
 uint32_t ssz_u32_at_Bytes_uint8_t_to_uint32_t(Bytes input, uint8_t offset);
 
-
 #ifdef __cplusplus
 }
 #endif

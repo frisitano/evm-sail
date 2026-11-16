@@ -38,6 +38,7 @@ from evm.primitives.crypto import (
     KECCAK_EMPTY,
     EMPTY_TRIE_ROOT,
 )
+from evm.primitives.fork import Amsterdam
 from evm.primitives.account import (
     Account,
     AccountInfo,
@@ -100,7 +101,9 @@ def k_aload(a: address) -> Account:
         tx_account = _host_acct_tx_get(a)
         if tx_account.found:
             raise SailReturn(tx_account.account)
-        _host_bal_account_touch(a)
+        execution_profile = environment.k_execution_profile
+        if (int(execution_profile.protocol.fork) >= int(Amsterdam)):
+            _host_bal_account_touch(a)
         block_account = _host_acct_block_get(a)
         if block_account.found:
             raise SailReturn(block_account.account)

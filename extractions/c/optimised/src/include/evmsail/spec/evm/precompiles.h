@@ -61,162 +61,126 @@ struct PrecompileResult run_p256_verify(struct CalldataSlice input);
 
 struct PrecompileResult run_precompile_slice(enum PrecompileId num, struct CalldataSlice input);
 
-struct PrecompileResult accelerator_result_bool_uint16_t_to_struct_PrecompileResult(bool success, uint16_t output_len);
+struct PrecompileResult
+accelerator_result_bool_uint16_t_to_struct_PrecompileResult(bool success, uint16_t output_len);
 
-struct PrecompileResult accelerator_result_bool_uint32_t_to_struct_PrecompileResult(bool success, uint32_t output_len);
+struct PrecompileResult
+accelerator_result_bool_uint32_t_to_struct_PrecompileResult(bool success, uint32_t output_len);
 
-struct PrecompileResult accelerator_result_bool_uint8_t_to_struct_PrecompileResult(bool success, uint8_t output_len);
+struct PrecompileResult
+accelerator_result_bool_uint8_t_to_struct_PrecompileResult(bool success, uint8_t output_len);
 
-bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
+bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(
+    struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
 
-bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint8_t stride, uint32_t count);
+bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice input, uint8_t base, uint8_t stride, uint32_t count);
 
-bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_to_bool(struct CalldataSlice input, uint8_t base, uint8_t stride, uint8_t count);
+bool bls_g1_padding_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_to_bool(struct CalldataSlice input,
+                                                                         uint8_t base,
+                                                                         uint8_t stride,
+                                                                         uint8_t count);
 
-bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
+bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool(
+    struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
 
-bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_variant_2(struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
+bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint32_t_to_bool_variant_2(
+    struct CalldataSlice input, uint8_t base, uint16_t stride, uint32_t count);
 
-bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(struct CalldataSlice input, uint8_t base, uint16_t stride, uint8_t count);
+bool bls_g2_padding_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_to_bool(
+    struct CalldataSlice input, uint8_t base, uint16_t stride, uint8_t count);
 
 extern const bytes20 PRECOMPILE_ADDRESS_1;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_10;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_11;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_12;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_13;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_14;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_15;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_16;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_17;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_2;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_256;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_3;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_4;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_5;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_6;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_7;
-
 
 extern const bytes20 PRECOMPILE_ADDRESS_8;
 
-
 extern const bytes20 PRECOMPILE_ADDRESS_9;
-
 
 extern const uint32_t ACCELERATOR_INPUT_MAX;
 
-
 extern const u256 FIELD_ELEMENTS_PER_BLOB;
-
 
 extern const u256 BLS_MODULUS;
 
-
 extern const uint8_t BLAKE2F_INPUT_LENGTH;
-
 
 extern const uint8_t BLAKE2F_FINAL_BLOCK_OFFSET;
 
-
 extern const uint8_t BLAKE2F_OUTPUT_LENGTH;
-
 
 extern const uint8_t KZG_INPUT_LENGTH;
 
-
 extern const uint8_t KZG_COMMITMENT_OFFSET;
-
 
 extern const uint8_t KZG_COMMITMENT_LENGTH;
 
-
 extern const uint8_t BLS_FIELD_PADDING_LENGTH;
-
 
 extern const uint8_t BLS_PADDED_FIELD_LENGTH;
 
-
 extern const uint8_t BLS_G1_POINT_LENGTH;
-
 
 extern const uint16_t BLS_G2_POINT_LENGTH;
 
-
 extern const uint8_t BLS_G2_FINAL_FIELD_OFFSET;
-
 
 extern const uint16_t BLS_G1_ADD_INPUT_LENGTH;
 
-
 extern const uint8_t BLS_G1_MSM_ITEM_LENGTH;
-
 
 extern const uint16_t BLS_G2_ADD_INPUT_LENGTH;
 
-
 extern const uint16_t BLS_G2_MSM_ITEM_LENGTH;
-
 
 extern const uint16_t BLS_PAIRING_ITEM_LENGTH;
 
-
 extern const uint8_t P256_INPUT_LENGTH;
-
 
 extern const uint8_t BN254_PAIRING_ITEM_LENGTH;
 
-
 extern const uint8_t PRECOMPILE_WORD_LENGTH;
-
 
 extern const uint8_t PRECOMPILE_DOUBLE_WORD_LENGTH;
 
-
 extern const uint8_t PRECOMPILE_WORD_OFFSET;
-
 
 extern const uint8_t PRECOMPILE_DOUBLE_WORD_OFFSET;
 
-
 extern const uint32_t ECRECOVER_S_OFFSET;
-
 
 extern const uint8_t TWO_COMPONENTS;
 
-
 extern const uint8_t BLS_G2_POINT_OFFSET;
-
-
 
 #ifdef __cplusplus
 }

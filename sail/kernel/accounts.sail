@@ -103,7 +103,10 @@ function k_aload(a : address) -> Account = {
         return tx_account.account
     };
 
-    bal_account_touch(a);
+    let execution_profile = k_execution_profile;
+    if execution_profile.protocol.fork >= Amsterdam then {
+        bal_account_touch(a)
+    };
 
     let block_account = acct_block_get(a);
     if block_account.found then {

@@ -19,7 +19,6 @@ uint8_t decode_single_stack_index(uint64_t immediate);
 
 uint16_t decode_exchange_stack_indices(uint64_t immediate, uint16_t *restrict field_0_8_1427);
 
-
 #ifdef __cplusplus
 }
 #endif

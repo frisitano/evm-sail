@@ -7,37 +7,50 @@
 extern "C" {
 #endif
 
-
 #ifndef SAIL_U128_DEFINED
 #define SAIL_U128_DEFINED
-typedef struct { uint64_t limbs[2]; } u128;
+typedef struct {
+  uint64_t limbs[2];
+} u128;
 #endif
 
 #ifndef SAIL_U256_DEFINED
 #define SAIL_U256_DEFINED
-typedef struct { uint64_t limbs[4]; } u256;
+typedef struct {
+  uint64_t limbs[4];
+} u256;
 #endif
 
-
 // union option<R__sail_c_repr_u256>
-enum kind_option_R__sail_c_repr_u256_ { Kind_None_R__sail_c_repr_u256_, Kind_Some_R__sail_c_repr_u256_ };
+enum kind_option_R__sail_c_repr_u256_ {
+  Kind_None_R__sail_c_repr_u256_,
+  Kind_Some_R__sail_c_repr_u256_
+};
 
 struct option_R__sail_c_repr_u256_ {
   enum kind_option_R__sail_c_repr_u256_ kind;
   union {
-    struct { unit None_R__sail_c_repr_u256_; };
-    struct { u256 Some_R__sail_c_repr_u256_; };
+    struct {
+      unit None_R__sail_c_repr_u256_;
+    };
+    struct {
+      u256 Some_R__sail_c_repr_u256_;
+    };
   } variants;
 };
 
 #ifndef SAIL_FIXED_BYTES_U64_LANES_32_DEFINED
 #define SAIL_FIXED_BYTES_U64_LANES_32_DEFINED
-typedef struct { uint64_t lanes[4]; } bytes32;
+typedef struct {
+  uint64_t lanes[4];
+} bytes32;
 #endif
 
 #ifndef SAIL_FIXED_BYTES_U64_LANES_20_DEFINED
 #define SAIL_FIXED_BYTES_U64_LANES_20_DEFINED
-typedef struct { uint64_t lanes[3]; } bytes20;
+typedef struct {
+  uint64_t lanes[3];
+} bytes20;
 #endif
 
 // struct AddressResult
@@ -46,29 +59,33 @@ struct AddressResult {
   bool success;
 };
 
-
 #ifndef SAIL_U128_DEFINED
 #define SAIL_U128_DEFINED
-typedef struct { uint64_t limbs[2]; } u128;
+typedef struct {
+  uint64_t limbs[2];
+} u128;
 #endif
 
 #ifndef SAIL_U256_DEFINED
 #define SAIL_U256_DEFINED
-typedef struct { uint64_t limbs[4]; } u256;
+typedef struct {
+  uint64_t limbs[4];
+} u256;
 #endif
 
 #ifndef SAIL_U320_DEFINED
 #define SAIL_U320_DEFINED
-typedef struct { uint64_t limbs[5]; } u320;
+typedef struct {
+  uint64_t limbs[5];
+} u320;
 #endif
-
-
 
 #ifndef SAIL_U128_DEFINED
 #define SAIL_U128_DEFINED
-typedef struct { uint64_t limbs[2]; } u128;
+typedef struct {
+  uint64_t limbs[2];
+} u128;
 #endif
-
 
 bool neq_bool(bool x, bool y);
 
@@ -206,9 +223,11 @@ bytes20 create2_address(bytes20 /* arg_0 */, u256 /* arg_1 */, bytes32 /* arg_2 
 
 bool storage_id_is_warm(uint32_t /* arg_0 */);
 
-uint32_t storage_resolve_slot(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, u256 /* arg_3 */);
+uint32_t storage_resolve_slot(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */,
+                              u256 /* arg_3 */);
 
-void storage_update_by_id(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, u256 /* arg_3 */, u256 /* arg_4 */);
+void storage_update_by_id(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */,
+                          u256 /* arg_3 */, u256 /* arg_4 */);
 
 void receipt_table_reset(void);
 
@@ -304,22 +323,15 @@ bool word_ult_u256_uint8_t_to_bool(u256 a, uint8_t b);
 
 extern const u256 ZERO_WORD;
 
-
 extern const bytes20 ZERO_ADDRESS;
-
 
 extern const bytes32 ZERO_HASH;
 
-
 extern const u256 WORD_ZERO;
-
 
 extern const u256 WORD_ONE;
 
-
 extern const u256 WORD_ALL_ONES;
-
-
 
 #ifdef __cplusplus
 }

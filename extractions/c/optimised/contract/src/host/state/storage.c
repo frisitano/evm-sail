@@ -382,6 +382,9 @@ bool storage_trie_binding_get(StorageId storage_id, StorageGeneration generation
 
 void storage_transaction_merge(uint32_t current_transaction_epoch)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   for (uint32_t i = 0; i < account_transaction_count(); i++) {
     AccountTransactionStorageView account;
     account_transaction_storage_view_at(i, &account);

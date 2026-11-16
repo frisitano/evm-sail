@@ -214,6 +214,9 @@ duplicating instructions elsewhere.
   schema `0x1501`. Set `EXECSPECS_ROOT` and `EXECSPECS_PY` to that checkout
   and its locked test environment (`uv sync --frozen --group test`). The
   obsolete v0.6.2 adapters and handwritten witness builder are removed.
+  `ssz_builder.py` remains the integration layer: Amsterdam bytes come from
+  the upstream filler; historical access collection and transport conversion
+  are repository code using the pinned EELS trie/SSZ implementation.
   `make memory-regression-test` runs the focused memory cases on both C
   backends. Synthesis accepts secret-key transactions and canonical raw signed
   type 0–4 envelopes. Historical selectors `0x0a01`–`0x1401` use the v21
@@ -237,8 +240,14 @@ duplicating instructions elsewhere.
   64 MiB scratch/log-data/receipts). Production capacities remain explicit;
   resource exhaustion must not be reported as protocol invalidity. Larger
   native-profile results do not prove production resource sufficiency.
+  `make historical-suite-test` provisions the pinned EELS checkout/environment,
+  fills and audits both full historical groups, and replays both backends.
+  Its persistent cache validates source identities and content hashes; only
+  the eleven explicit conversion limits may lack exports. EIP-7928 recording
+  and its optimized history allocations are disabled before Amsterdam;
+  authenticated historical account/slot reservations remain required.
   `make sender-regression-test` runs the pinned signature and chain-ID cases
-  on both native backends without a known-failure allowance.
+  on both native backends, requiring every case to pass.
   Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
@@ -396,22 +405,18 @@ rtk uv run --frozen python -m devtools.harness.cli --build optimized --limit 1 -
   zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
-Run the complete retained corpus with parallel native workers and compare it
-with the known failures:
+Run the complete retained corpus with parallel native workers:
 
 ```sh
 rtk make verify-corpus
 ```
 
-`make verify-corpus` is the complete-corpus gate. It passes only if the failing
-cases equal `config/corpora/tests-zkevm-known-failures.toml` exactly and the
-number of cases run equals the manifest's `embedded_cases`. Each entry names
-the fixture file (relative to the corpus directory), the case id and the
-failure category (`diff`, `runerr`, `builderr` or `noref`). A new failure, a
-listed case that passes again and a listed case that fails differently each
-fail the run and are named in its output. Delete an entry in the commit that
-fixes the case; add an entry only for a failure that is understood and
-accepted, never to silence a regression.
+`make verify-corpus` is the complete-corpus gate. It passes only if every case
+passes and the number of cases run equals the manifest's `embedded_cases`.
+Output mismatches, execution/build errors, missing reference outputs and failed
+worker processes fail the run. There is no failure allowlist. Historical
+state-only conversion limits are documented separately and are not exceptions
+to this pinned corpus gate.
 
 The same fixture can drive the real RISC-V guest on Spike or the production
 ZisK guest:
@@ -426,5 +431,5 @@ rtk env ZISKEMU=/path/to/matching/ziskemu uv run --frozen python -m devtools.har
 The ELF is built once without fixture input; each embedded
 `statelessInputBytes` value is supplied at runtime through `extractions/c/zkvm_io.h`.
 Use `--rebuild` after generated C or FFI changes. The recorded v21.0.6 result
-is `make verify-corpus` matching `config/corpora/tests-zkevm-known-failures.toml`
-exactly; do not reuse pass counts from other corpora.
+is `make verify-corpus` passing all 67,685 cases; do not reuse pass counts from
+other corpora.

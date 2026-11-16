@@ -27,7 +27,6 @@ u256 k_tload(bytes20 a, u256 s);
 
 void k_tstore(bytes20 a, u256 s, u256 v);
 
-
 #ifdef __cplusplus
 }
 #endif

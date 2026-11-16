@@ -2567,7 +2567,7 @@ unit zcode_slice_copy_word_offset(struct zCodeRegionSliceFields zs, uint32_t zds
 
 unit zcalldata_slice_copy_word_offset(struct zCalldataSlice zs, uint32_t zdst, u256 zoff, uint32_t zlen);
 
-uint32_t zscratch_begin(unit z3zE5249);
+uint32_t zscratch_begin(unit z3zE5252);
 
 uint32_t zscratch_reserve(uint32_t zlen);
 
@@ -2593,7 +2593,7 @@ struct zScratchSliceFields zscratch_finish(uint32_t zstart);
 
 unit zscratch_rewind(uint32_t zmark);
 
-unit zscratch_reset(unit z3zE5244);
+unit zscratch_reset(unit z3zE5247);
 
 void create_letbind_36(void);
 void kill_letbind_36(void);
@@ -3013,9 +3013,9 @@ struct zDecodedTransactionFields zdecode_set_code_tx(struct zStatelessInputSlice
 
 struct zDecodedTransactionFields zrlp_decode_tx(struct zStatelessInputSliceFields ztx, uint8_t zblob_limit);
 
-struct zStackPointer zstack_reset(unit z3zE4891);
+struct zStackPointer zstack_reset(unit z3zE4894);
 
-struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4889);
+struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4892);
 
 uint16_t zstack_top_height(struct zStackPointer ztop);
 
@@ -3035,7 +3035,7 @@ struct zOutputSliceFields zoutput_buffer_words(u256 zfirst, u256 zsecond);
 
 u256 zk_env(enum zEnvField zf);
 
-fixed_bytes_20 zk_coinbase(unit z3zE4871);
+fixed_bytes_20 zk_coinbase(unit z3zE4874);
 
 u256 zblockhash_word_distance(u256 zcurrent, u256 znumber);
 
@@ -3081,7 +3081,7 @@ unit zk_log_data(struct zLogData zdata);
 
 unit zk_log(fixed_bytes_20 za, struct zLogTopics ztopics, struct zLogData zdata);
 
-struct zLogSeriesRef zread_logs(unit z3zE4826);
+struct zLogSeriesRef zread_logs(unit z3zE4829);
 
 struct zLogDataSliceFields zread_log_data(uint64_t zindex);
 
@@ -3169,13 +3169,13 @@ bool zk_was_created(fixed_bytes_20 za);
 
 unit zk_zzero_balance(fixed_bytes_20 za);
 
-unit zk_journal_checkpoint(unit z3zE4759);
+unit zk_journal_checkpoint(unit z3zE4762);
 
 unit zk_set_header(struct zBlockHeader zh);
 
 unit zk_set_tx(struct zTxEnvFields zenv);
 
-unit zk_tx_reset(unit z3zE4753);
+unit zk_tx_reset(unit z3zE4756);
 
 struct zTransactionMergeSemantics ztransaction_merge_semantics(uint8_t zfork);
 

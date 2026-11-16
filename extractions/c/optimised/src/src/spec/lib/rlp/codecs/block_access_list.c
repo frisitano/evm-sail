@@ -43,4 +43,3 @@ void bal_expect_end(Bytes cursor)
   }
   fatal_error(InvalidBlockAccessList);
 }
-

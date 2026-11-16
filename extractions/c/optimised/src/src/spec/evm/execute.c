@@ -20,7 +20,8 @@ struct OpcodeOutcome guard_static(uint64_t *restrict g, bool is_static)
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome do_jump(uint32_t *restrict pc_in, uint64_t *restrict g, struct CodeFields frame_code, u256 destination_value)
+struct OpcodeOutcome do_jump(uint32_t *restrict pc_in, uint64_t *restrict g,
+                             struct CodeFields frame_code, u256 destination_value)
 {
   if (u256_lt_u64(destination_value, (frame_code_len(frame_code)))) {
     uint32_t destination = (uint32_t)u256_to_u64_unchecked(destination_value);
@@ -40,7 +41,10 @@ struct OpcodeOutcome guard_stack(StackPointer carried_sp, uint16_t inputs, uint1
   enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
     stack_validation = StackUnderflowFailure;
-  } else if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  } else if (STACK_LIMIT <
+             (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height -
+                                                                (uint32_t)inputs)) +
+                                  (int32_t)(int16_t)outputs))) {
     stack_validation = StackOverflowFailure;
   } else {
     stack_validation = StackValid;
@@ -55,7 +59,8 @@ struct OpcodeOutcome guard_stack(StackPointer carried_sp, uint16_t inputs, uint1
   }
 }
 
-StackPointer pop_log_topics(uint8_t count, StackPointer sp_in, struct LogTopics *restrict logtopics_8_1431)
+StackPointer pop_log_topics(uint8_t count, StackPointer sp_in,
+                            struct LogTopics *restrict logtopics_8_1431)
 {
   StackPointer sp = sp_in;
   if (count == UINT8_C(0)) {
@@ -83,7 +88,8 @@ StackPointer pop_log_topics(uint8_t count, StackPointer sp_in, struct LogTopics 
     sp = stack_top_retreat(sp, UINT16_C(1));
     u256 t2 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    (*logtopics_8_1431) = LogTopics3(((struct tuple_u256_u256_u256){.tup0 = t0_3_3011, .tup1 = t1_3_3012, .tup2 = t2}));
+    (*logtopics_8_1431) = LogTopics3(
+        ((struct tuple_u256_u256_u256){.tup0 = t0_3_3011, .tup1 = t1_3_3012, .tup2 = t2}));
     return sp;
   }
   if (count == UINT8_C(4)) {
@@ -95,7 +101,8 @@ StackPointer pop_log_topics(uint8_t count, StackPointer sp_in, struct LogTopics 
     sp = stack_top_retreat(sp, UINT16_C(1));
     u256 t3 = stack_slot_read(sp, UINT16_C(0));
     sp = stack_top_retreat(sp, UINT16_C(1));
-    (*logtopics_8_1431) = LogTopics4(((struct tuple_u256_u256_u256_u256){.tup0 = t0_3_3014, .tup1 = t1_3_3015, .tup2 = t2_3_3016, .tup3 = t3}));
+    (*logtopics_8_1431) = LogTopics4(((struct tuple_u256_u256_u256_u256){
+        .tup0 = t0_3_3014, .tup1 = t1_3_3015, .tup2 = t2_3_3016, .tup3 = t3}));
     return sp;
   }
   (*logtopics_8_1431) = LogTopics0(UNIT);
@@ -104,7 +111,9 @@ StackPointer pop_log_topics(uint8_t count, StackPointer sp_in, struct LogTopics 
 
 struct OpcodeOutcome execute_add(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -126,7 +135,9 @@ struct OpcodeOutcome execute_add(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_mul(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -148,7 +159,9 @@ struct OpcodeOutcome execute_mul(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_sub(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -170,7 +183,9 @@ struct OpcodeOutcome execute_sub(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_div(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -192,7 +207,9 @@ struct OpcodeOutcome execute_div(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_sdiv(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -214,7 +231,9 @@ struct OpcodeOutcome execute_sdiv(uint64_t *restrict carried_gas, StackPointer *
 
 struct OpcodeOutcome execute_mod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -236,7 +255,9 @@ struct OpcodeOutcome execute_mod(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_smod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -256,9 +277,12 @@ struct OpcodeOutcome execute_smod(uint64_t *restrict carried_gas, StackPointer *
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_addmod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_addmod(uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -280,9 +304,12 @@ struct OpcodeOutcome execute_addmod(uint64_t *restrict carried_gas, StackPointer
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_mulmod(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_mulmod(uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -306,7 +333,9 @@ struct OpcodeOutcome execute_mulmod(uint64_t *restrict carried_gas, StackPointer
 
 struct OpcodeOutcome execute_exp(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -327,9 +356,12 @@ struct OpcodeOutcome execute_exp(uint64_t *restrict carried_gas, StackPointer *r
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_signextend(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_signextend(uint64_t *restrict carried_gas,
+                                        StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -351,7 +383,9 @@ struct OpcodeOutcome execute_signextend(uint64_t *restrict carried_gas, StackPoi
 
 struct OpcodeOutcome execute_lt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -373,7 +407,9 @@ struct OpcodeOutcome execute_lt(uint64_t *restrict carried_gas, StackPointer *re
 
 struct OpcodeOutcome execute_gt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -395,7 +431,9 @@ struct OpcodeOutcome execute_gt(uint64_t *restrict carried_gas, StackPointer *re
 
 struct OpcodeOutcome execute_slt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -417,7 +455,9 @@ struct OpcodeOutcome execute_slt(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_sgt(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -439,7 +479,9 @@ struct OpcodeOutcome execute_sgt(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_eq(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -459,9 +501,12 @@ struct OpcodeOutcome execute_eq(uint64_t *restrict carried_gas, StackPointer *re
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_iszero(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_iszero(uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -478,7 +523,9 @@ struct OpcodeOutcome execute_iszero(uint64_t *restrict carried_gas, StackPointer
 
 struct OpcodeOutcome execute_and(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -500,7 +547,9 @@ struct OpcodeOutcome execute_and(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_or(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -522,7 +571,9 @@ struct OpcodeOutcome execute_or(uint64_t *restrict carried_gas, StackPointer *re
 
 struct OpcodeOutcome execute_xor(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -544,7 +595,9 @@ struct OpcodeOutcome execute_xor(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_not(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -561,7 +614,9 @@ struct OpcodeOutcome execute_not(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_byte(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -583,7 +638,9 @@ struct OpcodeOutcome execute_byte(uint64_t *restrict carried_gas, StackPointer *
 
 struct OpcodeOutcome execute_shl(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -605,7 +662,9 @@ struct OpcodeOutcome execute_shl(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_shr(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -627,7 +686,9 @@ struct OpcodeOutcome execute_shr(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_sar(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -649,7 +710,9 @@ struct OpcodeOutcome execute_sar(uint64_t *restrict carried_gas, StackPointer *r
 
 struct OpcodeOutcome execute_clz(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -664,9 +727,13 @@ struct OpcodeOutcome execute_clz(uint64_t *restrict carried_gas, StackPointer *r
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_keccak256(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_keccak256(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                       StackPointer *restrict carried_sp,
+                                       uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -705,9 +772,12 @@ struct OpcodeOutcome execute_keccak256(uint32_t memory_base, uint64_t *restrict 
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_address(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_address(bytes20 carried_address, uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -726,9 +796,12 @@ struct OpcodeOutcome execute_address(bytes20 carried_address, uint64_t *restrict
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_origin(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_origin(uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -747,9 +820,12 @@ struct OpcodeOutcome execute_origin(uint64_t *restrict carried_gas, StackPointer
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_caller(bytes20 carried_caller, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_caller(bytes20 carried_caller, uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -768,9 +844,12 @@ struct OpcodeOutcome execute_caller(bytes20 carried_caller, uint64_t *restrict c
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_callvalue(u256 carried_value, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_callvalue(u256 carried_value, uint64_t *restrict carried_gas,
+                                       StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -788,9 +867,12 @@ struct OpcodeOutcome execute_callvalue(u256 carried_value, uint64_t *restrict ca
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_gasprice(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_gasprice(uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -809,9 +891,13 @@ struct OpcodeOutcome execute_gasprice(uint64_t *restrict carried_gas, StackPoint
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_calldatasize(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_calldatasize(struct CalldataSlice carried_calldata,
+                                          uint64_t *restrict carried_gas,
+                                          StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -831,9 +917,13 @@ struct OpcodeOutcome execute_calldatasize(struct CalldataSlice carried_calldata,
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_calldataload(struct CalldataSlice carried_calldata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_calldataload(struct CalldataSlice carried_calldata,
+                                          uint64_t *restrict carried_gas,
+                                          StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -854,9 +944,14 @@ struct OpcodeOutcome execute_calldataload(struct CalldataSlice carried_calldata,
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata,
+                                          uint32_t memory_base, uint64_t *restrict carried_gas,
+                                          StackPointer *restrict carried_sp,
+                                          uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -903,9 +998,13 @@ struct OpcodeOutcome execute_calldatacopy(struct CalldataSlice carried_calldata,
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_codesize(struct CodeFields carried_code, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_codesize(struct CodeFields carried_code,
+                                      uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -925,9 +1024,14 @@ struct OpcodeOutcome execute_codesize(struct CodeFields carried_code, uint64_t *
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint32_t memory_base,
+                                      uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp,
+                                      uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -975,9 +1079,12 @@ struct OpcodeOutcome execute_codecopy(struct CodeFields carried_code, uint32_t m
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_balance(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_balance(uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1002,9 +1109,12 @@ struct OpcodeOutcome execute_balance(uint64_t *restrict carried_gas, StackPointe
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_selfbalance(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_selfbalance(bytes20 carried_address, uint64_t *restrict carried_gas,
+                                         StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1023,9 +1133,12 @@ struct OpcodeOutcome execute_selfbalance(bytes20 carried_address, uint64_t *rest
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas,
+                                         StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1042,7 +1155,8 @@ struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas, StackPo
     (*carried_sp) = sp;
     return Failed(OutOfGas);
   }
-  (*carried_gas) = gas_sub_uint64_t_uint32_t_to_uint64_t((*carried_gas), ((uint32_t)access_cost + (uint32_t)read_cost));
+  (*carried_gas) = gas_sub_uint64_t_uint32_t_to_uint64_t(
+      (*carried_gas), ((uint32_t)access_cost + (uint32_t)read_cost));
   k_account_mark_warm(a);
   uint32_t code_size = k_get_code_size(a);
   u256 size_word = word_of_source_byte_count(code_size);
@@ -1052,9 +1166,13 @@ struct OpcodeOutcome execute_extcodesize(uint64_t *restrict carried_gas, StackPo
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_extcodecopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_extcodecopy(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                         StackPointer *restrict carried_sp,
+                                         uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(4), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(4),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1108,9 +1226,12 @@ struct OpcodeOutcome execute_extcodecopy(uint32_t memory_base, uint64_t *restric
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_extcodehash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_extcodehash(uint64_t *restrict carried_gas,
+                                         StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1136,9 +1257,13 @@ struct OpcodeOutcome execute_extcodehash(uint64_t *restrict carried_gas, StackPo
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_returndatasize(Bytes carried_returndata, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_returndatasize(Bytes carried_returndata,
+                                            uint64_t *restrict carried_gas,
+                                            StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1158,9 +1283,14 @@ struct OpcodeOutcome execute_returndatasize(Bytes carried_returndata, uint64_t *
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t memory_base,
+                                            uint64_t *restrict carried_gas,
+                                            StackPointer *restrict carried_sp,
+                                            uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1183,8 +1313,11 @@ struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t m
   sp = stack_top_retreat_(sp, UINT8_C(1));
   uint32_t available = returndata_size(carried_returndata);
   if (!u64_lt_u256(available, source_word)) {
-    if (!u64_lt_u256((returndata_remaining(available, (uint32_t)u256_to_u64_unchecked(source_word))), length_word)) {
-      struct GasCharge copy_cost = copy_gas_cost_u256_uint64_t_to_struct_GasCharge(length_word, gas);
+    if (!u64_lt_u256(
+            (returndata_remaining(available, (uint32_t)u256_to_u64_unchecked(source_word))),
+            length_word)) {
+      struct GasCharge copy_cost =
+          copy_gas_cost_u256_uint64_t_to_struct_GasCharge(length_word, gas);
       if (!copy_cost.affordable) {
         (*carried_gas) = (uint64_t)GAS_ZERO;
         (*carried_sp) = sp;
@@ -1192,7 +1325,8 @@ struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t m
         return Failed(OutOfGas);
       }
       gas = gas_sub(gas, copy_cost.cost);
-      uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t_variant_2(destination_word, length_word);
+      uint64_t requested_height =
+          memory_requested_height_u256_u256_to_uint64_t_variant_2(destination_word, length_word);
       struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
       if (!expansion_cost.affordable) {
         (*carried_gas) = (uint64_t)GAS_ZERO;
@@ -1201,10 +1335,13 @@ struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t m
         return Failed(OutOfGas);
       }
       (*carried_gas) = gas_sub(gas, expansion_cost.cost);
-      struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(destination_word, length_word);
+      struct MemoryAccessFields access =
+          memory_access_u256_u256_to_struct_MemoryAccessFields_variant_2(destination_word,
+                                                                         length_word);
       (*carried_memory_height) = expand_memory(memory_base, memory, access.requested_height);
       uint32_t destination = memory_absolute(memory_base, access.range.off);
-      returndata_copy(carried_returndata, destination, (uint32_t)u256_to_u64_unchecked(source_word), (uint32_t)u256_to_u64_unchecked(length_word));
+      returndata_copy(carried_returndata, destination, (uint32_t)u256_to_u64_unchecked(source_word),
+                      (uint32_t)u256_to_u64_unchecked(length_word));
       (*carried_sp) = sp;
       return Continue(UNIT);
     }
@@ -1219,9 +1356,12 @@ struct OpcodeOutcome execute_returndatacopy(Bytes carried_returndata, uint32_t m
   return Failed(InvalidOpcode);
 }
 
-struct OpcodeOutcome execute_blockhash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_blockhash(uint64_t *restrict carried_gas,
+                                       StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1243,9 +1383,12 @@ struct OpcodeOutcome execute_blockhash(uint64_t *restrict carried_gas, StackPoin
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_coinbase(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_coinbase(uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1264,9 +1407,12 @@ struct OpcodeOutcome execute_coinbase(uint64_t *restrict carried_gas, StackPoint
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_timestamp(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_timestamp(uint64_t *restrict carried_gas,
+                                       StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1285,9 +1431,12 @@ struct OpcodeOutcome execute_timestamp(uint64_t *restrict carried_gas, StackPoin
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_number(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_number(uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1306,9 +1455,12 @@ struct OpcodeOutcome execute_number(uint64_t *restrict carried_gas, StackPointer
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_slotnum(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_slotnum(uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1327,9 +1479,12 @@ struct OpcodeOutcome execute_slotnum(uint64_t *restrict carried_gas, StackPointe
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_prevrandao(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_prevrandao(uint64_t *restrict carried_gas,
+                                        StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1348,9 +1503,12 @@ struct OpcodeOutcome execute_prevrandao(uint64_t *restrict carried_gas, StackPoi
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_gaslimit(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_gaslimit(uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1369,9 +1527,12 @@ struct OpcodeOutcome execute_gaslimit(uint64_t *restrict carried_gas, StackPoint
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_chainid(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_chainid(uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1390,9 +1551,12 @@ struct OpcodeOutcome execute_chainid(uint64_t *restrict carried_gas, StackPointe
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_basefee(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_basefee(uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1411,9 +1575,12 @@ struct OpcodeOutcome execute_basefee(uint64_t *restrict carried_gas, StackPointe
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_blobbasefee(u256 blob_fee, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_blobbasefee(u256 blob_fee, uint64_t *restrict carried_gas,
+                                         StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1431,9 +1598,12 @@ struct OpcodeOutcome execute_blobbasefee(u256 blob_fee, uint64_t *restrict carri
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_blobhash(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_blobhash(uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1456,7 +1626,9 @@ struct OpcodeOutcome execute_blobhash(uint64_t *restrict carried_gas, StackPoint
 
 struct OpcodeOutcome execute_pop(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1473,9 +1645,13 @@ struct OpcodeOutcome execute_pop(uint64_t *restrict carried_gas, StackPointer *r
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp,
+                                   uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1492,7 +1668,8 @@ struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carr
   gas = gas_sub_uint64_t_uint16_t_to_uint64_t(gas, G_verylow);
   u256 offset_word = read_stack_word(sp);
   sp = stack_top_retreat_(sp, UINT8_C(1));
-  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(
+      offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
   struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
   if (!expansion_cost.affordable) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
@@ -1501,7 +1678,8 @@ struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carr
     return Failed(OutOfGas);
   }
   (*carried_gas) = gas_sub(gas, expansion_cost.cost);
-  struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(
+      offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
   (*carried_memory_height) = expand_memory(memory_base, memory, access.requested_height);
   u256 value = mem_load(memory_base, access.range.off);
   sp = stack_top_advance_(sp, UINT8_C(1));
@@ -1510,9 +1688,13 @@ struct OpcodeOutcome execute_mload(uint32_t memory_base, uint64_t *restrict carr
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp,
+                                    uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1531,7 +1713,8 @@ struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict car
   sp = stack_top_retreat_(sp, UINT8_C(1));
   u256 v = read_stack_word(sp);
   sp = stack_top_retreat_(sp, UINT8_C(1));
-  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  uint64_t requested_height = memory_requested_height_u256_u256_to_uint64_t(
+      offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
   struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
   if (!expansion_cost.affordable) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
@@ -1540,16 +1723,21 @@ struct OpcodeOutcome execute_mstore(uint32_t memory_base, uint64_t *restrict car
     return Failed(OutOfGas);
   }
   (*carried_gas) = gas_sub(gas, expansion_cost.cost);
-  struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
+  struct MemoryAccessFields access = memory_access_u256_u256_to_struct_MemoryAccessFields(
+      offset_word, (u256){{UINT64_C(32), UINT64_C(0), UINT64_C(0), UINT64_C(0)}});
   (*carried_memory_height) = expand_memory(memory_base, memory, access.requested_height);
   mem_store(memory_base, access.range.off, v);
   (*carried_sp) = sp;
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_mstore8(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_mstore8(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                     StackPointer *restrict carried_sp,
+                                     uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1584,9 +1772,13 @@ struct OpcodeOutcome execute_mstore8(uint32_t memory_base, uint64_t *restrict ca
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp,
+                                   uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1607,9 +1799,13 @@ struct OpcodeOutcome execute_msize(uint64_t *restrict carried_gas, StackPointer 
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp,
+                                   uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(3),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1640,7 +1836,9 @@ struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carr
   gas = gas_sub(gas, copy_cost.cost);
   uint64_t destination_requested_height = memory_requested_height(destination_word, length_word);
   uint64_t source_requested_height = memory_requested_height(source_word, length_word);
-  uint64_t requested_height = destination_requested_height < source_requested_height ? source_requested_height : destination_requested_height;
+  uint64_t requested_height = destination_requested_height < source_requested_height
+                                  ? source_requested_height
+                                  : destination_requested_height;
   struct GasCharge expansion_cost = memory_expansion_gas_cost(memory, requested_height, gas);
   if (!expansion_cost.affordable) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
@@ -1651,7 +1849,9 @@ struct OpcodeOutcome execute_mcopy(uint32_t memory_base, uint64_t *restrict carr
   gas = gas_sub(gas, expansion_cost.cost);
   struct MemoryAccessFields destination = memory_access(destination_word, length_word);
   struct MemoryAccessFields source = memory_access(source_word, length_word);
-  uint32_t materialized_required_size = destination.requested_height < source.requested_height ? source.requested_height : destination.requested_height;
+  uint32_t materialized_required_size = destination.requested_height < source.requested_height
+                                            ? source.requested_height
+                                            : destination.requested_height;
   (*carried_memory_height) = expand_memory(memory_base, memory, materialized_required_size);
   mem_mcopy(memory_base, destination.range.off, source.range.off, destination.range.len);
   (*carried_gas) = gas;
@@ -1664,7 +1864,9 @@ struct AccountExecutionContext account_execution_context_(bytes20 address)
   return account_execution_context(address);
 }
 
-struct AccountExecutionContext refresh_account_execution_context(struct AccountExecutionContext context, bytes20 previous_address, bytes20 next_address)
+struct AccountExecutionContext
+refresh_account_execution_context(struct AccountExecutionContext context, bytes20 previous_address,
+                                  bytes20 next_address)
 {
   if (eq_bytes20(previous_address, next_address)) {
     return context;
@@ -1672,9 +1874,13 @@ struct AccountExecutionContext refresh_account_execution_context(struct AccountE
   return account_execution_context(next_address);
 }
 
-struct OpcodeOutcome execute_sload(struct AccountExecutionContext context, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_sload(struct AccountExecutionContext context,
+                                   uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1682,7 +1888,8 @@ struct OpcodeOutcome execute_sload(struct AccountExecutionContext context, uint6
   StackPointer sp = (*carried_sp);
   u256 slot = read_stack_word(sp);
   sp = stack_top_retreat_(sp, UINT8_C(1));
-  uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count, context.storage_count, slot);
+  uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count,
+                                             context.storage_count, slot);
   bool warm = storage_id_is_warm(storage_id);
   uint16_t gas_cost = sload_cost(warm);
   if ((*carried_gas) < gas_cost) {
@@ -1690,7 +1897,8 @@ struct OpcodeOutcome execute_sload(struct AccountExecutionContext context, uint6
     (*carried_sp) = sp;
     return Failed(OutOfGas);
   }
-  struct StorageValue entry = storage_load_by_id(context.account_id, context.storage_generation, storage_id, (bool)(!warm));
+  struct StorageValue entry =
+      storage_load_by_id(context.account_id, context.storage_generation, storage_id, (bool)(!warm));
   sp = stack_top_advance_(sp, UINT8_C(1));
   write_stack_word(sp, entry.curr);
   (*carried_gas) = ((*carried_gas) - (uint64_t)gas_cost);
@@ -1698,9 +1906,16 @@ struct OpcodeOutcome execute_sload(struct AccountExecutionContext context, uint6
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint8_t fork, bool carried_is_static, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, __int128 *restrict carried_refund, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint8_t fork,
+                                    bool carried_is_static, uint64_t *restrict carried_gas,
+                                    uint64_t *restrict carried_state_gas,
+                                    uint32_t *restrict carried_state_spill,
+                                    __int128 *restrict carried_refund,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1736,7 +1951,8 @@ struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint
   sp = stack_top_retreat_(sp, UINT8_C(1));
   u256 value = read_stack_word(sp);
   sp = stack_top_retreat_(sp, UINT8_C(1));
-  uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count, context.storage_count, slot);
+  uint32_t storage_id = storage_resolve_slot(context.storage_begin, context.storage_change_count,
+                                             context.storage_count, slot);
   bool warm = storage_id_is_warm(storage_id);
   bool cold = (bool)(!warm);
   if (fork >= Amsterdam) {
@@ -1749,12 +1965,14 @@ struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint
       return Failed(OutOfGas);
     }
   }
-  struct StorageValue entry = storage_load_by_id(context.account_id, context.storage_generation, storage_id, cold);
+  struct StorageValue entry =
+      storage_load_by_id(context.account_id, context.storage_generation, storage_id, cold);
   struct SstoreCosts costs = sstore_costs(entry.orig, entry.curr, value, cold);
   if (costs.state_credit != UINT8_C(0)) {
     uint64_t _8_1578_8_1655;
     uint64_t _8_1579_8_1656;
-    uint32_t _8_1580_8_1657 = credit_state_gas_refund(gas, state_gas, state_spill, costs.state_credit, &_8_1578_8_1655, &_8_1579_8_1656);
+    uint32_t _8_1580_8_1657 = credit_state_gas_refund(
+        gas, state_gas, state_spill, costs.state_credit, &_8_1578_8_1655, &_8_1579_8_1656);
     gas = _8_1578_8_1655;
     state_gas = _8_1579_8_1656;
     state_spill = _8_1580_8_1657;
@@ -1771,7 +1989,10 @@ struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint
   bool _8_1574_8_1651;
   uint64_t _8_1575_8_1652;
   uint64_t _8_1576_8_1653;
-  uint32_t _8_1577_8_1654 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas, state_gas, state_spill, costs.state_charge, &_8_1574_8_1651, &_8_1575_8_1652, &_8_1576_8_1653);
+  uint32_t _8_1577_8_1654 =
+      charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(
+          gas, state_gas, state_spill, costs.state_charge, &_8_1574_8_1651, &_8_1575_8_1652,
+          &_8_1576_8_1653);
   halt = _8_1574_8_1651;
   gas = _8_1575_8_1652;
   state_gas = _8_1576_8_1653;
@@ -1788,7 +2009,8 @@ struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint
     refund = record_refund(refund, costs.refund);
   }
   if (!eq_u256(entry.curr, value)) {
-    storage_update_by_id(context.account_id, context.storage_generation, storage_id, value, entry.orig);
+    storage_update_by_id(context.account_id, context.storage_generation, storage_id, value,
+                         entry.orig);
   }
   (*carried_gas) = gas;
   (*carried_state_gas) = state_gas;
@@ -1798,9 +2020,12 @@ struct OpcodeOutcome execute_sstore(struct AccountExecutionContext context, uint
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_tload(bytes20 carried_address, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_tload(bytes20 carried_address, uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1821,9 +2046,13 @@ struct OpcodeOutcome execute_tload(bytes20 carried_address, uint64_t *restrict c
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_tstore(bytes20 carried_address, bool carried_is_static, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_tstore(bytes20 carried_address, bool carried_is_static,
+                                    uint64_t *restrict carried_gas,
+                                    StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1854,9 +2083,12 @@ struct OpcodeOutcome execute_tstore(bytes20 carried_address, bool carried_is_sta
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_jump(struct CodeFields carried_code, uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_jump(struct CodeFields carried_code, uint32_t *restrict carried_pc,
+                                  uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1874,7 +2106,8 @@ struct OpcodeOutcome execute_jump(struct CodeFields carried_code, uint32_t *rest
   (*carried_sp) = stack_top_retreat_((*carried_sp), UINT8_C(1));
   uint32_t pc_in_after_8_1660 = pc;
   uint64_t g_after_8_1661 = gas;
-  struct OpcodeOutcome _8_1430_8_1662 = do_jump(&pc_in_after_8_1660, &g_after_8_1661, carried_code, dest);
+  struct OpcodeOutcome _8_1430_8_1662 =
+      do_jump(&pc_in_after_8_1660, &g_after_8_1661, carried_code, dest);
   pc = pc_in_after_8_1660;
   gas = g_after_8_1661;
   status = _8_1430_8_1662;
@@ -1883,9 +2116,13 @@ struct OpcodeOutcome execute_jump(struct CodeFields carried_code, uint32_t *rest
   return status;
 }
 
-struct OpcodeOutcome execute_jumpi(struct CodeFields carried_code, uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_jumpi(struct CodeFields carried_code, uint32_t *restrict carried_pc,
+                                   uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1913,7 +2150,8 @@ struct OpcodeOutcome execute_jumpi(struct CodeFields carried_code, uint32_t *res
   }
   uint32_t pc_in_after_8_1663 = pc;
   uint64_t g_after_8_1664 = gas;
-  struct OpcodeOutcome _8_1430_8_1665 = do_jump(&pc_in_after_8_1663, &g_after_8_1664, carried_code, dest);
+  struct OpcodeOutcome _8_1430_8_1665 =
+      do_jump(&pc_in_after_8_1663, &g_after_8_1664, carried_code, dest);
   pc = pc_in_after_8_1663;
   gas = g_after_8_1664;
   status = _8_1430_8_1665;
@@ -1923,9 +2161,12 @@ struct OpcodeOutcome execute_jumpi(struct CodeFields carried_code, uint32_t *res
   return status;
 }
 
-struct OpcodeOutcome execute_pc(uint32_t *restrict carried_pc, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
+struct OpcodeOutcome execute_pc(uint32_t *restrict carried_pc, uint64_t *restrict carried_gas,
+                                StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1945,7 +2186,9 @@ struct OpcodeOutcome execute_pc(uint32_t *restrict carried_pc, uint64_t *restric
 
 struct OpcodeOutcome execute_gas(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1973,9 +2216,12 @@ struct OpcodeOutcome execute_jumpdest(uint64_t *restrict carried_gas)
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_push(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n, u256 v)
+struct OpcodeOutcome execute_push(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp,
+                                  uint8_t n, u256 v)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3((*carried_sp), UINT8_C(0), UINT8_C(1));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+          (*carried_sp), UINT8_C(0), UINT8_C(1));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -1992,9 +2238,12 @@ struct OpcodeOutcome execute_push(uint64_t *restrict carried_gas, StackPointer *
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_dup(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n)
+struct OpcodeOutcome execute_dup(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp,
+                                 uint8_t n)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+          (*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2003,7 +2252,8 @@ struct OpcodeOutcome execute_dup(uint64_t *restrict carried_gas, StackPointer *r
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return Failed(OutOfGas);
   }
-  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
+  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256(
+      (*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
   StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
   write_stack_word(sp, value);
   (*carried_gas) = ((*carried_gas) - (uint64_t)G_verylow);
@@ -2011,9 +2261,13 @@ struct OpcodeOutcome execute_dup(uint64_t *restrict carried_gas, StackPointer *r
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_swap(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint8_t n)
+struct OpcodeOutcome execute_swap(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp,
+                                  uint8_t n)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+          (*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)),
+          ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2023,19 +2277,23 @@ struct OpcodeOutcome execute_swap(uint64_t *restrict carried_gas, StackPointer *
     return Failed(OutOfGas);
   }
   u256 top_value = read_stack_word((*carried_sp));
-  stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), UINT8_C(0), (stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n)));
+  stack_set_StackPointer_uint8_t_u256_to_unit(
+      (*carried_sp), UINT8_C(0), (stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n)));
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), n, top_value);
   (*carried_gas) = ((*carried_gas) - (uint64_t)G_verylow);
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_dupn(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
+struct OpcodeOutcome execute_dupn(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp,
+                                  uint64_t immediate)
 {
   if (!(deep_stack_immediate_valid(immediate))) {
     return Failed(InvalidOpcode);
   }
   uint8_t n = decode_single_stack_index(immediate);
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+          (*carried_sp), n, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2044,7 +2302,8 @@ struct OpcodeOutcome execute_dupn(uint64_t *restrict carried_gas, StackPointer *
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return Failed(OutOfGas);
   }
-  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
+  u256 value = stack_slot_read_StackPointer_uint8_t_to_u256(
+      (*carried_sp), ((uint8_t)((uint32_t)n - (uint32_t)UINT8_C(1))));
   StackPointer sp = stack_top_advance_((*carried_sp), UINT8_C(1));
   write_stack_word(sp, value);
   (*carried_gas) = ((*carried_gas) - (uint64_t)G_verylow);
@@ -2052,13 +2311,17 @@ struct OpcodeOutcome execute_dupn(uint64_t *restrict carried_gas, StackPointer *
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_swapn(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
+struct OpcodeOutcome execute_swapn(uint64_t *restrict carried_gas,
+                                   StackPointer *restrict carried_sp, uint64_t immediate)
 {
   if (!(deep_stack_immediate_valid(immediate))) {
     return Failed(InvalidOpcode);
   }
   uint8_t n = decode_single_stack_index(immediate);
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+          (*carried_sp), ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)),
+          ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)n)));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2068,20 +2331,24 @@ struct OpcodeOutcome execute_swapn(uint64_t *restrict carried_gas, StackPointer 
     return Failed(OutOfGas);
   }
   u256 top_value = read_stack_word((*carried_sp));
-  stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), UINT8_C(0), (stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n)));
+  stack_set_StackPointer_uint8_t_u256_to_unit(
+      (*carried_sp), UINT8_C(0), (stack_slot_read_StackPointer_uint8_t_to_u256((*carried_sp), n)));
   stack_set_StackPointer_uint8_t_u256_to_unit((*carried_sp), n, top_value);
   (*carried_gas) = ((*carried_gas) - (uint64_t)G_verylow);
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_exchange(uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint64_t immediate)
+struct OpcodeOutcome execute_exchange(uint64_t *restrict carried_gas,
+                                      StackPointer *restrict carried_sp, uint64_t immediate)
 {
   if (!(exchange_immediate_valid(immediate))) {
     return Failed(InvalidOpcode);
   }
   uint16_t n;
   uint16_t m = decode_exchange_stack_indices(immediate, &n);
-  struct OpcodeOutcome stack_status = guard_stack((*carried_sp), ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))), ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))));
+  struct OpcodeOutcome stack_status =
+      guard_stack((*carried_sp), ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))),
+                  ((uint16_t)((uint32_t)m + (uint32_t)UINT16_C(1))));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2098,9 +2365,14 @@ struct OpcodeOutcome execute_exchange(uint64_t *restrict carried_gas, StackPoint
   return Continue(UNIT);
 }
 
-struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static, uint32_t memory_base, uint8_t n, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct OpcodeOutcome execute_log(bytes20 carried_address, bool carried_is_static,
+                                 uint32_t memory_base, uint8_t n, uint64_t *restrict carried_gas,
+                                 StackPointer *restrict carried_sp,
+                                 uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2((*carried_sp), ((uint8_t)((uint32_t)UINT8_C(2) + (uint32_t)n)), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+          (*carried_sp), ((uint8_t)((uint32_t)UINT8_C(2) + (uint32_t)n)), UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return stack_status;
@@ -2160,9 +2432,13 @@ struct FrameStatus execute_stop(void)
   return Halted((HaltStop(UNIT)));
 }
 
-struct FrameStatus execute_return(uint32_t memory_base, uint64_t *restrict carried_gas, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct FrameStatus execute_return(uint32_t memory_base, uint64_t *restrict carried_gas,
+                                  StackPointer *restrict carried_sp,
+                                  uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return opcode_frame_status(stack_status);
@@ -2193,9 +2469,16 @@ struct FrameStatus execute_return(uint32_t memory_base, uint64_t *restrict carri
   return Halted(reason);
 }
 
-struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint32_t memory_base, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, StackPointer *restrict carried_sp, uint32_t *restrict carried_memory_height)
+struct FrameStatus execute_revert(uint64_t carried_state_gas_reservoir, uint32_t memory_base,
+                                  uint64_t *restrict carried_gas,
+                                  uint64_t *restrict carried_state_gas,
+                                  uint32_t *restrict carried_state_spill,
+                                  StackPointer *restrict carried_sp,
+                                  uint32_t *restrict carried_memory_height)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(2),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return opcode_frame_status(stack_status);
@@ -2242,9 +2525,16 @@ struct OpcodeOutcome execute_invalid(uint64_t *restrict carried_gas)
   return Failed(InvalidOpcode);
 }
 
-struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork, bool carried_is_static, uint64_t *restrict carried_gas, uint64_t *restrict carried_state_gas, uint32_t *restrict carried_state_spill, __int128 *restrict carried_refund, StackPointer *restrict carried_sp)
+struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork,
+                                        bool carried_is_static, uint64_t *restrict carried_gas,
+                                        uint64_t *restrict carried_state_gas,
+                                        uint32_t *restrict carried_state_spill,
+                                        __int128 *restrict carried_refund,
+                                        StackPointer *restrict carried_sp)
 {
-  struct OpcodeOutcome stack_status = guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1), UINT8_C(0));
+  struct OpcodeOutcome stack_status =
+      guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome((*carried_sp), UINT8_C(1),
+                                                                       UINT8_C(0));
   if (!(stack_status.kind != Kind_Failed)) {
     (*carried_gas) = (uint64_t)GAS_ZERO;
     return opcode_frame_status(stack_status);
@@ -2290,7 +2580,8 @@ struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork, b
     bool nonzero_balance = word_nonzero(bal);
     bool beneficiary_empty = k_account_is_empty(beneficiary);
     bool creates_account = (bool)(nonzero_balance && beneficiary_empty);
-    uint32_t execution_cost = creates_account ? (access_cost + (uint32_t)G_amsterdam_account_write) : access_cost;
+    uint32_t execution_cost =
+        creates_account ? (access_cost + (uint32_t)G_amsterdam_account_write) : access_cost;
     if (gas < execution_cost) {
       (*carried_gas) = (uint64_t)GAS_ZERO;
       (*carried_state_gas) = state_gas;
@@ -2304,7 +2595,10 @@ struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork, b
       bool _8_1570_8_1672;
       uint64_t _8_1571_8_1673;
       uint64_t _8_1572_8_1674;
-      uint32_t _8_1573_8_1675 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas, state_gas, state_spill, G_amsterdam_state_new_account, &_8_1570_8_1672, &_8_1571_8_1673, &_8_1572_8_1674);
+      uint32_t _8_1573_8_1675 =
+          charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(
+              gas, state_gas, state_spill, G_amsterdam_state_new_account, &_8_1570_8_1672,
+              &_8_1571_8_1673, &_8_1572_8_1674);
       halt = _8_1570_8_1672;
       gas = _8_1571_8_1673;
       state_gas = _8_1572_8_1674;
@@ -2387,12 +2681,17 @@ struct FrameStatus execute_selfdestruct(bytes20 carried_address, uint8_t fork, b
   return halt_status;
 }
 
-struct OpcodeOutcome guard_stack_StackPointer_uint16_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp, uint16_t inputs, uint8_t outputs)
+struct OpcodeOutcome
+guard_stack_StackPointer_uint16_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp,
+                                                                  uint16_t inputs, uint8_t outputs)
 {
   enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
     stack_validation = StackUnderflowFailure;
-  } else if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  } else if (STACK_LIMIT <
+             (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height -
+                                                                (uint32_t)inputs)) +
+                                  (int32_t)(int16_t)outputs))) {
     stack_validation = StackOverflowFailure;
   } else {
     stack_validation = StackValid;
@@ -2407,12 +2706,15 @@ struct OpcodeOutcome guard_stack_StackPointer_uint16_t_uint8_t_to_struct_OpcodeO
   }
 }
 
-struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
+struct OpcodeOutcome
+guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome(StackPointer carried_sp,
+                                                                 uint8_t inputs, uint8_t outputs)
 {
   enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
     stack_validation = StackUnderflowFailure;
-  } else if (STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
+  } else if (STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) +
+                                       (uint32_t)(uint16_t)outputs))) {
     stack_validation = StackOverflowFailure;
   } else {
     stack_validation = StackValid;
@@ -2427,12 +2729,16 @@ struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOu
   }
 }
 
-struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
+struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_2(
+    StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
 {
   enum StackValidation stack_validation;
   if (carried_sp.height < inputs) {
     stack_validation = StackUnderflowFailure;
-  } else if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  } else if (STACK_LIMIT <
+             (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)carried_sp.height -
+                                                                (uint32_t)(uint16_t)inputs)) +
+                                  (int32_t)(int16_t)outputs))) {
     stack_validation = StackOverflowFailure;
   } else {
     stack_validation = StackValid;
@@ -2447,9 +2753,14 @@ struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOu
   }
 }
 
-struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
+struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOutcome_variant_3(
+    StackPointer carried_sp, uint8_t inputs, uint8_t outputs)
 {
-  enum StackValidation stack_validation = STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs)) ? StackOverflowFailure : StackValid;
+  enum StackValidation stack_validation =
+      STACK_LIMIT < ((uint16_t)(((uint32_t)carried_sp.height - (uint32_t)(uint16_t)inputs) +
+                                (uint32_t)(uint16_t)outputs))
+          ? StackOverflowFailure
+          : StackValid;
   switch (stack_validation) {
   case StackValid:
     return Continue(UNIT);
@@ -2459,4 +2770,3 @@ struct OpcodeOutcome guard_stack_StackPointer_uint8_t_uint8_t_to_struct_OpcodeOu
     return Failed(StackOverflow);
   }
 }
-

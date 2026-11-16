@@ -19,7 +19,9 @@ struct Withdrawal {
 
 #ifndef SAIL_FIXED_BYTES_256_DEFINED
 #define SAIL_FIXED_BYTES_256_DEFINED
-typedef struct { uint8_t bytes[256]; } bytes256;
+typedef struct {
+  uint8_t bytes[256];
+} bytes256;
 #endif
 
 // struct BlockHeader
@@ -63,8 +65,8 @@ struct ExecutionPayload {
 
 struct Withdrawal decode_withdrawal(Bytes /* arg_0 */);
 
-bytes32 block_header_hash(struct BlockHeader /* arg_0 */, bytes32 /* arg_1 */, bytes32 /* arg_2 */, bytes32 /* arg_3 */, bytes32 /* arg_4 */);
-
+bytes32 block_header_hash(struct BlockHeader /* arg_0 */, bytes32 /* arg_1 */, bytes32 /* arg_2 */,
+                          bytes32 /* arg_3 */, bytes32 /* arg_4 */);
 
 #ifdef __cplusplus
 }

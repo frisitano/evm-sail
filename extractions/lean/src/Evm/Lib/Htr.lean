@@ -317,8 +317,8 @@ def merkleize (leaves : (Vector (Vector (BitVec 8) 32) k_n)) (depth : Nat) : Sai
 
 /-- The depth of the next progressive subtree. A remainder beyond the deepest
 supported subtree is not representable and fails closed. -/
-/- Type quantifiers: k_ex577563_ : Nat, k_ex577562_ : Nat, 0 ≤ k_ex577562_ ∧
-  k_ex577562_ ≤ 33554432, 0 ≤ k_ex577563_ ∧ k_ex577563_ ≤ 25 -/
+/- Type quantifiers: k_ex582609_ : Nat, k_ex582608_ : Nat, 0 ≤ k_ex582608_ ∧
+  k_ex582608_ ≤ 33554432, 0 ≤ k_ex582609_ ∧ k_ex582609_ ≤ 25 -/
 def htr_progressive_next_depth (remaining : Nat) (depth : Nat) : SailM Nat := do
   if ((remaining == 0) : Bool)
   then (pure depth)
@@ -598,11 +598,11 @@ def htr_bytes_subtree (bytes : (Sigma fun (k_off : Nat) =>
   else (_rec_htr_bytes_subtree ⟨_, ⟨_, bytes⟩⟩ start count depth (_measure + 1))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex577618_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex582664_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
-  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex577618_ ∧
-  k_ex577618_ ≤ 25 -/
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex582664_ ∧
+  k_ex582664_ ≤ 25 -/
 def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1

@@ -21,7 +21,6 @@ u256 mem_load_word(uint32_t /* arg_0 */);
 
 void mem_store_word(uint32_t /* arg_0 */, u256 /* arg_1 */);
 
-
 #ifdef __cplusplus
 }
 #endif

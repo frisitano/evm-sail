@@ -19,7 +19,6 @@ uint64_t bal_ref_uint64(struct RlpFieldRef f);
 
 void bal_expect_end(Bytes cursor);
 
-
 #ifdef __cplusplus
 }
 #endif

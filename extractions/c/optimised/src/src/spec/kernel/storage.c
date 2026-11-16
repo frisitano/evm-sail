@@ -35,4 +35,3 @@ void k_tstore(bytes20 a, u256 s, u256 v)
 {
   transient_storage_write(a, s, v);
 }
-

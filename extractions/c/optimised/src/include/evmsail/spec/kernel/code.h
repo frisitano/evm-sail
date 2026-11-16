@@ -31,7 +31,6 @@ uint32_t k_get_code_size(bytes20 a);
 
 void k_code_copy(bytes20 a, uint32_t dst, u256 off, uint32_t len);
 
-
 #ifdef __cplusplus
 }
 #endif

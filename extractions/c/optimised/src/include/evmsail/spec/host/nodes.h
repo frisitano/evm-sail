@@ -13,7 +13,6 @@ void nodedb_reset(void);
 
 Bytes nodedb_lookup(bytes32 /* arg_0 */);
 
-
 #ifdef __cplusplus
 }
 #endif

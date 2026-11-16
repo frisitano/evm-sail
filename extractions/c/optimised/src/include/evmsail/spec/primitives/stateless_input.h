@@ -27,7 +27,6 @@ struct StatelessInput {
   struct ExecutionPayload payload;
 };
 
-
 #ifdef __cplusplus
 }
 #endif

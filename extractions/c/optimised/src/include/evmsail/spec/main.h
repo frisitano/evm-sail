@@ -15,7 +15,6 @@ void zmain(void);
 
 void evmsail_model_init(void);
 
-
 #ifdef __cplusplus
 }
 #endif

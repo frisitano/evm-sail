@@ -347,6 +347,24 @@ all applicable cases from the pinned checkout, including Glacier and BPO
 profiles that the reference runner excludes by default:
 
 ```sh
+make historical-suite-test
+# Optional: choose the persistent output/cache directory and worker count.
+make historical-suite-test HISTORICAL_SUITE_ARGS='--directory /path/to/cache --jobs 4'
+```
+
+This provisions an isolated execution-specs checkout at the pinned revision
+and its frozen Python 3.12 test environment, generates both groups, exports and
+audits SSZ pairs, then replays every export on both native backends with the
+historical resource profile. Logs and exact conversion limits are retained.
+Only the eleven cases in `config/corpora/historical-conversion-limits.json`
+may lack exports; mismatches, duplicates, changed inventory and any model
+failure fail the target. These are conversion limits, not allowed model failures.
+Successful fixture generation is cached by source identity and verified
+content hashes; model replay always runs. Failed attempts remain inspectable.
+
+The equivalent individual steps, useful for diagnosis, are:
+
+```sh
 export EVM_SAIL_ROOT="$PWD"
 export HISTORICAL_FIXTURES=/absolute/path/to/historical-fixtures
 (
@@ -369,6 +387,11 @@ for group in main extra; do
     "$HISTORICAL_FIXTURES/$group-ssz"
 done
 ```
+
+The builder integration remains in `ssz_builder.py`; removal of the old
+v0.6.2 adapter/witness implementation does not remove fixture synthesis.
+Historical access collection temporarily instruments EELS at runtime; its
+fork execution is upstream, while historical transport conversion is local.
 
 The opt-in selection plugin normalizes Glacier feature ordering to London and
 enables BPO selection; it preserves test bodies and reference assertions.
@@ -400,12 +423,12 @@ mutual generic recursion without simplifying their semantics.
 
 `make sender-regression-test` runs the pinned malformed `v/r/s` cases for
 envelopes 0–4, unrecoverable signatures, and chain-ID mismatch fixtures against
-both native backends without a known-failure allowance. This focused gate does
+both native backends, requiring every case to pass. This focused gate does
 not cover historical signature rules or every signing-domain mutation.
 
 The sole pass criterion is byte-exact output agreement with the EELS reference
-guest; `make verify-corpus` runs the whole corpus and also requires the failing
-cases to equal `config/corpora/tests-zkevm-known-failures.toml`. `--debug` prints an on-demand native post-run state dump on failure;
+guest; `make verify-corpus` requires every case to pass and the case count to
+equal the pinned corpus inventory. `--debug` prints an on-demand native post-run state dump on failure;
 `--profile` enables optional zkVM cycle scopes without embedding them in normal
 builds. `--zisk` builds the optimised, input-agnostic ZisK ELF and runs the
 same fixtures through `ziskemu`. The emulator version must match the `ziskos`

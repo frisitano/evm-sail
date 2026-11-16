@@ -17,12 +17,13 @@ uint32_t expected_payload_excess_blob_gas(struct WitnessContext witness);
 
 u320 expected_payload_base_fee(struct WitnessContext witness);
 
-void validate_block_rlp_size(struct BlockHeader header, struct BoundedSszListRef transactions, struct BoundedSszListRef withdrawals);
+void validate_block_rlp_size(struct BlockHeader header, struct BoundedSszListRef transactions,
+                             struct BoundedSszListRef withdrawals);
 
 bytes32 execution_requests_hash_(struct StatelessInputRef input_ref);
 
-void validate_execution_payload(struct StatelessInput input, struct StatelessInputRef input_ref, struct WitnessContext witness);
-
+void validate_execution_payload(struct StatelessInput input, struct StatelessInputRef input_ref,
+                                struct WitnessContext witness);
 
 #ifdef __cplusplus
 }

@@ -430,7 +430,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex576662_ : Nat, 0 ≤ k_ex576662_ ∧ k_ex576662_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex581708_ : Nat, 0 ≤ k_ex581708_ ∧ k_ex581708_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -904,8 +904,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex576735_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex576735_ ∧ k_ex576735_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex581781_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex581781_ ∧ k_ex581781_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -1497,20 +1497,20 @@ def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInpu
   writeReg k_chain_id input_ref.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex637285_ : Nat) =>
-    (Sigma fun (k_ex637286_ : Nat) =>
-    (Sigma fun (k_ex637287_ : Nat) =>
-    (Sigma fun (k_ex637288_ : Nat) =>
-    (Sigma fun (k_ex637289_ : Nat) =>
-    (Sigma fun (k_ex637290_ : Nat) =>
-    (Sigma fun (k_ex637291_ : Nat) =>
-    (Sigma fun (k_ex637292_ : Nat) =>
-    (Sigma fun (k_ex637293_ : Nat) =>
-    (Sigma fun (k_ex637294_ : Nat) =>
-    (Sigma fun (k_ex637295_ : Nat) =>
-    (ExecutionProfileFields k_ex637285_ k_ex637286_ k_ex637287_ k_ex637288_ k_ex637289_ k_ex637290_ k_ex637291_ k_ex637292_ k_ex637293_ k_ex637294_ k_ex637295_ (if ( k_ex637295_
-    < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_) (if ( (if ( k_ex637295_ < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_)
-    < k_ex637292_  : Bool) then (if ( k_ex637295_ < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_) else k_ex637292_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex643005_ : Nat) =>
+    (Sigma fun (k_ex643006_ : Nat) =>
+    (Sigma fun (k_ex643007_ : Nat) =>
+    (Sigma fun (k_ex643008_ : Nat) =>
+    (Sigma fun (k_ex643009_ : Nat) =>
+    (Sigma fun (k_ex643010_ : Nat) =>
+    (Sigma fun (k_ex643011_ : Nat) =>
+    (Sigma fun (k_ex643012_ : Nat) =>
+    (Sigma fun (k_ex643013_ : Nat) =>
+    (Sigma fun (k_ex643014_ : Nat) =>
+    (Sigma fun (k_ex643015_ : Nat) =>
+    (ExecutionProfileFields k_ex643005_ k_ex643006_ k_ex643007_ k_ex643008_ k_ex643009_ k_ex643010_ k_ex643011_ k_ex643012_ k_ex643013_ k_ex643014_ k_ex643015_ (if ( k_ex643015_
+    < k_ex643011_  : Bool) then k_ex643015_ else k_ex643011_) (if ( (if ( k_ex643015_ < k_ex643011_  : Bool) then k_ex643015_ else k_ex643011_)
+    < k_ex643012_  : Bool) then (if ( k_ex643015_ < k_ex643011_  : Bool) then k_ex643015_ else k_ex643011_) else k_ex643012_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,

@@ -19,7 +19,8 @@ void validate_executed_block(struct Block block, struct BlockExecutionResult res
   if (neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(poststate, header.state_root)) {
     fatal_error(InvalidStateRoot);
   }
-  if (neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(result.receipts_root, header.receipts_root)) {
+  if (neq_anything_R__sail_c_repr_fixed_bytes_u64_lanes_C32__(result.receipts_root,
+                                                              header.receipts_root)) {
     fatal_error(InvalidReceiptsRoot);
   }
   if (!(block_logs_bloom_matches_(header.logs_bloom))) {
@@ -37,8 +38,8 @@ void verify_stateless_payload(struct StatelessInputRef input_ref)
   if (k_execution_profile.protocol.fork < Amsterdam) {
     validate_historical_access_schema(block.body.block_access_list);
   }
-  initialize_block_access_list_state_(block.body.block_access_list, k_parent_state_root, block.body.transactions.count);
+  initialize_block_access_list_state_(block.body.block_access_list, k_parent_state_root,
+                                      block.body.transactions.count);
   struct BlockExecutionResult result = execute_block_body(block.body, input_ref);
   validate_executed_block(block, result);
 }
-

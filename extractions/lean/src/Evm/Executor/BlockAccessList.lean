@@ -73,9 +73,9 @@ or re-encodes the list: the original source-backed slice is also the value
 hashed into the execution-payload header. -/
 
 /-- Compares one canonical `[index, word]` pair. -/
-/- Type quantifiers: k_ex577132_ : Nat, k_ex577131_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex577131_ ∧
-  k_ex577131_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex577132_ ∧ k_ex577132_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex582178_ : Nat, k_ex582177_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex582177_ ∧
+  k_ex582177_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex582178_ ∧ k_ex582178_ ≤ (2 ^ 256 - 1) -/
 def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -90,9 +90,9 @@ def bal_compare_index_word (pair : (RlpFieldRef k_source_off k_source_len k_cont
   else (pure ())
 
 /-- Compares one canonical `[index, nonce]` pair. -/
-/- Type quantifiers: k_ex577152_ : Nat, k_ex577151_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
-  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex577151_ ∧
-  k_ex577151_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex577152_ ∧ k_ex577152_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex582198_ : Nat, k_ex582197_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len
+  : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0 ≤ k_ex582197_ ∧
+  k_ex582197_ ≤ (2 ^ 20 + 1), 0 ≤ k_ex582198_ ∧ k_ex582198_ ≤ (2 ^ 64 - 1) -/
 def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (value : Nat) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -108,8 +108,8 @@ def bal_compare_index_nonce (pair : (RlpFieldRef k_source_off k_source_len k_con
 
 /-- Compares one canonical `[index, code]` pair without materializing either
 source-backed code sequence. -/
-/- Type quantifiers: k_ex577171_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
-  ≤ k_ex577171_ ∧ k_ex577171_ ≤ (2 ^ 20 + 1) -/
+/- Type quantifiers: k_ex582217_ : Nat, k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len), 0
+  ≤ k_ex582217_ ∧ k_ex582217_ ≤ (2 ^ 20 + 1) -/
 def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_content_len)) (index : Nat) (code_hash : (Vector (BitVec 8) 32)) : SailM Unit := do
   let fields ← do (bal_ref_cursor pair)
   let ⟨_, ⟨_, index_field⟩⟩ ← do (rlp_decode_item fields)
@@ -130,8 +130,8 @@ def bal_compare_index_code (pair : (RlpFieldRef k_source_off k_source_len k_cont
 
 /-- Consumes the encoded changes for one storage slot.  Each RLP pop strictly
 reduces the remaining byte length and must have one matching host event. -/
-/- Type quantifiers: _reclimit : Nat, k_ex577186_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex577186_ ∧ k_ex577186_ ≤ (2 ^ 256 - 1), 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex582232_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex582232_ ∧ k_ex582232_ ≤ (2 ^ 256 - 1), 0 ≤ _reclimit -/
 def _rec_bal_validate_storage_change_values (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (slot : Nat) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
   | 0 =>
@@ -425,8 +425,8 @@ def bal_validate_accounts (cursor : (StatelessInputSliceFields k_source_off k_so
 
 /-- Historical transport slots are writable schema entries, not EIP-7928
 changes. Their sole `[0, 0]` marker carries no execution claim. -/
-/- Type quantifiers: _reclimit : Nat, k_ex577371_ : Bool, k_ex577370_ : Nat, k_off : Nat, k_len :
-  Nat, (source_valid_range k_off k_len), 0 ≤ k_ex577370_ ∧ k_ex577370_ ≤ (2 ^ 256 - 1), 0 ≤
+/- Type quantifiers: _reclimit : Nat, k_ex582417_ : Bool, k_ex582416_ : Nat, k_off : Nat, k_len :
+  Nat, (source_valid_range k_off k_len), 0 ≤ k_ex582416_ ∧ k_ex582416_ ≤ (2 ^ 256 - 1), 0 ≤
   _reclimit -/
 def _rec_validate_historical_schema_slots (cursor : (StatelessInputSliceFields k_off k_len)) (previous : Nat) (have_previous : Bool) (storage_root : (Vector (BitVec 8) 32)) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
@@ -462,7 +462,7 @@ decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Historical transport slots are writable schema entries, not EIP-7928
 changes. Their sole `[0, 0]` marker carries no execution claim. -/
-/- Type quantifiers: k_ex577384_ : Bool, previous : Nat, k_off : Nat, k_len : Nat, (source_valid_range k_off k_len), 0
+/- Type quantifiers: k_ex582430_ : Bool, previous : Nat, k_off : Nat, k_len : Nat, (source_valid_range k_off k_len), 0
   ≤ previous ∧ previous ≤ (2 ^ 256 - 1) -/
 def validate_historical_schema_slots (cursor : (StatelessInputSliceFields k_off k_len)) (previous : Nat) (have_previous : Bool) (storage_root : (Vector (BitVec 8) 32)) : SailM Unit := do
   let _measure := (k_len : Int)
@@ -473,8 +473,8 @@ def validate_historical_schema_slots (cursor : (StatelessInputSliceFields k_off 
 
 /-- Validate the uncommitted historical access schema identically on both
 backends before optimized C uses it to provision its dense state store. -/
-/- Type quantifiers: _reclimit : Nat, k_ex577401_ : Bool, k_ex577400_ : Nat, k_off : Nat, k_len :
-  Nat, (source_valid_range k_off k_len), 0 ≤ k_ex577400_ ∧ k_ex577400_ ≤ (2 ^ 256 - 1), 0 ≤
+/- Type quantifiers: _reclimit : Nat, k_ex582447_ : Bool, k_ex582446_ : Nat, k_off : Nat, k_len :
+  Nat, (source_valid_range k_off k_len), 0 ≤ k_ex582446_ ∧ k_ex582446_ ≤ (2 ^ 256 - 1), 0 ≤
   _reclimit -/
 def _rec_validate_historical_schema_accounts (cursor : (StatelessInputSliceFields k_off k_len)) (previous : Nat) (have_previous : Bool) (_reclimit : Nat) : SailM Unit := do
   match _reclimit with
@@ -527,7 +527,7 @@ decreasing_by all_goals exact Nat.lt_succ_self _
 
 /-- Validate the uncommitted historical access schema identically on both
 backends before optimized C uses it to provision its dense state store. -/
-/- Type quantifiers: k_ex577414_ : Bool, previous : Nat, k_off : Nat, k_len : Nat, (source_valid_range k_off k_len), 0
+/- Type quantifiers: k_ex582460_ : Bool, previous : Nat, k_off : Nat, k_len : Nat, (source_valid_range k_off k_len), 0
   ≤ previous ∧ previous ≤ (2 ^ 256 - 1) -/
 def validate_historical_schema_accounts (cursor : (StatelessInputSliceFields k_off k_len)) (previous : Nat) (have_previous : Bool) : SailM Unit := do
   let _measure := (k_len : Int)
@@ -550,12 +550,12 @@ def validate_historical_access_schema (bytes : (Sigma fun (k_off : Nat) =>
   (validate_historical_schema_accounts (← (bal_ref_cursor root)) ZERO_WORD false)
 
 /-- Validates the canonical EIP-7928 BAL directly against the host recorder. -/
-/- Type quantifiers: k_ex577434_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex582480_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
   (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ (2 ^ 30) ∧ bytes_dependentWitness1 ≤ (2 ^ 30), 0 ≤ k_ex577434_ ∧
-  k_ex577434_ ≤ (2 ^ 64 - 1) -/
+  0 ≤ (2 ^ 30) ∧ bytes_dependentWitness1 ≤ (2 ^ 30), 0 ≤ k_ex582480_ ∧
+  k_ex582480_ ≤ (2 ^ 64 - 1) -/
 def validate_block_access_list (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (block_gas_limit : Nat) : SailM Unit := do
   let bytes_dependentWitness0 := (bytes).1

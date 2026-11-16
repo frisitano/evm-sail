@@ -109,9 +109,11 @@ uint32_t rlp_scratch_length_add_uint32_t_uint16_t_to_uint32_t(uint32_t left, uin
 
 uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t(uint32_t left, uint32_t right);
 
-uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_2(uint32_t left, uint32_t right);
+uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_2(uint32_t left,
+                                                                        uint32_t right);
 
-uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(uint32_t left, uint32_t right);
+uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(uint32_t left,
+                                                                        uint32_t right);
 
 uint32_t rlp_scratch_length_add_uint32_t_uint8_t_to_uint32_t(uint32_t left, uint8_t right);
 
@@ -157,13 +159,9 @@ void rlp_write_uint_word_uint8_t_to_unit(uint8_t w);
 
 extern const uint8_t RLP_SHORT_LENGTH_LIMIT;
 
-
 extern const uint8_t RLP_WORD_LENGTH_LIMIT;
 
-
 extern const uint8_t RLP_UINT64_LENGTH_LIMIT;
-
-
 
 #ifdef __cplusplus
 }

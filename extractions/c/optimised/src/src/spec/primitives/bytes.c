@@ -3,33 +3,23 @@
 
 const uint8_t ADDRESS_BYTE_LENGTH = UINT8_C(20);
 
-
 const uint8_t WORD_BYTE_LENGTH = UINT8_C(32);
-
 
 const uint8_t EIGHT_BYTE_LENGTH = UINT8_C(8);
 
-
 const uint8_t DOUBLE_WORD_BYTE_LENGTH = UINT8_C(64);
-
 
 Bytes EMPTY_STATELESS_INPUT_SLICE;
 
-
 Bytes EMPTY_SCRATCH_SLICE;
-
 
 Bytes EMPTY_EVM_MEMORY_SLICE;
 
-
 Bytes EMPTY_CODE_REGION_SLICE;
-
 
 Bytes EMPTY_OUTPUT_SLICE;
 
-
 struct CalldataSlice EMPTY_CALLDATA;
-
 
 uint32_t calldata_slice_length(struct CalldataSlice s)
 {
@@ -46,51 +36,51 @@ uint32_t stateless_input_slice_length(Bytes s)
   return s.len;
 }
 
-void create_letbind_26(void) {
+void create_letbind_26(void)
+{
 
   EMPTY_STATELESS_INPUT_SLICE.bytes = NULL;
   EMPTY_STATELESS_INPUT_SLICE.len = UINT32_C(0);
 }
-void kill_letbind_26(void) {
-}
+void kill_letbind_26(void) {}
 
-void create_letbind_27(void) {
+void create_letbind_27(void)
+{
 
   EMPTY_SCRATCH_SLICE.bytes = NULL;
   EMPTY_SCRATCH_SLICE.len = UINT32_C(0);
 }
-void kill_letbind_27(void) {
-}
+void kill_letbind_27(void) {}
 
-void create_letbind_28(void) {
+void create_letbind_28(void)
+{
 
   EMPTY_EVM_MEMORY_SLICE.bytes = NULL;
   EMPTY_EVM_MEMORY_SLICE.len = UINT32_C(0);
 }
-void kill_letbind_28(void) {
-}
+void kill_letbind_28(void) {}
 
-void create_letbind_29(void) {
+void create_letbind_29(void)
+{
 
   EMPTY_CODE_REGION_SLICE.bytes = NULL;
   EMPTY_CODE_REGION_SLICE.len = UINT32_C(0);
 }
-void kill_letbind_29(void) {
-}
+void kill_letbind_29(void) {}
 
-void create_letbind_31(void) {
+void create_letbind_31(void)
+{
 
   EMPTY_OUTPUT_SLICE.bytes = NULL;
   EMPTY_OUTPUT_SLICE.len = UINT32_C(0);
 }
-void kill_letbind_31(void) {
-}
+void kill_letbind_31(void) {}
 
-void create_letbind_32(void) {
-    EMPTY_CALLDATA = (InputCalldata(EMPTY_STATELESS_INPUT_SLICE));
+void create_letbind_32(void)
+{
+  EMPTY_CALLDATA = (InputCalldata(EMPTY_STATELESS_INPUT_SLICE));
 }
-void kill_letbind_32(void) {
-}
+void kill_letbind_32(void) {}
 
 Bytes stateless_input_sub_slice(Bytes s, uint32_t off, uint32_t len)
 {
@@ -117,34 +107,29 @@ Bytes scratch_slice_suffix(Bytes s, uint32_t off)
   return ((Bytes){.bytes = (s.bytes + off), .len = (s.len - off)});
 }
 
-void initialize_block_access_list_state_(Bytes bytes, bytes32 parent_state_root, uint32_t transaction_count)
-{
-  initialize_block_access_list_state(bytes, parent_state_root, transaction_count);
-}
-
 struct CalldataSlice calldata_sub_slice(struct CalldataSlice s, uint8_t off, uint8_t len)
 {
   switch (s.kind) {
-  case Kind_InputCalldata:
-  {
+  case Kind_InputCalldata: {
     Bytes bytes = s.variants.InputCalldata;
     if (((uint64_t)len + (uint64_t)off) > bytes.len) {
       __builtin_trap();
     }
-    return InputCalldata((stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes, off, len)));
+    return InputCalldata(
+        (stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes, off, len)));
   }
-  case Kind_MemoryCalldata:
-  {
+  case Kind_MemoryCalldata: {
     Bytes bytes_3_3728 = s.variants.MemoryCalldata;
     if (((uint64_t)len + (uint64_t)off) > bytes_3_3728.len) {
       __builtin_trap();
     }
-    return MemoryCalldata((memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3728, off, len)));
+    return MemoryCalldata(
+        (memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3728, off, len)));
   }
   }
 }
 
-Bytes evm_memory_slice(const uint8_t * off, uint32_t len)
+Bytes evm_memory_slice(const uint8_t *off, uint32_t len)
 {
   return ((Bytes){.bytes = off, .len = len});
 }
@@ -179,7 +164,7 @@ Bytes scratch_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(Bytes s, uint8_t off, uin
   return ((Bytes){.bytes = (s.bytes + off), .len = (uint32_t)len});
 }
 
-Bytes stateless_input_slice(const uint8_t * off, uint32_t len)
+Bytes stateless_input_slice(const uint8_t *off, uint32_t len)
 {
   return ((Bytes){.bytes = off, .len = len});
 }
@@ -203,4 +188,3 @@ Bytes stateless_input_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(Bytes s, uint8_t 
 {
   return ((Bytes){.bytes = (s.bytes + off), .len = (uint32_t)len});
 }
-

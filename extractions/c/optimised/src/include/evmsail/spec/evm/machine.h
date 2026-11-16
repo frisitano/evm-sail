@@ -30,9 +30,13 @@ bool frame_jumpdest_valid(struct CodeFields frame_code, uint32_t dest);
 
 uint64_t conserved_gas_add(uint64_t available, uint64_t credit);
 
-__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining, uint32_t state_gas_spilled);
+__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining,
+                              uint32_t state_gas_spilled);
 
-struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k);
+struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining,
+                                                    uint32_t state_gas_spilled,
+                                                    uint64_t state_gas_reservoir,
+                                                    enum ExceptionKind k);
 
 uint16_t stack_height(StackPointer top);
 
@@ -82,29 +86,37 @@ __int128 record_refund___int128_uint16_t_to___int128(__int128 refund, uint16_t d
 
 void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w);
 
-uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata, struct FrameCheckpoint *restrict framecheckpoint_8_1614, StackPointer *restrict stackpointer_8_1615, uint32_t *restrict field_2_8_1616);
+uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top,
+                       uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining,
+                       uint32_t state_gas_spilled, __int128 frame_refund,
+                       struct FrameStatus frame_status, struct Message message,
+                       struct CodeFields frame_code, struct CalldataSlice calldata,
+                       struct FrameCheckpoint *restrict framecheckpoint_8_1614,
+                       StackPointer *restrict stackpointer_8_1615,
+                       uint32_t *restrict field_2_8_1616);
 
-enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs);
+enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint16_t outputs);
 
-enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint8_t outputs);
 
-enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
-enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
-enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
 __int128 validated_refund_add___int128_uint16_t_to___int128(__int128 left, uint16_t right);
 
 extern const uint16_t STACK_LIMIT;
 
-
 extern const uint32_t MEMORY_HEIGHT_ZERO;
 
-
 extern const uint32_t MEMORY_BASE_ZERO;
-
-
 
 #ifdef __cplusplus
 }

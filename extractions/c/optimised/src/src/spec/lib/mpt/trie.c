@@ -28,8 +28,7 @@ void validate_secured_state_root(bytes32 root)
 uint64_t update_child_nibble(struct TrieUpdateCursor updates)
 {
   switch (updates.relation.kind) {
-  case Kind_UpdateUnderPrefix:
-  {
+  case Kind_UpdateUnderPrefix: {
     struct TriePath path_postfix = updates.relation.variants.UpdateUnderPrefix;
     if ((path_len(path_postfix)) == UINT8_C(0)) {
       fatal_error(WitnessDeficient);
@@ -61,7 +60,8 @@ uint8_t update_child_ranges_remaining(struct TrieUpdateCursor updates)
   return UINT8_C(0);
 }
 
-uint8_t overlay_child_ranges_remaining(struct TrieUpdateCursor updates, bool existing_pending, uint64_t existing_nibble)
+uint8_t overlay_child_ranges_remaining(struct TrieUpdateCursor updates, bool existing_pending,
+                                       uint64_t existing_nibble)
 {
   bool update_pending = update_under_current_prefix(updates);
   uint8_t update_position;
@@ -75,7 +75,8 @@ uint8_t overlay_child_ranges_remaining(struct TrieUpdateCursor updates, bool exi
   return ((uint8_t)((uint32_t)UINT8_C(17) - (uint32_t)next_position));
 }
 
-bool account_trie_update(struct AcctTrieEntry trie_entry, struct TrieUpdate *restrict trieupdate_8_1558)
+bool account_trie_update(struct AcctTrieEntry trie_entry,
+                         struct TrieUpdate *restrict trieupdate_8_1558)
 {
   struct AcctEntry entry = trie_entry.entry;
   struct Account current = entry.value.curr;
@@ -104,13 +105,19 @@ struct TrieRootResult trie_root_cursor(bytes32 base_root, struct TrieUpdateCurso
   struct TrieItem trieitem_8_1876;
   struct TrieUpdateCursor trieupdatecursor_8_1877;
   if (eq_bytes32(base_root, EMPTY_TRIE_ROOT)) {
-    trieupdatecursor_8_1877 = updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(updates, ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)}), UINT8_C(0), &trieitem_8_1876);
+    trieupdatecursor_8_1877 =
+        updates_subtree_struct_TrieUpdateCursor_struct_TriePath_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(
+            updates, ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)}), UINT8_C(0),
+            &trieitem_8_1876);
   } else {
     Bytes node = node_db_lookup(base_root);
     if (node.len == UINT8_C(0)) {
       fatal_error(WitnessDeficient);
     } else {
-      trieupdatecursor_8_1877 = witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(node, ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)}), updates, UINT8_C(0), &trieitem_8_1876);
+      trieupdatecursor_8_1877 =
+          witness_subtree_Bytes_struct_TriePath_struct_TrieUpdateCursor_uint8_t_to_struct_tuple_TrieItem_TrieUpdateCursor_variant_2(
+              node, ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)}), updates,
+              UINT8_C(0), &trieitem_8_1876);
     }
   }
   if (updates_empty(trieupdatecursor_8_1877)) {
@@ -132,8 +139,7 @@ Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(Bytes node, struct TriePa
   }
   struct InputTrieNode decoded = decode_input_trie_node(node);
   switch (decoded.kind) {
-  case Kind_InputLeafNode:
-  {
+  case Kind_InputLeafNode: {
     struct TriePath path = decoded.variants.InputLeafNode.tup0;
     if (path_matches(key, pos, path)) {
       uint8_t path_length = path_len(path);
@@ -144,8 +150,7 @@ Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(Bytes node, struct TriePa
     }
     return EMPTY_STATELESS_INPUT_SLICE;
   }
-  case Kind_InputExtensionNode:
-  {
+  case Kind_InputExtensionNode: {
     struct TriePath path_3_3314 = decoded.variants.InputExtensionNode.tup0;
     uint8_t extension_len = path_len(path_3_3314);
     if (extension_len == UINT8_C(0)) {
@@ -154,38 +159,40 @@ Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(Bytes node, struct TriePa
     if (path_matches(key, pos, path_3_3314)) {
       if (((uint8_t)((uint32_t)extension_len + (uint32_t)pos)) <= UINT8_C(64)) {
         Bytes child = resolve_witness_ref(decoded.variants.InputExtensionNode.tup1);
-        return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(child, key, ((uint8_t)((uint32_t)extension_len + (uint32_t)pos)));
+        return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(
+            child, key, ((uint8_t)((uint32_t)extension_len + (uint32_t)pos)));
       }
       return EMPTY_STATELESS_INPUT_SLICE;
     }
     return EMPTY_STATELESS_INPUT_SLICE;
   }
-  case Kind_InputBranchNode:
-  {
+  case Kind_InputBranchNode: {
     uint8_t key_length_3_3317 = path_len(key);
     if (pos == key_length_3_3317) {
       return decoded.variants.InputBranchNode.tup1;
     }
     if (pos < key_length_3_3317) {
       uint64_t child_nibble = path_nibble(key, pos);
-      struct NodeRef childref_3_3318 = branch_refs_get(decoded.variants.InputBranchNode.tup0, child_nibble);
+      struct NodeRef childref_3_3318 =
+          branch_refs_get(decoded.variants.InputBranchNode.tup0, child_nibble);
       Bytes child_3_3319 = resolve_witness_ref(childref_3_3318);
-      return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(child_3_3319, key, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)pos)));
+      return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(
+          child_3_3319, key, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)pos)));
     }
     return EMPTY_STATELESS_INPUT_SLICE;
   }
   }
 }
 
-Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes_variant_2(Bytes node, struct TriePath key, uint8_t pos)
+Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes_variant_2(Bytes node, struct TriePath key,
+                                                                 uint8_t pos)
 {
   if (node.len == UINT8_C(0)) {
     return EMPTY_STATELESS_INPUT_SLICE;
   }
   struct InputTrieNode decoded = decode_input_trie_node(node);
   switch (decoded.kind) {
-  case Kind_InputLeafNode:
-  {
+  case Kind_InputLeafNode: {
     struct TriePath path = decoded.variants.InputLeafNode.tup0;
     if (path_matches(key, pos, path)) {
       uint8_t path_length = path_len(path);
@@ -196,8 +203,7 @@ Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes_variant_2(Bytes node, str
     }
     return EMPTY_STATELESS_INPUT_SLICE;
   }
-  case Kind_InputExtensionNode:
-  {
+  case Kind_InputExtensionNode: {
     struct TriePath path_3_3314 = decoded.variants.InputExtensionNode.tup0;
     uint8_t extension_len = path_len(path_3_3314);
     if (extension_len == UINT8_C(0)) {
@@ -205,19 +211,21 @@ Bytes trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes_variant_2(Bytes node, str
     }
     if (path_matches(key, pos, path_3_3314)) {
       Bytes child = resolve_witness_ref(decoded.variants.InputExtensionNode.tup1);
-      return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(child, key, ((uint8_t)((uint32_t)extension_len + (uint32_t)pos)));
+      return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(
+          child, key, ((uint8_t)((uint32_t)extension_len + (uint32_t)pos)));
     }
     return EMPTY_STATELESS_INPUT_SLICE;
   }
-  case Kind_InputBranchNode:
-  {
+  case Kind_InputBranchNode: {
     if (pos == (path_len(key))) {
       return decoded.variants.InputBranchNode.tup1;
     }
     uint64_t child_nibble = path_nibble_struct_TriePath_uint8_t_to_uint64_t(key, pos);
-    struct NodeRef childref_3_3318 = branch_refs_get(decoded.variants.InputBranchNode.tup0, child_nibble);
+    struct NodeRef childref_3_3318 =
+        branch_refs_get(decoded.variants.InputBranchNode.tup0, child_nibble);
     Bytes child_3_3319 = resolve_witness_ref(childref_3_3318);
-    return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(child_3_3319, key, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)pos)));
+    return trie_walk_Bytes_struct_TriePath_uint8_t_to_Bytes(
+        child_3_3319, key, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)pos)));
   }
   }
 }
@@ -229,15 +237,13 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit(Bytes node, uint8_t rem
   }
   struct InputTrieNode decoded = decode_input_trie_node(node);
   switch (decoded.kind) {
-  case Kind_InputLeafNode:
-  {
+  case Kind_InputLeafNode: {
     if ((path_len(decoded.variants.InputLeafNode.tup0)) != remaining) {
       fatal_error(WitnessDeficient);
     }
     break;
   }
-  case Kind_InputExtensionNode:
-  {
+  case Kind_InputExtensionNode: {
     struct NodeRef childref = decoded.variants.InputExtensionNode.tup1;
     uint8_t length_ = path_len(decoded.variants.InputExtensionNode.tup0);
     uint8_t next_remaining;
@@ -268,8 +274,7 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit(Bytes node, uint8_t rem
     validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child, next_remaining);
     break;
   }
-  case Kind_InputBranchNode:
-  {
+  case Kind_InputBranchNode: {
     vector_16_NodeRef children = decoded.variants.InputBranchNode.tup0;
     uint8_t next_remaining_3_3306;
     if (decoded.variants.InputBranchNode.tup1.len == UINT8_C(0)) {
@@ -280,31 +285,34 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit(Bytes node, uint8_t rem
     uint8_t occupied = UINT8_C(0);
     int64_t i = (int64_t)UINT8_C(0);
     while (i <= (int64_t)UINT8_C(15)) {
-      struct NodeRef plain_vector_access_result_2_2306 = fast_vector_access_vector_16_NodeRef(children, i);
-      if (plain_vector_access_result_2_2306.kind != Kind_EmptyRef) {
+      struct NodeRef plain_vector_access_result_2_2311 =
+          fast_vector_access_vector_16_NodeRef(children, i);
+      if (plain_vector_access_result_2_2311.kind != Kind_EmptyRef) {
         uint8_t count = occupied;
         if (count < UINT8_C(16)) {
           occupied = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)count));
         }
       }
       Bytes child_3_3307;
-      struct NodeRef plain_vector_access_result_2_2308 = fast_vector_access_vector_16_NodeRef(children, i);
+      struct NodeRef plain_vector_access_result_2_2313 =
+          fast_vector_access_vector_16_NodeRef(children, i);
       Bytes tmp_3_3285;
-      switch (plain_vector_access_result_2_2308.kind) {
+      switch (plain_vector_access_result_2_2313.kind) {
       case Kind_EmptyRef:
         tmp_3_3285 = EMPTY_STATELESS_INPUT_SLICE;
         break;
       case Kind_InputInlineRef:
-        tmp_3_3285 = plain_vector_access_result_2_2308.variants.InputInlineRef;
+        tmp_3_3285 = plain_vector_access_result_2_2313.variants.InputInlineRef;
         break;
       case Kind_ScratchInlineRef:
         fatal_error(WitnessDeficient);
       case Kind_HashRef:
-        tmp_3_3285 = node_db_lookup(plain_vector_access_result_2_2308.variants.HashRef);
+        tmp_3_3285 = node_db_lookup(plain_vector_access_result_2_2313.variants.HashRef);
         break;
       }
       child_3_3307 = tmp_3_3285;
-      validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child_3_3307, next_remaining_3_3306);
+      validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child_3_3307,
+                                                                    next_remaining_3_3306);
       i = (i + (int64_t)UINT8_C(1));
     }
     if (occupied < UINT8_C(2)) {
@@ -321,15 +329,13 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(Bytes node, u
   }
   struct InputTrieNode decoded = decode_input_trie_node(node);
   switch (decoded.kind) {
-  case Kind_InputLeafNode:
-  {
+  case Kind_InputLeafNode: {
     if ((path_len(decoded.variants.InputLeafNode.tup0)) != remaining) {
       fatal_error(WitnessDeficient);
     }
     break;
   }
-  case Kind_InputExtensionNode:
-  {
+  case Kind_InputExtensionNode: {
     struct NodeRef childref = decoded.variants.InputExtensionNode.tup1;
     uint8_t length_ = path_len(decoded.variants.InputExtensionNode.tup0);
     uint8_t next_remaining;
@@ -360,8 +366,7 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(Bytes node, u
     validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child, next_remaining);
     break;
   }
-  case Kind_InputBranchNode:
-  {
+  case Kind_InputBranchNode: {
     vector_16_NodeRef children = decoded.variants.InputBranchNode.tup0;
     uint8_t next_remaining_3_3306;
     if ((UINT8_C(0) < remaining) && (decoded.variants.InputBranchNode.tup1.len == UINT8_C(0))) {
@@ -372,31 +377,34 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(Bytes node, u
     uint8_t occupied = UINT8_C(0);
     int64_t i = (int64_t)UINT8_C(0);
     while (i <= (int64_t)UINT8_C(15)) {
-      struct NodeRef plain_vector_access_result_2_2306 = fast_vector_access_vector_16_NodeRef(children, i);
-      if (plain_vector_access_result_2_2306.kind != Kind_EmptyRef) {
+      struct NodeRef plain_vector_access_result_2_2311 =
+          fast_vector_access_vector_16_NodeRef(children, i);
+      if (plain_vector_access_result_2_2311.kind != Kind_EmptyRef) {
         uint8_t count = occupied;
         if (count < UINT8_C(16)) {
           occupied = ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)count));
         }
       }
       Bytes child_3_3307;
-      struct NodeRef plain_vector_access_result_2_2308 = fast_vector_access_vector_16_NodeRef(children, i);
+      struct NodeRef plain_vector_access_result_2_2313 =
+          fast_vector_access_vector_16_NodeRef(children, i);
       Bytes tmp_3_3285;
-      switch (plain_vector_access_result_2_2308.kind) {
+      switch (plain_vector_access_result_2_2313.kind) {
       case Kind_EmptyRef:
         tmp_3_3285 = EMPTY_STATELESS_INPUT_SLICE;
         break;
       case Kind_InputInlineRef:
-        tmp_3_3285 = plain_vector_access_result_2_2308.variants.InputInlineRef;
+        tmp_3_3285 = plain_vector_access_result_2_2313.variants.InputInlineRef;
         break;
       case Kind_ScratchInlineRef:
         fatal_error(WitnessDeficient);
       case Kind_HashRef:
-        tmp_3_3285 = node_db_lookup(plain_vector_access_result_2_2308.variants.HashRef);
+        tmp_3_3285 = node_db_lookup(plain_vector_access_result_2_2313.variants.HashRef);
         break;
       }
       child_3_3307 = tmp_3_3285;
-      validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child_3_3307, next_remaining_3_3306);
+      validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(child_3_3307,
+                                                                    next_remaining_3_3306);
       i = (i + (int64_t)UINT8_C(1));
     }
     if (occupied < UINT8_C(2)) {
@@ -405,4 +413,3 @@ void validate_secured_witness_node_Bytes_uint8_t_to_unit_variant_2(Bytes node, u
   }
   }
 }
-

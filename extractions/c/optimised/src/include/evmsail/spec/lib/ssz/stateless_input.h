@@ -68,9 +68,11 @@ struct BoundedSszListCursor ssz_list_cursor(struct BoundedSszListRef items);
 
 bool ssz_list_cursor_empty(struct BoundedSszListCursor cursor);
 
-struct BoundedSszListCursor ssz_list_pop(struct BoundedSszListCursor cursor, Bytes *restrict statelessinputslicefields_8_1560);
+struct BoundedSszListCursor ssz_list_pop(struct BoundedSszListCursor cursor,
+                                         Bytes *restrict statelessinputslicefields_8_1560);
 
-struct StatelessInputRef decode_stateless_input_ref(Bytes /* arg_0 */, struct ProtocolProfileFields /* arg_1 */);
+struct StatelessInputRef decode_stateless_input_ref(Bytes /* arg_0 */,
+                                                    struct ProtocolProfileFields /* arg_1 */);
 
 struct StatelessInputRef decode_stateless_input_ref_(Bytes input);
 
@@ -80,7 +82,6 @@ void index_witness_codes_(struct BoundedSszListRef codes);
 
 void create_letbind_269(void);
 void kill_letbind_269(void);
-
 
 uint8_t next_parent_header_field(uint8_t index);
 
@@ -108,77 +109,60 @@ bytes32 execution_requests_hash(struct StatelessInputRef /* arg_0 */);
 
 bytes32 htr_new_payload_request(struct StatelessInputRef /* arg_0 */);
 
-struct ParentHeaderFields decode_parent_header_fields_Bytes_uint8_t_struct_ParentHeaderFields_to_struct_ParentHeaderFields(Bytes cursor, uint8_t field_index, struct ParentHeaderFields fields);
+struct ParentHeaderFields
+decode_parent_header_fields_Bytes_uint8_t_struct_ParentHeaderFields_to_struct_ParentHeaderFields(
+    Bytes cursor, uint8_t field_index, struct ParentHeaderFields fields);
 
-struct ParentHeaderFields decode_parent_header_fields_Bytes_uint8_t_struct_ParentHeaderFields_to_struct_ParentHeaderFields_variant_2(Bytes cursor, uint8_t field_index, struct ParentHeaderFields fields);
+struct ParentHeaderFields
+decode_parent_header_fields_Bytes_uint8_t_struct_ParentHeaderFields_to_struct_ParentHeaderFields_variant_2(
+    Bytes cursor, uint8_t field_index, struct ParentHeaderFields fields);
 
 uint8_t next_parent_header_field_uint8_t_to_uint8_t(uint8_t index);
 
-struct BoundedSszListRef ssz_fixed_list_pop(struct BoundedSszListRef items, uint8_t item_size, Bytes *restrict statelessinputslicefields_8_1612);
+struct BoundedSszListRef ssz_fixed_list_pop(struct BoundedSszListRef items, uint8_t item_size,
+                                            Bytes *restrict statelessinputslicefields_8_1612);
 
 extern const uint8_t NPR_BEACON_ROOT;
 
-
 extern const uint8_t PL_FEE_RECIPIENT;
-
 
 extern const uint8_t PL_STATE_ROOT;
 
-
 extern const uint8_t PL_RECEIPTS_ROOT;
-
 
 extern const uint8_t PL_LOGS_BLOOM;
 
-
 extern const uint16_t PL_PREV_RANDAO;
-
 
 extern const uint16_t PL_BLOCK_NUMBER;
 
-
 extern const uint16_t PL_GAS_LIMIT;
-
 
 extern const uint16_t PL_GAS_USED;
 
-
 extern const uint16_t PL_TIMESTAMP;
-
 
 extern const uint16_t PL_BASE_FEE;
 
-
 extern const uint16_t PL_BLOCK_HASH;
-
 
 extern const uint16_t PL_BLOB_GAS_USED;
 
-
 extern const uint16_t PL_EXCESS_BLOB_GAS;
-
 
 extern const uint16_t PL_SLOT_NUMBER;
 
-
 extern const uint8_t WD_SIZE;
-
 
 extern const uint8_t WD_INDEX;
 
-
 extern const uint8_t WD_VALIDATOR_INDEX;
-
 
 extern const uint8_t WD_ADDRESS;
 
-
 extern const uint8_t WD_AMOUNT;
 
-
 extern struct ParentHeaderFields EMPTY_PARENT_HEADER_FIELDS;
-
-
 
 #ifdef __cplusplus
 }

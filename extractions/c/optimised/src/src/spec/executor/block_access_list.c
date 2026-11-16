@@ -20,7 +20,8 @@ bool historical_schema_has_slot(Bytes cursor, u256 slot)
   return historical_schema_has_slot(next, slot);
 }
 
-bool historical_schema_has_access(Bytes cursor, u256 address, struct option_R__sail_c_repr_u256_ slot)
+bool historical_schema_has_access(Bytes cursor, u256 address,
+                                  struct option_R__sail_c_repr_u256_ slot)
 {
   if (cursor.len == UINT8_C(0)) {
     return false;
@@ -36,10 +37,10 @@ bool historical_schema_has_access(Bytes cursor, u256 address, struct option_R__s
     switch (slot.kind) {
     case Kind_None_R__sail_c_repr_u256_:
       return true;
-    case Kind_Some_R__sail_c_repr_u256_:
-    {
-      Bytes bal_ref_cursor_result_2_2393 = bal_ref_cursor(slots);
-      return historical_schema_has_slot(bal_ref_cursor_result_2_2393, slot.variants.Some_R__sail_c_repr_u256_);
+    case Kind_Some_R__sail_c_repr_u256_: {
+      Bytes bal_ref_cursor_result_2_2398 = bal_ref_cursor(slots);
+      return historical_schema_has_slot(bal_ref_cursor_result_2_2398,
+                                        slot.variants.Some_R__sail_c_repr_u256_);
     }
     }
   }
@@ -66,8 +67,9 @@ void require_historical_state_access(bytes20 address, struct option_R__sail_c_re
     }
     struct RlpFieldRef root = rlp_single_ref(k_historical_access_schema);
     bool found;
-    Bytes bal_ref_cursor_result_2_2388 = bal_ref_cursor(root);
-    found = historical_schema_has_access(bal_ref_cursor_result_2_2388, (address_to_word(address)), slot);
+    Bytes bal_ref_cursor_result_2_2393 = bal_ref_cursor(root);
+    found = historical_schema_has_access(bal_ref_cursor_result_2_2393, (address_to_word(address)),
+                                         slot);
     if (found) {
       return;
     }
@@ -75,7 +77,8 @@ void require_historical_state_access(bytes20 address, struct option_R__sail_c_re
   }
 }
 
-void validate_historical_schema_slots(Bytes cursor, u256 previous, bool have_previous, bytes32 storage_root)
+void validate_historical_schema_slots(Bytes cursor, u256 previous, bool have_previous,
+                                      bytes32 storage_root)
 {
   if (cursor.len == UINT8_C(0)) {
     return;
@@ -101,8 +104,8 @@ void validate_historical_schema_slots(Bytes cursor, u256 previous, bool have_pre
   struct RlpFieldRef marker = rlp_decode_item(values);
   bal_expect_end((rlp_cursor_advance(values, marker.source.len)));
   bal_compare_index_word(marker, UINT8_C(0), ZERO_WORD);
-  bytes32 keccak256_word_result_2_376 = host_keccak_word(slot);
-  stateless_storage_by_key(storage_root, keccak256_word_result_2_376);
+  bytes32 keccak256_word_result_2_381 = host_keccak_word(slot);
+  stateless_storage_by_key(storage_root, keccak256_word_result_2_381);
   validate_historical_schema_slots(next, slot, true, storage_root);
 }
 
@@ -141,28 +144,29 @@ void validate_historical_schema_accounts(Bytes cursor, u256 previous, bool have_
     fatal_error(InvalidBlockAccessList);
   }
   struct Account account;
-  bytes32 result_2_353;
-  bytes20 word_to_address_result_2_352 = word_to_address(address);
-  result_2_353 = host_keccak_address(word_to_address_result_2_352);
-  account = stateless_account_by_key(k_parent_state_root, result_2_353);
-  Bytes bal_ref_cursor_result_2_346 = bal_ref_cursor(slots_field);
-  validate_historical_schema_slots(bal_ref_cursor_result_2_346, ZERO_WORD, false, account.info.storage_root);
-  Bytes bal_ref_cursor_result_2_348 = bal_ref_cursor(reads);
-  bal_expect_end(bal_ref_cursor_result_2_348);
-  Bytes bal_ref_cursor_result_2_349 = bal_ref_cursor(balances);
-  bal_expect_end(bal_ref_cursor_result_2_349);
-  Bytes bal_ref_cursor_result_2_350 = bal_ref_cursor(nonces);
-  bal_expect_end(bal_ref_cursor_result_2_350);
-  Bytes bal_ref_cursor_result_2_351 = bal_ref_cursor(codes);
-  bal_expect_end(bal_ref_cursor_result_2_351);
+  bytes32 result_2_358;
+  bytes20 word_to_address_result_2_357 = word_to_address(address);
+  result_2_358 = host_keccak_address(word_to_address_result_2_357);
+  account = stateless_account_by_key(k_parent_state_root, result_2_358);
+  Bytes bal_ref_cursor_result_2_351 = bal_ref_cursor(slots_field);
+  validate_historical_schema_slots(bal_ref_cursor_result_2_351, ZERO_WORD, false,
+                                   account.info.storage_root);
+  Bytes bal_ref_cursor_result_2_353 = bal_ref_cursor(reads);
+  bal_expect_end(bal_ref_cursor_result_2_353);
+  Bytes bal_ref_cursor_result_2_354 = bal_ref_cursor(balances);
+  bal_expect_end(bal_ref_cursor_result_2_354);
+  Bytes bal_ref_cursor_result_2_355 = bal_ref_cursor(nonces);
+  bal_expect_end(bal_ref_cursor_result_2_355);
+  Bytes bal_ref_cursor_result_2_356 = bal_ref_cursor(codes);
+  bal_expect_end(bal_ref_cursor_result_2_356);
   validate_historical_schema_accounts(next, address, true);
 }
 
 void validate_historical_access_schema(Bytes bytes)
 {
   struct RlpFieldRef root = rlp_single_ref(bytes);
-  Bytes bal_ref_cursor_result_2_336 = bal_ref_cursor(root);
-  validate_historical_schema_accounts(bal_ref_cursor_result_2_336, ZERO_WORD, false);
+  Bytes bal_ref_cursor_result_2_341 = bal_ref_cursor(root);
+  validate_historical_schema_accounts(bal_ref_cursor_result_2_341, ZERO_WORD, false);
 }
 
 void validate_block_access_list_(Bytes bytes, uint64_t block_gas_limit)
@@ -183,4 +187,3 @@ void bal_compare_index_word(struct RlpFieldRef pair, uint8_t index, u256 value)
     fatal_error(InvalidBlockAccessList);
   }
 }
-

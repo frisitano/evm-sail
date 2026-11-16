@@ -149,12 +149,12 @@ abbrev DEPOSIT_REQUEST_INDEX : Nat := 184
 /-- Runs a top-level protocol system-call frame. The caller has already
 resolved `code`, made a fresh memory frame and, for a word input, frozen
 the parent-memory span that `input` references. -/
-/- Type quantifiers: k_ex577037_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex582083_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex577037_
-  ∧ k_ex577037_ ≤ (2 ^ 32 - 1) -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex582083_
+  ∧ k_ex582083_ ≤ (2 ^ 32 - 1) -/
 def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (input : CalldataSlice) (memory_base : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
   fun (code_dependentWitness0 : Nat) =>

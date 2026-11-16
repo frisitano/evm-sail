@@ -88,10 +88,10 @@ function k_tx_merge() -> unit = {
                 if deleted | (curr.storage_cleared & original_storage_retained) then {
                     storage_block_clear(e.addr)
                 };
-                if curr.info.nonce != e.value.orig.info.nonce then {
+                if (profile.fork >= Amsterdam) & (curr.info.nonce != e.value.orig.info.nonce) then {
                     bal_nonce_change(k_current_transaction_epoch, e.addr, curr.info.nonce)
                 };
-                if curr.info.balance != e.value.orig.info.balance then {
+                if (profile.fork >= Amsterdam) & (curr.info.balance != e.value.orig.info.balance) then {
                     bal_balance_change(
                         k_current_transaction_epoch,
                         e.addr,
@@ -99,7 +99,7 @@ function k_tx_merge() -> unit = {
                         curr.info.balance,
                     )
                 };
-                if curr.info.code_hash != e.value.orig.info.code_hash then {
+                if (profile.fork >= Amsterdam) & (curr.info.code_hash != e.value.orig.info.code_hash) then {
                     bal_code_change(k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 };
                 curr = { curr with created = false,  selfdestructed = false };
@@ -122,13 +122,15 @@ function k_tx_merge() -> unit = {
                 if account.found then {
                     let acc = account.account;
                     if acc.present & e.value.curr != e.value.orig then {
-                        bal_storage_change(
-                            k_current_transaction_epoch,
-                            e.key.addr,
-                            e.key.slot,
-                            e.value.orig,
-                            e.value.curr,
-                        );
+                        if profile.fork >= Amsterdam then {
+                            bal_storage_change(
+                                k_current_transaction_epoch,
+                                e.key.addr,
+                                e.key.slot,
+                                e.value.orig,
+                                e.value.curr,
+                            )
+                        };
                         storage_block_put(e)
                     }
                 }

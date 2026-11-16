@@ -56,6 +56,9 @@ void bal_input_workspace_bind(uint32_t expected_count)
 static void bal_expect(enum bal_iter_tag tag, AccountId account_id, StorageId storage_id,
                        const rlp_item *item)
 {
+  if (!bal_recording_enabled) {
+    return;
+  }
   if (bal_expected_count >= bal_expected_capacity) {
     GUEST_ABORT();
   }
@@ -294,7 +297,7 @@ static void bal_initialize_account_changes(const rlp_item *field, AccountId acco
 }
 
 void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
-                                        uint32_t transaction_count)
+                                        uint32_t transaction_count, bool record_block_accesses)
 {
   bal_expected_count = 0;
   bal_expected_item_count = 0;
@@ -314,7 +317,7 @@ void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
   BalShape shape = {0};
   bal_measure_accounts(accounts, &shape);
   workspace_prepare_execution(shape.account_count, shape.storage_count, shape.expected_count,
-                              transaction_count);
+                              transaction_count, record_block_accesses);
 
   while (accounts.remaining != 0) {
     rlp_item account_item;
@@ -367,7 +370,7 @@ void initialize_block_access_list_state(Bytes bytes, bytes32 parent_state_root,
   }
 
   if (account_id_count() != shape.account_count + 1U || storage_id_count() != shape.storage_count ||
-      bal_expected_count != shape.expected_count) {
+      (record_block_accesses && bal_expected_count != shape.expected_count)) {
     GUEST_ABORT();
   }
   storage_schema_seal();

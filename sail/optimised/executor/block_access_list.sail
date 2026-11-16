@@ -10,6 +10,7 @@ val block_access_list_state_initialize = impure { c: "initialize_block_access_li
         StatelessInputSliceAtMost(block_access_list_length_bound),
         hash,
         transaction_count,
+        bool,
     ) -> unit
 
 val block_access_list_validate_encoded = impure { c: "validate_block_access_list" } : (
@@ -23,8 +24,15 @@ function initialize_block_access_list_state(
     transaction_count : transaction_count,
 ) -> (
     unit
-) =
-    block_access_list_state_initialize(bytes, parent_state_root, transaction_count)
+) = {
+    let execution_profile = k_execution_profile;
+    block_access_list_state_initialize(
+        bytes,
+        parent_state_root,
+        transaction_count,
+        execution_profile.protocol.fork >= Amsterdam,
+    )
+}
 
 function validate_block_access_list(bytes, block_gas_limit) =
     block_access_list_validate_encoded(bytes, block_gas_limit)

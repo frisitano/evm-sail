@@ -26,6 +26,7 @@ from evm.prelude import (
     ZERO_WORD,
 )
 from evm.primitives.quantities import PrecompileId
+from evm.primitives.fork import Amsterdam
 from evm.primitives.account import (
     StorageEntry,
     StorageKey,
@@ -38,6 +39,7 @@ from evm.kernel.accounts import k_aload
 from evm.evm.precompiles import precompile_id_for_address
 from evm.lib.state_trie import stateless_storage_by_key
 from evm.executor.block_access_list import require_historical_state_access
+from evm.kernel import environment
 
 def storage_key(a: address, s: word) -> StorageKey:
     return StorageKey(addr=address(a), slot=word(s))
@@ -75,14 +77,17 @@ def k_sload(a: address, s: word) -> StorageValue:
         require_historical_state_access(a, s)
         key = storage_key(a, s)
         tx_value = _host_storage_tx_get(key)
+        execution_profile = environment.k_execution_profile
         match tx_value:
             case StorageTxHit(value):
                 raise SailReturn(value)
             case StorageTxCleared(_):
-                _host_bal_storage_read(a, s)
+                if (int(execution_profile.protocol.fork) >= int(Amsterdam)):
+                    _host_bal_storage_read(a, s)
                 raise SailReturn(StorageValue(curr=word(ZERO_WORD), orig=word(ZERO_WORD)))
             case StorageTxMiss(_):
-                _host_bal_storage_read(a, s)
+                if (int(execution_profile.protocol.fork) >= int(Amsterdam)):
+                    _host_bal_storage_read(a, s)
             case _:
                 raise SailMatchFailure("no Sail match clause applied")
         block_value = _host_storage_block_get(key)

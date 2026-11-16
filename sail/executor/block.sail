@@ -293,7 +293,9 @@ function apply_block_end_state(body : BlockBody) -> unit = {
 function execute_block_body(body : BlockBody, input_ref : StatelessInputRef) -> BlockExecutionResult = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
-    bal_reset();
+    if profile.fork >= Amsterdam then {
+        bal_reset()
+    };
     k_current_transaction_epoch = 0;
     warm_reset(k_current_transaction_epoch);
     run_block_start_system_calls();

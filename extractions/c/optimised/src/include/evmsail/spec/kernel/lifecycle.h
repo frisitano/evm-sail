@@ -33,7 +33,6 @@ void k_journal_revert(void);
 
 void k_journal_commit(void);
 
-
 #ifdef __cplusplus
 }
 #endif

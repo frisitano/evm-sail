@@ -73,7 +73,6 @@ uint64_t log_topic_count(uint64_t /* arg_0 */);
 
 u256 log_topic(uint64_t /* arg_0 */, uint64_t /* arg_1 */);
 
-
 #ifdef __cplusplus
 }
 #endif

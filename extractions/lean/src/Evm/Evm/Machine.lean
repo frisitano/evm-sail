@@ -147,9 +147,9 @@ def conserved_gas_add (available : Nat) (credit : Nat) : SailM Nat := do
   else (fatal_error ExecutionInvalid)
 
 /-- Computes the signed state gas consumed by the current frame. -/
-/- Type quantifiers: k_ex574522_ : Nat, k_ex574521_ : Nat, k_ex574520_ : Nat, 0 ≤ k_ex574520_ ∧
-  k_ex574520_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex574521_ ∧ k_ex574521_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex574522_ ∧ k_ex574522_ ≤ 30000000 -/
+/- Type quantifiers: k_ex579568_ : Nat, k_ex579567_ : Nat, k_ex579566_ : Nat, 0 ≤ k_ex579566_ ∧
+  k_ex579566_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex579567_ ∧ k_ex579567_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex579568_ ∧ k_ex579568_ ≤ 30000000 -/
 def frame_state_gas_used (state_gas_reservoir : Nat) (state_gas_remaining : Nat) (state_gas_spilled : Nat) : Int :=
   let entry := state_gas_reservoir
   let remaining := state_gas_remaining
@@ -211,14 +211,14 @@ def read_stack_word (sp : StackPointer) : SailM Nat := do
   (stack_slot_read sp 0)
 
 /-- Writes the `n=0` slot under a validated cursor. -/
-/- Type quantifiers: k_ex574528_ : Nat, 0 ≤ k_ex574528_ ∧ k_ex574528_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex579574_ : Nat, 0 ≤ k_ex579574_ ∧ k_ex579574_ ≤ (2 ^ 256 - 1) -/
 def write_stack_word (sp : StackPointer) (value : Nat) : SailM Unit := do
   (stack_slot_write sp 0 value)
 
 /-- Overwrites the `n`-th-from-top operand (`SWAP`); the cursor is
 unchanged. -/
-/- Type quantifiers: k_ex574530_ : Nat, k_ex574529_ : Nat, 0 ≤ k_ex574529_ ∧
-  k_ex574529_ ≤ 1023, 0 ≤ k_ex574530_ ∧ k_ex574530_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex579576_ : Nat, k_ex579575_ : Nat, 0 ≤ k_ex579575_ ∧
+  k_ex579575_ ≤ 1023, 0 ≤ k_ex579576_ ∧ k_ex579576_ ≤ (2 ^ 256 - 1) -/
 def stack_set (top : StackPointer) (n : Nat) (w : Nat) : SailM Unit := do
   (stack_slot_write top n w)
 
@@ -266,11 +266,11 @@ def returndata_copy (returndata : (Sigma fun (k_syn_off : Nat) =>
 
 /-- Copies `min(want, size)` returndata bytes — the `CALL`-family output
 write-back. -/
-/- Type quantifiers: k_ex574567_ : Nat, k_ex574566_ : Nat, returndata_dependentWitness1 : Nat, returndata_dependentWitness0
+/- Type quantifiers: k_ex579613_ : Nat, k_ex579612_ : Nat, returndata_dependentWitness1 : Nat, returndata_dependentWitness0
   : Nat, 0 ≤ returndata_dependentWitness0 ∧
   0 ≤ returndata_dependentWitness1 ∧
-  (returndata_dependentWitness0 + returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex574566_
-  ∧ k_ex574566_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574567_ ∧ k_ex574567_ ≤ (2 ^ 32 - 1) -/
+  (returndata_dependentWitness0 + returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex579612_
+  ∧ k_ex579612_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579613_ ∧ k_ex579613_ ≤ (2 ^ 32 - 1) -/
 def returndata_copy_prefix (returndata : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (dst : Nat) (want : Nat) : SailM Unit := do
   let returndata_dependentWitness0 := (returndata).1
@@ -301,8 +301,8 @@ def MEMORY_HEIGHT_ZERO : memory_height := 0
 def MEMORY_BASE_ZERO : memory_base := 0
 
 /-- Converts a frame-relative coordinate to an absolute arena coordinate. -/
-/- Type quantifiers: k_ex574579_ : Nat, k_ex574578_ : Nat, 0 ≤ k_ex574578_ ∧
-  k_ex574578_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574579_ ∧ k_ex574579_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579625_ : Nat, k_ex579624_ : Nat, 0 ≤ k_ex579624_ ∧
+  k_ex579624_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579625_ ∧ k_ex579625_ ≤ (2 ^ 32 - 1) -/
 def memory_absolute (base : Nat) (relative : Nat) : SailM Nat := do
   if ((relative ≤b (((2 ^i 32) - 1) - base)) : Bool)
   then (pure (base + relative))
@@ -310,8 +310,8 @@ def memory_absolute (base : Nat) (relative : Nat) : SailM Nat := do
 
 /-- Restores the parent arena cursor from the current child cursor and the
 parent's frame-scoped memory height. -/
-/- Type quantifiers: k_ex574581_ : Nat, k_ex574580_ : Nat, 0 ≤ k_ex574580_ ∧
-  k_ex574580_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574581_ ∧ k_ex574581_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579627_ : Nat, k_ex579626_ : Nat, 0 ≤ k_ex579626_ ∧
+  k_ex579626_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579627_ ∧ k_ex579627_ ≤ (2 ^ 32 - 1) -/
 def memory_parent_base (child_base : Nat) (parent_height : Nat) : SailM Nat := do
   if ((parent_height ≤b child_base) : Bool)
   then (pure (child_base - parent_height))
@@ -319,9 +319,9 @@ def memory_parent_base (child_base : Nat) (parent_height : Nat) : SailM Nat := d
 
 /-- Materializes an already-charged memory high-water mark and returns its
 updated scalar height. -/
-/- Type quantifiers: k_ex574584_ : Nat, k_ex574583_ : Nat, k_ex574582_ : Nat, 0 ≤ k_ex574582_ ∧
-  k_ex574582_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574583_ ∧ k_ex574583_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex574584_ ∧ k_ex574584_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579630_ : Nat, k_ex579629_ : Nat, k_ex579628_ : Nat, 0 ≤ k_ex579628_ ∧
+  k_ex579628_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579629_ ∧ k_ex579629_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex579630_ ∧ k_ex579630_ ≤ (2 ^ 32 - 1) -/
 def expand_memory (base : Nat) (height : Nat) (requested_height : Nat) : SailM Nat := do
   if ((requested_height ≤b (((2 ^i 32) - 1) - base)) : Bool)
   then
@@ -386,13 +386,13 @@ registers: this checkpoint reads them at the one authoritative
 boundary. The host operand-frame cursor mirrors `call_depth`: push the
 empty child operand stack before installing the child's semantic depth,
 and pop it before restoring the parent's semantic depth. -/
-/- Type quantifiers: frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0 : Nat, k_ex574622_
-  : Int, k_ex574621_ : Nat, k_ex574620_ : Nat, k_ex574619_ : Nat, k_ex574618_ : Nat, k_ex574617_ :
-  Nat, k_ex574616_ : Nat, 0 ≤ k_ex574616_ ∧ k_ex574616_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574617_ ∧
-  k_ex574617_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex574618_ ∧ k_ex574618_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex574619_ ∧ k_ex574619_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574620_ ∧ k_ex574620_ ≤ (2 ^ 64 - 1), 0
-  ≤ k_ex574621_ ∧ k_ex574621_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex574622_ ∧
-  k_ex574622_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ frame_code_dependentWitness0 ∧
+/- Type quantifiers: frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0 : Nat, k_ex579668_
+  : Int, k_ex579667_ : Nat, k_ex579666_ : Nat, k_ex579665_ : Nat, k_ex579664_ : Nat, k_ex579663_ :
+  Nat, k_ex579662_ : Nat, 0 ≤ k_ex579662_ ∧ k_ex579662_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579663_ ∧
+  k_ex579663_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex579664_ ∧ k_ex579664_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex579665_ ∧ k_ex579665_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579666_ ∧ k_ex579666_ ≤ (2 ^ 64 - 1), 0
+  ≤ k_ex579667_ ∧ k_ex579667_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex579668_ ∧
+  k_ex579668_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1) -/
@@ -420,41 +420,41 @@ def suspend_frame (pc : Nat) (gas_remaining : Nat) (stack_top : StackPointer) (m
   (pure (checkpoint, child_stack, child_memory_base, child_memory_height))
 
 /-- Writes one memory byte and raises the high-water mark. -/
-/- Type quantifiers: k_ex574628_ : Nat, k_ex574627_ : Nat, 0 ≤ k_ex574627_ ∧
-  k_ex574627_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574628_ ∧ k_ex574628_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579674_ : Nat, k_ex579673_ : Nat, 0 ≤ k_ex579673_ ∧
+  k_ex579673_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579674_ ∧ k_ex579674_ ≤ (2 ^ 32 - 1) -/
 def mem_set_byte (base : Nat) (off : Nat) (v : (BitVec 8)) : SailM Unit := do
   let absolute_offset ← do (memory_absolute base off)
   (mem_write_byte absolute_offset v)
 
 /-- `MLOAD`: the big-endian word at `off`. -/
-/- Type quantifiers: k_ex574630_ : Nat, k_ex574629_ : Nat, 0 ≤ k_ex574629_ ∧
-  k_ex574629_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574630_ ∧ k_ex574630_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579676_ : Nat, k_ex579675_ : Nat, 0 ≤ k_ex579675_ ∧
+  k_ex579675_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579676_ ∧ k_ex579676_ ≤ (2 ^ 32 - 1) -/
 def mem_load (base : Nat) (off : Nat) : SailM Nat := do
   let absolute_offset ← do (memory_absolute base off)
   (mem_load_word absolute_offset)
 
 /-- `MSTORE`: writes the big-endian word at `off` and raises the
 high-water mark. -/
-/- Type quantifiers: k_ex574633_ : Nat, k_ex574632_ : Nat, k_ex574631_ : Nat, 0 ≤ k_ex574631_ ∧
-  k_ex574631_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574632_ ∧ k_ex574632_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex574633_ ∧ k_ex574633_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex579679_ : Nat, k_ex579678_ : Nat, k_ex579677_ : Nat, 0 ≤ k_ex579677_ ∧
+  k_ex579677_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579678_ ∧ k_ex579678_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex579679_ ∧ k_ex579679_ ≤ (2 ^ 256 - 1) -/
 def mem_store (base : Nat) (off : Nat) (w : Nat) : SailM Unit := do
   let absolute_offset ← do (memory_absolute base off)
   (mem_store_word absolute_offset w)
 
 /-- `MSTORE8`: writes the low byte of `w`. -/
-/- Type quantifiers: k_ex574636_ : Nat, k_ex574635_ : Nat, k_ex574634_ : Nat, 0 ≤ k_ex574634_ ∧
-  k_ex574634_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574635_ ∧ k_ex574635_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex574636_ ∧ k_ex574636_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex579682_ : Nat, k_ex579681_ : Nat, k_ex579680_ : Nat, 0 ≤ k_ex579680_ ∧
+  k_ex579680_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579681_ ∧ k_ex579681_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex579682_ ∧ k_ex579682_ ≤ (2 ^ 256 - 1) -/
 def mem_store_byte (base : Nat) (off : Nat) (w : Nat) : SailM Unit := do
   let value := (word_low_byte w)
   (mem_set_byte base off value)
 
 /-- `MCOPY` (EIP-5656): overlapping-safe memory-to-memory copy. -/
-/- Type quantifiers: k_ex574640_ : Nat, k_ex574639_ : Nat, k_ex574638_ : Nat, k_ex574637_ : Nat, 0
-  ≤ k_ex574637_ ∧ k_ex574637_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574638_ ∧
-  k_ex574638_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574639_ ∧ k_ex574639_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex574640_ ∧ k_ex574640_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex579686_ : Nat, k_ex579685_ : Nat, k_ex579684_ : Nat, k_ex579683_ : Nat, 0
+  ≤ k_ex579683_ ∧ k_ex579683_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579684_ ∧
+  k_ex579684_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579685_ ∧ k_ex579685_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex579686_ ∧ k_ex579686_ ≤ (2 ^ 32 - 1) -/
 def mem_mcopy (base : Nat) (dst : Nat) (src : Nat) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then
@@ -465,9 +465,9 @@ def mem_mcopy (base : Nat) (dst : Nat) (src : Nat) (len : Nat) : SailM Unit := d
   else (pure ())
 
 /-- `KECCAK256` over the already-expanded memory range `[off, off+len)`. -/
-/- Type quantifiers: range_dependentWitness1 : Nat, range_dependentWitness0 : Nat, k_ex574644_ : Nat, k_ex574643_
-  : Nat, 0 ≤ k_ex574643_ ∧ k_ex574643_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574644_ ∧
-  k_ex574644_ ≤ (2 ^ 32 - 1), 0 ≤ range_dependentWitness0 ∧
+/- Type quantifiers: range_dependentWitness1 : Nat, range_dependentWitness0 : Nat, k_ex579690_ : Nat, k_ex579689_
+  : Nat, 0 ≤ k_ex579689_ ∧ k_ex579689_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579690_ ∧
+  k_ex579690_ ≤ (2 ^ 32 - 1), 0 ≤ range_dependentWitness0 ∧
   0 ≤ range_dependentWitness1 ∧
   (range_dependentWitness0 + range_dependentWitness1) ≤ (2 ^ 32 - 1) -/
 def mem_keccak (base : Nat) (mem : Nat) (range : (Sigma fun (k_off : Nat) =>

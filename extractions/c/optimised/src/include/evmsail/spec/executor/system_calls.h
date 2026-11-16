@@ -9,7 +9,11 @@
 extern "C" {
 #endif
 
-Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input, uint32_t memory_base, uint64_t *restrict field_0_8_1562, uint64_t *restrict field_1_8_1563, uint32_t *restrict field_2_8_1564, __int128 *restrict field_3_8_1565, struct FrameStatus *restrict framestatus_8_1566);
+Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input,
+                            uint32_t memory_base, uint64_t *restrict field_0_8_1562,
+                            uint64_t *restrict field_1_8_1563, uint32_t *restrict field_2_8_1564,
+                            __int128 *restrict field_3_8_1565,
+                            struct FrameStatus *restrict framestatus_8_1566);
 
 void system_call(bytes20 tgt, bytes32 input);
 
@@ -27,88 +31,59 @@ void validate_execution_requests(struct StatelessInputRef input_ref);
 
 extern const uint8_t SYSTEM_CALL_INPUT_LENGTH;
 
-
 extern const uint16_t DEPOSIT_EVENT_DATA_LENGTH;
-
 
 extern const uint8_t DEPOSIT_PUBKEY_HEAD;
 
-
 extern const uint8_t DEPOSIT_WITHDRAWAL_CREDENTIALS_HEAD;
-
 
 extern const uint8_t DEPOSIT_AMOUNT_HEAD;
 
-
 extern const uint8_t DEPOSIT_SIGNATURE_HEAD;
-
 
 extern const uint8_t DEPOSIT_INDEX_HEAD;
 
-
 extern const uint8_t DEPOSIT_PUBKEY_LENGTH_WORD;
-
 
 extern const uint8_t DEPOSIT_PUBKEY_DATA;
 
-
 extern const uint8_t DEPOSIT_PUBKEY_LENGTH;
-
 
 extern const uint16_t DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH_WORD;
 
-
 extern const uint16_t DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA;
-
 
 extern const uint8_t DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH;
 
-
 extern const uint16_t DEPOSIT_AMOUNT_LENGTH_WORD;
-
 
 extern const uint16_t DEPOSIT_AMOUNT_DATA;
 
-
 extern const uint8_t DEPOSIT_AMOUNT_LENGTH;
-
 
 extern const uint16_t DEPOSIT_SIGNATURE_LENGTH_WORD;
 
-
 extern const uint16_t DEPOSIT_SIGNATURE_DATA;
-
 
 extern const uint8_t DEPOSIT_SIGNATURE_LENGTH;
 
-
 extern const uint16_t DEPOSIT_INDEX_LENGTH_WORD;
-
 
 extern const uint16_t DEPOSIT_INDEX_DATA;
 
-
 extern const uint8_t DEPOSIT_INDEX_LENGTH;
-
 
 extern const uint8_t DEPOSIT_REQUEST_LENGTH;
 
-
 extern const uint8_t DEPOSIT_REQUEST_PUBKEY;
-
 
 extern const uint8_t DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS;
 
-
 extern const uint8_t DEPOSIT_REQUEST_AMOUNT;
-
 
 extern const uint8_t DEPOSIT_REQUEST_SIGNATURE;
 
-
 extern const uint8_t DEPOSIT_REQUEST_INDEX;
-
-
 
 #ifdef __cplusplus
 }

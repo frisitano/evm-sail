@@ -43,7 +43,6 @@ bytes32 transaction_trie_root(struct BoundedSszListRef /* arg_0 */);
 
 bytes32 withdrawals_trie_root(struct BoundedSszListRef /* arg_0 */);
 
-
 #ifdef __cplusplus
 }
 #endif

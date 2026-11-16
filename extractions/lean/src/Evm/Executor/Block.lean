@@ -534,7 +534,9 @@ def execute_block_body (body : BlockBody) (input_ref : StatelessInputRef) : Sail
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
-  (bal_reset ())
+  if ((profile.fork ≥b Amsterdam) : Bool)
+  then (bal_reset ())
+  else (pure ())
   writeReg k_current_transaction_epoch 0
   (warm_reset (← readReg k_current_transaction_epoch))
   (run_block_start_system_calls ())

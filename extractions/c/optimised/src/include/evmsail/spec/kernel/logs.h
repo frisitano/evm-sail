@@ -23,8 +23,6 @@ void k_emit_transfer_log(bytes20 src, bytes20 dst, u256 v);
 
 extern const uint16_t LOGS_BLOOM_BYTE_LENGTH;
 
-
-
 #ifdef __cplusplus
 }
 #endif

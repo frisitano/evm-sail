@@ -28,14 +28,24 @@ struct tuple_vector_16_NodeRef_Bytes {
 };
 
 // union ScratchTrieNode
-enum kind_ScratchTrieNode { Kind_ScratchBranchNode, Kind_ScratchExtensionNode, Kind_ScratchLeafNode };
+enum kind_ScratchTrieNode {
+  Kind_ScratchBranchNode,
+  Kind_ScratchExtensionNode,
+  Kind_ScratchLeafNode
+};
 
 struct ScratchTrieNode {
   enum kind_ScratchTrieNode kind;
   union {
-    struct { struct tuple_vector_16_NodeRef_Bytes ScratchBranchNode; };
-    struct { struct tuple_TriePath_NodeRef ScratchExtensionNode; };
-    struct { struct tuple_TriePath_Bytes ScratchLeafNode; };
+    struct {
+      struct tuple_vector_16_NodeRef_Bytes ScratchBranchNode;
+    };
+    struct {
+      struct tuple_TriePath_NodeRef ScratchExtensionNode;
+    };
+    struct {
+      struct tuple_TriePath_Bytes ScratchLeafNode;
+    };
   } variants;
 };
 
@@ -57,9 +67,15 @@ enum kind_InputTrieNode { Kind_InputBranchNode, Kind_InputExtensionNode, Kind_In
 struct InputTrieNode {
   enum kind_InputTrieNode kind;
   union {
-    struct { struct tuple_vector_16_NodeRef_Bytes_1 InputBranchNode; };
-    struct { struct tuple_TriePath_NodeRef InputExtensionNode; };
-    struct { struct tuple_TriePath_Bytes_1 InputLeafNode; };
+    struct {
+      struct tuple_vector_16_NodeRef_Bytes_1 InputBranchNode;
+    };
+    struct {
+      struct tuple_TriePath_NodeRef InputExtensionNode;
+    };
+    struct {
+      struct tuple_TriePath_Bytes_1 InputLeafNode;
+    };
   } variants;
 };
 
@@ -111,14 +127,21 @@ struct NodeRef merge_ext_node(struct TriePath prefix, Bytes childnode);
 
 struct NodeRef merge_ext_ref(struct TriePath prefix, struct NodeRef childref);
 
-struct InputTrieNode decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(Bytes cursor, uint8_t index, vector_16_NodeRef children);
+struct InputTrieNode
+decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children);
 
-struct InputTrieNode decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(Bytes cursor, uint8_t index, vector_16_NodeRef children);
+struct InputTrieNode
+decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children);
 
-struct ScratchTrieNode decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(Bytes cursor, uint8_t index, vector_16_NodeRef children);
+struct ScratchTrieNode
+decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children);
 
-struct ScratchTrieNode decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(Bytes cursor, uint8_t index, vector_16_NodeRef children);
-
+struct ScratchTrieNode
+decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children);
 
 #ifdef __cplusplus
 }

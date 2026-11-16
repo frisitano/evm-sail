@@ -15,7 +15,6 @@ Bytes encode_storage_value(u256 value);
 
 struct AccountInfo decode_state_account(Bytes value);
 
-
 #ifdef __cplusplus
 }
 #endif

@@ -44,7 +44,6 @@ uint32_t scratch_reserve_uint8_t_to_uint32_t(uint8_t len);
 // register zscratch_arena
 extern Bytes scratch_arena;
 
-
 #ifdef __cplusplus
 }
 #endif

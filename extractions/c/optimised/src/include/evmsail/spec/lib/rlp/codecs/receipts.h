@@ -37,7 +37,6 @@ void receipt_write_encoded(struct ReceiptFields r, u128 cumulative_gas_used);
 
 Bytes receipt_encoded(struct ReceiptFields r, u128 cumulative_gas_used);
 
-
 #ifdef __cplusplus
 }
 #endif
