@@ -3,6 +3,7 @@
 
 struct Account k_aload_(bytes20 a)
 {
+  require_historical_state_access(a, (None_R__sail_c_repr_u256_(UNIT)));
   return k_aload(k_parent_state_root, a);
 }
 

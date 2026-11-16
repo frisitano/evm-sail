@@ -37,18 +37,44 @@ GUEST_NORETURN void guest_finish(void);
  * checks its live length before writing and fails closed when the workspace is
  * exhausted. The backing storage is never heap-allocated, resized, or freed.
  *
- * Sixteen MiB is above the expansion affordable by the protocol transaction
- * gas limit for one frame. The arena retains every suspended parent's extent,
- * however, and there is not yet a proof that the sum across nested live frames
- * fits this reservation. Exhaustion fails closed; the aggregate capacity is an
- * explicit correctness risk rather than an established protocol invariant.
+ * Sixteen MiB covers one frame under Amsterdam's regular-transaction gas cap;
+ * earlier transactions can exceed it. The arena retains every suspended
+ * parent's extent, and there is no proof that aggregate live memory fits a
+ * finite reservation. The larger native historical profile is a conformance
+ * resource budget, not a protocol invariant. Exhaustion fails closed as an
+ * execution failure.
  * The other byte regions are deliberately separate so a large encoding cannot
  * consume memory owned by execution or guest output.
  */
+#if defined(EVMSAIL_NATIVE_TEST) && defined(EVMSAIL_NATIVE_HISTORICAL_RESOURCES)
+#define GUEST_WORKSPACE_BYTES (UINT64_C(2) * 1024U * 1024U * 1024U)
+#else
+#define GUEST_WORKSPACE_BYTES (UINT64_C(256) * 1024U * 1024U)
+#endif
+
 enum {
-  GUEST_WORKSPACE_BYTES = 256U * 1024U * 1024U,
+#if defined(EVMSAIL_NATIVE_TEST) && defined(EVMSAIL_NATIVE_HISTORICAL_RESOURCES)
+  /* Explicit native conformance profile for historical transactions without
+   * Amsterdam's regular-gas cap. This is a resource reservation, not a
+   * protocol bound, and does not change production guest capacities. */
+  GUEST_EVM_MEMORY_BYTES = 1024U * 1024U * 1024U,
+  GUEST_SCRATCH_BYTES = 64U * 1024U * 1024U,
+  GUEST_LOG_DATA_BYTES = 64U * 1024U * 1024U,
+  GUEST_RECEIPT_BYTES = 64U * 1024U * 1024U,
+  GUEST_PREPARED_AUTHORIZATIONS = 8192U,
+  GUEST_AUTHORIZATION_ENTRIES = 32768U,
+#else
   GUEST_EVM_MEMORY_BYTES = 16U * 1024U * 1024U,
   GUEST_SCRATCH_BYTES = 16U * 1024U * 1024U,
+  GUEST_LOG_DATA_BYTES = 16U * 1024U * 1024U,
+  GUEST_RECEIPT_BYTES = 8U * 1024U * 1024U,
+  /* Amsterdam's 2^24 regular-gas ceiling and 7,816 execution gas per
+   * authorization admit at most 2,146 tuples. The tracker uses power-of-two
+   * open addressing below 50% load: 8,192 buckets suffice for this profile.
+   * These reservations are not semantic bounds for earlier forks. */
+  GUEST_PREPARED_AUTHORIZATIONS = (1U << 24) / 7816U,
+  GUEST_AUTHORIZATION_ENTRIES = 8192U,
+#endif
   GUEST_OUTPUT_BYTES = 1U * 1024U * 1024U,
   GUEST_ACCELERATOR_INPUT_BYTES = 2U * 1024U * 1024U,
   GUEST_ACCELERATOR_WORK_BYTES = 2U * 1024U * 1024U,
@@ -70,17 +96,9 @@ enum {
    * The code and analysis arenas have independent cursors but identical
    * worst-case live extents. */
   GUEST_JUMPDEST_BYTES = GUEST_CODE_BYTES,
-  /* Amsterdam charges 7,816 execution gas per authorization.  Its 2^24
-   * regular-transaction gas ceiling therefore admits at most 2,146 tuples.
-   * The authorization tracker uses power-of-two open addressing below 50%
-   * load, so the first sufficient workspace is 8,192 buckets. */
-  GUEST_PREPARED_AUTHORIZATIONS = (1U << 24) / 7816U,
-  GUEST_AUTHORIZATION_ENTRIES = 8192U,
   GUEST_LOG_RECORDS = 65536U,
   GUEST_LOG_TOPICS = 4U * GUEST_LOG_RECORDS,
-  GUEST_LOG_DATA_BYTES = 16U * 1024U * 1024U,
   GUEST_STATE_JOURNAL_ENTRIES = 262144U,
-  GUEST_RECEIPT_BYTES = 8U * 1024U * 1024U,
   GUEST_BAL_STORAGE_CHANGES = 65536U,
   GUEST_BAL_BALANCE_CHANGES = 32768U,
   GUEST_BAL_NONCE_CHANGES = 32768U,

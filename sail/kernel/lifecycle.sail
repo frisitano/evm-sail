@@ -92,7 +92,12 @@ function k_tx_merge() -> unit = {
                     bal_nonce_change(k_current_transaction_epoch, e.addr, curr.info.nonce)
                 };
                 if curr.info.balance != e.value.orig.info.balance then {
-                    bal_balance_change(k_current_transaction_epoch, e.addr, curr.info.balance)
+                    bal_balance_change(
+                        k_current_transaction_epoch,
+                        e.addr,
+                        e.value.orig.info.balance,
+                        curr.info.balance,
+                    )
                 };
                 if curr.info.code_hash != e.value.orig.info.code_hash then {
                     bal_code_change(k_current_transaction_epoch, e.addr, curr.info.code_hash)
@@ -117,7 +122,13 @@ function k_tx_merge() -> unit = {
                 if account.found then {
                     let acc = account.account;
                     if acc.present & e.value.curr != e.value.orig then {
-                        bal_storage_change(k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr);
+                        bal_storage_change(
+                            k_current_transaction_epoch,
+                            e.key.addr,
+                            e.key.slot,
+                            e.value.orig,
+                            e.value.curr,
+                        );
                         storage_block_put(e)
                     }
                 }

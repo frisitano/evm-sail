@@ -355,7 +355,7 @@ def word_of_nat_byte_count(value: int) -> word:
         return word(u256(value))
     else:
         if not (False):
-            raise SailError("sail/primitives/quantities.sail:615.20-615.21")
+            raise SailError("sail/primitives/quantities.sail:618.20-618.21")
         raise SailExit(None)
 
 def word_of_source_byte_count(value: int) -> word:

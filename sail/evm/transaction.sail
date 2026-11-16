@@ -163,7 +163,8 @@ function intrinsic_gas(tx : Transaction) -> IntrinsicGasCost = {
     let profile = execution_profile.protocol;
     if profile.fork < Amsterdam then {
         let execution = legacy_intrinsic_gas(tx);
-        let calldata_floor = legacy_calldata_floor(tx.input_src);
+        let calldata_floor =
+            if profile.fork >= Prague then legacy_calldata_floor(tx.input_src) else 0;
         struct { execution = execution, state = 0, calldata_floor = calldata_floor }
     } else {
         let input = tx.input_src;

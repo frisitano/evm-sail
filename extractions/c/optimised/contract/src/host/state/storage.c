@@ -143,6 +143,17 @@ bool storage_id_is_warm(StorageId storage_id)
   return storage_table.schema[storage_id].warm_epoch >= current_warm_epoch;
 }
 
+bool storage_is_warm(bytes20 address, u256 slot)
+{
+  if (lookup_account_id(&address) == ACCOUNT_ID_NONE) {
+    return false;
+  }
+  const struct AccountExecutionContext context = account_execution_context(address);
+  const StorageId storage_id = storage_resolve_slot(
+      context.storage_begin, context.storage_change_count, context.storage_count, slot);
+  return storage_id_is_warm(storage_id);
+}
+
 void storage_mark_warm(bytes20 address, const u256 slot)
 {
   const AccountId account_id = lookup_account_id(&address);
@@ -403,7 +414,8 @@ void storage_transaction_merge(uint32_t current_transaction_epoch)
         continue;
       }
 
-      bal_note_storage_change(current_transaction_epoch, account_id, storage_id, final_value);
+      bal_note_storage_change(current_transaction_epoch, account_id, storage_id, original_value,
+                              final_value);
     }
   }
 }

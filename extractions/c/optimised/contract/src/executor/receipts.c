@@ -59,7 +59,9 @@ void receipt_table_push(uint32_t index, Bytes value)
       receipt_table.bytes_length > SIZE_MAX - (size_t)length ||
       receipt_table.count >= receipt_table.record_capacity ||
       (size_t)length > receipt_table.bytes_capacity - receipt_table.bytes_length) {
-    fatal_error(WitnessDeficient);
+    /* These are execution-store invariants/resource limits, not evidence
+     * that the authenticated input is invalid. */
+    GUEST_ABORT();
   }
 
   ReceiptRecord *record = &receipt_table.records[receipt_table.count];

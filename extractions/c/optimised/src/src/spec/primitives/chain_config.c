@@ -59,11 +59,38 @@ struct ProtocolProfileFields schema_protocol_profile(uint64_t schema_fork)
   if (schema_fork == UINT64_C(0x14)) {
     return pack_protocol_profile(((struct ProtocolProfileFields){.blob_schedule = ((struct BlobScheduleFields){.base_fee_update_fraction = UINT32_C(11684671), .max = UINT8_C(21), .target = UINT8_C(14)}), .deployed_code_size_limit = UINT32_C(24576), .excess_blob_gas_limit = (compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(BPO2, UINT8_C(14), UINT8_C(21), UINT32_C(11684671))), .fork = BPO2, .initcode_size_limit = UINT32_C(49152), .refund_divisor = UINT8_C(5), .transaction_blob_limit = UINT8_C(6), .transaction_regular_gas_limit = UINT64_C(16777216), .transaction_total_gas_limit = UINT64_C(16777216)}));
   }
-  return pack_protocol_profile(((struct ProtocolProfileFields){.blob_schedule = ((struct BlobScheduleFields){.base_fee_update_fraction = UINT32_C(11684671), .max = UINT8_C(21), .target = UINT8_C(14)}), .deployed_code_size_limit = UINT32_C(65536), .excess_blob_gas_limit = (compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(Amsterdam, UINT8_C(14), UINT8_C(21), UINT32_C(11684671))), .fork = Amsterdam, .initcode_size_limit = UINT32_C(131072), .refund_divisor = UINT8_C(5), .transaction_blob_limit = UINT8_C(6), .transaction_regular_gas_limit = UINT64_C(16777216), .transaction_total_gas_limit = UINT64_C(18446744073709551615)}));
+  if (schema_fork == UINT64_C(0x15)) {
+    return pack_protocol_profile(((struct ProtocolProfileFields){.blob_schedule = ((struct BlobScheduleFields){.base_fee_update_fraction = UINT32_C(11684671), .max = UINT8_C(21), .target = UINT8_C(14)}), .deployed_code_size_limit = UINT32_C(65536), .excess_blob_gas_limit = (compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(Amsterdam, UINT8_C(14), UINT8_C(21), UINT32_C(11684671))), .fork = Amsterdam, .initcode_size_limit = UINT32_C(131072), .refund_divisor = UINT8_C(5), .transaction_blob_limit = UINT8_C(6), .transaction_regular_gas_limit = UINT64_C(16777216), .transaction_total_gas_limit = UINT64_C(4294967295)}));
+  }
+  fatal_error(InvalidConfig);
+}
+
+bool schema_protocol_profile_forwards_matches(uint64_t schema_fork)
+{
+  if ((schema_fork == UINT64_C(0x0A)) || (schema_fork == UINT64_C(0x0B))) {
+    return true;
+  }
+  if ((schema_fork == UINT64_C(0x0C)) || (schema_fork == UINT64_C(0x0D))) {
+    return true;
+  }
+  if (schema_fork == UINT64_C(0x0E)) {
+    return true;
+  }
+  if (schema_fork == UINT64_C(0x0F)) {
+    return true;
+  }
+  return (bool)((schema_fork == UINT64_C(0x10)) || ((schema_fork == UINT64_C(0x11)) || ((schema_fork == UINT64_C(0x12)) || ((schema_fork == UINT64_C(0x13)) || ((schema_fork == UINT64_C(0x14)) || (schema_fork == UINT64_C(0x15)))))));
 }
 
 void create_letbind_57(void) {
-    DEFAULT_PROTOCOL_PROFILE = (schema_protocol_profile(UINT64_C(0x15)));
+
+  struct ProtocolProfileFields let_value_3_72;
+  struct ProtocolProfileFields profile;
+  {
+    profile = ((struct ProtocolProfileFields){.blob_schedule = ((struct BlobScheduleFields){.base_fee_update_fraction = UINT32_C(11684671), .max = UINT8_C(21), .target = UINT8_C(14)}), .deployed_code_size_limit = UINT32_C(65536), .excess_blob_gas_limit = (compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(Amsterdam, UINT8_C(14), UINT8_C(21), UINT32_C(11684671))), .fork = Amsterdam, .initcode_size_limit = UINT32_C(131072), .refund_divisor = UINT8_C(5), .transaction_blob_limit = UINT8_C(6), .transaction_regular_gas_limit = UINT64_C(16777216), .transaction_total_gas_limit = UINT64_C(4294967295)});
+  }
+  let_value_3_72 = pack_protocol_profile(profile);
+  DEFAULT_PROTOCOL_PROFILE = let_value_3_72;
 }
 void kill_letbind_57(void) {
 }

@@ -37,6 +37,7 @@ from evm.primitives.account import (
 from evm.kernel.accounts import k_aload
 from evm.evm.precompiles import precompile_id_for_address
 from evm.lib.state_trie import stateless_storage_by_key
+from evm.executor.block_access_list import require_historical_state_access
 
 def storage_key(a: address, s: word) -> StorageKey:
     return StorageKey(addr=address(a), slot=word(s))
@@ -53,6 +54,7 @@ def k_account_mark_warm(a: address) -> None:
         precompile_id_ = precompile_id_for_address(a)
         if ((precompile_id_) != (PrecompileId.NotPrecompile)):
             raise SailReturn(None)
+        require_historical_state_access(a, None)
         return _host_account_mark_warm(a)
     except SailReturn as _sail_return:
         return _sail_return.value
@@ -61,13 +63,16 @@ def k_slot_is_warm(a: address, s: word) -> bool:
     return _host_storage_is_warm(a, s)
 
 def k_slot_mark_warm(a: address, s: word) -> None:
+    require_historical_state_access(a, s)
     return _host_storage_mark_warm(a, s)
 
 def k_prewarm_slot(a: address, s: word) -> None:
+    require_historical_state_access(a, s)
     return _host_storage_mark_warm(a, s)
 
 def k_sload(a: address, s: word) -> StorageValue:
     try:
+        require_historical_state_access(a, s)
         key = storage_key(a, s)
         tx_value = _host_storage_tx_get(key)
         match tx_value:

@@ -65,6 +65,8 @@ struct InputTrieNode {
 
 Bytes node_db_lookup(bytes32 h);
 
+struct NodeRef branch_refs_get(vector_16_NodeRef children, uint64_t index);
+
 struct NodeRef input_field_to_ref(struct RlpFieldRef f);
 
 struct InputTrieNode decode_input_trie_node(Bytes node);

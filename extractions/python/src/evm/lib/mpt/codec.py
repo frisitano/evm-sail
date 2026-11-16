@@ -383,7 +383,10 @@ def input_field_to_ref(f: RlpFieldRef) -> NodeRef:
             hash_ = word_to_hash(word_)
             return HashRef(hash_)
         else:
-            return EmptyRef(None)
+            if ((f.content_len) == (0)):
+                return EmptyRef(None)
+            else:
+                return fatal_error(FatalError.RlpDecode)
 
 def scratch_field_to_ref(f: ScratchRlpFieldRef) -> NodeRef:
     if f.is_list:
@@ -395,7 +398,10 @@ def scratch_field_to_ref(f: ScratchRlpFieldRef) -> NodeRef:
             hash_ = word_to_hash(word_)
             return HashRef(hash_)
         else:
-            return EmptyRef(None)
+            if ((f.content_len) == (0)):
+                return EmptyRef(None)
+            else:
+                return fatal_error(FatalError.RlpDecode)
 
 def decode_input_branch_node(cursor: RlpCursor, index: BoundedUint[2, 16], children: BranchRefs) -> InputTrieNode:
     if (int(index) < 16):
@@ -438,6 +444,8 @@ def decode_input_trie_node(node: StatelessInputSlice) -> InputTrieNode:
     if ((fields.len) == (0)):
         (is_leaf, path) = hex_prefix_decode_ref(first)
         if is_leaf:
+            if second.is_list:
+                fatal_error(FatalError.RlpDecode)
             value = rlp_item_content(second)
             return InputLeafNode((path, value))
         else:
@@ -465,6 +473,8 @@ def decode_scratch_trie_node(node: ScratchSlice) -> ScratchTrieNode:
     if ((fields.len) == (0)):
         (is_leaf, path) = scratch_hex_prefix_decode_ref(first)
         if is_leaf:
+            if second.is_list:
+                fatal_error(FatalError.RlpDecode)
             value = scratch_rlp_item_content(second)
             return ScratchLeafNode((path, value))
         else:

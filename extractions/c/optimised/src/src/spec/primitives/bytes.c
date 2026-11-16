@@ -135,11 +135,11 @@ struct CalldataSlice calldata_sub_slice(struct CalldataSlice s, uint8_t off, uin
   }
   case Kind_MemoryCalldata:
   {
-    Bytes bytes_3_3511 = s.variants.MemoryCalldata;
-    if (((uint64_t)len + (uint64_t)off) > bytes_3_3511.len) {
+    Bytes bytes_3_3728 = s.variants.MemoryCalldata;
+    if (((uint64_t)len + (uint64_t)off) > bytes_3_3728.len) {
       __builtin_trap();
     }
-    return MemoryCalldata((memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3511, off, len)));
+    return MemoryCalldata((memory_sub_slice_Bytes_uint8_t_uint8_t_to_Bytes(bytes_3_3728, off, len)));
   }
   }
 }

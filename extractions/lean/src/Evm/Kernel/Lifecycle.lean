@@ -43,6 +43,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -157,7 +158,8 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             else (pure ())
             if ((curr.info.balance != e.value.orig.info.balance) : Bool)
             then
-              (bal_balance_change (← readReg k_current_transaction_epoch) e.addr curr.info.balance)
+              (bal_balance_change (← readReg k_current_transaction_epoch) e.addr
+                e.value.orig.info.balance curr.info.balance)
             else (pure ())
             if ((bne curr.info.code_hash e.value.orig.info.code_hash) : Bool)
             then
@@ -195,7 +197,7 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
                 then
                   (do
                     (bal_storage_change (← readReg k_current_transaction_epoch) e.key.addr
-                      e.key.slot e.value.curr)
+                      e.key.slot e.value.orig e.value.curr)
                     (storage_block_put e))
                 else (pure ()))
             else (pure ())

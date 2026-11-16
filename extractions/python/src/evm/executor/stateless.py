@@ -20,7 +20,10 @@ from evm.lib.ssz.stateless_input import (
     index_execution_witness,
 )
 from evm.executor.receipts import block_logs_bloom_matches
-from evm.executor.block_access_list import validate_block_access_list
+from evm.executor.block_access_list import (
+    validate_historical_access_schema,
+    validate_block_access_list,
+)
 from evm.executor.block import (
     BlockExecutionResult,
     execute_block_body,
@@ -37,6 +40,8 @@ def validate_executed_block(block: Block, result: BlockExecutionResult) -> None:
         fatal_error(FatalError.InvalidGasUsed)
     if (((int(profile.fork) >= int(Cancun))) & (((result.blob_gas_used) != (header.blob_gas_used)))):
         fatal_error(FatalError.InvalidBlobGasUsed)
+    if (int(profile.fork) >= int(Amsterdam)):
+        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
     poststate = compute_state_root()
     if ((poststate) != (header.state_root)):
         fatal_error(FatalError.InvalidStateRoot)
@@ -46,10 +51,7 @@ def validate_executed_block(block: Block, result: BlockExecutionResult) -> None:
     logs_bloom_mismatch = (not (logs_bloom_matches))
     if logs_bloom_mismatch:
         fatal_error(FatalError.InvalidLogsBloom)
-    if (int(profile.fork) >= int(Amsterdam)):
-        return validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
-    else:
-        return None
+    return None
 
 def verify_stateless_payload(input_ref: StatelessInputRef) -> None:
     scratch_reset()
@@ -57,6 +59,9 @@ def verify_stateless_payload(input_ref: StatelessInputRef) -> None:
     witness = index_execution_witness(input_ref)
     validate_execution_payload(input, input_ref, witness)
     block = input.payload.block
+    protocol = input_ref.protocol
+    if (int(protocol.fork) < int(Amsterdam)):
+        validate_historical_access_schema(block.body.block_access_list)
     result = execute_block_body(block.body, input_ref)
     return validate_executed_block(block, result)
 

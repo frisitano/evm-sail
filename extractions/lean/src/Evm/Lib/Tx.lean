@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -68,8 +69,8 @@ recovery parity. Legacy accepts `27`/`28` or an EIP-155 value binding the
 chain id; typed envelopes accept only an explicit zero-or-one parity.
 An invalid `v` rejects the block here, so an unvalidated parity is
 impossible to pass to sender recovery. -/
-/- Type quantifiers: k_ex424971_ : Nat, k_ex424970_ : Nat, 0 ≤ k_ex424970_ ∧
-  k_ex424970_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex424971_ ∧ k_ex424971_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex573585_ : Nat, k_ex573584_ : Nat, 0 ≤ k_ex573584_ ∧
+  k_ex573584_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex573585_ ∧ k_ex573585_ ≤ (2 ^ 256 - 1) -/
 def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) : SailM Nat := do
   match scheme with
   | .LegacySignature =>
@@ -97,9 +98,9 @@ def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) 
 /-- Recovers the sender of a transaction: enforce the EIP-2 low-`s` bound and
 the `(0, n)` range of `r`, then recover the signer selected by
 `y_parity`. Any failure rejects the block. -/
-/- Type quantifiers: k_ex424974_ : Nat, k_ex424973_ : Nat, k_ex424972_ : Nat, 0 ≤ k_ex424972_ ∧
-  k_ex424972_ ≤ 1, 0 ≤ k_ex424973_ ∧ k_ex424973_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex424974_ ∧
-  k_ex424974_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex573588_ : Nat, k_ex573587_ : Nat, k_ex573586_ : Nat, 0 ≤ k_ex573586_ ∧
+  k_ex573586_ ≤ 1, 0 ≤ k_ex573587_ ∧ k_ex573587_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex573588_ ∧
+  k_ex573588_ ≤ (2 ^ 256 - 1) -/
 def tx_recover_sender (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM (Vector (BitVec 8) 20) := do
   let valid_range :=
     ((word_ult ZERO_WORD r) && ((word_ult r SECP_N_FULL) && ((word_ult ZERO_WORD s) && (word_ule s

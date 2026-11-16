@@ -7,7 +7,6 @@ from ...._runtime import (
     IntegerRange,
     SailMatchFailure,
     Uint,
-    sail_ediv_int,
     sail_vector_subrange,
 )
 from typing import Annotated
@@ -241,7 +240,7 @@ def decode_authorization(sail_tuple: RlpFieldRef) -> Authorization:
             raise SailMatchFailure("no Sail match clause applied")
     return Authorization(valid_sig=((recovered.success) & (((word_ult(ZERO_WORD, r)) & (((word_ult(r, SECP_N_FULL)) & (((word_ult(ZERO_WORD, s)) & (((word_ule(s, SECP_N_HALF)) & (((auth_nonce) != ((int((1 << 64)) - 1))))))))))))), authority=address(recovered.address), address=address(auth_addr), nonce=account_nonce(auth_nonce), chain_id=word(chain_id))
 
-def prepare_authorization_entries(cursor: RlpCursor, count: prepared_authorization_count) -> list[Authorization]:
+def prepare_authorization_entries(cursor: RlpCursor, count: transaction_byte_length) -> list[Authorization]:
     if ((count) == (0)):
         if ((cursor.len) != (0)):
             fatal_error(FatalError.RlpDecode)
@@ -255,7 +254,7 @@ def prepare_authorization_entries(cursor: RlpCursor, count: prepared_authorizati
         return [authorization, *prepare_authorization_entries(next, (int(count) - 1))]
 
 def prepare_authorizations(authorizations: AuthorizationListRef) -> PreparedAuthorizationList:
-    if (int(authorizations.count) <= int(sail_ediv_int((1 << 24), 7816))):
+    if (int(authorizations.count) <= int((1 << 30))):
         encoded = authorizations.encoded
         entries = prepare_authorization_entries(encoded, authorizations.count)
         return PreparedAuthorizationList(entries=entries, count=prepared_authorization_count(authorizations.count))

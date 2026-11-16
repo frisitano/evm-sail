@@ -107,8 +107,8 @@ struct tuple_TrieUpdate_bool {
   bool tup1;
 };
 
-void create_letbind_208(void);
-void kill_letbind_208(void);
+void create_letbind_205(void);
+void kill_letbind_205(void);
 
 
 bytes32 trie_subtree_root(struct TrieItem subtree);
@@ -137,7 +137,7 @@ struct TrieItem trie_input_leaf(struct TriePath path, Bytes value);
 
 struct TrieItem trie_subtree(struct TriePath path, struct NodeRef childref);
 
-struct TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates, struct TrieUpdate *restrict trieupdate_8_1499);
+struct TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates, struct TrieUpdate *restrict trieupdate_8_1556);
 
 struct TrieUpdateCursor trie_updates_begin(struct TrieUpdateSource source);
 

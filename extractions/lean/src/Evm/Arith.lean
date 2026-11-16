@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -58,19 +59,19 @@ open BalIterEntry
 open AcctTxPopResult
 open AcctBlockIterResult
 
-/- Type quantifiers: k_ex421094_ : Int, k_ex421093_ : Int -/
+/- Type quantifiers: k_ex569698_ : Int, k_ex569697_ : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
-/- Type quantifiers: k_ex421096_ : Int, k_ex421095_ : Int -/
+/- Type quantifiers: k_ex569700_ : Int, k_ex569699_ : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
   if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
-/- Type quantifiers: k_ex421103_ : Int, k_ex421102_ : Int -/
+/- Type quantifiers: k_ex569707_ : Int, k_ex569706_ : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
@@ -79,6 +80,6 @@ def fdiv_int (n : Int) (m : Int) : Int :=
     then ((Int.tdiv (n - 1) m) -i 1)
     else (Int.tdiv n m))
 
-/- Type quantifiers: k_ex421105_ : Int, k_ex421104_ : Int -/
+/- Type quantifiers: k_ex569709_ : Int, k_ex569708_ : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))

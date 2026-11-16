@@ -8,6 +8,8 @@ environment reads the `evm` layer serves opcodes from.
 /*! The authenticated parent state root, the anchor of every stateless
     read. */
 register k_parent_state_root : hash = ZERO_HASH
+/*! Uncommitted access schema used by historical v21 transport selectors. */
+register k_historical_access_schema : StatelessInputSlice = EMPTY_STATELESS_INPUT_SLICE
 /*! The number of witnessed ancestor headers ([k_blockhash][] range). */
 register k_n_headers : ancestor_hash_count = 0
 /*! The chain id (`CHAINID`, EIP-155 domains). */

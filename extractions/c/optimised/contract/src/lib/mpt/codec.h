@@ -61,6 +61,8 @@ typedef enum { DECODED_NODE_LEAF, DECODED_NODE_EXTENSION, DECODED_NODE_BRANCH } 
  */
 typedef struct {
   DecodedNodeKind kind;
+  /* Successful full secured-root validation, performed lazily on access. */
+  bool secured_root_validated;
   NibblePath path;
   ByteSpan value;
   const uint8_t *child_references[16];

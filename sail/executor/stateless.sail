@@ -28,6 +28,12 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     if (profile.fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         fatal_error(InvalidBlobGasUsed)
     };
+
+    /* Reject unauthenticated BAL entries before they can reach the storage
+       update reducer used to assemble the post-state commitment. */
+    if profile.fork >= Amsterdam then {
+        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
+    };
     let poststate = compute_state_root();
     if poststate != header.state_root then {
         fatal_error(InvalidStateRoot)
@@ -40,9 +46,7 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     if logs_bloom_mismatch then {
         fatal_error(InvalidLogsBloom)
     };
-    if profile.fork >= Amsterdam then {
-        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit)
-    }
+    ()
 }
 
 /*md
@@ -72,6 +76,10 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
     let witness = index_execution_witness(input_ref);
     validate_execution_payload(input, input_ref, witness);
     let block = input.payload.block;
+    let protocol = input_ref.protocol;
+    if protocol.fork < Amsterdam then {
+        validate_historical_access_schema(block.body.block_access_list)
+    };
     let result = execute_block_body(block.body, input_ref);
     validate_executed_block(block, result)
 }

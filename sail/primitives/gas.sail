@@ -154,12 +154,15 @@ let TRANSACTION_EXECUTION_GAS_LIMIT : int(transaction_execution_gas_limit_value)
     transaction_execution_gas_limit_value
 )
 
-/*! Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
-    draws spill only from the regular-gas pool, which is capped by EIP-7825. */
-type state_gas_spill = range(0, transaction_execution_gas_limit_value)
+/*! A system call grants 30M execution gas, exceeding the EIP-7825
+    transaction allowance. State-gas spill must cover either frame kind. */
+type frame_execution_gas_limit_value : Int = 30000000
+/*! State charges temporarily drawn from a transaction or system frame's
+    execution grant. */
+type state_gas_spill = range(0, frame_execution_gas_limit_value)
 
 let STATE_GAS_SPILL_ZERO : int(0) = 0
-let STATE_GAS_SPILL_LIMIT : state_gas_spill = sizeof(transaction_execution_gas_limit_value)
+let STATE_GAS_SPILL_LIMIT : state_gas_spill = sizeof(frame_execution_gas_limit_value)
 
 /*! A block header's gas limit. Its SSZ execution-payload field is `uint64`;
     `GASLIMIT` widens this bounded natural into an EVM word when it pushes the
@@ -229,7 +232,7 @@ type gas_refund_delta = range(
     adding at most one EIP-7825 regular-pool spill. */
 type frame_state_gas_delta = range(
     -(2 ^ 64 - 1),
-    (2 ^ 64 - 1) + transaction_execution_gas_limit_value,
+    (2 ^ 64 - 1) + frame_execution_gas_limit_value,
 )
 
 let FRAME_STATE_GAS_DELTA_ZERO : frame_state_gas_delta = 0
@@ -238,7 +241,7 @@ let FRAME_STATE_GAS_DELTA_ZERO : frame_state_gas_delta = 0
     frames. */
 type state_gas_delta = range(
     -(2 * (2 ^ 64 - 1)),
-    2 * ((2 ^ 64 - 1) + transaction_execution_gas_limit_value),
+    2 * ((2 ^ 64 - 1) + frame_execution_gas_limit_value),
 )
 
 let STATE_GAS_DELTA_ZERO : state_gas_delta = 0
@@ -247,14 +250,14 @@ let STATE_GAS_DELTA_ZERO : state_gas_delta = 0
     block-level non-negative/u64 checks. */
 type transaction_state_gas_delta = range(
     -(2 * (2 ^ 64 - 1)),
-    3 * (2 ^ 64 - 1) + 2 * transaction_execution_gas_limit_value,
+    3 * (2 ^ 64 - 1) + 2 * frame_execution_gas_limit_value,
 )
 
 /*! A non-negative transaction state-gas total after settlement has rejected
     a negative signed delta. */
 type transaction_state_gas_used = range(
     0,
-    3 * (2 ^ 64 - 1) + 2 * transaction_execution_gas_limit_value,
+    3 * (2 ^ 64 - 1) + 2 * frame_execution_gas_limit_value,
 )
 
 /* The transaction refund cap is `gas_used / 2` before London and

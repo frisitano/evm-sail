@@ -5,24 +5,15 @@ Canonical execution-header encoding and hashing over already recomputed payload
 commitments.
 */
 
-/*! The block header hash: `keccak256(rlp(header))` with the recomputed
-    body roots spliced in (YP §4.4; post-merge constants for ommers,
-    difficulty, and nonce). */
-function block_header_hash(
-    header : BlockHeader,
-    transactions_root : hash,
-    withdrawals_root : hash,
-    requests_hash : hash,
-    block_access_list_hash : hash,
-) -> (
-    hash
-) = {
+/*! Encoded header width, shared by hashing and the EIP-7934 block-size check. */
+function block_header_rlp_lengths(header : BlockHeader) -> (range(0, 749), range(1, 782)) = {
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let word_length = rlp_word_size();
     let address_length = rlp_addr_size();
     let bloom_length = 3 + LOGS_BLOOM_BYTE_LENGTH;
-    let difficulty_length = rlp_uint_size(0);
+    let difficulty_length =
+        if profile.fork < Paris then rlp_uint_word_size(header.prev_randao) else rlp_uint_size(0);
     let number_length = rlp_uint_size(header.number);
     let gas_limit_length = rlp_uint_size(header.gas_limit);
     let gas_used_length = rlp_uint_size(header.gas_used);
@@ -70,6 +61,24 @@ function block_header_hash(
     let bounded_content_length : range(0, 749) = tmod_nat(content_length, 750);
     let content_len = bounded_content_length;
     let encoded_length = rlp_list_size(content_len);
+    (content_len, encoded_length)
+}
+
+/*! The block header hash: `keccak256(rlp(header))` with the recomputed
+    body roots spliced in (YP §4.4; post-merge constants for ommers,
+    difficulty, and nonce). */
+function block_header_hash(
+    header : BlockHeader,
+    transactions_root : hash,
+    withdrawals_root : hash,
+    requests_hash : hash,
+    block_access_list_hash : hash,
+) -> (
+    hash
+) = {
+    let execution_profile = k_execution_profile;
+    let profile = execution_profile.protocol;
+    let (content_len, encoded_length) = block_header_rlp_lengths(header);
     let encoder = rlp_encoder_begin(encoded_length);
     rlp_write_list_prefix(content_len);
     let parent_hash = hash_to_word(header.parent_hash);
@@ -85,13 +94,17 @@ function block_header_hash(
     rlp_write_word(receipts_root);
     let logs_bloom = logs_bloom_from_ref(header.logs_bloom);
     rlp_write_logs_bloom(logs_bloom);
-    rlp_write_uint(0);
+    if profile.fork < Paris then {
+        rlp_write_uint_word(header.prev_randao)
+    } else {
+        rlp_write_uint(0)
+    };
     rlp_write_uint(header.number);
     rlp_write_uint(header.gas_limit);
     rlp_write_uint(header.gas_used);
     rlp_write_uint(header.timestamp);
     rlp_write_slice(header.extra_data);
-    rlp_write_word(header.prev_randao);
+    rlp_write_word(if profile.fork < Paris then ZERO_WORD else header.prev_randao);
     rlp_write_string_prefix(EIGHT_BYTE_LENGTH, 0x00);
     scratch_push_word_be(ZERO_WORD, EIGHT_BYTE_LENGTH);
     if profile.fork >= London then {

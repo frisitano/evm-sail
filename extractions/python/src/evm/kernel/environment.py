@@ -41,6 +41,7 @@ from evm.primitives.gas import (
     block_gas_limit,
 )
 from evm.primitives.bytes import (
+    StatelessInputSlice,
     stateless_input_slice,
     WORD_BYTE_LENGTH,
     EMPTY_STATELESS_INPUT_SLICE,
@@ -149,6 +150,8 @@ def k_create2_addr(a: address, salt: word, inithash: hash) -> address:
 
 k_parent_state_root: hash = ZERO_HASH
 
+k_historical_access_schema: StatelessInputSlice = EMPTY_STATELESS_INPUT_SLICE
+
 k_n_headers: ancestor_hash_count = 0
 
 k_chain_id: chain_identifier = 1
@@ -162,8 +165,9 @@ k_tx: TxEnv = TxEnvFields(validity=TxEnvFieldsValidity(blob_limit=0), origin=add
 k_current_transaction_epoch: block_access_index = 0
 
 def _reset_registers() -> None:
-    global k_parent_state_root, k_n_headers, k_chain_id, k_execution_profile, k_header, k_tx, k_current_transaction_epoch
+    global k_parent_state_root, k_historical_access_schema, k_n_headers, k_chain_id, k_execution_profile, k_header, k_tx, k_current_transaction_epoch
     k_parent_state_root = ZERO_HASH
+    k_historical_access_schema = EMPTY_STATELESS_INPUT_SLICE
     k_n_headers = 0
     k_chain_id = 1
     k_execution_profile = DEFAULT_EXECUTION_PROFILE

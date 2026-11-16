@@ -83,13 +83,13 @@ uint16_t process_auth(struct Authorization au);
 
 uint64_t authorization_refund_add(uint16_t item, uint64_t accumulated);
 
-uint64_t process_auth_cursor(PreparedAuthorizationList authorizations, uint16_t count);
+uint64_t process_auth_cursor(PreparedAuthorizationList authorizations, uint32_t count);
 
 uint64_t process_auth_list(PreparedAuthorizationList authorizations);
 
-uint32_t process_amsterdam_auth(struct Authorization au, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, bool *restrict condition_8_1464, uint64_t *restrict field_1_8_1465, uint64_t *restrict field_2_8_1466);
+uint32_t process_amsterdam_auth(struct Authorization au, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, bool *restrict condition_8_1521, uint64_t *restrict field_1_8_1522, uint64_t *restrict field_2_8_1523);
 
-uint32_t process_amsterdam_auth_cursor(PreparedAuthorizationList authorizations, uint16_t count, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t gas, uint64_t state_gas, uint32_t state_spill, bool *restrict condition_8_1468, uint64_t *restrict field_1_8_1469, uint64_t *restrict field_2_8_1470);
+uint32_t process_amsterdam_auth_cursor(PreparedAuthorizationList authorizations, uint32_t count, bytes20 sender, bytes20 current_target, bool transfers_value, uint64_t gas, uint64_t state_gas, uint32_t state_spill, bool *restrict condition_8_1525, uint64_t *restrict field_1_8_1526, uint64_t *restrict field_2_8_1527);
 
 void warm_access_list_keys(Bytes cursor, bytes20 addr);
 
@@ -97,17 +97,17 @@ void warm_access_list(Bytes cursor);
 
 void prewarm(struct TransactionFields tx);
 
-u256 eff_gas_price_for(u256 base_fee, u256 max_fee, u256 max_priority_fee, u256 *restrict __sail_c_repr_u256_8_1472);
+u256 eff_gas_price_for(u256 base_fee, u256 max_fee, u256 max_priority_fee, u256 *restrict __sail_c_repr_u256_8_1529);
 
 struct TxValidityFields check_transaction_validity(struct TransactionFields tx, struct TransactionGasAllowanceFields allowance);
 
 struct TxUpfrontResult apply_transaction_upfront_effects(struct TransactionFields tx, struct TxValidityFields v, PreparedAuthorizationList authorizations);
 
-uint32_t enter_transaction_frame(struct TxValidityFields v, uint64_t *restrict field_0_8_1474, uint64_t *restrict field_1_8_1475, uint32_t *restrict field_2_8_1476, __int128 *restrict field_3_8_1477, StackPointer *restrict stackpointer_8_1478, uint32_t *restrict field_5_8_1479);
+uint32_t enter_transaction_frame(struct TxValidityFields v, uint64_t *restrict field_0_8_1531, uint64_t *restrict field_1_8_1532, uint32_t *restrict field_2_8_1533, __int128 *restrict field_3_8_1534, StackPointer *restrict stackpointer_8_1535, uint32_t *restrict field_5_8_1536);
 
-Bytes run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir, uint64_t *restrict field_0_8_1481, uint64_t *restrict field_1_8_1482, uint32_t *restrict field_2_8_1483, __int128 *restrict field_3_8_1484, struct FrameStatus *restrict framestatus_8_1485);
+Bytes run_create_transaction_frame(struct TransactionFields tx, bytes20 sender, uint64_t nonce_before, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir, uint64_t *restrict field_0_8_1538, uint64_t *restrict field_1_8_1539, uint32_t *restrict field_2_8_1540, __int128 *restrict field_3_8_1541, struct FrameStatus *restrict framestatus_8_1542);
 
-Bytes run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_code_address, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir, uint64_t *restrict field_0_8_1487, uint64_t *restrict field_1_8_1488, uint32_t *restrict field_2_8_1489, __int128 *restrict field_3_8_1490, struct FrameStatus *restrict framestatus_8_1491);
+Bytes run_call_transaction_frame(struct TransactionFields tx, bytes20 sender, bool delegated, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, __int128 carried_refund, StackPointer carried_stack, uint32_t carried_memory_base, uint32_t carried_memory_height, bytes20 carried_code_address, struct CodeFields carried_code, struct CalldataSlice carried_calldata, uint64_t state_gas_reservoir, uint64_t *restrict field_0_8_1544, uint64_t *restrict field_1_8_1545, uint32_t *restrict field_2_8_1546, __int128 *restrict field_3_8_1547, struct FrameStatus *restrict framestatus_8_1548);
 
 struct TxFrameResultFields run_legacy_transaction_frame(struct TransactionFields tx, struct TxValidityFields v);
 
@@ -121,7 +121,7 @@ struct ReceiptFields settle_transaction(struct TransactionFields tx, struct TxVa
 
 struct ReceiptFields process_transaction(struct TransactionFields tx, struct TransactionGasAllowanceFields allowance);
 
-struct CalldataSlice prepare_amsterdam_transaction_dispatch(struct TransactionFields tx, struct TxValidityFields v, struct TxUpfrontResult upfront, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, struct TransactionPreparation *restrict transactionpreparation_8_1543, uint64_t *restrict field_1_8_1544, uint64_t *restrict field_2_8_1545, uint32_t *restrict field_3_8_1546, bytes20 *restrict __sail_c_repr_fixed_bytes_u64_lanes_8_1547, bytes20 *restrict __sail_c_repr_fixed_bytes_u64_lanes_8_1548, struct CodeFields *restrict codefields_8_1549);
+struct CalldataSlice prepare_amsterdam_transaction_dispatch(struct TransactionFields tx, struct TxValidityFields v, struct TxUpfrontResult upfront, uint64_t carried_gas, uint64_t carried_state_gas, uint32_t carried_state_spill, struct TransactionPreparation *restrict transactionpreparation_8_1601, uint64_t *restrict field_1_8_1602, uint64_t *restrict field_2_8_1603, uint32_t *restrict field_3_8_1604, bytes20 *restrict __sail_c_repr_fixed_bytes_u64_lanes_8_1605, bytes20 *restrict __sail_c_repr_fixed_bytes_u64_lanes_8_1606, struct CodeFields *restrict codefields_8_1607);
 
 struct TransactionGasAllowanceFields transaction_gas_allowance(uint64_t value, uint64_t total_limit, uint64_t regular_limit);
 
@@ -129,7 +129,7 @@ struct TransactionInitialGasFields transaction_initial_gas(struct TransactionGas
 
 struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_struct_TransactionInitialGasFields_uint64_t_uint64_t___int128_to_struct_TxFrameGasSnapshotFields(struct TransactionInitialGasFields initial, uint64_t execution, uint64_t state, __int128 state_delta);
 
-struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_struct_TransactionInitialGasFields_uint8_t_uint8_t___int128_to_struct_TxFrameGasSnapshotFields(struct TransactionInitialGasFields initial, uint8_t execution, uint8_t state, __int128 state_delta);
+struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_struct_TransactionInitialGasFields_uint8_t_uint64_t___int128_to_struct_TxFrameGasSnapshotFields(struct TransactionInitialGasFields initial, uint8_t execution, uint64_t state, __int128 state_delta);
 
 u256 validated_word_product_u256_uint32_t_to_u256(u256 value, uint32_t factor);
 
@@ -171,9 +171,6 @@ extern const uint16_t AMSTERDAM_COLD_ACCOUNT_ACCESS;
 
 
 extern const uint16_t AMSTERDAM_TX_VALUE_COST;
-
-
-extern const uint16_t AMSTERDAM_TRANSFER_LOG_COST;
 
 
 extern const uint16_t AMSTERDAM_ACCESS_LIST_ADDRESS;

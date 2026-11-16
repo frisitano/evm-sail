@@ -180,6 +180,7 @@ class CorpusVerdictTests(unittest.TestCase):
                 python=False,
                 build_mode="optimized",
                 fork=None,
+                save_synthesized=None,
                 limit=0,
                 timeout=None,
                 fail_limit=0,

@@ -102,7 +102,7 @@ from evm.primitives.tx import (
     Transaction,
     TransactionInputSlice,
     TxSignatureScheme,
-    prepared_authorization_count,
+    transaction_byte_length,
     transaction_calldata_cost,
     transaction_calldata_floor_cost,
     tx_type_semantics,
@@ -310,7 +310,10 @@ def intrinsic_gas(tx: Transaction) -> IntrinsicGasCost:
     profile = execution_profile.protocol
     if (int(profile.fork) < int(Amsterdam)):
         execution = legacy_intrinsic_gas(tx)
-        calldata_floor = legacy_calldata_floor(tx.input_src)
+        if (int(profile.fork) >= int(Prague)):
+            calldata_floor = legacy_calldata_floor(tx.input_src)
+        else:
+            calldata_floor = 0
         return IntrinsicGasCost(execution=gas_cost(execution), state=gas_cost(0), calldata_floor=gas_cost(calldata_floor))
     else:
         input = tx.input_src
@@ -448,7 +451,7 @@ def authorization_refund_add(item: authorization_item_refund, accumulated: autho
     else:
         return authorization_refund(fatal_error(FatalError.ExecutionInvalid))
 
-def process_auth_cursor(authorizations: PreparedAuthorizationList, count: prepared_authorization_count) -> authorization_refund:
+def process_auth_cursor(authorizations: PreparedAuthorizationList, count: transaction_byte_length) -> authorization_refund:
     if ((count) == (0)):
         return authorization_refund(0)
     else:
@@ -519,7 +522,7 @@ def process_amsterdam_auth(au: Authorization, sender: address, current_target: a
     except SailReturn as _sail_return:
         return _sail_return.value
 
-def process_amsterdam_auth_cursor(authorizations: PreparedAuthorizationList, count: prepared_authorization_count, sender: address, current_target: address, transfers_value: bool, gas_: gas, state_gas_: state_gas, state_spill: state_gas_spill) -> tuple[bool, gas, state_gas, state_gas_spill]:
+def process_amsterdam_auth_cursor(authorizations: PreparedAuthorizationList, count: transaction_byte_length, sender: address, current_target: address, transfers_value: bool, gas_: gas, state_gas_: state_gas, state_spill: state_gas_spill) -> tuple[bool, gas, state_gas, state_gas_spill]:
     if ((count) == (0)):
         return (True, gas_, state_gas_, state_spill)
     else:

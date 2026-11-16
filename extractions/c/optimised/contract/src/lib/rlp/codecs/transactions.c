@@ -256,14 +256,14 @@ static struct Authorization prepare_authorization(const rlp_item *tuple)
 PreparedAuthorizationList prepare_authorizations(struct AuthorizationListRefFields authorizations)
 {
   if (authorizations.count > GUEST_PREPARED_AUTHORIZATIONS || prepared_authorizations == NULL) {
-    decode_failure(ExecutionInvalid, "optimized prepared authorization capacity");
+    GUEST_ABORT();
   }
-  const uint16_t count = (uint16_t)authorizations.count;
+  const uint32_t count = authorizations.count;
   rlp_cursor tuples = {
       .next = authorizations.encoded.bytes,
       .remaining = authorizations.encoded.len,
   };
-  for (uint16_t index = 0; index < count; ++index) {
+  for (uint32_t index = 0; index < count; ++index) {
     rlp_item tuple;
     if (!rlp_take_item(&tuples, &tuple)) {
       decode_failure(RlpDecode, "optimized prepared authorization item");
@@ -287,7 +287,7 @@ struct Authorization prepared_authorization_head(PreparedAuthorizationList autho
 }
 
 PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList authorizations,
-                                                      uint16_t count)
+                                                      uint32_t count)
 {
   if (count == 0) {
     decode_failure(ExecutionInvalid, "optimized prepared authorization tail");

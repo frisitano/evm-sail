@@ -265,10 +265,14 @@ def protocol_initcode_size_limit_value (k_value : Int) : Prop :=
 EIP-3860 activates. -/
 abbrev protocol_initcode_size_limit := Nat
 
-/-- Whether a value is a supported per-transaction total-gas ceiling: the
-EIP-7825 cap or the unrestricted SSZ block-gas domain. -/
+/-- Amsterdam's complete transaction reservoir is a uint32 quantity. -/
+abbrev amsterdam_transaction_total_gas_limit : Int := (2 ^ 32 - 1)
+
+/-- Supported total-gas ceilings: EIP-7825, Amsterdam, or the earlier
+unrestricted SSZ block-gas domain. -/
 def protocol_transaction_total_gas_limit_value (k_value : Int) : Prop :=
-  k_value = eip7825_transaction_gas_limit ∨ k_value = ssz_uint_bound
+  k_value = eip7825_transaction_gas_limit ∨
+  k_value = amsterdam_transaction_total_gas_limit ∨ k_value = ssz_uint_bound
 
 /-- The fork-selected per-transaction total-gas ceiling. -/
 abbrev protocol_transaction_total_gas_limit := Nat
@@ -719,8 +723,12 @@ abbrev transaction_execution_gas_limit_value : Int := (2 ^ 24)
 EIP-7825 per-transaction cap. -/
 abbrev transaction_execution_gas := Nat
 
-/-- Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
-draws spill only from the regular-gas pool, which is capped by EIP-7825. -/
+/-- A system call grants 30M execution gas, exceeding the EIP-7825
+transaction allowance. State-gas spill must cover either frame kind. -/
+abbrev frame_execution_gas_limit_value : Int := 30000000
+
+/-- State charges temporarily drawn from a transaction or system frame's
+execution grant. -/
 abbrev state_gas_spill := Nat
 
 /-- A block header's gas limit. Its SSZ execution-payload field is `uint64`;
@@ -1437,7 +1445,7 @@ def protocol_profile_parameters
   k_denominator = bpo2_blob_fee_update_fraction ∧
   k_code_limit = amsterdam_deployed_code_size_limit ∧
   k_initcode_limit = amsterdam_initcode_size_limit ∧
-  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_total_gas_limit = amsterdam_transaction_total_gas_limit ∧
   k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
   k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
 
@@ -1830,11 +1838,11 @@ abbrev TransactionInputSlice :=
 /-- A collection count whose entries are encoded inside one transaction. -/
 abbrev transaction_item_count := Nat
 
-/-- EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
-Amsterdam's least expensive authorization costs 7,816 execution gas.
-Successful transaction validity therefore proves that no executable
-authorization list can contain more entries than this bound. -/
-abbrev prepared_authorization_count_bound : Int := (eip7825_transaction_gas_limit / 7816)
+/-- Prepared entries retain the structural transaction-envelope count bound.
+Prague predates the regular-gas cap, so Amsterdam's gas-derived bound
+cannot constrain this shared semantic representation. Each fork's actual
+intrinsic and transaction gas checks establish execution validity. -/
+abbrev prepared_authorization_count_bound : Int := (2 ^ 30)
 
 /-- The number of authorization tuples admitted by one valid transaction. -/
 abbrev prepared_authorization_count := Nat
@@ -2485,6 +2493,9 @@ structure WitnessContext where
   parent_hash : hash
   parent_state_root : hash
   parent_base_fee_per_gas : word
+  parent_has_base_fee : Bool
+  parent_gas_limit : block_gas_limit
+  parent_gas_used : block_gas
   parent_blob_gas_used : blob_gas_used
   parent_excess_blob_gas : excess_blob_gas
   deriving BEq, Inhabited, Repr
@@ -3106,6 +3117,7 @@ abbrev rlp_index := Nat
 Consumers receive explicit source spans instead of re-reading nested
 SSZ offset tables. -/
 structure StatelessInputRef where
+  schema_id : (BitVec 16)
   protocol : ProtocolProfile
   new_payload_request : StatelessInputSlice
   execution_payload : (StatelessInputSliceAtLeast 540)
@@ -3138,6 +3150,8 @@ structure ParentHeaderFields where
   parent_hash : hash
   state_root : hash
   base_fee : word
+  gas_limit : block_gas_limit
+  gas_used : block_gas
   blob_gas_used : blob_gas_used
   excess_blob_gas : excess_blob_gas
   have_parent : Bool
@@ -3158,6 +3172,9 @@ structure WitnessHeaderIndex where
   valid : Bool
   parent_state_root : hash
   parent_base_fee_per_gas : word
+  parent_has_base_fee : Bool
+  parent_gas_limit : block_gas_limit
+  parent_gas_used : block_gas
   parent_blob_gas_used : blob_gas_used
   parent_excess_blob_gas : excess_blob_gas
   parent_fields_valid : Bool
@@ -3252,12 +3269,21 @@ abbrev htr_depth := Nat
 /-- A leaf count in any supported execution-layer SSZ Merkle tree. -/
 abbrev htr_leaf_count := Nat
 
-/-- The closed fixed-width leaf-operation algebra carried through the generic
-request-list recursion. [htr_request_leaf][] interprets it at depth zero,
-replacing a higher-order leaf function without duplicating merkleization. -/
+/-- Fixed-width execution-request leaf semantics. -/
 inductive HtrRequestKind where | HtrDeposit | HtrWithdrawalRequest | HtrConsolidationRequest | HtrBuilderDepositRequest | HtrBuilderExitRequest
   deriving BEq, Inhabited, Repr
   open HtrRequestKind
+
+/-- Progressive traversal for fixed-shape leaves. Byte lists and transaction
+lists retain their own traversal layers because transaction leaves recurse
+into progressive byte lists; this boundary avoids a mutually recursive
+type-erasing traversal while sharing the fixed-leaf algorithm. -/
+inductive HtrProgressiveSource where
+  | HtrWithdrawalLeaves (_ : WithdrawalListRef)
+  | HtrVersionedHashLeaves (_ : StatelessInputSlice)
+  | HtrRequestLeaves (_ : (StatelessInputSlice × HtrRequestKind))
+  deriving Inhabited, BEq, Repr
+  open HtrProgressiveSource
 
 inductive Register : Type where
   | k_current_transaction_epoch
@@ -3266,6 +3292,7 @@ inductive Register : Type where
   | k_execution_profile
   | k_chain_id
   | k_n_headers
+  | k_historical_access_schema
   | k_parent_state_root
   | scratch_arena
   deriving DecidableEq, Hashable, Repr
@@ -3278,6 +3305,7 @@ abbrev RegisterType : Register → Type
   | .k_execution_profile => ExecutionProfile
   | .k_chain_id => chain_identifier
   | .k_n_headers => ancestor_hash_count
+  | .k_historical_access_schema => StatelessInputSlice
   | .k_parent_state_root => hash
   | .scratch_arena => ScratchSlice
 
@@ -3287,6 +3315,8 @@ instance : Inhabited (RegisterRef RegisterType ExecutionProfile) where
   default := .Reg k_execution_profile
 instance : Inhabited (RegisterRef RegisterType ScratchSlice) where
   default := .Reg scratch_arena
+instance : Inhabited (RegisterRef RegisterType StatelessInputSlice) where
+  default := .Reg k_historical_access_schema
 instance : Inhabited (RegisterRef RegisterType TxEnv) where
   default := .Reg k_tx
 instance : Inhabited (RegisterRef RegisterType ancestor_hash_count) where

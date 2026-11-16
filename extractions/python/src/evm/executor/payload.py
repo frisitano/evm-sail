@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from .._runtime import (
     Bits,
+    BoundedUint,
     Bytes32,
     SailMatchFailure,
+    SailReturn,
+    sail_ediv_int,
 )
 from dataclasses import dataclass
 from evm.HostContract import (
@@ -30,6 +33,7 @@ from evm.primitives.ssz import (
     TransactionListRef,
     WithdrawalListRef,
 )
+from evm.host.region_access import stateless_input_slice_byte
 from evm.kernel.scratch import (
     scratch_begin,
     scratch_reserve,
@@ -39,15 +43,21 @@ from evm.kernel.scratch import (
 )
 from evm.primitives.crypto import EMPTY_TRIE_ROOT
 from evm.primitives.fork import (
-    Paris,
+    London,
     Shanghai,
     Cancun,
     Prague,
+    Osaka,
     Amsterdam,
 )
+from evm.primitives.block import BlockHeader
 from evm.primitives.stateless_input import (
     StatelessInput,
     WitnessContext,
+)
+from evm.lib.rlp.encoding import (
+    rlp_input_slice_size,
+    rlp_list_size,
 )
 from evm.evm.gas import next_excess_blob_gas
 from evm.lib.mpt.primitives import (
@@ -82,13 +92,20 @@ from evm.lib.mpt.indexed import (
 )
 from evm.lib.ssz.stateless_input import (
     StatelessInputRef,
+    ssz_list_cursor,
+    ssz_list_cursor_empty,
+    ssz_list_pop,
     ssz_list_at,
     ssz_fixed_list_at,
+    ssz_fixed_list_pop,
     sha256_request_digest,
     WD_SIZE,
 )
 from evm.lib.rlp.codecs.withdrawals import withdrawal_rlp
-from evm.lib.rlp.codecs.block_header import block_header_hash
+from evm.lib.rlp.codecs.block_header import (
+    block_header_rlp_lengths,
+    block_header_hash,
+)
 from evm.kernel import environment
 from evm.executor import receipts as executor_receipts
 
@@ -232,6 +249,87 @@ def expected_payload_excess_blob_gas(witness: WitnessContext) -> excess_blob_gas
     execution_profile = environment.k_execution_profile
     return excess_blob_gas(next_excess_blob_gas(execution_profile.protocol, witness.parent_excess_blob_gas, witness.parent_blob_gas_used, witness.parent_base_fee_per_gas))
 
+def expected_payload_base_fee(witness: WitnessContext) -> BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575]:
+    try:
+        if (not (witness.parent_has_base_fee)):
+            raise SailReturn(1000000000)
+        raw_target = sail_ediv_int(witness.parent_gas_limit, 2)
+        if (0 < int(raw_target)):
+            target = raw_target
+        else:
+            target = fatal_error(FatalError.InvalidGasLimit)
+        used = witness.parent_gas_used
+        fee = witness.parent_base_fee_per_gas
+        if ((((target) == (0))) | ((int(witness.parent_gas_limit) < int(used)))):
+            fatal_error(FatalError.InvalidGasLimit)
+        if ((used) == (target)):
+            return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575](fee)
+        else:
+            if (int(target) < int(used)):
+                change = sail_ediv_int(sail_ediv_int((int(fee) * int((int(used) - int(target)))), target), 8)
+                candidate = (int(fee) + int((1 if (int(change) < 1) else change)))
+                if (int(candidate) <= int((int((1 << 320)) - 1))):
+                    return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575](candidate)
+                else:
+                    return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575](fatal_error(FatalError.InvalidGasLimit))
+            else:
+                change = sail_ediv_int(sail_ediv_int((int(fee) * int((int(target) - int(used)))), target), 8)
+                if (int(change) <= int(fee)):
+                    return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575]((int(fee) - int(change)))
+                else:
+                    return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575](fatal_error(FatalError.InvalidGasLimit))
+    except SailReturn as _sail_return:
+        return BoundedUint[0, 2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086936575](_sail_return.value)
+
+def validate_block_rlp_size(header: BlockHeader, transactions: TransactionListRef, withdrawals: WithdrawalListRef) -> None:
+    maximum = 8388608
+    tx_bytes = 0
+    cursor = ssz_list_cursor(transactions)
+    while True:
+        if not ((not (ssz_list_cursor_empty(cursor)))):
+            break
+        (tx, next) = ssz_list_pop(cursor)
+        if ((((tx.len) != (0))) & ((int(tx.len) <= int((1 << 30))))):
+            if (int(stateless_input_slice_byte(tx, 0)) >= 192):
+                size = tx.len
+            else:
+                size = rlp_input_slice_size(tx)
+        else:
+            size = fatal_error(FatalError.RlpDecode)
+        total = (int(tx_bytes) + int(size))
+        if (int(total) <= int(maximum)):
+            _sail_assigned_value_1 = total
+        else:
+            _sail_assigned_value_1 = fatal_error(FatalError.ExecutionInvalid)
+        tx_bytes = BoundedUint[0, 8388608](_sail_assigned_value_1)
+        cursor = next
+    withdrawal_bytes = 0
+    rest = withdrawals
+    while True:
+        if not (((rest.count) != (0))):
+            break
+        (withdrawal, next) = ssz_fixed_list_pop(rest, WD_SIZE)
+        mark = scratch_begin()
+        encoded = withdrawal_rlp(withdrawal)
+        size = encoded.len
+        total = (int(withdrawal_bytes) + int(size))
+        if (int(total) <= int(maximum)):
+            _sail_assigned_value_0 = total
+        else:
+            _sail_assigned_value_0 = fatal_error(FatalError.ExecutionInvalid)
+        withdrawal_bytes = BoundedUint[0, 8388608](_sail_assigned_value_0)
+        scratch_rewind(mark)
+        rest = next
+    (_, header_size) = block_header_rlp_lengths(header)
+    transactions_size = rlp_list_size(tx_bytes)
+    withdrawals_size = rlp_list_size(withdrawal_bytes)
+    body_size = (int((int((int(header_size) + int(transactions_size))) + 1)) + int(withdrawals_size))
+    block_size = rlp_list_size(body_size)
+    if (int(maximum) < int(block_size)):
+        return fatal_error(FatalError.ExecutionInvalid)
+    else:
+        return None
+
 def execution_requests_hash(input_ref: StatelessInputRef) -> hash:
     deposits = input_ref.deposits
     withdrawal_requests = input_ref.withdrawal_requests
@@ -281,31 +379,43 @@ def validate_execution_payload(input: StatelessInput, input_ref: StatelessInputR
     block = payload.block
     header = block.header
     body = block.body
+    if ((((profile.fork) == (London))) & ((not (witness.parent_has_base_fee)))):
+        parent_limit = (2 * int(witness.parent_gas_limit))
+    else:
+        parent_limit = witness.parent_gas_limit
+    if (int(header.gas_limit) < int(parent_limit)):
+        limit_delta = (int(parent_limit) - int(header.gas_limit))
+    else:
+        limit_delta = (int(header.gas_limit) - int(parent_limit))
+    if (((int(header.gas_limit) < 5000)) | ((((int((1 << 63)) <= int(header.gas_limit))) | ((((int(parent_limit) < 5000)) | ((int(sail_ediv_int(parent_limit, 1024)) <= int(limit_delta)))))))):
+        fatal_error(FatalError.InvalidGasLimit)
+    if (int(profile.fork) >= int(Osaka)):
+        validate_block_rlp_size(header, body.transactions, body.withdrawals)
     if (int(header.gas_limit) < int(header.gas_used)):
         fatal_error(FatalError.InvalidGasUsed)
     if ((witness.parent_hash) != (header.parent_hash)):
         fatal_error(FatalError.InvalidParentHash)
-    expected_excess_blob_gas = expected_payload_excess_blob_gas(witness)
-    if (((int(profile.fork) >= int(Cancun))) & (((header.excess_blob_gas) != (expected_excess_blob_gas)))):
-        fatal_error(FatalError.InvalidExcessBlobGas)
-    if (int(profile.fork) >= int(Paris)):
-        transactions_root = transaction_trie_root(body.transactions)
-        if (int(profile.fork) >= int(Shanghai)):
-            withdrawals_root = withdrawals_trie_root(body.withdrawals)
-        else:
-            withdrawals_root = EMPTY_TRIE_ROOT
-        if (int(profile.fork) >= int(Prague)):
-            requests_hash = execution_requests_hash(input_ref)
-        else:
-            requests_hash = ZERO_HASH
-        if (int(profile.fork) >= int(Amsterdam)):
-            block_access_list_hash = _host_stateless_input_keccak256(body.block_access_list)
-        else:
-            block_access_list_hash = ZERO_HASH
-        computed_block_hash = block_header_hash(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash)
-        if ((computed_block_hash) != (payload.expected_block_hash)):
-            return fatal_error(FatalError.InvalidBlockHash)
-        else:
-            return None
+    if (((int(profile.fork) >= int(London))) & (((header.base_fee) != (expected_payload_base_fee(witness))))):
+        fatal_error(FatalError.ExecutionInvalid)
+    if (int(profile.fork) >= int(Cancun)):
+        expected_excess_blob_gas = expected_payload_excess_blob_gas(witness)
+        if ((header.excess_blob_gas) != (expected_excess_blob_gas)):
+            fatal_error(FatalError.InvalidExcessBlobGas)
+    transactions_root = transaction_trie_root(body.transactions)
+    if (int(profile.fork) >= int(Shanghai)):
+        withdrawals_root = withdrawals_trie_root(body.withdrawals)
+    else:
+        withdrawals_root = EMPTY_TRIE_ROOT
+    if (int(profile.fork) >= int(Prague)):
+        requests_hash = execution_requests_hash(input_ref)
+    else:
+        requests_hash = ZERO_HASH
+    if (int(profile.fork) >= int(Amsterdam)):
+        block_access_list_hash = _host_stateless_input_keccak256(body.block_access_list)
+    else:
+        block_access_list_hash = ZERO_HASH
+    computed_block_hash = block_header_hash(header, transactions_root, withdrawals_root, requests_hash, block_access_list_hash)
+    if ((computed_block_hash) != (payload.expected_block_hash)):
+        return fatal_error(FatalError.InvalidBlockHash)
     else:
         return None

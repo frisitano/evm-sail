@@ -39,11 +39,11 @@ void k_clear_code(bytes20 a)
   store_account_info_(a, cur, ((struct AccountInfo){.balance = cur.info.balance, .code_hash = KECCAK_EMPTY, .nonce = cur.info.nonce, .storage_root = cur.info.storage_root}));
 }
 
-bytes20 k_deleg_target(bytes20 a, bool *restrict condition_8_1363)
+bytes20 k_deleg_target(bytes20 a, bool *restrict condition_8_1423)
 {
   bytes32 h = k_code_key(a);
   struct AddressResult r = code_db_read_delegation(h);
-  (*condition_8_1363) = r.success;
+  (*condition_8_1423) = r.success;
   return r.address;
 }
 

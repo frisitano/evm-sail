@@ -77,12 +77,15 @@ static auth_tracker_entry *auth_tracker_find(const bytes20 *key, int insert)
   }
 }
 
-void authorization_tracker_reset(uint16_t count_hint)
+void authorization_tracker_reset(uint32_t count_hint)
 {
   uint64_t need = count_hint < 8 ? 16 : UINT64_C(2) * count_hint;
   uint32_t cap = 16;
   while ((uint64_t)cap < need) {
     cap *= 2;
+  }
+  if (cap > GUEST_AUTHORIZATION_ENTRIES) {
+    GUEST_ABORT();
   }
   auth_tracker_limit = cap;
   auth_tracker_epoch++;

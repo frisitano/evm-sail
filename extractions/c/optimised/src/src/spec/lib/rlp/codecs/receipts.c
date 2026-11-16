@@ -97,12 +97,12 @@ void receipt_write_logs_bloom(struct ReceiptFields receipt)
 uint32_t receipt_payload_content_size(struct ReceiptFields r, u128 cumulative_gas_used)
 {
   uint8_t status = r.success ? UINT8_C(1) : UINT8_C(0);
-  uint8_t status_size = rlp_uint_word_size_uint8_t_to_uint8_t(status);
+  uint8_t status_size = rlp_uint_word_size_uint8_t_to_uint8_t_variant_2(status);
   uint32_t status_length = rlp_scratch_small_length(status_size);
   u256 gas_word = word_of_nat_byte_count_u128_to_u256(cumulative_gas_used);
   uint8_t gas_size = rlp_uint_word_size(gas_word);
   uint32_t gas_length = rlp_scratch_small_length(gas_size);
-  uint8_t bloom_prefix_size = rlp_length_prefix_len_uint16_t_to_uint8_t(LOGS_BLOOM_BYTE_LENGTH);
+  uint8_t bloom_prefix_size = rlp_length_prefix_len_uint16_t_to_uint8_t_variant_2(LOGS_BLOOM_BYTE_LENGTH);
   uint32_t bloom_prefix_length = rlp_scratch_small_length(bloom_prefix_size);
   uint32_t bloom_length = rlp_scratch_length_add_uint16_t_uint32_t_to_uint32_t(LOGS_BLOOM_BYTE_LENGTH, bloom_prefix_length);
   uint32_t logs_length = logs_rlp_size(r.logs);

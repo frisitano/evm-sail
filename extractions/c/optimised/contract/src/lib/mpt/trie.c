@@ -22,6 +22,7 @@
 
 #include "lib/mpt/trie.h"
 #include "evmsail/spec/exceptions.h"
+#include "evmsail/spec/lib/mpt/trie.h"
 #include "executor/receipts.h"
 #include "host/code/store.h"
 #include "lib/mpt/paths.h"
@@ -1289,7 +1290,9 @@ uint32_t mpt_storage_updates_prepare(StorageId begin, uint32_t candidates,
   }
   mpt_order_sort(MPT_ORDER_STORAGE_BINDINGS, NULL, count);
   if (!mpt_order_is_strict(MPT_ORDER_STORAGE_BINDINGS, NULL, count)) {
-    GUEST_ABORT();
+    /* Witness/BAL-provided duplicate slot bindings are invalid input, not a
+     * process invariant violation. Keep the guest fail-closed and runnable. */
+    fatal_error(InvalidBlockAccessList);
   }
   order_workspace.storage_count = count;
   return count;
@@ -2098,6 +2101,14 @@ void stateless_account_read(bytes32 root, bytes32 address_hash, struct AccountIn
 void stateless_storage_read(NodeId root_node, bytes32 slot_hash, u256 *value_out, bool *found,
                             NodeId *terminal_node)
 {
+  DecodedNode *root;
+  mpt_decode_cached_node(root_node, &root);
+  if (!root->secured_root_validated) {
+    bytes32 root_hash;
+    mpt_node_digest(root_node, &root_hash);
+    validate_secured_state_root(root_hash);
+    root->secured_root_validated = true;
+  }
   *found = false;
   memset(value_out, 0, sizeof(*value_out));
   ByteSpan value;

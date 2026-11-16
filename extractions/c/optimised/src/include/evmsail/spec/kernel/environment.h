@@ -29,6 +29,9 @@ bytes20 k_create2_addr(bytes20 a, u256 salt, bytes32 inithash);
 // register zk_parent_state_root
 extern bytes32 k_parent_state_root;
 
+// register zk_historical_access_schema
+extern Bytes k_historical_access_schema;
+
 // register zk_n_headers
 extern uint16_t k_n_headers;
 

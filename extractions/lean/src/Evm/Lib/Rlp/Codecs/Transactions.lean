@@ -49,6 +49,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -197,9 +198,9 @@ abbrev BLOB_HASH_LENGTH : Nat := 32
 /-- Validates every fixed-width versioned-hash item and returns their count.
 The cursor exits immediately for an empty list and checks the version byte
 while each item is already live, avoiding a second fixed-width pass. -/
-/- Type quantifiers: _reclimit : Nat, k_ex425146_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
+/- Type quantifiers: _reclimit : Nat, k_ex573760_ : Nat, k_source_off : Nat, k_source_len : Nat, limit
   : Nat, (source_valid_range k_source_off k_source_len) ∧ (transaction_blob_limit_value limit), 0
-  ≤ k_ex425146_ ∧ k_ex425146_ ≤ limit, 0 ≤ _reclimit -/
+  ≤ k_ex573760_ ∧ k_ex573760_ ≤ limit, 0 ≤ _reclimit -/
 def _rec_decode_blob_hash_items (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (limit : Nat) (count : Nat) (_reclimit : Nat) : SailM Nat := do
   match _reclimit with
   | 0 =>
@@ -340,7 +341,7 @@ def decode_authorization (tuple : (RlpFieldRef k_source_off k_source_len k_conte
           chain_id := chain_id })
 
 /- Type quantifiers: _reclimit : Nat, count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ count ∧ count ≤ ((2 ^ 24) / 7816), 0 ≤ _reclimit -/
+  ≤ count ∧ count ≤ (2 ^ 30), 0 ≤ _reclimit -/
 def _rec_prepare_authorization_entries (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (count : Nat) (_reclimit : Nat) : SailM (List Authorization) := do
   match _reclimit with
   | 0 =>
@@ -370,7 +371,7 @@ termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
 /- Type quantifiers: count : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ count ∧ count ≤ ((2 ^ 24) / 7816) -/
+  ≤ count ∧ count ≤ (2 ^ 30) -/
 def prepare_authorization_entries (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (count : Nat) : SailM (List Authorization) := do
   let _measure := (count : Int)
   if ((_measure <b 0) : Bool)
@@ -385,17 +386,13 @@ def prepare_authorizations (authorizations : (Sigma fun (k_count : Nat) =>
   (AuthorizationListRefFields k_count))) : SailM PreparedAuthorizationList := do
   let authorizations_dependentWitness0 := (authorizations).1
   let authorizations := (authorizations).2
-  if ((authorizations.count ≤b ((2 ^i 24) / 7816)) : Bool)
-  then
-    (do
-      let ⟨_, ⟨_, encoded⟩⟩ : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) :=
-        (authorizations.encoded : (Sigma fun (k_off : Nat) =>
-        (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))))
-      let entries ← do (prepare_authorization_entries encoded authorizations.count)
-      (pure { entries := entries,
-              count := authorizations.count }))
-  else (fatal_error ExecutionInvalid)
+  let ⟨_, ⟨_, encoded⟩⟩ : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) :=
+    (authorizations.encoded : (Sigma fun (k_off : Nat) =>
+    (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))))
+  let entries ← do (prepare_authorization_entries encoded authorizations.count)
+  (pure { entries := entries,
+          count := authorizations.count })
 
 /-- Reads the current prepared entry. Callers carry the decreasing count that
 proves this operation is not applied to the empty collection. -/

@@ -41,6 +41,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -60,17 +61,6 @@ open AcctBlockIterResult
 Canonical list, byte-string, and integer field decoding shared by EIP-7928
 validation. -/
 
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
-def bal_ref_cursor (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM (StatelessInputSliceFields (k_source_off + (k_source_len - k_content_len)) k_content_len) := do
-  let framing_canonical ← do (rlp_ref_framing_canonical f)
-  if _sailIf0 : ((f.is_list && framing_canonical) : Bool) = true
-  then
-    (do
-      (do
-        let indexRefinedResult ← (rlp_decode_list f)
-        pure (cast (by first | rfl | omega | (congr 1 <;> simp_all) | (congr 1 <;> omega) | (simp_all <;> omega) | (simp_all <;> rfl) | simp_all) (indexRefinedResult))))
-  else (fatal_error InvalidBlockAccessList)
-
 /-- Requires a canonical RLP byte string and returns its content slice. -/
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
 def bal_ref_bytes (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM (Sigma fun
@@ -83,14 +73,6 @@ def bal_ref_bytes (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : 
   else
     (do
       (fatal_error InvalidBlockAccessList))
-
-/-- Requires a canonical RLP integer in the EVM-word domain. -/
-/- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/
-def bal_ref_word (f : (RlpFieldRef k_source_off k_source_len k_content_len)) : SailM Nat := do
-  let canonical ← do (rlp_item_uint_canonical f)
-  if ((canonical && (k_content_len ≤b 32)) : Bool)
-  then (rlp_decode_word f)
-  else (fatal_error InvalidBlockAccessList)
 
 /-- Requires a canonical RLP integer in the host-index/nonce domain. -/
 /- Type quantifiers: k_source_off : Nat, k_source_len : Nat, k_content_len : Nat, (rlp_field_ref_valid k_source_off k_source_len k_content_len) -/

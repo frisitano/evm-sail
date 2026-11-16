@@ -9,13 +9,13 @@ struct TriePath path_new(bytes32 data, uint8_t len)
   return ((struct TriePath){.data = data, .len = len});
 }
 
-struct TriePath hex_prefix_decode_ref(struct RlpFieldRef f, bool *restrict condition_8_1361)
+struct TriePath hex_prefix_decode_ref(struct RlpFieldRef f, bool *restrict condition_8_1421)
 {
   if (f.is_list) {
     fatal_error(RlpDecode);
   }
   if (f.content_len == UINT8_C(0)) {
-    (*condition_8_1361) = false;
+    (*condition_8_1421) = false;
     return ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)});
   }
   if (HEX_PREFIX_MAX_LENGTH < f.content_len) {
@@ -31,14 +31,14 @@ struct TriePath hex_prefix_decode_ref(struct RlpFieldRef f, bool *restrict condi
       bytes32 bytes = word_to_hash(shifted);
       bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & ((fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0))) >> UINT8_C(0))));
       bytes32 path_data = B256(bytes);
-      (*condition_8_1361) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
+      (*condition_8_1421) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
       return path_new(path_data, ((uint8_t)((uint32_t)UINT8_C(1) + ((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1))))));
     }
     fatal_error(WitnessDeficient);
   }
-  bytes32 path_data_3_3192 = word_to_hash(packed);
-  (*condition_8_1361) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
-  return path_new(path_data_3_3192, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
+  bytes32 path_data_3_3348 = word_to_hash(packed);
+  (*condition_8_1421) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
+  return path_new(path_data_3_3348, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
 }
 
 uint8_t path_len(struct TriePath path)
@@ -178,13 +178,13 @@ uint64_t hex_prefix_first_byte(struct TriePath path, bool is_leaf)
   return (flag << 4) | UINT64_C(0x0);
 }
 
-struct TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldRef f, bool *restrict condition_8_1493)
+struct TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldRef f, bool *restrict condition_8_1550)
 {
   if (f.is_list) {
     fatal_error(RlpDecode);
   }
   if (f.content_len == UINT8_C(0)) {
-    (*condition_8_1493) = false;
+    (*condition_8_1550) = false;
     return ((struct TriePath){.data = ((bytes32){0}), .len = UINT8_C(0)});
   }
   if (HEX_PREFIX_MAX_LENGTH < f.content_len) {
@@ -200,14 +200,14 @@ struct TriePath scratch_hex_prefix_decode_ref(struct ScratchRlpFieldRef f, bool 
       bytes32 bytes = word_to_hash(shifted);
       bytes = fast_unsigned_vector_update_bytes32(bytes, UINT8_C(0), ((UINT64_C(0xF) & (fb >> UINT8_C(0))) << 4) | (UINT64_C(0xF) & ((fast_unsigned_vector_access_bytes32(bytes, UINT8_C(0))) >> UINT8_C(0))));
       bytes32 path_data = B256(bytes);
-      (*condition_8_1493) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
+      (*condition_8_1550) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
       return path_new(path_data, ((uint8_t)((uint32_t)UINT8_C(1) + ((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1))))));
     }
     fatal_error(WitnessDeficient);
   }
-  bytes32 path_data_3_1007 = word_to_hash(packed);
-  (*condition_8_1493) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
-  return path_new(path_data_3_1007, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
+  bytes32 path_data_3_1099 = word_to_hash(packed);
+  (*condition_8_1550) = (bool)((UINT64_C(1) & ((UINT64_C(0xF) & (fb >> UINT8_C(4))) >> UINT8_C(1))) == UINT64_C(0x1));
+  return path_new(path_data_3_1099, ((uint8_t)((uint32_t)UINT8_C(2) * ((uint32_t)(uint8_t)f.content_len - (uint32_t)UINT8_C(1)))));
 }
 
 uint8_t path_byte_index(uint8_t i)

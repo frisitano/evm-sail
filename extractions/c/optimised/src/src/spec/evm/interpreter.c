@@ -6,7 +6,7 @@ u256 read_push(Bytes code, uint32_t offset, uint8_t n)
   return code_slice_load_n(code, offset, n);
 }
 
-__attribute__((__always_inline__)) bool opcode_available(uint8_t opcode, uint8_t fork)
+bool opcode_available(uint8_t opcode, uint8_t fork)
 {
   if (opcode == UINT8_C(30)) {
     return (bool)(fork >= Osaka);
@@ -47,7 +47,7 @@ __attribute__((__always_inline__)) bool opcode_available(uint8_t opcode, uint8_t
   return true;
 }
 
-__attribute__((__always_inline__)) u256 decode_push_immediate(struct CodeFields frame_code, uint32_t *restrict immediate_offset, uint8_t width)
+u256 decode_push_immediate(struct CodeFields frame_code, uint32_t *restrict immediate_offset, uint8_t width)
 {
   Bytes bytes = code_bytes(frame_code);
   u256 value = read_push(bytes, (*immediate_offset), width);
@@ -55,7 +55,7 @@ __attribute__((__always_inline__)) u256 decode_push_immediate(struct CodeFields 
   return value;
 }
 
-__attribute__((__always_inline__)) uint64_t decode_deep_immediate(struct CodeFields frame_code, uint32_t *restrict immediate_offset, enum DeepStackOperation operation)
+uint64_t decode_deep_immediate(struct CodeFields frame_code, uint32_t *restrict immediate_offset, enum DeepStackOperation operation)
 {
   Bytes bytes = code_bytes(frame_code);
   uint64_t immediate = code_slice_byte(bytes, (*immediate_offset));
@@ -65,125 +65,125 @@ __attribute__((__always_inline__)) uint64_t decode_deep_immediate(struct CodeFie
   return immediate;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_push_encoded(struct CodeFields frame_code, uint8_t opcode, uint32_t *restrict immediate_offset, uint64_t *restrict execution_gas, StackPointer *restrict sp)
+struct OpcodeOutcome execute_push_encoded(struct CodeFields frame_code, uint8_t opcode, uint32_t *restrict immediate_offset, uint64_t *restrict execution_gas, StackPointer *restrict sp)
 {
   if ((UINT8_C(95) <= opcode) && (opcode <= UINT8_C(127))) {
     uint8_t width = ((uint8_t)((uint32_t)opcode - (uint32_t)UINT8_C(95)));
-    u256 _8_1457_8_1615 = decode_push_immediate(frame_code, immediate_offset, width);
-    uint64_t carried_gas_8_1569 = (*execution_gas);
-    StackPointer carried_sp_8_1570 = (*sp);
-    struct OpcodeOutcome _8_1446_8_1571 = execute_push(&carried_gas_8_1569, &carried_sp_8_1570, width, _8_1457_8_1615);
-    (*execution_gas) = carried_gas_8_1569;
-    (*sp) = carried_sp_8_1570;
-    return _8_1446_8_1571;
+    u256 _8_1514_8_1676 = decode_push_immediate(frame_code, immediate_offset, width);
+    uint64_t carried_gas_8_1630 = (*execution_gas);
+    StackPointer carried_sp_8_1631 = (*sp);
+    struct OpcodeOutcome _8_1503_8_1632 = execute_push(&carried_gas_8_1630, &carried_sp_8_1631, width, _8_1514_8_1676);
+    (*execution_gas) = carried_gas_8_1630;
+    (*sp) = carried_sp_8_1631;
+    return _8_1503_8_1632;
   }
-  uint64_t carried_gas_8_1567 = (*execution_gas);
-  struct OpcodeOutcome _8_1455_8_1568 = execute_invalid(&carried_gas_8_1567);
-  (*execution_gas) = carried_gas_8_1567;
-  return _8_1455_8_1568;
+  uint64_t carried_gas_8_1628 = (*execution_gas);
+  struct OpcodeOutcome _8_1512_8_1629 = execute_invalid(&carried_gas_8_1628);
+  (*execution_gas) = carried_gas_8_1628;
+  return _8_1512_8_1629;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_dup_encoded(uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp)
+struct OpcodeOutcome execute_dup_encoded(uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp)
 {
   if ((UINT8_C(128) <= opcode) && (opcode <= UINT8_C(143))) {
     return execute_dup(execution_gas, sp, ((uint8_t)((uint32_t)opcode - (uint32_t)UINT8_C(127))));
   }
-  uint64_t carried_gas_8_1572 = (*execution_gas);
-  struct OpcodeOutcome _8_1455_8_1573 = execute_invalid(&carried_gas_8_1572);
-  (*execution_gas) = carried_gas_8_1572;
-  return _8_1455_8_1573;
+  uint64_t carried_gas_8_1633 = (*execution_gas);
+  struct OpcodeOutcome _8_1512_8_1634 = execute_invalid(&carried_gas_8_1633);
+  (*execution_gas) = carried_gas_8_1633;
+  return _8_1512_8_1634;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_swap_encoded(uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp)
+struct OpcodeOutcome execute_swap_encoded(uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp)
 {
   if ((UINT8_C(144) <= opcode) && (opcode <= UINT8_C(159))) {
     return execute_swap(execution_gas, sp, ((uint8_t)((uint32_t)opcode - (uint32_t)UINT8_C(143))));
   }
-  uint64_t carried_gas_8_1574 = (*execution_gas);
-  struct OpcodeOutcome _8_1455_8_1575 = execute_invalid(&carried_gas_8_1574);
-  (*execution_gas) = carried_gas_8_1574;
-  return _8_1455_8_1575;
+  uint64_t carried_gas_8_1635 = (*execution_gas);
+  struct OpcodeOutcome _8_1512_8_1636 = execute_invalid(&carried_gas_8_1635);
+  (*execution_gas) = carried_gas_8_1635;
+  return _8_1512_8_1636;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_log_encoded(bytes20 carried_address, bool carried_is_static, uint32_t memory_base, uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp, uint32_t *restrict memory)
+struct OpcodeOutcome execute_log_encoded(bytes20 carried_address, bool carried_is_static, uint32_t memory_base, uint8_t opcode, uint64_t *restrict execution_gas, StackPointer *restrict sp, uint32_t *restrict memory)
 {
   if ((UINT8_C(160) <= opcode) && (opcode <= UINT8_C(164))) {
     return execute_log(carried_address, carried_is_static, memory_base, ((uint8_t)((uint32_t)opcode - (uint32_t)UINT8_C(160))), execution_gas, sp, memory);
   }
-  uint64_t carried_gas_8_1576 = (*execution_gas);
-  struct OpcodeOutcome _8_1455_8_1577 = execute_invalid(&carried_gas_8_1576);
-  (*execution_gas) = carried_gas_8_1576;
-  return _8_1455_8_1577;
+  uint64_t carried_gas_8_1637 = (*execution_gas);
+  struct OpcodeOutcome _8_1512_8_1638 = execute_invalid(&carried_gas_8_1637);
+  (*execution_gas) = carried_gas_8_1637;
+  return _8_1512_8_1638;
 }
 
-__attribute__((__always_inline__)) struct OpcodeOutcome execute_deep_stack_encoded(struct CodeFields frame_code, uint8_t opcode, uint32_t *restrict immediate_offset, uint64_t *restrict execution_gas, StackPointer *restrict sp)
+struct OpcodeOutcome execute_deep_stack_encoded(struct CodeFields frame_code, uint8_t opcode, uint32_t *restrict immediate_offset, uint64_t *restrict execution_gas, StackPointer *restrict sp)
 {
   enum DeepStackOperation operation = deep_stack_operation(opcode);
-  uint64_t _8_1458_8_1616 = decode_deep_immediate(frame_code, immediate_offset, operation);
-  uint64_t field_0_8_1790;
-  StackPointer stackpointer_8_1791;
-  struct OpcodeOutcome opcodeoutcome_8_1792;
+  uint64_t _8_1515_8_1677 = decode_deep_immediate(frame_code, immediate_offset, operation);
+  uint64_t field_0_8_1863;
+  StackPointer stackpointer_8_1864;
+  struct OpcodeOutcome opcodeoutcome_8_1865;
   switch (operation) {
   case DeepStackDuplicate:
-    opcodeoutcome_8_1792 = execute_dupn(execution_gas, sp, _8_1458_8_1616);
-    field_0_8_1790 = (*execution_gas);
-    stackpointer_8_1791 = (*sp);
+    opcodeoutcome_8_1865 = execute_dupn(execution_gas, sp, _8_1515_8_1677);
+    field_0_8_1863 = (*execution_gas);
+    stackpointer_8_1864 = (*sp);
     break;
   case DeepStackSwap:
-    opcodeoutcome_8_1792 = execute_swapn(execution_gas, sp, _8_1458_8_1616);
-    field_0_8_1790 = (*execution_gas);
-    stackpointer_8_1791 = (*sp);
+    opcodeoutcome_8_1865 = execute_swapn(execution_gas, sp, _8_1515_8_1677);
+    field_0_8_1863 = (*execution_gas);
+    stackpointer_8_1864 = (*sp);
     break;
   case DeepStackExchange:
-    opcodeoutcome_8_1792 = execute_exchange(execution_gas, sp, _8_1458_8_1616);
-    field_0_8_1790 = (*execution_gas);
-    stackpointer_8_1791 = (*sp);
+    opcodeoutcome_8_1865 = execute_exchange(execution_gas, sp, _8_1515_8_1677);
+    field_0_8_1863 = (*execution_gas);
+    stackpointer_8_1864 = (*sp);
     break;
   case NotDeepStackOperation:
   {
-    struct OpcodeOutcome _8_1455_8_1617 = execute_invalid(execution_gas);
-    field_0_8_1790 = (*execution_gas);
-    stackpointer_8_1791 = (*sp);
-    opcodeoutcome_8_1792 = _8_1455_8_1617;
+    struct OpcodeOutcome _8_1512_8_1678 = execute_invalid(execution_gas);
+    field_0_8_1863 = (*execution_gas);
+    stackpointer_8_1864 = (*sp);
+    opcodeoutcome_8_1865 = _8_1512_8_1678;
     break;
   }
   }
-  (*execution_gas) = field_0_8_1790;
-  (*sp) = stackpointer_8_1791;
-  return opcodeoutcome_8_1792;
+  (*execution_gas) = field_0_8_1863;
+  (*sp) = stackpointer_8_1864;
+  return opcodeoutcome_8_1865;
 }
 
 Bytes frame_output(struct FrameStatus frame_status)
 {
   if (frame_status.kind != Kind_Halted) {
-    goto case_1799;
+    goto case_1876;
   }
   if (frame_status.variants.Halted.kind != Kind_HaltReturn) {
-    goto case_1799;
+    goto case_1876;
   }
   return frame_status.variants.Halted.variants.HaltReturn;
-case_1799: ;
+case_1876: ;
   if (frame_status.kind != Kind_Halted) {
-    goto case_1798;
+    goto case_1875;
   }
   if (frame_status.variants.Halted.kind != Kind_HaltRevert) {
-    goto case_1798;
+    goto case_1875;
   }
   return frame_status.variants.Halted.variants.HaltRevert;
-case_1798: ;
+case_1875: ;
   return EMPTY_OUTPUT_SLICE;
 }
 
 bool frame_succeeded(struct FrameStatus frame_status)
 {
   if (frame_status.kind != Kind_Halted) {
-    goto case_1791;
+    goto case_1868;
   }
   if (frame_status.variants.Halted.kind != Kind_HaltRevert) {
-    goto case_1791;
+    goto case_1868;
   }
   return false;
-case_1791: ;
+case_1868: ;
   switch (frame_status.kind) {
   case Kind_Halted:
   case Kind_Running:
@@ -252,9 +252,9 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
   case Kind_Continue:
   {
     uint64_t gas_after = carried_gas;
-    uint64_t state_gas_after_3_1670 = carried_state_gas;
-    uint32_t state_spill_after_3_1671 = carried_state_spill;
-    struct FrameStatus status_after_3_1672 = Running(UNIT);
+    uint64_t state_gas_after_3_1777 = carried_state_gas;
+    uint32_t state_spill_after_3_1778 = carried_state_spill;
+    struct FrameStatus status_after_3_1779 = Running(UNIT);
     StackPointer sp_after = carried_sp;
     uint32_t memory_after = carried_memory_height;
     Bytes returndata_after = carried_returndata;
@@ -267,18 +267,18 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
     u256 target_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     bytes20 target = word_to_address(target_word);
-    u256 __sail_c_repr_u256_8_1793;
-    StackPointer stackpointer_8_1794;
+    u256 __sail_c_repr_u256_8_1866;
+    StackPointer stackpointer_8_1867;
     if (semantics.takes_value) {
-      __sail_c_repr_u256_8_1793 = stack_slot_read(sp_after, UINT16_C(0));
-      stackpointer_8_1794 = stack_top_retreat(sp_after, UINT16_C(1));
+      __sail_c_repr_u256_8_1866 = stack_slot_read(sp_after, UINT16_C(0));
+      stackpointer_8_1867 = stack_top_retreat(sp_after, UINT16_C(1));
     } else {
-      __sail_c_repr_u256_8_1793 = WORD_ZERO;
-      stackpointer_8_1794 = sp_after;
+      __sail_c_repr_u256_8_1866 = WORD_ZERO;
+      stackpointer_8_1867 = sp_after;
     }
-    u256 value_3_1673 = __sail_c_repr_u256_8_1793;
-    sp_after = stackpointer_8_1794;
-    bool value_nonzero = word_nonzero(value_3_1673);
+    u256 value_3_1780 = __sail_c_repr_u256_8_1866;
+    sp_after = stackpointer_8_1867;
+    bool value_nonzero = word_nonzero(value_3_1780);
     u256 args_off_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     u256 args_len_word = stack_slot_read(sp_after, UINT16_C(0));
@@ -289,16 +289,16 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     if (semantics.transfers_value && (value_nonzero && carried_is_static)) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1674;
+      struct ExceptionalStateTransition exceptional_3_1781;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1674 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1781 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
       } else {
-        exceptional_3_1674 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1781 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(WriteProtection))});
       }
-      state_gas_after_3_1670 = exceptional_3_1674.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1674.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1674.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1781.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1781.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1781.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     bool warm = k_account_is_warm(target);
     uint16_t target_cost = account_cost(warm);
@@ -328,31 +328,31 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
     }
     if (!expansion_cost.affordable) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1675;
+      struct ExceptionalStateTransition exceptional_3_1782;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1675 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1782 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1675 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1782 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1675.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1675.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1675.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1782.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1782.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1782.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, expansion_cost.cost);
     uint64_t static_base = ((uint64_t)(uint32_t)target_cost + (uint64_t)(uint32_t)transfer_cost);
     if (gas_after < static_base) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1676;
+      struct ExceptionalStateTransition exceptional_3_1783;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1676 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1783 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1676 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1783 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1676.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1676.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1676.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1783.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1783.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1783.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, static_base);
     k_account_mark_warm(target);
@@ -371,72 +371,72 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
     uint64_t additional_cost = ((uint64_t)(uint32_t)delegation_cost + (uint64_t)(uint32_t)create_cost);
     if (gas_after < additional_cost) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1677;
+      struct ExceptionalStateTransition exceptional_3_1784;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1677 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1784 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1677 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1784 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1677.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1677.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1677.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1784.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1784.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1784.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, additional_cost);
     uint64_t stipend = value_nonzero ? G_callstipend : (uint64_t)GAS_ZERO;
     uint64_t base_child = (uint64_t)GAS_ZERO;
     if (profile_8_6.fork >= Amsterdam) {
       if (new_account_charged) {
-        bool _8_1511_8_1631;
-        uint64_t _8_1512_8_1632;
-        uint64_t _8_1513_8_1633;
-        uint32_t _8_1514_8_1634 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1511_8_1631, &_8_1512_8_1632, &_8_1513_8_1633);
-        gas_after = _8_1512_8_1632;
-        state_gas_after_3_1670 = _8_1513_8_1633;
-        state_spill_after_3_1671 = _8_1514_8_1634;
-        if (_8_1511_8_1631) {
+        bool _8_1570_8_1692;
+        uint64_t _8_1571_8_1693;
+        uint64_t _8_1572_8_1694;
+        uint32_t _8_1573_8_1695 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1570_8_1692, &_8_1571_8_1693, &_8_1572_8_1694);
+        gas_after = _8_1571_8_1693;
+        state_gas_after_3_1777 = _8_1572_8_1694;
+        state_spill_after_3_1778 = _8_1573_8_1695;
+        if (_8_1570_8_1692) {
           gas_after = (uint64_t)GAS_ZERO;
-          struct ExceptionalStateTransition exceptional_3_1678;
+          struct ExceptionalStateTransition exceptional_3_1785;
           if (k_execution_profile.protocol.fork >= Amsterdam) {
-            exceptional_3_1678 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1785 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
           } else {
-            exceptional_3_1678 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1785 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
           }
-          state_gas_after_3_1670 = exceptional_3_1678.state_gas_remaining;
-          state_spill_after_3_1671 = exceptional_3_1678.state_gas_spilled;
-          status_after_3_1672 = exceptional_3_1678.status;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+          state_gas_after_3_1777 = exceptional_3_1785.state_gas_remaining;
+          state_spill_after_3_1778 = exceptional_3_1785.state_gas_spilled;
+          status_after_3_1779 = exceptional_3_1785.status;
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
         }
       }
       base_child = call_gas_cap_word(gas_after, gas_request);
       if (gas_after < base_child) {
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1679;
+        struct ExceptionalStateTransition exceptional_3_1786;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1679 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1786 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1679 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1786 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1670 = exceptional_3_1679.state_gas_remaining;
-        state_spill_after_3_1671 = exceptional_3_1679.state_gas_spilled;
-        status_after_3_1672 = exceptional_3_1679.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        state_gas_after_3_1777 = exceptional_3_1786.state_gas_remaining;
+        state_spill_after_3_1778 = exceptional_3_1786.state_gas_spilled;
+        status_after_3_1779 = exceptional_3_1786.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       gas_after = gas_sub(gas_after, base_child);
     } else {
       base_child = call_gas_cap_word(gas_after, gas_request);
       if (gas_after < base_child) {
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1680;
+        struct ExceptionalStateTransition exceptional_3_1787;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1680 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1787 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1680 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1787 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1670 = exceptional_3_1680.state_gas_remaining;
-        state_spill_after_3_1671 = exceptional_3_1680.state_gas_spilled;
-        status_after_3_1672 = exceptional_3_1680.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        state_gas_after_3_1777 = exceptional_3_1787.state_gas_remaining;
+        state_spill_after_3_1778 = exceptional_3_1787.state_gas_spilled;
+        status_after_3_1779 = exceptional_3_1787.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       gas_after = gas_sub(gas_after, base_child);
     }
@@ -467,7 +467,7 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
     bool insufficient_balance;
     if (semantics.takes_value && value_nonzero) {
       u256 caller_balance = k_get_balance(carried_address);
-      insufficient_balance = (bool)(!(word_ule(value_3_1673, caller_balance)));
+      insufficient_balance = (bool)(!(word_ule(value_3_1780, caller_balance)));
     } else {
       insufficient_balance = false;
     }
@@ -475,17 +475,17 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
       returndata_after = returndata_clear();
       gas_after = refund_gas(gas_after, child_gas);
       if (new_account_charged) {
-        uint64_t _8_1365_8_1628;
-        uint64_t _8_1366_8_1629;
-        uint32_t _8_1367_8_1630 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1628, &_8_1366_8_1629);
-        gas_after = _8_1365_8_1628;
-        state_gas_after_3_1670 = _8_1366_8_1629;
-        state_spill_after_3_1671 = _8_1367_8_1630;
+        uint64_t _8_1578_8_1689;
+        uint64_t _8_1579_8_1690;
+        uint32_t _8_1580_8_1691 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1689, &_8_1579_8_1690);
+        gas_after = _8_1578_8_1689;
+        state_gas_after_3_1777 = _8_1579_8_1690;
+        state_spill_after_3_1778 = _8_1580_8_1691;
       }
       sp_after = stack_top_advance(sp_after, UINT16_C(1));
       stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
       memory_after = mem1;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     enum PrecompileId selected_precompile = precompile_id_for_address(target);
     if (neq_anything_EPrecompileId__(selected_precompile, NotPrecompile)) {
@@ -497,7 +497,7 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
         if (result.success) {
           returndata_after = result.output;
           if (semantics.transfers_value && value_nonzero) {
-            k_transfer(carried_address, target, value_3_1673);
+            k_transfer(carried_address, target, value_3_1780);
           }
           uint32_t return_destination = memory_absolute(carried_memory_base, ret_access.range.off);
           returndata_copy_prefix(returndata_after, return_destination, ret_access.range.len);
@@ -505,54 +505,54 @@ struct FrameTransition run_call(uint32_t carried_pc, uint64_t carried_gas, uint6
           sp_after = stack_top_advance(sp_after, UINT16_C(1));
           stack_slot_write(sp_after, UINT16_C(0), WORD_ONE);
           memory_after = mem1;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
         }
         returndata_after = returndata_clear();
         if (new_account_charged) {
-          uint64_t _8_1365_8_1625;
-          uint64_t _8_1366_8_1626;
-          uint32_t _8_1367_8_1627 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1625, &_8_1366_8_1626);
-          gas_after = _8_1365_8_1625;
-          state_gas_after_3_1670 = _8_1366_8_1626;
-          state_spill_after_3_1671 = _8_1367_8_1627;
+          uint64_t _8_1578_8_1686;
+          uint64_t _8_1579_8_1687;
+          uint32_t _8_1580_8_1688 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1686, &_8_1579_8_1687);
+          gas_after = _8_1578_8_1686;
+          state_gas_after_3_1777 = _8_1579_8_1687;
+          state_spill_after_3_1778 = _8_1580_8_1688;
         }
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       returndata_after = returndata_clear();
       if (new_account_charged) {
-        uint64_t _8_1365_8_1622;
-        uint64_t _8_1366_8_1623;
-        uint32_t _8_1367_8_1624 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1622, &_8_1366_8_1623);
-        gas_after = _8_1365_8_1622;
-        state_gas_after_3_1670 = _8_1366_8_1623;
-        state_spill_after_3_1671 = _8_1367_8_1624;
+        uint64_t _8_1578_8_1683;
+        uint64_t _8_1579_8_1684;
+        uint32_t _8_1580_8_1685 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1683, &_8_1579_8_1684);
+        gas_after = _8_1578_8_1683;
+        state_gas_after_3_1777 = _8_1579_8_1684;
+        state_spill_after_3_1778 = _8_1580_8_1685;
       }
       sp_after = stack_top_advance(sp_after, UINT16_C(1));
       stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
       memory_after = mem1;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     struct CodeFields child_code = executable_code(target, tg_deleg, tg_target);
     bytes20 child_addr = semantics.uses_target_address ? target : carried_address;
     bytes20 child_caller = semantics.inherits_caller_and_value ? carried_caller : carried_address;
-    u256 child_value = semantics.inherits_caller_and_value ? carried_value : value_3_1673;
+    u256 child_value = semantics.inherits_caller_and_value ? carried_value : value_3_1780;
     Bytes bytes = active_memory_slice(carried_memory_base, mem1, args_access.range.off, args_access.range.len);
     Bytes child_memory = evm_memory_slice(bytes.bytes, bytes.len);
     struct CalldataSlice child_calldata = MemoryCalldata(child_memory);
     struct FrameStatus running = Running(UNIT);
-    struct FrameCheckpoint _8_1553_8_1618;
-    StackPointer _8_1554_8_1619;
-    uint32_t _8_1555_8_1620;
-    uint32_t _8_1556_8_1621 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1671, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1553_8_1618, &_8_1554_8_1619, &_8_1555_8_1620);
-    frame_stack_push((ResumeCall(((struct CallContinuation){.checkpoint = _8_1553_8_1618, .new_account_charged = new_account_charged, .return_length = ret_access.range.len, .return_offset = ret_access.range.off}))));
+    struct FrameCheckpoint _8_1614_8_1679;
+    StackPointer _8_1615_8_1680;
+    uint32_t _8_1616_8_1681;
+    uint32_t _8_1617_8_1682 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1778, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1614_8_1679, &_8_1615_8_1680, &_8_1616_8_1681);
+    frame_stack_push((ResumeCall(((struct CallContinuation){.checkpoint = _8_1614_8_1679, .new_account_charged = new_account_charged, .return_length = ret_access.range.len, .return_offset = ret_access.range.off}))));
     if (semantics.transfers_value && value_nonzero) {
-      k_transfer(carried_address, target, value_3_1673);
+      k_transfer(carried_address, target, value_3_1780);
     }
     Bytes child_returndata = returndata_clear();
-    return ((struct FrameTransition){.calldata = child_calldata, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1555_8_1620, .memory_height = _8_1556_8_1621, .message = ((struct Message){.address = child_addr, .caller = child_caller, .code_address = target, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = (bool)(semantics.enters_static_context || carried_is_static), .state_gas_reservoir = state_gas_after_3_1670, .value = child_value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = child_returndata, .stack_top = _8_1554_8_1619, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
+    return ((struct FrameTransition){.calldata = child_calldata, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1616_8_1681, .memory_height = _8_1617_8_1682, .message = ((struct Message){.address = child_addr, .caller = child_caller, .code_address = target, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = (bool)(semantics.enters_static_context || carried_is_static), .state_gas_reservoir = state_gas_after_3_1777, .value = child_value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = child_returndata, .stack_top = _8_1615_8_1680, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
   }
   }
 }
@@ -595,9 +595,9 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
   case Kind_Continue:
   {
     uint64_t gas_after = carried_gas;
-    uint64_t state_gas_after_3_1510 = carried_state_gas;
-    uint32_t state_spill_after_3_1511 = carried_state_spill;
-    struct FrameStatus status_after_3_1512 = Running(UNIT);
+    uint64_t state_gas_after_3_1617 = carried_state_gas;
+    uint32_t state_spill_after_3_1618 = carried_state_spill;
+    struct FrameStatus status_after_3_1619 = Running(UNIT);
     StackPointer sp_after = carried_sp;
     uint32_t memory_after = carried_memory_height;
     Bytes returndata_after = carried_returndata;
@@ -611,28 +611,28 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     u256 len_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
-    u256 __sail_c_repr_u256_8_1795;
-    StackPointer stackpointer_8_1796;
+    u256 __sail_c_repr_u256_8_1868;
+    StackPointer stackpointer_8_1869;
     if (semantics.uses_salt) {
-      __sail_c_repr_u256_8_1795 = stack_slot_read(sp_after, UINT16_C(0));
-      stackpointer_8_1796 = stack_top_retreat(sp_after, UINT16_C(1));
+      __sail_c_repr_u256_8_1868 = stack_slot_read(sp_after, UINT16_C(0));
+      stackpointer_8_1869 = stack_top_retreat(sp_after, UINT16_C(1));
     } else {
-      __sail_c_repr_u256_8_1795 = WORD_ZERO;
-      stackpointer_8_1796 = sp_after;
+      __sail_c_repr_u256_8_1868 = WORD_ZERO;
+      stackpointer_8_1869 = sp_after;
     }
-    sp_after = stackpointer_8_1796;
+    sp_after = stackpointer_8_1869;
     if (carried_is_static) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1514;
+      struct ExceptionalStateTransition exceptional_3_1621;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1514 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1621 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
       } else {
-        exceptional_3_1514 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1621 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(WriteProtection))});
       }
-      state_gas_after_3_1510 = exceptional_3_1514.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1514.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1514.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1621.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1621.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1621.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     uint64_t requested_height = memory_requested_height(off_word, len_word);
     struct GasCharge expansion_cost;
@@ -652,16 +652,16 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
     }
     if (!expansion_cost.affordable) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1515;
+      struct ExceptionalStateTransition exceptional_3_1622;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1515 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1622 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1515 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1622 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1510 = exceptional_3_1515.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1515.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1515.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1622.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1622.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1622.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     gas_after = gas_sub(gas_after, expansion_cost.cost);
     struct MemoryAccessFields initcode_access = memory_access(off_word, len_word);
@@ -681,16 +681,16 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
     if (gas_after < access_cost) {
       memory_after = mem1;
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1516;
+      struct ExceptionalStateTransition exceptional_3_1623;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1516 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1623 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1516 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1623 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1510 = exceptional_3_1516.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1516.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1516.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1623.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1623.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1623.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     gas_after = gas_sub_uint64_t_uint16_t_to_uint64_t(gas_after, access_cost);
     u256 initcode_word_count;
@@ -705,16 +705,16 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
       if (!initcode_cost.affordable) {
         memory_after = mem1;
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1517;
+        struct ExceptionalStateTransition exceptional_3_1624;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1517 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1624 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1517 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1624 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1510 = exceptional_3_1517.state_gas_remaining;
-        state_spill_after_3_1511 = exceptional_3_1517.state_gas_spilled;
-        status_after_3_1512 = exceptional_3_1517.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        state_gas_after_3_1617 = exceptional_3_1624.state_gas_remaining;
+        state_spill_after_3_1618 = exceptional_3_1624.state_gas_spilled;
+        status_after_3_1619 = exceptional_3_1624.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       gas_after = gas_sub(gas_after, initcode_cost.cost);
     }
@@ -723,16 +723,16 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
       if (!hashing_cost.affordable) {
         memory_after = mem1;
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1518;
+        struct ExceptionalStateTransition exceptional_3_1625;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1518 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1625 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1518 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1625 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1510 = exceptional_3_1518.state_gas_remaining;
-        state_spill_after_3_1511 = exceptional_3_1518.state_gas_spilled;
-        status_after_3_1512 = exceptional_3_1518.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        state_gas_after_3_1617 = exceptional_3_1625.state_gas_remaining;
+        state_spill_after_3_1618 = exceptional_3_1625.state_gas_spilled;
+        status_after_3_1619 = exceptional_3_1625.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       gas_after = gas_sub(gas_after, hashing_cost.cost);
     }
@@ -741,7 +741,7 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
       bytes20 new_addr;
       if (semantics.uses_salt) {
         u256 initcode_digest_word = mem_keccak(carried_memory_base, mem1, initcode);
-        new_addr = k_create2_addr(carried_address, __sail_c_repr_u256_8_1795, (word_to_hash(initcode_digest_word)));
+        new_addr = k_create2_addr(carried_address, __sail_c_repr_u256_8_1868, (word_to_hash(initcode_digest_word)));
       } else {
         new_addr = k_create_addr(carried_address, nonce);
       }
@@ -763,7 +763,7 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       k_account_mark_warm(new_addr);
       bool new_account_charged = false;
@@ -771,77 +771,77 @@ struct FrameTransition run_create(uint32_t carried_pc, uint64_t carried_gas, uin
         new_account_charged = k_account_is_empty(new_addr);
       }
       if (new_account_charged) {
-        bool _8_1511_8_1642;
-        uint64_t _8_1512_8_1643;
-        uint64_t _8_1513_8_1644;
-        uint32_t _8_1514_8_1645 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1510, state_spill_after_3_1511, G_amsterdam_state_new_account, &_8_1511_8_1642, &_8_1512_8_1643, &_8_1513_8_1644);
-        gas_after = _8_1512_8_1643;
-        state_gas_after_3_1510 = _8_1513_8_1644;
-        state_spill_after_3_1511 = _8_1514_8_1645;
-        if (_8_1511_8_1642) {
+        bool _8_1570_8_1703;
+        uint64_t _8_1571_8_1704;
+        uint64_t _8_1572_8_1705;
+        uint32_t _8_1573_8_1706 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1617, state_spill_after_3_1618, G_amsterdam_state_new_account, &_8_1570_8_1703, &_8_1571_8_1704, &_8_1572_8_1705);
+        gas_after = _8_1571_8_1704;
+        state_gas_after_3_1617 = _8_1572_8_1705;
+        state_spill_after_3_1618 = _8_1573_8_1706;
+        if (_8_1570_8_1703) {
           memory_after = mem1;
           gas_after = (uint64_t)GAS_ZERO;
-          struct ExceptionalStateTransition exceptional_3_1520;
+          struct ExceptionalStateTransition exceptional_3_1627;
           if (k_execution_profile.protocol.fork >= Amsterdam) {
-            exceptional_3_1520 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1627 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
           } else {
-            exceptional_3_1520 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1627 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
           }
-          state_gas_after_3_1510 = exceptional_3_1520.state_gas_remaining;
-          state_spill_after_3_1511 = exceptional_3_1520.state_gas_spilled;
-          status_after_3_1512 = exceptional_3_1520.status;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+          state_gas_after_3_1617 = exceptional_3_1627.state_gas_remaining;
+          state_spill_after_3_1618 = exceptional_3_1627.state_gas_spilled;
+          status_after_3_1619 = exceptional_3_1627.status;
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
         }
       }
       if (profile_8_67.fork >= Amsterdam) {
-        uint64_t retained_gas_3_1522 = (gas_after / (uint64_t)UINT8_C(64));
-        child_gas = gas_sub(gas_after, retained_gas_3_1522);
-        gas_after = retained_gas_3_1522;
+        uint64_t retained_gas_3_1629 = (gas_after / (uint64_t)UINT8_C(64));
+        child_gas = gas_sub(gas_after, retained_gas_3_1629);
+        gas_after = retained_gas_3_1629;
       }
       bool occupied = k_account_occupied(new_addr);
       returndata_after = returndata_clear();
       k_bump_nonce(carried_address);
       if (occupied) {
         if (new_account_charged) {
-          uint64_t _8_1365_8_1639;
-          uint64_t _8_1366_8_1640;
-          uint32_t _8_1367_8_1641 = credit_state_gas_refund(gas_after, state_gas_after_3_1510, state_spill_after_3_1511, G_amsterdam_state_new_account, &_8_1365_8_1639, &_8_1366_8_1640);
-          gas_after = _8_1365_8_1639;
-          state_gas_after_3_1510 = _8_1366_8_1640;
-          state_spill_after_3_1511 = _8_1367_8_1641;
+          uint64_t _8_1578_8_1700;
+          uint64_t _8_1579_8_1701;
+          uint32_t _8_1580_8_1702 = credit_state_gas_refund(gas_after, state_gas_after_3_1617, state_spill_after_3_1618, G_amsterdam_state_new_account, &_8_1578_8_1700, &_8_1579_8_1701);
+          gas_after = _8_1578_8_1700;
+          state_gas_after_3_1617 = _8_1579_8_1701;
+          state_spill_after_3_1618 = _8_1580_8_1702;
         }
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       Bytes initcode_bytes = memory_code_slice(carried_memory_base, mem1, initcode.off, initcode.len);
       bytes32 child_code_id = code_db_insert(initcode_bytes, profile_8_67.fork);
       struct CodeFields child_code = code_db_resolve(child_code_id);
       struct FrameStatus running = Running(UNIT);
-      struct FrameCheckpoint _8_1553_8_1635;
-      StackPointer _8_1554_8_1636;
-      uint32_t _8_1555_8_1637;
-      uint32_t _8_1556_8_1638 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1511, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1553_8_1635, &_8_1554_8_1636, &_8_1555_8_1637);
-      frame_stack_push((ResumeCreate(((struct CreateContinuation){.address = new_addr, .checkpoint = _8_1553_8_1635, .new_account_charged = new_account_charged}))));
+      struct FrameCheckpoint _8_1614_8_1696;
+      StackPointer _8_1615_8_1697;
+      uint32_t _8_1616_8_1698;
+      uint32_t _8_1617_8_1699 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1618, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1614_8_1696, &_8_1615_8_1697, &_8_1616_8_1698);
+      frame_stack_push((ResumeCreate(((struct CreateContinuation){.address = new_addr, .checkpoint = _8_1614_8_1696, .new_account_charged = new_account_charged}))));
       k_mark_created(new_addr);
       k_clear_storage(new_addr);
       k_bump_nonce(new_addr);
       k_transfer(carried_address, new_addr, value);
-      return ((struct FrameTransition){.calldata = EMPTY_CALLDATA, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1555_8_1637, .memory_height = _8_1556_8_1638, .message = ((struct Message){.address = new_addr, .caller = carried_address, .code_address = new_addr, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = carried_is_static, .state_gas_reservoir = state_gas_after_3_1510, .value = value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = (returndata_clear()), .stack_top = _8_1554_8_1636, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
+      return ((struct FrameTransition){.calldata = EMPTY_CALLDATA, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1616_8_1698, .memory_height = _8_1617_8_1699, .message = ((struct Message){.address = new_addr, .caller = carried_address, .code_address = new_addr, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = carried_is_static, .state_gas_reservoir = state_gas_after_3_1617, .value = value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = (returndata_clear()), .stack_top = _8_1615_8_1697, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
     }
     memory_after = mem1;
     gas_after = (uint64_t)GAS_ZERO;
-    struct ExceptionalStateTransition exceptional_3_1519;
+    struct ExceptionalStateTransition exceptional_3_1626;
     if (k_execution_profile.protocol.fork >= Amsterdam) {
-      exceptional_3_1519 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(InitCodeTooLarge))});
+      exceptional_3_1626 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(InitCodeTooLarge))});
     } else {
-      exceptional_3_1519 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(InitCodeTooLarge))});
+      exceptional_3_1626 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(InitCodeTooLarge))});
     }
-    state_gas_after_3_1510 = exceptional_3_1519.state_gas_remaining;
-    state_spill_after_3_1511 = exceptional_3_1519.state_gas_spilled;
-    status_after_3_1512 = exceptional_3_1519.status;
-    return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+    state_gas_after_3_1617 = exceptional_3_1626.state_gas_remaining;
+    state_spill_after_3_1618 = exceptional_3_1626.state_gas_spilled;
+    status_after_3_1619 = exceptional_3_1626.status;
+    return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
   }
   }
 }
@@ -855,15 +855,21 @@ struct FrameTransition resume_call(struct CallContinuation continuation, Bytes o
   uint64_t parent_gas = refund_gas(checkpoint.gas_remaining, child_gas);
   uint64_t parent_state_gas = checkpoint.state_gas_remaining;
   uint32_t parent_state_spill = checkpoint.state_gas_spilled;
-  uint64_t _8_1368_8_1646;
-  uint32_t _8_1369_8_1647 = return_child_state_gas(parent_state_gas, parent_state_spill, child_state_gas, child_state_spill, &_8_1368_8_1646);
-  parent_state_gas = _8_1368_8_1646;
-  parent_state_spill = _8_1369_8_1647;
+  uint64_t _8_1425_8_1707;
+  uint32_t _8_1426_8_1708 = return_child_state_gas(parent_state_gas, parent_state_spill, child_state_gas, child_state_spill, &_8_1425_8_1707);
+  parent_state_gas = _8_1425_8_1707;
+  parent_state_spill = _8_1426_8_1708;
   __int128 parent_refund = checkpoint.refund;
   StackPointer parent_sp = checkpoint.stack_top;
   uint32_t return_destination = memory_absolute(parent_memory_base, continuation.return_offset);
   returndata_copy_prefix(output, return_destination, continuation.return_length);
   if (succeeded) {
+    uint64_t _8_1609_8_1712;
+    uint64_t _8_1610_8_1713;
+    uint32_t _8_1611_8_1714 = repay_state_gas_spill(parent_gas, parent_state_gas, parent_state_spill, &_8_1609_8_1712, &_8_1610_8_1713);
+    parent_gas = _8_1609_8_1712;
+    parent_state_gas = _8_1610_8_1713;
+    parent_state_spill = _8_1611_8_1714;
     parent_refund = record_refund(parent_refund, child_refund);
     k_journal_commit();
     parent_sp = stack_top_advance(parent_sp, UINT16_C(1));
@@ -871,12 +877,12 @@ struct FrameTransition resume_call(struct CallContinuation continuation, Bytes o
   } else {
     k_journal_revert();
     if (continuation.new_account_charged) {
-      uint64_t _8_1365_8_1648;
-      uint64_t _8_1366_8_1649;
-      uint32_t _8_1367_8_1650 = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account, &_8_1365_8_1648, &_8_1366_8_1649);
-      parent_gas = _8_1365_8_1648;
-      parent_state_gas = _8_1366_8_1649;
-      parent_state_spill = _8_1367_8_1650;
+      uint64_t _8_1578_8_1709;
+      uint64_t _8_1579_8_1710;
+      uint32_t _8_1580_8_1711 = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account, &_8_1578_8_1709, &_8_1579_8_1710);
+      parent_gas = _8_1578_8_1709;
+      parent_state_gas = _8_1579_8_1710;
+      parent_state_spill = _8_1580_8_1711;
     }
     parent_sp = stack_top_advance(parent_sp, UINT16_C(1));
     stack_slot_write(parent_sp, UINT16_C(0), WORD_ZERO);
@@ -919,37 +925,37 @@ struct FrameTransition resume_create(struct CreateContinuation continuation, Byt
         settled_child_gas = gas_sub(settled_child_gas, deployment_charge.cost);
         uint64_t state_deposit = code_deployment_state_cost(deployed_length);
         bool deployment_halt = false;
-        bool _8_1519_8_1656;
-        uint64_t _8_1520_8_1657;
-        uint64_t _8_1521_8_1658;
-        uint32_t _8_1522_8_1659 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(settled_child_gas, settled_child_state_gas, settled_child_state_spill, state_deposit, &_8_1519_8_1656, &_8_1520_8_1657, &_8_1521_8_1658);
-        deployment_halt = _8_1519_8_1656;
-        settled_child_gas = _8_1520_8_1657;
-        settled_child_state_gas = _8_1521_8_1658;
-        settled_child_state_spill = _8_1522_8_1659;
+        bool _8_1574_8_1723;
+        uint64_t _8_1575_8_1724;
+        uint64_t _8_1576_8_1725;
+        uint32_t _8_1577_8_1726 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint64_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(settled_child_gas, settled_child_state_gas, settled_child_state_spill, state_deposit, &_8_1574_8_1723, &_8_1575_8_1724, &_8_1576_8_1725);
+        deployment_halt = _8_1574_8_1723;
+        settled_child_gas = _8_1575_8_1724;
+        settled_child_state_gas = _8_1576_8_1725;
+        settled_child_state_spill = _8_1577_8_1726;
         if (deployment_halt) {
           settled_child_gas = (uint64_t)GAS_ZERO;
-          struct ExceptionalStateTransition exceptional_3_1379;
+          struct ExceptionalStateTransition exceptional_3_1475;
           if (k_execution_profile.protocol.fork >= Amsterdam) {
-            exceptional_3_1379 = ((struct ExceptionalStateTransition){.state_gas_remaining = child_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1475 = ((struct ExceptionalStateTransition){.state_gas_remaining = child_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
           } else {
-            exceptional_3_1379 = ((struct ExceptionalStateTransition){.state_gas_remaining = settled_child_state_gas, .state_gas_spilled = settled_child_state_spill, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1475 = ((struct ExceptionalStateTransition){.state_gas_remaining = settled_child_state_gas, .state_gas_spilled = settled_child_state_spill, .status = (Exceptional(OutOfGas))});
           }
-          settled_child_state_gas = exceptional_3_1379.state_gas_remaining;
-          settled_child_state_spill = exceptional_3_1379.state_gas_spilled;
-          settled_child_status = exceptional_3_1379.status;
+          settled_child_state_gas = exceptional_3_1475.state_gas_remaining;
+          settled_child_state_spill = exceptional_3_1475.state_gas_spilled;
+          settled_child_status = exceptional_3_1475.status;
         }
       } else {
         settled_child_gas = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1380;
+        struct ExceptionalStateTransition exceptional_3_1476;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1380 = ((struct ExceptionalStateTransition){.state_gas_remaining = child_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1476 = ((struct ExceptionalStateTransition){.state_gas_remaining = child_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1380 = ((struct ExceptionalStateTransition){.state_gas_remaining = settled_child_state_gas, .state_gas_spilled = settled_child_state_spill, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1476 = ((struct ExceptionalStateTransition){.state_gas_remaining = settled_child_state_gas, .state_gas_spilled = settled_child_state_spill, .status = (Exceptional(OutOfGas))});
         }
-        settled_child_state_gas = exceptional_3_1380.state_gas_remaining;
-        settled_child_state_spill = exceptional_3_1380.state_gas_spilled;
-        settled_child_status = exceptional_3_1380.status;
+        settled_child_state_gas = exceptional_3_1476.state_gas_remaining;
+        settled_child_state_spill = exceptional_3_1476.state_gas_spilled;
+        settled_child_status = exceptional_3_1476.status;
       }
     }
   }
@@ -962,13 +968,19 @@ struct FrameTransition resume_create(struct CreateContinuation continuation, Byt
   uint64_t parent_gas = refund_gas(checkpoint.gas_remaining, settled_child_gas);
   uint64_t parent_state_gas = checkpoint.state_gas_remaining;
   uint32_t parent_state_spill = checkpoint.state_gas_spilled;
-  uint64_t _8_1368_8_1651;
-  uint32_t _8_1369_8_1652 = return_child_state_gas(parent_state_gas, parent_state_spill, settled_child_state_gas, settled_child_state_spill, &_8_1368_8_1651);
-  parent_state_gas = _8_1368_8_1651;
-  parent_state_spill = _8_1369_8_1652;
+  uint64_t _8_1425_8_1715;
+  uint32_t _8_1426_8_1716 = return_child_state_gas(parent_state_gas, parent_state_spill, settled_child_state_gas, settled_child_state_spill, &_8_1425_8_1715);
+  parent_state_gas = _8_1425_8_1715;
+  parent_state_spill = _8_1426_8_1716;
   __int128 parent_refund = checkpoint.refund;
   StackPointer parent_sp = checkpoint.stack_top;
   if (deploy_succeeds) {
+    uint64_t _8_1609_8_1720;
+    uint64_t _8_1610_8_1721;
+    uint32_t _8_1611_8_1722 = repay_state_gas_spill(parent_gas, parent_state_gas, parent_state_spill, &_8_1609_8_1720, &_8_1610_8_1721);
+    parent_gas = _8_1609_8_1720;
+    parent_state_gas = _8_1610_8_1721;
+    parent_state_spill = _8_1611_8_1722;
     parent_refund = record_refund(parent_refund, child_refund);
     Bytes deployed_code = code_db_intern_output(output);
     k_deploy_code(continuation.address, deployed_code);
@@ -979,12 +991,12 @@ struct FrameTransition resume_create(struct CreateContinuation continuation, Byt
   } else {
     k_journal_revert();
     if (continuation.new_account_charged) {
-      uint64_t _8_1365_8_1653;
-      uint64_t _8_1366_8_1654;
-      uint32_t _8_1367_8_1655 = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account, &_8_1365_8_1653, &_8_1366_8_1654);
-      parent_gas = _8_1365_8_1653;
-      parent_state_gas = _8_1366_8_1654;
-      parent_state_spill = _8_1367_8_1655;
+      uint64_t _8_1578_8_1717;
+      uint64_t _8_1579_8_1718;
+      uint32_t _8_1580_8_1719 = credit_state_gas_refund(parent_gas, parent_state_gas, parent_state_spill, G_amsterdam_state_new_account, &_8_1578_8_1717, &_8_1579_8_1718);
+      parent_gas = _8_1578_8_1717;
+      parent_state_gas = _8_1579_8_1718;
+      parent_state_spill = _8_1580_8_1719;
     }
     parent_sp = stack_top_advance(parent_sp, UINT16_C(1));
     stack_slot_write(parent_sp, UINT16_C(0), WORD_ZERO);
@@ -1039,33 +1051,43 @@ struct FrameTransition run_frame_entry_encoded(uint32_t carried_pc, uint64_t car
   return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = (uint64_t)GAS_ZERO, .memory_base = carried_memory_base, .memory_height = carried_memory_height, .message = ((struct Message){.address = carried_address, .caller = carried_caller, .code_address = carried_code_address, .depth = carried_depth, .is_static = carried_is_static, .state_gas_reservoir = carried_state_gas_reservoir, .value = carried_value}), .pc = carried_pc, .refund = carried_refund, .returndata = carried_returndata, .stack_top = carried_sp, .state_gas_remaining = exceptional.state_gas_remaining, .state_gas_spilled = exceptional.state_gas_spilled, .status = exceptional.status});
 }
 
-Bytes interpret_uint32_t_uint8_t_uint8_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint8_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint32_t initial_gas, uint8_t initial_state_gas, uint8_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint8_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1523, uint64_t *restrict field_1_8_1524, uint32_t *restrict field_2_8_1525, __int128 *restrict field_3_8_1526, struct FrameStatus *restrict framestatus_8_1527)
+Bytes interpret_uint32_t_uint64_t_uint8_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint32_t initial_gas, uint64_t initial_state_gas, uint8_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1581, uint64_t *restrict field_1_8_1582, uint32_t *restrict field_2_8_1583, __int128 *restrict field_3_8_1584, struct FrameStatus *restrict framestatus_8_1585)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   struct ProtocolProfileFields profile = execution_profile.protocol;
   uint8_t fork = profile.fork;
-  u256 blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, (k_header.excess_blob_gas));
-  struct InterpreterCompletion completion = threaded_interpret((uint64_t)initial_gas, (uint64_t)initial_state_gas, (uint32_t)initial_state_spill, initial_refund, initial_sp, initial_memory_base, initial_memory_height, initial_caller, initial_address, initial_code_address, initial_value, (uint64_t)initial_state_gas_reservoir, initial_is_static, (uint16_t)initial_depth, initial_code, initial_calldata, fork, blob_fee);
-  (*field_0_8_1523) = completion.gas_remaining;
-  (*field_1_8_1524) = completion.state_gas_remaining;
-  (*field_2_8_1525) = completion.state_gas_spilled;
-  (*field_3_8_1526) = completion.refund;
-  (*framestatus_8_1527) = completion.status;
+  u256 blob_fee;
+  if (fork >= Cancun) {
+    blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, (k_header.excess_blob_gas));
+  } else {
+    blob_fee = ZERO_WORD;
+  }
+  struct InterpreterCompletion completion = threaded_interpret((uint64_t)initial_gas, initial_state_gas, (uint32_t)initial_state_spill, initial_refund, initial_sp, initial_memory_base, initial_memory_height, initial_caller, initial_address, initial_code_address, initial_value, initial_state_gas_reservoir, initial_is_static, (uint16_t)initial_depth, initial_code, initial_calldata, fork, blob_fee);
+  (*field_0_8_1581) = completion.gas_remaining;
+  (*field_1_8_1582) = completion.state_gas_remaining;
+  (*field_2_8_1583) = completion.state_gas_spilled;
+  (*field_3_8_1584) = completion.refund;
+  (*framestatus_8_1585) = completion.status;
   return completion.output;
 }
 
-Bytes interpret_uint64_t_uint64_t_uint32_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1529, uint64_t *restrict field_1_8_1530, uint32_t *restrict field_2_8_1531, __int128 *restrict field_3_8_1532, struct FrameStatus *restrict framestatus_8_1533)
+Bytes interpret_uint64_t_uint64_t_uint32_t___int128_StackPointer_uint32_t_uint32_t_bytes20_bytes20_bytes20_u256_uint64_t_bool_uint8_t_struct_CodeFields_struct_CalldataSlice_to_struct_tuple_uint_64_uint_64_uint_32_int_128_FrameStatus_Bytes(uint64_t initial_gas, uint64_t initial_state_gas, uint32_t initial_state_spill, __int128 initial_refund, StackPointer initial_sp, uint32_t initial_memory_base, uint32_t initial_memory_height, bytes20 initial_caller, bytes20 initial_address, bytes20 initial_code_address, u256 initial_value, uint64_t initial_state_gas_reservoir, bool initial_is_static, uint8_t initial_depth, struct CodeFields initial_code, struct CalldataSlice initial_calldata, uint64_t *restrict field_0_8_1587, uint64_t *restrict field_1_8_1588, uint32_t *restrict field_2_8_1589, __int128 *restrict field_3_8_1590, struct FrameStatus *restrict framestatus_8_1591)
 {
   struct ExecutionProfileFields execution_profile = k_execution_profile;
   struct ProtocolProfileFields profile = execution_profile.protocol;
   uint8_t fork = profile.fork;
-  u256 blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, (k_header.excess_blob_gas));
+  u256 blob_fee;
+  if (fork >= Cancun) {
+    blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, (k_header.excess_blob_gas));
+  } else {
+    blob_fee = ZERO_WORD;
+  }
   struct InterpreterCompletion completion = threaded_interpret(initial_gas, initial_state_gas, initial_state_spill, initial_refund, initial_sp, initial_memory_base, initial_memory_height, initial_caller, initial_address, initial_code_address, initial_value, initial_state_gas_reservoir, initial_is_static, (uint16_t)initial_depth, initial_code, initial_calldata, fork, blob_fee);
-  (*field_0_8_1529) = completion.gas_remaining;
-  (*field_1_8_1530) = completion.state_gas_remaining;
-  (*field_2_8_1531) = completion.state_gas_spilled;
-  (*field_3_8_1532) = completion.refund;
-  (*framestatus_8_1533) = completion.status;
+  (*field_0_8_1587) = completion.gas_remaining;
+  (*field_1_8_1588) = completion.state_gas_remaining;
+  (*field_2_8_1589) = completion.state_gas_spilled;
+  (*field_3_8_1590) = completion.refund;
+  (*framestatus_8_1591) = completion.status;
   return completion.output;
 }
 
@@ -1087,9 +1109,9 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
   case Kind_Continue:
   {
     uint64_t gas_after = carried_gas;
-    uint64_t state_gas_after_3_1670 = carried_state_gas;
-    uint32_t state_spill_after_3_1671 = carried_state_spill;
-    struct FrameStatus status_after_3_1672 = Running(UNIT);
+    uint64_t state_gas_after_3_1777 = carried_state_gas;
+    uint32_t state_spill_after_3_1778 = carried_state_spill;
+    struct FrameStatus status_after_3_1779 = Running(UNIT);
     StackPointer sp_after = carried_sp;
     uint32_t memory_after = carried_memory_height;
     Bytes returndata_after = carried_returndata;
@@ -1102,18 +1124,18 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
     u256 target_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     bytes20 target = word_to_address(target_word);
-    u256 __sail_c_repr_u256_8_1815;
-    StackPointer stackpointer_8_1816;
+    u256 __sail_c_repr_u256_8_1888;
+    StackPointer stackpointer_8_1889;
     if (semantics.takes_value) {
-      __sail_c_repr_u256_8_1815 = stack_slot_read(sp_after, UINT16_C(0));
-      stackpointer_8_1816 = stack_top_retreat(sp_after, UINT16_C(1));
+      __sail_c_repr_u256_8_1888 = stack_slot_read(sp_after, UINT16_C(0));
+      stackpointer_8_1889 = stack_top_retreat(sp_after, UINT16_C(1));
     } else {
-      __sail_c_repr_u256_8_1815 = WORD_ZERO;
-      stackpointer_8_1816 = sp_after;
+      __sail_c_repr_u256_8_1888 = WORD_ZERO;
+      stackpointer_8_1889 = sp_after;
     }
-    u256 value_3_1673 = __sail_c_repr_u256_8_1815;
-    sp_after = stackpointer_8_1816;
-    bool value_nonzero = word_nonzero(value_3_1673);
+    u256 value_3_1780 = __sail_c_repr_u256_8_1888;
+    sp_after = stackpointer_8_1889;
+    bool value_nonzero = word_nonzero(value_3_1780);
     u256 args_off_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     u256 args_len_word = stack_slot_read(sp_after, UINT16_C(0));
@@ -1124,16 +1146,16 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     if (semantics.transfers_value && (value_nonzero && carried_is_static)) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1674;
+      struct ExceptionalStateTransition exceptional_3_1781;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1674 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1781 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
       } else {
-        exceptional_3_1674 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1781 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(WriteProtection))});
       }
-      state_gas_after_3_1670 = exceptional_3_1674.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1674.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1674.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1781.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1781.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1781.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     bool warm = k_account_is_warm(target);
     uint16_t target_cost = account_cost(warm);
@@ -1163,31 +1185,31 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
     }
     if (!expansion_cost.affordable) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1675;
+      struct ExceptionalStateTransition exceptional_3_1782;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1675 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1782 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1675 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1782 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1675.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1675.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1675.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1782.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1782.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1782.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, expansion_cost.cost);
     uint64_t static_base = ((uint64_t)(uint32_t)target_cost + (uint64_t)(uint32_t)transfer_cost);
     if (gas_after < static_base) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1676;
+      struct ExceptionalStateTransition exceptional_3_1783;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1676 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1783 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1676 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1783 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1676.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1676.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1676.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1783.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1783.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1783.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, static_base);
     k_account_mark_warm(target);
@@ -1206,72 +1228,72 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
     uint64_t additional_cost = ((uint64_t)(uint32_t)delegation_cost + (uint64_t)(uint32_t)create_cost);
     if (gas_after < additional_cost) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1677;
+      struct ExceptionalStateTransition exceptional_3_1784;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1677 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1784 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1677 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1784 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1670 = exceptional_3_1677.state_gas_remaining;
-      state_spill_after_3_1671 = exceptional_3_1677.state_gas_spilled;
-      status_after_3_1672 = exceptional_3_1677.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      state_gas_after_3_1777 = exceptional_3_1784.state_gas_remaining;
+      state_spill_after_3_1778 = exceptional_3_1784.state_gas_spilled;
+      status_after_3_1779 = exceptional_3_1784.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     gas_after = gas_sub(gas_after, additional_cost);
     uint64_t stipend = value_nonzero ? G_callstipend : (uint64_t)GAS_ZERO;
     uint64_t base_child = (uint64_t)GAS_ZERO;
     if (profile_8_192.fork >= Amsterdam) {
       if (new_account_charged) {
-        bool _8_1511_8_1771;
-        uint64_t _8_1512_8_1772;
-        uint64_t _8_1513_8_1773;
-        uint32_t _8_1514_8_1774 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1511_8_1771, &_8_1512_8_1772, &_8_1513_8_1773);
-        gas_after = _8_1512_8_1772;
-        state_gas_after_3_1670 = _8_1513_8_1773;
-        state_spill_after_3_1671 = _8_1514_8_1774;
-        if (_8_1511_8_1771) {
+        bool _8_1570_8_1844;
+        uint64_t _8_1571_8_1845;
+        uint64_t _8_1572_8_1846;
+        uint32_t _8_1573_8_1847 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1570_8_1844, &_8_1571_8_1845, &_8_1572_8_1846);
+        gas_after = _8_1571_8_1845;
+        state_gas_after_3_1777 = _8_1572_8_1846;
+        state_spill_after_3_1778 = _8_1573_8_1847;
+        if (_8_1570_8_1844) {
           gas_after = (uint64_t)GAS_ZERO;
-          struct ExceptionalStateTransition exceptional_3_1678;
+          struct ExceptionalStateTransition exceptional_3_1785;
           if (k_execution_profile.protocol.fork >= Amsterdam) {
-            exceptional_3_1678 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1785 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
           } else {
-            exceptional_3_1678 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1785 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
           }
-          state_gas_after_3_1670 = exceptional_3_1678.state_gas_remaining;
-          state_spill_after_3_1671 = exceptional_3_1678.state_gas_spilled;
-          status_after_3_1672 = exceptional_3_1678.status;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+          state_gas_after_3_1777 = exceptional_3_1785.state_gas_remaining;
+          state_spill_after_3_1778 = exceptional_3_1785.state_gas_spilled;
+          status_after_3_1779 = exceptional_3_1785.status;
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
         }
       }
       base_child = call_gas_cap_word(gas_after, gas_request);
       if (gas_after < base_child) {
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1679;
+        struct ExceptionalStateTransition exceptional_3_1786;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1679 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1786 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1679 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1786 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1670 = exceptional_3_1679.state_gas_remaining;
-        state_spill_after_3_1671 = exceptional_3_1679.state_gas_spilled;
-        status_after_3_1672 = exceptional_3_1679.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        state_gas_after_3_1777 = exceptional_3_1786.state_gas_remaining;
+        state_spill_after_3_1778 = exceptional_3_1786.state_gas_spilled;
+        status_after_3_1779 = exceptional_3_1786.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       gas_after = gas_sub(gas_after, base_child);
     } else {
       base_child = call_gas_cap_word(gas_after, gas_request);
       if (gas_after < base_child) {
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1680;
+        struct ExceptionalStateTransition exceptional_3_1787;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1680 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1787 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1680 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1787 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1670 = exceptional_3_1680.state_gas_remaining;
-        state_spill_after_3_1671 = exceptional_3_1680.state_gas_spilled;
-        status_after_3_1672 = exceptional_3_1680.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        state_gas_after_3_1777 = exceptional_3_1787.state_gas_remaining;
+        state_spill_after_3_1778 = exceptional_3_1787.state_gas_spilled;
+        status_after_3_1779 = exceptional_3_1787.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       gas_after = gas_sub(gas_after, base_child);
     }
@@ -1302,7 +1324,7 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
     bool insufficient_balance;
     if (semantics.takes_value && value_nonzero) {
       u256 caller_balance = k_get_balance(carried_address);
-      insufficient_balance = (bool)(!(word_ule(value_3_1673, caller_balance)));
+      insufficient_balance = (bool)(!(word_ule(value_3_1780, caller_balance)));
     } else {
       insufficient_balance = false;
     }
@@ -1310,17 +1332,17 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
       returndata_after = returndata_clear();
       gas_after = refund_gas(gas_after, child_gas);
       if (new_account_charged) {
-        uint64_t _8_1365_8_1768;
-        uint64_t _8_1366_8_1769;
-        uint32_t _8_1367_8_1770 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1768, &_8_1366_8_1769);
-        gas_after = _8_1365_8_1768;
-        state_gas_after_3_1670 = _8_1366_8_1769;
-        state_spill_after_3_1671 = _8_1367_8_1770;
+        uint64_t _8_1578_8_1841;
+        uint64_t _8_1579_8_1842;
+        uint32_t _8_1580_8_1843 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1841, &_8_1579_8_1842);
+        gas_after = _8_1578_8_1841;
+        state_gas_after_3_1777 = _8_1579_8_1842;
+        state_spill_after_3_1778 = _8_1580_8_1843;
       }
       sp_after = stack_top_advance(sp_after, UINT16_C(1));
       stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
       memory_after = mem1;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     enum PrecompileId selected_precompile = precompile_id_for_address(target);
     if (neq_anything_EPrecompileId__(selected_precompile, NotPrecompile)) {
@@ -1332,7 +1354,7 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
         if (result.success) {
           returndata_after = result.output;
           if (semantics.transfers_value && value_nonzero) {
-            k_transfer(carried_address, target, value_3_1673);
+            k_transfer(carried_address, target, value_3_1780);
           }
           uint32_t return_destination = memory_absolute(carried_memory_base, ret_access.range.off);
           returndata_copy_prefix(returndata_after, return_destination, ret_access.range.len);
@@ -1340,54 +1362,54 @@ struct FrameTransition run_call_uint32_t_uint64_t_uint64_t_uint32_t___int128_Sta
           sp_after = stack_top_advance(sp_after, UINT16_C(1));
           stack_slot_write(sp_after, UINT16_C(0), WORD_ONE);
           memory_after = mem1;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
         }
         returndata_after = returndata_clear();
         if (new_account_charged) {
-          uint64_t _8_1365_8_1765;
-          uint64_t _8_1366_8_1766;
-          uint32_t _8_1367_8_1767 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1765, &_8_1366_8_1766);
-          gas_after = _8_1365_8_1765;
-          state_gas_after_3_1670 = _8_1366_8_1766;
-          state_spill_after_3_1671 = _8_1367_8_1767;
+          uint64_t _8_1578_8_1838;
+          uint64_t _8_1579_8_1839;
+          uint32_t _8_1580_8_1840 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1838, &_8_1579_8_1839);
+          gas_after = _8_1578_8_1838;
+          state_gas_after_3_1777 = _8_1579_8_1839;
+          state_spill_after_3_1778 = _8_1580_8_1840;
         }
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
       }
       returndata_after = returndata_clear();
       if (new_account_charged) {
-        uint64_t _8_1365_8_1762;
-        uint64_t _8_1366_8_1763;
-        uint32_t _8_1367_8_1764 = credit_state_gas_refund(gas_after, state_gas_after_3_1670, state_spill_after_3_1671, G_amsterdam_state_new_account, &_8_1365_8_1762, &_8_1366_8_1763);
-        gas_after = _8_1365_8_1762;
-        state_gas_after_3_1670 = _8_1366_8_1763;
-        state_spill_after_3_1671 = _8_1367_8_1764;
+        uint64_t _8_1578_8_1835;
+        uint64_t _8_1579_8_1836;
+        uint32_t _8_1580_8_1837 = credit_state_gas_refund(gas_after, state_gas_after_3_1777, state_spill_after_3_1778, G_amsterdam_state_new_account, &_8_1578_8_1835, &_8_1579_8_1836);
+        gas_after = _8_1578_8_1835;
+        state_gas_after_3_1777 = _8_1579_8_1836;
+        state_spill_after_3_1778 = _8_1580_8_1837;
       }
       sp_after = stack_top_advance(sp_after, UINT16_C(1));
       stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
       memory_after = mem1;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = state_spill_after_3_1671, .status = status_after_3_1672});
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = state_spill_after_3_1778, .status = status_after_3_1779});
     }
     struct CodeFields child_code = executable_code(target, tg_deleg, tg_target);
     bytes20 child_addr = semantics.uses_target_address ? target : carried_address;
     bytes20 child_caller = semantics.inherits_caller_and_value ? carried_caller : carried_address;
-    u256 child_value = semantics.inherits_caller_and_value ? carried_value : value_3_1673;
+    u256 child_value = semantics.inherits_caller_and_value ? carried_value : value_3_1780;
     Bytes bytes = active_memory_slice(carried_memory_base, mem1, args_access.range.off, args_access.range.len);
     Bytes child_memory = evm_memory_slice(bytes.bytes, bytes.len);
     struct CalldataSlice child_calldata = MemoryCalldata(child_memory);
     struct FrameStatus running = Running(UNIT);
-    struct FrameCheckpoint _8_1553_8_1758;
-    StackPointer _8_1554_8_1759;
-    uint32_t _8_1555_8_1760;
-    uint32_t _8_1556_8_1761 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1671, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1553_8_1758, &_8_1554_8_1759, &_8_1555_8_1760);
-    frame_stack_push((ResumeCall(((struct CallContinuation){.checkpoint = _8_1553_8_1758, .new_account_charged = new_account_charged, .return_length = ret_access.range.len, .return_offset = ret_access.range.off}))));
+    struct FrameCheckpoint _8_1614_8_1831;
+    StackPointer _8_1615_8_1832;
+    uint32_t _8_1616_8_1833;
+    uint32_t _8_1617_8_1834 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1778, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1614_8_1831, &_8_1615_8_1832, &_8_1616_8_1833);
+    frame_stack_push((ResumeCall(((struct CallContinuation){.checkpoint = _8_1614_8_1831, .new_account_charged = new_account_charged, .return_length = ret_access.range.len, .return_offset = ret_access.range.off}))));
     if (semantics.transfers_value && value_nonzero) {
-      k_transfer(carried_address, target, value_3_1673);
+      k_transfer(carried_address, target, value_3_1780);
     }
     Bytes child_returndata = returndata_clear();
-    return ((struct FrameTransition){.calldata = child_calldata, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1555_8_1760, .memory_height = _8_1556_8_1761, .message = ((struct Message){.address = child_addr, .caller = child_caller, .code_address = target, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = (bool)(semantics.enters_static_context || carried_is_static), .state_gas_reservoir = state_gas_after_3_1670, .value = child_value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = child_returndata, .stack_top = _8_1554_8_1759, .state_gas_remaining = state_gas_after_3_1670, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
+    return ((struct FrameTransition){.calldata = child_calldata, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1616_8_1833, .memory_height = _8_1617_8_1834, .message = ((struct Message){.address = child_addr, .caller = child_caller, .code_address = target, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = (bool)(semantics.enters_static_context || carried_is_static), .state_gas_reservoir = state_gas_after_3_1777, .value = child_value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = child_returndata, .stack_top = _8_1615_8_1832, .state_gas_remaining = state_gas_after_3_1777, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
   }
   }
 }
@@ -1410,9 +1432,9 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
   case Kind_Continue:
   {
     uint64_t gas_after = carried_gas;
-    uint64_t state_gas_after_3_1510 = carried_state_gas;
-    uint32_t state_spill_after_3_1511 = carried_state_spill;
-    struct FrameStatus status_after_3_1512 = Running(UNIT);
+    uint64_t state_gas_after_3_1617 = carried_state_gas;
+    uint32_t state_spill_after_3_1618 = carried_state_spill;
+    struct FrameStatus status_after_3_1619 = Running(UNIT);
     StackPointer sp_after = carried_sp;
     uint32_t memory_after = carried_memory_height;
     Bytes returndata_after = carried_returndata;
@@ -1426,28 +1448,28 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
     u256 len_word = stack_slot_read(sp_after, UINT16_C(0));
     sp_after = stack_top_retreat(sp_after, UINT16_C(1));
-    u256 __sail_c_repr_u256_8_1817;
-    StackPointer stackpointer_8_1818;
+    u256 __sail_c_repr_u256_8_1890;
+    StackPointer stackpointer_8_1891;
     if (semantics.uses_salt) {
-      __sail_c_repr_u256_8_1817 = stack_slot_read(sp_after, UINT16_C(0));
-      stackpointer_8_1818 = stack_top_retreat(sp_after, UINT16_C(1));
+      __sail_c_repr_u256_8_1890 = stack_slot_read(sp_after, UINT16_C(0));
+      stackpointer_8_1891 = stack_top_retreat(sp_after, UINT16_C(1));
     } else {
-      __sail_c_repr_u256_8_1817 = WORD_ZERO;
-      stackpointer_8_1818 = sp_after;
+      __sail_c_repr_u256_8_1890 = WORD_ZERO;
+      stackpointer_8_1891 = sp_after;
     }
-    sp_after = stackpointer_8_1818;
+    sp_after = stackpointer_8_1891;
     if (carried_is_static) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1514;
+      struct ExceptionalStateTransition exceptional_3_1621;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1514 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1621 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(WriteProtection))});
       } else {
-        exceptional_3_1514 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(WriteProtection))});
+        exceptional_3_1621 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(WriteProtection))});
       }
-      state_gas_after_3_1510 = exceptional_3_1514.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1514.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1514.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1621.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1621.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1621.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     uint64_t requested_height = memory_requested_height(off_word, len_word);
     struct GasCharge expansion_cost;
@@ -1467,16 +1489,16 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
     }
     if (!expansion_cost.affordable) {
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1515;
+      struct ExceptionalStateTransition exceptional_3_1622;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1515 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1622 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1515 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1622 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1510 = exceptional_3_1515.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1515.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1515.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1622.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1622.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1622.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     gas_after = gas_sub(gas_after, expansion_cost.cost);
     struct MemoryAccessFields initcode_access = memory_access(off_word, len_word);
@@ -1496,16 +1518,16 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
     if (gas_after < access_cost) {
       memory_after = mem1;
       gas_after = (uint64_t)GAS_ZERO;
-      struct ExceptionalStateTransition exceptional_3_1516;
+      struct ExceptionalStateTransition exceptional_3_1623;
       if (k_execution_profile.protocol.fork >= Amsterdam) {
-        exceptional_3_1516 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1623 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
       } else {
-        exceptional_3_1516 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+        exceptional_3_1623 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
       }
-      state_gas_after_3_1510 = exceptional_3_1516.state_gas_remaining;
-      state_spill_after_3_1511 = exceptional_3_1516.state_gas_spilled;
-      status_after_3_1512 = exceptional_3_1516.status;
-      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+      state_gas_after_3_1617 = exceptional_3_1623.state_gas_remaining;
+      state_spill_after_3_1618 = exceptional_3_1623.state_gas_spilled;
+      status_after_3_1619 = exceptional_3_1623.status;
+      return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
     }
     gas_after = gas_sub_uint64_t_uint16_t_to_uint64_t(gas_after, access_cost);
     u256 initcode_word_count;
@@ -1520,16 +1542,16 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
       if (!initcode_cost.affordable) {
         memory_after = mem1;
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1517;
+        struct ExceptionalStateTransition exceptional_3_1624;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1517 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1624 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1517 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1624 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1510 = exceptional_3_1517.state_gas_remaining;
-        state_spill_after_3_1511 = exceptional_3_1517.state_gas_spilled;
-        status_after_3_1512 = exceptional_3_1517.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        state_gas_after_3_1617 = exceptional_3_1624.state_gas_remaining;
+        state_spill_after_3_1618 = exceptional_3_1624.state_gas_spilled;
+        status_after_3_1619 = exceptional_3_1624.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       gas_after = gas_sub(gas_after, initcode_cost.cost);
     }
@@ -1538,16 +1560,16 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
       if (!hashing_cost.affordable) {
         memory_after = mem1;
         gas_after = (uint64_t)GAS_ZERO;
-        struct ExceptionalStateTransition exceptional_3_1518;
+        struct ExceptionalStateTransition exceptional_3_1625;
         if (k_execution_profile.protocol.fork >= Amsterdam) {
-          exceptional_3_1518 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1625 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
         } else {
-          exceptional_3_1518 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+          exceptional_3_1625 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
         }
-        state_gas_after_3_1510 = exceptional_3_1518.state_gas_remaining;
-        state_spill_after_3_1511 = exceptional_3_1518.state_gas_spilled;
-        status_after_3_1512 = exceptional_3_1518.status;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        state_gas_after_3_1617 = exceptional_3_1625.state_gas_remaining;
+        state_spill_after_3_1618 = exceptional_3_1625.state_gas_spilled;
+        status_after_3_1619 = exceptional_3_1625.status;
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       gas_after = gas_sub(gas_after, hashing_cost.cost);
     }
@@ -1556,7 +1578,7 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
       bytes20 new_addr;
       if (semantics.uses_salt) {
         u256 initcode_digest_word = mem_keccak(carried_memory_base, mem1, initcode);
-        new_addr = k_create2_addr(carried_address, __sail_c_repr_u256_8_1817, (word_to_hash(initcode_digest_word)));
+        new_addr = k_create2_addr(carried_address, __sail_c_repr_u256_8_1890, (word_to_hash(initcode_digest_word)));
       } else {
         new_addr = k_create_addr(carried_address, nonce);
       }
@@ -1578,7 +1600,7 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       k_account_mark_warm(new_addr);
       bool new_account_charged = false;
@@ -1586,77 +1608,77 @@ struct FrameTransition run_create_uint32_t_uint64_t_uint64_t_uint32_t___int128_S
         new_account_charged = k_account_is_empty(new_addr);
       }
       if (new_account_charged) {
-        bool _8_1511_8_1782;
-        uint64_t _8_1512_8_1783;
-        uint64_t _8_1513_8_1784;
-        uint32_t _8_1514_8_1785 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1510, state_spill_after_3_1511, G_amsterdam_state_new_account, &_8_1511_8_1782, &_8_1512_8_1783, &_8_1513_8_1784);
-        gas_after = _8_1512_8_1783;
-        state_gas_after_3_1510 = _8_1513_8_1784;
-        state_spill_after_3_1511 = _8_1514_8_1785;
-        if (_8_1511_8_1782) {
+        bool _8_1570_8_1855;
+        uint64_t _8_1571_8_1856;
+        uint64_t _8_1572_8_1857;
+        uint32_t _8_1573_8_1858 = charge_state_gas_uint64_t_uint64_t_uint32_t_uint32_t_to_struct_tuple_bool_uint_64_uint_64_uint_32(gas_after, state_gas_after_3_1617, state_spill_after_3_1618, G_amsterdam_state_new_account, &_8_1570_8_1855, &_8_1571_8_1856, &_8_1572_8_1857);
+        gas_after = _8_1571_8_1856;
+        state_gas_after_3_1617 = _8_1572_8_1857;
+        state_spill_after_3_1618 = _8_1573_8_1858;
+        if (_8_1570_8_1855) {
           memory_after = mem1;
           gas_after = (uint64_t)GAS_ZERO;
-          struct ExceptionalStateTransition exceptional_3_1520;
+          struct ExceptionalStateTransition exceptional_3_1627;
           if (k_execution_profile.protocol.fork >= Amsterdam) {
-            exceptional_3_1520 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1627 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(OutOfGas))});
           } else {
-            exceptional_3_1520 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(OutOfGas))});
+            exceptional_3_1627 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(OutOfGas))});
           }
-          state_gas_after_3_1510 = exceptional_3_1520.state_gas_remaining;
-          state_spill_after_3_1511 = exceptional_3_1520.state_gas_spilled;
-          status_after_3_1512 = exceptional_3_1520.status;
-          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+          state_gas_after_3_1617 = exceptional_3_1627.state_gas_remaining;
+          state_spill_after_3_1618 = exceptional_3_1627.state_gas_spilled;
+          status_after_3_1619 = exceptional_3_1627.status;
+          return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
         }
       }
       if (profile_8_253.fork >= Amsterdam) {
-        uint64_t retained_gas_3_1522 = (gas_after / (uint64_t)UINT8_C(64));
-        child_gas = gas_sub(gas_after, retained_gas_3_1522);
-        gas_after = retained_gas_3_1522;
+        uint64_t retained_gas_3_1629 = (gas_after / (uint64_t)UINT8_C(64));
+        child_gas = gas_sub(gas_after, retained_gas_3_1629);
+        gas_after = retained_gas_3_1629;
       }
       bool occupied = k_account_occupied(new_addr);
       returndata_after = returndata_clear();
       k_bump_nonce(carried_address);
       if (occupied) {
         if (new_account_charged) {
-          uint64_t _8_1365_8_1779;
-          uint64_t _8_1366_8_1780;
-          uint32_t _8_1367_8_1781 = credit_state_gas_refund(gas_after, state_gas_after_3_1510, state_spill_after_3_1511, G_amsterdam_state_new_account, &_8_1365_8_1779, &_8_1366_8_1780);
-          gas_after = _8_1365_8_1779;
-          state_gas_after_3_1510 = _8_1366_8_1780;
-          state_spill_after_3_1511 = _8_1367_8_1781;
+          uint64_t _8_1578_8_1852;
+          uint64_t _8_1579_8_1853;
+          uint32_t _8_1580_8_1854 = credit_state_gas_refund(gas_after, state_gas_after_3_1617, state_spill_after_3_1618, G_amsterdam_state_new_account, &_8_1578_8_1852, &_8_1579_8_1853);
+          gas_after = _8_1578_8_1852;
+          state_gas_after_3_1617 = _8_1579_8_1853;
+          state_spill_after_3_1618 = _8_1580_8_1854;
         }
         sp_after = stack_top_advance(sp_after, UINT16_C(1));
         stack_slot_write(sp_after, UINT16_C(0), WORD_ZERO);
         memory_after = mem1;
-        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+        return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
       }
       Bytes initcode_bytes = memory_code_slice(carried_memory_base, mem1, initcode.off, initcode.len);
       bytes32 child_code_id = code_db_insert(initcode_bytes, profile_8_253.fork);
       struct CodeFields child_code = code_db_resolve(child_code_id);
       struct FrameStatus running = Running(UNIT);
-      struct FrameCheckpoint _8_1553_8_1775;
-      StackPointer _8_1554_8_1776;
-      uint32_t _8_1555_8_1777;
-      uint32_t _8_1556_8_1778 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1511, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1553_8_1775, &_8_1554_8_1776, &_8_1555_8_1777);
-      frame_stack_push((ResumeCreate(((struct CreateContinuation){.address = new_addr, .checkpoint = _8_1553_8_1775, .new_account_charged = new_account_charged}))));
+      struct FrameCheckpoint _8_1614_8_1848;
+      StackPointer _8_1615_8_1849;
+      uint32_t _8_1616_8_1850;
+      uint32_t _8_1617_8_1851 = suspend_frame(carried_pc, gas_after, sp_after, carried_memory_base, mem1, STATE_GAS_ZERO, state_spill_after_3_1618, carried_refund, running, parent_message, carried_code, carried_calldata, &_8_1614_8_1848, &_8_1615_8_1849, &_8_1616_8_1850);
+      frame_stack_push((ResumeCreate(((struct CreateContinuation){.address = new_addr, .checkpoint = _8_1614_8_1848, .new_account_charged = new_account_charged}))));
       k_mark_created(new_addr);
       k_clear_storage(new_addr);
       k_bump_nonce(new_addr);
       k_transfer(carried_address, new_addr, value);
-      return ((struct FrameTransition){.calldata = EMPTY_CALLDATA, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1555_8_1777, .memory_height = _8_1556_8_1778, .message = ((struct Message){.address = new_addr, .caller = carried_address, .code_address = new_addr, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = carried_is_static, .state_gas_reservoir = state_gas_after_3_1510, .value = value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = (returndata_clear()), .stack_top = _8_1554_8_1776, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
+      return ((struct FrameTransition){.calldata = EMPTY_CALLDATA, .code = child_code, .gas_remaining = child_gas, .memory_base = _8_1616_8_1850, .memory_height = _8_1617_8_1851, .message = ((struct Message){.address = new_addr, .caller = carried_address, .code_address = new_addr, .depth = ((uint16_t)((uint32_t)carried_depth + (uint32_t)UINT16_C(1))), .is_static = carried_is_static, .state_gas_reservoir = state_gas_after_3_1617, .value = value}), .pc = UINT32_C(0), .refund = GAS_REFUND_ZERO, .returndata = (returndata_clear()), .stack_top = _8_1615_8_1849, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = running});
     }
     memory_after = mem1;
     gas_after = (uint64_t)GAS_ZERO;
-    struct ExceptionalStateTransition exceptional_3_1519;
+    struct ExceptionalStateTransition exceptional_3_1626;
     if (k_execution_profile.protocol.fork >= Amsterdam) {
-      exceptional_3_1519 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(InitCodeTooLarge))});
+      exceptional_3_1626 = ((struct ExceptionalStateTransition){.state_gas_remaining = carried_state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(InitCodeTooLarge))});
     } else {
-      exceptional_3_1519 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = (Exceptional(InitCodeTooLarge))});
+      exceptional_3_1626 = ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = (Exceptional(InitCodeTooLarge))});
     }
-    state_gas_after_3_1510 = exceptional_3_1519.state_gas_remaining;
-    state_spill_after_3_1511 = exceptional_3_1519.state_gas_spilled;
-    status_after_3_1512 = exceptional_3_1519.status;
-    return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1510, .state_gas_spilled = state_spill_after_3_1511, .status = status_after_3_1512});
+    state_gas_after_3_1617 = exceptional_3_1626.state_gas_remaining;
+    state_spill_after_3_1618 = exceptional_3_1626.state_gas_spilled;
+    status_after_3_1619 = exceptional_3_1626.status;
+    return ((struct FrameTransition){.calldata = carried_calldata, .code = carried_code, .gas_remaining = gas_after, .memory_base = carried_memory_base, .memory_height = memory_after, .message = parent_message, .pc = carried_pc, .refund = carried_refund, .returndata = returndata_after, .stack_top = sp_after, .state_gas_remaining = state_gas_after_3_1617, .state_gas_spilled = state_spill_after_3_1618, .status = status_after_3_1619});
   }
   }
 }

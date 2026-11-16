@@ -15,6 +15,7 @@ from ..._runtime import (
     sail_tdiv_int,
     sail_tmod_int,
     sail_vector_append,
+    sail_vector_subrange,
 )
 from dataclasses import dataclass
 from typing import Annotated, TypeAlias
@@ -93,11 +94,18 @@ from evm.kernel.scratch import (
     scratch_finish,
     scratch_rewind,
 )
-from evm.primitives.fork import Cancun
+from evm.primitives.fork import (
+    London,
+    Shanghai,
+    Cancun,
+    Prague,
+    Amsterdam,
+)
 from evm.primitives.chain_config import (
     ProtocolProfile,
     execution_profile_for,
-    DEFAULT_PROTOCOL_PROFILE,
+    schema_protocol_profile,
+    schema_protocol_profile_forwards_matches,
 )
 from evm.primitives.tx import (
     DecodedTransactionFields,
@@ -147,6 +155,7 @@ from evm.lib.tx import (
 )
 from evm.lib.rlp.codecs.transactions import rlp_decode_tx
 from evm.kernel.lifecycle import k_set_header
+from evm.lib.mpt.trie import validate_secured_state_root
 from evm.kernel import environment
 
 def ssz_offset_table_position(index: ssz_offset_index) -> ssz_offset:
@@ -257,6 +266,7 @@ def ssz_fixed_list_pop(items: BoundedSszListRef, item_size: int) -> tuple[Statel
 
 @dataclass(slots=True)
 class StatelessInputRef:
+    schema_id: Annotated[Bits, BitWidth(16)]
     protocol: ProtocolProfile
     new_payload_request: StatelessInputSlice
     execution_payload: StatelessInputSliceAtLeast
@@ -354,9 +364,10 @@ def decode_stateless_input_ref(input: StatelessInputSlice) -> StatelessInputRef:
     else:
         input_fields = fatal_error(FatalError.InvalidConfig)
     schema_id = sail_vector_append(stateless_input_slice_byte(input_fields, 0), stateless_input_slice_byte(input_fields, 1))
-    if neq_bits(schema_id, STATELESS_SCHEMA_ID):
+    schema_fork = sail_vector_subrange(schema_id, 15, 8, False)
+    if ((neq_bits(sail_vector_subrange(schema_id, 7, 0, False), Bits(8, 0b00000001))) | ((not (schema_protocol_profile_forwards_matches(schema_fork))))):
         fatal_error(FatalError.InvalidConfig)
-    protocol = DEFAULT_PROTOCOL_PROFILE
+    protocol = schema_protocol_profile(schema_fork)
     body_bytes = stateless_input_slice_suffix(input_fields, body_offset_value)
     body = ssz_container_bytes(body_bytes, STATELESS_INPUT_BODY_FIXED_LENGTH)
     container_start = 0
@@ -464,7 +475,7 @@ def decode_stateless_input_ref(input: StatelessInputSlice) -> StatelessInputRef:
     ssz_validate_variable_list(witness_state)
     ssz_validate_variable_list(witness_codes)
     ssz_validate_variable_list(witness_headers)
-    return StatelessInputRef(protocol=protocol, new_payload_request=new_payload_request, execution_payload=execution_payload, versioned_hashes=versioned_hashes, deposits=deposits, withdrawal_requests=withdrawal_requests, consolidation_requests=consolidation_requests, builder_deposit_requests=builder_deposit_requests, builder_exit_requests=builder_exit_requests, extra_data=extra_data, transactions=transactions, withdrawals=withdrawals, block_access_list=block_access_list, witness_state=witness_state, witness_codes=witness_codes, witness_headers=witness_headers, chain_id=chain_identifier(chain_id))
+    return StatelessInputRef(schema_id=schema_id, protocol=protocol, new_payload_request=new_payload_request, execution_payload=execution_payload, versioned_hashes=versioned_hashes, deposits=deposits, withdrawal_requests=withdrawal_requests, consolidation_requests=consolidation_requests, builder_deposit_requests=builder_deposit_requests, builder_exit_requests=builder_exit_requests, extra_data=extra_data, transactions=transactions, withdrawals=withdrawals, block_access_list=block_access_list, witness_state=witness_state, witness_codes=witness_codes, witness_headers=witness_headers, chain_id=chain_identifier(chain_id))
 
 def sha256_request_digest(request_type: Annotated[Bits, BitWidth(8)], s: StatelessInputSlice) -> hash:
     digest_length = scratch_length_add(1, s.len)
@@ -520,6 +531,8 @@ class ParentHeaderFields:
     parent_hash: hash
     state_root: hash
     base_fee: word
+    gas_limit: block_gas_limit
+    gas_used: block_gas
     blob_gas_used: _ParentHeaderFields_blob_gas_used_type
     excess_blob_gas: _ParentHeaderFields_excess_blob_gas_type
     have_parent: bool
@@ -558,31 +571,37 @@ def decode_parent_header_fields(cursor: RlpCursor, field_index: parent_header_fi
                 decoded.state_root = Bytes32(word_to_hash(state_root_word))
                 decoded.have_state = True
             else:
-                if ((field_index) == (15)):
-                    decoded.base_fee = word(rlp_decode_u256(field))
-                    decoded.have_base_fee = True
+                if ((field_index) == (9)):
+                    decoded.gas_limit = block_gas(rlp_decode_uint64(field))
                 else:
-                    if ((field_index) == (17)):
-                        value = rlp_decode_uint64(field)
-                        count = sail_ediv_int(value, (1 << 17))
-                        execution_profile = environment.k_execution_profile
-                        profile = execution_profile.protocol
-                        if (((int(count) <= int(profile.blob_schedule.max))) & (((value) == ((int((1 << 17)) * int(count)))))):
-                            decoded.blob_gas_used = (int((1 << 17)) * int(count))
-                            decoded.have_blob_gas = True
-                        else:
-                            fatal_error(FatalError.RlpDecode)
+                    if ((field_index) == (10)):
+                        decoded.gas_used = block_gas(rlp_decode_uint64(field))
                     else:
-                        if ((field_index) == (18)):
-                            value = rlp_decode_uint64(field)
-                            execution_profile = environment.k_execution_profile
-                            profile = execution_profile.protocol
-                            limit = profile.excess_blob_gas_limit
-                            if (int(value) <= int(limit)):
-                                decoded.excess_blob_gas = excess_blob_gas(value)
-                                decoded.have_excess_blob_gas = True
+                        if ((field_index) == (15)):
+                            decoded.base_fee = word(rlp_decode_u256(field))
+                            decoded.have_base_fee = True
+                        else:
+                            if ((field_index) == (17)):
+                                value = rlp_decode_uint64(field)
+                                count = sail_ediv_int(value, (1 << 17))
+                                execution_profile = environment.k_execution_profile
+                                profile = execution_profile.protocol
+                                if (((int(count) <= int(profile.blob_schedule.max))) & (((value) == ((int((1 << 17)) * int(count)))))):
+                                    decoded.blob_gas_used = (int((1 << 17)) * int(count))
+                                    decoded.have_blob_gas = True
+                                else:
+                                    fatal_error(FatalError.RlpDecode)
                             else:
-                                fatal_error(FatalError.RlpDecode)
+                                if ((field_index) == (18)):
+                                    value = rlp_decode_uint64(field)
+                                    execution_profile = environment.k_execution_profile
+                                    profile = execution_profile.protocol
+                                    limit = profile.excess_blob_gas_limit
+                                    if (int(value) <= int(limit)):
+                                        decoded.excess_blob_gas = excess_blob_gas(value)
+                                        decoded.have_excess_blob_gas = True
+                                    else:
+                                        fatal_error(FatalError.RlpDecode)
         next_field = next_parent_header_field(field_index)
         return decode_parent_header_fields(next, next_field, decoded)
 
@@ -593,6 +612,9 @@ class WitnessHeaderIndex:
     valid: bool
     parent_state_root: hash
     parent_base_fee_per_gas: word
+    parent_has_base_fee: bool
+    parent_gas_limit: block_gas_limit
+    parent_gas_used: block_gas
     parent_blob_gas_used: blob_gas_used
     parent_excess_blob_gas: excess_blob_gas
     parent_fields_valid: bool
@@ -621,9 +643,14 @@ def index_witness_header_cursor(state: WitnessHeaderIndex) -> WitnessHeaderIndex
             if is_last:
                 result.parent_state_root = Bytes32(decoded.state_root)
                 result.parent_base_fee_per_gas = word(decoded.base_fee)
+                result.parent_has_base_fee = decoded.have_base_fee
+                result.parent_gas_limit = block_gas(decoded.gas_limit)
+                result.parent_gas_used = block_gas(decoded.gas_used)
                 result.parent_blob_gas_used = decoded.blob_gas_used
                 result.parent_excess_blob_gas = excess_blob_gas(decoded.excess_blob_gas)
                 result.parent_fields_valid = decoded.have_state
+                if (((int(profile.fork) > int(London))) & ((not (decoded.have_base_fee)))):
+                    result.parent_fields_valid = False
                 if (int(profile.fork) >= int(Cancun)):
                     if (not (decoded.have_base_fee)):
                         result.parent_fields_valid = False
@@ -644,7 +671,7 @@ def index_witness_header_cursor(state: WitnessHeaderIndex) -> WitnessHeaderIndex
 
 def index_witness_headers(headers: WitnessHeaderListRef) -> WitnessContext:
     cursor = ssz_list_cursor(headers)
-    initial = WitnessHeaderIndex(cursor=cursor, previous_hash=hash(ZERO_HASH), valid=((headers.count) != (0)), parent_state_root=hash(ZERO_HASH), parent_base_fee_per_gas=word(ZERO_WORD), parent_blob_gas_used=0, parent_excess_blob_gas=excess_blob_gas(0), parent_fields_valid=False)
+    initial = WitnessHeaderIndex(cursor=cursor, previous_hash=hash(ZERO_HASH), valid=((headers.count) != (0)), parent_state_root=hash(ZERO_HASH), parent_base_fee_per_gas=word(ZERO_WORD), parent_has_base_fee=False, parent_gas_limit=block_gas_limit(0), parent_gas_used=block_gas(0), parent_blob_gas_used=0, parent_excess_blob_gas=excess_blob_gas(0), parent_fields_valid=False)
     indexed = index_witness_header_cursor(initial)
     environment.k_n_headers = BoundedUint[0, 256](headers.count)
     invalid = (not (indexed.valid))
@@ -653,7 +680,7 @@ def index_witness_headers(headers: WitnessHeaderListRef) -> WitnessContext:
     parent_fields_invalid = (not (indexed.parent_fields_valid))
     if parent_fields_invalid:
         fatal_error(FatalError.RlpDecode)
-    return WitnessContext(parent_hash=hash(indexed.previous_hash), parent_state_root=hash(indexed.parent_state_root), parent_base_fee_per_gas=word(indexed.parent_base_fee_per_gas), parent_blob_gas_used=indexed.parent_blob_gas_used, parent_excess_blob_gas=excess_blob_gas(indexed.parent_excess_blob_gas))
+    return WitnessContext(parent_hash=hash(indexed.previous_hash), parent_state_root=hash(indexed.parent_state_root), parent_base_fee_per_gas=word(indexed.parent_base_fee_per_gas), parent_has_base_fee=indexed.parent_has_base_fee, parent_gas_limit=block_gas_limit(indexed.parent_gas_limit), parent_gas_used=block_gas(indexed.parent_gas_used), parent_blob_gas_used=indexed.parent_blob_gas_used, parent_excess_blob_gas=excess_blob_gas(indexed.parent_excess_blob_gas))
 
 def decode_payload_blob_gas_used(payload: StatelessInputSlice, profile: ProtocolProfile) -> blob_gas_used:
     value = decode_ssz_uint(payload, PL_BLOB_GAS_USED)
@@ -697,7 +724,29 @@ def decode_withdrawal(withdrawal: StatelessInputSlice) -> Withdrawal:
 def decode_stateless_input(input_ref: StatelessInputRef) -> StatelessInput:
     payload = input_ref.execution_payload
     header = decode_block_header_ssz(input_ref)
+    protocol = input_ref.protocol
+    fork = protocol.fork
+    versioned_hashes = input_ref.versioned_hashes
+    deposits = input_ref.deposits
+    withdrawal_requests = input_ref.withdrawal_requests
+    consolidation_requests = input_ref.consolidation_requests
+    builder_deposits = input_ref.builder_deposit_requests
+    builder_exits = input_ref.builder_exit_requests
+    if (((int(fork) < int(London))) & (((header.base_fee) != (ZERO_WORD)))):
+        fatal_error(FatalError.InvalidConfig)
+    if (((int(fork) < int(Shanghai))) & (((input_ref.withdrawals.count) != (0)))):
+        fatal_error(FatalError.InvalidConfig)
+    if (int(fork) < int(Cancun)):
+        if ((((versioned_hashes.len) != (0))) | (((((header.blob_gas_used) != (0))) | (((((header.excess_blob_gas) != (0))) | (((header.parent_beacon_block_root) != (ZERO_HASH)))))))):
+            fatal_error(FatalError.InvalidConfig)
+    if (int(fork) < int(Prague)):
+        if ((((deposits.len) != (0))) | (((((withdrawal_requests.len) != (0))) | (((consolidation_requests.len) != (0)))))):
+            fatal_error(FatalError.InvalidConfig)
+    if (int(fork) < int(Amsterdam)):
+        if ((((builder_deposits.len) != (0))) | (((((builder_exits.len) != (0))) | (((header.slot_number) != (0)))))):
+            fatal_error(FatalError.InvalidConfig)
     k_set_header(header)
+    environment.k_historical_access_schema = input_ref.block_access_list
     environment.k_chain_id = chain_identifier(input_ref.chain_id)
     environment.k_execution_profile = execution_profile_for(input_ref.protocol, header.gas_limit)
     return StatelessInput(payload=ExecutionPayload(expected_block_hash=hash(ssz_bytes32(input_ref.execution_payload, PL_BLOCK_HASH)), block=Block(header=header, body=BlockBody(transactions=input_ref.transactions, withdrawals=input_ref.withdrawals, block_access_list=input_ref.block_access_list))), chain_id=chain_identifier(input_ref.chain_id))
@@ -707,6 +756,7 @@ def index_execution_witness(input_ref: StatelessInputRef) -> WitnessContext:
     index_witness_nodes(input_ref.witness_state)
     index_witness_codes(input_ref.witness_codes)
     witness = index_witness_headers(input_ref.witness_headers)
+    validate_secured_state_root(witness.parent_state_root)
     environment.k_parent_state_root = Bytes32(witness.parent_state_root)
     return witness
 
@@ -852,4 +902,4 @@ MAX_WITNESS_HEADERS: int = (1 << 8)
 
 MAX_WITNESS_HEADER_LENGTH: int = (1 << 10)
 
-EMPTY_PARENT_HEADER_FIELDS: ParentHeaderFields = ParentHeaderFields(parent_hash=hash(ZERO_HASH), state_root=hash(ZERO_HASH), base_fee=word(ZERO_WORD), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), have_parent=False, have_state=False, have_base_fee=False, have_blob_gas=False, have_excess_blob_gas=False)
+EMPTY_PARENT_HEADER_FIELDS: ParentHeaderFields = ParentHeaderFields(parent_hash=hash(ZERO_HASH), state_root=hash(ZERO_HASH), base_fee=word(ZERO_WORD), gas_limit=block_gas_limit(0), gas_used=block_gas(0), blob_gas_used=0, excess_blob_gas=excess_blob_gas(0), have_parent=False, have_state=False, have_base_fee=False, have_blob_gas=False, have_excess_blob_gas=False)

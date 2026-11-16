@@ -41,6 +41,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -61,7 +62,7 @@ The `CREATE` and `CREATE2` address rules (YP §7, EIP-1014). -/
 
 /-- The `CREATE` address (YP §7): the low 20 bytes of
 `keccak256(rlp([sender, nonce]))`. -/
-/- Type quantifiers: k_ex424958_ : Nat, 0 ≤ k_ex424958_ ∧ k_ex424958_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex573572_ : Nat, 0 ≤ k_ex573572_ ∧ k_ex573572_ ≤ (2 ^ 64 - 1) -/
 def create_address (sender : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   let address_length := (rlp_addr_size ())
   let nonce_length := (rlp_uint_word_size nonce)

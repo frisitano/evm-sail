@@ -134,7 +134,8 @@ static bool fixed_list_ref(Bytes bytes, uint32_t width, uint32_t maximum_count,
   return true;
 }
 
-struct StatelessInputRef decode_stateless_input_ref(Bytes input)
+struct StatelessInputRef decode_stateless_input_ref(Bytes input,
+                                                    struct ProtocolProfileFields protocol)
 {
   enum {
     STATELESS_INPUT_FIXED_LENGTH = 18,
@@ -168,11 +169,12 @@ struct StatelessInputRef decode_stateless_input_ref(Bytes input)
   struct StatelessInputRef result;
   memset(&result, 0, sizeof(result));
   const uint8_t *source = input.bytes;
-  if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH || source[0] != 0x15 ||
+  if (!source || input.len < STATELESS_INPUT_FIXED_LENGTH || source[0] < 0x0a || source[0] > 0x15 ||
       source[1] != 0x01) {
     fatal_error(InvalidConfig);
   }
-  result.protocol = DEFAULT_PROTOCOL_PROFILE;
+  result.schema_id = (uint16_t)((uint16_t)source[0] << 8) | source[1];
+  result.protocol = protocol;
 
   const Bytes body = source_span(input, SSZ_BODY, input.len);
   const uint8_t *body_source = source + SSZ_BODY;

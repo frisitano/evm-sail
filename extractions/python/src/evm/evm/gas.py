@@ -190,7 +190,7 @@ def sstore_clear_refund() -> gas_constant:
         return gas_constant(R_sclear_pre_london)
 
 def state_gas_spill_room(left: int) -> int:
-    return (int((1 << 24)) - int(left))
+    return (30000000 - int(left))
 
 def state_gas_spill_add(left: int, right: int) -> int:
     room = state_gas_spill_room(left)
@@ -230,6 +230,13 @@ def credit_state_gas_refund(g: gas, state_gas_remaining: state_gas, state_gas_sp
             credited = g
         to_state = (int(amount) - int(spilled))
         return (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
+
+def repay_state_gas_spill(g: gas, remaining: state_gas, spilled: state_gas_spill) -> tuple[gas, state_gas, state_gas_spill]:
+    if (int(remaining) < int(spilled)):
+        repayment = remaining
+    else:
+        repayment = spilled
+    return (conserved_gas_add(g, repayment), (int(remaining) - int(repayment)), (int(spilled) - int(repayment)))
 
 def return_child_state_gas(parent_remaining: state_gas, parent_spilled: state_gas_spill, child_remaining: state_gas, child_spilled: state_gas_spill) -> tuple[state_gas, state_gas_spill]:
     state_room = (int((int((1 << 64)) - 1)) - int(parent_remaining))

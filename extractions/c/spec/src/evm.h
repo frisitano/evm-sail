@@ -76,9 +76,6 @@ typedef uint32_t ztransaction_blob_gas;
 // type abbreviation transaction_blob_count
 typedef sail_int ztransaction_blob_count;
 
-// type abbreviation stateless_input_pointer
-typedef uint32_t zstateless_input_pointer;
-
 // type abbreviation state_gas_spill
 typedef uint32_t zstate_gas_spill;
 
@@ -128,13 +125,24 @@ typedef uint8_t zpush_width;
 typedef sail_int zprofile_excess_blob_gas_limit;
 
 // type abbreviation prepared_authorization_count
-typedef uint16_t zprepared_authorizzation_count;
+typedef uint32_t zprepared_authorizzation_count;
 
 // type abbreviation parent_header_field_cursor
 typedef uint8_t zparent_header_field_cursor;
 
 // type abbreviation pairing_check_result
 typedef uint8_t zpairing_check_result;
+
+// union option<R__sail_c_repr_u256>
+enum kind_zoptionzIR__sail_c_repr_u256zK { Kind_zNonezIR__sail_c_repr_u256zK, Kind_zSomezIR__sail_c_repr_u256zK };
+
+struct zoptionzIR__sail_c_repr_u256zK {
+  enum kind_zoptionzIR__sail_c_repr_u256zK kind;
+  union {
+    struct { unit zNonezIR__sail_c_repr_u256zK; };
+    struct { u256 zSomezIR__sail_c_repr_u256zK; };
+  } variants;
+};
 
 // type abbreviation operand_stack_height
 typedef uint16_t zoperand_stack_height;
@@ -427,6 +435,9 @@ struct zWitnessContext {
   u256 zparent_base_fee_per_gas;
   uint32_t zparent_blob_gas_used;
   uint32_t zparent_excess_blob_gas;
+  uint64_t zparent_gas_limit;
+  uint64_t zparent_gas_used;
+  bool zparent_has_base_fee;
   fixed_bytes_32 zparent_hash;
   fixed_bytes_32 zparent_state_root;
 };
@@ -794,6 +805,8 @@ struct zParentHeaderFields {
   u256 zbase_fee;
   uint32_t zblob_gas_used;
   uint32_t zexcess_blob_gas;
+  uint64_t zgas_limit;
+  uint64_t zgas_used;
   bool zhave_base_fee;
   bool zhave_blob_gas;
   bool zhave_excess_blob_gas;
@@ -1078,7 +1091,7 @@ struct zGasCharge {
 typedef uint8_t zFork;
 
 // enum FatalError
-enum zFatalError { zInvalidConfig, zHeaderChainBroken, zRlpDecode, zInvalidSignature, zInvalidGasLimit, zGasUsedExceedsLimit, zBlobGasLimitExceeded, zExecutionInvalid, zInvalidGasUsed, zInvalidBlobGasUsed, zInvalidExcessBlobGas, zInvalidStateRoot, zInvalidReceiptsRoot, zInvalidLogsBloom, zInvalidBlockHash, zInvalidParentHash, zBlockAccessListTooLarge, zInvalidBlockAccessList, zInvalidExecutionRequests, zWitnessDeficient, zNumericOverflow };
+enum zFatalError { zInvalidConfig, zHeaderChainBroken, zRlpDecode, zInvalidSignature, zInvalidGasLimit, zGasUsedExceedsLimit, zBlobGasLimitExceeded, zExecutionInvalid, zInvalidGasUsed, zInvalidBlobGasUsed, zInvalidExcessBlobGas, zInvalidStateRoot, zInvalidReceiptsRoot, zInvalidLogsBloom, zInvalidBlockHash, zInvalidParentHash, zBlockAccessListTooLarge, zInvalidBlockAccessList, zInvalidExecutionRequests, zInvalidVersionedHashes, zWitnessDeficient, zNumericOverflow };
 
 // enum ExceptionKind
 enum zExceptionKind { zStackUnderflow, zStackOverflow, zOutOfGas, zInvalidOpcode, zInvalidJump, zStaticViolation, zCallDepthExceeded, zInsufficientBalance, zWriteProtection, zInitCodeTooLarge, zNonceOverflow, zAddressCollision };
@@ -1166,9 +1179,6 @@ struct zCodeFields {
 
 // type abbreviation Code
 typedef struct zCodeFields zCode;
-
-// struct ChainConfig
-struct zChainConfig {uint64_t zchain_id;};
 
 // union CalldataSlice
 enum kind_zCalldataSlice { Kind_zInputCalldata, Kind_zMemoryCalldata };
@@ -1289,6 +1299,24 @@ struct zIndexedTrieSource {
   } variants;
 };
 
+// struct tuple_(%struct zStatelessInputSliceFields, %enum zHtrRequestKind)
+struct ztuple_z8z5structz0zzStatelessInputSliceFieldszCz0z5enumz0zzHtrRequestKindz9 {
+  struct zStatelessInputSliceFields ztup0;
+  enum zHtrRequestKind ztup1;
+};
+
+// union HtrProgressiveSource
+enum kind_zHtrProgressiveSource { Kind_zHtrRequestLeaves, Kind_zHtrVersionedHashLeaves, Kind_zHtrWithdrawalLeaves };
+
+struct zHtrProgressiveSource {
+  enum kind_zHtrProgressiveSource kind;
+  union {
+    struct { struct ztuple_z8z5structz0zzStatelessInputSliceFieldszCz0z5enumz0zzHtrRequestKindz9 zHtrRequestLeaves; };
+    struct { struct zStatelessInputSliceFields zHtrVersionedHashLeaves; };
+    struct { struct zBoundedSszzListRef zHtrWithdrawalLeaves; };
+  } variants;
+};
+
 // struct BoundedSszListCursor
 struct zBoundedSszzListCursor {
   uint32_t zcurrent;
@@ -1309,6 +1337,9 @@ struct zWitnessHeaderIndex {
   uint32_t zparent_blob_gas_used;
   uint32_t zparent_excess_blob_gas;
   bool zparent_fields_valid;
+  uint64_t zparent_gas_limit;
+  uint64_t zparent_gas_used;
+  bool zparent_has_base_fee;
   fixed_bytes_32 zparent_state_root;
   fixed_bytes_32 zprevious_hash;
   bool zvalid;
@@ -1379,7 +1410,7 @@ struct zExecutionPayload {
 
 // struct StatelessInput
 struct zStatelessInput {
-  struct zChainConfig zchain_config;
+  uint64_t zchain_id;
   struct zExecutionPayload zpayload;
 };
 
@@ -1408,14 +1439,14 @@ struct zStatelessInputRef {
   struct zStatelessInputSliceFields zblock_access_list;
   struct zStatelessInputSliceFields zbuilder_deposit_requests;
   struct zStatelessInputSliceFields zbuilder_exit_requests;
-  struct zStatelessInputSliceFields zchain_config;
+  uint64_t zchain_id;
   struct zStatelessInputSliceFields zconsolidation_requests;
   struct zStatelessInputSliceFields zdeposits;
   struct zStatelessInputSliceFields zexecution_payload;
   struct zStatelessInputSliceFields zextra_data;
   struct zStatelessInputSliceFields znew_payload_request;
   struct zProtocolProfileFields zprotocol;
-  struct zStatelessInputSliceFields zpublic_keys;
+  uint64_t zschema_id;
   struct zBoundedSszzListRef ztransactions;
   struct zStatelessInputSliceFields zversioned_hashes;
   struct zStatelessInputSliceFields zwithdrawal_requests;
@@ -1522,7 +1553,7 @@ typedef struct node_zz5listz8z5structz0zzAuthorizzzzationz9 *zz5listz8z5structz0
 
 // struct PreparedAuthorizationList
 struct zPreparedAuthorizzationList {
-  uint16_t zcount;
+  uint32_t zcount;
   zz5listz8z5structz0zzAuthorizzzzationz9 zentries;
 };
 
@@ -1618,7 +1649,6 @@ struct zTransactionFields {
   u256 zmax_fee;
   u256 zmax_priority_fee;
   u256 znonce;
-  struct zStatelessInputSliceFields zpubkey;
   struct zStatelessInputSliceFields zraw;
   fixed_bytes_20 zrecipient;
   fixed_bytes_20 zsender;
@@ -1632,6 +1662,29 @@ struct zTransactionFields {
 
 // type abbreviation Transaction
 typedef struct zTransactionFields zTransaction;
+
+// struct DecodedTransactionFields
+struct zDecodedTransactionFields {
+  struct zAccessListRef zaccess_list;
+  struct zAuthorizzationListRefFields zauthorizzations;
+  struct zBlobHashesFields zblob_hashes;
+  uint64_t zchain_id;
+  uint64_t zgas_limit;
+  struct zStatelessInputSliceFields zinput_src;
+  bool zis_create;
+  u256 zmax_blob_fee;
+  u256 zmax_fee;
+  u256 zmax_priority_fee;
+  u256 znonce;
+  struct zStatelessInputSliceFields zraw;
+  fixed_bytes_20 zrecipient;
+  u256 zsig_r;
+  u256 zsig_s;
+  u256 zsig_v;
+  fixed_bytes_32 zsigning_hash;
+  enum zTxType ztx_type;
+  u256 zvalue;
+};
 
 // struct AccessListDecode
 struct zAccessListDecode {
@@ -1705,20 +1758,6 @@ struct ztuple_z8z5boolzCz0z5u8zCz0z5u64z9 {
 struct ztuple_z8z5boolzCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9z9 {
   bool ztup0;
   fixed_bytes_20 ztup1;
-};
-
-// struct tuple_(%u64, %u64, %u32)
-struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 {
-  uint64_t ztup0;
-  uint64_t ztup1;
-  uint32_t ztup2;
-};
-
-// struct tuple_(%u64, %u64, %u8)
-struct ztuple_z8z5u64zCz0z5u64zCz0z5u8z9 {
-  uint64_t ztup0;
-  uint64_t ztup1;
-  uint8_t ztup2;
 };
 
 // struct tuple_(%u64, %u32)
@@ -1817,6 +1856,13 @@ struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5structz0zzStackPointerzCz
   __int128 ztup3;
   struct zStackPointer ztup4;
   struct zOpcodeOutcome ztup5;
+};
+
+// struct tuple_(%u64, %u64, %u32)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint32_t ztup2;
 };
 
 // struct tuple_(%bool, %u64, %u64, %u32)
@@ -2067,6 +2113,13 @@ struct ztuple_z8z5boolzCz0z5u64zCz0z5u8zCz0z5u32z9 {
   uint64_t ztup1;
   uint8_t ztup2;
   uint32_t ztup3;
+};
+
+// struct tuple_(%u64, %u64, %u8)
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u8z9 {
+  uint64_t ztup0;
+  uint64_t ztup1;
+  uint8_t ztup2;
 };
 
 // struct tuple_(%u32, %bv8)
@@ -2514,7 +2567,7 @@ unit zcode_slice_copy_word_offset(struct zCodeRegionSliceFields zs, uint32_t zds
 
 unit zcalldata_slice_copy_word_offset(struct zCalldataSlice zs, uint32_t zdst, u256 zoff, uint32_t zlen);
 
-uint32_t zscratch_begin(unit z3zE5100);
+uint32_t zscratch_begin(unit z3zE5249);
 
 uint32_t zscratch_reserve(uint32_t zlen);
 
@@ -2540,7 +2593,7 @@ struct zScratchSliceFields zscratch_finish(uint32_t zstart);
 
 unit zscratch_rewind(uint32_t zmark);
 
-unit zscratch_reset(unit z3zE5095);
+unit zscratch_reset(unit z3zE5244);
 
 void create_letbind_36(void);
 void kill_letbind_36(void);
@@ -2724,6 +2777,8 @@ void create_letbind_75(void);
 void kill_letbind_75(void);
 
 
+struct zDecodedTransactionFields zpack_decoded_transaction(struct zDecodedTransactionFields ztx);
+
 struct zTransactionFields zpack_transaction(struct zTransactionFields ztx);
 
 uint64_t zlog_store_index_increment(uint64_t zvalue);
@@ -2772,19 +2827,17 @@ void create_letbind_79(void);
 void kill_letbind_79(void);
 
 
-void create_letbind_80(void);
-void kill_letbind_80(void);
-
-
 uint32_t zsszz_u32_at(struct zStatelessInputSliceFields zinput, uint32_t zoffset);
 
 uint32_t zsszz_u32_in_slice(struct zStatelessInputSliceFields zinput, uint32_t zoffset);
 
 uint32_t zsszz_offset_to_source_pointer(uint32_t zvalue);
 
-uint64_t zdecode_sszz_uint(struct zStatelessInputSliceFields zinput, uint32_t zoffset);
-
 uint8_t zsszz_u256_index(uint8_t zindex);
+
+void create_letbind_80(void);
+void kill_letbind_80(void);
+
 
 void create_letbind_81(void);
 void kill_letbind_81(void);
@@ -2800,10 +2853,6 @@ void kill_letbind_83(void);
 
 void create_letbind_84(void);
 void kill_letbind_84(void);
-
-
-void create_letbind_85(void);
-void kill_letbind_85(void);
 
 
 uint32_t zrlp_scratch_small_length(uint8_t zvalue);
@@ -2902,12 +2951,8 @@ fixed_bytes_20 zcreate2_address(fixed_bytes_20 zsender, u256 zsalt, fixed_bytes_
 
 u256 zlegacy_sig_chain_id(u256 zv);
 
-void create_letbind_86(void);
-void kill_letbind_86(void);
-
-
-void create_letbind_87(void);
-void kill_letbind_87(void);
+void create_letbind_85(void);
+void kill_letbind_85(void);
 
 
 fixed_bytes_32 ztx_signing_hash(enum zTxType zt, struct zStatelessInputSliceFields zcontent_src, u256 zv);
@@ -2916,10 +2961,10 @@ fixed_bytes_32 zauth_signing_hash(u256 zchain_id, fixed_bytes_20 zaddr, uint64_t
 
 uint8_t ztx_signature_parity(uint64_t zchain_id, enum zTxSignatureScheme zscheme, u256 zv);
 
-bool ztx_auth_valid(fixed_bytes_20 zsender, fixed_bytes_32 zh, uint8_t zparity, u256 zr, u256 zs);
+fixed_bytes_20 ztx_recover_sender(fixed_bytes_32 zh, uint8_t zparity, u256 zr, u256 zs);
 
-void create_letbind_88(void);
-void kill_letbind_88(void);
+void create_letbind_86(void);
+void kill_letbind_86(void);
 
 
 struct zStatelessInputSliceFields ztransaction_rlp_content(struct zRlpFieldRef zf);
@@ -2930,12 +2975,12 @@ struct zAccessListDecode zdecode_access_list_entries(struct zStatelessInputSlice
 
 struct zAccessListRef zdecode_access_list(struct zRlpFieldRef zf);
 
-void create_letbind_89(void);
-void kill_letbind_89(void);
+void create_letbind_87(void);
+void kill_letbind_87(void);
 
 
-void create_letbind_90(void);
-void kill_letbind_90(void);
+void create_letbind_88(void);
+void kill_letbind_88(void);
 
 
 struct zBlobHashesFields zdecode_blob_hashes(struct zRlpFieldRef zf, uint8_t zlimit);
@@ -2944,7 +2989,7 @@ struct zAuthorizzationListRefFields zdecode_auth_list(struct zRlpFieldRef zf);
 
 struct zAuthorizzation zdecode_authorizzation(struct zRlpFieldRef ztuple);
 
-void zprepare_authorizzation_entries(zz5listz8z5structz0zzAuthorizzzzationz9 *rop, struct zStatelessInputSliceFields zcursor, uint16_t zcount);
+void zprepare_authorizzation_entries(zz5listz8z5structz0zzAuthorizzzzationz9 *rop, struct zStatelessInputSliceFields zcursor, uint32_t zcount);
 
 void zprepare_authorizzations(struct zPreparedAuthorizzationList *rop, struct zAuthorizzationListRefFields zauthorizzations);
 
@@ -2956,21 +3001,21 @@ struct zStatelessInputSliceFields ztx_sig_span(struct zRlpFieldRef zfirst, struc
 
 uint64_t zrlp_decode_gas(struct zRlpFieldRef zf);
 
-struct zTransactionFields zdecode_legacy_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, fixed_bytes_20 zsender, struct zStatelessInputSliceFields zfields);
+struct zDecodedTransactionFields zdecode_legacy_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zfields);
 
-struct zTransactionFields zdecode_access_list_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, fixed_bytes_20 zsender, struct zStatelessInputSliceFields zfields);
+struct zDecodedTransactionFields zdecode_access_list_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zfields);
 
-struct zTransactionFields zdecode_fee_market_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, fixed_bytes_20 zsender, struct zStatelessInputSliceFields zfields);
+struct zDecodedTransactionFields zdecode_fee_market_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zfields);
 
-struct zTransactionFields zdecode_blob_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, uint8_t zblob_limit, fixed_bytes_20 zsender, struct zStatelessInputSliceFields zfields);
+struct zDecodedTransactionFields zdecode_blob_tx(struct zStatelessInputSliceFields ztx, uint8_t zblob_limit, struct zStatelessInputSliceFields zfields);
 
-struct zTransactionFields zdecode_set_code_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, fixed_bytes_20 zsender, struct zStatelessInputSliceFields zfields);
+struct zDecodedTransactionFields zdecode_set_code_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zfields);
 
-struct zTransactionFields zrlp_decode_tx(struct zStatelessInputSliceFields ztx, struct zStatelessInputSliceFields zpubkey, uint8_t zblob_limit);
+struct zDecodedTransactionFields zrlp_decode_tx(struct zStatelessInputSliceFields ztx, uint8_t zblob_limit);
 
-struct zStackPointer zstack_reset(unit z3zE4747);
+struct zStackPointer zstack_reset(unit z3zE4891);
 
-struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4745);
+struct zStackPointer zoperand_stack_push_empty_frame(unit z3zE4889);
 
 uint16_t zstack_top_height(struct zStackPointer ztop);
 
@@ -2990,7 +3035,7 @@ struct zOutputSliceFields zoutput_buffer_words(u256 zfirst, u256 zsecond);
 
 u256 zk_env(enum zEnvField zf);
 
-fixed_bytes_20 zk_coinbase(unit z3zE4727);
+fixed_bytes_20 zk_coinbase(unit z3zE4871);
 
 u256 zblockhash_word_distance(u256 zcurrent, u256 znumber);
 
@@ -3007,6 +3052,8 @@ struct zAccount zk_aload(fixed_bytes_20 za);
 u256 zstateless_storage_by_key(fixed_bytes_32 zroot, fixed_bytes_32 zslot_hash);
 
 enum zPrecompileId zprecompile_id_for_address(fixed_bytes_20 zbytes);
+
+unit zrequire_historical_state_access(fixed_bytes_20 zaddress, struct zoptionzIR__sail_c_repr_u256zK zslot);
 
 struct zStorageKey zstorage_key(fixed_bytes_20 za, u256 zs);
 
@@ -3034,12 +3081,12 @@ unit zk_log_data(struct zLogData zdata);
 
 unit zk_log(fixed_bytes_20 za, struct zLogTopics ztopics, struct zLogData zdata);
 
-struct zLogSeriesRef zread_logs(unit z3zE4686);
+struct zLogSeriesRef zread_logs(unit z3zE4826);
 
 struct zLogDataSliceFields zread_log_data(uint64_t zindex);
 
-void create_letbind_91(void);
-void kill_letbind_91(void);
+void create_letbind_89(void);
+void kill_letbind_89(void);
 
 
 uint64_t zbloom_bit_mask(uint8_t zbit_to_set);
@@ -3122,23 +3169,23 @@ bool zk_was_created(fixed_bytes_20 za);
 
 unit zk_zzero_balance(fixed_bytes_20 za);
 
-unit zk_journal_checkpoint(unit z3zE4620);
+unit zk_journal_checkpoint(unit z3zE4759);
 
 unit zk_set_header(struct zBlockHeader zh);
 
 unit zk_set_tx(struct zTxEnvFields zenv);
 
-unit zk_tx_reset(unit z3zE4614);
+unit zk_tx_reset(unit z3zE4753);
 
 struct zTransactionMergeSemantics ztransaction_merge_semantics(uint8_t zfork);
 
 bool zaccount_deleted_at_tx_end(struct zTransactionMergeSemantics zsemantics, struct zAccount zacc);
 
-unit zk_tx_merge(unit z3zE4580);
+unit zk_tx_merge(unit z3zE4719);
 
-unit zk_journal_revert(unit z3zE4579);
+unit zk_journal_revert(unit z3zE4718);
 
-unit zk_journal_commit(unit z3zE4578);
+unit zk_journal_commit(unit z3zE4717);
 
 __int128 zvalidated_refund_add(__int128 zleft, __int128 zright);
 
@@ -3148,8 +3195,8 @@ uint32_t zframe_code_len(struct zCodeFields zframe_code);
 
 bool zframe_jumpdest_valid(struct zCodeFields zframe_code, uint32_t zdest);
 
-void create_letbind_92(void);
-void kill_letbind_92(void);
+void create_letbind_90(void);
+void kill_letbind_90(void);
 
 
 uint64_t zconserved_gas_add(uint64_t zavailable, uint64_t zcredit);
@@ -3168,7 +3215,7 @@ unit zstack_set(struct zStackPointer ztop, uint16_t zn, u256 zw);
 
 bool zis_running(struct zFrameStatus zframe_status);
 
-struct zOutputSliceFields zreturndata_clear(unit z3zE4571);
+struct zOutputSliceFields zreturndata_clear(unit z3zE4710);
 
 uint32_t zreturndata_sizze(struct zOutputSliceFields zreturndata);
 
@@ -3180,12 +3227,12 @@ uint32_t zreturndata_remaining(uint32_t zavailable, uint32_t zoffset);
 
 uint32_t zmemory_high_water(uint32_t zheight);
 
-void create_letbind_93(void);
-void kill_letbind_93(void);
+void create_letbind_91(void);
+void kill_letbind_91(void);
 
 
-void create_letbind_94(void);
-void kill_letbind_94(void);
+void create_letbind_92(void);
+void kill_letbind_92(void);
 
 
 uint32_t zmemory_absolute(uint32_t zbase, uint32_t zrelative);
@@ -3210,8 +3257,8 @@ unit zmem_mcopy(uint32_t zbase, uint32_t zdst, uint32_t zsrc, uint32_t zlen);
 
 u256 zmem_keccak(uint32_t zbase, uint32_t zmem, struct zMemoryRangeFields zrange);
 
-void create_letbind_95(void);
-void kill_letbind_95(void);
+void create_letbind_93(void);
+void kill_letbind_93(void);
 
 
 u256 zprotocol_word(u256 zvalue);
@@ -3223,6 +3270,14 @@ u256 zblob_base_fee(uint8_t zfork, struct zBlobScheduleFields zschedule, uint32_
 uint32_t zblock_blob_gas_add(uint8_t zmaximum_count, uint32_t zaccumulated, uint32_t ztransaction);
 
 uint32_t znext_excess_blob_gas(struct zProtocolProfileFields zprofile, uint32_t zparent_excess_blob_gas, uint32_t zparent_blob_gas_used, u256 zparent_base_fee_per_gas);
+
+void create_letbind_94(void);
+void kill_letbind_94(void);
+
+
+void create_letbind_95(void);
+void kill_letbind_95(void);
+
 
 void create_letbind_96(void);
 void kill_letbind_96(void);
@@ -3388,19 +3443,7 @@ void create_letbind_136(void);
 void kill_letbind_136(void);
 
 
-void create_letbind_137(void);
-void kill_letbind_137(void);
-
-
-void create_letbind_138(void);
-void kill_letbind_138(void);
-
-
-uint16_t zsstore_clear_refund(unit z3zE4551);
-
-uint32_t zstate_gas_spill_room(uint32_t zleft);
-
-struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 zcredit_state_gas_refund(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint32_t zamount);
+uint16_t zsstore_clear_refund(unit z3zE4690);
 
 struct ztuple_z8z5u64zCz0z5u32z9 zreturn_child_state_gas(uint64_t zparent_remaining, uint32_t zparent_spilled, uint64_t zchild_remaining, uint32_t zchild_spilled);
 
@@ -3414,13 +3457,13 @@ struct zMemoryAccessFields zmemory_access(u256 zstart, u256 zsizze);
 
 uint16_t zaccount_cost(bool zwarm);
 
-uint16_t zexternal_code_read_cost(unit z3zE4531);
+uint16_t zexternal_code_read_cost(unit z3zE4669);
 
 uint16_t zsload_cost(bool zwarm);
 
-uint16_t zcall_value_cost(unit z3zE4530);
+uint16_t zcall_value_cost(unit z3zE4668);
 
-uint16_t zcreate_access_cost(unit z3zE4529);
+uint16_t zcreate_access_cost(unit z3zE4667);
 
 struct zGasCharge zcode_deployment_execution_cost(uint32_t zbyte_len, uint64_t zavailable);
 
@@ -3434,12 +3477,12 @@ uint32_t zpc_blake2_rounds(struct zCalldataSlice zinput);
 
 struct zGasCharge zmodexp_gas(struct zCalldataSlice zinput, uint64_t zavailable);
 
-void create_letbind_139(void);
-void kill_letbind_139(void);
+void create_letbind_137(void);
+void kill_letbind_137(void);
 
 
-void create_letbind_140(void);
-void kill_letbind_140(void);
+void create_letbind_138(void);
+void kill_letbind_138(void);
 
 
 struct zGasCharge zprecompile_gas(enum zPrecompileId znum, struct zCalldataSlice zinput, uint64_t zavailable);
@@ -3469,6 +3512,14 @@ uint64_t zexp_gas(u256 zexponent);
 uint32_t ztransaction_initcode_gas(uint32_t zbyte_len);
 
 uint64_t zcall_gas_cap_word(uint64_t zavailable, u256 zrequested);
+
+void create_letbind_139(void);
+void kill_letbind_139(void);
+
+
+void create_letbind_140(void);
+void kill_letbind_140(void);
+
 
 void create_letbind_141(void);
 void kill_letbind_141(void);
@@ -3646,17 +3697,9 @@ void create_letbind_184(void);
 void kill_letbind_184(void);
 
 
-void create_letbind_185(void);
-void kill_letbind_185(void);
-
-
-void create_letbind_186(void);
-void kill_letbind_186(void);
-
-
 struct zPrecompileResult zprecompile_success(struct zOutputSliceFields zoutput);
 
-struct zPrecompileResult zprecompile_failure(unit z3zE4440);
+struct zPrecompileResult zprecompile_failure(unit z3zE4578);
 
 struct zPrecompileResult zcopied_result(struct zCalldataSlice zdata);
 
@@ -3866,7 +3909,7 @@ void zexecute_swapn(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5union
 
 void zexecute_exchange(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5unionz0zzOpcodeOutcomez9 *rop, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint64_t zimmediate);
 
-void zexecute_stop(struct zFrameStatus *rop, unit z3zE3293);
+void zexecute_stop(struct zFrameStatus *rop, unit z3zE3431);
 
 void zexecute_return(struct ztuple_z8z5u64zCz0z5structz0zzStackPointerzCz0z5u32zCz0z5unionz0zzFrameStatusz9 *rop, uint32_t zmemory_base, uint64_t zcarried_gas, struct zStackPointer zcarried_sp, uint32_t zcarried_memory_height);
 
@@ -3897,6 +3940,14 @@ uint16_t zcreate_stack_inputs(enum zCreateKind zkind);
 void zresume_call(struct zFrameTransition *rop, struct zCallContinuation zcontinuation, struct zOutputSliceFields zoutput, uint32_t zchild_memory_base, uint64_t zchild_gas, uint64_t zchild_state_gas, uint32_t zchild_state_spill, __int128 zchild_refund, struct zFrameStatus zchild_status);
 
 void zresume_create(struct zFrameTransition *rop, struct zCreateContinuation zcontinuation, struct zOutputSliceFields zoutput, uint32_t zchild_memory_base, uint64_t zchild_gas, uint64_t zchild_state_gas, uint32_t zchild_state_spill, __int128 zchild_refund, struct zFrameStatus zchild_status, uint64_t zchild_state_gas_reservoir);
+
+void create_letbind_185(void);
+void kill_letbind_185(void);
+
+
+void create_letbind_186(void);
+void kill_letbind_186(void);
+
 
 void create_letbind_187(void);
 void kill_letbind_187(void);
@@ -3962,18 +4013,6 @@ void create_letbind_202(void);
 void kill_letbind_202(void);
 
 
-void create_letbind_203(void);
-void kill_letbind_203(void);
-
-
-void create_letbind_204(void);
-void kill_letbind_204(void);
-
-
-void create_letbind_205(void);
-void kill_letbind_205(void);
-
-
 struct zCodeRegionSliceFields ztransaction_initcode_slice(struct zStatelessInputSliceFields zinput);
 
 uint64_t zcalldata_cost(struct zStatelessInputSliceFields zinput);
@@ -4000,13 +4039,13 @@ uint16_t zprocess_auth(struct zAuthorizzation zau);
 
 uint64_t zauthorizzation_refund_add(uint16_t zitem, uint64_t zaccumulated);
 
-uint64_t zprocess_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount);
+uint64_t zprocess_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint32_t zcount);
 
 uint64_t zprocess_auth_list(struct zPreparedAuthorizzationList zauthorizzations);
 
 struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zprocess_amsterdam_auth(struct zAuthorizzation zau, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill);
 
-struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zprocess_amsterdam_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value, uint64_t zgas, uint64_t zstate_gas, uint32_t zstate_spill);
+struct ztuple_z8z5boolzCz0z5u64zCz0z5u64zCz0z5u32z9 zprocess_amsterdam_auth_cursor(struct zPreparedAuthorizzationList zauthorizzations, uint32_t zcount, fixed_bytes_20 zsender, fixed_bytes_20 zcurrent_target, bool ztransfers_value, uint64_t zgas, uint64_t zstate_gas, uint32_t zstate_spill);
 
 unit zwarm_access_list_keys(struct zStatelessInputSliceFields zcursor, fixed_bytes_20 zaddr);
 
@@ -4038,8 +4077,8 @@ struct zReceiptFields zsettle_transaction(struct zTransactionFields ztx, struct 
 
 struct zReceiptFields zprocess_transaction(struct zTransactionFields ztx, struct zTransactionGasAllowanceFields zallowance);
 
-void create_letbind_206(void);
-void kill_letbind_206(void);
+void create_letbind_203(void);
+void kill_letbind_203(void);
 
 
 uint8_t zpath_len(struct zTriePath zpath);
@@ -4072,8 +4111,8 @@ struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zhex_prefix_decode_ref(struct z
 
 struct ztuple_z8z5boolzCz0z5structz0zzTriePathz9 zscratch_hex_prefix_decode_ref(struct zScratchRlpFieldRef zf);
 
-void create_letbind_207(void);
-void kill_letbind_207(void);
+void create_letbind_204(void);
+void kill_letbind_204(void);
 
 
 struct zInlineNode zinline_node_from_scratch_slice(struct zScratchSliceFields zbytes);
@@ -4130,8 +4169,8 @@ void zmerge_ext_node(struct zNodeRef *rop, struct zTriePath zprefix, struct zSta
 
 void zmerge_ext_ref(struct zNodeRef *rop, struct zTriePath zprefix, struct zNodeRef zchildref);
 
-void create_letbind_208(void);
-void kill_letbind_208(void);
+void create_letbind_205(void);
+void kill_letbind_205(void);
 
 
 void ztrie_update_source_next(struct zTrieUpdateFetch *rop, struct zTrieUpdateSource zsource);
@@ -4146,7 +4185,7 @@ void ztrie_updates_rebase(struct zTrieUpdateCursor *rop, struct zTrieUpdateCurso
 
 void ztrie_updates_descend(struct zTrieUpdateCursor *rop, struct zTrieUpdateCursor zupdates);
 
-void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1325);
+void ztrie_empty_subtree(struct zTrieItem *rop, unit z3zE1446);
 
 void ztrie_leaf(struct zTrieItem *rop, struct zTriePath zpath, struct zTrieLeafValue zvalue);
 
@@ -4158,7 +4197,7 @@ void ztrie_branch(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef
 
 void ztrie_subtree(struct zTrieItem *rop, struct zTriePath zpath, struct zNodeRef zchildref);
 
-void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1311);
+void ztrie_children_empty(struct zTrieChildren *rop, unit z3zE1432);
 
 void ztrie_children_add(struct zTrieChildren *rop, struct zTrieChildren zchildren, struct zTriePath zprefix, uint64_t zindex, struct zTrieItem zchild);
 
@@ -4194,6 +4233,8 @@ void zupdates_subtree(struct ztuple_z8z5structz0zzTrieItemzCz0z5structz0zzTrieUp
 
 void zwitness_subtree(struct ztuple_z8z5structz0zzTrieItemzCz0z5structz0zzTrieUpdateCursorz9 *rop, struct zStatelessInputSliceFields znode, struct zTriePath zprefix, struct zTrieUpdateCursor zupdates, uint8_t zcursor);
 
+unit zvalidate_secured_state_root(fixed_bytes_32 zroot);
+
 struct zTrieRootResult ztrie_root_cursor(fixed_bytes_32 zbase_root, struct zTrieUpdateCursor zupdates);
 
 struct zTrieRootResult ztrie_root(fixed_bytes_32 zbase_root, struct zTrieUpdateSource zsource);
@@ -4218,11 +4259,23 @@ void znext_storage_trie_update(struct zTrieUpdateFetch *rop, fixed_bytes_20 zadd
 
 void zaccount_trie_update(struct ztuple_z8z5structz0zzTrieUpdatezCz0z5boolz9 *rop, struct zAcctTrieEntry ztrie_entry);
 
-void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1079);
+void znext_changed_account_trie_update(struct zTrieUpdateFetch *rop, unit z3zE1163);
 
-fixed_bytes_32 zcompute_state_root(unit z3zE1074);
+fixed_bytes_32 zcompute_state_root(unit z3zE1158);
 
 unit zvalidation_debug_capture_block_gas(uint64_t z_actual, uint64_t z_expected, uint64_t z_execution, uint64_t z_state);
+
+void create_letbind_206(void);
+void kill_letbind_206(void);
+
+
+void create_letbind_207(void);
+void kill_letbind_207(void);
+
+
+void create_letbind_208(void);
+void kill_letbind_208(void);
+
 
 void create_letbind_209(void);
 void kill_letbind_209(void);
@@ -4464,34 +4517,6 @@ void create_letbind_268(void);
 void kill_letbind_268(void);
 
 
-void create_letbind_269(void);
-void kill_letbind_269(void);
-
-
-void create_letbind_270(void);
-void kill_letbind_270(void);
-
-
-void create_letbind_271(void);
-void kill_letbind_271(void);
-
-
-void create_letbind_272(void);
-void kill_letbind_272(void);
-
-
-void create_letbind_273(void);
-void kill_letbind_273(void);
-
-
-void create_letbind_274(void);
-void kill_letbind_274(void);
-
-
-void create_letbind_275(void);
-void kill_letbind_275(void);
-
-
 uint32_t zsszz_offset_table_position(uint32_t zindex);
 
 struct zBoundedSszzListCursor zsszz_list_cursor(struct zBoundedSszzListRef zitems);
@@ -4501,6 +4526,10 @@ bool zsszz_list_cursor_empty(struct zBoundedSszzListCursor zcursor);
 struct ztuple_z8z5structz0zzStatelessInputSliceFieldszCz0z5structz0zzBoundedSszzzzListCursorz9 zsszz_list_pop(struct zBoundedSszzListCursor zcursor);
 
 struct zStatelessInputSliceFields zsszz_list_at(struct zBoundedSszzListRef zitems, sail_int zindex);
+
+unit zsszz_validate_variable_list_cursor(struct zBoundedSszzListCursor zcursor);
+
+unit zsszz_validate_variable_list(struct zBoundedSszzListRef zitems);
 
 struct ztuple_z8z5structz0zzStatelessInputSliceFieldszCz0z5structz0zzSszzzzContainerCursorz9 zsszz_take(struct zSszzContainerCursor zcursor, uint32_t zstop);
 
@@ -4518,8 +4547,8 @@ unit zindex_witness_codes_cursor(struct zBoundedSszzListCursor zcursor);
 
 unit zindex_witness_codes(struct zBoundedSszzListRef zcodes);
 
-void create_letbind_276(void);
-void kill_letbind_276(void);
+void create_letbind_269(void);
+void kill_letbind_269(void);
 
 
 uint8_t znext_parent_header_field(uint8_t zindex);
@@ -4536,13 +4565,13 @@ struct zBlockHeader zdecode_block_header_sszz(struct zStatelessInputRef zinput_r
 
 struct zWithdrawal zdecode_withdrawal(struct zStatelessInputSliceFields zwithdrawal);
 
-struct zChainConfig zdecode_chain_config(struct zStatelessInputSliceFields zcc, uint64_t znumber, uint64_t ztimestamp);
-
 struct zStatelessInput zdecode_stateless_input(struct zStatelessInputRef zinput_ref);
 
 struct zWitnessContext zindex_execution_witness(struct zStatelessInputRef zinput_ref);
 
-struct zTransactionFields zdecode_transaction(struct zStatelessInputSliceFields ztransaction, struct zStatelessInputSliceFields zpublic_key);
+struct zTransactionFields zrecover_transaction_sender(struct zDecodedTransactionFields ztx);
+
+struct zTransactionFields zdecode_transaction(struct zStatelessInputSliceFields ztransaction);
 
 struct zScratchSliceFields zwithdrawal_rlp(struct zStatelessInputSliceFields zwithdrawal);
 
@@ -4578,7 +4607,7 @@ unit zreceipt_record_append(struct zReceiptFields zr, u128 zcumulative_gas_used)
 
 fixed_bytes_32 zindexed_receipt_trie_root(struct zReceiptRecordsRef zreceipts);
 
-uint32_t zreceipt_store_begin(unit z3zE894);
+uint32_t zreceipt_store_begin(unit z3zE961);
 
 struct ztuple_z8z5structz0zzScratchSliceFieldszCz0z5structz0zzScratchSliceFieldsz9 zreceipt_record_pop(struct zScratchSliceFields zrecords);
 
@@ -4587,6 +4616,34 @@ unit zreceipt_store_append(struct zReceiptFields zreceipt, u128 zcumulative_gas_
 fixed_bytes_32 zreceipt_store_root(uint32_t zrecords_start, uint32_t zcount);
 
 bool zblock_logs_bloom_matches(struct zLogSeriesRef zlogs, struct zStatelessInputSliceFields zreference);
+
+void create_letbind_270(void);
+void kill_letbind_270(void);
+
+
+void create_letbind_271(void);
+void kill_letbind_271(void);
+
+
+void create_letbind_272(void);
+void kill_letbind_272(void);
+
+
+void create_letbind_273(void);
+void kill_letbind_273(void);
+
+
+void create_letbind_274(void);
+void kill_letbind_274(void);
+
+
+void create_letbind_275(void);
+void kill_letbind_275(void);
+
+
+void create_letbind_276(void);
+void kill_letbind_276(void);
+
 
 void create_letbind_277(void);
 void kill_letbind_277(void);
@@ -4672,34 +4729,6 @@ void create_letbind_297(void);
 void kill_letbind_297(void);
 
 
-void create_letbind_298(void);
-void kill_letbind_298(void);
-
-
-void create_letbind_299(void);
-void kill_letbind_299(void);
-
-
-void create_letbind_300(void);
-void kill_letbind_300(void);
-
-
-void create_letbind_301(void);
-void kill_letbind_301(void);
-
-
-void create_letbind_302(void);
-void kill_letbind_302(void);
-
-
-void create_letbind_303(void);
-void kill_letbind_303(void);
-
-
-void create_letbind_304(void);
-void kill_letbind_304(void);
-
-
 void zrun_system_call_frame(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, fixed_bytes_20 ztgt, struct zCodeFields zcode, struct zCalldataSlice zinput, uint32_t zmemory_base);
 
 unit zsystem_call(fixed_bytes_20 ztgt, fixed_bytes_32 zinput);
@@ -4746,23 +4775,35 @@ unit zbal_validate_code_changes(struct zStatelessInputSliceFields zcursor);
 
 uint32_t zbal_validate_accounts(struct zStatelessInputSliceFields zcursor);
 
+unit zvalidate_historical_schema_slots(struct zStatelessInputSliceFields zcursor, u256 zprevious, bool zhave_previous, fixed_bytes_32 zstorage_root);
+
+unit zvalidate_historical_schema_accounts(struct zStatelessInputSliceFields zcursor, u256 zprevious, bool zhave_previous);
+
+unit zvalidate_historical_access_schema(struct zStatelessInputSliceFields zbytes);
+
+bool zhistorical_schema_has_slot(struct zStatelessInputSliceFields zcursor, u256 zslot);
+
+bool zhistorical_schema_has_access(struct zStatelessInputSliceFields zcursor, u256 zaddress, struct zoptionzIR__sail_c_repr_u256zK zslot);
+
 unit zvalidate_block_access_list(struct zStatelessInputSliceFields zbytes, uint64_t zblock_gas_limit);
 
 struct zBlockGasUsageFields zblock_gas_usage_empty(uint64_t z_limit);
 
-void create_letbind_305(void);
-void kill_letbind_305(void);
+void create_letbind_298(void);
+void kill_letbind_298(void);
 
 
-unit zrun_block_start_system_calls(unit z3zE795);
+unit zrun_block_start_system_calls(unit z3zE836);
 
-struct zBlockExecutionResult zexecute_block_transactions(struct zBoundedSszzListRef ztransactions, struct zStatelessInputSliceFields zpublic_keys, struct zStatelessInputSliceFields zexpected_deposits);
+struct zBlockExecutionResult zexecute_block_transactions(struct zBoundedSszzListRef ztransactions, struct zStatelessInputSliceFields zexpected_deposits, struct zStatelessInputSliceFields zexpected_versioned_hashes);
 
 unit zapply_withdrawals(struct zBoundedSszzListRef zwithdrawals);
 
 unit zapply_block_end_state(struct zBlockBody zbody);
 
 struct zBlockExecutionResult zexecute_block_body(struct zBlockBody zbody, struct zStatelessInputRef zinput_ref);
+
+struct ztuple_z8z5u16zCz0z5u16z9 zblock_header_rlp_lengths(struct zBlockHeader zheader);
 
 fixed_bytes_32 zblock_header_hash(struct zBlockHeader zheader, fixed_bytes_32 ztransactions_root, fixed_bytes_32 zwithdrawals_root, fixed_bytes_32 zrequests_hash, fixed_bytes_32 zblock_access_list_hash);
 
@@ -4788,11 +4829,45 @@ fixed_bytes_32 zwithdrawals_trie_root(struct zBoundedSszzListRef zwds);
 
 uint32_t zexpected_payload_excess_blob_gas(struct zWitnessContext zwitness);
 
+u320 zexpected_payload_base_fee(struct zWitnessContext zwitness);
+
+unit zvalidate_block_rlp_sizze(struct zBlockHeader zheader, struct zBoundedSszzListRef ztransactions, struct zBoundedSszzListRef zwithdrawals);
+
 fixed_bytes_32 zexecution_requests_hash(struct zStatelessInputRef zinput_ref);
 
 unit zvalidate_execution_payload(struct zStatelessInput zinput, struct zStatelessInputRef zinput_ref, struct zWitnessContext zwitness);
 
 unit zvalidate_executed_block(struct zBlock zblock, struct zBlockExecutionResult zresult);
+
+void create_letbind_299(void);
+void kill_letbind_299(void);
+
+
+void create_letbind_300(void);
+void kill_letbind_300(void);
+
+
+void create_letbind_301(void);
+void kill_letbind_301(void);
+
+
+void create_letbind_302(void);
+void kill_letbind_302(void);
+
+
+void create_letbind_303(void);
+void kill_letbind_303(void);
+
+
+unit zverify_stateless_payload(struct zStatelessInputRef zinput_ref);
+
+void create_letbind_304(void);
+void kill_letbind_304(void);
+
+
+void create_letbind_305(void);
+void kill_letbind_305(void);
+
 
 void create_letbind_306(void);
 void kill_letbind_306(void);
@@ -4813,8 +4888,6 @@ void kill_letbind_309(void);
 void create_letbind_310(void);
 void kill_letbind_310(void);
 
-
-unit zverify_stateless_payload(struct zStatelessInputRef zinput_ref);
 
 void create_letbind_311(void);
 void kill_letbind_311(void);
@@ -4984,6 +5057,10 @@ void create_letbind_352(void);
 void kill_letbind_352(void);
 
 
+fixed_bytes_32 zsszz_zzero_hash(uint8_t zlevel);
+
+uint32_t zhtr_leaf_capacity(uint8_t zdepth);
+
 void create_letbind_353(void);
 void kill_letbind_353(void);
 
@@ -4992,29 +5069,7 @@ void create_letbind_354(void);
 void kill_letbind_354(void);
 
 
-void create_letbind_355(void);
-void kill_letbind_355(void);
-
-
-void create_letbind_356(void);
-void kill_letbind_356(void);
-
-
-void create_letbind_357(void);
-void kill_letbind_357(void);
-
-
-void create_letbind_358(void);
-void kill_letbind_358(void);
-
-
-void create_letbind_359(void);
-void kill_letbind_359(void);
-
-
-fixed_bytes_32 zsszz_zzero_hash(uint8_t zlevel);
-
-uint32_t zhtr_leaf_capacity(uint8_t zdepth);
+fixed_bytes_32 zmix_in_active_fields(fixed_bytes_32 zroot, fixed_bytes_32 zactive_fields);
 
 fixed_bytes_32 zhtr_uint(uint64_t zv);
 
@@ -5037,6 +5092,8 @@ uint32_t zhtr_chunk_count(uint32_t zbyte_len);
 fixed_bytes_32 zhtr_bytes_root(struct zStatelessInputSliceFields zbytes, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytevector(struct zStatelessInputSliceFields zbytes);
+
+fixed_bytes_32 zhtr_progressive_bytelist(struct zStatelessInputSliceFields zbytes);
 
 fixed_bytes_32 zhtr_withdrawal(struct zStatelessInputSliceFields zwithdrawal);
 
@@ -5074,19 +5131,17 @@ fixed_bytes_32 zhtr_execution_requests(struct zStatelessInputRef zinput_ref);
 
 fixed_bytes_32 zhtr_new_payload_request(struct zStatelessInputRef zinput_ref);
 
-void create_letbind_360(void);
-void kill_letbind_360(void);
+void create_letbind_355(void);
+void kill_letbind_355(void);
 
 
-unit zwrite_prefix(fixed_bytes_32 zroot, bool zsuccess);
-
-unit zcommit_validation_result(fixed_bytes_32 zroot, bool zsuccess, struct zStatelessInputSliceFields zchain_config);
+unit zcommit_validation_result(fixed_bytes_32 zroot, bool zsuccess, uint64_t zchain_id, uint64_t zschema_id);
 
 unit zwrite_validation_result(struct zStatelessInputRef zinput_ref, bool zsuccess);
 
-unit zmain(unit z3zE444);
+unit zmain(unit z3zE443);
 
-unit zinitializze_registers(unit z3zE443);
+unit zinitializze_registers(unit z3zE442);
 
 struct zPrecompileResult zaccelerator_result_bool_uint16_t_to_struct_zzPrecompileResult(bool zsuccess, uint16_t zoutput_len);
 
@@ -5109,6 +5164,8 @@ uint64_t zanalyzze_code_struct_zzCodeRegionSliceFields_uint8_t_to_uint64_t_varia
 unit zanalyzze_code_from(struct zCodeRegionSliceFields zcode, uint8_t zfork, uint64_t ztable, uint8_t zpc);
 
 struct zAuthorizzationListRefFields zauthorizzation_list_ref_struct_zzStatelessInputSliceFields_uint8_t_to_struct_zzAuthorizzzzationListRefFields(struct zStatelessInputSliceFields zencoded, uint8_t zcount);
+
+unit zbal_compare_index_word_struct_zzRlpFieldRef_uint8_t_u256_to_unit(struct zRlpFieldRef zpair, uint8_t zindex, u256 zvalue);
 
 uint32_t zblock_blob_gas_add_uint8_t_uint32_t_uint32_t_to_uint32_t(uint8_t zmaximum_count, uint32_t zaccumulated, uint32_t ztransaction);
 
@@ -5162,7 +5219,13 @@ uint8_t zcompute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint8_t_t
 
 uint64_t zconserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t zavailable, uint32_t zcredit);
 
+struct zStatelessInputSliceFields zconsume_versioned_hashes_struct_zzBlobHashesFields_uint8_t_struct_zzStatelessInputSliceFields_to_struct_zzStatelessInputSliceFields(struct zBlobHashesFields zblob_hashes, uint8_t zindex, struct zStatelessInputSliceFields zexpected);
+
+struct zStatelessInputSliceFields zconsume_versioned_hashes_struct_zzBlobHashesFields_uint8_t_struct_zzStatelessInputSliceFields_to_struct_zzStatelessInputSliceFields_variant_2(struct zBlobHashesFields zblob_hashes, uint8_t zindex, struct zStatelessInputSliceFields zexpected);
+
 struct zGasCharge zcopy_gas_cost_u256_uint64_t_to_struct_zzGasCharge(u256 zsizze, uint64_t zavailable);
+
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 zcredit_state_gas_refund(uint64_t zg, uint64_t zstate_gas_remaining, uint32_t zstate_gas_spilled, uint32_t zamount);
 
 uint8_t zdecode_blob_hash_items_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_uint8_t(struct zStatelessInputSliceFields zcursor, uint8_t zlimit, uint8_t zcount);
 
@@ -5288,35 +5351,95 @@ void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcom
 
 void zguard_stack_struct_zzStackPointer_uint8_t_uint8_t_to_struct_zzOpcodeOutcome_variant_16(struct zOpcodeOutcome *rop, struct zStackPointer zcarried_sp, uint8_t zinputs, uint8_t zoutputs);
 
-fixed_bytes_32 zhtr_bytelist_struct_zzStatelessInputSliceFields_uint32_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint32_t zlimit_bytes);
+fixed_bytes_32 zhtr_bytelist(struct zStatelessInputSliceFields zbytes, uint8_t zlimit_bytes);
 
-fixed_bytes_32 zhtr_bytelist_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint8_t zlimit_bytes);
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_progressive_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zbytes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zbytes, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zbytes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zbytes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_bytes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zbytes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_chunk_struct_zzStatelessInputSliceFields_u128_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, u128 zchunk_index);
 
@@ -5332,11 +5455,7 @@ fixed_bytes_32 zhtr_chunk_struct_zzStatelessInputSliceFields_uint64_t_to_fixed_b
 
 fixed_bytes_32 zhtr_chunk_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint8_t zchunk_index);
 
-fixed_bytes_32 zhtr_chunk_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zbytes, uint8_t zchunk_index);
-
 fixed_bytes_32 zhtr_chunk_struct_zzStatelessInputSliceFields_sail_int_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, sail_int zchunk_index);
-
-uint32_t zhtr_chunk_count_uint32_t_to_uint32_t(uint32_t zbyte_len);
 
 uint32_t zhtr_chunk_count_uint8_t_to_uint32_t(uint8_t zbyte_len);
 
@@ -5350,27 +5469,37 @@ uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_4(uint8_t zdepth);
 
 uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_5(uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_6(uint8_t zdepth);
+uint8_t zhtr_progressive_next_depth_uint32_t_uint8_t_to_uint8_t(uint32_t zremaining, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_7(uint8_t zdepth);
+uint8_t zhtr_progressive_next_depth_uint32_t_uint8_t_to_uint8_t_variant_2(uint32_t zremaining, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_8(uint8_t zdepth);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_9(uint8_t zdepth);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_10(uint8_t zdepth);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_11(uint8_t zdepth);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
-uint32_t zhtr_leaf_capacity_uint8_t_to_uint32_t_variant_12(uint8_t zdepth);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_length_chunk_uint16_t_to_fixed_bytes_32(uint16_t zlen);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_length_chunk_uint8_t_to_fixed_bytes_32(uint8_t zlen);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_length_chunk_uint8_t_to_fixed_bytes_32_variant_2(uint8_t zlen);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_length_chunk_uint8_t_to_fixed_bytes_32_variant_3(uint8_t zlen);
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zHtrProgressiveSource zsource, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zHtrProgressiveSource zsource, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_progressive_source_struct_zzHtrProgressiveSource_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zHtrProgressiveSource zsource, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_request_leaf_struct_zzStatelessInputSliceFields_u128_enum_zzHtrRequestKind_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, u128 zindex, enum zHtrRequestKind zkind);
 
@@ -5392,17 +5521,37 @@ fixed_bytes_32 zhtr_request_leaf_struct_zzStatelessInputSliceFields_uint64_t_enu
 
 fixed_bytes_32 zhtr_request_leaf_struct_zzStatelessInputSliceFields_uint8_t_enum_zzHtrRequestKind_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, uint8_t zindex, enum zHtrRequestKind zkind);
 
+fixed_bytes_32 zhtr_requests_progressive(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5410,29 +5559,27 @@ fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzH
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_6(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
-
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
-
-fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_requests_subtree_struct_zzStatelessInputSliceFields_enum_zzHtrRequestKind_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zrequests, enum zHtrRequestKind zkind, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_sszz_addr_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zbytes, uint8_t zoffset);
 
@@ -5492,17 +5639,61 @@ fixed_bytes_32 zhtr_sszz_uint_struct_zzStatelessInputSliceFields_uint8_t_to_fixe
 
 fixed_bytes_32 zhtr_sszz_uint_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_32_variant_6(struct zStatelessInputSliceFields zbytes, uint8_t zoffset);
 
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_progressive_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef ztransactions, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef ztransactions, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef ztransactions, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5514,25 +5705,55 @@ fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint64_t_
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef ztransactions, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_transactions_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef ztransactions, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_progressive(struct zStatelessInputSliceFields zversioned_hashes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zversioned_hashes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zversioned_hashes, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zversioned_hashes, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zversioned_hashes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zversioned_hashes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zversioned_hashes, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zversioned_hashes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zversioned_hashes, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zversioned_hashes, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5544,25 +5765,55 @@ fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zversioned_hashes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zversioned_hashes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zversioned_hashes, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zStatelessInputSliceFields zversioned_hashes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zStatelessInputSliceFields zversioned_hashes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zStatelessInputSliceFields zversioned_hashes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zStatelessInputSliceFields zversioned_hashes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_versioned_hashes_subtree_struct_zzStatelessInputSliceFields_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zStatelessInputSliceFields zversioned_hashes, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_progressive(struct zBoundedSszzListRef zwithdrawals, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef zwithdrawals, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef zwithdrawals, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef zwithdrawals, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef zwithdrawals, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef zwithdrawals, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef zwithdrawals, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef zwithdrawals, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef zwithdrawals, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef zwithdrawals, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5574,17 +5825,27 @@ fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint64_t_u
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef zwithdrawals, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef zwithdrawals, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef zwithdrawals, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(struct zBoundedSszzListRef zwithdrawals, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(struct zBoundedSszzListRef zwithdrawals, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(struct zBoundedSszzListRef zwithdrawals, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(struct zBoundedSszzListRef zwithdrawals, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zhtr_withdrawals_subtree_struct_zzBoundedSszzzzListRef_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(struct zBoundedSszzListRef zwithdrawals, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
 bool zinitcode_sizze_allowed(uint32_t zsizze);
 
-void zinterpret_uint32_t_uint8_t_uint8_t___int128_struct_zzStackPointer_uint32_t_uint32_t_fixed_bytes_20_fixed_bytes_20_fixed_bytes_20_u256_uint8_t_bool_uint8_t_struct_zzCodeFields_struct_zzCalldataSlice_to_struct_zztuple_zz8zz5u64zzCzz0zz5u64zzCzz0zz5u32zzCzz0zz5i128zzCzz0zz5unionzz0zzzzFrameStatuszzCzz0zz5structzz0zzzzOutputSliceFieldszz9(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, uint32_t zinitial_gas, uint8_t zinitial_state_gas, uint8_t zinitial_state_spill, __int128 zinitial_refund, struct zStackPointer zinitial_sp, uint32_t zinitial_memory_base, uint32_t zinitial_memory_height, fixed_bytes_20 zinitial_caller, fixed_bytes_20 zinitial_address, fixed_bytes_20 zinitial_code_address, u256 zinitial_value, uint8_t zinitial_state_gas_reservoir, bool zinitial_is_static, uint8_t zinitial_depth, struct zCodeFields zinitial_code, struct zCalldataSlice zinitial_calldata);
+void zinterpret_uint32_t_uint64_t_uint8_t___int128_struct_zzStackPointer_uint32_t_uint32_t_fixed_bytes_20_fixed_bytes_20_fixed_bytes_20_u256_uint64_t_bool_uint8_t_struct_zzCodeFields_struct_zzCalldataSlice_to_struct_zztuple_zz8zz5u64zzCzz0zz5u64zzCzz0zz5u32zzCzz0zz5i128zzCzz0zz5unionzz0zzzzFrameStatuszzCzz0zz5structzz0zzzzOutputSliceFieldszz9(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, uint32_t zinitial_gas, uint64_t zinitial_state_gas, uint8_t zinitial_state_spill, __int128 zinitial_refund, struct zStackPointer zinitial_sp, uint32_t zinitial_memory_base, uint32_t zinitial_memory_height, fixed_bytes_20 zinitial_caller, fixed_bytes_20 zinitial_address, fixed_bytes_20 zinitial_code_address, u256 zinitial_value, uint64_t zinitial_state_gas_reservoir, bool zinitial_is_static, uint8_t zinitial_depth, struct zCodeFields zinitial_code, struct zCalldataSlice zinitial_calldata);
 
 void zinterpret_uint64_t_uint64_t_uint32_t___int128_struct_zzStackPointer_uint32_t_uint32_t_fixed_bytes_20_fixed_bytes_20_fixed_bytes_20_u256_uint64_t_bool_uint8_t_struct_zzCodeFields_struct_zzCalldataSlice_to_struct_zztuple_zz8zz5u64zzCzz0zz5u64zzCzz0zz5u32zzCzz0zz5i128zzCzz0zz5unionzz0zzzzFrameStatuszzCzz0zz5structzz0zzzzOutputSliceFieldszz9(struct ztuple_z8z5u64zCz0z5u64zCz0z5u32zCz0z5i128zCz0z5unionz0zzFrameStatuszCz0z5structz0zzOutputSliceFieldsz9 *rop, uint64_t zinitial_gas, uint64_t zinitial_state_gas, uint32_t zinitial_state_spill, __int128 zinitial_refund, struct zStackPointer zinitial_sp, uint32_t zinitial_memory_base, uint32_t zinitial_memory_height, fixed_bytes_20 zinitial_caller, fixed_bytes_20 zinitial_address, fixed_bytes_20 zinitial_code_address, u256 zinitial_value, uint64_t zinitial_state_gas_reservoir, bool zinitial_is_static, uint8_t zinitial_depth, struct zCodeFields zinitial_code, struct zCalldataSlice zinitial_calldata);
 
@@ -5662,8 +5923,6 @@ struct zGasCharge zmemory_word_gas_cost_uint16_t_uint16_t_u256_uint64_t_to_struc
 
 struct zGasCharge zmemory_word_gas_cost_uint16_t_uint8_t_u256_uint64_t_to_struct_zzGasCharge(uint16_t zbase, uint8_t zper_word, u256 zsizze, uint64_t zavailable);
 
-fixed_bytes_32 zmerkleizze_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zdepth);
-
 fixed_bytes_32 zmerkleizze_zzzz5fveczz82zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_to_fixed_bytes_32(zz5fvecz82zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_zzzz5fveczz83zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_to_fixed_bytes_32(zz5fvecz83zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zdepth);
@@ -5672,17 +5931,117 @@ fixed_bytes_32 zmerkleizze_zzzz5fveczz84zzCzz0zz5structzz0zzzz__sail_c_repr_fixe
 
 fixed_bytes_32 zmerkleizze_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_progressive_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves);
+
+fixed_bytes_32 zmerkleizze_progressive_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_progressive_from_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5694,13 +6053,23 @@ fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz819zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz819zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz82zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz82zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5796,13 +6165,31 @@ fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__s
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
@@ -5810,51 +6197,97 @@ fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__s
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5fveczz85zzCzz0zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5fvecz85zCz0z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u128_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u128 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u256_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u256 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_u320_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, u320 zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint32_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint32_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
 
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint64_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint64_t zstart, uint32_t zcount, uint8_t zdepth);
+
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
+
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_uint8_t_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, uint8_t zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_2(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zmix_in_length_fixed_bytes_32_uint16_t_to_fixed_bytes_32(fixed_bytes_32 zroot, uint16_t zlen);
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_3(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zmix_in_length_fixed_bytes_32_uint8_t_to_fixed_bytes_32(fixed_bytes_32 zroot, uint8_t zlen);
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_4(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
-fixed_bytes_32 zmix_in_length_fixed_bytes_32_uint8_t_to_fixed_bytes_32_variant_2(fixed_bytes_32 zroot, uint8_t zlen);
-
-fixed_bytes_32 zmix_in_length_fixed_bytes_32_uint8_t_to_fixed_bytes_32_variant_3(fixed_bytes_32 zroot, uint8_t zlen);
+fixed_bytes_32 zmerkleizze_vector_subtree_zzzz5veczz8zz5structzz0zzzz__sail_c_repr_fixed_byteszz832zz9zz9_sail_int_uint32_t_uint8_t_to_fixed_bytes_32_variant_5(zz5vecz8z5structz0zz__sail_c_repr_fixed_bytesz832z9z9 zleaves, sail_int zstart, uint32_t zcount, uint8_t zdepth);
 
 uint8_t znext_parent_header_field_uint8_t_to_uint8_t(uint8_t zindex);
 
@@ -5920,13 +6353,15 @@ u256 zpc_word_after_declared_field_struct_zzCalldataSlice_uint8_t_u256_uint8_t_t
 
 void zprepare_amsterdam_transaction_dispatch(struct ztuple_z8z5structz0zzTransactionPreparationzCz0z5u64zCz0z5u64zCz0z5u32zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zz__sail_c_repr_fixed_bytesz820z9zCz0z5structz0zzCodeFieldszCz0z5unionz0zzCalldataSlicez9 *rop, struct zTransactionFields ztx, struct zTxValidityFields zv, struct zTxUpfrontResult zupfront, uint64_t zcarried_gas, uint64_t zcarried_state_gas, uint32_t zcarried_state_spill);
 
-void zprepared_authorizzation_tail(struct zPreparedAuthorizzationList *rop, struct zPreparedAuthorizzationList zauthorizzations, uint16_t zcount);
+void zprepared_authorizzation_tail(struct zPreparedAuthorizzationList *rop, struct zPreparedAuthorizzationList zauthorizzations, uint32_t zcount);
 
 u256 zread_push(struct zCodeRegionSliceFields zcode, uint32_t zoffset, uint8_t zn);
 
 unit zreceipt_record_write_length(uint32_t zvalue);
 
 __int128 zrecord_refund___int128_uint16_t_to___int128(__int128 zrefund, uint16_t zdelta);
+
+struct ztuple_z8z5u64zCz0z5u64zCz0z5u32z9 zrepay_state_gas_spill(uint64_t zg, uint64_t zremaining, uint32_t zspilled);
 
 struct zRlpEncoder zrlp_encoder_begin_uint16_t_to_struct_zzRlpEncoder(uint16_t zexpected_len);
 
@@ -5936,7 +6371,9 @@ struct zRlpEncoder zrlp_encoder_begin_uint8_t_to_struct_zzRlpEncoder_variant_2(u
 
 struct zRlpEncoder zrlp_encoder_begin_uint8_t_to_struct_zzRlpEncoder_variant_3(uint8_t zexpected_len);
 
-uint8_t zrlp_input_slice_sizze(struct zStatelessInputSliceFields zdata);
+uint32_t zrlp_input_slice_sizze_struct_zzStatelessInputSliceFields_to_uint32_t(struct zStatelessInputSliceFields zdata);
+
+uint8_t zrlp_input_slice_sizze_struct_zzStatelessInputSliceFields_to_uint8_t(struct zStatelessInputSliceFields zdata);
 
 uint8_t zrlp_length_prefix_len_uint16_t_to_uint8_t(uint16_t zlen);
 
@@ -5945,6 +6382,10 @@ uint8_t zrlp_length_prefix_len_uint16_t_to_uint8_t_variant_2(uint16_t zlen);
 uint8_t zrlp_length_prefix_len_uint32_t_to_uint8_t(uint32_t zlen);
 
 uint8_t zrlp_length_prefix_len_uint32_t_to_uint8_t_variant_2(uint32_t zlen);
+
+uint8_t zrlp_length_prefix_len_uint32_t_to_uint8_t_variant_3(uint32_t zlen);
+
+uint8_t zrlp_length_prefix_len_uint32_t_to_uint8_t_variant_4(uint32_t zlen);
 
 uint8_t zrlp_length_prefix_len_uint8_t_to_uint8_t(uint8_t zlen);
 
@@ -5965,6 +6406,10 @@ u256 zrlp_length_word_uint16_t_to_u256_variant_3(uint16_t zvalue);
 u256 zrlp_length_word_uint32_t_to_u256(uint32_t zvalue);
 
 u256 zrlp_length_word_uint32_t_to_u256_variant_2(uint32_t zvalue);
+
+u256 zrlp_length_word_uint32_t_to_u256_variant_3(uint32_t zvalue);
+
+u256 zrlp_length_word_uint32_t_to_u256_variant_4(uint32_t zvalue);
 
 u256 zrlp_length_word_uint8_t_to_u256(uint8_t zvalue);
 
@@ -5987,6 +6432,10 @@ u256 zrlp_length_word_uint8_t_to_u256_variant_9(uint8_t zvalue);
 u256 zrlp_length_word_uint8_t_to_u256_variant_10(uint8_t zvalue);
 
 uint16_t zrlp_list_sizze_uint16_t_to_uint16_t(uint16_t zcontent_len);
+
+uint32_t zrlp_list_sizze_uint32_t_to_uint32_t(uint32_t zcontent_len);
+
+uint32_t zrlp_list_sizze_uint32_t_to_uint32_t_variant_2(uint32_t zcontent_len);
 
 uint8_t zrlp_list_sizze_uint8_t_to_uint8_t(uint8_t zcontent_len);
 
@@ -6023,6 +6472,8 @@ uint32_t zrlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t_variant_3(uint32_
 uint32_t zrlp_scratch_length_add_uint32_t_uint8_t_to_uint32_t(uint32_t zleft, uint8_t zright);
 
 uint32_t zrlp_scratch_length_add_uint8_t_uint32_t_to_uint32_t(uint8_t zleft, uint32_t zright);
+
+uint32_t zrlp_string_sizze_uint32_t_uint64_t_to_uint32_t(uint32_t zlen, uint64_t zfirst);
 
 uint64_t zrlp_string_sizze_uint32_t_uint64_t_to_uint64_t(uint32_t zlen, uint64_t zfirst);
 
@@ -6096,8 +6547,6 @@ uint32_t zscratch_length_add_uint8_t_uint32_t_to_uint32_t(uint8_t zleft, uint32_
 
 uint32_t zscratch_length_add_uint8_t_uint32_t_to_uint32_t_variant_2(uint8_t zleft, uint32_t zright);
 
-uint32_t zscratch_length_add_uint8_t_uint32_t_to_uint32_t_variant_3(uint8_t zleft, uint32_t zright);
-
 unit zscratch_push_b256_fixed_bytes_32_uint8_t_to_unit(fixed_bytes_32 zdata, uint8_t zlen);
 
 unit zscratch_push_word_be_u256_uint8_t_to_unit(u256 zdata, uint8_t zlen);
@@ -6166,19 +6615,19 @@ fixed_bytes_20 zsszz_addr_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_by
 
 fixed_bytes_20 zsszz_addr_struct_zzStatelessInputSliceFields_uint8_t_to_fixed_bytes_20_variant_3(struct zStatelessInputSliceFields zinput, uint8_t zoffset);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint16_t_to_struct_zzBoundedSszzzzListRef(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint16_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint16_t_to_struct_zzBoundedSszzzzListRef_variant_2(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint16_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_2(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzBoundedSszzzzListRef(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint8_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_3(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzBoundedSszzzzListRef_variant_2(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint8_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_4(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzBoundedSszzzzListRef_variant_3(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint8_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_5(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzBoundedSszzzzListRef_variant_4(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint8_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_6(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
-struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzBoundedSszzzzListRef_variant_5(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint8_t zmaximum_count);
+struct zBoundedSszzListRef zsszz_bounded_fixed_list_ref_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzBoundedSszzzzListRef_variant_7(struct zStatelessInputSliceFields zbytes, uint8_t zitem_sizze, uint32_t zmaximum_count);
 
 struct zBoundedSszzListRef zsszz_bounded_variable_list_ref_struct_zzStatelessInputSliceFields_uint16_t_uint16_t_to_struct_zzBoundedSszzzzListRef(struct zStatelessInputSliceFields zbytes, uint16_t zmaximum_count, uint16_t zmaximum_item_length);
 
@@ -6280,8 +6729,6 @@ uint32_t zsszz_u32_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_varian
 
 uint32_t zsszz_u32_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_variant_6(struct zStatelessInputSliceFields zinput, uint8_t zoffset);
 
-uint32_t zsszz_u32_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_variant_7(struct zStatelessInputSliceFields zinput, uint8_t zoffset);
-
 uint32_t zsszz_u32_at_struct_zzStatelessInputSliceFields_uint16_t_to_uint32_t(struct zStatelessInputSliceFields zinput, uint16_t zoffset);
 
 uint32_t zsszz_u32_at_struct_zzStatelessInputSliceFields_uint16_t_to_uint32_t_variant_2(struct zStatelessInputSliceFields zinput, uint16_t zoffset);
@@ -6302,8 +6749,6 @@ uint32_t zsszz_u32_at_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_var
 
 uint32_t zsszz_u32_at_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_variant_6(struct zStatelessInputSliceFields zinput, uint8_t zoffset);
 
-uint32_t zsszz_u32_at_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t_variant_7(struct zStatelessInputSliceFields zinput, uint8_t zoffset);
-
 fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32(uint8_t zlevel);
 
 fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_2(uint8_t zlevel);
@@ -6311,22 +6756,6 @@ fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_2(uint8_t zlev
 fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_3(uint8_t zlevel);
 
 fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_4(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_5(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_6(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_7(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_8(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_9(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_10(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_11(uint8_t zlevel);
-
-fixed_bytes_32 zsszz_zzero_hash_uint8_t_to_fixed_bytes_32_variant_12(uint8_t zlevel);
 
 unit zstack_set_struct_zzStackPointer_uint8_t_u256_to_unit(struct zStackPointer ztop, uint8_t zn, u256 zw);
 
@@ -6352,19 +6781,17 @@ struct zStackPointer zstack_top_retreat(struct zStackPointer ztop, uint8_t zcoun
 
 uint32_t zstate_gas_spill_add_uint32_t___int128_to_uint32_t(uint32_t zleft, __int128 zright);
 
-uint32_t zstate_gas_spill_add_uint32_t_int64_t_to_uint32_t(uint32_t zleft, int64_t zright);
+uint32_t zstate_gas_spill_add_uint32_t_int32_t_to_uint32_t(uint32_t zleft, int32_t zright);
 
-uint32_t zstate_gas_spill_add_uint32_t_int64_t_to_uint32_t_variant_2(uint32_t zleft, int64_t zright);
+uint32_t zstate_gas_spill_add_uint32_t_int32_t_to_uint32_t_variant_2(uint32_t zleft, int32_t zright);
 
 uint32_t zstate_gas_spill_add_uint32_t_uint32_t_to_uint32_t(uint32_t zleft, uint32_t zright);
 
-uint32_t zstate_gas_spill_room_uint32_t_to_uint32_t(uint32_t zleft);
+uint32_t zstate_gas_spill_room(uint32_t zleft);
 
 uint64_t zstateless_input_slice_byte_struct_zzStatelessInputSliceFields_uint16_t_to_uint64_t(struct zStatelessInputSliceFields zs, uint16_t zoff);
 
 uint64_t zstateless_input_slice_byte_struct_zzStatelessInputSliceFields_uint8_t_to_uint64_t(struct zStatelessInputSliceFields zs, uint8_t zoff);
-
-uint64_t zstateless_input_slice_byte_struct_zzStatelessInputSliceFields_uint8_t_to_uint64_t_variant_2(struct zStatelessInputSliceFields zs, uint8_t zoff);
 
 u256 zstateless_input_slice_load_struct_zzStatelessInputSliceFields_uint16_t_to_u256(struct zStatelessInputSliceFields zs, uint16_t zoff);
 
@@ -6400,27 +6827,19 @@ struct zStatelessInputSliceFields zstateless_input_slice_suffix_struct_zzStatele
 
 struct zStatelessInputSliceFields zstateless_input_slice_suffix_struct_zzStatelessInputSliceFields_uint8_t_to_struct_zzStatelessInputSliceFields_variant_3(struct zStatelessInputSliceFields zs, uint8_t zoff);
 
-struct zStatelessInputSliceFields zstateless_input_slice_suffix_struct_zzStatelessInputSliceFields_uint8_t_to_struct_zzStatelessInputSliceFields_variant_4(struct zStatelessInputSliceFields zs, uint8_t zoff);
-
-struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint16_t_uint32_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields zs, uint16_t zoff, uint32_t zlen);
-
-struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint16_t_uint8_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields zs, uint16_t zoff, uint8_t zlen);
-
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint16_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields zs, uint8_t zoff, uint16_t zlen);
 
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields zs, uint8_t zoff, uint32_t zlen);
 
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzStatelessInputSliceFields_variant_2(struct zStatelessInputSliceFields zs, uint8_t zoff, uint32_t zlen);
 
+struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint32_t_to_struct_zzStatelessInputSliceFields_variant_3(struct zStatelessInputSliceFields zs, uint8_t zoff, uint32_t zlen);
+
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
 
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields_variant_2(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
 
 struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields_variant_3(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
-
-struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields_variant_4(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
-
-struct zStatelessInputSliceFields zstateless_input_sub_slice_struct_zzStatelessInputSliceFields_uint8_t_uint8_t_to_struct_zzStatelessInputSliceFields_variant_5(struct zStatelessInputSliceFields zs, uint8_t zoff, uint8_t zlen);
 
 void zsuspend_frame(struct ztuple_z8z5structz0zzFrameCheckpointzCz0z5structz0zzStackPointerzCz0z5u32zCz0z5u32z9 *rop, uint32_t zpc, uint64_t zgas_remaining, struct zStackPointer zstack_top, uint32_t zmemory_base, uint32_t zmemory_height, uint8_t zstate_gas_remaining, uint32_t zstate_gas_spilled, __int128 zframe_refund, struct zFrameStatus zframe_status, struct zMessage zmessage, struct zCodeFields zframe_code, struct zCalldataSlice zcalldata);
 
@@ -6440,7 +6859,7 @@ struct zStatelessInputSliceFields ztrie_walk_struct_zzStatelessInputSliceFields_
 
 struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_struct_zzTransactionInitialGasFields_uint64_t_uint64_t___int128_to_struct_zzTxFrameGasSnapshotFields(struct zTransactionInitialGasFields zinitial, uint64_t zexecution, uint64_t zstate, __int128 zstate_delta);
 
-struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_struct_zzTransactionInitialGasFields_uint8_t_uint8_t___int128_to_struct_zzTxFrameGasSnapshotFields(struct zTransactionInitialGasFields zinitial, uint8_t zexecution, uint8_t zstate, __int128 zstate_delta);
+struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_struct_zzTransactionInitialGasFields_uint8_t_uint64_t___int128_to_struct_zzTxFrameGasSnapshotFields(struct zTransactionInitialGasFields zinitial, uint8_t zexecution, uint64_t zstate, __int128 zstate_delta);
 
 struct zTxFrameGasSnapshotFields ztx_frame_gas_snapshot_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_zzTxFrameGasSnapshotFields(uint64_t zlimit, uint64_t zregular, uint64_t zcalldata_floor, uint64_t zremaining, uint8_t zstate_used);
 
@@ -6471,6 +6890,10 @@ uint32_t zvalidate_auth_tuples_struct_zzStatelessInputSliceFields_uint32_t_to_ui
 uint32_t zvalidate_auth_tuples_struct_zzStatelessInputSliceFields_uint32_t_to_uint32_t_variant_2(struct zStatelessInputSliceFields zcursor, uint32_t zcount);
 
 uint32_t zvalidate_auth_tuples_struct_zzStatelessInputSliceFields_uint8_t_to_uint32_t(struct zStatelessInputSliceFields zcursor, uint8_t zcount);
+
+unit zvalidate_secured_witness_node_struct_zzStatelessInputSliceFields_uint8_t_to_unit(struct zStatelessInputSliceFields znode, uint8_t zremaining);
+
+unit zvalidate_secured_witness_node_struct_zzStatelessInputSliceFields_uint8_t_to_unit_variant_2(struct zStatelessInputSliceFields znode, uint8_t zremaining);
 
 enum zStackValidation zvalidate_stack_struct_zzStackPointer_uint16_t_uint16_t_to_enum_zzStackValidation(struct zStackPointer ztop, uint16_t zinputs, uint16_t zoutputs);
 
@@ -6556,13 +6979,15 @@ u256 zword_of_nat_byte_count_uint16_t_to_u256_variant_2(uint16_t zvalue);
 
 u256 zword_of_nat_byte_count_uint16_t_to_u256_variant_3(uint16_t zvalue);
 
-u256 zword_of_nat_byte_count_uint16_t_to_u256_variant_4(uint16_t zvalue);
-
 u256 zword_of_nat_byte_count_uint32_t_to_u256(uint32_t zvalue);
 
 u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_2(uint32_t zvalue);
 
 u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_3(uint32_t zvalue);
+
+u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_4(uint32_t zvalue);
+
+u256 zword_of_nat_byte_count_uint32_t_to_u256_variant_5(uint32_t zvalue);
 
 u256 zword_of_nat_byte_count_uint64_t_to_u256(uint64_t zvalue);
 
@@ -6587,20 +7012,6 @@ u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_8(uint8_t zvalue);
 u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_9(uint8_t zvalue);
 
 u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_10(uint8_t zvalue);
-
-u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_11(uint8_t zvalue);
-
-u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_12(uint8_t zvalue);
-
-u256 zword_of_nat_byte_count_uint8_t_to_u256_variant_13(uint8_t zvalue);
-
-u256 zword_of_source_byte_count_uint16_t_to_u256(uint16_t zvalue);
-
-u256 zword_of_source_byte_count_uint8_t_to_u256(uint8_t zvalue);
-
-u256 zword_of_source_byte_count_uint8_t_to_u256_variant_2(uint8_t zvalue);
-
-u256 zword_of_source_byte_count_uint8_t_to_u256_variant_3(uint8_t zvalue);
 
 struct zGasCharge zword_scaled_gas_cost_uint8_t_u256_uint64_t_to_struct_zzGasCharge(uint8_t zper_unit, u256 zunits, uint64_t zavailable);
 
@@ -6629,6 +7040,9 @@ extern struct zScratchSliceFields zscratch_arena;
 
 // register zk_parent_state_root
 extern fixed_bytes_32 zk_parent_state_root;
+
+// register zk_historical_access_schema
+extern struct zStatelessInputSliceFields zk_historical_access_schema;
 
 // register zk_n_headers
 extern uint16_t zk_n_headers;

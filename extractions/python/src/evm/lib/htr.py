@@ -16,6 +16,7 @@ from .._runtime import (
     sail_vector_access,
     sail_vector_update,
 )
+from dataclasses import dataclass
 from typing import Annotated
 from evm.HostContract import (
     sha256_pair as _host_sha256_pair,
@@ -531,6 +532,28 @@ def htr_transactions(transactions: TransactionListRef) -> hash:
     root = htr_transactions_progressive(transactions, 0, count, 0)
     return Bytes32(mix_in_length(root, transactions.count))
 
+class HtrRequestKind(UintEnum):
+    HtrDeposit = Uint(0)
+    HtrWithdrawalRequest = Uint(1)
+    HtrConsolidationRequest = Uint(2)
+    HtrBuilderDepositRequest = Uint(3)
+    HtrBuilderExitRequest = Uint(4)
+
+class HtrProgressiveSource:
+    pass
+
+@dataclass(frozen=True, slots=True)
+class HtrWithdrawalLeaves(HtrProgressiveSource):
+    value: WithdrawalListRef
+
+@dataclass(frozen=True, slots=True)
+class HtrVersionedHashLeaves(HtrProgressiveSource):
+    value: StatelessInputSlice
+
+@dataclass(frozen=True, slots=True)
+class HtrRequestLeaves(HtrProgressiveSource):
+    value: tuple[StatelessInputSlice, HtrRequestKind]
+
 def htr_withdrawals_subtree(withdrawals: WithdrawalListRef, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
     if ((count) == (0)):
         return Bytes32(ssz_zero_hash(depth))
@@ -557,22 +580,7 @@ def htr_withdrawals_subtree(withdrawals: WithdrawalListRef, start: int, count: h
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
 def htr_withdrawals_progressive(withdrawals: WithdrawalListRef, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
-    if ((count) == (0)):
-        return Bytes32(ZERO_HASH)
-    else:
-        capacity = htr_leaf_capacity(depth)
-        if (int(count) < int(capacity)):
-            take = count
-        else:
-            take = capacity
-        if (int(count) < int(capacity)):
-            remaining = 0
-        else:
-            remaining = (int(count) - int(capacity))
-        next_depth = htr_progressive_next_depth(remaining, depth)
-        left_root = htr_withdrawals_subtree(withdrawals, start, take, depth)
-        right_root = htr_withdrawals_progressive(withdrawals, (int(start) + int(take)), remaining, next_depth)
-        return Bytes32(_host_sha256_pair(left_root, right_root))
+    return Bytes32(htr_progressive_source(HtrWithdrawalLeaves(withdrawals), start, count, depth))
 
 def htr_withdrawals(withdrawals: WithdrawalListRef) -> hash:
     count = withdrawals.count
@@ -628,22 +636,7 @@ def htr_versioned_hashes_subtree(versioned_hashes: StatelessInputSlice, start: i
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
 def htr_versioned_hashes_progressive(versioned_hashes: StatelessInputSlice, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
-    if ((count) == (0)):
-        return Bytes32(ZERO_HASH)
-    else:
-        capacity = htr_leaf_capacity(depth)
-        if (int(count) < int(capacity)):
-            take = count
-        else:
-            take = capacity
-        if (int(count) < int(capacity)):
-            remaining = 0
-        else:
-            remaining = (int(count) - int(capacity))
-        next_depth = htr_progressive_next_depth(remaining, depth)
-        left_root = htr_versioned_hashes_subtree(versioned_hashes, start, take, depth)
-        right_root = htr_versioned_hashes_progressive(versioned_hashes, (int(start) + int(take)), remaining, next_depth)
-        return Bytes32(_host_sha256_pair(left_root, right_root))
+    return Bytes32(htr_progressive_source(HtrVersionedHashLeaves(versioned_hashes), start, count, depth))
 
 def htr_versioned_hashes(versioned_hashes: StatelessInputSlice) -> hash:
     items = ssz_bounded_fixed_list_ref(versioned_hashes, WORD_BYTE_LENGTH, (1 << 25))
@@ -682,13 +675,6 @@ def htr_builder_exit_request(request: StatelessInputSliceFields) -> hash:
     source_address = htr_ssz_addr(request, HTR_BUILDER_EXIT_SOURCE_ADDRESS)
     pubkey = htr_ssz_bytevector(request, HTR_BUILDER_EXIT_PUBKEY, HTR_REQUEST_PUBKEY_LENGTH)
     return Bytes32(merkleize([source_address, pubkey], 1))
-
-class HtrRequestKind(UintEnum):
-    HtrDeposit = Uint(0)
-    HtrWithdrawalRequest = Uint(1)
-    HtrConsolidationRequest = Uint(2)
-    HtrBuilderDepositRequest = Uint(3)
-    HtrBuilderExitRequest = Uint(4)
 
 def htr_request_leaf(requests: StatelessInputSlice, index: int, kind: HtrRequestKind) -> hash:
     match kind:
@@ -730,6 +716,32 @@ def htr_request_leaf(requests: StatelessInputSlice, index: int, kind: HtrRequest
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
+def htr_progressive_source(source: HtrProgressiveSource, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
+    if ((count) == (0)):
+        return Bytes32(ZERO_HASH)
+    else:
+        capacity = htr_leaf_capacity(depth)
+        if (int(count) < int(capacity)):
+            take = count
+        else:
+            take = capacity
+        if (int(count) < int(capacity)):
+            remaining = 0
+        else:
+            remaining = (int(count) - int(capacity))
+        next_depth = htr_progressive_next_depth(remaining, depth)
+        match source:
+            case HtrWithdrawalLeaves(withdrawals):
+                left_root = htr_withdrawals_subtree(withdrawals, start, take, depth)
+            case HtrVersionedHashLeaves(hashes):
+                left_root = htr_versioned_hashes_subtree(hashes, start, take, depth)
+            case HtrRequestLeaves((requests, kind)):
+                left_root = htr_requests_subtree(requests, kind, start, take, depth)
+            case _:
+                raise SailMatchFailure("no Sail match clause applied")
+        right_root = htr_progressive_source(source, (int(start) + int(take)), remaining, next_depth)
+        return Bytes32(_host_sha256_pair(left_root, right_root))
+
 def htr_requests_subtree(requests: StatelessInputSlice, kind: HtrRequestKind, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
     if ((count) == (0)):
         return Bytes32(ssz_zero_hash(depth))
@@ -755,22 +767,7 @@ def htr_requests_subtree(requests: StatelessInputSlice, kind: HtrRequestKind, st
             return Bytes32(_host_sha256_pair(left_root, right_root))
 
 def htr_requests_progressive(requests: StatelessInputSlice, kind: HtrRequestKind, start: int, count: htr_leaf_count, depth: htr_depth) -> hash:
-    if ((count) == (0)):
-        return Bytes32(ZERO_HASH)
-    else:
-        capacity = htr_leaf_capacity(depth)
-        if (int(count) < int(capacity)):
-            take = count
-        else:
-            take = capacity
-        if (int(count) < int(capacity)):
-            remaining = 0
-        else:
-            remaining = (int(count) - int(capacity))
-        next_depth = htr_progressive_next_depth(remaining, depth)
-        left_root = htr_requests_subtree(requests, kind, start, take, depth)
-        right_root = htr_requests_progressive(requests, kind, (int(start) + int(take)), remaining, next_depth)
-        return Bytes32(_host_sha256_pair(left_root, right_root))
+    return Bytes32(htr_progressive_source(HtrRequestLeaves((requests, kind)), start, count, depth))
 
 def htr_deposits(deposits: StatelessInputSlice) -> hash:
     items = ssz_bounded_fixed_list_ref(deposits, HTR_DEPOSIT_LENGTH, (1 << 25))

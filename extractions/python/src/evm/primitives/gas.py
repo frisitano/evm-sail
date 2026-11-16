@@ -99,7 +99,7 @@ class transaction_execution_gas(Unsigned):
 
 class state_gas_spill(Unsigned):
     LOWER = 0
-    UPPER = 16777216
+    UPPER = 30000000
 
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
@@ -134,7 +134,7 @@ transaction_state_gas_delta: TypeAlias = int
 
 class transaction_state_gas_used(Unsigned):
     LOWER = 0
-    UPPER = 55340232221162209277
+    UPPER = 55340232221188654845
 
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
@@ -151,7 +151,7 @@ TRANSACTION_EXECUTION_GAS_LIMIT: Annotated[int, IntegerRange((2 ** 24), (2 ** 24
 
 STATE_GAS_SPILL_ZERO: Annotated[int, IntegerRange(0, 0)] = 0
 
-STATE_GAS_SPILL_LIMIT: int = (1 << 24)
+STATE_GAS_SPILL_LIMIT: int = 30000000
 
 GAS_ZERO: Annotated[int, IntegerRange(0, 0)] = 0
 

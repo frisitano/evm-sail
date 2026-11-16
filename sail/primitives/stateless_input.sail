@@ -19,6 +19,9 @@ struct WitnessContext = {
     parent_hash : hash,
     parent_state_root : hash,
     parent_base_fee_per_gas : word,
+    parent_has_base_fee : bool,
+    parent_gas_limit : block_gas_limit,
+    parent_gas_used : block_gas,
     parent_blob_gas_used : blob_gas_used,
     parent_excess_blob_gas : excess_blob_gas,
 }

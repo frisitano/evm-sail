@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input, uint32_t memory_base, uint64_t *restrict field_0_8_1505, uint64_t *restrict field_1_8_1506, uint32_t *restrict field_2_8_1507, __int128 *restrict field_3_8_1508, struct FrameStatus *restrict framestatus_8_1509);
+Bytes run_system_call_frame(bytes20 tgt, struct CodeFields code, struct CalldataSlice input, uint32_t memory_base, uint64_t *restrict field_0_8_1562, uint64_t *restrict field_1_8_1563, uint32_t *restrict field_2_8_1564, __int128 *restrict field_3_8_1565, struct FrameStatus *restrict framestatus_8_1566);
 
 void system_call(bytes20 tgt, bytes32 input);
 

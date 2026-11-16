@@ -13,8 +13,10 @@ val account_load_from_root = impure { c: "k_aload" } : (hash, address) -> Accoun
 val account_store_record = impure { c: "store_account" } : (address, Account) -> unit
 val account_store_record_info = impure { c: "store_account_info" } : (address, Account, AccountInfo) -> unit
 
-function k_aload(a : address) -> Account =
+function k_aload(a : address) -> Account = {
+    require_historical_state_access(a, None());
     account_load_from_root(k_parent_state_root, a)
+}
 
 function store_account(a : address, account : Account) -> unit =
     account_store_record(a, account)

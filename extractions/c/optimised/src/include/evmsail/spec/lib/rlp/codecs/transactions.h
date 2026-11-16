@@ -19,9 +19,9 @@ PreparedAuthorizationList prepare_authorizations_(struct AuthorizationListRefFie
 
 struct Authorization prepared_authorization_head_(PreparedAuthorizationList authorizations);
 
-PreparedAuthorizationList prepared_authorization_tail_(PreparedAuthorizationList authorizations, uint16_t count);
+PreparedAuthorizationList prepared_authorization_tail_(PreparedAuthorizationList authorizations, uint32_t count);
 
-struct TransactionFields rlp_decode_tx(Bytes tx, Bytes pubkey, uint8_t blob_limit);
+struct DecodedTransactionFields rlp_decode_tx(Bytes tx, uint8_t blob_limit);
 
 
 #ifdef __cplusplus

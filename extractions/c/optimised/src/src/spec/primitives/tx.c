@@ -42,6 +42,11 @@ void create_letbind_73(void) {
 void kill_letbind_73(void) {
 }
 
+struct TransactionFields pack_transaction(struct TransactionFields tx)
+{
+  return tx;
+}
+
 uint64_t log_store_index_increment(uint64_t value)
 {
   if (value >= UINT64_C(18446744073709551615)) {

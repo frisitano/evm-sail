@@ -91,6 +91,16 @@ struct AcctBlockIterResult {
   } variants;
 };
 
+void create_letbind_71(void);
+void kill_letbind_71(void);
+
+
+void create_letbind_72(void);
+void kill_letbind_72(void);
+
+
+struct Account account_from_info(struct AccountInfo info);
+
 struct Account k_aload(bytes32 /* arg_0 */, bytes20 /* arg_1 */);
 
 void store_account(bytes20 /* arg_0 */, struct Account /* arg_1 */);
@@ -98,6 +108,12 @@ void store_account(bytes20 /* arg_0 */, struct Account /* arg_1 */);
 void store_account_info(bytes20 /* arg_0 */, struct Account /* arg_1 */, struct AccountInfo /* arg_2 */);
 
 struct StorageValue storage_load_by_id(uint32_t /* arg_0 */, uint32_t /* arg_1 */, uint32_t /* arg_2 */, bool /* arg_3 */);
+
+extern struct AccountInfo EMPTY_ACCOUNT_INFO;
+
+
+extern struct Account EMPTY_ACCOUNT;
+
 
 
 #ifdef __cplusplus

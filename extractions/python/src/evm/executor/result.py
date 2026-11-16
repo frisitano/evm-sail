@@ -27,10 +27,7 @@ from evm.kernel.scratch import (
     scratch_push_b256,
     scratch_finish,
 )
-from evm.lib.ssz.stateless_input import (
-    StatelessInputRef,
-    STATELESS_SCHEMA_ID,
-)
+from evm.lib.ssz.stateless_input import StatelessInputRef
 from evm.lib.htr import (
     htr_uint,
     htr_new_payload_request,
@@ -56,7 +53,7 @@ def commit_validation_result(root: hash, success: bool, chain_id: chain_identifi
 
 def write_validation_result(input_ref: StatelessInputRef, success: bool) -> None:
     root = htr_new_payload_request(input_ref)
-    return commit_validation_result(root, success, input_ref.chain_id, STATELESS_SCHEMA_ID)
+    return commit_validation_result(root, success, input_ref.chain_id, input_ref.schema_id)
 
 def write_invalid_result() -> None:
     return commit_validation_result(ZERO_HASH, False, 0, Bits(16, 0b0000000000000000))

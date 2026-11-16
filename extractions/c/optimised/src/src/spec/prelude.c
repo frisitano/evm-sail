@@ -49,7 +49,7 @@ u256 word_add_word(u256 left, u256 right)
   return as_u256(u256_add(left, right));
 }
 
-__attribute__((__always_inline__)) u256 word_sub_word(u256 left, u256 right)
+u256 word_sub_word(u256 left, u256 right)
 {
   return !u256_lt(left, right) ? u256_sub(left, right) : u256_of_u320(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, u256_sub(right, left))), u320_of_u64(UINT8_C(1))));
 }
@@ -92,7 +92,7 @@ u256 word_of_bool(bool b)
   return WORD_ZERO;
 }
 
-__attribute__((__always_inline__)) bool word_is_zero(u256 w)
+bool word_is_zero(u256 w)
 {
   return eq_u256(w, WORD_ZERO);
 }
@@ -152,7 +152,7 @@ u256 word_shift_right(u256 value, uint16_t amount)
   return u256_shiftr_u64(value, amount);
 }
 
-__attribute__((__always_inline__)) uint8_t word_byte_length(u256 value)
+uint8_t word_byte_length(u256 value)
 {
   uint16_t bit_length = word_bit_length(value);
   if (bit_length == UINT8_C(0)) {
@@ -161,7 +161,7 @@ __attribute__((__always_inline__)) uint8_t word_byte_length(u256 value)
   return (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
 }
 
-__attribute__((__always_inline__)) u256 word_arithmetic_shift_right(u256 value, uint16_t amount)
+u256 word_arithmetic_shift_right(u256 value, uint16_t amount)
 {
   u256 shifted = word_shift_right(value, amount);
   if ((word_bit(value, UINT8_C(255))) == UINT64_C(0x1)) {
@@ -175,7 +175,7 @@ u256 word_negate(u256 value)
   return !u256_lt(WORD_ZERO, value) ? u256_sub(WORD_ZERO, value) : u256_of_u320(u320_add(u320_of_u256(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, u256_sub(value, WORD_ZERO))), u320_of_u64(UINT8_C(1))));
 }
 
-__attribute__((__always_inline__)) u256 word_abs(u256 value)
+u256 word_abs(u256 value)
 {
   if ((word_bit(value, UINT8_C(255))) == UINT64_C(0x1)) {
     return word_negate(value);
@@ -183,7 +183,7 @@ __attribute__((__always_inline__)) u256 word_abs(u256 value)
   return value;
 }
 
-__attribute__((__always_inline__)) bool word_slt(u256 a, u256 b)
+bool word_slt(u256 a, u256 b)
 {
   uint64_t a_sign = word_bit(a, UINT8_C(255));
   uint64_t b_sign = word_bit(b, UINT8_C(255));
@@ -508,6 +508,11 @@ uint16_t word_bit_length_u128_to_uint16_t(u128 value)
   return (uint16_t)(u64_bit_length_(u128_extract_u64(value, (uint64_t)(UINT64_C(0)))));
 }
 
+uint16_t word_bit_length_uint32_t_to_uint16_t(uint32_t value)
+{
+  return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
+}
+
 uint16_t word_bit_length_uint64_t_to_uint16_t(uint64_t value)
 {
   return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
@@ -518,7 +523,12 @@ uint16_t word_bit_length_uint8_t_to_uint16_t(uint8_t value)
   return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
 }
 
-__attribute__((__always_inline__)) uint8_t word_byte_length_u128_to_uint8_t(u128 value)
+uint16_t word_bit_length_uint8_t_to_uint16_t_variant_2(uint8_t value)
+{
+  return (uint16_t)(u64_bit_length_((value >> UINT64_C(0))));
+}
+
+uint8_t word_byte_length_u128_to_uint8_t(u128 value)
 {
   uint16_t bit_length = word_bit_length_u128_to_uint16_t(value);
   if (bit_length == UINT8_C(0)) {
@@ -527,7 +537,16 @@ __attribute__((__always_inline__)) uint8_t word_byte_length_u128_to_uint8_t(u128
   return (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
 }
 
-__attribute__((__always_inline__)) uint8_t word_byte_length_uint64_t_to_uint8_t(uint64_t value)
+uint8_t word_byte_length_uint32_t_to_uint8_t(uint32_t value)
+{
+  uint16_t bit_length = word_bit_length_uint32_t_to_uint16_t(value);
+  if (bit_length == UINT8_C(0)) {
+    return UINT8_C(0);
+  }
+  return (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
+}
+
+uint8_t word_byte_length_uint64_t_to_uint8_t(uint64_t value)
 {
   uint16_t bit_length = word_bit_length_uint64_t_to_uint16_t(value);
   if (bit_length == UINT8_C(0)) {
@@ -536,9 +555,18 @@ __attribute__((__always_inline__)) uint8_t word_byte_length_uint64_t_to_uint8_t(
   return (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
 }
 
-__attribute__((__always_inline__)) uint8_t word_byte_length_uint8_t_to_uint8_t(uint8_t value)
+uint8_t word_byte_length_uint8_t_to_uint8_t(uint8_t value)
 {
   uint16_t bit_length = word_bit_length_uint8_t_to_uint16_t(value);
+  if (bit_length == UINT8_C(0)) {
+    return UINT8_C(0);
+  }
+  return (uint8_t)((uint16_t)(((uint32_t)bit_length + (uint32_t)UINT16_C(7)) / (uint32_t)UINT16_C(8)));
+}
+
+uint8_t word_byte_length_uint8_t_to_uint8_t_variant_2(uint8_t value)
+{
+  uint16_t bit_length = word_bit_length_uint8_t_to_uint16_t_variant_2(value);
   if (bit_length == UINT8_C(0)) {
     return UINT8_C(0);
   }
@@ -581,17 +609,17 @@ u256 word_div_word_u256_uint8_t_to_u256(u256 dividend, uint8_t divisor)
   return as_u256(u256_div_u64(dividend, divisor));
 }
 
-__attribute__((__always_inline__)) bool word_is_zero_u128_to_bool(u128 w)
+bool word_is_zero_u128_to_bool(u128 w)
 {
   return u256_eq_u128(WORD_ZERO, w);
 }
 
-__attribute__((__always_inline__)) bool word_is_zero_uint32_t_to_bool(uint32_t w)
+bool word_is_zero_uint32_t_to_bool(uint32_t w)
 {
   return u256_eq_u64(WORD_ZERO, w);
 }
 
-__attribute__((__always_inline__)) bool word_is_zero_uint64_t_to_bool(uint64_t w)
+bool word_is_zero_uint64_t_to_bool(uint64_t w)
 {
   return u256_eq_u64(WORD_ZERO, w);
 }
@@ -599,6 +627,11 @@ __attribute__((__always_inline__)) bool word_is_zero_uint64_t_to_bool(uint64_t w
 uint64_t word_low_byte_u128_to_uint64_t(u128 value)
 {
   return (UINT64_C(0xFF) & u128_extract_u64(value, (uint64_t)(UINT64_C(0))));
+}
+
+uint64_t word_low_byte_uint32_t_to_uint64_t(uint32_t value)
+{
+  return (UINT64_C(0xFF) & (value >> UINT64_C(0)));
 }
 
 uint64_t word_low_byte_uint64_t_to_uint64_t(uint64_t value)
@@ -642,12 +675,17 @@ u256 word_shift_right_u256_uint8_t_to_u256(u256 value, uint8_t amount)
   return u256_shiftr_u64(value, amount);
 }
 
-__attribute__((__always_inline__)) u256 word_sub_word_u256_uint8_t_to_u256(u256 left, uint8_t right)
+u256 word_sub_word_u256_uint8_t_to_u256(u256 left, uint8_t right)
 {
   if (!u256_lt_u64(left, right)) {
     return u256_sub_u64(left, right);
   }
   return u256_add_u64(u256_sub((u256){{UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615), UINT64_C(18446744073709551615)}}, u256_of_fbits(((uint8_t)((uint32_t)right - (uint32_t)(uint8_t)u256_to_u64_unchecked(left))))), UINT8_C(1));
+}
+
+bool word_ule_u256_u256_to_bool(u256 a, u256 b)
+{
+  return (bool)(!(word_ult(b, a)));
 }
 
 bool word_ule_uint8_t_u256_to_bool(uint8_t a, u256 b)

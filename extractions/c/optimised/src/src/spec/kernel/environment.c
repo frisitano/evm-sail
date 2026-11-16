@@ -4,6 +4,9 @@
 // register zk_parent_state_root
 bytes32 k_parent_state_root;
 
+// register zk_historical_access_schema
+Bytes k_historical_access_schema;
+
 // register zk_n_headers
 uint16_t k_n_headers;
 

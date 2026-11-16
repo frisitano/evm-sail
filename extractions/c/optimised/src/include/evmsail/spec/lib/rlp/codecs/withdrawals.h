@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+Bytes withdrawal_rlp(Bytes withdrawal);
+
 
 #ifdef __cplusplus
 }

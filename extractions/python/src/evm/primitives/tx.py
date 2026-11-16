@@ -128,18 +128,17 @@ class transaction_item_count(Unsigned):
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
 
-prepared_authorization_count: TypeAlias = Uint
+class prepared_authorization_count(Unsigned):
+    LOWER = 0
+    UPPER = 1073741824
 
-@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+@dataclass(slots=True)
 class PreparedAuthorizationList:
     entries: list[Authorization]
     count: prepared_authorization_count
-
-    @model_validator(mode="after")
-    def validate(self) -> Self:
-        if not ((0 <= int(self.count) <= ((2 ** 24) // 7816))):
-            raise ValueError("PreparedAuthorizationList.count violates Sail type range(0, div(2 ^ 24, 7816))")
-        return self
 
 @dataclass(slots=True)
 class AccessListRef:

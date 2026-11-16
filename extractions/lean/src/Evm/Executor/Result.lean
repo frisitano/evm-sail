@@ -1,7 +1,6 @@
 import Evm.Prelude
 import Evm.Primitives.Bytes
 import Evm.Kernel.Scratch
-import Evm.Lib.Ssz.StatelessInput
 import Evm.Lib.Htr
 
 set_option maxHeartbeats 1_000_000_000
@@ -44,6 +43,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -70,8 +70,8 @@ verdict byte, the `uint64` chain id, and the `uint16` schema id. -/
 abbrev RESULT_LENGTH : Nat := 43
 
 /-- Serializes and commits the public validation result exactly once. -/
-/- Type quantifiers: k_ex429163_ : Nat, k_ex429162_ : Bool, 0 ≤ k_ex429163_ ∧
-  k_ex429163_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex577910_ : Nat, k_ex577909_ : Bool, 0 ≤ k_ex577910_ ∧
+  k_ex577910_ ≤ (2 ^ 64 - 1) -/
 def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (chain_id : Nat) (schema_id : (BitVec 16)) : SailM Unit := do
   let start ← do (scratch_reserve RESULT_LENGTH)
   (scratch_push_b256 root WORD_BYTE_LENGTH)
@@ -93,10 +93,10 @@ def commit_validation_result (root : (Vector (BitVec 8) 32)) (success : Bool) (c
 /-- Emits the full public output for a decoded input: the request root
 computed from the input itself, the verdict, and the input's chain id and
 schema id. -/
-/- Type quantifiers: k_ex429164_ : Bool -/
+/- Type quantifiers: k_ex577911_ : Bool -/
 def write_validation_result (input_ref : StatelessInputRef) (success : Bool) : SailM Unit := do
   let root ← do (htr_new_payload_request input_ref)
-  (commit_validation_result root success input_ref.chain_id STATELESS_SCHEMA_ID)
+  (commit_validation_result root success input_ref.chain_id input_ref.schema_id)
 
 /-- Emits the failure output for an undecodable input: a zero root, a
 false verdict, and a zero chain id and schema id. -/

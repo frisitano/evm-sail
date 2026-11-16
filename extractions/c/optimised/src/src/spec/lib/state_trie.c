@@ -1,6 +1,18 @@
 #include "evmsail/spec.h"
 #include "evmsail/spec/support.h"
 
+u256 stateless_storage_by_key(bytes32 root, bytes32 slot_hash)
+{
+  validate_secured_state_root(root);
+  struct TriePath path = path_new(slot_hash, UINT8_C(64));
+  Bytes value = trie_lookup(root, path);
+  if (value.len == UINT8_C(0)) {
+    return ZERO_WORD;
+  }
+  struct RlpFieldRef encoded_value = rlp_single_ref(value);
+  return rlp_decode_u256(encoded_value);
+}
+
 struct TrieUpdate account_update(struct AcctTrieEntry trie_entry, bytes32 storage_root)
 {
   struct Account current = trie_entry.entry.value.curr;
@@ -64,5 +76,16 @@ struct TrieUpdateFetch next_storage_trie_update(bytes20 addr)
     }
   }
   return result;
+}
+
+struct Account stateless_account_by_key(bytes32 root, bytes32 address_hash)
+{
+  struct TriePath path = path_new(address_hash, UINT8_C(64));
+  Bytes value = trie_lookup(root, path);
+  if (value.len == UINT8_C(0)) {
+    return EMPTY_ACCOUNT;
+  }
+  struct AccountInfo account_info = decode_state_account(value);
+  return account_from_info(account_info);
 }
 

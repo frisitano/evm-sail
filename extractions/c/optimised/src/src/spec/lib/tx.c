@@ -28,12 +28,36 @@ uint8_t tx_signature_parity(uint64_t chain_id, enum TxSignatureScheme scheme, u2
   }
 }
 
-bool tx_auth_valid(bytes20 sender, bytes32 h, uint8_t parity, u256 r, u256 s)
+bytes20 tx_recover_sender(bytes32 h, uint8_t parity, u256 r, u256 s)
 {
-  if (word_ult(SECP_N_HALF, s)) {
-    return false;
+  bool word_ult_result_2_2444 = word_ult(ZERO_WORD, r);
+  bool tmp_3_3461;
+  if (word_ult_result_2_2444) {
+    bool word_ult_result_2_2443 = word_ult(r, SECP_N_FULL);
+    bool tmp_3_3460;
+    if (word_ult_result_2_2443) {
+      bool word_ult_result_2_2442 = word_ult(ZERO_WORD, s);
+      bool tmp_3_3459;
+      if (word_ult_result_2_2442) {
+        tmp_3_3459 = word_ule_u256_u256_to_bool(s, SECP_N_HALF);
+      } else {
+        tmp_3_3459 = false;
+      }
+      tmp_3_3460 = tmp_3_3459;
+    } else {
+      tmp_3_3460 = false;
+    }
+    tmp_3_3461 = tmp_3_3460;
+  } else {
+    tmp_3_3461 = false;
+  }
+  if (!tmp_3_3461) {
+    fatal_error(InvalidSignature);
   }
   struct AddressResult recovered = ecrecover_addr(h, parity, r, s);
-  return (bool)(recovered.success && eq_bytes20(recovered.address, sender));
+  if (recovered.success) {
+    return recovered.address;
+  }
+  fatal_error(InvalidSignature);
 }
 

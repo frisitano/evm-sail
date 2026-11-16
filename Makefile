@@ -201,6 +201,7 @@ C_OPT_PRESERVE_FLAGS := --c-preserve main \
                         --c-preserve refresh_account_execution_context \
                         --c-preserve validation_debug_record \
                         --c-preserve write_invalid_result \
+                        --c-preserve validate_secured_state_root \
                         --c-preserve sload_cost \
                         --c-preserve sstore_sentry_cost \
                         --c-preserve sstore_costs \
@@ -321,7 +322,18 @@ verify-corpus: eest-provision
 		--known-failures $(EEST_KNOWN_FAILURES) --corpus-manifest $(EEST_CORPUS_MANIFEST) $(EEST_CORPUS)
 
 memory-regression-test:
-	$(PYTHON) -m devtools.tests.test_memory_frames
+	$(PYTHON) -m devtools.tests.test_memory_frames $(MEMORY_REGRESSION_ARGS)
+
+historical-regression-test: eest-provision
+	$(PYTHON) -m devtools.tests.test_historical_forks
+
+.PHONY: historical-regression-test
+
+stateless-boundary-test: eest-provision
+	$(PYTHON) -m devtools.tests.test_stateless_boundaries
+	$(PYTHON) -m devtools.tests.test_state_conversion
+
+.PHONY: stateless-boundary-test
 
 # Pinned malformed-signature and signing-domain fixtures, with no allowlist.
 sender-regression-test: eest-provision

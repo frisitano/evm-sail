@@ -39,7 +39,7 @@ function commit_validation_result(
     schema id. */
 function write_validation_result(input_ref : StatelessInputRef, success : bool) -> unit = {
     let root = htr_new_payload_request(input_ref);
-    commit_validation_result(root, success, input_ref.chain_id, STATELESS_SCHEMA_ID)
+    commit_validation_result(root, success, input_ref.chain_id, input_ref.schema_id)
 }
 
 /*! Emits the failure output for an undecodable input: a zero root, a

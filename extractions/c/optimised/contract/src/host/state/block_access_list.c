@@ -21,6 +21,7 @@
 typedef struct {
   uint32_t index;
   uint32_t next;
+  uint64_t before[4];
   union {
     uint64_t word[4];
     uint64_t nonce;
@@ -171,15 +172,21 @@ void bal_note_account_touch(AccountId account_id)
 }
 
 void bal_note_storage_change(uint64_t transaction_epoch, AccountId account_id, StorageId storage_id,
-                             const u256 value)
+                             const u256 before, const u256 value)
 {
   bal_account_activate(account_id);
   bal_storage_activate(account_id, storage_id);
   BalStorageState *bal = &bal_storage[storage_id];
+  const bool continuing = bal->change_tail != BAL_NO_HISTORY &&
+                          bal_storage_history[bal->change_tail].index == transaction_epoch;
   BalHistoryRow *row =
       bal_append_history(bal_storage_history, &bal_storage_history_n, GUEST_BAL_STORAGE_CHANGES,
                          &bal->change_head, &bal->change_tail, (uint32_t)transaction_epoch);
+  if (!continuing) {
+    sail_word_to_le_words4(row->before, before);
+  }
   sail_word_to_le_words4(row->value.word, value);
+  bal->read = 1;
 }
 
 void bal_note_storage_touch(AccountId account_id, StorageId storage_id)
@@ -189,13 +196,19 @@ void bal_note_storage_touch(AccountId account_id, StorageId storage_id)
   bal_storage[storage_id].read = 1;
 }
 
-void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, const u256 value)
+void bal_note_balance_change(uint64_t transaction_epoch, AccountId account_id, const u256 before,
+                             const u256 value)
 {
   bal_account_activate(account_id);
   BalAccountState *account = &bal_accounts[account_id];
+  const bool continuing = account->balance_tail != BAL_NO_HISTORY &&
+                          bal_balance_history[account->balance_tail].index == transaction_epoch;
   BalHistoryRow *row = bal_append_history(bal_balance_history, &bal_balance_history_n,
                                           GUEST_BAL_BALANCE_CHANGES, &account->balance_head,
                                           &account->balance_tail, (uint32_t)transaction_epoch);
+  if (!continuing) {
+    sail_word_to_le_words4(row->before, before);
+  }
   sail_word_to_le_words4(row->value.word, value);
 }
 
@@ -338,6 +351,15 @@ void bal_reset(void)
   bal_reset_cursors();
 }
 
+static uint32_t bal_next_word_change(const BalHistoryRow *rows, uint32_t index)
+{
+  while (index != BAL_NO_HISTORY &&
+         memcmp(rows[index].before, rows[index].value.word, sizeof(rows[index].before)) == 0) {
+    index = rows[index].next;
+  }
+  return index;
+}
+
 void bal_prepare_iter(void)
 {
   /*
@@ -385,10 +407,12 @@ enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_
     }
 
     case BAL_STREAM_STORAGE_CHANGE: {
+      bal_active_storage_history =
+          bal_next_word_change(bal_storage_history, bal_active_storage_history);
       if (bal_active_storage_history != BAL_NO_HISTORY) {
         const BalHistoryRow *history = &bal_storage_history[bal_active_storage_history];
         const StorageId current_storage_id = bal_storage_order[bal_storage_cursor];
-        bal_active_storage_history = history->next;
+        bal_active_storage_history = bal_next_word_change(bal_storage_history, history->next);
         *account_id = bal_active_account_index;
         *storage_id = current_storage_id;
         *index = history->index;
@@ -403,8 +427,10 @@ enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_
         if (!bal_storage_belongs_to_active(candidate_storage_id)) {
           break;
         }
-        if (bal_storage[candidate_storage_id].change_head != BAL_NO_HISTORY) {
-          bal_active_storage_history = bal_storage[candidate_storage_id].change_head;
+        const uint32_t first = bal_next_word_change(bal_storage_history,
+                                                    bal_storage[candidate_storage_id].change_head);
+        if (first != BAL_NO_HISTORY) {
+          bal_active_storage_history = first;
           break;
         }
         bal_storage_cursor++;
@@ -431,7 +457,8 @@ enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_
           break;
         }
         const BalStorageState *bal = &bal_storage[current_storage_id];
-        if (!bal->read || bal->change_head != BAL_NO_HISTORY) {
+        if (!bal->read ||
+            bal_next_word_change(bal_storage_history, bal->change_head) != BAL_NO_HISTORY) {
           continue;
         }
         *account_id = bal_active_account_index;
@@ -443,6 +470,8 @@ enum bal_iter_tag bal_iter_next_probe(AccountId *account_id, StorageId *storage_
       continue;
 
     case BAL_STREAM_BALANCE:
+      bal_active_field_history =
+          bal_next_word_change(bal_balance_history, bal_active_field_history);
       if (bal_active_field_history != BAL_NO_HISTORY) {
         const BalHistoryRow *history = &bal_balance_history[bal_active_field_history];
         bal_active_field_history = history->next;

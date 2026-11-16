@@ -194,6 +194,9 @@ bool mpt_decode_trusted_state_node(ByteSpan encoded, DecodedNode *node)
       return false;
     }
     if (leaf) {
+      if (item[1].list) {
+        return false;
+      }
       node->kind = DECODED_NODE_LEAF;
       node->value = item[1].content;
       return true;

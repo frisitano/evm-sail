@@ -31,7 +31,7 @@ struct BlockGasUsageFields block_gas_usage_empty(void);
 
 void run_block_start_system_calls(void);
 
-struct BlockExecutionResult execute_block_transactions(struct BoundedSszListRef transactions, Bytes public_keys, Bytes expected_deposits);
+struct BlockExecutionResult execute_block_transactions(struct BoundedSszListRef transactions, Bytes expected_deposits, Bytes expected_versioned_hashes);
 
 void apply_withdrawals(struct BoundedSszListRef withdrawals);
 
@@ -42,6 +42,10 @@ struct BlockExecutionResult execute_block_body(struct BlockBody body, struct Sta
 struct BlockGasUsageFields block_gas_usage_add_struct_BlockGasUsageFields_uint64_t_uint64_t_uint64_t_to_struct_BlockGasUsageFields(struct BlockGasUsageFields usage, uint64_t add_execution, uint64_t add_state, uint64_t add_receipt);
 
 struct BlockGasUsageFields block_gas_usage_add_struct_BlockGasUsageFields_uint64_t_uint8_t_uint64_t_to_struct_BlockGasUsageFields(struct BlockGasUsageFields usage, uint64_t add_execution, uint8_t add_state, uint64_t add_receipt);
+
+Bytes consume_versioned_hashes_struct_BlobHashesFields_uint8_t_Bytes_to_Bytes(struct BlobHashesFields blob_hashes, uint8_t index, Bytes expected);
+
+Bytes consume_versioned_hashes_struct_BlobHashesFields_uint8_t_Bytes_to_Bytes_variant_2(struct BlobHashesFields blob_hashes, uint8_t index, Bytes expected);
 
 extern const uint64_t PRE_MERGE_BLOCK_REWARD;
 

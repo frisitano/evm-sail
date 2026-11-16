@@ -2,10 +2,10 @@
 
 #include "evmsail/spec.h"
 
+static bool eq_u256(u256 op1, u256 op2);
 static bool eq_bytes20(bytes20 op1, bytes20 op2);
 static bool eq_MemoryRangeFields(struct MemoryRangeFields op1, struct MemoryRangeFields op2);
 static bool eq_Bytes(Bytes op1, Bytes op2);
-static bool eq_u256(u256 op1, u256 op2);
 static bool eq_ExceptionKind(enum ExceptionKind op1, enum ExceptionKind op2);
 static bool eq_HaltKind(struct HaltKind op1, struct HaltKind op2);
 static bool eq_FrameStatus(struct FrameStatus op1, struct FrameStatus op2);
@@ -45,7 +45,6 @@ static bool eq_StackPointer(StackPointer op1, StackPointer op2);
 static bool eq_FrameCheckpoint(struct FrameCheckpoint op1, struct FrameCheckpoint op2);
 static bool eq_CallContinuation(struct CallContinuation op1, struct CallContinuation op2);
 static bool eq_CreateContinuation(struct CreateContinuation op1, struct CreateContinuation op2);
-static bool eq_ChainConfig(struct ChainConfig op1, struct ChainConfig op2);
 static bool eq_ExecutionPayload(struct ExecutionPayload op1, struct ExecutionPayload op2);
 static bool eq_OpcodeOutcome(struct OpcodeOutcome op1, struct OpcodeOutcome op2);
 static bool eq_LogTopics(struct LogTopics op1, struct LogTopics op2);
@@ -831,6 +830,35 @@ static inline u256 u256_of_fbits(const uint64_t value) {
   return result;
 }
 
+
+static inline bool EQUAL(option_R__sail_c_repr_u256_)(struct option_R__sail_c_repr_u256_ op1, struct option_R__sail_c_repr_u256_ op2) {
+  if (op1.kind != op2.kind) {
+    return false;
+  }
+  switch (op1.kind) {
+  case Kind_Some_R__sail_c_repr_u256_: {
+    return EQUAL(u256)(op1.variants.Some_R__sail_c_repr_u256_, op2.variants.Some_R__sail_c_repr_u256_);
+  }
+  case Kind_None_R__sail_c_repr_u256_: {
+    return true;
+  }
+  }
+  return false;
+}
+
+static inline struct option_R__sail_c_repr_u256_ None_R__sail_c_repr_u256_(unit op) {
+  struct option_R__sail_c_repr_u256_ result;
+  result.kind = Kind_None_R__sail_c_repr_u256_;
+  result.variants.None_R__sail_c_repr_u256_ = op;
+  return result;
+}
+
+static inline struct option_R__sail_c_repr_u256_ Some_R__sail_c_repr_u256_(u256 op) {
+  struct option_R__sail_c_repr_u256_ result;
+  result.kind = Kind_Some_R__sail_c_repr_u256_;
+  result.variants.Some_R__sail_c_repr_u256_ = op;
+  return result;
+}
 
 
 static inline bytes32 bytes32_zero(void) {
@@ -2094,10 +2122,6 @@ static inline bool EQUAL(GasLimitsFields)(struct GasLimitsFields op1, struct Gas
   return (bool)((op1.block_limit == op2.block_limit) && (op1.system_regular_limit == op2.system_regular_limit) && (op1.system_state_limit == op2.system_state_limit) && (op1.transaction_regular_limit == op2.transaction_regular_limit) && (op1.transaction_total_limit == op2.transaction_total_limit));
 }
 
-static inline bool EQUAL(ChainConfig)(struct ChainConfig op1, struct ChainConfig op2) {
-  return (bool)(op1.chain_id == op2.chain_id);
-}
-
 static inline bool EQUAL(BlobScheduleFields)(struct BlobScheduleFields op1, struct BlobScheduleFields op2) {
   return (bool)((op1.base_fee_update_fraction == op2.base_fee_update_fraction) && (op1.max == op2.max) && (op1.target == op2.target));
 }
@@ -2316,7 +2340,11 @@ static inline bool EQUAL(AccessListRef)(struct AccessListRef op1, struct AccessL
 }
 
 static inline bool EQUAL(TransactionFields)(struct TransactionFields op1, struct TransactionFields op2) {
-  return (bool)(EQUAL(AccessListRef)(op1.access_list, op2.access_list) && EQUAL(AuthorizationListRefFields)(op1.authorizations, op2.authorizations) && EQUAL(BlobHashesFields)(op1.blob_hashes, op2.blob_hashes) && (op1.chain_id == op2.chain_id) && (op1.gas_limit == op2.gas_limit) && EQUAL(Bytes)(op1.input_src, op2.input_src) && EQUAL(bool)(op1.is_create, op2.is_create) && EQUAL(u256)(op1.max_blob_fee, op2.max_blob_fee) && EQUAL(u256)(op1.max_fee, op2.max_fee) && EQUAL(u256)(op1.max_priority_fee, op2.max_priority_fee) && EQUAL(u256)(op1.nonce, op2.nonce) && EQUAL(Bytes)(op1.pubkey, op2.pubkey) && EQUAL(Bytes)(op1.raw, op2.raw) && EQUAL(bytes20)(op1.recipient, op2.recipient) && EQUAL(bytes20)(op1.sender, op2.sender) && EQUAL(u256)(op1.sig_r, op2.sig_r) && EQUAL(u256)(op1.sig_s, op2.sig_s) && EQUAL(u256)(op1.sig_v, op2.sig_v) && EQUAL(bytes32)(op1.signing_hash, op2.signing_hash) && EQUAL(TxType)(op1.tx_type, op2.tx_type) && EQUAL(u256)(op1.value, op2.value));
+  return (bool)(EQUAL(AccessListRef)(op1.access_list, op2.access_list) && EQUAL(AuthorizationListRefFields)(op1.authorizations, op2.authorizations) && EQUAL(BlobHashesFields)(op1.blob_hashes, op2.blob_hashes) && (op1.chain_id == op2.chain_id) && (op1.gas_limit == op2.gas_limit) && EQUAL(Bytes)(op1.input_src, op2.input_src) && EQUAL(bool)(op1.is_create, op2.is_create) && EQUAL(u256)(op1.max_blob_fee, op2.max_blob_fee) && EQUAL(u256)(op1.max_fee, op2.max_fee) && EQUAL(u256)(op1.max_priority_fee, op2.max_priority_fee) && EQUAL(u256)(op1.nonce, op2.nonce) && EQUAL(Bytes)(op1.raw, op2.raw) && EQUAL(bytes20)(op1.recipient, op2.recipient) && EQUAL(bytes20)(op1.sender, op2.sender) && EQUAL(u256)(op1.sig_r, op2.sig_r) && EQUAL(u256)(op1.sig_s, op2.sig_s) && EQUAL(u256)(op1.sig_v, op2.sig_v) && EQUAL(bytes32)(op1.signing_hash, op2.signing_hash) && EQUAL(TxType)(op1.tx_type, op2.tx_type) && EQUAL(u256)(op1.value, op2.value));
+}
+
+static inline bool EQUAL(DecodedTransactionFields)(struct DecodedTransactionFields op1, struct DecodedTransactionFields op2) {
+  return (bool)(EQUAL(AccessListRef)(op1.access_list, op2.access_list) && EQUAL(AuthorizationListRefFields)(op1.authorizations, op2.authorizations) && EQUAL(BlobHashesFields)(op1.blob_hashes, op2.blob_hashes) && (op1.chain_id == op2.chain_id) && (op1.gas_limit == op2.gas_limit) && EQUAL(Bytes)(op1.input_src, op2.input_src) && EQUAL(bool)(op1.is_create, op2.is_create) && EQUAL(u256)(op1.max_blob_fee, op2.max_blob_fee) && EQUAL(u256)(op1.max_fee, op2.max_fee) && EQUAL(u256)(op1.max_priority_fee, op2.max_priority_fee) && EQUAL(u256)(op1.nonce, op2.nonce) && EQUAL(Bytes)(op1.raw, op2.raw) && EQUAL(bytes20)(op1.recipient, op2.recipient) && EQUAL(u256)(op1.sig_r, op2.sig_r) && EQUAL(u256)(op1.sig_s, op2.sig_s) && EQUAL(u256)(op1.sig_v, op2.sig_v) && EQUAL(bytes32)(op1.signing_hash, op2.signing_hash) && EQUAL(TxType)(op1.tx_type, op2.tx_type) && EQUAL(u256)(op1.value, op2.value));
 }
 
 static inline bool EQUAL(Withdrawal)(struct Withdrawal op1, struct Withdrawal op2) {
@@ -2528,11 +2556,11 @@ static inline bool EQUAL(TxEnvFields)(struct TxEnvFields op1, struct TxEnvFields
 }
 
 static inline bool EQUAL(WitnessContext)(struct WitnessContext op1, struct WitnessContext op2) {
-  return (bool)(EQUAL(u256)(op1.parent_base_fee_per_gas, op2.parent_base_fee_per_gas) && (op1.parent_blob_gas_used == op2.parent_blob_gas_used) && (op1.parent_excess_blob_gas == op2.parent_excess_blob_gas) && EQUAL(bytes32)(op1.parent_hash, op2.parent_hash) && EQUAL(bytes32)(op1.parent_state_root, op2.parent_state_root));
+  return (bool)(EQUAL(u256)(op1.parent_base_fee_per_gas, op2.parent_base_fee_per_gas) && (op1.parent_blob_gas_used == op2.parent_blob_gas_used) && (op1.parent_excess_blob_gas == op2.parent_excess_blob_gas) && (op1.parent_gas_limit == op2.parent_gas_limit) && (op1.parent_gas_used == op2.parent_gas_used) && EQUAL(bool)(op1.parent_has_base_fee, op2.parent_has_base_fee) && EQUAL(bytes32)(op1.parent_hash, op2.parent_hash) && EQUAL(bytes32)(op1.parent_state_root, op2.parent_state_root));
 }
 
 static inline bool EQUAL(StatelessInput)(struct StatelessInput op1, struct StatelessInput op2) {
-  return (bool)(EQUAL(ChainConfig)(op1.chain_config, op2.chain_config) && EQUAL(ExecutionPayload)(op1.payload, op2.payload));
+  return (bool)((op1.chain_id == op2.chain_id) && EQUAL(ExecutionPayload)(op1.payload, op2.payload));
 }
 
 static inline bool EQUAL(RlpEncoder)(struct RlpEncoder op1, struct RlpEncoder op2) {
@@ -2571,12 +2599,12 @@ static inline bool EQUAL(SstoreCosts)(struct SstoreCosts op1, struct SstoreCosts
   return (bool)((op1.execution == op2.execution) && (op1.refund == op2.refund) && (op1.state_charge == op2.state_charge) && (op1.state_credit == op2.state_credit));
 }
 
-static inline bool EQUAL(tuple_uint_64_uint_64_uint_32)(struct tuple_uint_64_uint_64_uint_32 op1, struct tuple_uint_64_uint_64_uint_32 op2) {
-  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
-}
-
 static inline bool EQUAL(tuple_bool_uint_64_uint_64_uint_32)(struct tuple_bool_uint_64_uint_64_uint_32 op1, struct tuple_bool_uint_64_uint_64_uint_32 op2) {
   return (bool)(EQUAL(bool)(op1.tup0, op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2) && (op1.tup3 == op2.tup3));
+}
+
+static inline bool EQUAL(tuple_uint_64_uint_64_uint_32)(struct tuple_uint_64_uint_64_uint_32 op1, struct tuple_uint_64_uint_64_uint_32 op2) {
+  return (bool)((op1.tup0 == op2.tup0) && (op1.tup1 == op2.tup1) && (op1.tup2 == op2.tup2));
 }
 
 static inline bool EQUAL(PrecompileResult)(struct PrecompileResult op1, struct PrecompileResult op2) {
@@ -3046,15 +3074,15 @@ static inline bool EQUAL(TrieRootResult)(struct TrieRootResult op1, struct TrieR
 }
 
 static inline bool EQUAL(ParentHeaderFields)(struct ParentHeaderFields op1, struct ParentHeaderFields op2) {
-  return (bool)(EQUAL(u256)(op1.base_fee, op2.base_fee) && (op1.blob_gas_used == op2.blob_gas_used) && (op1.excess_blob_gas == op2.excess_blob_gas) && EQUAL(bool)(op1.have_base_fee, op2.have_base_fee) && EQUAL(bool)(op1.have_blob_gas, op2.have_blob_gas) && EQUAL(bool)(op1.have_excess_blob_gas, op2.have_excess_blob_gas) && EQUAL(bool)(op1.have_parent, op2.have_parent) && EQUAL(bool)(op1.have_state, op2.have_state) && EQUAL(bytes32)(op1.parent_hash, op2.parent_hash) && EQUAL(bytes32)(op1.state_root, op2.state_root));
+  return (bool)(EQUAL(u256)(op1.base_fee, op2.base_fee) && (op1.blob_gas_used == op2.blob_gas_used) && (op1.excess_blob_gas == op2.excess_blob_gas) && (op1.gas_limit == op2.gas_limit) && (op1.gas_used == op2.gas_used) && EQUAL(bool)(op1.have_base_fee, op2.have_base_fee) && EQUAL(bool)(op1.have_blob_gas, op2.have_blob_gas) && EQUAL(bool)(op1.have_excess_blob_gas, op2.have_excess_blob_gas) && EQUAL(bool)(op1.have_parent, op2.have_parent) && EQUAL(bool)(op1.have_state, op2.have_state) && EQUAL(bytes32)(op1.parent_hash, op2.parent_hash) && EQUAL(bytes32)(op1.state_root, op2.state_root));
 }
 
 static inline bool EQUAL(WitnessHeaderIndex)(struct WitnessHeaderIndex op1, struct WitnessHeaderIndex op2) {
-  return (bool)(EQUAL(BoundedSszListCursor)(op1.cursor, op2.cursor) && EQUAL(u256)(op1.parent_base_fee_per_gas, op2.parent_base_fee_per_gas) && (op1.parent_blob_gas_used == op2.parent_blob_gas_used) && (op1.parent_excess_blob_gas == op2.parent_excess_blob_gas) && EQUAL(bool)(op1.parent_fields_valid, op2.parent_fields_valid) && EQUAL(bytes32)(op1.parent_state_root, op2.parent_state_root) && EQUAL(bytes32)(op1.previous_hash, op2.previous_hash) && EQUAL(bool)(op1.valid, op2.valid));
+  return (bool)(EQUAL(BoundedSszListCursor)(op1.cursor, op2.cursor) && EQUAL(u256)(op1.parent_base_fee_per_gas, op2.parent_base_fee_per_gas) && (op1.parent_blob_gas_used == op2.parent_blob_gas_used) && (op1.parent_excess_blob_gas == op2.parent_excess_blob_gas) && EQUAL(bool)(op1.parent_fields_valid, op2.parent_fields_valid) && (op1.parent_gas_limit == op2.parent_gas_limit) && (op1.parent_gas_used == op2.parent_gas_used) && EQUAL(bool)(op1.parent_has_base_fee, op2.parent_has_base_fee) && EQUAL(bytes32)(op1.parent_state_root, op2.parent_state_root) && EQUAL(bytes32)(op1.previous_hash, op2.previous_hash) && EQUAL(bool)(op1.valid, op2.valid));
 }
 
 static inline bool EQUAL(StatelessInputRef)(struct StatelessInputRef op1, struct StatelessInputRef op2) {
-  return (bool)(EQUAL(Bytes)(op1.block_access_list, op2.block_access_list) && EQUAL(Bytes)(op1.builder_deposit_requests, op2.builder_deposit_requests) && EQUAL(Bytes)(op1.builder_exit_requests, op2.builder_exit_requests) && EQUAL(Bytes)(op1.chain_config, op2.chain_config) && EQUAL(Bytes)(op1.consolidation_requests, op2.consolidation_requests) && EQUAL(Bytes)(op1.deposits, op2.deposits) && EQUAL(Bytes)(op1.execution_payload, op2.execution_payload) && EQUAL(Bytes)(op1.extra_data, op2.extra_data) && EQUAL(Bytes)(op1.new_payload_request, op2.new_payload_request) && EQUAL(ProtocolProfileFields)(op1.protocol, op2.protocol) && EQUAL(Bytes)(op1.public_keys, op2.public_keys) && EQUAL(BoundedSszListRef)(op1.transactions, op2.transactions) && EQUAL(Bytes)(op1.versioned_hashes, op2.versioned_hashes) && EQUAL(Bytes)(op1.withdrawal_requests, op2.withdrawal_requests) && EQUAL(BoundedSszListRef)(op1.withdrawals, op2.withdrawals) && EQUAL(BoundedSszListRef)(op1.witness_codes, op2.witness_codes) && EQUAL(BoundedSszListRef)(op1.witness_headers, op2.witness_headers) && EQUAL(BoundedSszListRef)(op1.witness_state, op2.witness_state));
+  return (bool)(EQUAL(Bytes)(op1.block_access_list, op2.block_access_list) && EQUAL(Bytes)(op1.builder_deposit_requests, op2.builder_deposit_requests) && EQUAL(Bytes)(op1.builder_exit_requests, op2.builder_exit_requests) && (op1.chain_id == op2.chain_id) && EQUAL(Bytes)(op1.consolidation_requests, op2.consolidation_requests) && EQUAL(Bytes)(op1.deposits, op2.deposits) && EQUAL(Bytes)(op1.execution_payload, op2.execution_payload) && EQUAL(Bytes)(op1.extra_data, op2.extra_data) && EQUAL(Bytes)(op1.new_payload_request, op2.new_payload_request) && EQUAL(ProtocolProfileFields)(op1.protocol, op2.protocol) && EQUAL(fbits)(op1.schema_id, op2.schema_id) && EQUAL(BoundedSszListRef)(op1.transactions, op2.transactions) && EQUAL(Bytes)(op1.versioned_hashes, op2.versioned_hashes) && EQUAL(Bytes)(op1.withdrawal_requests, op2.withdrawal_requests) && EQUAL(BoundedSszListRef)(op1.withdrawals, op2.withdrawals) && EQUAL(BoundedSszListRef)(op1.witness_codes, op2.witness_codes) && EQUAL(BoundedSszListRef)(op1.witness_headers, op2.witness_headers) && EQUAL(BoundedSszListRef)(op1.witness_state, op2.witness_state));
 }
 
 static inline bool EQUAL(BlockGasUsageFields)(struct BlockGasUsageFields op1, struct BlockGasUsageFields op2) {

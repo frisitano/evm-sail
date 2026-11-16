@@ -13,6 +13,7 @@ import Evm.Lib.Rlp.Decoding
 import Evm.Lib.Tx
 import Evm.Lib.Rlp.Codecs.Transactions
 import Evm.Kernel.Environment
+import Evm.Kernel.Storage
 import Evm.Kernel.Lifecycle
 
 set_option maxHeartbeats 1_000_000_000
@@ -55,6 +56,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -428,7 +430,7 @@ def ssz_container_cursor (bytes : (Sigma fun (k_off : Nat) =>
 
 /-- Takes the next variable field, ending at its container-relative SSZ
 offset, and returns the advanced cursor. -/
-/- Type quantifiers: k_ex427932_ : Nat, 0 ≤ k_ex427932_ ∧ k_ex427932_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex576662_ : Nat, 0 ≤ k_ex576662_ ∧ k_ex576662_ ≤ (2 ^ 32 - 1) -/
 def ssz_take (cursor : SszContainerCursor) (stop : Nat) : SailM ((Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len))) × SszContainerCursor) := do
   let current_value := cursor.current
@@ -561,10 +563,14 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
   let schema_id ← (( do
     (pure ((← (stateless_input_slice_byte ⟨_, ⟨_, input_fields⟩⟩ 0)) +++ (← (stateless_input_slice_byte
             ⟨_, ⟨_, input_fields⟩⟩ 1)))) ) : SailM (BitVec 16) )
-  if ((schema_id != STATELESS_SCHEMA_ID) : Bool)
+  let schema_fork := (Sail.BitVec.extractLsb schema_id 15 8)
+  if ((((Sail.BitVec.extractLsb schema_id 7 0) != 0x01#8) || (! (schema_protocol_profile_forwards_matches
+           schema_fork))) : Bool)
   then (fatal_error InvalidConfig)
   else (pure ())
-  let protocol : (Sigma fun (k_fork : Nat) =>
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← (( do
+    (schema_protocol_profile schema_fork) ) : SailM
+    (Sigma fun (k_fork : Nat) =>
     (Sigma fun (k_target : Nat) =>
     (Sigma fun (k_maximum : Nat) =>
     (Sigma fun (k_denominator : Nat) =>
@@ -574,30 +580,8 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
     (Sigma fun (k_transaction_blob_limit : Nat) =>
     (Sigma fun (k_refund_divisor : Nat) =>
-    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))))))))))) :=
-    ((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((DEFAULT_PROTOCOL_PROFILE).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_fork : Nat) =>
-    (Sigma fun (k_target : Nat) =>
-    (Sigma fun (k_maximum : Nat) =>
-    (Sigma fun (k_denominator : Nat) =>
-    (Sigma fun (k_code_limit : Nat) =>
-    (Sigma fun (k_initcode_limit : Nat) =>
-    (Sigma fun (k_transaction_total_gas_limit : Nat) =>
-    (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
-    (Sigma fun (k_transaction_blob_limit : Nat) =>
-    (Sigma fun (k_refund_divisor : Nat) =>
-    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))) : (Sigma
-    fun (k_fork : Nat) =>
-    (Sigma fun (k_target : Nat) =>
-    (Sigma fun (k_maximum : Nat) =>
-    (Sigma fun (k_denominator : Nat) =>
-    (Sigma fun (k_code_limit : Nat) =>
-    (Sigma fun (k_initcode_limit : Nat) =>
-    (Sigma fun (k_transaction_total_gas_limit : Nat) =>
-    (Sigma fun (k_transaction_regular_gas_limit : Nat) =>
-    (Sigma fun (k_transaction_blob_limit : Nat) =>
-    (Sigma fun (k_refund_divisor : Nat) =>
-    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor))))))))))))
+    (ProtocolProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_transaction_total_gas_limit k_transaction_regular_gas_limit k_transaction_blob_limit k_refund_divisor)))))))))))
+    )
   let body_bytes := (stateless_input_slice_suffix input_fields body_offset_value)
   let ⟨_, ⟨_, body⟩⟩ ← do
     (ssz_container_bytes ⟨_, ⟨_, body_bytes⟩⟩ STATELESS_INPUT_BODY_FIXED_LENGTH)
@@ -779,7 +763,8 @@ def decode_stateless_input_ref (input : (Sigma fun (k_off : Nat) =>
   (ssz_validate_variable_list witness_state)
   (ssz_validate_variable_list witness_codes)
   (ssz_validate_variable_list witness_headers)
-  (pure { protocol := protocol,
+  (pure { schema_id := schema_id,
+          protocol := ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩,
           new_payload_request := ⟨_, ⟨_, new_payload_request⟩⟩,
           execution_payload := ⟨_, ⟨_, execution_payload⟩⟩,
           versioned_hashes := versioned_hashes,
@@ -900,6 +885,8 @@ def EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields :=
   { parent_hash := ZERO_HASH,
     state_root := ZERO_HASH,
     base_fee := ZERO_WORD,
+    gas_limit := 0,
+    gas_used := 0,
     blob_gas_used := 0,
     excess_blob_gas := 0,
     have_parent := false,
@@ -917,8 +904,8 @@ def next_parent_header_field (index : Nat) : Nat :=
   else 19
 
 /-- Extracts the execution-relevant fields while walking one parent header. -/
-/- Type quantifiers: _reclimit : Nat, k_ex428003_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
-  ≤ k_ex428003_ ∧ k_ex428003_ ≤ 19, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex576735_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 0
+  ≤ k_ex576735_ ∧ k_ex576735_ ≤ 19, 0 ≤ _reclimit -/
 def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_source_off k_source_len)) (field_index : Nat) (fields : ParentHeaderFields) (_reclimit : Nat) : SailM ParentHeaderFields := do
   match _reclimit with
   | 0 =>
@@ -953,51 +940,63 @@ def _rec_decode_parent_header_fields (cursor : (StatelessInputSliceFields k_sour
                     (pure { decoded with have_state := true }))
                 else
                   (do
-                    if ((field_index == 15) : Bool)
+                    if ((field_index == 9) : Bool)
                     then
                       (do
-                        let decoded ←
-                          (pure { decoded with base_fee := ← (rlp_decode_u256 field) })
-                        (pure { decoded with have_base_fee := true }))
+                        (pure { decoded with gas_limit := ← (rlp_decode_uint64 field) }))
                     else
                       (do
-                        if ((field_index == 17) : Bool)
+                        if ((field_index == 10) : Bool)
                         then
                           (do
-                            let value ← do (rlp_decode_uint64 field)
-                            let count := (value / (2 ^i 17))
-                            let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
-                              readReg k_execution_profile
-                            let profile := execution_profile.protocol
-                            if (((count ≤b profile.blob_schedule.max) && (value == ((2 ^i 17) *i count))) : Bool)
-                            then
-                              (let decoded : ParentHeaderFields :=
-                                { decoded with blob_gas_used := ((2 ^i 17) *i count) }
-                              (pure { decoded with have_blob_gas := true }))
-                            else
-                              (do
-                                (fatal_error RlpDecode)
-                                (pure decoded)))
+                            (pure { decoded with gas_used := ← (rlp_decode_uint64 field) }))
                         else
                           (do
-                            if ((field_index == 18) : Bool)
+                            if ((field_index == 15) : Bool)
                             then
                               (do
-                                let value ← do (rlp_decode_uint64 field)
-                                let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
-                                  readReg k_execution_profile
-                                let profile := execution_profile.protocol
-                                let limit := profile.excess_blob_gas_limit
-                                if ((value ≤b limit) : Bool)
+                                let decoded ←
+                                  (pure { decoded with base_fee := ← (rlp_decode_u256 field) })
+                                (pure { decoded with have_base_fee := true }))
+                            else
+                              (do
+                                if ((field_index == 17) : Bool)
                                 then
-                                  (let decoded : ParentHeaderFields :=
-                                    { decoded with excess_blob_gas := value }
-                                  (pure { decoded with have_excess_blob_gas := true }))
+                                  (do
+                                    let value ← do (rlp_decode_uint64 field)
+                                    let count := (value / (2 ^i 17))
+                                    let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+                                      readReg k_execution_profile
+                                    let profile := execution_profile.protocol
+                                    if (((count ≤b profile.blob_schedule.max) && (value == ((2 ^i 17) *i count))) : Bool)
+                                    then
+                                      (let decoded : ParentHeaderFields :=
+                                        { decoded with blob_gas_used := ((2 ^i 17) *i count) }
+                                      (pure { decoded with have_blob_gas := true }))
+                                    else
+                                      (do
+                                        (fatal_error RlpDecode)
+                                        (pure decoded)))
                                 else
                                   (do
-                                    (fatal_error RlpDecode)
-                                    (pure decoded)))
-                            else (pure decoded))))) ) : SailM ParentHeaderFields )
+                                    if ((field_index == 18) : Bool)
+                                    then
+                                      (do
+                                        let value ← do (rlp_decode_uint64 field)
+                                        let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+                                          readReg k_execution_profile
+                                        let profile := execution_profile.protocol
+                                        let limit := profile.excess_blob_gas_limit
+                                        if ((value ≤b limit) : Bool)
+                                        then
+                                          (let decoded : ParentHeaderFields :=
+                                            { decoded with excess_blob_gas := value }
+                                          (pure { decoded with have_excess_blob_gas := true }))
+                                        else
+                                          (do
+                                            (fatal_error RlpDecode)
+                                            (pure decoded)))
+                                    else (pure decoded))))))) ) : SailM ParentHeaderFields )
           let next_field := (next_parent_header_field field_index)
           (_rec_decode_parent_header_fields next next_field decoded _reclimit_pred)))
 termination_by _reclimit
@@ -1058,11 +1057,21 @@ def _rec_index_witness_header_cursor (state : WitnessHeaderIndex) (_reclimit : N
                   let result : WitnessHeaderIndex :=
                     { result with parent_base_fee_per_gas := decoded.base_fee }
                   let result : WitnessHeaderIndex :=
+                    { result with parent_has_base_fee := decoded.have_base_fee }
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_gas_limit := decoded.gas_limit }
+                  let result : WitnessHeaderIndex :=
+                    { result with parent_gas_used := decoded.gas_used }
+                  let result : WitnessHeaderIndex :=
                     { result with parent_blob_gas_used := decoded.blob_gas_used }
                   let result : WitnessHeaderIndex :=
                     { result with parent_excess_blob_gas := decoded.excess_blob_gas }
                   let result : WitnessHeaderIndex :=
                     { result with parent_fields_valid := decoded.have_state }
+                  let result : WitnessHeaderIndex :=
+                    if (((profile.fork >b London) && (! decoded.have_base_fee)) : Bool)
+                    then { result with parent_fields_valid := false }
+                    else result
                   if ((profile.fork ≥b Cancun) : Bool)
                   then
                     (let result : WitnessHeaderIndex :=
@@ -1113,6 +1122,9 @@ def index_witness_headers (headers : (BoundedSszListRef (2 ^ 8))) : SailM Witnes
       valid := (headers.count != 0),
       parent_state_root := ZERO_HASH,
       parent_base_fee_per_gas := ZERO_WORD,
+      parent_has_base_fee := false,
+      parent_gas_limit := 0,
+      parent_gas_used := 0,
       parent_blob_gas_used := 0,
       parent_excess_blob_gas := 0,
       parent_fields_valid := false }
@@ -1129,6 +1141,9 @@ def index_witness_headers (headers : (BoundedSszListRef (2 ^ 8))) : SailM Witnes
   (pure { parent_hash := indexed.previous_hash,
           parent_state_root := indexed.parent_state_root,
           parent_base_fee_per_gas := indexed.parent_base_fee_per_gas,
+          parent_has_base_fee := indexed.parent_has_base_fee,
+          parent_gas_limit := indexed.parent_gas_limit,
+          parent_gas_used := indexed.parent_gas_used,
           parent_blob_gas_used := indexed.parent_blob_gas_used,
           parent_excess_blob_gas := indexed.parent_excess_blob_gas })
 
@@ -1219,7 +1234,7 @@ offsets. -/
   profile_dependentWitness3 = 11684671 ∧
   profile_dependentWitness4 = 65536 ∧
   profile_dependentWitness5 = 131072 ∧
-  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness6 = (2 ^ 32 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
   profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 -/
 def decode_payload_blob_gas_used (payload : (Sigma fun (k_off : Nat) =>
@@ -1344,7 +1359,7 @@ previously valid parent chain, not on SSZ alone. -/
   profile_dependentWitness3 = 11684671 ∧
   profile_dependentWitness4 = 65536 ∧
   profile_dependentWitness5 = 131072 ∧
-  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness6 = (2 ^ 32 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
   profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5 -/
 def decode_payload_excess_blob_gas (payload : (Sigma fun (k_off : Nat) =>
@@ -1440,24 +1455,62 @@ element, and installs the header and chain parameters in the kernel. -/
 def decode_stateless_input (input_ref : StatelessInputRef) : SailM StatelessInput := do
   let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
   let header ← do (decode_block_header_ssz input_ref)
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ :=
+    input_ref.protocol
+  let fork := protocol.fork
+  let ⟨_, ⟨_, versioned_hashes⟩⟩ := input_ref.versioned_hashes
+  let ⟨_, ⟨_, deposits⟩⟩ := input_ref.deposits
+  let ⟨_, ⟨_, withdrawal_requests⟩⟩ := input_ref.withdrawal_requests
+  let ⟨_, ⟨_, consolidation_requests⟩⟩ := input_ref.consolidation_requests
+  let ⟨_, ⟨_, builder_deposits⟩⟩ := input_ref.builder_deposit_requests
+  let ⟨_, ⟨_, builder_exits⟩⟩ := input_ref.builder_exit_requests
+  if (((fork <b London) && ((header.base_fee != ZERO_WORD) : Bool)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if (((fork <b Shanghai) && ((input_ref.withdrawals.count != 0) : Bool)) : Bool)
+  then (fatal_error InvalidConfig)
+  else (pure ())
+  if ((fork <b Cancun) : Bool)
+  then
+    (do
+      if (((versioned_hashes.len != 0) || (((header.blob_gas_used != 0) || (((header.excess_blob_gas != 0) || (bne
+                 header.parent_beacon_block_root ZERO_HASH)) : Bool)) : Bool)) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ()))
+  else (pure ())
+  if ((fork <b Prague) : Bool)
+  then
+    (do
+      if (((deposits.len != 0) || ((withdrawal_requests.len != 0) || (consolidation_requests.len != 0))) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ()))
+  else (pure ())
+  if ((fork <b Amsterdam) : Bool)
+  then
+    (do
+      if (((builder_deposits.len != 0) || ((builder_exits.len != 0) || ((header.slot_number != 0) : Bool))) : Bool)
+      then (fatal_error InvalidConfig)
+      else (pure ()))
+  else (pure ())
   (k_set_header header)
+  writeReg k_historical_access_schema ⟨_, ⟨_, ((input_ref.block_access_list).2).2⟩⟩
   writeReg k_chain_id input_ref.chain_id
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ((((((((((((⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (execution_profile_for
     ((((((((((input_ref.protocol).2).2).2).2).2).2).2).2).2).2 header.gas_limit)⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ : (Sigma
-    fun (k_ex469420_ : Nat) =>
-    (Sigma fun (k_ex469421_ : Nat) =>
-    (Sigma fun (k_ex469422_ : Nat) =>
-    (Sigma fun (k_ex469423_ : Nat) =>
-    (Sigma fun (k_ex469424_ : Nat) =>
-    (Sigma fun (k_ex469425_ : Nat) =>
-    (Sigma fun (k_ex469426_ : Nat) =>
-    (Sigma fun (k_ex469427_ : Nat) =>
-    (Sigma fun (k_ex469428_ : Nat) =>
-    (Sigma fun (k_ex469429_ : Nat) =>
-    (Sigma fun (k_ex469430_ : Nat) =>
-    (ExecutionProfileFields k_ex469420_ k_ex469421_ k_ex469422_ k_ex469423_ k_ex469424_ k_ex469425_ k_ex469426_ k_ex469427_ k_ex469428_ k_ex469429_ k_ex469430_ (if ( k_ex469430_
-    < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_) (if ( (if ( k_ex469430_ < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_)
-    < k_ex469427_  : Bool) then (if ( k_ex469430_ < k_ex469426_  : Bool) then k_ex469430_ else k_ex469426_) else k_ex469427_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
+    fun (k_ex637285_ : Nat) =>
+    (Sigma fun (k_ex637286_ : Nat) =>
+    (Sigma fun (k_ex637287_ : Nat) =>
+    (Sigma fun (k_ex637288_ : Nat) =>
+    (Sigma fun (k_ex637289_ : Nat) =>
+    (Sigma fun (k_ex637290_ : Nat) =>
+    (Sigma fun (k_ex637291_ : Nat) =>
+    (Sigma fun (k_ex637292_ : Nat) =>
+    (Sigma fun (k_ex637293_ : Nat) =>
+    (Sigma fun (k_ex637294_ : Nat) =>
+    (Sigma fun (k_ex637295_ : Nat) =>
+    (ExecutionProfileFields k_ex637285_ k_ex637286_ k_ex637287_ k_ex637288_ k_ex637289_ k_ex637290_ k_ex637291_ k_ex637292_ k_ex637293_ k_ex637294_ k_ex637295_ (if ( k_ex637295_
+    < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_) (if ( (if ( k_ex637295_ < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_)
+    < k_ex637292_  : Bool) then (if ( k_ex637295_ < k_ex637291_  : Bool) then k_ex637295_ else k_ex637291_) else k_ex637292_))))))))))))))).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩
   (pure { payload := ← (pure { expected_block_hash := ← (ssz_bytes32 input_ref.execution_payload
                                      PL_BLOCK_HASH),
                                  block' := { header := header,
@@ -1474,6 +1527,7 @@ def index_execution_witness (input_ref : StatelessInputRef) : SailM WitnessConte
   (index_witness_nodes input_ref.witness_state)
   (index_witness_codes input_ref.witness_codes)
   let witness ← do (index_witness_headers input_ref.witness_headers)
+  (validate_secured_state_root witness.parent_state_root)
   writeReg k_parent_state_root witness.parent_state_root
   (pure witness)
 

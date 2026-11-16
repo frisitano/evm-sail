@@ -18,9 +18,6 @@ struct GasLimitsFields {
   uint64_t transaction_total_limit;
 };
 
-// struct ChainConfig
-struct ChainConfig {uint64_t chain_id;};
-
 // struct BlobScheduleFields
 struct BlobScheduleFields {
   uint32_t base_fee_update_fraction;
@@ -54,6 +51,8 @@ struct GasLimitsFields gas_limits_for(struct ProtocolProfileFields profile, uint
 struct ExecutionProfileFields execution_profile_for(struct ProtocolProfileFields protocol, uint64_t block_limit);
 
 struct ProtocolProfileFields schema_protocol_profile(uint64_t schema_fork);
+
+bool schema_protocol_profile_forwards_matches(uint64_t schema_fork);
 
 void create_letbind_57(void);
 void kill_letbind_57(void);

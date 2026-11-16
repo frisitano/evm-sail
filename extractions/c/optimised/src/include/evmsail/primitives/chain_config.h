@@ -11,6 +11,7 @@
  * C enum: the active value remains the integer stored by ProtocolProfile.
  */
 #define EVMSAIL_FORK_LONDON UINT64_C(6)
+#define EVMSAIL_FORK_PARIS UINT64_C(9)
 #define EVMSAIL_FORK_SHANGHAI UINT64_C(10)
 #define EVMSAIL_FORK_CANCUN UINT64_C(11)
 #define EVMSAIL_FORK_PRAGUE UINT64_C(12)

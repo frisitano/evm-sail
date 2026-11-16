@@ -583,6 +583,35 @@ function htr_transactions(transactions : TransactionListRef) -> hash = {
     mix_in_length(root, transactions.count)
 }
 
+/*! Fixed-width execution-request leaf semantics. */
+enum HtrRequestKind = {
+    /* a validator deposit request (EIP-6110) */
+    HtrDeposit,
+    /* a validator withdrawal request (EIP-7002) */
+    HtrWithdrawalRequest,
+    /* a validator consolidation request (EIP-7251) */
+    HtrConsolidationRequest,
+    /* a builder deposit request */
+    HtrBuilderDepositRequest,
+    /* a builder exit request */
+    HtrBuilderExitRequest,
+}
+
+/*! Progressive traversal for fixed-shape leaves. Byte lists and transaction
+    lists retain their own traversal layers because transaction leaves recurse
+    into progressive byte lists; this boundary avoids a mutually recursive
+    type-erasing traversal while sharing the fixed-leaf algorithm. */
+union HtrProgressiveSource = {
+    /* execution withdrawal leaves */
+    HtrWithdrawalLeaves : WithdrawalListRef,
+    /* versioned blob-hash leaves */
+    HtrVersionedHashLeaves : StatelessInputSlice,
+    /* typed fixed-width execution-request leaves */
+    HtrRequestLeaves : (StatelessInputSlice, HtrRequestKind),
+}
+
+val htr_progressive_source : forall 'start, 0 <= 'start. (HtrProgressiveSource, int('start), htr_leaf_count, htr_depth) -> hash
+
 /*! Recursively merkleizes a range of withdrawal roots. */
 val htr_withdrawals_subtree : forall 'start, 0 <= 'start. (WithdrawalListRef, int('start), htr_leaf_count, htr_depth) -> hash
 function htr_withdrawals_subtree(withdrawals, start, count, depth) =
@@ -618,21 +647,7 @@ val htr_withdrawals_progressive : forall 'start, 0 <= 'start. (
         htr_depth,
     ) -> hash
 function htr_withdrawals_progressive(withdrawals, start, count, depth) =
-    if count == 0 then {
-        ZERO_HASH
-    } else {
-        let capacity = htr_leaf_capacity(depth);
-        let take : htr_leaf_count =
-            if count < capacity then count else capacity;
-        let remaining : htr_leaf_count =
-            if count < capacity then 0 else count - capacity;
-        let next_depth = htr_progressive_next_depth(remaining, depth);
-        let left_root = htr_withdrawals_subtree(withdrawals, start, take, depth);
-        let right_root = htr_withdrawals_progressive(withdrawals, start + take, remaining, next_depth);
-        sha256_pair(left_root, right_root)
-    }
-
-termination_measure htr_withdrawals_progressive(withdrawals, start, count, depth) = count
+    htr_progressive_source(HtrWithdrawalLeaves(withdrawals), start, count, depth)
 
 /*! `hash_tree_root` of the withdrawals list
     (`ProgressiveList[Withdrawal]`). */
@@ -730,21 +745,7 @@ val htr_versioned_hashes_progressive : forall 'start, 0 <= 'start. (
         htr_depth,
     ) -> hash
 function htr_versioned_hashes_progressive(versioned_hashes, start, count, depth) =
-    if count == 0 then {
-        ZERO_HASH
-    } else {
-        let capacity = htr_leaf_capacity(depth);
-        let take : htr_leaf_count =
-            if count < capacity then count else capacity;
-        let remaining : htr_leaf_count =
-            if count < capacity then 0 else count - capacity;
-        let next_depth = htr_progressive_next_depth(remaining, depth);
-        let left_root = htr_versioned_hashes_subtree(versioned_hashes, start, take, depth);
-        let right_root = htr_versioned_hashes_progressive(versioned_hashes, start + take, remaining, next_depth);
-        sha256_pair(left_root, right_root)
-    }
-
-termination_measure htr_versioned_hashes_progressive(versioned_hashes, start, count, depth) = count
+    htr_progressive_source(HtrVersionedHashLeaves(versioned_hashes), start, count, depth)
 
 /*! `hash_tree_root` of the versioned hashes (`ProgressiveList[Bytes32]`). */
 function htr_versioned_hashes(versioned_hashes : StatelessInputSlice) -> hash = {
@@ -801,22 +802,6 @@ function htr_builder_exit_request(request : StatelessInputSliceLength(68)) -> ha
     merkleize([source_address, pubkey], 1)
 }
 
-/*! The closed fixed-width leaf-operation algebra carried through the generic
-    request-list recursion. [htr_request_leaf][] interprets it at depth zero,
-    replacing a higher-order leaf function without duplicating merkleization. */
-enum HtrRequestKind = {
-    /* a validator deposit request (EIP-6110) */
-    HtrDeposit,
-    /* a validator withdrawal request (EIP-7002) */
-    HtrWithdrawalRequest,
-    /* a validator consolidation request (EIP-7251) */
-    HtrConsolidationRequest,
-    /* a builder deposit request */
-    HtrBuilderDepositRequest,
-    /* a builder exit request */
-    HtrBuilderExitRequest,
-}
-
 /*! Hashes one fixed-width execution-request item at `index`. */
 val htr_request_leaf : forall 'index, 0 <= 'index. (StatelessInputSlice, int('index), HtrRequestKind) -> hash
 function htr_request_leaf(requests, index, kind) =
@@ -868,7 +853,7 @@ function htr_request_leaf(requests, index, kind) =
         },
     }
 
-/*! Recursively merkleizes a range of fixed-width execution-request roots. */
+/*! One progressive recurrence, with leaf-specific balanced subtrees. */
 val htr_requests_subtree : forall 'start, 0 <= 'start. (
         StatelessInputSlice,
         HtrRequestKind,
@@ -876,6 +861,28 @@ val htr_requests_subtree : forall 'start, 0 <= 'start. (
         htr_leaf_count,
         htr_depth,
     ) -> hash
+/*! Folds progressive chunks using the source's leaf-specific subtree. */
+function htr_progressive_source(source, start, count, depth) =
+    if count == 0 then {
+        ZERO_HASH
+    } else {
+        let capacity = htr_leaf_capacity(depth);
+        let take : htr_leaf_count =
+            if count < capacity then count else capacity;
+        let remaining : htr_leaf_count =
+            if count < capacity then 0 else count - capacity;
+        let next_depth = htr_progressive_next_depth(remaining, depth);
+        let left_root : hash = match source {
+            HtrWithdrawalLeaves(withdrawals) => htr_withdrawals_subtree(withdrawals, start, take, depth),
+            HtrVersionedHashLeaves(hashes) => htr_versioned_hashes_subtree(hashes, start, take, depth),
+            HtrRequestLeaves(requests, kind) => htr_requests_subtree(requests, kind, start, take, depth),
+        };
+        let right_root = htr_progressive_source(source, start + take, remaining, next_depth);
+        sha256_pair(left_root, right_root)
+    }
+termination_measure htr_progressive_source(source, start, count, depth) = count
+
+/*! Recursively merkleizes a range of fixed-width execution-request roots. */
 function htr_requests_subtree(requests, kind, start, count, depth) =
     if count == 0 then {
         ssz_zero_hash(depth)
@@ -909,21 +916,7 @@ val htr_requests_progressive : forall 'start, 0 <= 'start. (
         htr_depth,
     ) -> hash
 function htr_requests_progressive(requests, kind, start, count, depth) =
-    if count == 0 then {
-        ZERO_HASH
-    } else {
-        let capacity = htr_leaf_capacity(depth);
-        let take : htr_leaf_count =
-            if count < capacity then count else capacity;
-        let remaining : htr_leaf_count =
-            if count < capacity then 0 else count - capacity;
-        let next_depth = htr_progressive_next_depth(remaining, depth);
-        let left_root = htr_requests_subtree(requests, kind, start, take, depth);
-        let right_root = htr_requests_progressive(requests, kind, start + take, remaining, next_depth);
-        sha256_pair(left_root, right_root)
-    }
-
-termination_measure htr_requests_progressive(requests, kind, start, count, depth) = count
+    htr_progressive_source(HtrRequestLeaves(requests, kind), start, count, depth)
 
 /*! `hash_tree_root` of the deposit-request list
     (`ProgressiveList[DepositRequest]`). */

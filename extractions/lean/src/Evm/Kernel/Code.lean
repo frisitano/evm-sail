@@ -47,6 +47,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -130,9 +131,9 @@ def k_get_code_size (a : (Vector (BitVec 8) 20)) : SailM Nat := do
 
 /-- `EXTCODECOPY`: copies account code into frame memory, zero-padded
 past the end. -/
-/- Type quantifiers: k_ex425765_ : Nat, k_ex425764_ : Nat, k_ex425763_ : Nat, 0 ≤ k_ex425763_ ∧
-  k_ex425763_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex425764_ ∧ k_ex425764_ ≤ (2 ^ 256 - 1), 0 ≤
-  k_ex425765_ ∧ k_ex425765_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex574491_ : Nat, k_ex574490_ : Nat, k_ex574489_ : Nat, 0 ≤ k_ex574489_ ∧
+  k_ex574489_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex574490_ ∧ k_ex574490_ ≤ (2 ^ 256 - 1), 0 ≤
+  k_ex574491_ ∧ k_ex574491_ ≤ (2 ^ 32 - 1) -/
 def k_code_copy (a : (Vector (BitVec 8) 20)) (dst : Nat) (off : Nat) (len : Nat) : SailM Unit := do
   let code_key ← do (k_code_key a)
   let ⟨_, ⟨_, code⟩⟩ ← do (code_db_resolve code_key)

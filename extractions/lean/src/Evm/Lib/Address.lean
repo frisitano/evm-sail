@@ -42,6 +42,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -63,7 +64,7 @@ the CREATE address codec. -/
 
 /-- The `CREATE2` address (EIP-1014): the low 20 bytes of
 `keccak256(0xff ++ sender ++ salt ++ keccak256(initcode))`. -/
-/- Type quantifiers: k_ex424959_ : Nat, 0 ≤ k_ex424959_ ∧ k_ex424959_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex573573_ : Nat, 0 ≤ k_ex573573_ ∧ k_ex573573_ ≤ (2 ^ 256 - 1) -/
 def create2_address (sender : (Vector (BitVec 8) 20)) (salt : Nat) (init_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   let mark ← do (scratch_reserve 85)
   (scratch_push_byte 0xFF#8)

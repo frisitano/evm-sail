@@ -51,6 +51,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -91,6 +92,9 @@ def validate_executed_block (block' : Block) (result : BlockExecutionResult) : S
   if (((profile.fork ≥b Cancun) && ((result.blob_gas_used != header.blob_gas_used) : Bool)) : Bool)
   then (fatal_error InvalidBlobGasUsed)
   else (pure ())
+  if ((profile.fork ≥b Amsterdam) : Bool)
+  then (validate_block_access_list block'.body.block_access_list execution_profile.gas.block_limit)
+  else (pure ())
   let poststate ← do (compute_state_root ())
   if ((bne poststate header.state_root) : Bool)
   then (fatal_error InvalidStateRoot)
@@ -102,9 +106,6 @@ def validate_executed_block (block' : Block) (result : BlockExecutionResult) : S
   let logs_bloom_mismatch := (! logs_bloom_matches)
   if (logs_bloom_mismatch : Bool)
   then (fatal_error InvalidLogsBloom)
-  else (pure ())
-  if ((profile.fork ≥b Amsterdam) : Bool)
-  then (validate_block_access_list block'.body.block_access_list execution_profile.gas.block_limit)
   else (pure ())
 
 def VALIDATION_STAGE_DECODE_INPUT : validation_stage := 1
@@ -127,5 +128,10 @@ def verify_stateless_payload (input_ref : StatelessInputRef) : SailM Unit := do
   let witness ← do (index_execution_witness input_ref)
   (validate_execution_payload input input_ref witness)
   let block' := input.payload.block'
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, protocol⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ :=
+    input_ref.protocol
+  if ((protocol.fork <b Amsterdam) : Bool)
+  then (validate_historical_access_schema block'.body.block_access_list)
+  else (pure ())
   let result ← do (execute_block_body block'.body input_ref)
   (validate_executed_block block' result)

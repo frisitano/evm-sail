@@ -37,6 +37,8 @@ void k_sub_balance(bytes20 a, u256 v);
 
 void k_clear_storage(bytes20 a);
 
+struct Account stateless_account_by_key(bytes32 root, bytes32 address_hash);
+
 void k_add_balance_bytes20_u128_to_unit(bytes20 a, u128 v);
 
 void k_add_balance_bytes20_uint64_t_to_unit(bytes20 a, uint64_t v);

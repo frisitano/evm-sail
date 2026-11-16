@@ -46,6 +46,7 @@ from evm.primitives.account import (
 from evm.kernel.logs import k_emit_transfer_log
 from evm.kernel import environment
 from evm.lib import state_trie
+from evm.executor import block_access_list as executor_block_access_list
 
 def account_info_changed(c: AccountInfo, o: AccountInfo) -> bool:
     return ((((c.nonce) != (o.nonce))) | (((((c.balance) != (o.balance))) | (((((c.code_hash) != (o.code_hash))) | (((c.storage_root) != (o.storage_root))))))))
@@ -95,6 +96,7 @@ def store_account_info(a: address, acc: Account, info: AccountInfo) -> None:
 
 def k_aload(a: address) -> Account:
     try:
+        executor_block_access_list.require_historical_state_access(a, None)
         tx_account = _host_acct_tx_get(a)
         if tx_account.found:
             raise SailReturn(tx_account.account)

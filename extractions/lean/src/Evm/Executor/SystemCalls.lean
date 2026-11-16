@@ -17,6 +17,7 @@ import Evm.Kernel.Logs
 import Evm.Kernel.Code
 import Evm.Kernel.Lifecycle
 import Evm.Evm.Machine
+import Evm.Evm.Gas
 import Evm.Evm.Interpreter
 
 set_option maxHeartbeats 1_000_000_000
@@ -59,6 +60,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -147,12 +149,12 @@ abbrev DEPOSIT_REQUEST_INDEX : Nat := 184
 /-- Runs a top-level protocol system-call frame. The caller has already
 resolved `code`, made a fresh memory frame and, for a word input, frozen
 the parent-memory span that `input` references. -/
-/- Type quantifiers: k_ex428305_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex577037_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0 : Nat, 0
   ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex428305_
-  ∧ k_ex428305_ ≤ (2 ^ 32 - 1) -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex577037_
+  ∧ k_ex577037_ ≤ (2 ^ 32 - 1) -/
 def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (input : CalldataSlice) (memory_base : Nat) : SailM (Nat × Nat × Nat × Int × FrameStatus × (Sigma
   fun (code_dependentWitness0 : Nat) =>
@@ -163,8 +165,15 @@ def run_system_call_frame (tgt : (Vector (BitVec 8) 20)) (code : (Sigma fun (k_o
   let code := ((code).2).2
   (k_journal_checkpoint ())
   let stack_top ← do (stack_reset ())
-  (interpret SYSTEM_CALL_GAS_LIMIT STATE_GAS_ZERO STATE_GAS_SPILL_ZERO GAS_REFUND_ZERO stack_top
-    memory_base MEMORY_HEIGHT_ZERO SYSTEM_ADDRESS tgt tgt ZERO_WORD STATE_GAS_ZERO false 0
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let protocol := execution_profile.protocol
+  let reservoir : Nat :=
+    if ((protocol.fork ≥b Amsterdam) : Bool)
+    then (16 *i G_amsterdam_state_storage_set)
+    else 0
+  (interpret SYSTEM_CALL_GAS_LIMIT reservoir STATE_GAS_SPILL_ZERO GAS_REFUND_ZERO stack_top
+    memory_base MEMORY_HEIGHT_ZERO SYSTEM_ADDRESS tgt tgt ZERO_WORD reservoir false 0
     ⟨_, ⟨_, code⟩⟩ input)
 
 /-- Issues one unchecked block-start system call: a 30M-gas frame from

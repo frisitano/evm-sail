@@ -354,6 +354,7 @@ compile_common() {
         --c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct \
         --c-preserve main --c-preserve resume_frame \
         --c-preserve validation_debug_record --c-preserve write_invalid_result \
+        --c-preserve validate_secured_state_root \
         --c-preserve sload_cost --c-preserve sstore_sentry_cost \
         --c-preserve sstore_costs \
         "${interpreter_preserve_flags[@]}" \

@@ -8,9 +8,9 @@ execution-specs venv) and fed
 to main.sail's full-block validator, gated BYTE-EXACT against the EELS
 reference. Two input
 sources, auto-detected per fixture file:
-  - state tests: ssz_builder executes the case through the in-process EELS t8n
-    and reference guest. This synthesis is pinned to the v0.6.2 EELS schema and
-    is NOT supported with the v21 guest (which accepts only schema id 0x1501);
+  - state tests: ssz_builder uses the pinned v21 EELS blockchain filler for
+    the selected execution fork. Amsterdam uses upstream stateless bytes;
+    historical profiles use the v21 layout with explicit fork selectors;
   - blockchain and engine fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
     The 43-byte StatelessValidationResult is compared as opaque bytes.
@@ -94,7 +94,14 @@ def fixture_items(path):
                 if not line.strip():
                     continue
                 row = json.loads(line)
-                value = row["v"]
+                if "p" in row:
+                    base = Path(path).resolve().parent
+                    part = (base / row["p"]).resolve()
+                    if not part.is_relative_to(base):
+                        raise ValueError("fixture shard part must be inside its shard directory")
+                    value = json.loads(part.read_text())
+                else:
+                    value = row["v"]
                 yield row["k"], json.loads(value) if isinstance(value, str) else value
     else:
         with open(path) as fixture_file:
@@ -122,11 +129,14 @@ def collect(path, want_fork, limit):
                         "idx": idx,  # for ssz_builder (fork rules + tx index)
                         "config": t.get("config", {}),
                         "txbytes": pe.get("txbytes"),
+                        "expected_exception": pe.get("expectException"),
                         "gas": h2i(tx["gasLimit"][idx["gas"]]),
                         "val": h2i(tx["value"][idx["value"]]),
                         "data": tx["data"][idx["data"]],
-                        "post": pe["state"],
+                        "post": pe.get("state", {}),
                         "hash": pe.get("hash"),
+                        "logs_hash": pe.get("logs"),
+                        "receipt": pe.get("receipt"),
                         "al": (
                             tx["accessLists"][idx["data"]]
                             if "accessLists" in tx and idx["data"] < len(tx["accessLists"])
@@ -178,9 +188,7 @@ def _serve_request(payload):
 
 
 def build_guest_pair(case):
-    """case -> (input bytes, expected StatelessValidationResult bytes): a fully
-    VALID Amsterdam block built by the in-process EELS t8n, plus the reference
-    guest's byte-exact expected output over that exact input."""
+    """Validate state-fixture expectations, then synthesize its fork-correct block pair."""
     resp = _serve_request(
         {
             "env": case["env"],
@@ -191,6 +199,10 @@ def build_guest_pair(case):
             "config": case["config"],
             "txbytes": case["txbytes"],
             "expected_post": case["post"],
+            "expected_exception": case.get("expected_exception"),
+            "expected_state_root": case.get("hash"),
+            "expected_logs_hash": case.get("logs_hash"),
+            "expected_receipt": case.get("receipt"),
         }
     )
     return bytes.fromhex(resp["input"]), bytes.fromhex(resp["expected"])
@@ -475,7 +487,7 @@ def corpus_verdict(args, ntotal, npass, failures):
 def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
-    built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
+    built into fork-selected blocks + reference outputs by ssz_builder
     mode. State-test synthesis is pinned to the v0.6.2 EELS schema and is not
     supported with the v21 guest. Pass criterion: the guest's output bytes
     EQUAL the reference output.
@@ -531,9 +543,26 @@ def run_fixtures(files, args):
             print(f"TRACE_FILE {f}", flush=True)
         work = [(cid, inp, exp) for cid, inp, exp in collect_stateless(f)]
         if not work:
-            for c in collect(f, args.fork or "Amsterdam", args.limit):
+            for c in collect(f, args.fork, args.limit):
                 try:
                     inp, exp = build_guest_pair(c)
+                    if args.save_synthesized:
+                        directory = Path(args.save_synthesized)
+                        directory.mkdir(parents=True, exist_ok=True)
+                        row = {
+                            "k": c["cid"] + " [" + f + "]",
+                            "v": {
+                                "_info": {"source": f, "case": c["cid"], "fork": c["fork"]},
+                                "blocks": [
+                                    {
+                                        "statelessInputBytes": "0x" + inp.hex(),
+                                        "statelessOutputBytes": "0x" + exp.hex(),
+                                    }
+                                ],
+                            },
+                        }
+                        with (directory / f"synthesized-{os.getpid()}.jsonl").open("a") as output:
+                            output.write(json.dumps(row) + "\n")
                 except Exception as e:
                     work.append((c["cid"], None, str(e)))
                     continue
@@ -613,6 +642,8 @@ def run_sharded(files: list[str], args: argparse.Namespace) -> int:
     if args.python:
         flags.append("--python")
     flags += ["--build", args.build_mode]
+    if args.save_synthesized:
+        flags += ["--save-synthesized", args.save_synthesized]
     if args.fork:
         flags += ["--fork", args.fork]
     if args.limit:
@@ -685,6 +716,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+")
     ap.add_argument("--fork", default=None)
+    ap.add_argument(
+        "--save-synthesized",
+        metavar="DIRECTORY",
+        help="export newly synthesized SSZ pairs as replayable JSONL fixture shards",
+    )
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--verbose", action="store_true")

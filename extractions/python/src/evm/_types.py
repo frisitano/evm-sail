@@ -678,7 +678,11 @@ from .executor.payload import (
 )
 
 from .lib.htr import (
+    HtrProgressiveSource as HtrProgressiveSource,
     HtrRequestKind as HtrRequestKind,
+    HtrRequestLeaves as HtrRequestLeaves,
+    HtrVersionedHashLeaves as HtrVersionedHashLeaves,
+    HtrWithdrawalLeaves as HtrWithdrawalLeaves,
     htr_depth as htr_depth,
     htr_leaf_count as htr_leaf_count,
 )

@@ -26,11 +26,14 @@ void evmsail_model_init(void)
   create_letbind_35();
   create_letbind_57();
   create_letbind_58();
+  create_letbind_71();
+  create_letbind_72();
   create_letbind_73();
-  create_letbind_208();
-  create_letbind_276();
+  create_letbind_205();
+  create_letbind_269();
   scratch_arena = EMPTY_SCRATCH_SLICE;
   k_parent_state_root = ZERO_HASH;
+  k_historical_access_schema = EMPTY_STATELESS_INPUT_SLICE;
   k_n_headers = (uint16_t)UINT8_C(0);
   k_chain_id = (uint64_t)UINT8_C(1);
   k_execution_profile = DEFAULT_EXECUTION_PROFILE;

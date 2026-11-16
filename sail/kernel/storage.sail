@@ -8,6 +8,7 @@ and transient storage (EIP-1153), over the host state stores.
 val k_aload : address -> Account
 val stateless_storage_by_key : (hash, hash) -> word
 val precompile_id_for_address : address -> precompile_id
+val require_historical_state_access : (address, option(word)) -> unit
 
 function storage_key(a : address, s : word) -> StorageKey = struct { addr = a, slot = s }
 
@@ -29,6 +30,7 @@ function k_account_mark_warm(a : address) -> unit = {
     if precompile_id != NotPrecompile then {
         return ()
     };
+    require_historical_state_access(a, None());
     account_mark_warm(a)
 }
 
@@ -36,11 +38,17 @@ function k_account_mark_warm(a : address) -> unit = {
 function k_slot_is_warm(a : address, s : word) -> bool = storage_is_warm(a, s)
 
 /*! Marks a storage slot warm after the caller has paid its access charge. */
-function k_slot_mark_warm(a : address, s : word) -> unit = storage_mark_warm(a, s)
+function k_slot_mark_warm(a : address, s : word) -> unit = {
+    require_historical_state_access(a, Some(s));
+    storage_mark_warm(a, s)
+}
 
 /*! Warms an explicitly addressed storage slot while preparing a transaction's
     access list, before any EVM frame owns the execution context. */
-function k_prewarm_slot(a : address, s : word) -> unit = storage_mark_warm(a, s)
+function k_prewarm_slot(a : address, s : word) -> unit = {
+    require_historical_state_access(a, Some(s));
+    storage_mark_warm(a, s)
+}
 
 /* --- persistent storage (SLOAD/SSTORE): the C cache/update store, whose
  * mutations are recorded between k_journal_checkpoint / k_journal_revert boundaries --- */
@@ -59,6 +67,7 @@ function k_prewarm_slot(a : address, s : word) -> unit = storage_mark_warm(a, s)
     point-get, one walk for both the witness and the harness-built alloc trie;
     everything above it (the overlay, the read-through, the journal) is common. */
 function k_sload(a : address, s : word) -> StorageValue = {
+    require_historical_state_access(a, Some(s));
     let key = storage_key(a, s);
     let tx_value = storage_tx_get(key);
     match tx_value {

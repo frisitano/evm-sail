@@ -108,12 +108,12 @@ val bal_reset = impure { c: "bal_reset" } : unit -> unit
 val bal_account_touch = impure { c: "bal_note_account_touch" } : address -> unit
 /*! Records a post-transaction storage value for `(address, slot)` at
     the supplied EIP-7928 position. */
-val bal_storage_change = impure { c: "bal_note_storage_change" } : (block_access_index, address, word, word) -> unit
+val bal_storage_change = impure { c: "bal_note_storage_change" } : (block_access_index, address, word, word, word) -> unit
 /*! Records a storage read of `(address, slot)`; reads with no
     subsequent change are listed slot-only in EIP-7928. */
 val bal_storage_read = impure { c: "bal_note_storage_read" } : (address, word) -> unit
 /*! Records a post-transaction balance at the supplied EIP-7928 position. */
-val bal_balance_change = impure { c: "bal_note_balance_change" } : (block_access_index, address, word) -> unit
+val bal_balance_change = impure { c: "bal_note_balance_change" } : (block_access_index, address, word, word) -> unit
 /*! Records a post-transaction nonce at the supplied EIP-7928 position. */
 val bal_nonce_change = impure { c: "bal_note_nonce_change" } : (block_access_index, address, account_nonce) -> unit
 /*! Records a post-transaction code hash at the supplied EIP-7928 position. */

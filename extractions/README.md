@@ -12,9 +12,10 @@ by the native and zkVM executables.
   narrow EVM adapter, and a smoke test for the numeric boundary.
 
 Generated Rocq, Lean, and Python sources are written below their backend
-directories and are kept in version control. Generated C is an ephemeral build
-artifact under `build/c-spec/` or `build/c-optimised/`; it is compile-checked
-but not retained as a readable mirror. Lean's compiled `.lake/build/` output
+directories and are kept in version control. Generated C is built under
+`build/c-spec/` or `build/c-optimised/`; `make publish-c-extraction` refreshes
+the tracked snapshots in `c/spec/src/` and `c/optimised/src/` after validation.
+Lean's compiled `.lake/build/` output
 and Python bytecode remain ignored. The repository's root `Makefile` owns all
 backend commands.
 

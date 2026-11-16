@@ -17,10 +17,18 @@ function ssz_u256(input, offset) =
  * source-backed spans and bounded list references without materializing any
  * variable-length field.
  */
-val stateless_input_ref_decode = impure { c: "decode_stateless_input_ref" } : StatelessInputSlice -> StatelessInputRef
+val stateless_input_ref_decode = impure { c: "decode_stateless_input_ref" } : (StatelessInputSlice, ProtocolProfile) -> StatelessInputRef
 
-function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInputRef =
-    stateless_input_ref_decode(input)
+function decode_stateless_input_ref(input : StatelessInputSlice) -> StatelessInputRef = {
+    let fields : StatelessInputSliceAtLeast(2) =
+        if 2 <= input.len then input else fatal_error(InvalidConfig);
+    let fork = slice_byte(fields, 0);
+    if (slice_byte(fields, 1) != 0x01) | not_bool(schema_protocol_profile_forwards_matches(fork)) then {
+        fatal_error(InvalidConfig)
+    };
+    let protocol = schema_protocol_profile(fork);
+    stateless_input_ref_decode(fields, protocol)
+}
 
 /*! Decode one fixed-width withdrawal without four separate source accesses. */
 val withdrawal_decode_from_ssz = impure { c: "decode_withdrawal" } : StatelessInputSlice -> Withdrawal

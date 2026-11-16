@@ -9,15 +9,15 @@
 extern "C" {
 #endif
 
-void write_prefix(bytes32 root, bool success);
-
-void commit_validation_result(bytes32 root, bool success, Bytes chain_config);
+void commit_validation_result(bytes32 root, bool success, uint64_t chain_id, uint64_t schema_id);
 
 void write_validation_result(struct StatelessInputRef input_ref, bool success);
 
 void write_invalid_result(void);
 
-extern const uint8_t RESULT_METADATA_LENGTH;
+void commit_validation_result_bytes32_bool_uint8_t_uint64_t_to_unit(bytes32 root, bool success, uint8_t chain_id, uint64_t schema_id);
+
+extern const uint8_t RESULT_LENGTH;
 
 
 

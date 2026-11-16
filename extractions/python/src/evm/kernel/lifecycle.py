@@ -115,7 +115,7 @@ def k_tx_merge() -> None:
                 if ((curr.info.nonce) != (e.value.orig.info.nonce)):
                     _host_bal_nonce_change(environment.k_current_transaction_epoch, e.addr, curr.info.nonce)
                 if ((curr.info.balance) != (e.value.orig.info.balance)):
-                    _host_bal_balance_change(environment.k_current_transaction_epoch, e.addr, curr.info.balance)
+                    _host_bal_balance_change(environment.k_current_transaction_epoch, e.addr, e.value.orig.info.balance, curr.info.balance)
                 if ((curr.info.code_hash) != (e.value.orig.info.code_hash)):
                     _host_bal_code_change(environment.k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 curr = replace(deepcopy(curr), created=False, selfdestructed=False)
@@ -137,7 +137,7 @@ def k_tx_merge() -> None:
                 if account.found:
                     acc = account.account
                     if ((acc.present) & (((e.value.curr) != (e.value.orig)))):
-                        _host_bal_storage_change(environment.k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr)
+                        _host_bal_storage_change(environment.k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.orig, e.value.curr)
                         _host_storage_block_put(e)
             case StorageTxPopExhausted(_):
                 more = False

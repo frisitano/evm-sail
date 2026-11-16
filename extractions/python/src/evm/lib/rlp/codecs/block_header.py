@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ...._runtime import (
     Bits,
+    BoundedUint,
     Bytes32,
     sail_tmod_int,
 )
@@ -23,6 +24,7 @@ from evm.exceptions import (
 from evm.kernel.scratch import scratch_push_word_be
 from evm.primitives.fork import (
     London,
+    Paris,
     Shanghai,
     Cancun,
     Prague,
@@ -55,13 +57,16 @@ from evm.kernel.logs import LOGS_BLOOM_BYTE_LENGTH
 from evm.lib.rlp.codecs.receipts import rlp_write_logs_bloom
 from evm.kernel import environment
 
-def block_header_hash(header: BlockHeader, transactions_root: hash, withdrawals_root: hash, requests_hash: hash, block_access_list_hash: hash) -> hash:
+def block_header_rlp_lengths(header: BlockHeader) -> tuple[BoundedUint[0, 749], BoundedUint[1, 782]]:
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     word_length = rlp_word_size()
     address_length = rlp_addr_size()
     bloom_length = (3 + int(LOGS_BLOOM_BYTE_LENGTH))
-    difficulty_length = rlp_uint_word_size(0)
+    if (int(profile.fork) < int(Paris)):
+        difficulty_length = rlp_uint_word_size(header.prev_randao)
+    else:
+        difficulty_length = rlp_uint_word_size(0)
     number_length = rlp_uint_word_size(header.number)
     gas_limit_length = rlp_uint_word_size(header.gas_limit)
     gas_used_length = rlp_uint_word_size(header.gas_used)
@@ -99,6 +104,12 @@ def block_header_hash(header: BlockHeader, transactions_root: hash, withdrawals_
     bounded_content_length = sail_tmod_int(content_length, 750)
     content_len = bounded_content_length
     encoded_length = rlp_list_size(content_len)
+    return (content_len, encoded_length)
+
+def block_header_hash(header: BlockHeader, transactions_root: hash, withdrawals_root: hash, requests_hash: hash, block_access_list_hash: hash) -> hash:
+    execution_profile = environment.k_execution_profile
+    profile = execution_profile.protocol
+    (content_len, encoded_length) = block_header_rlp_lengths(header)
     encoder = rlp_encoder_begin(encoded_length)
     rlp_write_list_prefix(content_len)
     parent_hash = hash_to_word(header.parent_hash)
@@ -114,13 +125,16 @@ def block_header_hash(header: BlockHeader, transactions_root: hash, withdrawals_
     rlp_write_word(receipts_root)
     logs_bloom = logs_bloom_from_ref(header.logs_bloom)
     rlp_write_logs_bloom(logs_bloom)
-    rlp_write_uint_word(0)
+    if (int(profile.fork) < int(Paris)):
+        rlp_write_uint_word(header.prev_randao)
+    else:
+        rlp_write_uint_word(0)
     rlp_write_uint_word(header.number)
     rlp_write_uint_word(header.gas_limit)
     rlp_write_uint_word(header.gas_used)
     rlp_write_uint_word(header.timestamp)
     rlp_write_input_slice(header.extra_data)
-    rlp_write_word(header.prev_randao)
+    rlp_write_word((ZERO_WORD if (int(profile.fork) < int(Paris)) else header.prev_randao))
     rlp_write_string_prefix(EIGHT_BYTE_LENGTH, Bits(8, 0b00000000))
     scratch_push_word_be(ZERO_WORD, EIGHT_BYTE_LENGTH)
     if (int(profile.fork) >= int(London)):

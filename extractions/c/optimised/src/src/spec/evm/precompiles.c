@@ -595,8 +595,8 @@ struct PrecompileResult run_precompile_slice(enum PrecompileId num, struct Calld
   }
   case Bn254Mul:
   {
-    bool success_3_2950 = accelerator_bn254_mul(input);
-    return accelerator_result_bool_uint8_t_to_struct_PrecompileResult(success_3_2950, PRECOMPILE_DOUBLE_WORD_LENGTH);
+    bool success_3_3057 = accelerator_bn254_mul(input);
+    return accelerator_result_bool_uint8_t_to_struct_PrecompileResult(success_3_3057, PRECOMPILE_DOUBLE_WORD_LENGTH);
   }
   case Bn254Pairing:
   {

@@ -345,18 +345,15 @@ function sstore_clear_refund() -> gas_constant = {
 }
 
 /*! Adds state-gas spill while preserving EIP-8037's regular-gas cap. */
-val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= transaction_execution_gas_limit_value. int('left) -> int(
-        transaction_execution_gas_limit_value - 'left,
+val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= frame_execution_gas_limit_value. int('left) -> int(
+        frame_execution_gas_limit_value - 'left,
     )
-function state_gas_spill_room(left) = sizeof(transaction_execution_gas_limit_value) - left
+function state_gas_spill_room(left) = sizeof(frame_execution_gas_limit_value) - left
 
-val state_gas_spill_add : forall 'left 'right,
-                            0 <= 'left & 'left <= transaction_execution_gas_limit_value & 0 <= 'right. (
+val state_gas_spill_add : forall 'left 'right, 0 <= 'left & 'left <= frame_execution_gas_limit_value & 0 <= 'right. (
         int('left),
         int('right),
-    ) -> {'result,
-          'result == 'left + 'right & 0 <= 'result & 'result <= transaction_execution_gas_limit_value.
-          int('result)}
+    ) -> {'result, 'result == 'left + 'right & 0 <= 'result & 'result <= frame_execution_gas_limit_value. int('result)}
 /*! Adds a nonnegative spill amount or rejects a value beyond the transaction cap. */
 function state_gas_spill_add(left, right) =
     let room = state_gas_spill_room(left) in
@@ -411,6 +408,21 @@ function credit_state_gas_refund(g, state_gas_remaining, state_gas_spilled, amou
         let to_state : state_gas_spill = amount - spilled;
         (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
     }
+}
+
+/*! A successful child can return a refund in state gas for a charge funded
+    by its parent's execution gas. Reunite the credit and outstanding spill
+    before the parent resumes execution (EIP-8037). */
+function repay_state_gas_spill(
+    g : gas,
+    remaining : state_gas,
+    spilled : state_gas_spill,
+) -> (
+    (gas, state_gas, state_gas_spill)
+) = {
+    let repayment =
+        if remaining < spilled then remaining else spilled;
+    (conserved_gas_add(g, repayment), remaining - repayment, spilled - repayment)
 }
 
 /*! Returns a completed child's remaining state reservoir to its parent and

@@ -64,6 +64,7 @@ def stateless_account_by_key(root: hash, address_hash: hash) -> Account:
         return account_from_info(account_info)
 
 def stateless_storage_by_key(root: hash, slot_hash: hash) -> word:
+    trie.validate_secured_state_root(root)
     path = path_new(slot_hash, 64)
     value = trie.trie_lookup(root, path)
     if ((value.len) == (0)):

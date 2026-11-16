@@ -57,7 +57,13 @@ void rlp_encoder_rewind(struct RlpEncoder encoder);
 
 struct RlpEncoder rlp_encoder_begin_uint8_t_to_struct_RlpEncoder(uint8_t expected_len);
 
+uint32_t rlp_input_slice_size_Bytes_to_uint32_t(Bytes data);
+
+uint8_t rlp_input_slice_size_Bytes_to_uint8_t(Bytes data);
+
 uint8_t rlp_length_prefix_len_uint16_t_to_uint8_t(uint16_t len);
+
+uint8_t rlp_length_prefix_len_uint16_t_to_uint8_t_variant_2(uint16_t len);
 
 uint8_t rlp_length_prefix_len_uint32_t_to_uint8_t(uint32_t len);
 
@@ -73,6 +79,12 @@ u256 rlp_length_word_uint32_t_to_u256(uint32_t value);
 
 u256 rlp_length_word_uint8_t_to_u256(uint8_t value);
 
+uint16_t rlp_list_size_uint16_t_to_uint16_t(uint16_t content_len);
+
+uint32_t rlp_list_size_uint32_t_to_uint32_t(uint32_t content_len);
+
+uint32_t rlp_list_size_uint32_t_to_uint32_t_variant_2(uint32_t content_len);
+
 uint8_t rlp_list_size_uint8_t_to_uint8_t(uint8_t content_len);
 
 uint8_t rlp_list_size_uint8_t_to_uint8_t_variant_2(uint8_t content_len);
@@ -81,13 +93,19 @@ uint8_t rlp_list_size_uint8_t_to_uint8_t_variant_3(uint8_t content_len);
 
 uint8_t rlp_minimal_word_len_u128_to_uint8_t(u128 w);
 
+uint8_t rlp_minimal_word_len_uint32_t_to_uint8_t(uint32_t w);
+
 uint8_t rlp_minimal_word_len_uint64_t_to_uint8_t(uint64_t w);
 
 uint8_t rlp_minimal_word_len_uint8_t_to_uint8_t(uint8_t w);
 
+uint8_t rlp_minimal_word_len_uint8_t_to_uint8_t_variant_2(uint8_t w);
+
 uint32_t rlp_scratch_length_add_uint16_t_uint32_t_to_uint32_t(uint16_t left, uint32_t right);
 
 uint32_t rlp_scratch_length_add_uint16_t_uint8_t_to_uint32_t(uint16_t left, uint8_t right);
+
+uint32_t rlp_scratch_length_add_uint32_t_uint16_t_to_uint32_t(uint32_t left, uint16_t right);
 
 uint32_t rlp_scratch_length_add_uint32_t_uint32_t_to_uint32_t(uint32_t left, uint32_t right);
 
@@ -99,9 +117,19 @@ uint32_t rlp_scratch_length_add_uint32_t_uint8_t_to_uint32_t(uint32_t left, uint
 
 uint32_t rlp_scratch_length_add_uint8_t_uint32_t_to_uint32_t(uint8_t left, uint32_t right);
 
+uint32_t rlp_string_size_uint32_t_uint64_t_to_uint32_t(uint32_t len, uint64_t first);
+
+uint64_t rlp_string_size_uint32_t_uint64_t_to_uint64_t(uint32_t len, uint64_t first);
+
+uint8_t rlp_string_size_uint32_t_uint64_t_to_uint8_t(uint32_t len, uint64_t first);
+
+uint8_t rlp_uint_word_size_uint32_t_to_uint8_t(uint32_t w);
+
 uint8_t rlp_uint_word_size_uint64_t_to_uint8_t(uint64_t w);
 
 uint8_t rlp_uint_word_size_uint8_t_to_uint8_t(uint8_t w);
+
+uint8_t rlp_uint_word_size_uint8_t_to_uint8_t_variant_2(uint8_t w);
 
 void rlp_write_list_prefix_uint16_t_to_unit(uint16_t content_len);
 

@@ -98,11 +98,11 @@ type TransactionInputSlice = {
 /*! A collection count whose entries are encoded inside one transaction. */
 type transaction_item_count = range(0, transaction_length_bound)
 
-/*! EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
-    Amsterdam's least expensive authorization costs 7,816 execution gas.
-    Successful transaction validity therefore proves that no executable
-    authorization list can contain more entries than this bound. */
-type prepared_authorization_count_bound : Int = div(eip7825_transaction_gas_limit, 7816)
+/*! Prepared entries retain the structural transaction-envelope count bound.
+    Prague predates the regular-gas cap, so Amsterdam's gas-derived bound
+    cannot constrain this shared semantic representation. Each fork's actual
+    intrinsic and transaction gas checks establish execution validity. */
+type prepared_authorization_count_bound : Int = transaction_length_bound
 /*! The number of authorization tuples admitted by one valid transaction. */
 type prepared_authorization_count = range(0, prepared_authorization_count_bound)
 

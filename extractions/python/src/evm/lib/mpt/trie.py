@@ -7,6 +7,7 @@ from ..._runtime import (
     Bits,
     BoundedUint,
     SailMatchFailure,
+    SailReturn,
     sail_range,
     sail_vector_access,
 )
@@ -36,7 +37,10 @@ from evm.lib.mpt.primitives import (
 )
 from evm.lib.mpt.nodes import (
     EmptyRef,
+    HashRef,
+    InputInlineRef,
     NodeRef,
+    ScratchInlineRef,
 )
 from evm.lib.mpt.codec import (
     InputBranchNode,
@@ -305,6 +309,85 @@ def overlay_extension_subtree(childref: NodeRef, child_prefix: TriePath, updates
                     children = lib_mpt_updates.trie_children_add(children, prefix, extension_nibble, extension)
                     extension_pending = False
             return (lib_mpt_updates.trie_children_finish(prefix, children), remaining)
+
+def validate_secured_witness_node(node: StatelessInputSlice, remaining: BoundedUint[0, 64]) -> None:
+    try:
+        if ((node.len) == (0)):
+            raise SailReturn(None)
+        decoded = decode_input_trie_node(node)
+        match decoded:
+            case InputLeafNode((path, _)):
+                if ((path_len(path)) != (remaining)):
+                    return fatal_error(FatalError.WitnessDeficient)
+                else:
+                    return None
+            case InputExtensionNode((path, childref)):
+                length = path_len(path)
+                if (((0 < int(length))) & ((int(length) < int(remaining)))):
+                    next_remaining = (int(remaining) - int(length))
+                else:
+                    next_remaining = fatal_error(FatalError.WitnessDeficient)
+                match childref:
+                    case EmptyRef(None):
+                        child = fatal_error(FatalError.WitnessDeficient)
+                    case InputInlineRef(bytes):
+                        child = bytes
+                    case ScratchInlineRef(_):
+                        child = fatal_error(FatalError.WitnessDeficient)
+                    case HashRef(h):
+                        child = node_db_lookup(h)
+                    case _:
+                        raise SailMatchFailure("no Sail match clause applied")
+                if ((child.len) != (0)):
+                    match decode_input_trie_node(child):
+                        case InputBranchNode((_, _)):
+                            pass
+                        case _:
+                            fatal_error(FatalError.WitnessDeficient)
+                return validate_secured_witness_node(child, next_remaining)
+            case InputBranchNode((children, value)):
+                if (((0 < int(remaining))) & (((value.len) == (0)))):
+                    next_remaining = (int(remaining) - 1)
+                else:
+                    next_remaining = fatal_error(FatalError.WitnessDeficient)
+                occupied = 0
+                for i in sail_range(0, 15, 1, True):
+                    match sail_vector_access(children, i, False):
+                        case EmptyRef(None):
+                            pass
+                        case _:
+                            count = occupied
+                            if (int(count) < 16):
+                                occupied = (int(count) + 1)
+                    match sail_vector_access(children, i, False):
+                        case EmptyRef(None):
+                            child = EMPTY_STATELESS_INPUT_SLICE
+                        case InputInlineRef(bytes):
+                            child = bytes
+                        case ScratchInlineRef(_):
+                            child = fatal_error(FatalError.WitnessDeficient)
+                        case HashRef(h):
+                            child = node_db_lookup(h)
+                        case _:
+                            raise SailMatchFailure("no Sail match clause applied")
+                    validate_secured_witness_node(child, next_remaining)
+                if (int(occupied) < 2):
+                    return fatal_error(FatalError.WitnessDeficient)
+                else:
+                    return None
+            case _:
+                raise SailMatchFailure("no Sail match clause applied")
+    except SailReturn as _sail_return:
+        return _sail_return.value
+
+def validate_secured_state_root(root: hash) -> None:
+    if ((root) != (EMPTY_TRIE_ROOT)):
+        node = node_db_lookup(root)
+        if ((node.len) == (0)):
+            fatal_error(FatalError.WitnessDeficient)
+        return validate_secured_witness_node(node, 64)
+    else:
+        return None
 
 def witness_subtree(node: StatelessInputSlice, prefix: TriePath, updates: lib_mpt_updates.TrieUpdateCursor, cursor: trie_path_cursor) -> tuple[lib_mpt_updates.TrieItem, lib_mpt_updates.TrieUpdateCursor]:
     prefix_len = path_len(prefix)

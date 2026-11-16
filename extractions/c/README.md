@@ -2,30 +2,29 @@
 
 The generated C model links exactly one complete host backend:
 
-- `spec/` implements the readable specification build against Sail's generated
+- `spec/contract/` implements the readable specification build against Sail's generated
   GMP-backed C ABI.
-- `optimised/` implements the production fixed-layout ABI and owns all
+- `optimised/contract/` implements the production fixed-layout ABI and owns all
   optimized-only whole-operation replacements and pointer-based storage.
 
 The optimized backend uses the conventional split while mirroring the Sail
 source tree:
 
-- `optimised/include/evmsail/` contains public declarations injected into the
+- `optimised/contract/include/evmsail/` contains public declarations injected into the
   generated model.
-- `optimised/src/` contains implementations and private headers.
-- `optimised/src/host/state.c` implements the generated aggregate boundary;
-  `optimised/src/host/state/` is split by semantic ownership:
-  `account.c` owns account schema, values, logs, and authentication metadata;
+- `optimised/contract/src/` contains implementations and private headers.
+- `optimised/contract/src/kernel/accounts.c` implements the generated aggregate boundary;
+  `optimised/contract/src/host/state/` is split by semantic ownership:
+  `account.c` owns account schema, values and authentication metadata;
   `storage.c` owns the corresponding persistent-storage state;
-  `block_access_list.c` owns BAL history and iteration; and `store.c` contains
-  only the lifecycle ordering that coordinates those independent modules.
-- `optimised/src/host/state/logs.c` owns emitted log records and the cumulative
-  block bloom. `optimised/src/executor/receipts.c` owns retained encoded
+  `block_access_list.c` owns BAL history and iteration; `journal.c` owns rollback.
+- `optimised/contract/src/host/state/logs.c` owns emitted log records and the cumulative
+  block bloom. `optimised/contract/src/executor/receipts.c` owns retained encoded
   receipts; the generic MPT implementation consumes their spans but does not
   own receipt storage.
 
 Large optimized-backend storage is owned by one pre-provisioned workspace.
-`optimised/src/workspace.c` binds a typed pointer for each module exactly once
+`optimised/contract/src/workspace.c` binds a typed pointer for each module exactly once
 before generated-model initialization; modules then use ordinary direct
 indexing such as `entries[id]`. A module must not define its own capacity-sized
 backing array or allocate, resize, or free storage. Native tests provide one
@@ -42,12 +41,15 @@ The two directories are mutually exclusive implementations of the same Sail
 host contracts. A source or header in one backend must not include a private
 source or header from the other backend. Builds put the selected backend first
 on the include path and compile implementation files only from that directory.
-`EVMSAIL_MODEL_H` selects the generated model umbrella header. The optimized
-host prelude then gives the selected fixed representations their
-semantic names (`Address`, `Hash32`, `LogsBloom`, and `U256`). Raw generated
-representation names must not leak into subsystem headers or implementations.
-This is a naming boundary only: the aliases preserve the exact generated ABI
-and add no wrapper calls, allocation, conversion, or ownership layer.
+`EVMSAIL_MODEL_H` selects the generated model umbrella header through the
+optimized `evmsail/prelude.h`. Subsystems use its fixed-layout types directly,
+including `bytes20`, `bytes32` and `u256`. The prelude adds no mirrored types,
+wrapper calls, allocation, conversion or ownership layer.
+
+Tracked `spec/src/` and `optimised/src/` contain generated review snapshots.
+The root Make targets extract fresh sources under `build/`; after validation,
+`make publish-c-extraction` updates the tracked snapshots. Handwritten changes
+belong in `contract/`, and semantic model changes belong in Sail.
 
 Only standardized platform contracts live at this directory's root:
 

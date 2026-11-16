@@ -48,6 +48,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -316,8 +317,8 @@ def merkleize (leaves : (Vector (Vector (BitVec 8) 32) k_n)) (depth : Nat) : Sai
 
 /-- The depth of the next progressive subtree. A remainder beyond the deepest
 supported subtree is not representable and fails closed. -/
-/- Type quantifiers: k_ex428801_ : Nat, k_ex428800_ : Nat, 0 ≤ k_ex428800_ ∧
-  k_ex428800_ ≤ 33554432, 0 ≤ k_ex428801_ ∧ k_ex428801_ ≤ 25 -/
+/- Type quantifiers: k_ex577563_ : Nat, k_ex577562_ : Nat, 0 ≤ k_ex577562_ ∧
+  k_ex577562_ ≤ 33554432, 0 ≤ k_ex577563_ ∧ k_ex577563_ ≤ 25 -/
 def htr_progressive_next_depth (remaining : Nat) (depth : Nat) : SailM Nat := do
   if ((remaining == 0) : Bool)
   then (pure depth)
@@ -597,11 +598,11 @@ def htr_bytes_subtree (bytes : (Sigma fun (k_off : Nat) =>
   else (_rec_htr_bytes_subtree ⟨_, ⟨_, bytes⟩⟩ start count depth (_measure + 1))
 
 /-- The Merkle root of a byte span's chunks at `depth`. -/
-/- Type quantifiers: k_ex428856_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex577618_ : Nat, bytes_dependentWitness1 : Nat, bytes_dependentWitness0 : Nat, 0
   ≤ bytes_dependentWitness0 ∧
   0 ≤ bytes_dependentWitness1 ∧
-  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex428856_ ∧
-  k_ex428856_ ≤ 25 -/
+  (bytes_dependentWitness0 + bytes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex577618_ ∧
+  k_ex577618_ ≤ 25 -/
 def htr_bytes_root (bytes : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
   let bytes_dependentWitness0 := (bytes).1
@@ -891,6 +892,27 @@ def htr_transactions (transactions : (BoundedSszListRef (2 ^ 20))) : SailM (Vect
   let root ← do (htr_transactions_progressive transactions 0 count 0)
   (mix_in_length root transactions.count)
 
+def undefined_HtrRequestKind (_ : Unit) : SailM HtrRequestKind := do
+  (internal_pick
+    [HtrDeposit, HtrWithdrawalRequest, HtrConsolidationRequest, HtrBuilderDepositRequest, HtrBuilderExitRequest])
+
+/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 4 -/
+def HtrRequestKind_of_num (arg_ : Nat) : HtrRequestKind :=
+  match arg_ with
+  | 0 => HtrDeposit
+  | 1 => HtrWithdrawalRequest
+  | 2 => HtrConsolidationRequest
+  | 3 => HtrBuilderDepositRequest
+  | _ => HtrBuilderExitRequest
+
+def num_of_HtrRequestKind (arg_ : HtrRequestKind) : Nat :=
+  match arg_ with
+  | .HtrDeposit => 0
+  | .HtrWithdrawalRequest => 1
+  | .HtrConsolidationRequest => 2
+  | .HtrBuilderDepositRequest => 3
+  | .HtrBuilderExitRequest => 4
+
 /- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤
   count ∧ count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
 def _rec_htr_withdrawals_subtree (withdrawals : (BoundedSszListRef (2 ^ 20))) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
@@ -945,9 +967,171 @@ def htr_withdrawals_subtree (withdrawals : (BoundedSszListRef (2 ^ 20))) (start 
   then throw Error.Exit
   else (_rec_htr_withdrawals_subtree withdrawals start count depth (_measure + 1))
 
-/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤
-  count ∧ count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
-def _rec_htr_withdrawals_progressive (withdrawals : (BoundedSszListRef (2 ^ 20))) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
+/-- `hash_tree_root` of one builder deposit request (4 fields, depth 2). -/
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧
+  0 ≤ request_dependentWitness1 ∧
+  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  request_dependentWitness1 = 184 -/
+def htr_builder_deposit_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
+  let request := ((request).2).2
+  let pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_PUBKEY
+      HTR_REQUEST_PUBKEY_LENGTH)
+  let withdrawal_credentials ← do
+    (htr_ssz_bytes32 ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)
+  let amount ← do (htr_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_AMOUNT)
+  let signature ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_SIGNATURE
+      HTR_DEPOSIT_SIGNATURE_LENGTH)
+  (merkleize #v[signature, amount, withdrawal_credentials, pubkey] 2)
+
+/-- `hash_tree_root` of one builder exit request (2 fields, depth 1). -/
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧
+  0 ≤ request_dependentWitness1 ∧
+  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  request_dependentWitness1 = 68 -/
+def htr_builder_exit_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
+  let request := ((request).2).2
+  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_EXIT_SOURCE_ADDRESS)
+  let pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_EXIT_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)
+  (merkleize #v[pubkey, source_address] 1)
+
+/-- `hash_tree_root` of one consolidation request (3 fields, depth 2). -/
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧
+  0 ≤ request_dependentWitness1 ∧
+  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  request_dependentWitness1 = 116 -/
+def htr_consolidation_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
+  let request := ((request).2).2
+  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_ADDRESS)
+  let source_pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_PUBKEY
+      HTR_REQUEST_PUBKEY_LENGTH)
+  let target_pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY
+      HTR_REQUEST_PUBKEY_LENGTH)
+  (merkleize #v[target_pubkey, source_pubkey, source_address] 2)
+
+/-- `hash_tree_root` of one deposit request (5 fields, depth 3). -/
+/- Type quantifiers: deposit_dependentWitness1 : Nat, deposit_dependentWitness0 : Nat, 0 ≤
+  deposit_dependentWitness0 ∧
+  0 ≤ deposit_dependentWitness1 ∧
+  (deposit_dependentWitness0 + deposit_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  deposit_dependentWitness1 = 192 -/
+def htr_deposit (deposit : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let deposit_dependentWitness0 := (deposit).1
+  let deposit_dependentWitness1 := ((deposit).2).1
+  let deposit := ((deposit).2).2
+  let pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_PUBKEY HTR_DEPOSIT_PUBKEY_LENGTH)
+  let withdrawal_credentials ← do
+    (htr_ssz_bytes32 ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)
+  let amount ← do (htr_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_AMOUNT)
+  let signature ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_SIGNATURE HTR_DEPOSIT_SIGNATURE_LENGTH)
+  let index ← do (htr_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_INDEX)
+  (merkleize #v[index, signature, amount, withdrawal_credentials, pubkey] 3)
+
+/-- `hash_tree_root` of one withdrawal request (3 fields, depth 2). -/
+/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
+  request_dependentWitness0 ∧
+  0 ≤ request_dependentWitness1 ∧
+  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
+  request_dependentWitness1 = 76 -/
+def htr_withdrawal_request (request : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
+  let request_dependentWitness0 := (request).1
+  let request_dependentWitness1 := ((request).2).1
+  let request := ((request).2).2
+  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_ADDRESS)
+  let source_pubkey ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_PUBKEY
+      HTR_REQUEST_PUBKEY_LENGTH)
+  let amount ← do (htr_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_WITHDRAWAL_REQUEST_AMOUNT)
+  (merkleize #v[amount, source_pubkey, source_address] 2)
+
+/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, index : Nat, 0
+  ≤ index, 0 ≤ requests_dependentWitness0 ∧
+  0 ≤ requests_dependentWitness1 ∧
+  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1) -/
+def htr_request_leaf (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (index : Nat) (kind : HtrRequestKind) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
+  let requests := ((requests).2).2
+  match kind with
+  | .HtrDeposit =>
+    (do
+      let offset := (index *i HTR_DEPOSIT_LENGTH)
+      if (((offset + HTR_DEPOSIT_LENGTH) ≤b requests.len) : Bool)
+      then
+        (do
+          let deposit := (stateless_input_sub_slice requests offset HTR_DEPOSIT_LENGTH)
+          (htr_deposit ⟨_, ⟨_, deposit⟩⟩))
+      else (fatal_error InvalidConfig))
+  | .HtrWithdrawalRequest =>
+    (do
+      let offset := (index *i HTR_WITHDRAWAL_REQUEST_LENGTH)
+      if (((offset + HTR_WITHDRAWAL_REQUEST_LENGTH) ≤b requests.len) : Bool)
+      then
+        (do
+          let request := (stateless_input_sub_slice requests offset HTR_WITHDRAWAL_REQUEST_LENGTH)
+          (htr_withdrawal_request ⟨_, ⟨_, request⟩⟩))
+      else (fatal_error InvalidConfig))
+  | .HtrConsolidationRequest =>
+    (do
+      let offset := (index *i HTR_CONSOLIDATION_REQUEST_LENGTH)
+      if (((offset + HTR_CONSOLIDATION_REQUEST_LENGTH) ≤b requests.len) : Bool)
+      then
+        (do
+          let request :=
+            (stateless_input_sub_slice requests offset HTR_CONSOLIDATION_REQUEST_LENGTH)
+          (htr_consolidation_request ⟨_, ⟨_, request⟩⟩))
+      else (fatal_error InvalidConfig))
+  | .HtrBuilderDepositRequest =>
+    (do
+      let offset := (index *i HTR_BUILDER_DEPOSIT_LENGTH)
+      if (((offset + HTR_BUILDER_DEPOSIT_LENGTH) ≤b requests.len) : Bool)
+      then
+        (do
+          let request := (stateless_input_sub_slice requests offset HTR_BUILDER_DEPOSIT_LENGTH)
+          (htr_builder_deposit_request ⟨_, ⟨_, request⟩⟩))
+      else (fatal_error InvalidConfig))
+  | .HtrBuilderExitRequest =>
+    (do
+      let offset := (index *i HTR_BUILDER_EXIT_LENGTH)
+      if (((offset + HTR_BUILDER_EXIT_LENGTH) ≤b requests.len) : Bool)
+      then
+        (do
+          let request := (stateless_input_sub_slice requests offset HTR_BUILDER_EXIT_LENGTH)
+          (htr_builder_exit_request ⟨_, ⟨_, request⟩⟩))
+      else (fatal_error InvalidConfig))
+
+/-- Recursively merkleizes a range of fixed-width execution-request roots. -/
+/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
+  : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
+  0 ≤ requests_dependentWitness1 ∧
+  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ count ∧
+  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
+def _rec_htr_requests_subtree (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (kind : HtrRequestKind) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
+  let requests := ((requests).2).2
   match _reclimit with
   | 0 =>
     (do
@@ -956,70 +1140,52 @@ def _rec_htr_withdrawals_progressive (withdrawals : (BoundedSszListRef (2 ^ 20))
   | _reclimit_pred + 1 =>
     (do
       if ((count == 0) : Bool)
-      then (pure ZERO_HASH)
+      then (pure (ssz_zero_hash depth))
       else
         (do
-          let capacity := (htr_leaf_capacity depth)
-          let take : Nat :=
-            if ((count <b capacity) : Bool)
-            then count
-            else capacity
-          let remaining : Nat :=
-            if ((count <b capacity) : Bool)
-            then 0
-            else (count - capacity)
-          let next_depth ← do (htr_progressive_next_depth remaining depth)
-          let left_root ← do (htr_withdrawals_subtree withdrawals start take depth)
-          let right_root ← do
-            (_rec_htr_withdrawals_progressive withdrawals (start + take) remaining next_depth
-              _reclimit_pred)
-          (sha256_pair left_root right_root)))
+          if ((depth == 0) : Bool)
+          then
+            (do
+              if ((count == 1) : Bool)
+              then (htr_request_leaf ⟨_, ⟨_, requests⟩⟩ start kind)
+              else (fatal_error WitnessDeficient))
+          else
+            (do
+              let child_depth : Nat := (depth - 1)
+              let half := (htr_leaf_capacity child_depth)
+              let left_count : Nat :=
+                if ((count <b half) : Bool)
+                then count
+                else half
+              let right_count : Nat :=
+                if ((count <b half) : Bool)
+                then 0
+                else (count - half)
+              let left_root ← do
+                (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind start left_count
+                  child_depth _reclimit_pred)
+              let right_root ← do
+                (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind (start + half)
+                  right_count child_depth _reclimit_pred)
+              (sha256_pair left_root right_root))))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
 
-/- Type quantifiers: depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤ count ∧
+/-- Recursively merkleizes a range of fixed-width execution-request roots. -/
+/- Type quantifiers: depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
+  : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
+  0 ≤ requests_dependentWitness1 ∧
+  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ count ∧
   count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25 -/
-def htr_withdrawals_progressive (withdrawals : (BoundedSszListRef (2 ^ 20))) (start : Nat) (count : Nat) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
-  let _measure := (count : Int)
+def htr_requests_subtree (requests : (Sigma fun (k_off : Nat) =>
+  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (kind : HtrRequestKind) (start : Nat) (count : Nat) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let requests_dependentWitness0 := (requests).1
+  let requests_dependentWitness1 := ((requests).2).1
+  let requests := ((requests).2).2
+  let _measure := (depth : Int)
   if ((_measure <b 0) : Bool)
   then throw Error.Exit
-  else (_rec_htr_withdrawals_progressive withdrawals start count depth (_measure + 1))
-
-/-- `hash_tree_root` of the withdrawals list
-(`ProgressiveList[Withdrawal]`). -/
-def htr_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 20))) : SailM (Vector (BitVec 8) 32) := do
-  let count : Nat := withdrawals.count
-  let root ← do (htr_withdrawals_progressive withdrawals 0 count 0)
-  (mix_in_length root withdrawals.count)
-
-/-- `hash_tree_root` of the `ExecutionPayload` (a progressive container of 19
-active fields). -/
-def htr_execution_payload (input_ref : StatelessInputRef) : SailM (Vector (BitVec 8) 32) := do
-  let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
-  let parent_hash_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ 0)
-  let fee_recipient_root ← do (htr_ssz_addr ⟨_, ⟨_, payload⟩⟩ PL_FEE_RECIPIENT)
-  let state_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_STATE_ROOT)
-  let receipts_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT)
-  let logs_bloom_root ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, payload⟩⟩ PL_LOGS_BLOOM LOGS_BLOOM_BYTE_LENGTH)
-  let prev_randao_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO)
-  let block_number_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER)
-  let gas_limit_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_LIMIT)
-  let gas_used_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED)
-  let timestamp_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP)
-  let extra_data_root ← do (htr_bytelist input_ref.extra_data WORD_BYTE_LENGTH)
-  let base_fee_root ← do (htr_ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE)
-  let block_hash_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_HASH)
-  let transactions_root ← do (htr_transactions input_ref.transactions)
-  let withdrawals_root ← do (htr_withdrawals input_ref.withdrawals)
-  let blob_gas_used_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOB_GAS_USED)
-  let excess_blob_gas_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS)
-  let block_access_list_root ← do (htr_progressive_bytelist input_ref.block_access_list)
-  let slot_number_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER)
-  let fields_root ← do
-    (merkleize_progressive
-      #v[slot_number_root, block_access_list_root, excess_blob_gas_root, blob_gas_used_root, withdrawals_root, transactions_root, block_hash_root, base_fee_root, extra_data_root, timestamp_root, gas_used_root, gas_limit_root, block_number_root, prev_randao_root, logs_bloom_root, receipts_root, state_root, fee_recipient_root, parent_hash_root])
-  (mix_in_active_fields fields_root HTR_PAYLOAD_ACTIVE_FIELDS)
+  else (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind start count depth (_measure + 1))
 
 /- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, versioned_hashes_dependentWitness1 :
   Nat, versioned_hashes_dependentWitness0 : Nat, start : Nat, 0 ≤ start, 0 ≤
@@ -1088,17 +1254,10 @@ def htr_versioned_hashes_subtree (versioned_hashes : (Sigma fun (k_off : Nat) =>
     (_rec_htr_versioned_hashes_subtree ⟨_, ⟨_, versioned_hashes⟩⟩ start count depth
       (_measure + 1))
 
-/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, versioned_hashes_dependentWitness1 :
-  Nat, versioned_hashes_dependentWitness0 : Nat, start : Nat, 0 ≤ start, 0 ≤
-  versioned_hashes_dependentWitness0 ∧
-  0 ≤ versioned_hashes_dependentWitness1 ∧
-  (versioned_hashes_dependentWitness0 + versioned_hashes_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤
+/-- Folds progressive chunks using the source's leaf-specific subtree. -/
+/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤
   count ∧ count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
-def _rec_htr_versioned_hashes_progressive (versioned_hashes : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
-  let versioned_hashes_dependentWitness0 := (versioned_hashes).1
-  let versioned_hashes_dependentWitness1 := ((versioned_hashes).2).1
-  let versioned_hashes := ((versioned_hashes).2).2
+def _rec_htr_progressive_source (source : HtrProgressiveSource) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
   match _reclimit with
   | 0 =>
     (do
@@ -1120,14 +1279,70 @@ def _rec_htr_versioned_hashes_progressive (versioned_hashes : (Sigma fun (k_off 
             then 0
             else (count - capacity)
           let next_depth ← do (htr_progressive_next_depth remaining depth)
-          let left_root ← do
-            (htr_versioned_hashes_subtree ⟨_, ⟨_, versioned_hashes⟩⟩ start take depth)
+          let left_root ← (( do
+            match source with
+            | .HtrWithdrawalLeaves withdrawals =>
+              (htr_withdrawals_subtree withdrawals start take depth)
+            | .HtrVersionedHashLeaves ⟨_, ⟨_, hashes⟩⟩ =>
+              (htr_versioned_hashes_subtree ⟨_, ⟨_, hashes⟩⟩ start take depth)
+            | .HtrRequestLeaves (requests, kind) =>
+              (htr_requests_subtree requests kind start take depth) ) : SailM (Vector (BitVec 8) 32)
+            )
           let right_root ← do
-            (_rec_htr_versioned_hashes_progressive ⟨_, ⟨_, versioned_hashes⟩⟩ (start + take)
-              remaining next_depth _reclimit_pred)
+            (_rec_htr_progressive_source source (start + take) remaining next_depth _reclimit_pred)
           (sha256_pair left_root right_root)))
 termination_by _reclimit
 decreasing_by all_goals exact Nat.lt_succ_self _
+
+/-- Folds progressive chunks using the source's leaf-specific subtree. -/
+/- Type quantifiers: depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤ count ∧
+  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25 -/
+def htr_progressive_source (source : HtrProgressiveSource) (start : Nat) (count : Nat) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
+  let _measure := (count : Int)
+  if ((_measure <b 0) : Bool)
+  then throw Error.Exit
+  else (_rec_htr_progressive_source source start count depth (_measure + 1))
+
+/- Type quantifiers: depth : Nat, count : Nat, start : Nat, 0 ≤ start, 0 ≤ count ∧
+  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25 -/
+def htr_withdrawals_progressive (withdrawals : (BoundedSszListRef (2 ^ 20))) (start : Nat) (count : Nat) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
+  (htr_progressive_source (HtrWithdrawalLeaves withdrawals) start count depth)
+
+/-- `hash_tree_root` of the withdrawals list
+(`ProgressiveList[Withdrawal]`). -/
+def htr_withdrawals (withdrawals : (BoundedSszListRef (2 ^ 20))) : SailM (Vector (BitVec 8) 32) := do
+  let count : Nat := withdrawals.count
+  let root ← do (htr_withdrawals_progressive withdrawals 0 count 0)
+  (mix_in_length root withdrawals.count)
+
+/-- `hash_tree_root` of the `ExecutionPayload` (a progressive container of 19
+active fields). -/
+def htr_execution_payload (input_ref : StatelessInputRef) : SailM (Vector (BitVec 8) 32) := do
+  let ⟨_, ⟨_, payload⟩⟩ := input_ref.execution_payload
+  let parent_hash_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ 0)
+  let fee_recipient_root ← do (htr_ssz_addr ⟨_, ⟨_, payload⟩⟩ PL_FEE_RECIPIENT)
+  let state_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_STATE_ROOT)
+  let receipts_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_RECEIPTS_ROOT)
+  let logs_bloom_root ← do
+    (htr_ssz_bytevector ⟨_, ⟨_, payload⟩⟩ PL_LOGS_BLOOM LOGS_BLOOM_BYTE_LENGTH)
+  let prev_randao_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_PREV_RANDAO)
+  let block_number_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_NUMBER)
+  let gas_limit_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_LIMIT)
+  let gas_used_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_GAS_USED)
+  let timestamp_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_TIMESTAMP)
+  let extra_data_root ← do (htr_bytelist input_ref.extra_data WORD_BYTE_LENGTH)
+  let base_fee_root ← do (htr_ssz_u256 ⟨_, ⟨_, payload⟩⟩ PL_BASE_FEE)
+  let block_hash_root ← do (htr_ssz_bytes32 ⟨_, ⟨_, payload⟩⟩ PL_BLOCK_HASH)
+  let transactions_root ← do (htr_transactions input_ref.transactions)
+  let withdrawals_root ← do (htr_withdrawals input_ref.withdrawals)
+  let blob_gas_used_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_BLOB_GAS_USED)
+  let excess_blob_gas_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_EXCESS_BLOB_GAS)
+  let block_access_list_root ← do (htr_progressive_bytelist input_ref.block_access_list)
+  let slot_number_root ← do (htr_ssz_uint ⟨_, ⟨_, payload⟩⟩ PL_SLOT_NUMBER)
+  let fields_root ← do
+    (merkleize_progressive
+      #v[slot_number_root, block_access_list_root, excess_blob_gas_root, blob_gas_used_root, withdrawals_root, transactions_root, block_hash_root, base_fee_root, extra_data_root, timestamp_root, gas_used_root, gas_limit_root, block_number_root, prev_randao_root, logs_bloom_root, receipts_root, state_root, fee_recipient_root, parent_hash_root])
+  (mix_in_active_fields fields_root HTR_PAYLOAD_ACTIVE_FIELDS)
 
 /- Type quantifiers: depth : Nat, count : Nat, versioned_hashes_dependentWitness1 : Nat, versioned_hashes_dependentWitness0
   : Nat, start : Nat, 0 ≤ start, 0 ≤ versioned_hashes_dependentWitness0 ∧
@@ -1139,12 +1354,8 @@ def htr_versioned_hashes_progressive (versioned_hashes : (Sigma fun (k_off : Nat
   let versioned_hashes_dependentWitness0 := (versioned_hashes).1
   let versioned_hashes_dependentWitness1 := ((versioned_hashes).2).1
   let versioned_hashes := ((versioned_hashes).2).2
-  let _measure := (count : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else
-    (_rec_htr_versioned_hashes_progressive ⟨_, ⟨_, versioned_hashes⟩⟩ start count depth
-      (_measure + 1))
+  (htr_progressive_source (HtrVersionedHashLeaves ⟨_, ⟨_, versioned_hashes⟩⟩) start count
+    depth)
 
 /-- `hash_tree_root` of the versioned hashes (`ProgressiveList[Bytes32]`). -/
 /- Type quantifiers: versioned_hashes_dependentWitness1 : Nat, versioned_hashes_dependentWitness0 :
@@ -1162,285 +1373,6 @@ def htr_versioned_hashes (versioned_hashes : (Sigma fun (k_off : Nat) =>
   let root ← do (htr_versioned_hashes_progressive ⟨_, ⟨_, versioned_hashes⟩⟩ 0 count 0)
   (mix_in_length root items.count)
 
-/-- `hash_tree_root` of one deposit request (5 fields, depth 3). -/
-/- Type quantifiers: deposit_dependentWitness1 : Nat, deposit_dependentWitness0 : Nat, 0 ≤
-  deposit_dependentWitness0 ∧
-  0 ≤ deposit_dependentWitness1 ∧
-  (deposit_dependentWitness0 + deposit_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  deposit_dependentWitness1 = 192 -/
-def htr_deposit (deposit : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
-  let deposit_dependentWitness0 := (deposit).1
-  let deposit_dependentWitness1 := ((deposit).2).1
-  let deposit := ((deposit).2).2
-  let pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_PUBKEY HTR_DEPOSIT_PUBKEY_LENGTH)
-  let withdrawal_credentials ← do
-    (htr_ssz_bytes32 ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)
-  let amount ← do (htr_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_AMOUNT)
-  let signature ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_SIGNATURE HTR_DEPOSIT_SIGNATURE_LENGTH)
-  let index ← do (htr_ssz_uint ⟨_, ⟨_, deposit⟩⟩ HTR_DEPOSIT_INDEX)
-  (merkleize #v[index, signature, amount, withdrawal_credentials, pubkey] 3)
-
-/-- `hash_tree_root` of one withdrawal request (3 fields, depth 2). -/
-/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
-  request_dependentWitness0 ∧
-  0 ≤ request_dependentWitness1 ∧
-  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  request_dependentWitness1 = 76 -/
-def htr_withdrawal_request (request : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
-  let request_dependentWitness0 := (request).1
-  let request_dependentWitness1 := ((request).2).1
-  let request := ((request).2).2
-  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_ADDRESS)
-  let source_pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_PUBKEY
-      HTR_REQUEST_PUBKEY_LENGTH)
-  let amount ← do (htr_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_WITHDRAWAL_REQUEST_AMOUNT)
-  (merkleize #v[amount, source_pubkey, source_address] 2)
-
-/-- `hash_tree_root` of one consolidation request (3 fields, depth 2). -/
-/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
-  request_dependentWitness0 ∧
-  0 ≤ request_dependentWitness1 ∧
-  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  request_dependentWitness1 = 116 -/
-def htr_consolidation_request (request : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
-  let request_dependentWitness0 := (request).1
-  let request_dependentWitness1 := ((request).2).1
-  let request := ((request).2).2
-  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_ADDRESS)
-  let source_pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_REQUEST_SOURCE_PUBKEY
-      HTR_REQUEST_PUBKEY_LENGTH)
-  let target_pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY
-      HTR_REQUEST_PUBKEY_LENGTH)
-  (merkleize #v[target_pubkey, source_pubkey, source_address] 2)
-
-/-- `hash_tree_root` of one builder deposit request (4 fields, depth 2). -/
-/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
-  request_dependentWitness0 ∧
-  0 ≤ request_dependentWitness1 ∧
-  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  request_dependentWitness1 = 184 -/
-def htr_builder_deposit_request (request : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
-  let request_dependentWitness0 := (request).1
-  let request_dependentWitness1 := ((request).2).1
-  let request := ((request).2).2
-  let pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_PUBKEY
-      HTR_REQUEST_PUBKEY_LENGTH)
-  let withdrawal_credentials ← do
-    (htr_ssz_bytes32 ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)
-  let amount ← do (htr_ssz_uint ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_AMOUNT)
-  let signature ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_DEPOSIT_SIGNATURE
-      HTR_DEPOSIT_SIGNATURE_LENGTH)
-  (merkleize #v[signature, amount, withdrawal_credentials, pubkey] 2)
-
-/-- `hash_tree_root` of one builder exit request (2 fields, depth 1). -/
-/- Type quantifiers: request_dependentWitness1 : Nat, request_dependentWitness0 : Nat, 0 ≤
-  request_dependentWitness0 ∧
-  0 ≤ request_dependentWitness1 ∧
-  (request_dependentWitness0 + request_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  request_dependentWitness1 = 68 -/
-def htr_builder_exit_request (request : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) : SailM (Vector (BitVec 8) 32) := do
-  let request_dependentWitness0 := (request).1
-  let request_dependentWitness1 := ((request).2).1
-  let request := ((request).2).2
-  let source_address ← do (htr_ssz_addr ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_EXIT_SOURCE_ADDRESS)
-  let pubkey ← do
-    (htr_ssz_bytevector ⟨_, ⟨_, request⟩⟩ HTR_BUILDER_EXIT_PUBKEY HTR_REQUEST_PUBKEY_LENGTH)
-  (merkleize #v[pubkey, source_address] 1)
-
-def undefined_HtrRequestKind (_ : Unit) : SailM HtrRequestKind := do
-  (internal_pick
-    [HtrDeposit, HtrWithdrawalRequest, HtrConsolidationRequest, HtrBuilderDepositRequest, HtrBuilderExitRequest])
-
-/- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 4 -/
-def HtrRequestKind_of_num (arg_ : Nat) : HtrRequestKind :=
-  match arg_ with
-  | 0 => HtrDeposit
-  | 1 => HtrWithdrawalRequest
-  | 2 => HtrConsolidationRequest
-  | 3 => HtrBuilderDepositRequest
-  | _ => HtrBuilderExitRequest
-
-def num_of_HtrRequestKind (arg_ : HtrRequestKind) : Nat :=
-  match arg_ with
-  | .HtrDeposit => 0
-  | .HtrWithdrawalRequest => 1
-  | .HtrConsolidationRequest => 2
-  | .HtrBuilderDepositRequest => 3
-  | .HtrBuilderExitRequest => 4
-
-/- Type quantifiers: requests_dependentWitness1 : Nat, requests_dependentWitness0 : Nat, index : Nat, 0
-  ≤ index, 0 ≤ requests_dependentWitness0 ∧
-  0 ≤ requests_dependentWitness1 ∧
-  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1) -/
-def htr_request_leaf (requests : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (index : Nat) (kind : HtrRequestKind) : SailM (Vector (BitVec 8) 32) := do
-  let requests_dependentWitness0 := (requests).1
-  let requests_dependentWitness1 := ((requests).2).1
-  let requests := ((requests).2).2
-  match kind with
-  | .HtrDeposit =>
-    (do
-      let offset := (index *i HTR_DEPOSIT_LENGTH)
-      if (((offset + HTR_DEPOSIT_LENGTH) ≤b requests.len) : Bool)
-      then
-        (do
-          let deposit := (stateless_input_sub_slice requests offset HTR_DEPOSIT_LENGTH)
-          (htr_deposit ⟨_, ⟨_, deposit⟩⟩))
-      else (fatal_error InvalidConfig))
-  | .HtrWithdrawalRequest =>
-    (do
-      let offset := (index *i HTR_WITHDRAWAL_REQUEST_LENGTH)
-      if (((offset + HTR_WITHDRAWAL_REQUEST_LENGTH) ≤b requests.len) : Bool)
-      then
-        (do
-          let request := (stateless_input_sub_slice requests offset HTR_WITHDRAWAL_REQUEST_LENGTH)
-          (htr_withdrawal_request ⟨_, ⟨_, request⟩⟩))
-      else (fatal_error InvalidConfig))
-  | .HtrConsolidationRequest =>
-    (do
-      let offset := (index *i HTR_CONSOLIDATION_REQUEST_LENGTH)
-      if (((offset + HTR_CONSOLIDATION_REQUEST_LENGTH) ≤b requests.len) : Bool)
-      then
-        (do
-          let request :=
-            (stateless_input_sub_slice requests offset HTR_CONSOLIDATION_REQUEST_LENGTH)
-          (htr_consolidation_request ⟨_, ⟨_, request⟩⟩))
-      else (fatal_error InvalidConfig))
-  | .HtrBuilderDepositRequest =>
-    (do
-      let offset := (index *i HTR_BUILDER_DEPOSIT_LENGTH)
-      if (((offset + HTR_BUILDER_DEPOSIT_LENGTH) ≤b requests.len) : Bool)
-      then
-        (do
-          let request := (stateless_input_sub_slice requests offset HTR_BUILDER_DEPOSIT_LENGTH)
-          (htr_builder_deposit_request ⟨_, ⟨_, request⟩⟩))
-      else (fatal_error InvalidConfig))
-  | .HtrBuilderExitRequest =>
-    (do
-      let offset := (index *i HTR_BUILDER_EXIT_LENGTH)
-      if (((offset + HTR_BUILDER_EXIT_LENGTH) ≤b requests.len) : Bool)
-      then
-        (do
-          let request := (stateless_input_sub_slice requests offset HTR_BUILDER_EXIT_LENGTH)
-          (htr_builder_exit_request ⟨_, ⟨_, request⟩⟩))
-      else (fatal_error InvalidConfig))
-
-/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
-  : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
-  0 ≤ requests_dependentWitness1 ∧
-  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ count ∧
-  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
-def _rec_htr_requests_subtree (requests : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (kind : HtrRequestKind) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
-  let requests_dependentWitness0 := (requests).1
-  let requests_dependentWitness1 := ((requests).2).1
-  let requests := ((requests).2).2
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if ((count == 0) : Bool)
-      then (pure (ssz_zero_hash depth))
-      else
-        (do
-          if ((depth == 0) : Bool)
-          then
-            (do
-              if ((count == 1) : Bool)
-              then (htr_request_leaf ⟨_, ⟨_, requests⟩⟩ start kind)
-              else (fatal_error WitnessDeficient))
-          else
-            (do
-              let child_depth : Nat := (depth - 1)
-              let half := (htr_leaf_capacity child_depth)
-              let left_count : Nat :=
-                if ((count <b half) : Bool)
-                then count
-                else half
-              let right_count : Nat :=
-                if ((count <b half) : Bool)
-                then 0
-                else (count - half)
-              let left_root ← do
-                (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind start left_count
-                  child_depth _reclimit_pred)
-              let right_root ← do
-                (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind (start + half)
-                  right_count child_depth _reclimit_pred)
-              (sha256_pair left_root right_root))))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
-/- Type quantifiers: depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
-  : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
-  0 ≤ requests_dependentWitness1 ∧
-  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ count ∧
-  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25 -/
-def htr_requests_subtree (requests : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (kind : HtrRequestKind) (start : Nat) (count : Nat) (depth : Nat) : SailM (Vector (BitVec 8) 32) := do
-  let requests_dependentWitness0 := (requests).1
-  let requests_dependentWitness1 := ((requests).2).1
-  let requests := ((requests).2).2
-  let _measure := (depth : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else (_rec_htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind start count depth (_measure + 1))
-
-/- Type quantifiers: _reclimit : Nat, depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
-  : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
-  0 ≤ requests_dependentWitness1 ∧
-  (requests_dependentWitness0 + requests_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ count ∧
-  count ≤ 33554432, 0 ≤ depth ∧ depth ≤ 25, 0 ≤ _reclimit -/
-def _rec_htr_requests_progressive (requests : (Sigma fun (k_off : Nat) =>
-  (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (kind : HtrRequestKind) (start : Nat) (count : Nat) (depth : Nat) (_reclimit : Nat) : SailM (Vector (BitVec 8) 32) := do
-  let requests_dependentWitness0 := (requests).1
-  let requests_dependentWitness1 := ((requests).2).1
-  let requests := ((requests).2).2
-  match _reclimit with
-  | 0 =>
-    (do
-      assert false "recursion limit reached"
-      throw Error.Exit)
-  | _reclimit_pred + 1 =>
-    (do
-      if ((count == 0) : Bool)
-      then (pure ZERO_HASH)
-      else
-        (do
-          let capacity := (htr_leaf_capacity depth)
-          let take : Nat :=
-            if ((count <b capacity) : Bool)
-            then count
-            else capacity
-          let remaining : Nat :=
-            if ((count <b capacity) : Bool)
-            then 0
-            else (count - capacity)
-          let next_depth ← do (htr_progressive_next_depth remaining depth)
-          let left_root ← do
-            (htr_requests_subtree ⟨_, ⟨_, requests⟩⟩ kind start take depth)
-          let right_root ← do
-            (_rec_htr_requests_progressive ⟨_, ⟨_, requests⟩⟩ kind (start + take) remaining
-              next_depth _reclimit_pred)
-          (sha256_pair left_root right_root)))
-termination_by _reclimit
-decreasing_by all_goals exact Nat.lt_succ_self _
-
 /- Type quantifiers: depth : Nat, count : Nat, requests_dependentWitness1 : Nat, requests_dependentWitness0
   : Nat, start : Nat, 0 ≤ start, 0 ≤ requests_dependentWitness0 ∧
   0 ≤ requests_dependentWitness1 ∧
@@ -1451,11 +1383,10 @@ def htr_requests_progressive (requests : (Sigma fun (k_off : Nat) =>
   let requests_dependentWitness0 := (requests).1
   let requests_dependentWitness1 := ((requests).2).1
   let requests := ((requests).2).2
-  let _measure := (count : Int)
-  if ((_measure <b 0) : Bool)
-  then throw Error.Exit
-  else
-    (_rec_htr_requests_progressive ⟨_, ⟨_, requests⟩⟩ kind start count depth (_measure + 1))
+  (htr_progressive_source
+    (HtrRequestLeaves
+      ((fun (dependentValue0, dependentValue1) => (⟨_, ⟨_, dependentValue0⟩⟩, dependentValue1)) ((requests, kind))))
+    start count depth)
 
 /-- `hash_tree_root` of the deposit-request list
 (`ProgressiveList[DepositRequest]`). -/

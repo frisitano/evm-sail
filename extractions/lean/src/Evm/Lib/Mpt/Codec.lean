@@ -49,6 +49,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -89,7 +90,7 @@ def rlp_write_node_ref (r : NodeRef) : SailM Unit := do
       (rlp_write_word hash_word))
 
 /-- Returns the canonical RLP width of a compact trie path. -/
-/- Type quantifiers: k_ex427343_ : Bool -/
+/- Type quantifiers: k_ex576072_ : Bool -/
 def rlp_hex_prefix_size (path : TriePath) (is_leaf : Bool) : SailM Nat := do
   let encoded_length := (hex_prefix_encoded_length path)
   let first ← do (hex_prefix_first_byte path is_leaf)
@@ -98,7 +99,7 @@ def rlp_hex_prefix_size (path : TriePath) (is_leaf : Bool) : SailM Nat := do
   else (pure (encoded_length + 1))
 
 /-- Writes the hex-evm_prefix path directly into scratch in wire order. -/
-/- Type quantifiers: k_ex427344_ : Bool -/
+/- Type quantifiers: k_ex576073_ : Bool -/
 def rlp_write_hex_prefix (path : TriePath) (is_leaf : Bool) : SailM Unit := do
   let length := (path_len path)
   let encoded_length := (hex_prefix_encoded_length path)
@@ -355,11 +356,15 @@ def scratch_field_to_ref (f : (ScratchRlpFieldRef k_source_off k_source_len k_co
           let word ← do (scratch_rlp_decode_word f)
           let hash := (word_to_hash word)
           (pure (HashRef hash)))
-      else (pure (EmptyRef ())))
+      else
+        (do
+          if ((k_content_len == 0) : Bool)
+          then (pure (EmptyRef ()))
+          else (fatal_error RlpDecode)))
 
 /-- [decode_input_branch_node][] over the scratch cursor family. -/
-/- Type quantifiers: _reclimit : Nat, k_ex427402_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
-  ≤ k_ex427402_ ∧ k_ex427402_ ≤ 16, 0 ≤ _reclimit -/
+/- Type quantifiers: _reclimit : Nat, k_ex576131_ : Nat, k_source_off : Nat, k_source_len : Nat, (source_valid_range k_source_off k_source_len), 2
+  ≤ k_ex576131_ ∧ k_ex576131_ ≤ 16, 0 ≤ _reclimit -/
 def _rec_decode_scratch_branch_node (cursor : (ScratchSliceFields k_source_off k_source_len)) (index : Nat) (children : (Vector NodeRef 16)) (_reclimit : Nat) : SailM ScratchTrieNode := do
   match _reclimit with
   | 0 =>
@@ -418,9 +423,13 @@ def decode_scratch_trie_node (node : (Sigma fun (k_off : Nat) =>
       let (is_leaf, path) ← do (scratch_hex_prefix_decode_ref first)
       if (is_leaf : Bool)
       then
-        (let ⟨_, ⟨_, value⟩⟩ := (scratch_rlp_item_content second)
-        (pure (ScratchLeafNode
-            ((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) ((path, value))))))
+        (do
+          if (second.is_list : Bool)
+          then (fatal_error RlpDecode)
+          else (pure ())
+          let ⟨_, ⟨_, value⟩⟩ := (scratch_rlp_item_content second)
+          (pure (ScratchLeafNode
+              ((fun (dependentValue0, dependentValue1) => (dependentValue0, ⟨_, ⟨_, dependentValue1⟩⟩)) ((path, value))))))
       else
         (do
           let path_length := (path_len path)

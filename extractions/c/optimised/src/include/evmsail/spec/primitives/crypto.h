@@ -29,12 +29,19 @@ bytes32 host_sha256_memory(Bytes /* arg_0 */);
 
 bytes32 calldata_sha256(struct CalldataSlice input);
 
+bytes32 host_keccak_word(u256 /* arg_0 */);
+
+bytes32 host_keccak_address(bytes20 /* arg_0 */);
+
 struct AddressResult ecrecover_addr(bytes32 h, uint8_t yparity, u256 r, u256 s);
 
 extern const bytes32 KECCAK_EMPTY;
 
 
 extern const bytes32 EMPTY_TRIE_ROOT;
+
+
+extern const u256 SECP_N_FULL;
 
 
 extern const u256 SECP_N_HALF;

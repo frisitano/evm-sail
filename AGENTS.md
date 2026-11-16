@@ -81,7 +81,7 @@ duplicating instructions elsewhere.
   Both compile against the GENERATED model header (`-DEVMSAIL_MODEL_H`, `-I`
   build dir) and name its concrete types directly, so generated layouts are
   never hand-mirrored or hidden behind a second ABI alias layer. Optimized
-  headers include `evmsail/model.h`, the single generated-header selection
+  headers include `evmsail/prelude.h`, the single generated-header selection
   shim required because Sail emits `--c-include` headers before its own model
   header; it declares no wrapper types or runtime interface.
   `extractions/c/spec/contract/state.c` and
@@ -104,8 +104,9 @@ duplicating instructions elsewhere.
   executed directly. Fallible optimized-only C externs carry `$[c_throws]`;
   the custom compiler marks those calls as throwing and emits the ordinary
   generated `have_exception` unwind immediately after each call. Their C
-  implementations raise the generated `InvalidBlock` exception directly,
-  without result-union wrappers or process aborts. This annotation exists only
+  implementations report protocol-invalid input through `InvalidBlock`,
+  without result-union wrappers. Host invariant/resource exhaustion remains
+  an execution failure. This annotation exists only
   in the optimized C splice, while spec C and proof extraction retain the
   explicit Sail bodies and throws. SSZ decoding reads only from
   `StatelessInputSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer
@@ -140,7 +141,7 @@ duplicating instructions elsewhere.
   spec build. Its source hierarchy follows Sail at established module
   boundaries. `extractions/c/optimised/contract/include/evmsail/` contains the Sail-facing public
   declarations; `extractions/c/optimised/contract/src/` contains implementations and private
-  headers. In particular, `src/host/state.c` adapts generated aggregate values
+  headers. In particular, `src/kernel/accounts.c` adapts generated aggregate values
   while `src/host/state/` owns the dense semantic state, transaction logs, BAL
   metadata, and state-root iterators. Large optimized storage is pointer-backed
   and bound once from `src/workspace.c` before model initialization. Modules
@@ -214,8 +215,28 @@ duplicating instructions elsewhere.
   and its locked test environment (`uv sync --frozen --group test`). The
   obsolete v0.6.2 adapters and handwritten witness builder are removed.
   `make memory-regression-test` runs the focused memory cases on both C
-  backends. Synthesis currently accepts Amsterdam secret-key transactions;
-  raw signed state-test envelopes and historical forks fail explicitly.
+  backends. Synthesis accepts secret-key transactions and canonical raw signed
+  type 0–4 envelopes. Historical selectors `0x0a01`–`0x1401` use the v21
+  transport with fork-specific EELS execution; upstream's Amsterdam guest
+  accepts only `0x1501`. Historical payloads carry an uncommitted account/slot
+  schema in the otherwise inactive BAL transport field; its zero markers
+  reserve writable slots and never seed state. Common Sail checks ordering,
+  membership, and proofs, including unused schema entries. Other inactive
+  fields must be empty/zero. Pre-Paris transport represents zero nonce and
+  mix-hash with no ommers and does not validate Ethash. Eight pinned fork
+  transitions through Amsterdam resolve to the active execution profile. Use
+  `make historical-regression-test` and `make stateless-boundary-test` for the
+  fork activation and authenticated-input mutation gates on both backends.
+  The complete Berlin-through-Amsterdam state-suite generation, opt-in
+  Glacier/BPO selection, SSZ export, provenance audit and standard-backend
+  replay commands are documented in README. Matrix results do not establish
+  full-suite coverage. Retain conversion failures and missing exports in the
+  inventory; synthetic state-only BLOCKHASH history cannot be substituted
+  for authenticated headers. `EVM_NATIVE_RESOURCES=historical` uses a separate
+  native build/cache with a 2 GiB optimized workspace (1 GiB memory and
+  64 MiB scratch/log-data/receipts). Production capacities remain explicit;
+  resource exhaustion must not be reported as protocol invalidity. Larger
+  native-profile results do not prove production resource sufficiency.
   `make sender-regression-test` runs the pinned signature and chain-ID cases
   on both native backends without a known-failure allowance.
   Fixtures that already carry
