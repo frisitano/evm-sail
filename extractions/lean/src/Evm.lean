@@ -46,6 +46,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -66,6 +67,7 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg scratch_arena ⟨_, ⟨_, EMPTY_SCRATCH_SLICE⟩⟩
   writeReg k_parent_state_root ZERO_HASH
+  writeReg k_historical_access_schema ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩
   writeReg k_n_headers 0
   writeReg k_chain_id 1
   writeReg k_execution_profile ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, (((((((((((((DEFAULT_EXECUTION_PROFILE).2).2).2).2).2).2).2).2).2).2).2).2).2⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩

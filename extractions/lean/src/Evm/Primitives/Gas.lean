@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -101,7 +102,7 @@ def TRANSACTION_EXECUTION_GAS_LIMIT : Nat := (2 ^i 24)
 
 abbrev STATE_GAS_SPILL_ZERO : Nat := 0
 
-def STATE_GAS_SPILL_LIMIT : state_gas_spill := (2 ^i 24)
+def STATE_GAS_SPILL_LIMIT : state_gas_spill := 30000000
 
 abbrev GAS_ZERO : Nat := 0
 

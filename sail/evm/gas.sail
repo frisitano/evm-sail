@@ -291,11 +291,11 @@ let G_initcode_word : int(2) = 2 /* EIP-3860 (per word of initcode)            *
  * constants retain their unit in the name: execution costs debit
  * `gas_remaining`; state costs debit the frame's state-gas reservoir. */
 let G_amsterdam_cold_account_access : gas_constant = 3000
-let G_amsterdam_cold_storage_access : gas_constant = 3000
+let G_amsterdam_cold_storage_access : gas_constant = 2100
 let G_amsterdam_storage_write : gas_constant = 10000
-let G_amsterdam_account_write : gas_constant = 8000
-let G_amsterdam_call_value : gas_constant = 10300
-let G_amsterdam_create_access : gas_constant = 11000
+let G_amsterdam_account_write : gas_constant = 9000
+let G_amsterdam_call_value : gas_constant = 11300
+let G_amsterdam_create_access : gas_constant = 12000
 let G_amsterdam_state_byte : gas_constant = 1530
 let G_amsterdam_state_storage_set : state_gas_spill = 97920
 let G_amsterdam_state_new_account : state_gas_spill = 183600
@@ -345,18 +345,15 @@ function sstore_clear_refund() -> gas_constant = {
 }
 
 /*! Adds state-gas spill while preserving EIP-8037's regular-gas cap. */
-val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= transaction_execution_gas_limit_value. int('left) -> int(
-        transaction_execution_gas_limit_value - 'left,
+val state_gas_spill_room : forall 'left, 0 <= 'left & 'left <= frame_execution_gas_limit_value. int('left) -> int(
+        frame_execution_gas_limit_value - 'left,
     )
-function state_gas_spill_room(left) = sizeof(transaction_execution_gas_limit_value) - left
+function state_gas_spill_room(left) = sizeof(frame_execution_gas_limit_value) - left
 
-val state_gas_spill_add : forall 'left 'right,
-                            0 <= 'left & 'left <= transaction_execution_gas_limit_value & 0 <= 'right. (
+val state_gas_spill_add : forall 'left 'right, 0 <= 'left & 'left <= frame_execution_gas_limit_value & 0 <= 'right. (
         int('left),
         int('right),
-    ) -> {'result,
-          'result == 'left + 'right & 0 <= 'result & 'result <= transaction_execution_gas_limit_value.
-          int('result)}
+    ) -> {'result, 'result == 'left + 'right & 0 <= 'result & 'result <= frame_execution_gas_limit_value. int('result)}
 /*! Adds a nonnegative spill amount or rejects a value beyond the transaction cap. */
 function state_gas_spill_add(left, right) =
     let room = state_gas_spill_room(left) in
@@ -411,6 +408,21 @@ function credit_state_gas_refund(g, state_gas_remaining, state_gas_spilled, amou
         let to_state : state_gas_spill = amount - spilled;
         (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
     }
+}
+
+/*! A successful child can return a refund in state gas for a charge funded
+    by its parent's execution gas. Reunite the credit and outstanding spill
+    before the parent resumes execution (EIP-8037). */
+function repay_state_gas_spill(
+    g : gas,
+    remaining : state_gas,
+    spilled : state_gas_spill,
+) -> (
+    (gas, state_gas, state_gas_spill)
+) = {
+    let repayment =
+        if remaining < spilled then remaining else spilled;
+    (conserved_gas_add(g, repayment), remaining - repayment, spilled - repayment)
 }
 
 /*! Returns a completed child's remaining state reservoir to its parent and

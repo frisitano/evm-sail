@@ -9,7 +9,7 @@
 #   VEC=<input> ./build.sh run    - supply input at runtime and run on spike
 #   ./build.sh clean              - remove build artifacts
 #
-# VEC is a raw schema-prefixed SszStatelessInput file used only by the Spike
+# VEC is a raw schema-prefixed StatelessInput file used only by the Spike
 # validation device. It is never compiled or linked into the ELF. The canonical
 # driver is devtools.harness.cli --spike, which builds the guest once and supplies a
 # different runtime input to the unchanged ELF for each fixture.
@@ -354,6 +354,7 @@ compile_common() {
         --c-optimized-byte-pointer-field OutputSliceFields.bytes=__direct \
         --c-preserve main --c-preserve resume_frame \
         --c-preserve validation_debug_record --c-preserve write_invalid_result \
+        --c-preserve validate_secured_state_root \
         --c-preserve sload_cost --c-preserve sstore_sentry_cost \
         --c-preserve sstore_costs \
         "${interpreter_preserve_flags[@]}" \
@@ -641,7 +642,7 @@ cmd_run() {
   fi
   local vec="${VEC:-}"
   if [ -z "$vec" ]; then
-    echo "error: set VEC=<raw SszStatelessInput file> for the Spike run" >&2
+    echo "error: set VEC=<raw StatelessInput file> for the Spike run" >&2
     exit 2
   fi
   echo "--- spike run (${SPIKE_FLAGS[*]}) ---"

@@ -100,40 +100,40 @@ void cleanup_library(void);
  */
 
 /* Allocate a new instance of the type. */
-#define CREATE(type) create_ ## type
+#define CREATE(type) create_##type
 /* Deallocate an instance of the type (it must be valid) and then
    allocate a new one. Equivalent to KILL(type); CREATE(type);
    except it can be more efficient because it is allowed to
    reuse allocations. */
-#define RECREATE(type) recreate_ ## type
+#define RECREATE(type) recreate_##type
 /* Allocate a new instance of the type and set its value to type2.
    Equivalent to CREATE(type1); CONVERT_OF(type1, type2); but
    it can be more efficient. */
-#define CREATE_OF(type1, type2) create_ ## type1 ## _of_ ## type2
+#define CREATE_OF(type1, type2) create_##type1##_of_##type2
 /* Equivalent to KILL(type1); CREATE(type1); CONVERT_OF(type1; type2);
    but more efficient. */
-#define RECREATE_OF(type1, type2) recreate_ ## type1 ## _of_ ## type2
+#define RECREATE_OF(type1, type2) recreate_##type1##_of_##type2
 /* Set type1 = type2. Both must have already been CREATE()ed.
    The types can be different, and a conversion will be performed. */
-#define CONVERT_OF(type1, type2) convert_ ## type1 ## _of_ ## type2
+#define CONVERT_OF(type1, type2) convert_##type1##_of_##type2
 /* Like CONVERT_OF() but the types must be the same and it is just
    copied without any conversion. */
-#define COPY(type) copy_ ## type
+#define COPY(type) copy_##type
 /* Deallocate an instance of the type. It is not safe to call KILL()
    on a value that has already been KILL()ed or has never been CREATE()ed. */
-#define KILL(type) kill_ ## type
+#define KILL(type) kill_##type
 /* Set a value to the `undefined` Sail value (it can be anything).
    The instance must have been CREATE()ed. */
-#define UNDEFINED(type) undefined_ ## type
+#define UNDEFINED(type) undefined_##type
 /* Return true if two instances of the type are semantically equal
    (e.g. two strings are compared by values, not by their addresses). */
-#define EQUAL(type) eq_ ## type
+#define EQUAL(type) eq_##type
 
-#define SAIL_BUILTIN_TYPE_IMPL(type, const_type)\
-  void create_ ## type(type *);\
-  void recreate_ ## type(type *);\
-  void copy_ ## type(type *, const_type);\
-  void kill_ ## type(type *);
+#define SAIL_BUILTIN_TYPE_IMPL(type, const_type)                                                   \
+  void create_##type(type *);                                                                      \
+  void recreate_##type(type *);                                                                    \
+  void copy_##type(type *, const_type);                                                            \
+  void kill_##type(type *);
 #define SAIL_BUILTIN_TYPE(type) SAIL_BUILTIN_TYPE_IMPL(type, const type)
 /* ***** Sail unit type ***** */
 
@@ -197,32 +197,40 @@ uint64_t sail_int_get_ui(const sail_int op);
 void sail_int_to_u64_array(uint64_t *, size_t, const sail_int);
 void sail_int_from_u64_array(sail_int *, const uint64_t *, size_t);
 void sail_int_from_twos_complement_u64_array(sail_int *, const uint64_t *, size_t);
-static inline uint64_t mpz_get_ui(const sail_int op) {
+static inline uint64_t mpz_get_ui(const sail_int op)
+{
   return op->length == 0 ? UINT64_C(0) : op->limbs[0];
 }
-static inline long mpz_get_si(const sail_int op) {
-  if (op->length > 1) abort();
+static inline long mpz_get_si(const sail_int op)
+{
+  if (op->length > 1)
+    abort();
   uint64_t magnitude = mpz_get_ui(op);
   if (!op->negative) {
-    if (magnitude > (uint64_t)LONG_MAX) abort();
+    if (magnitude > (uint64_t)LONG_MAX)
+      abort();
     return (long)magnitude;
   }
-  if (magnitude > (uint64_t)LONG_MAX + UINT64_C(1)) abort();
-  if (magnitude == (uint64_t)LONG_MAX + UINT64_C(1)) return LONG_MIN;
+  if (magnitude > (uint64_t)LONG_MAX + UINT64_C(1))
+    abort();
+  if (magnitude == (uint64_t)LONG_MAX + UINT64_C(1))
+    return LONG_MIN;
   return -(long)magnitude;
 }
-static inline void mpz_set_ui(sail_int result, unsigned long value) {
+static inline void mpz_set_ui(sail_int result, unsigned long value)
+{
   result->negative = 0;
   result->length = value == 0 ? 0 : 1;
-  if (value != 0) result->limbs[0] = value;
+  if (value != 0)
+    result->limbs[0] = value;
 }
-static inline void mpz_set_si(sail_int result, long value) {
-  uint64_t magnitude = value < 0
-      ? (uint64_t)(-(value + 1)) + UINT64_C(1)
-      : (uint64_t)value;
+static inline void mpz_set_si(sail_int result, long value)
+{
+  uint64_t magnitude = value < 0 ? (uint64_t)(-(value + 1)) + UINT64_C(1) : (uint64_t)value;
   result->negative = value < 0;
   result->length = magnitude == 0 ? 0 : 1;
-  if (magnitude != 0) result->limbs[0] = magnitude;
+  if (magnitude != 0)
+    result->limbs[0] = magnitude;
 }
 int mpz_set_str(sail_int result, const char *string, int base);
 
@@ -282,11 +290,11 @@ bool eq_bit(const fbits a, const fbits b);
 
 static inline bool bit_to_bool(const fbits a)
 {
-  return (bool) a;
+  return (bool)a;
 }
 
 bool EQUAL(fbits)(const fbits, const fbits);
-bool EQUAL(ref_fbits)(const fbits*, const fbits*);
+bool EQUAL(ref_fbits)(const fbits *, const fbits *);
 
 typedef struct {
   uint64_t len;
@@ -325,10 +333,7 @@ sbits append_fs(const fbits, const uint64_t, const sbits);
 sbits append_ss(const sbits, const sbits);
 fbits fast_replicate_bits(const fbits shift, const fbits v, const mach_int times);
 
-fbits fast_update_subrange(const fbits op,
-			   const mach_int n,
-			   const mach_int m,
-			   const fbits slice);
+fbits fast_update_subrange(const fbits op, const mach_int n, const mach_int m, const fbits slice);
 
 sbits sslice(const fbits op, const mach_int start, const mach_int len);
 
@@ -343,7 +348,9 @@ sbits sub_sbits(const sbits op1, const sbits op2);
 
 /* ***** Sail reals ***** */
 
-typedef struct { uint64_t _num, _den; } real;  /* unused by the EVM guest (no GMP) */
+typedef struct {
+  uint64_t _num, _den;
+} real; /* unused by the EVM guest (no GMP) */
 
 SAIL_BUILTIN_TYPE(real)
 
@@ -386,7 +393,6 @@ void random_real(real *rop, unit);
 SAIL_INT_FUNCTION(string_length, sail_int, const_sail_string s);
 void string_drop(sail_string *dst, const_sail_string s, sail_int len);
 void string_take(sail_string *dst, const_sail_string s, sail_int len);
-
 
 /* ***** Printing ***** */
 

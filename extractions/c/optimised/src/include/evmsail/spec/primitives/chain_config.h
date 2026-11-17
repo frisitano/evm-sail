@@ -18,9 +18,6 @@ struct GasLimitsFields {
   uint64_t transaction_total_limit;
 };
 
-// struct ChainConfig
-struct ChainConfig {uint64_t chain_id;};
-
 // struct BlobScheduleFields
 struct BlobScheduleFields {
   uint32_t base_fee_update_fraction;
@@ -51,32 +48,36 @@ struct ProtocolProfileFields pack_protocol_profile(struct ProtocolProfileFields 
 
 struct GasLimitsFields gas_limits_for(struct ProtocolProfileFields profile, uint64_t block_limit);
 
-struct ExecutionProfileFields execution_profile_for(struct ProtocolProfileFields protocol, uint64_t block_limit);
+struct ExecutionProfileFields execution_profile_for(struct ProtocolProfileFields protocol,
+                                                    uint64_t block_limit);
 
 struct ProtocolProfileFields schema_protocol_profile(uint64_t schema_fork);
+
+bool schema_protocol_profile_forwards_matches(uint64_t schema_fork);
 
 void create_letbind_57(void);
 void kill_letbind_57(void);
 
-
 void create_letbind_58(void);
 void kill_letbind_58(void);
 
+uint32_t compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(
+    uint8_t fork, uint8_t target, uint8_t maximum, uint32_t denominator);
 
-uint32_t compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint32_t_to_uint32_t(uint8_t fork, uint8_t target, uint8_t maximum, uint32_t denominator);
+uint8_t compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint8_t_to_uint8_t(
+    uint8_t fork, uint8_t target, uint8_t maximum, uint8_t denominator);
 
-uint8_t compute_profile_excess_blob_gas_limit_uint8_t_uint8_t_uint8_t_uint8_t_to_uint8_t(uint8_t fork, uint8_t target, uint8_t maximum, uint8_t denominator);
+struct ExecutionProfileFields
+execution_profile_for_struct_ProtocolProfileFields_uint8_t_to_struct_ExecutionProfileFields(
+    struct ProtocolProfileFields protocol, uint8_t block_limit);
 
-struct ExecutionProfileFields execution_profile_for_struct_ProtocolProfileFields_uint8_t_to_struct_ExecutionProfileFields(struct ProtocolProfileFields protocol, uint8_t block_limit);
-
-struct GasLimitsFields gas_limits_for_struct_ProtocolProfileFields_uint8_t_to_struct_GasLimitsFields(struct ProtocolProfileFields profile, uint8_t block_limit);
+struct GasLimitsFields
+gas_limits_for_struct_ProtocolProfileFields_uint8_t_to_struct_GasLimitsFields(
+    struct ProtocolProfileFields profile, uint8_t block_limit);
 
 extern struct ProtocolProfileFields DEFAULT_PROTOCOL_PROFILE;
 
-
 extern struct ExecutionProfileFields DEFAULT_EXECUTION_PROFILE;
-
-
 
 #ifdef __cplusplus
 }

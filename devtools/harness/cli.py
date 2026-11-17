@@ -3,18 +3,17 @@
 
 Architecture: the Sail model is built ONCE into a shared library and driven
 IN-PROCESS via ctypes (devtools.harness.guest). Each fixture case is serialized
-to the SSZ SszStatelessInput (devtools.harness.ssz_builder, under the
+to the SSZ StatelessInput (devtools.harness.ssz_builder, under the
 execution-specs venv) and fed
 to main.sail's full-block validator, gated BYTE-EXACT against the EELS
 reference. Two input
 sources, auto-detected per fixture file:
-  - state tests: ssz_builder executes the case through the in-process EELS t8n
-    and reference guest. The pinned EELS schema's three request lists are
-    extended with the two known-empty v0.6.2 builder lists; only the request
-    root is recomputed, while the reference guest supplies the validation
-    verdict;
-  - blockchain/stateless fixtures already carrying statelessInputBytes /
+  - state tests: ssz_builder uses the pinned v21 EELS blockchain filler for
+    the selected execution fork. Amsterdam uses upstream stateless bytes;
+    historical profiles use the v21 layout with explicit fork selectors;
+  - blockchain and engine fixtures already carrying statelessInputBytes /
     statelessOutputBytes (e.g. corpora under zkvm/.fixtures/): fed directly.
+    The 43-byte StatelessValidationResult is compared as opaque bytes.
 Four execution vehicles: the native in-process ctypes lib (default), the
 generated Python extraction (--python), the REAL RISC-V guest ELF on Spike
 (--spike), or the production ZisK ELF on ziskemu (--zisk). Both ELF vehicles
@@ -25,7 +24,7 @@ zkvm/native-runner/run_fixtures*.py and zkvm/run_guest_smoke.py runners.
 Usage:
     uv run --frozen python -m devtools.harness.cli <test.json|dir> [...] [--fork F] [--limit N]
             [--build standard|optimized] [--python|--spike|--zisk] [--rebuild]
-            [--verbose] [--debug]
+            [--verbose] [--debug] [--corpus-manifest FILE]
 Requires `sail` on PATH and a C compiler; devtools.harness.ssz_builder runs under the
 execution-specs venv (EXECSPECS_PY).
 """
@@ -40,8 +39,11 @@ import tempfile
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
+from devtools.build_support import BuildSupportError
+from devtools.corpus import load_manifest
 from devtools.harness import guest as dump_state
 from devtools.paths import REPO_ROOT, temporary_root
 
@@ -85,7 +87,14 @@ def fixture_items(path):
                 if not line.strip():
                     continue
                 row = json.loads(line)
-                value = row["v"]
+                if "p" in row:
+                    base = Path(path).resolve().parent
+                    part = (base / row["p"]).resolve()
+                    if not part.is_relative_to(base):
+                        raise ValueError("fixture shard part must be inside its shard directory")
+                    value = json.loads(part.read_text())
+                else:
+                    value = row["v"]
                 yield row["k"], json.loads(value) if isinstance(value, str) else value
     else:
         with open(path) as fixture_file:
@@ -113,11 +122,14 @@ def collect(path, want_fork, limit):
                         "idx": idx,  # for ssz_builder (fork rules + tx index)
                         "config": t.get("config", {}),
                         "txbytes": pe.get("txbytes"),
+                        "expected_exception": pe.get("expectException"),
                         "gas": h2i(tx["gasLimit"][idx["gas"]]),
                         "val": h2i(tx["value"][idx["value"]]),
                         "data": tx["data"][idx["data"]],
-                        "post": pe["state"],
+                        "post": pe.get("state", {}),
                         "hash": pe.get("hash"),
+                        "logs_hash": pe.get("logs"),
+                        "receipt": pe.get("receipt"),
                         "al": (
                             tx["accessLists"][idx["data"]]
                             if "accessLists" in tx and idx["data"] < len(tx["accessLists"])
@@ -140,7 +152,7 @@ EXECSPECS_PY = os.environ.get(
     "EXECSPECS_PY", os.path.join(EXECSPECS_ROOT, ".venv", "bin", "python3")
 )
 
-# Persistent SSZ SszStatelessInput builder (devtools.harness.ssz_builder --serve), run under the
+# Persistent SSZ StatelessInput builder (devtools.harness.ssz_builder --serve), run under the
 # execution-specs venv (it owns the stateless SSZ types + serializer + t8n). One
 # case JSON per line in, one JSON response per line out ({"input": hex[,
 # "expected": hex]} or {"err": msg}).
@@ -169,9 +181,7 @@ def _serve_request(payload):
 
 
 def build_guest_pair(case):
-    """case -> (input bytes, expected SszStatelessValidationResult bytes): a fully
-    VALID Amsterdam block built by the in-process EELS t8n, plus the reference
-    guest's byte-exact expected output over that exact input."""
+    """Validate state-fixture expectations, then synthesize its fork-correct block pair."""
     resp = _serve_request(
         {
             "env": case["env"],
@@ -181,28 +191,36 @@ def build_guest_pair(case):
             "idx": case["idx"],
             "config": case["config"],
             "txbytes": case["txbytes"],
+            "expected_post": case["post"],
+            "expected_exception": case.get("expected_exception"),
+            "expected_state_root": case.get("hash"),
+            "expected_logs_hash": case.get("logs_hash"),
+            "expected_receipt": case.get("receipt"),
         }
     )
     return bytes.fromhex(resp["input"]), bytes.fromhex(resp["expected"])
 
 
 def collect_stateless(path):
-    """Blockchain/stateless fixture blocks carrying statelessInputBytes:
-    [(cid, input_bytes, expected_bytes|None)]. Empty for state-test files."""
+    """Blockchain and engine fixture entries carrying statelessInputBytes:
+    [(cid, input_bytes, expected_bytes|None)]. Blockchain fixtures carry them
+    on `blocks`, engine fixtures on `engineNewPayloads`. Empty for state-test
+    files."""
     out = []
     for name, t in fixture_items(path):
-        for i, b in enumerate(t.get("blocks", [])):
-            sib = b.get("statelessInputBytes")
-            if not sib:
-                continue
-            want = b.get("statelessOutputBytes")
-            out.append(
-                (
-                    f"{name.split('::')[-1]}#{i}",
-                    bytes.fromhex(sib.removeprefix("0x")),
-                    bytes.fromhex(want.removeprefix("0x")) if want else None,
+        for key, tag in (("blocks", "#"), ("engineNewPayloads", "#engine")):
+            for i, b in enumerate(t.get(key, [])):
+                sib = b.get("statelessInputBytes")
+                if not sib:
+                    continue
+                want = b.get("statelessOutputBytes")
+                out.append(
+                    (
+                        f"{name.split('::')[-1]}{tag}{i}",
+                        bytes.fromhex(sib.removeprefix("0x")),
+                        bytes.fromhex(want.removeprefix("0x")) if want else None,
+                    )
                 )
-            )
     return out
 
 
@@ -423,12 +441,23 @@ def output_matches(got, expected, zisk=False):
     return got[: len(expected)] == expected and not any(got[len(expected) :])
 
 
+def corpus_verdict(args, ntotal, npass):
+    """Require every case to pass and, when supplied, the pinned inventory."""
+    status = 0 if ntotal > 0 and npass == ntotal else 1
+    if args.expected_cases is not None and ntotal != args.expected_cases:
+        print(
+            f"=== case count: ran {ntotal}, {args.corpus_manifest} pins {args.expected_cases} ==="
+        )
+        status = 1
+    return status
+
+
 def run_fixtures(files, args):
     """Drive main.sail over every fixture: embedded statelessInputBytes
     blocks run directly against their statelessOutputBytes; state-test cases are
-    built into valid Amsterdam blocks + reference outputs by ssz_builder's t8n
-    mode and narrow v0.6.2 request-schema adapter. Pass criterion: the guest's
-    output bytes EQUAL the adapted reference output.
+    built into fork-selected blocks + reference outputs by ssz_builder
+    mode using the pinned v21 EELS environment. Pass criterion: the guest's output bytes
+    EQUAL the reference output.
     Backend: native in-process ctypes, the generated Python extraction,
     executable Lean extraction, the real RISC-V ELF on Spike, or the production
     ZisK ELF on ziskemu."""
@@ -460,14 +489,45 @@ def run_fixtures(files, args):
     fail_reasons: dict[str, int] = {}
     printed_fails = 0
     suppressed_fails = 0
+
+    def report_failure(category, cid, f, detail=None):
+        """Count one failing case; print its FAIL line unless --fail-limit
+        suppresses it. Returns whether the line was printed."""
+        nonlocal printed_fails, suppressed_fails
+        fail_reasons[category] = fail_reasons.get(category, 0) + 1
+        if args.fail_limit > 0 and printed_fails >= args.fail_limit:
+            suppressed_fails += 1
+            return False
+        printed_fails += 1
+        suffix = f": {detail.splitlines()[0]}" if detail else ""
+        print(f"FAIL {cid} [{f}] {category}{suffix}")
+        return True
+
     for f in files:
         if args._trace_files:
             print(f"TRACE_FILE {f}", flush=True)
         work = [(cid, inp, exp) for cid, inp, exp in collect_stateless(f)]
         if not work:
-            for c in collect(f, args.fork or "Amsterdam", args.limit):
+            for c in collect(f, args.fork, args.limit):
                 try:
                     inp, exp = build_guest_pair(c)
+                    if args.save_synthesized:
+                        directory = Path(args.save_synthesized)
+                        directory.mkdir(parents=True, exist_ok=True)
+                        row = {
+                            "k": c["cid"] + " [" + f + "]",
+                            "v": {
+                                "_info": {"source": f, "case": c["cid"], "fork": c["fork"]},
+                                "blocks": [
+                                    {
+                                        "statelessInputBytes": "0x" + inp.hex(),
+                                        "statelessOutputBytes": "0x" + exp.hex(),
+                                    }
+                                ],
+                            },
+                        }
+                        with (directory / f"synthesized-{os.getpid()}.jsonl").open("a") as output:
+                            output.write(json.dumps(row) + "\n")
                 except Exception as e:
                     work.append((c["cid"], None, str(e)))
                     continue
@@ -475,29 +535,17 @@ def run_fixtures(files, args):
         for cid, inp, exp in work:
             ntotal += 1
             if inp is None:
-                fail_reasons["builderr"] = fail_reasons.get("builderr", 0) + 1
-                if args.fail_limit <= 0 or printed_fails < args.fail_limit:
-                    printed_fails += 1
-                    print(f"FAIL {cid} [{f}]")
-                    if args.verbose:
-                        print(f"      {exp}")
-                else:
-                    suppressed_fails += 1
+                if report_failure("builderr", cid, f, exp) and args.verbose:
+                    print(f"      {exp}")
                 continue
             try:
                 got = backend.run_once(inp)
             except Exception as e:
-                fail_reasons["runerr"] = fail_reasons.get("runerr", 0) + 1
-                if args.fail_limit <= 0 or printed_fails < args.fail_limit:
-                    printed_fails += 1
-                    print(f"FAIL {cid} [{f}]")
-                    if args.verbose:
-                        detail = "".join(
-                            traceback.format_exception(type(e), e, e.__traceback__)
-                        ).rstrip()
-                        print("\n".join(f"      {line}" for line in detail.splitlines()))
-                else:
-                    suppressed_fails += 1
+                if report_failure("runerr", cid, f, str(e)) and args.verbose:
+                    detail = "".join(
+                        traceback.format_exception(type(e), e, e.__traceback__)
+                    ).rstrip()
+                    print("\n".join(f"      {line}" for line in detail.splitlines()))
                 continue
             if output_matches(got, exp, zisk=args.zisk):
                 npass += 1
@@ -505,10 +553,7 @@ def run_fixtures(files, args):
                     print(f"PASS {cid}")
             else:
                 cat = "noref" if exp is None else "diff"
-                fail_reasons[cat] = fail_reasons.get(cat, 0) + 1
-                if args.fail_limit <= 0 or printed_fails < args.fail_limit:
-                    printed_fails += 1
-                    print(f"FAIL {cid} [{f}]")
+                if report_failure(cat, cid, f):
                     if args.verbose and exp is not None:
                         gv = got[32:33].hex() if len(got) > 32 else "??"
                         ev = exp[32:33].hex() if len(exp) > 32 else "??"
@@ -521,8 +566,6 @@ def run_fixtures(files, args):
                             dump_state.snapshot(), limit=0 if args.verbose else 12
                         )
                         print("\n".join("      " + ln for ln in snap.splitlines()))
-                else:
-                    suppressed_fails += 1
     if args.spike:
         vehicle = "spike guest"
     elif args.zisk:
@@ -538,11 +581,10 @@ def run_fixtures(files, args):
         print(f"=== suppressed FAIL lines: {suppressed_fails} ===")
     if fail_reasons:
         print("fail categories:", dict(sorted(fail_reasons.items(), key=lambda x: -x[1])))
-    if ntotal == 0 or npass != ntotal:
-        sys.exit(1)
+    sys.exit(corpus_verdict(args, ntotal, npass))
 
 
-def run_sharded(files, args):
+def run_sharded(files: list[str], args: argparse.Namespace) -> int:
     """Shard fixture files across N self-invocations (one library instance per
     process -- the C world state is process-global, so this is the only safe
     concurrency) and aggregate their summaries."""
@@ -565,6 +607,8 @@ def run_sharded(files, args):
     if args.python:
         flags.append("--python")
     flags += ["--build", args.build_mode]
+    if args.save_synthesized:
+        flags += ["--save-synthesized", args.save_synthesized]
     if args.fork:
         flags += ["--fork", args.fork]
     if args.limit:
@@ -575,30 +619,42 @@ def run_sharded(files, args):
         flags += ["--fail-limit", str(args.fail_limit)]
 
     def run_shard(shard):
-        return subprocess.run(
-            [sys.executable, "-m", "devtools.harness.cli", *shard, *flags],
-            capture_output=True,
-            text=True,
-        )
+        # Large fixture inventories (especially absolute paths) exceed ARG_MAX.
+        # argparse reads one argument per line, preserving spaces in paths.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".args") as inputs:
+            inputs.write("\n".join(shard) + "\n")
+            inputs.flush()
+            return subprocess.run(
+                [sys.executable, "-m", "devtools.harness.cli", "@" + inputs.name, *flags],
+                capture_output=True,
+                text=True,
+            )
 
-    npass = ntotal = ntimeout = 0
+    npass = ntotal = 0
     cats: dict[str, int] = {}
     rc = 0
+    abnormal_worker = False
     with cf.ThreadPoolExecutor(n) as ex:
         futs = {ex.submit(run_shard, sh): i for i, sh in enumerate(shards)}
         for fut in cf.as_completed(futs):
             r = fut.result()
+            if r.returncode != 0:
+                rc = 1
             out = r.stdout + r.stderr
             for ln in out.splitlines():
-                if ln.startswith(("FAIL", "TIMEOUT")):
+                if ln.startswith("FAIL"):
                     print(ln)
-            m = re.search(r"=== (\d+)/(\d+) passed(?: \((\d+) timeouts\))?", out)
+            m = re.search(r"=== (\d+)/(\d+) passed", out)
             if m:
+                expected_status = 0 if int(m.group(1)) == int(m.group(2)) > 0 else 1
+                if r.returncode != expected_status:
+                    abnormal_worker = True
+                    print(f"[shard {futs[fut] + 1}/{n} unexpected exit status {r.returncode}]")
                 npass += int(m.group(1))
                 ntotal += int(m.group(2))
-                ntimeout += int(m.group(3) or 0)
                 print(f"[shard {futs[fut] + 1}/{n} done: {m.group(1)}/{m.group(2)}]")
             else:
+                abnormal_worker = True
                 rc = 1
                 if r.returncode < 0:
                     import signal
@@ -622,13 +678,19 @@ def run_sharded(files, args):
     )
     if cats:
         print("fail categories:", dict(sorted(cats.items(), key=lambda x: -x[1])))
-    return 1 if (rc or ntotal == 0 or npass != ntotal or ntimeout != 0) else 0
+    status = corpus_verdict(args, ntotal, npass)
+    return 2 if abnormal_worker else 1 if (rc or status) else 0
 
 
-def main():
-    ap = argparse.ArgumentParser()
+def main() -> None:
+    ap = argparse.ArgumentParser(fromfile_prefix_chars="@")
     ap.add_argument("files", nargs="+")
     ap.add_argument("--fork", default=None)
+    ap.add_argument(
+        "--save-synthesized",
+        metavar="DIRECTORY",
+        help="export newly synthesized SSZ pairs as replayable JSONL fixture shards",
+    )
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--verbose", action="store_true")
@@ -700,6 +762,12 @@ def main():
         "--debug and --rebuild (rebuild once with --jobs 1 first)",
     )
     ap.add_argument(
+        "--corpus-manifest",
+        metavar="FILE",
+        help="require the number of cases run to equal the embedded_cases "
+        "inventory pinned in this corpus manifest",
+    )
+    ap.add_argument(
         "--_trace-files", dest="_trace_files", action="store_true", help=argparse.SUPPRESS
     )
     args = ap.parse_args()
@@ -711,6 +779,15 @@ def main():
         ap.error("--profile is not available for the Lean extraction")
     if args.debug and (args.spike or args.zisk or args.python):
         ap.error("--debug is available only for native and Lean runs")
+    if args.corpus_manifest and args.limit:
+        ap.error("--corpus-manifest needs a full run: omit --limit")
+    # Validate the inventory before starting the run.
+    args.expected_cases = None
+    try:
+        if args.corpus_manifest:
+            args.expected_cases = load_manifest(Path(args.corpus_manifest)).expected_cases
+    except BuildSupportError as error:
+        ap.error(str(error))
 
     # Expand regular fixtures and EEST worker-shard JSONL files recursively.
     import glob as _glob

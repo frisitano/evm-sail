@@ -71,9 +71,13 @@ function run_system_call_frame(
 ) = {
     k_journal_checkpoint();
     let stack_top = stack_reset();
+    let execution_profile = k_execution_profile;
+    let protocol = execution_profile.protocol;
+    let reservoir : state_gas =
+        if protocol.fork >= Amsterdam then 16 * G_amsterdam_state_storage_set else 0;
     interpret(
         SYSTEM_CALL_GAS_LIMIT,
-        STATE_GAS_ZERO,
+        reservoir,
         STATE_GAS_SPILL_ZERO,
         GAS_REFUND_ZERO,
         stack_top,
@@ -83,7 +87,7 @@ function run_system_call_frame(
         tgt,
         tgt,
         ZERO_WORD,
-        STATE_GAS_ZERO,
+        reservoir,
         false,
         0,
         code,

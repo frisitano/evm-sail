@@ -46,8 +46,8 @@ extern "C" {
  * @param[out] quotient Quotient limbs
  * @param[out] remainder Remainder limbs (remainder < b)
  */
-void zkvm_u256_divrem(const uint64_t a[4], const uint64_t b[4],
-                      uint64_t quotient[4], uint64_t remainder[4]);
+void zkvm_u256_divrem(const uint64_t a[4], const uint64_t b[4], uint64_t quotient[4],
+                      uint64_t remainder[4]);
 
 /**
  * Unsigned 256-bit modular multiplication.
@@ -60,8 +60,8 @@ void zkvm_u256_divrem(const uint64_t a[4], const uint64_t b[4],
  * @param n Modulus limbs; precondition n != 0
  * @param[out] out Result limbs (out < n)
  */
-void zkvm_u256_mulmod(const uint64_t a[4], const uint64_t b[4],
-                      const uint64_t n[4], uint64_t out[4]);
+void zkvm_u256_mulmod(const uint64_t a[4], const uint64_t b[4], const uint64_t n[4],
+                      uint64_t out[4]);
 
 /**
  * Unsigned 256-bit modular addition.
@@ -74,8 +74,8 @@ void zkvm_u256_mulmod(const uint64_t a[4], const uint64_t b[4],
  * @param n Modulus limbs; precondition n != 0
  * @param[out] out Result limbs (out < n)
  */
-void zkvm_u256_addmod(const uint64_t a[4], const uint64_t b[4],
-                      const uint64_t n[4], uint64_t out[4]);
+void zkvm_u256_addmod(const uint64_t a[4], const uint64_t b[4], const uint64_t n[4],
+                      uint64_t out[4]);
 
 #ifdef __cplusplus
 }

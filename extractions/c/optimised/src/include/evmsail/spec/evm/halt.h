@@ -15,10 +15,18 @@ enum kind_HaltKind { Kind_HaltReturn, Kind_HaltRevert, Kind_HaltSelfDestruct, Ki
 struct HaltKind {
   enum kind_HaltKind kind;
   union {
-    struct { Bytes HaltReturn; };
-    struct { Bytes HaltRevert; };
-    struct { unit HaltSelfDestruct; };
-    struct { unit HaltStop; };
+    struct {
+      Bytes HaltReturn;
+    };
+    struct {
+      Bytes HaltRevert;
+    };
+    struct {
+      unit HaltSelfDestruct;
+    };
+    struct {
+      unit HaltStop;
+    };
   } variants;
 };
 
@@ -28,9 +36,15 @@ enum kind_FrameStatus { Kind_Exceptional, Kind_Halted, Kind_Running };
 struct FrameStatus {
   enum kind_FrameStatus kind;
   union {
-    struct { enum ExceptionKind Exceptional; };
-    struct { struct HaltKind Halted; };
-    struct { unit Running; };
+    struct {
+      enum ExceptionKind Exceptional;
+    };
+    struct {
+      struct HaltKind Halted;
+    };
+    struct {
+      unit Running;
+    };
   } variants;
 };
 
@@ -43,7 +57,6 @@ struct InterpreterCompletion {
   uint32_t state_gas_spilled;
   struct FrameStatus status;
 };
-
 
 #ifdef __cplusplus
 }

@@ -190,7 +190,7 @@ def sstore_clear_refund() -> gas_constant:
         return gas_constant(R_sclear_pre_london)
 
 def state_gas_spill_room(left: int) -> int:
-    return (int((1 << 24)) - int(left))
+    return (30000000 - int(left))
 
 def state_gas_spill_add(left: int, right: int) -> int:
     room = state_gas_spill_room(left)
@@ -230,6 +230,13 @@ def credit_state_gas_refund(g: gas, state_gas_remaining: state_gas, state_gas_sp
             credited = g
         to_state = (int(amount) - int(spilled))
         return (credited, conserved_gas_add(state_gas_remaining, to_state), STATE_GAS_SPILL_ZERO)
+
+def repay_state_gas_spill(g: gas, remaining: state_gas, spilled: state_gas_spill) -> tuple[gas, state_gas, state_gas_spill]:
+    if (int(remaining) < int(spilled)):
+        repayment = remaining
+    else:
+        repayment = spilled
+    return (conserved_gas_add(g, repayment), (int(remaining) - int(repayment)), (int(spilled) - int(repayment)))
 
 def return_child_state_gas(parent_remaining: state_gas, parent_spilled: state_gas_spill, child_remaining: state_gas, child_spilled: state_gas_spill) -> tuple[state_gas, state_gas_spill]:
     state_room = (int((int((1 << 64)) - 1)) - int(parent_remaining))
@@ -947,15 +954,15 @@ G_initcode_word: Annotated[int, IntegerRange(2, 2)] = 2
 
 G_amsterdam_cold_account_access: int = 3000
 
-G_amsterdam_cold_storage_access: int = 3000
+G_amsterdam_cold_storage_access: int = 2100
 
 G_amsterdam_storage_write: int = 10000
 
-G_amsterdam_account_write: int = 8000
+G_amsterdam_account_write: int = 9000
 
-G_amsterdam_call_value: int = 10300
+G_amsterdam_call_value: int = 11300
 
-G_amsterdam_create_access: int = 11000
+G_amsterdam_create_access: int = 12000
 
 G_amsterdam_state_byte: int = 1530
 
@@ -965,7 +972,7 @@ G_amsterdam_state_new_account: int = 183600
 
 G_amsterdam_state_auth_base: int = 35190
 
-R_amsterdam_storage_clear: int = 12480
+R_amsterdam_storage_clear: int = 11616
 
 G_sstore_sentry: int = 2301
 

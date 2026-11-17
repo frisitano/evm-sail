@@ -17,7 +17,6 @@ void state_journal_revert(void);
 
 void state_journal_commit(void);
 
-
 #ifdef __cplusplus
 }
 #endif

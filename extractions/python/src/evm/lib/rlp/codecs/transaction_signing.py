@@ -22,10 +22,7 @@ from evm.prelude import (
     ZERO_WORD,
 )
 from evm.primitives.quantities import account_nonce
-from evm.primitives.bytes import (
-    StatelessInputSlice,
-    DOUBLE_WORD_BYTE_LENGTH,
-)
+from evm.primitives.bytes import StatelessInputSlice
 from evm.exceptions import (
     FatalError,
     fatal_error,
@@ -112,5 +109,3 @@ def auth_signing_hash(chain_id: word, addr: address, nonce: account_nonce) -> ha
     return Bytes32(signing_hash)
 
 LEGACY_SIGNATURE_SUFFIX_LENGTH: Annotated[int, IntegerRange(2, 2)] = 2
-
-PUBLIC_KEY_BODY_LENGTH: Annotated[int, IntegerRange(64, 64)] = DOUBLE_WORD_BYTE_LENGTH

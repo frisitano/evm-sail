@@ -27,7 +27,7 @@ extern "C" {
  * @param[out] buf_ptr Pointer receiving the input buffer address
  * @param[out] buf_size Pointer receiving the input buffer size in bytes
  */
-void read_input(const uint8_t** buf_ptr, size_t* buf_size);
+void read_input(const uint8_t **buf_ptr, size_t *buf_size);
 
 /**
  * Append bytes to the public output.
@@ -37,7 +37,7 @@ void read_input(const uint8_t** buf_ptr, size_t* buf_size);
  * @param output Pointer to readable bytes
  * @param size Number of bytes to append
  */
-void write_output(const uint8_t* output, size_t size);
+void write_output(const uint8_t *output, size_t size);
 
 #ifdef __cplusplus
 }

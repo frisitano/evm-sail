@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .._runtime import (
+    Bytes20,
     SailMatchFailure,
 )
 from evm.prelude import (
@@ -12,6 +13,7 @@ from evm.prelude import (
     word_and,
     word_ult,
     word_ule,
+    ZERO_WORD,
     WORD_ZERO,
     WORD_ONE,
 )
@@ -26,6 +28,7 @@ from evm.exceptions import (
 )
 from evm.primitives.crypto import (
     ecrecover_addr,
+    SECP_N_FULL,
     SECP_N_HALF,
 )
 from evm.primitives.tx import TxSignatureScheme
@@ -56,10 +59,13 @@ def tx_signature_parity(chain_id: chain_identifier, scheme: TxSignatureScheme, v
         case _:
             raise SailMatchFailure("no Sail match clause applied")
 
-def tx_auth_valid(sender: address, h: hash, parity: y_parity, r: word, s: word) -> bool:
-    high_s = word_ult(SECP_N_HALF, s)
-    if high_s:
-        return False
+def tx_recover_sender(h: hash, parity: y_parity, r: word, s: word) -> address:
+    valid_range = ((word_ult(ZERO_WORD, r)) & (((word_ult(r, SECP_N_FULL)) & (((word_ult(ZERO_WORD, s)) & (word_ule(s, SECP_N_HALF)))))))
+    invalid_range = (not (valid_range))
+    if invalid_range:
+        fatal_error(FatalError.InvalidSignature)
+    recovered = ecrecover_addr(h, parity, r, s)
+    if recovered.success:
+        return Bytes20(recovered.address)
     else:
-        recovered = ecrecover_addr(h, parity, r, s)
-        return ((recovered.success) & (((recovered.address) == (sender))))
+        return Bytes20(fatal_error(FatalError.InvalidSignature))

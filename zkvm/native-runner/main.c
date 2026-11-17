@@ -1,7 +1,7 @@
 /* Native conformance driver for the evm-sail zkVM stateless block guest.
  *
  * Reads argv[1] = a file containing the RAW statelessInputBytes (already
- * hex-decoded, INCLUDING the leading 0x0001 schema prefix — the Sail SSZ
+ * hex-decoded, INCLUDING the leading 0x1501 schema id — the Sail SSZ
  * decoder strips it). Runs the guest entry main() over those bytes and
  * prints the guest's canonical SSZ output as a single lowercase hex line.
  *

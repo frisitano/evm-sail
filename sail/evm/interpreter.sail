@@ -463,7 +463,10 @@ function interpret(
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let fork = profile.fork;
-    let blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas);
+    let blob_fee =
+        if fork >= Cancun
+        then blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas)
+        else ZERO_WORD;
     frame_stack_reset();
     var interpreting : bool = true;
     var result : OutputSlice = EMPTY_OUTPUT_SLICE;
@@ -3463,6 +3466,11 @@ function resume_call(
     let return_destination = memory_absolute(parent_memory_base, continuation.return_offset);
     returndata_copy_prefix(output, return_destination, continuation.return_length);
     if succeeded then {
+        (parent_gas, parent_state_gas, parent_state_spill) = repay_state_gas_spill(
+            parent_gas,
+            parent_state_gas,
+            parent_state_spill,
+        );
         parent_refund = record_refund(parent_refund, child_refund);
         k_journal_commit();
         parent_sp = stack_top_advance(parent_sp, 1);
@@ -3611,6 +3619,11 @@ function resume_create(
     var parent_sp : StackPointer = checkpoint.stack_top;
 
     if deploy_succeeds then {
+        (parent_gas, parent_state_gas, parent_state_spill) = repay_state_gas_spill(
+            parent_gas,
+            parent_state_gas,
+            parent_state_spill,
+        );
         parent_refund = record_refund(parent_refund, child_refund);
         let deployed_bytes : OutputSlice =
             if frontier_empty_deposit then EMPTY_OUTPUT_SLICE else output;

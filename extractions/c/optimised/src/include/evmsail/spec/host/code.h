@@ -23,7 +23,7 @@ bool jumpdest_ref_contains(uint8_t * /* arg_0 */, uint32_t /* arg_1 */, uint32_t
 
 struct AddressResult code_db_read_delegation(bytes32 /* arg_0 */);
 
-uint8_t * analyze_code(Bytes code, uint8_t fork);
+uint8_t *analyze_code(Bytes code, uint8_t fork);
 
 Bytes code_db_intern_input(Bytes bytes);
 
@@ -34,7 +34,6 @@ Bytes code_db_intern_output(Bytes bytes);
 struct CodeFields code_db_resolve(bytes32 code_hash);
 
 bytes32 code_db_insert(Bytes code, uint8_t fork);
-
 
 #ifdef __cplusplus
 }

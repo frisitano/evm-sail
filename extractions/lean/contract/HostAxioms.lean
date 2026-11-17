@@ -1133,6 +1133,8 @@ structure HostState where
   `bal_prepare_iter`. -/
   balAccounts : List address
   balRecords : List (address × BalIterEntry)
+  balStorageOriginals : List ((address × word × block_access_index) × word)
+  balBalanceOriginals : List ((address × block_access_index) × word)
   balIterator : List BalIterEntry
 
 def initialHostState : HostState where
@@ -1166,6 +1168,8 @@ def initialHostState : HostState where
   nodeDb := []
   balAccounts := []
   balRecords := []
+  balStorageOriginals := []
+  balBalanceOriginals := []
   balIterator := []
 
 /-- The generated model runs in Sail's register monad extended with the host
@@ -2235,30 +2239,54 @@ private def keepLastByKey [BEq k] (key : a -> k) (items : List a) : List a :=
 
 def bal_reset (_ : Unit) : SailM Unit :=
   modify fun state =>
-    { state with balAccounts := [], balRecords := [], balIterator := [] }
+    { state with
+      balAccounts := []
+      balRecords := []
+      balIterator := []
+      balStorageOriginals := []
+      balBalanceOriginals := [] }
 
 def bal_account_touch (account : address) : SailM Unit :=
   modify fun state =>
     { state with balAccounts := touchBalAccount state.balAccounts account }
 
 def bal_storage_change
-    (index : block_access_index) (account : address) (slot value : word) :
+    (index : block_access_index) (account : address) (slot before value : word) :
     SailM Unit :=
   modify fun state =>
-    recordBal state account
-      (BalIterEntry.BalStorageChange
-        { slot := slot, index := index, value := value })
+    let key := (account, slot, index)
+    let original := (assocGet state.balStorageOriginals key).getD before
+    let records := state.balRecords.filter fun record =>
+      !(record.1 == account && (match record.2 with
+        | .BalStorageChange entry => entry.slot == slot && entry.index == index
+        | _ => false))
+    let state := { state with
+      balRecords := records
+      balStorageOriginals := assocPut state.balStorageOriginals key original }
+    let state := recordBal state account (.BalStorageRead slot)
+    if value == original then state else
+      recordBal state account (.BalStorageChange { slot := slot, index := index, value := value })
 
 def bal_storage_read (account : address) (slot : word) : SailM Unit :=
   modify fun state =>
     recordBal state account (BalIterEntry.BalStorageRead slot)
 
 def bal_balance_change
-    (index : block_access_index) (account : address) (value : word) :
+    (index : block_access_index) (account : address) (before value : word) :
     SailM Unit :=
   modify fun state =>
-    recordBal state account
-      (BalIterEntry.BalBalanceChange { index := index, value := value })
+    let key := (account, index)
+    let original := (assocGet state.balBalanceOriginals key).getD before
+    let records := state.balRecords.filter fun record =>
+      !(record.1 == account && (match record.2 with
+        | .BalBalanceChange entry => entry.index == index
+        | _ => false))
+    let state := { state with
+      balRecords := records
+      balAccounts := touchBalAccount state.balAccounts account
+      balBalanceOriginals := assocPut state.balBalanceOriginals key original }
+    if value == original then state else
+      recordBal state account (.BalBalanceChange { index := index, value := value })
 
 def bal_nonce_change
     (index : block_access_index) (account : address) (value : account_nonce) :

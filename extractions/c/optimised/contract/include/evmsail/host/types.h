@@ -17,7 +17,7 @@ typedef struct Bytes {
  * the decoded rows once in its fixed workspace and advances this compact view. */
 typedef struct PreparedAuthorizationList {
   uint32_t offset;
-  uint16_t count;
+  uint32_t count;
 } PreparedAuthorizationList;
 
 static inline bool eq_Bytes(Bytes op1, Bytes op2)

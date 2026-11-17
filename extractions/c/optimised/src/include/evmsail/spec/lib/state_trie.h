@@ -21,10 +21,10 @@ struct TrieUpdateFetch next_storage_trie_update(bytes20 addr);
 
 struct TrieUpdateFetch next_changed_account_trie_update(void);
 
-bool account_trie_update(struct AcctTrieEntry trie_entry, struct TrieUpdate *restrict trieupdate_8_1501);
+bool account_trie_update(struct AcctTrieEntry trie_entry,
+                         struct TrieUpdate *restrict trieupdate_8_1558);
 
 bytes32 compute_state_root(void);
-
 
 #ifdef __cplusplus
 }

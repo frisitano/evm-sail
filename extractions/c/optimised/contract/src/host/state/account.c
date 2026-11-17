@@ -748,7 +748,8 @@ void account_transaction_merge(struct TransactionMergeSemantics semantics,
       bal_note_nonce_change(current_transaction_epoch, account_id, state->current.nonce);
     }
     if (!word_equal(&state->current.balance, &state->original.balance)) {
-      bal_note_balance_change(current_transaction_epoch, account_id, state->current.balance);
+      bal_note_balance_change(current_transaction_epoch, account_id, state->original.balance,
+                              state->current.balance);
     }
     if (!hash_equal(&state->current.code_hash, &state->original.code_hash)) {
       bal_note_code_change(current_transaction_epoch, account_id, state->current.code_hash);

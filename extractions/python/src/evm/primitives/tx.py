@@ -128,18 +128,17 @@ class transaction_item_count(Unsigned):
     def _in_range(self, value: int) -> bool:
         return self.LOWER <= value <= self.UPPER
 
-prepared_authorization_count: TypeAlias = Uint
+class prepared_authorization_count(Unsigned):
+    LOWER = 0
+    UPPER = 1073741824
 
-@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+    def _in_range(self, value: int) -> bool:
+        return self.LOWER <= value <= self.UPPER
+
+@dataclass(slots=True)
 class PreparedAuthorizationList:
     entries: list[Authorization]
     count: prepared_authorization_count
-
-    @model_validator(mode="after")
-    def validate(self) -> Self:
-        if not ((0 <= int(self.count) <= ((2 ** 24) // 7816))):
-            raise ValueError("PreparedAuthorizationList.count violates Sail type range(0, div(2 ^ 24, 7816))")
-        return self
 
 @dataclass(slots=True)
 class AccessListRef:
@@ -198,6 +197,44 @@ class transaction_calldata_floor_cost(Unsigned):
 transaction_initcode_cost: TypeAlias = Uint
 
 @pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
+class DecodedTransactionFieldsValidity:
+    blob_limit: int
+
+    @model_validator(mode="after")
+    def validate(self) -> Self:
+        if not (((self.blob_limit == 0) or ((self.blob_limit == 6) or (self.blob_limit == 9)))):
+            raise ValueError("DecodedTransactionFieldsValidity violates Sail constraint transaction_blob_limit_value('blob_limit)")
+        return self
+
+@pydantic_dataclass(config=ConfigDict(strict=True, validate_assignment=True, revalidate_instances="always", arbitrary_types_allowed=True), slots=True, kw_only=True)
+class DecodedTransactionFields:
+    validity: DecodedTransactionFieldsValidity
+    tx_type: TxType
+    nonce: word
+    chain_id: chain_identifier
+    gas_limit: transaction_gas
+    is_create: bool
+    recipient: address
+    value: word
+    raw: StatelessInputSlice
+    input_src: TransactionInputSlice
+    access_list: AccessListRef
+    max_fee: word
+    max_blob_fee: word
+    max_priority_fee: word
+    authorizations: AuthorizationListRef
+    blob_hashes: BlobHashesFields
+    signing_hash: hash
+    sig_v: word
+    sig_r: word
+    sig_s: word
+
+DecodedTransaction: TypeAlias = DecodedTransactionFields
+
+def pack_decoded_transaction(tx: DecodedTransactionFields) -> DecodedTransactionFields:
+    return tx
+
+@pydantic_dataclass(config=ConfigDict(strict=True, arbitrary_types_allowed=True), frozen=True, slots=True, kw_only=True)
 class TransactionFieldsValidity:
     blob_limit: int
 
@@ -226,7 +263,6 @@ class TransactionFields:
     max_priority_fee: word
     authorizations: AuthorizationListRef
     blob_hashes: BlobHashesFields
-    pubkey: StatelessInputSlice
     signing_hash: hash
     sig_v: word
     sig_r: word

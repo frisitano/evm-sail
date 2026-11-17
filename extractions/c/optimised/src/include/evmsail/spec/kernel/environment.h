@@ -10,7 +10,18 @@ extern "C" {
 #endif
 
 // enum EnvField
-enum EnvField { F_Number, F_Timestamp, F_Coinbase, F_BaseFee, F_ChainId, F_GasLimit, F_PrevRandao, F_Origin, F_GasPrice, F_SlotNumber };
+enum EnvField {
+  F_Number,
+  F_Timestamp,
+  F_Coinbase,
+  F_BaseFee,
+  F_ChainId,
+  F_GasLimit,
+  F_PrevRandao,
+  F_Origin,
+  F_GasPrice,
+  F_SlotNumber
+};
 
 u256 k_env(enum EnvField f);
 
@@ -29,6 +40,9 @@ bytes20 k_create2_addr(bytes20 a, u256 salt, bytes32 inithash);
 // register zk_parent_state_root
 extern bytes32 k_parent_state_root;
 
+// register zk_historical_access_schema
+extern Bytes k_historical_access_schema;
+
 // register zk_n_headers
 extern uint16_t k_n_headers;
 
@@ -46,7 +60,6 @@ extern struct TxEnvFields k_tx;
 
 // register zk_current_transaction_epoch
 extern uint32_t k_current_transaction_epoch;
-
 
 #ifdef __cplusplus
 }

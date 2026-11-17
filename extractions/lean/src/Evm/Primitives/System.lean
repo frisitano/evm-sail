@@ -40,6 +40,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation

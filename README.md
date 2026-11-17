@@ -186,7 +186,7 @@ sail/        the specification (evm.sail_project defines the single build)
       codecs/           address, tx, receipt, header, BAL, state codecs
     ssz/
       ssz.sail         generic source-backed SSZ readers and list navigation
-      stateless_input.sail concrete SszStatelessInput refs and decoder
+      stateless_input.sail concrete StatelessInput refs and decoder
     htr.sail           SSZ hash-tree-root computation
     mpt/               generic MPT implementation
       primitives.sail  trie paths + hex-prefix encoding
@@ -206,10 +206,8 @@ extractions/c/         C backends: memory.c (memory/nominal region access), scra
              whole-operation refinements
 devtools/    handwritten Python and developer tooling: devtools/harness/cli.py drives
              main.sail in-process and gates its canonical output byte-exactly
-             against EELS. State tests are materialized as valid stateless
-             blocks by the in-process t8n, then adapted only by appending the
-             two known-empty v0.6.2 request lists and recomputing their root;
-             the EELS guest supplies the independent validation verdict.
+             against EELS. Amsterdam state-test synthesis uses the pinned v21
+             EELS blockchain filler, including its witnesses and SSZ serializer.
              benchmarks/, docs/, and optimised_c/ own the other repository
              developer utilities
 extractions/ one directory per target, each with contract/ (the axiom or ABI
@@ -271,8 +269,9 @@ the host slice records to the handwritten `evmsail/host/types.h` contract.
 Generated translation units mirror their paths below `sail/` and are compiled
 in the order recorded by the compiler in `src/spec/sources.list`; the single
 semantic `evm` project module is unchanged.
-Generated C is not retained as a readable source mirror: the Sail model is the
-source of truth. The optimized target uses the same ordered
+Generated C is built under `build/`; `make publish-c-extraction` refreshes the
+tracked snapshots under `extractions/c/{spec,optimised}/src`. The Sail model is
+the source of truth. The optimized target uses the same ordered
 `sail/optimised/manifest` module overrides as optimized native and zkVM builds.
 The override tree mirrors `sail/`, so each replacement remains next to the
 corresponding canonical module path. Spec C and proof extraction retain the
@@ -286,18 +285,164 @@ whitespace, no tabs, final newline); `make fmt-check` enforces that every
 `*.sail` is formatted with the official `sail --fmt` (canonical 4-space style).
 `make fmt` reformats in place.
 
+Use matching clang and clang-tidy 18.1.8 for the optimized-C diagnostic
+baseline (`make c-optimised-clang-tidy`). The gate keeps the comprehensive
+checker set and exact diagnostic locations/source identifiers; generated
+worker numbers and equivalent host typedef spelling are normalized. Compare
+fresh extractions with the same toolchain before updating that baseline.
+
 Run the conformance suite against the workspace-local
-`tests-zkevm@v0.6.2` corpus:
+`tests-zkevm@v21.0.6` corpus:
 
 ```sh
 uv run --frozen python -m devtools.harness.cli --build optimized --rebuild --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
-uv run --frozen python -m devtools.harness.cli --build optimized --jobs 12 --quiet \
-  zkvm/.fixtures/current-v062-full
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+make verify-corpus
 ```
 
+Run focused memory regressions against both native C backends with:
+
+```sh
+EXECSPECS_ROOT=/path/to/execution-specs \
+EXECSPECS_PY=/path/to/execution-specs/.venv/bin/python make memory-regression-test
+```
+
+After explicitly rebuilding both native harness libraries from the current
+sources, `MEMORY_REGRESSION_ARGS=--no-rebuild` reuses those exact libraries.
+The default memory target rebuilds them.
+
+The execution-specs checkout must be at
+`59c1473ddfba341babaeca1c97a50e996f639a0b` (`tests-zkevm@v21.0.6`),
+with its locked test environment installed using `uv sync --frozen --group test`.
+For Amsterdam the filler generates the full blockchain fixture and supplies
+unmodified stateless input/output bytes. The obsolete v0.6.2 request adapter and handwritten
+witness builder have been removed. Synthesis accepts secret-key transactions
+and canonical raw signed envelopes of types 0–4. Historical execution uses the
+selected EELS blockchain filler from Berlin through Amsterdam, rather than
+running an Amsterdam transition with a different label. The transport keeps
+the v21 container layout: its two-byte selector is `fork << 8 | revision`, with
+forks `0x0a`–`0x15` and revision `0x01`. Historical selectors are a repository
+interoperability extension; upstream's Amsterdam stateless guest accepts only
+`0x1501`. Historical payloads use the otherwise inactive block-access-list
+transport field as an uncommitted access schema: sorted accounts and writable
+slots, each with one `[0, 0]` reservation marker. These markers never seed
+state or assert EIP-7928 changes. The filler records accesses without changing
+the reference transition; both guests validate schema shape, membership, and
+parent-state proofs. Supersets require proofs too. Other inactive fields must
+be empty or zero, and unknown combinations fail closed. Pre-Paris transport
+uses `prev_randao` for DIFFICULTY and represents zero nonce/mix-hash with no
+ommers; synthesis rejects blocks outside that scope. It validates execution,
+not Ethash consensus. Profiles follow the pinned EELS modules, including their
+EOA sender restriction in Berlin.
+
+`make historical-regression-test` checks fork activation boundaries on
+both native backends using independent fork-specific EELS post-state checks.
+It includes the eight pinned transition profiles through Amsterdam, before
+and at activation, transaction types 0–4, sender identity, and gas/code limits.
+`make stateless-boundary-test` exercises signature fatal reasons, deposit
+authentication, progressive commitments, and malformed selectors.
+
+The focused matrix supplements the complete historical state suite. Generate
+all applicable cases from the pinned checkout, including Glacier and BPO
+profiles that the reference runner excludes by default:
+
+```sh
+make historical-suite-test
+# Optional: choose the persistent output/cache directory and worker count.
+make historical-suite-test HISTORICAL_SUITE_ARGS='--directory /path/to/cache --jobs 4'
+```
+
+This provisions an isolated execution-specs checkout at the pinned revision
+and its frozen Python 3.12 test environment, generates both groups, exports and
+audits SSZ pairs, then replays every export on both native backends with the
+historical resource profile. Logs and exact conversion limits are retained.
+Only the eleven cases in `config/corpora/historical-conversion-limits.json`
+may lack exports; mismatches, duplicates, changed inventory and any model
+failure fail the target. These are conversion limits, not allowed model failures.
+Successful fixture generation is cached by source identity and verified
+content hashes; model replay always runs. Failed attempts remain inspectable.
+
+Before committing changes to the model, C backends or fixture tooling, run
+`make historical-suite-test` and the focused memory, signature,
+fork/transition and stateless-boundary checks on both native backends:
+
+```sh
+make memory-regression-test sender-regression-test historical-regression-test stateless-boundary-test
+```
+
+These are manual pre-commit checks; CI does not run the historical suite.
+The CI corpus job still runs all 67,685 pinned cases. Toolchain, solver, uv
+and Cargo caches remain enabled; Cargo rechecks the accelerator build before
+native reuse. Local historical reference caches still validate content hashes,
+rebuild both native libraries and replay every export.
+
+The equivalent individual steps, useful for diagnosis, are:
+
+```sh
+export EVM_SAIL_ROOT="$PWD"
+export HISTORICAL_FIXTURES=/absolute/path/to/historical-fixtures
+(
+  cd "$EXECSPECS_ROOT"
+  .venv/bin/fill --from Berlin --until Amsterdam -m state_test -n 8 --no-html \
+    --output "$HISTORICAL_FIXTURES/main" tests
+  PYTHONPATH="$EVM_SAIL_ROOT" .venv/bin/fill -p devtools.tests.full_fork_selection \
+    --fork ArrowGlacier,GrayGlacier,BPO1,BPO2 -m state_test -n 8 --no-html \
+    --output "$HISTORICAL_FIXTURES/extra" tests
+)
+for group in main extra; do
+  uv run --frozen python -m devtools.harness.cli --build optimized --jobs 8 --quiet \
+    --save-synthesized "$HISTORICAL_FIXTURES/$group-ssz" \
+    "$HISTORICAL_FIXTURES/$group/state_tests"
+  "$EXECSPECS_PY" -m devtools.tests.audit_synthesized \
+    "$HISTORICAL_FIXTURES/$group-ssz" \
+    --sources "$HISTORICAL_FIXTURES/$group/state_tests" \
+    --report "$HISTORICAL_FIXTURES/$group-audit.json"
+  uv run --frozen python -m devtools.harness.cli --build standard --jobs 8 --quiet \
+    "$HISTORICAL_FIXTURES/$group-ssz"
+done
+```
+
+The builder integration remains in `ssz_builder.py`; removal of the old
+v0.6.2 adapter/witness implementation does not remove fixture synthesis.
+Historical access collection temporarily instruments EELS at runtime; its
+fork execution is upstream, while historical transport conversion is local.
+
+The opt-in selection plugin normalizes Glacier feature ordering to London and
+enables BPO selection; it preserves test bodies and reference assertions.
+Exports retain original case provenance. The audit checks complete inventory,
+duplicates, original receipt commitments and signed envelopes. Conversion
+failures produce no export and remain explicit missing cases. A state-only
+test asserting synthetic BLOCKHASH history may have no corresponding
+authenticated block input; it must be reported, not counted as a model pass.
+
+`EVM_NATIVE_RESOURCES=historical` selects a separate native build/cache for
+transactions predating Amsterdam's regular-gas cap. Its optimized workspace
+reserves 2 GiB, including 1 GiB EVM memory and 64 MiB each for scratch,
+log data and receipts.
+The historical native profile also reserves 8,192 prepared authorizations
+and 32,768 authorization-tracker buckets; these are execution resources,
+separate from the shared transaction-envelope count bound.
+Default production reservations remain 256 MiB total,
+16 MiB memory/scratch/log data and 8 MiB receipts. Exhaustion is an execution
+resource failure, not a consensus-invalid verdict. Record which profile was
+used; a larger native reservation does not establish production capacity or
+coverage of the unrestricted historical gas domain. Native reset clears
+claimed regions, so the larger profile costs additional memory and time.
+
+Progressive HTR shares one traversal for withdrawals, versioned hashes, and
+fixed-width requests while retaining their leaf-specific balanced subtrees.
+Byte and transaction folds remain specialized because transaction leaves
+recursively hash progressive bytes; merging those layers would introduce
+mutual generic recursion without simplifying their semantics.
+
+`make sender-regression-test` runs the pinned malformed `v/r/s` cases for
+envelopes 0–4, unrecoverable signatures, and chain-ID mismatch fixtures against
+both native backends, requiring every case to pass. This focused gate does
+not cover historical signature rules or every signing-domain mutation.
+
 The sole pass criterion is byte-exact output agreement with the EELS reference
-guest. `--debug` prints an on-demand native post-run state dump on failure;
+guest; `make verify-corpus` requires every case to pass and the case count to
+equal the pinned corpus inventory. `--debug` prints an on-demand native post-run state dump on failure;
 `--profile` enables optional zkVM cycle scopes without embedding them in normal
 builds. `--zisk` builds the optimised, input-agnostic ZisK ELF and runs the
 same fixtures through `ziskemu`. The emulator version must match the `ziskos`
@@ -306,7 +451,7 @@ binary is not at `~/.zisk/bin/ziskemu`:
 
 ```sh
 ZISKEMU=/path/to/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The crypto

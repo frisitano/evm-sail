@@ -1,7 +1,7 @@
 #include "evmsail/spec.h"
 #include "evmsail/spec/support.h"
 
-uint8_t * analyze_code(Bytes code, uint8_t fork)
+uint8_t *analyze_code(Bytes code, uint8_t fork)
 {
   return code_db_analyze_indexed(code, (bool)(fork >= Amsterdam));
 }
@@ -31,7 +31,6 @@ struct CodeFields code_db_resolve(bytes32 code_hash)
 
 bytes32 code_db_insert(Bytes code, uint8_t fork)
 {
-  uint8_t * jumpdest_table = analyze_code(code, fork);
+  uint8_t *jumpdest_table = analyze_code(code, fork);
   return code_db_store_indexed((analyzed_code(code, jumpdest_table)));
 }
-

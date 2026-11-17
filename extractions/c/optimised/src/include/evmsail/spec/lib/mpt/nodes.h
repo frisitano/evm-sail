@@ -15,8 +15,12 @@ enum kind_TrieLeafValue { Kind_InputTrieLeaf, Kind_ScratchTrieLeaf };
 struct TrieLeafValue {
   enum kind_TrieLeafValue kind;
   union {
-    struct { Bytes InputTrieLeaf; };
-    struct { Bytes ScratchTrieLeaf; };
+    struct {
+      Bytes InputTrieLeaf;
+    };
+    struct {
+      Bytes ScratchTrieLeaf;
+    };
   } variants;
 };
 
@@ -32,10 +36,18 @@ enum kind_NodeRef { Kind_EmptyRef, Kind_HashRef, Kind_InputInlineRef, Kind_Scrat
 struct NodeRef {
   enum kind_NodeRef kind;
   union {
-    struct { unit EmptyRef; };
-    struct { bytes32 HashRef; };
-    struct { Bytes InputInlineRef; };
-    struct { struct InlineNode ScratchInlineRef; };
+    struct {
+      unit EmptyRef;
+    };
+    struct {
+      bytes32 HashRef;
+    };
+    struct {
+      Bytes InputInlineRef;
+    };
+    struct {
+      struct InlineNode ScratchInlineRef;
+    };
   } variants;
 };
 
@@ -56,8 +68,6 @@ bytes32 inline_node_hash(struct InlineNode node);
 uint16_t branch_content_length_add(uint16_t current, uint8_t addition);
 
 extern const uint8_t MPT_HASH_LENGTH;
-
-
 
 #ifdef __cplusplus
 }

@@ -10,7 +10,27 @@ extern "C" {
 #endif
 
 // enum PrecompileId
-enum PrecompileId { NotPrecompile, Ecrecover, Sha256, Ripemd160, Identity, Modexp, Bn254Add, Bn254Mul, Bn254Pairing, Blake2f, KzgPointEvaluation, BlsG1Add, BlsG1Msm, BlsG2Add, BlsG2Msm, BlsPairing, BlsMapFpToG1, BlsMapFp2ToG2, P256Verify };
+enum PrecompileId {
+  NotPrecompile,
+  Ecrecover,
+  Sha256,
+  Ripemd160,
+  Identity,
+  Modexp,
+  Bn254Add,
+  Bn254Mul,
+  Bn254Pairing,
+  Blake2f,
+  KzgPointEvaluation,
+  BlsG1Add,
+  BlsG1Msm,
+  BlsG2Add,
+  BlsG2Msm,
+  BlsPairing,
+  BlsMapFpToG1,
+  BlsMapFp2ToG2,
+  P256Verify
+};
 
 // struct MemoryRangeFields
 struct MemoryRangeFields {
@@ -41,14 +61,13 @@ struct MemoryRangeFields memory_range(uint32_t off, uint32_t len);
 void create_letbind_7(void);
 void kill_letbind_7(void);
 
-
 void create_letbind_8(void);
 void kill_letbind_8(void);
 
-
 u256 word_of_source_byte_count(uint32_t value);
 
-struct MemoryRangeFields memory_range_uint8_t_uint8_t_to_struct_MemoryRangeFields(uint8_t off, uint8_t len);
+struct MemoryRangeFields memory_range_uint8_t_uint8_t_to_struct_MemoryRangeFields(uint8_t off,
+                                                                                  uint8_t len);
 
 u256 word_of_nat_byte_count_u128_to_u256(u128 value);
 
@@ -62,10 +81,7 @@ u256 word_of_nat_byte_count_uint8_t_to_u256(uint8_t value);
 
 extern struct MemoryRangeFields EMPTY_MEMORY_RANGE;
 
-
 extern struct MemoryAccessFields EMPTY_MEMORY_ACCESS;
-
-
 
 #ifdef __cplusplus
 }

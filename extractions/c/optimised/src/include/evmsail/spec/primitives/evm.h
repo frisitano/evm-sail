@@ -69,8 +69,12 @@ enum kind_OpcodeOutcome { Kind_Continue, Kind_Failed };
 struct OpcodeOutcome {
   enum kind_OpcodeOutcome kind;
   union {
-    struct { unit Continue; };
-    struct { enum ExceptionKind Failed; };
+    struct {
+      unit Continue;
+    };
+    struct {
+      enum ExceptionKind Failed;
+    };
   } variants;
 };
 
@@ -140,9 +144,15 @@ enum kind_FrameContinuation { Kind_Empty, Kind_ResumeCall, Kind_ResumeCreate };
 struct FrameContinuation {
   enum kind_FrameContinuation kind;
   union {
-    struct { unit Empty; };
-    struct { struct CallContinuation ResumeCall; };
-    struct { struct CreateContinuation ResumeCreate; };
+    struct {
+      unit Empty;
+    };
+    struct {
+      struct CallContinuation ResumeCall;
+    };
+    struct {
+      struct CreateContinuation ResumeCreate;
+    };
   } variants;
 };
 
@@ -155,16 +165,29 @@ struct TxEnvFields {
 
 struct TxEnvFields tx_env(bytes20 origin, u256 gas_price, struct BlobHashesFields blob_hashes);
 
-struct TransactionInitialGasFields transaction_initial_gas_fields(uint64_t total, uint64_t regular, uint64_t intrinsic_execution, uint64_t intrinsic_state, uint64_t calldata_floor, uint64_t execution, uint64_t state);
+struct TransactionInitialGasFields
+transaction_initial_gas_fields(uint64_t total, uint64_t regular, uint64_t intrinsic_execution,
+                               uint64_t intrinsic_state, uint64_t calldata_floor,
+                               uint64_t execution, uint64_t state);
 
-struct TxValidityFields tx_validity_fields(bytes20 sender, uint64_t nonce_before, struct TransactionInitialGasFields gas, u256 blob_fee, u256 gas_price, u256 priority_fee);
+struct TxValidityFields tx_validity_fields(bytes20 sender, uint64_t nonce_before,
+                                           struct TransactionInitialGasFields gas, u256 blob_fee,
+                                           u256 gas_price, u256 priority_fee);
 
-struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_fields(uint64_t limit, uint64_t regular, uint64_t calldata_floor, uint64_t remaining, uint64_t state_used);
+struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_fields(uint64_t limit, uint64_t regular,
+                                                             uint64_t calldata_floor,
+                                                             uint64_t remaining,
+                                                             uint64_t state_used);
 
-struct TransactionInitialGasFields transaction_initial_gas_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TransactionInitialGasFields(uint64_t total, uint64_t regular, uint64_t intrinsic_execution, uint64_t intrinsic_state, uint64_t calldata_floor, uint64_t execution, uint8_t state);
+struct TransactionInitialGasFields
+transaction_initial_gas_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TransactionInitialGasFields(
+    uint64_t total, uint64_t regular, uint64_t intrinsic_execution, uint64_t intrinsic_state,
+    uint64_t calldata_floor, uint64_t execution, uint8_t state);
 
-struct TxFrameGasSnapshotFields tx_frame_gas_snapshot_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TxFrameGasSnapshotFields(uint64_t limit, uint64_t regular, uint64_t calldata_floor, uint64_t remaining, uint8_t state_used);
-
+struct TxFrameGasSnapshotFields
+tx_frame_gas_snapshot_fields_uint64_t_uint64_t_uint64_t_uint64_t_uint8_t_to_struct_TxFrameGasSnapshotFields(
+    uint64_t limit, uint64_t regular, uint64_t calldata_floor, uint64_t remaining,
+    uint8_t state_used);
 
 #ifdef __cplusplus
 }

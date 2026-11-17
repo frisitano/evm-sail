@@ -27,6 +27,7 @@ from evm.prelude import (
     word_nonzero,
     word_ule,
     address_to_word,
+    ZERO_WORD,
     WORD_ZERO,
     WORD_ONE,
 )
@@ -175,6 +176,7 @@ from evm.evm.gas import (
     initcode_size_allowed,
     charge_state_gas,
     credit_state_gas_refund,
+    repay_state_gas_spill,
     return_child_state_gas,
     refund_gas,
     gas_sub,
@@ -715,7 +717,10 @@ def interpret(initial_gas: gas, initial_state_gas: state_gas, initial_state_spil
     execution_profile = environment.k_execution_profile
     profile = execution_profile.protocol
     fork = profile.fork
-    blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, environment.k_header.excess_blob_gas)
+    if (int(fork) >= int(Cancun)):
+        blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, environment.k_header.excess_blob_gas)
+    else:
+        blob_fee = ZERO_WORD
     _host_frame_stack_reset()
     interpreting = True
     result = EMPTY_OUTPUT_SLICE
@@ -1750,6 +1755,10 @@ def resume_call(continuation: CallContinuation, output: OutputSlice, child_memor
     return_destination = memory_absolute(parent_memory_base, continuation.return_offset)
     returndata_copy_prefix(output, return_destination, continuation.return_length)
     if succeeded:
+        (tup__0, tup__1, tup__2) = repay_state_gas_spill(parent_gas, parent_state_gas, parent_state_spill)
+        parent_gas = tup__0
+        parent_state_gas = tup__1
+        parent_state_spill = tup__2
         parent_refund = record_refund(parent_refund, child_refund)
         k_journal_commit()
         parent_sp = stack_top_advance(parent_sp, 1)
@@ -1833,6 +1842,10 @@ def resume_create(continuation: CreateContinuation, output: OutputSlice, child_m
     parent_refund = checkpoint.refund
     parent_sp = checkpoint.stack_top
     if deploy_succeeds:
+        (tup__0, tup__1, tup__2) = repay_state_gas_spill(parent_gas, parent_state_gas, parent_state_spill)
+        parent_gas = tup__0
+        parent_state_gas = tup__1
+        parent_state_spill = tup__2
         parent_refund = record_refund(parent_refund, child_refund)
         if frontier_empty_deposit:
             deployed_bytes = EMPTY_OUTPUT_SLICE

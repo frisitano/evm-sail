@@ -6,6 +6,56 @@ Bytes node_db_lookup(bytes32 h)
   return nodedb_lookup(h);
 }
 
+struct NodeRef branch_refs_get(vector_16_NodeRef children, uint64_t index)
+{
+  if (index == UINT64_C(0x0)) {
+    return children.data[(size_t)UINT8_C(0)];
+  }
+  if (index == UINT64_C(0x1)) {
+    return children.data[(size_t)UINT8_C(1)];
+  }
+  if (index == UINT64_C(0x2)) {
+    return children.data[(size_t)UINT8_C(2)];
+  }
+  if (index == UINT64_C(0x3)) {
+    return children.data[(size_t)UINT8_C(3)];
+  }
+  if (index == UINT64_C(0x4)) {
+    return children.data[(size_t)UINT8_C(4)];
+  }
+  if (index == UINT64_C(0x5)) {
+    return children.data[(size_t)UINT8_C(5)];
+  }
+  if (index == UINT64_C(0x6)) {
+    return children.data[(size_t)UINT8_C(6)];
+  }
+  if (index == UINT64_C(0x7)) {
+    return children.data[(size_t)UINT8_C(7)];
+  }
+  if (index == UINT64_C(0x8)) {
+    return children.data[(size_t)UINT8_C(8)];
+  }
+  if (index == UINT64_C(0x9)) {
+    return children.data[(size_t)UINT8_C(9)];
+  }
+  if (index == UINT64_C(0xA)) {
+    return children.data[(size_t)UINT8_C(10)];
+  }
+  if (index == UINT64_C(0xB)) {
+    return children.data[(size_t)UINT8_C(11)];
+  }
+  if (index == UINT64_C(0xC)) {
+    return children.data[(size_t)UINT8_C(12)];
+  }
+  if (index == UINT64_C(0xD)) {
+    return children.data[(size_t)UINT8_C(13)];
+  }
+  if (index == UINT64_C(0xE)) {
+    return children.data[(size_t)UINT8_C(14)];
+  }
+  return children.data[(size_t)UINT8_C(15)];
+}
+
 struct NodeRef input_field_to_ref(struct RlpFieldRef f)
 {
   if (f.is_list) {
@@ -18,7 +68,10 @@ struct NodeRef input_field_to_ref(struct RlpFieldRef f)
     u256 word = rlp_decode_word(f);
     return HashRef((word_to_hash(word)));
   }
-  return EmptyRef(UNIT);
+  if (f.content_len == UINT8_C(0)) {
+    return EmptyRef(UNIT);
+  }
+  fatal_error(RlpDecode);
 }
 
 struct InputTrieNode decode_input_trie_node(Bytes node)
@@ -28,28 +81,35 @@ struct InputTrieNode decode_input_trie_node(Bytes node)
   }
   Bytes fields = rlp_node_cursor(node);
   struct RlpFieldRef first = rlp_decode_item(fields);
-  Bytes fields_1_8 = rlp_cursor_advance(fields, first.source.len);
-  struct RlpFieldRef second = rlp_decode_item(fields_1_8);
-  Bytes fields_1_9 = rlp_cursor_advance(fields_1_8, second.source.len);
-  if (fields_1_9.len == UINT8_C(0)) {
-    bool _8_1361_8_1586;
-    struct TriePath _8_1362_8_1587 = hex_prefix_decode_ref(first, &_8_1361_8_1586);
-    if (_8_1361_8_1586) {
-      return InputLeafNode(((struct tuple_TriePath_Bytes_1){.tup0 = _8_1362_8_1587, .tup1 = (rlp_item_content(second))}));
+  Bytes fields_1_19 = rlp_cursor_advance(fields, first.source.len);
+  struct RlpFieldRef second = rlp_decode_item(fields_1_19);
+  Bytes fields_1_20 = rlp_cursor_advance(fields_1_19, second.source.len);
+  if (fields_1_20.len == UINT8_C(0)) {
+    bool _8_1421_8_1647;
+    struct TriePath _8_1422_8_1648 = hex_prefix_decode_ref(first, &_8_1421_8_1647);
+    if (_8_1421_8_1647) {
+      if (second.is_list) {
+        fatal_error(RlpDecode);
+      }
+      return InputLeafNode(((struct tuple_TriePath_Bytes_1){.tup0 = _8_1422_8_1648,
+                                                            .tup1 = (rlp_item_content(second))}));
     }
-    if ((path_len(_8_1362_8_1587)) == UINT8_C(0)) {
+    if ((path_len(_8_1422_8_1648)) == UINT8_C(0)) {
       fatal_error(RlpDecode);
     }
     struct NodeRef child = input_field_to_ref(second);
-    return InputExtensionNode(((struct tuple_TriePath_NodeRef){.tup0 = _8_1362_8_1587, .tup1 = child}));
+    return InputExtensionNode(
+        ((struct tuple_TriePath_NodeRef){.tup0 = _8_1422_8_1648, .tup1 = child}));
   }
   struct NodeRef empty_child = EmptyRef(UNIT);
   struct NodeRef first_child = input_field_to_ref(first);
   struct NodeRef second_child = input_field_to_ref(second);
-  vector_16_NodeRef children = fast_unsigned_vector_init_vector_16_NodeRef(UINT8_C(16), empty_child);
+  vector_16_NodeRef children =
+      fast_unsigned_vector_init_vector_16_NodeRef(UINT8_C(16), empty_child);
   children = fast_unsigned_vector_update_vector_16_NodeRef(children, UINT8_C(0), first_child);
   children = fast_unsigned_vector_update_vector_16_NodeRef(children, UINT8_C(1), second_child);
-  return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(fields_1_9, UINT8_C(2), children);
+  return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(
+      fields_1_20, UINT8_C(2), children);
 }
 
 Bytes resolve_witness_ref(struct NodeRef r)
@@ -61,13 +121,12 @@ Bytes resolve_witness_ref(struct NodeRef r)
     return r.variants.InputInlineRef;
   case Kind_ScratchInlineRef:
     fatal_error(WitnessDeficient);
-  case Kind_HashRef:
-  {
-    Bytes node_3_3170 = node_db_lookup(r.variants.HashRef);
-    if (node_3_3170.len == UINT8_C(0)) {
+  case Kind_HashRef: {
+    Bytes node_3_3325 = node_db_lookup(r.variants.HashRef);
+    if (node_3_3325.len == UINT8_C(0)) {
       fatal_error(WitnessDeficient);
     }
-    return node_3_3170;
+    return node_3_3325;
   }
   }
 }
@@ -98,8 +157,7 @@ void rlp_write_node_ref(struct NodeRef r)
   case Kind_ScratchInlineRef:
     scratch_push_b256(r.variants.ScratchInlineRef.data, r.variants.ScratchInlineRef.len);
     return;
-  case Kind_HashRef:
-  {
+  case Kind_HashRef: {
     rlp_write_word((hash_to_word(r.variants.HashRef)));
     return;
   }
@@ -231,21 +289,22 @@ struct NodeRef branch_child_ref(uint64_t mask, vector_16_NodeRef children)
     child_bit = ((child_bit << UINT64_C(1)) & UINT64_C(0xFFFF));
     i = (i + (int64_t)UINT8_C(1));
   }
-  uint32_t scratch_content_length = rlp_scratch_length_add_uint16_t_uint8_t_to_uint32_t(content_length, UINT8_C(0));
+  uint32_t scratch_content_length =
+      rlp_scratch_length_add_uint16_t_uint8_t_to_uint32_t(content_length, UINT8_C(0));
   uint32_t encoded_size = rlp_scratch_list_size(scratch_content_length);
   struct RlpEncoder encoder = rlp_encoder_begin(encoded_size);
   rlp_write_list_prefix_uint16_t_to_unit(content_length);
   child_bit = UINT64_C(0x0001);
-  int64_t i_3_959 = (int64_t)UINT8_C(0);
-  while (i_3_959 <= (int64_t)UINT8_C(15)) {
+  int64_t i_3_1051 = (int64_t)UINT8_C(0);
+  while (i_3_1051 <= (int64_t)UINT8_C(15)) {
     if ((mask & child_bit) != UINT64_C(0x0000)) {
-      struct NodeRef childref_3_961 = fast_vector_access_vector_16_NodeRef(children, i_3_959);
-      rlp_write_node_ref(childref_3_961);
+      struct NodeRef childref_3_1053 = fast_vector_access_vector_16_NodeRef(children, i_3_1051);
+      rlp_write_node_ref(childref_3_1053);
     } else {
       scratch_push_byte(UINT64_C(0x80));
     }
     child_bit = ((child_bit << UINT64_C(1)) & UINT64_C(0xFFFF));
-    i_3_959 = (i_3_959 + (int64_t)UINT8_C(1));
+    i_3_1051 = (i_3_1051 + (int64_t)UINT8_C(1));
   }
   scratch_push_byte(UINT64_C(0x80));
   Bytes encoded = rlp_encoder_finish(encoder);
@@ -290,35 +349,45 @@ struct NodeRef scratch_field_to_ref(struct ScratchRlpFieldRef f)
     u256 word = scratch_rlp_decode_word(f);
     return HashRef((word_to_hash(word)));
   }
-  return EmptyRef(UNIT);
+  if (f.content_len == UINT8_C(0)) {
+    return EmptyRef(UNIT);
+  }
+  fatal_error(RlpDecode);
 }
 
 struct ScratchTrieNode decode_scratch_trie_node(Bytes node)
 {
   Bytes fields = scratch_rlp_node_cursor(node);
   struct ScratchRlpFieldRef first = scratch_rlp_decode_item(fields);
-  Bytes fields_1_2 = scratch_rlp_cursor_advance(fields, first.source.len);
-  struct ScratchRlpFieldRef second = scratch_rlp_decode_item(fields_1_2);
-  Bytes fields_1_3 = scratch_rlp_cursor_advance(fields_1_2, second.source.len);
-  if (fields_1_3.len == UINT8_C(0)) {
-    bool _8_1493_8_1728;
-    struct TriePath _8_1494_8_1729 = scratch_hex_prefix_decode_ref(first, &_8_1493_8_1728);
-    if (_8_1493_8_1728) {
-      return ScratchLeafNode(((struct tuple_TriePath_Bytes){.tup0 = _8_1494_8_1729, .tup1 = (scratch_rlp_item_content(second))}));
+  Bytes fields_1_13 = scratch_rlp_cursor_advance(fields, first.source.len);
+  struct ScratchRlpFieldRef second = scratch_rlp_decode_item(fields_1_13);
+  Bytes fields_1_14 = scratch_rlp_cursor_advance(fields_1_13, second.source.len);
+  if (fields_1_14.len == UINT8_C(0)) {
+    bool _8_1550_8_1795;
+    struct TriePath _8_1551_8_1796 = scratch_hex_prefix_decode_ref(first, &_8_1550_8_1795);
+    if (_8_1550_8_1795) {
+      if (second.is_list) {
+        fatal_error(RlpDecode);
+      }
+      return ScratchLeafNode(((struct tuple_TriePath_Bytes){
+          .tup0 = _8_1551_8_1796, .tup1 = (scratch_rlp_item_content(second))}));
     }
-    if ((path_len(_8_1494_8_1729)) == UINT8_C(0)) {
+    if ((path_len(_8_1551_8_1796)) == UINT8_C(0)) {
       fatal_error(RlpDecode);
     }
     struct NodeRef child = scratch_field_to_ref(second);
-    return ScratchExtensionNode(((struct tuple_TriePath_NodeRef){.tup0 = _8_1494_8_1729, .tup1 = child}));
+    return ScratchExtensionNode(
+        ((struct tuple_TriePath_NodeRef){.tup0 = _8_1551_8_1796, .tup1 = child}));
   }
   struct NodeRef empty_child = EmptyRef(UNIT);
   struct NodeRef first_child = scratch_field_to_ref(first);
   struct NodeRef second_child = scratch_field_to_ref(second);
-  vector_16_NodeRef children = fast_unsigned_vector_init_vector_16_NodeRef(UINT8_C(16), empty_child);
+  vector_16_NodeRef children =
+      fast_unsigned_vector_init_vector_16_NodeRef(UINT8_C(16), empty_child);
   children = fast_unsigned_vector_update_vector_16_NodeRef(children, UINT8_C(0), first_child);
   children = fast_unsigned_vector_update_vector_16_NodeRef(children, UINT8_C(1), second_child);
-  return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(fields_1_3, UINT8_C(2), children);
+  return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(
+      fields_1_14, UINT8_C(2), children);
 }
 
 struct NodeRef merge_ext_node(struct TriePath prefix, Bytes childnode)
@@ -331,18 +400,16 @@ struct NodeRef merge_ext_node(struct TriePath prefix, Bytes childnode)
   }
   struct InputTrieNode decoded = decode_input_trie_node(childnode);
   switch (decoded.kind) {
-  case Kind_InputLeafNode:
-  {
+  case Kind_InputLeafNode: {
     struct TriePath merged_path = path_concat(prefix, decoded.variants.InputLeafNode.tup0);
     return input_leaf_child_ref(merged_path, decoded.variants.InputLeafNode.tup1);
   }
-  case Kind_InputExtensionNode:
-  {
-    struct TriePath merged_path_3_926 = path_concat(prefix, decoded.variants.InputExtensionNode.tup0);
-    return extension_child_ref(merged_path_3_926, decoded.variants.InputExtensionNode.tup1);
+  case Kind_InputExtensionNode: {
+    struct TriePath merged_path_3_1017 =
+        path_concat(prefix, decoded.variants.InputExtensionNode.tup0);
+    return extension_child_ref(merged_path_3_1017, decoded.variants.InputExtensionNode.tup1);
   }
-  case Kind_InputBranchNode:
-  {
+  case Kind_InputBranchNode: {
     struct NodeRef childref = input_node_to_ref(childnode);
     return extension_child_ref(prefix, childref);
   }
@@ -359,38 +426,37 @@ struct NodeRef merge_ext_ref(struct TriePath prefix, struct NodeRef childref)
     return EmptyRef(UNIT);
   case Kind_HashRef:
     return extension_child_ref(prefix, childref);
-  case Kind_InputInlineRef:
-  {
+  case Kind_InputInlineRef: {
     struct InputTrieNode decoded = decode_input_trie_node(childref.variants.InputInlineRef);
     switch (decoded.kind) {
-    case Kind_InputLeafNode:
-    {
+    case Kind_InputLeafNode: {
       struct TriePath merged_path = path_concat(prefix, decoded.variants.InputLeafNode.tup0);
       return input_leaf_child_ref(merged_path, decoded.variants.InputLeafNode.tup1);
     }
-    case Kind_InputExtensionNode:
-    {
-      struct TriePath merged_path_3_912 = path_concat(prefix, decoded.variants.InputExtensionNode.tup0);
-      return extension_child_ref(merged_path_3_912, decoded.variants.InputExtensionNode.tup1);
+    case Kind_InputExtensionNode: {
+      struct TriePath merged_path_3_1003 =
+          path_concat(prefix, decoded.variants.InputExtensionNode.tup0);
+      return extension_child_ref(merged_path_3_1003, decoded.variants.InputExtensionNode.tup1);
     }
     case Kind_InputBranchNode:
       return extension_child_ref(prefix, childref);
     }
   }
-  case Kind_ScratchInlineRef:
-  {
+  case Kind_ScratchInlineRef: {
     Bytes node_slice = inline_node_slice(childref.variants.ScratchInlineRef);
-    struct ScratchTrieNode decoded_3_914 = decode_scratch_trie_node(node_slice);
-    switch (decoded_3_914.kind) {
-    case Kind_ScratchLeafNode:
-    {
-      struct TriePath merged_path_3_917 = path_concat(prefix, decoded_3_914.variants.ScratchLeafNode.tup0);
-      return scratch_leaf_child_ref(merged_path_3_917, decoded_3_914.variants.ScratchLeafNode.tup1);
+    struct ScratchTrieNode decoded_3_1005 = decode_scratch_trie_node(node_slice);
+    switch (decoded_3_1005.kind) {
+    case Kind_ScratchLeafNode: {
+      struct TriePath merged_path_3_1008 =
+          path_concat(prefix, decoded_3_1005.variants.ScratchLeafNode.tup0);
+      return scratch_leaf_child_ref(merged_path_3_1008,
+                                    decoded_3_1005.variants.ScratchLeafNode.tup1);
     }
-    case Kind_ScratchExtensionNode:
-    {
-      struct TriePath merged_path_3_920 = path_concat(prefix, decoded_3_914.variants.ScratchExtensionNode.tup0);
-      return extension_child_ref(merged_path_3_920, decoded_3_914.variants.ScratchExtensionNode.tup1);
+    case Kind_ScratchExtensionNode: {
+      struct TriePath merged_path_3_1011 =
+          path_concat(prefix, decoded_3_1005.variants.ScratchExtensionNode.tup0);
+      return extension_child_ref(merged_path_3_1011,
+                                 decoded_3_1005.variants.ScratchExtensionNode.tup1);
     }
     case Kind_ScratchBranchNode:
       return extension_child_ref(prefix, childref);
@@ -399,7 +465,9 @@ struct NodeRef merge_ext_ref(struct TriePath prefix, struct NodeRef childref)
   }
 }
 
-struct InputTrieNode decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(Bytes cursor, uint8_t index, vector_16_NodeRef children)
+struct InputTrieNode
+decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children)
 {
   if (index < UINT8_C(16)) {
     struct RlpFieldRef child = rlp_decode_item(cursor);
@@ -407,24 +475,31 @@ struct InputTrieNode decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to
     struct NodeRef decoded_child = input_field_to_ref(child);
     vector_16_NodeRef updated = children;
     updated = fast_unsigned_vector_update_vector_16_NodeRef(updated, index, decoded_child);
-    return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
+    return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(
+        next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
   }
   struct RlpFieldRef value = rlp_decode_item(cursor);
   rlp_cursor_expect_end((rlp_cursor_advance(cursor, value.source.len)));
-  return InputBranchNode(((struct tuple_vector_16_NodeRef_Bytes_1){.tup0 = children, .tup1 = (rlp_item_content(value))}));
+  return InputBranchNode(((struct tuple_vector_16_NodeRef_Bytes_1){
+      .tup0 = children, .tup1 = (rlp_item_content(value))}));
 }
 
-struct InputTrieNode decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(Bytes cursor, uint8_t index, vector_16_NodeRef children)
+struct InputTrieNode
+decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode_variant_2(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children)
 {
   struct RlpFieldRef child = rlp_decode_item(cursor);
   Bytes next = rlp_cursor_advance(cursor, child.source.len);
   struct NodeRef decoded_child = input_field_to_ref(child);
   vector_16_NodeRef updated = children;
   updated = fast_unsigned_vector_update_vector_16_NodeRef(updated, index, decoded_child);
-  return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
+  return decode_input_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_InputTrieNode(
+      next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
 }
 
-struct ScratchTrieNode decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(Bytes cursor, uint8_t index, vector_16_NodeRef children)
+struct ScratchTrieNode
+decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children)
 {
   if (index < UINT8_C(16)) {
     struct ScratchRlpFieldRef child = scratch_rlp_decode_item(cursor);
@@ -432,20 +507,24 @@ struct ScratchTrieNode decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRe
     struct NodeRef decoded_child = scratch_field_to_ref(child);
     vector_16_NodeRef updated = children;
     updated = fast_unsigned_vector_update_vector_16_NodeRef(updated, index, decoded_child);
-    return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
+    return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(
+        next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
   }
   struct ScratchRlpFieldRef value = scratch_rlp_decode_item(cursor);
   scratch_rlp_cursor_expect_end((scratch_rlp_cursor_advance(cursor, value.source.len)));
-  return ScratchBranchNode(((struct tuple_vector_16_NodeRef_Bytes){.tup0 = children, .tup1 = (scratch_rlp_item_content(value))}));
+  return ScratchBranchNode(((struct tuple_vector_16_NodeRef_Bytes){
+      .tup0 = children, .tup1 = (scratch_rlp_item_content(value))}));
 }
 
-struct ScratchTrieNode decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(Bytes cursor, uint8_t index, vector_16_NodeRef children)
+struct ScratchTrieNode
+decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode_variant_2(
+    Bytes cursor, uint8_t index, vector_16_NodeRef children)
 {
   struct ScratchRlpFieldRef child = scratch_rlp_decode_item(cursor);
   Bytes next = scratch_rlp_cursor_advance(cursor, child.source.len);
   struct NodeRef decoded_child = scratch_field_to_ref(child);
   vector_16_NodeRef updated = children;
   updated = fast_unsigned_vector_update_vector_16_NodeRef(updated, index, decoded_child);
-  return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
+  return decode_scratch_branch_node_Bytes_uint8_t_vector_16_NodeRef_to_struct_ScratchTrieNode(
+      next, ((uint8_t)((uint32_t)UINT8_C(1) + (uint32_t)index)), updated);
 }
-

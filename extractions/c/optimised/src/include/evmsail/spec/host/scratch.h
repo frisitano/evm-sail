@@ -29,7 +29,6 @@ Bytes scratch_store_word(uint32_t /* arg_0 */, u256 /* arg_1 */, uint8_t /* arg_
 
 void scratch_truncate(uint32_t /* arg_0 */);
 
-
 #ifdef __cplusplus
 }
 #endif

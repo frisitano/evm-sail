@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -66,8 +67,6 @@ source. Concrete container layouts belong in their decoder modules. -/
 /-- The width of one entry in an SSZ variable-field offset table
 (`uint32`, little-endian). -/
 abbrev SSZ_OFF_BYTES : Nat := 4
-
-abbrev SSZ_UINT_BYTES : Nat := 8
 
 /- Type quantifiers: base : Nat, delta : Nat, (stateless_input_valid_range base delta) -/
 def ssz_field_offset (base : Nat) (delta : Nat) : Nat :=
@@ -118,11 +117,11 @@ def ssz_u32 (input : (Sigma fun (k_off : Nat) =>
 
 /-- Reads an offset-table entry after establishing that the dynamic table
 position is contained by its enclosing input slice. -/
-/- Type quantifiers: k_ex548499_ : Nat, input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0
+/- Type quantifiers: k_ex577956_ : Nat, input_dependentWitness1 : Nat, input_dependentWitness0 : Nat, 0
   ≤ input_dependentWitness0 ∧
   0 ≤ input_dependentWitness1 ∧
-  (input_dependentWitness0 + input_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex548499_ ∧
-  k_ex548499_ ≤ (2 ^ 32 - 1) -/
+  (input_dependentWitness0 + input_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex577956_ ∧
+  k_ex577956_ ≤ (2 ^ 32 - 1) -/
 def ssz_u32_in_slice (input : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (StatelessInputSliceFields k_off k_len)))) (offset : Nat) : SailM Nat := do
   let input_dependentWitness0 := (input).1

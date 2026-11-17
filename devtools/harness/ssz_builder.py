@@ -1,565 +1,582 @@
 #!/usr/bin/env python3
-"""Build a valid stateless block input/output pair from an EEST state-test case.
+"""Synthesize v21 stateless pairs with the pinned EELS blockchain filler.
 
-Runs under the execution-specs venv (it reuses that project's stateless SSZ types
-and serializer, so the bytes match the model's stateless-input decoder exactly).
-The devtools.harness.cli module
-(which lacks these deps) drives this over --serve: one case JSON per stdin line,
-one JSON response per stdout line ({"input": hex[, "expected": hex]} or
-{"err": msg}).
-
-A fully VALID single-tx block is built by executing the case through the
-in-process EELS t8n (blockchain mode). t8n runs the reference STF and fills
-every header commitment from the results. The narrow v0.6.2 adapter then runs
-EELS run_stateless_guest over its native three-request-list input, appends the
-two known-empty EIP-8282 request lists, and carries the independent reference
-validation verdict into the expanded output with its recomputed request root.
-Two things make validity achievable from a bare state test:
-  - the canonical system-contract predeploys are injected into the alloc
-    (_PREDEPLOYS): Amsterdam's CHECKED block-end system calls reject any block
-    whose 7002/7251/8282 predeploys are absent, which would silently collapse the
-    gate to agreeing-on-invalid (only the request-root echo + the validity bit
-    would be compared, not execution);
-  - the synthesized parent header is economically consistent with the block
-    (gas_limit equal, gas_used at target, base_fee equal), so the reference's
-    EIP-1559/4844 header expectations hold.
-The dummy ancestor chain is hash-chained; the parent anchors the pre-state
-root; t8n gets the same chain via env blockHeaders/blockHashes.
+Run under the execution-specs test environment. EELS owns predeploys, parent
+headers, signing, and execution. Amsterdam returns upstream stateless bytes.
+Historical transport uses the same SSZ containers with an explicit fork and
+an uncommitted access schema; its execution verdict comes from that fork's
+blockchain filler, with no manufactured post-state or validity outcome.
 """
 
-import argparse
-import dataclasses
-import io
 import json
-import logging
 import os
+import subprocess
 import sys
+from contextlib import redirect_stdout
+from pathlib import Path
+from typing import Any
 
-from devtools.harness import prestate_mpt
 from devtools.paths import REPO_ROOT
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-EVM_SAIL_ROOT = str(REPO_ROOT)
-EXECSPECS_ROOT = os.environ.get(
-    "EXECSPECS_ROOT",
-    os.path.abspath(os.path.join(EVM_SAIL_ROOT, "..", "execution-specs")),
+EELS_REVISION = "59c1473ddfba341babaeca1c97a50e996f639a0b"
+EXECSPECS_ROOT = Path(os.environ.get("EXECSPECS_ROOT", REPO_ROOT.parent / "execution-specs"))
+_verified = False
+SUPPORTED_FORKS = (
+    "Berlin",
+    "London",
+    "ArrowGlacier",
+    "GrayGlacier",
+    "Paris",
+    "Shanghai",
+    "Cancun",
+    "Prague",
+    "Osaka",
+    "BPO1",
+    "BPO2",
+    "Amsterdam",
 )
-sys.path.insert(0, os.path.join(EXECSPECS_ROOT, "src"))
-
-from ethereum.crypto.hash import keccak256
-from ethereum_rlp import rlp
-from ethereum_spec_tools.evm_tools.loaders.fork_loader import ForkLoad
-from ethereum_spec_tools.evm_tools.t8n import T8N, ForkCache
-from ethereum_spec_tools.forks import Hardfork
-from ethereum_types.bytes import Bytes, Bytes8, Bytes32
-from ethereum_types.numeric import U64, U256, Uint
-
-_FORKS = {f.name.split(".")[-1]: f for f in Hardfork.discover()}
-_FL = {}
+SUPPORTED_TRANSITIONS = (
+    "BerlinToLondonAt5",
+    "ParisToShanghaiAtTime15k",
+    "ShanghaiToCancunAtTime15k",
+    "CancunToPragueAtTime15k",
+    "PragueToOsakaAtTime15k",
+    "OsakaToBPO1AtTime15k",
+    "BPO1ToBPO2AtTime15k",
+    "BPO2ToAmsterdamAtTime15k",
+)
 
 
-def _fork(name):
-    if name not in _FL:
-        _FL[name] = ForkLoad(_FORKS[name.lower()])
-    return _FL[name]
+def _verify_source():
+    global _verified
+    if _verified:
+        return
+    revision = subprocess.check_output(
+        ["git", "-C", str(EXECSPECS_ROOT), "rev-parse", "HEAD"], text=True
+    ).strip()
+    if revision != EELS_REVISION:
+        raise RuntimeError(f"execution-specs must be {EELS_REVISION}, got {revision}")
+    import ethereum
+    import execution_testing
+
+    for module in (ethereum, execution_testing):
+        if not Path(module.__file__).resolve().is_relative_to(EXECSPECS_ROOT.resolve()):
+            raise RuntimeError(f"{module.__name__} is not loaded from pinned execution-specs")
+    _verified = True
 
 
-Z32 = b"\x00" * 32
-EMPTY_TRIE = keccak256(rlp.encode(b""))
+def _chain_id(case: dict[str, Any]) -> int:
+    value = case.get("config", {}).get("chainid", case["env"].get("currentChainId", 1))
+    return int(value, 16) if isinstance(value, str) else int(value)
 
 
-def _hi(s):
-    return int(s, 16) if isinstance(s, str) else int(s or 0)
+def _signed_transaction(encoded: str) -> dict[str, Any]:
+    from ethereum_rlp import rlp
+    from ethereum_types.bytes import Bytes
+    from execution_testing import Transaction
 
+    raw = bytes.fromhex(encoded.removeprefix("0x"))
+    if not raw:
+        raise ValueError("empty transaction envelope")
+    kind = 0 if raw[0] >= 0xC0 else raw[0]
+    fields = rlp.decode(Bytes(raw if kind == 0 else raw[1:]))
+    arities = {0: 9, 1: 11, 2: 12, 3: 14, 4: 13}
+    if kind not in arities or not isinstance(fields, list) or len(fields) != arities[kind]:
+        raise ValueError("unsupported or malformed signed transaction shape")
 
-def _header(fk, **ov):
-    """A fork-shaped block header with zeroed defaults."""
-    d = {
-        "parent_hash": Bytes32(Z32),
-        "ommers_hash": keccak256(rlp.encode([])),
-        "coinbase": Bytes(b"\x00" * 20),
-        "state_root": Bytes32(Z32),
-        "transactions_root": Bytes32(Z32),
-        "receipt_root": Bytes32(Z32),
-        "bloom": Bytes(b"\x00" * 256),
-        "difficulty": Uint(0),
-        "number": Uint(0),
-        "gas_limit": Uint(0),
-        "gas_used": Uint(0),
-        "timestamp": U256(0),
-        "extra_data": Bytes(b""),
-        "mix_digest": Bytes32(Z32),
-        "prev_randao": Bytes32(Z32),
-        "nonce": Bytes8(b"\x00" * 8),
-        "base_fee_per_gas": Uint(0),
-        "withdrawals_root": Bytes32(EMPTY_TRIE),
-        "blob_gas_used": U64(0),
-        "excess_blob_gas": U64(0),
-        "parent_beacon_block_root": Bytes32(Z32),
-        "requests_hash": Bytes32(Z32),
-        "block_access_list_hash": Bytes32(Z32),
-        "slot_number": U64(0),
+    def quantity(i):
+        return int.from_bytes(fields[i], "big")
+
+    values = {
+        "type": kind,
+        "v": quantity(len(fields) - 3),
+        "r": quantity(len(fields) - 2),
+        "s": quantity(len(fields) - 1),
     }
-    d.update(ov)
-    header_fields = {field.name for field in dataclasses.fields(fk.Header)}
-    return fk.Header(**{name: value for name, value in d.items() if name in header_fields})
-
-
-# ---------------------------- EELS t8n ------------------------------------
-
-_T8N_CACHE = None
-
-
-def _t8n_options(chain_id, fork="Amsterdam", no_stateless=False, state_reward=None):
-    """The argparse surface T8N reads, shaped for one in-process blockchain-mode
-    run over stdin-style inputs. state_test=False is what makes t8n build the
-    full block + stateless input/output pair (t8n_types.Result.update)."""
-    return argparse.Namespace(
-        input_alloc="stdin",
-        input_env="stdin",
-        input_txs="stdin",
-        blob_parameters=None,
-        output_alloc="alloc.json",
-        output_result="result.json",
-        output_body=None,
-        output_basedir=".",
-        state_chainid=chain_id,
-        state_fork=fork,
-        state_reward=state_reward,
-        trace=False,
-        opcode_count=None,
-        state_test=False,
-        no_stateless=no_stateless,
-    )
-
-
-_BLOB_TARGET = None
-
-
-def _blob_target(fk):
-    """TARGET_BLOB_GAS_PER_BLOCK, probed from calculate_excess_blob_gas so the
-    blob schedule is never hardcoded: calc(excess=Q, used=0) = Q - target."""
-    global _BLOB_TARGET
-    if _BLOB_TARGET is None:
-        q = 10**12
-        probe = _header(fk, excess_blob_gas=U64(q), blob_gas_used=U64(0))
-        _BLOB_TARGET = q - int(fk.calculate_excess_blob_gas(probe))
-    return _BLOB_TARGET
-
-
-def _ancestor_headers(fk, pre_root, number, parent_excess, parent_blob_used, base_fee, gas_limit):
-    """Synthesize the dummy ancestor chain for blocks [n-min(256,n) .. n-1]:
-    hash-chained RLP headers, the direct parent carrying the pre-state root
-    anchor. The reference validates the BLOCK header against this parent
-    (EELS validate_header), so the parent must be economically consistent
-    with the block: gas_limit equal to the block's (within the 1/1024 bound),
-    gas_used at target (gas_limit/2) so the expected base fee carries over
-    unchanged, base_fee equal to the block's, and the blob-gas parameters the
-    excess-blob-gas expectation is derived from (EIP-7918 reads the parent
-    base fee too). t8n's env gets the SAME parent values, so both sides
-    compute identical header expectations.
-    Returns ({hex(number): "0x"+rlp}, {hex(number): "0x"+hash}) for t8n env."""
-    count = min(256, number)
-    headers, hashes = {}, {}
-    phash = Z32
-    for num in range(number - count, number):
-        is_parent = num == number - 1
-        h = _header(
-            fk,
-            number=Uint(num),
-            parent_hash=Bytes32(phash),
-            state_root=Bytes32(pre_root if is_parent else Z32),
-            excess_blob_gas=U64(parent_excess if is_parent else 0),
-            blob_gas_used=U64(parent_blob_used if is_parent else 0),
-            base_fee_per_gas=Uint(base_fee if is_parent else 0),
-            gas_limit=Uint(gas_limit if is_parent else 0),
-            gas_used=Uint(gas_limit // 2 if is_parent else 0),
+    if kind == 0:
+        values.update(
+            nonce=quantity(0),
+            gasPrice=quantity(1),
+            gasLimit=quantity(2),
+            to=fields[3] or None,
+            value=quantity(4),
+            data=fields[5],
         )
-        enc = rlp.encode(h)
-        phash = keccak256(enc)
-        headers[hex(num)] = "0x" + enc.hex()
-        hashes[hex(num)] = "0x" + phash.hex()
-    return headers, hashes
-
-
-def _t8n_tx(tx, idx, chain_id):
-    """The fixture's indexed tx as a geth-t8n JSON tx (v=r=s=0 + secretKey:
-    t8n signs it with the fork-correct signing hash, including typed txs)."""
-    j = {
-        "nonce": tx["nonce"],
-        "gas": tx["gasLimit"][idx["gas"]],
-        "input": tx["data"][idx["data"]],
-        "to": tx.get("to") or "",
-        "value": tx["value"][idx["value"]],
-        "secretKey": tx["secretKey"],
-        "v": "0x0",
-        "r": "0x0",
-        "s": "0x0",
-        "chainId": hex(chain_id),
-    }
-    if "gasPrice" in tx:
-        j["gasPrice"] = tx["gasPrice"]
+        values["protected"] = values["v"] >= 35
+        if values["protected"]:
+            values["chainId"] = (values["v"] - 35) // 2
     else:
-        j["maxFeePerGas"] = tx["maxFeePerGas"]
-        j["maxPriorityFeePerGas"] = tx["maxPriorityFeePerGas"]
-    # Presence selects EIP-2930 even when the selected list is empty. Dropping
-    # [] would make t8n sign a legacy transaction while the fixture's txbytes
-    # still carry a type-1 envelope, yielding a legacy receipt root for a typed
-    # payload.
-    if "accessLists" in tx and idx["data"] < len(tx["accessLists"]):
-        j["accessList"] = tx["accessLists"][idx["data"]]
-    for k in ("maxFeePerBlobGas", "blobVersionedHashes", "authorizationList"):
-        if k in tx:
-            j[k] = tx[k]
-    return j
+        values.update(chainId=quantity(0), nonce=quantity(1))
+        if kind == 1:
+            values["gasPrice"] = quantity(2)
+            gas_index = 3
+        else:
+            values.update(maxPriorityFeePerGas=quantity(2), maxFeePerGas=quantity(3))
+            gas_index = 4
+        values.update(
+            gasLimit=quantity(gas_index),
+            to=fields[gas_index + 1] or None,
+            value=quantity(gas_index + 2),
+            data=fields[gas_index + 3],
+        )
+        values["accessList"] = [
+            {"address": item[0], "storageKeys": item[1]} for item in fields[gas_index + 4]
+        ]
+        if kind == 3:
+            values.update(maxFeePerBlobGas=quantity(9), blobVersionedHashes=fields[10])
+        if kind == 4:
+            values["authorizationList"] = [
+                {
+                    "chainId": int.from_bytes(a[0], "big"),
+                    "address": a[1],
+                    "nonce": int.from_bytes(a[2], "big"),
+                    "v": int.from_bytes(a[3], "big"),
+                    "r": int.from_bytes(a[4], "big"),
+                    "s": int.from_bytes(a[5], "big"),
+                }
+                for a in fields[9]
+            ]
+    transaction = Transaction.model_validate(values)
+    if bytes(transaction.rlp()) != raw:
+        raise ValueError("signed transaction cannot be represented without changing its envelope")
+    return values
 
 
-def _t8n_rlp_transactions(tx_hex):
-    """Wrap one fixture transaction in t8n's RLP block-body input."""
-    raw = bytes.fromhex(tx_hex.removeprefix("0x"))
-    transaction = raw if raw[0] < 0x80 else rlp.decode(raw)
-    return "0x" + rlp.encode([transaction]).hex()
+def _transaction(case: dict[str, Any], chain_id: int) -> dict[str, Any]:
+    if case.get("txbytes"):
+        transaction = _signed_transaction(case["txbytes"])
+        if case["tx"].get("sender"):
+            # Reference-filler metadata only. The raw envelope is unchanged,
+            # and the Sail guest always recovers its sender independently.
+            # Supplying this avoids EELS's signed-transaction copy dropping
+            # the excluded expected-error field during sender preparation.
+            transaction["sender"] = case["tx"]["sender"]
+        return transaction
+    tx, idx = case["tx"], case["idx"]
+    values = {
+        "nonce": tx["nonce"],
+        "gasLimit": tx["gasLimit"][idx["gas"]],
+        "data": tx["data"][idx["data"]],
+        "to": tx.get("to") or None,
+        "value": tx["value"][idx["value"]],
+        "chainId": chain_id,
+    }
+    for key in (
+        "protected",
+        "gasPrice",
+        "maxFeePerGas",
+        "maxPriorityFeePerGas",
+        "maxFeePerBlobGas",
+        "blobVersionedHashes",
+        "authorizationList",
+    ):
+        if key in tx:
+            values[key] = tx[key]
+    if "accessLists" in tx:
+        values["accessList"] = tx["accessLists"][idx["data"]]
+    values["secretKey"] = tx["secretKey"]
+    return values
 
 
-# Canonical system-contract predeploys (extracted from the aligned Amsterdam
-# corpus fill; consensus constants). A state-test alloc lacks them, but the
-# Amsterdam block-end system calls are CHECKED: without the 7002/7251/8282 code the
-# reference rejects EVERY block (block_exception), collapsing the byte-exact
-# gate to agreeing-on-invalid. build_guest injects any that are absent so the
-# built block is genuinely VALID end-to-end.
-_PREDEPLOYS = {
-    # EIP-4788 beacon roots
-    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
-    },
-    # EIP-2935 history storage
-    "0x0000f90827f1c53a10cb7a02335b175320002935": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500",
-    },
-    # EIP-7002 withdrawal requests
-    "0x00000961ef480eb55e80d19ad83579a64c007002": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffffffff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101e8565b01600290035b5f555f600155604c025ff35b5f5ffd",
-    },
-    # EIP-7251 consolidation requests
-    "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd",
-    },
-    # EIP-8282 builder deposit requests
-    "0x0000bff46984e3725691fa540a8c7589300d8282": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1461011c575f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146102705760015460088111605257506058565b60089003015b601190600182026001905f5b5f821115607f57810190830284830290049160010191906064565b90939004925050503660b814609f57366102705734610270575f5260205ff35b8034106102705760383567ffffffffffffffff1680633b9aca001161027057633b9aca00029034031061027057600154600101600155600354806006026004015f358155600101602035815560010160403581556001016060358155600101608035815560010160a035905560b85f5f3760b85fa0600101600355005b60035460025480820380604011610131575060405b5f5b8181146101d7578281016006026004018160b8028154815260200181600101548152602001816002015480825260401c67ffffffffffffffff16816010018160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c816001015353602001816003015481526020018160040154815260200190600501549052600101610133565b91018092146101e957906002556101f4565b90505f6002555f6003555b36610242575f54600154817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461023057600882820111610238575b50505f610264565b0160089003610264565b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b5f555f60015560b8025ff35b5f5ffd",
-    },
-    # EIP-8282 builder exit requests
-    "0x000064d678505ad48f8ccb093bc65613800e8282": {
-        "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {},
-        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460e1575f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101c65760015460028111605157506057565b60029003015b601190600182026001905f5b5f821115607e57810190830284830290049160010191906063565b909390049250505036603014609e57366101c657346101c6575f5260205ff35b34106101c657600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260305f60143760445fa0600101600355005b6003546002548082038060101160f5575060105b5f5b81811461012d5782810160030260040181604402815460601b8152601401816001015481526020019060020154905260010160f7565b910180921461013f579060025561014a565b90505f6002555f6003555b36610198575f54600154817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101865760028282011161018e575b50505f6101ba565b01600290036101ba565b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b5f555f6001556044025ff35b5f5ffd",
-    },
-}
+def _historical_pair(fixture, reference, chain_id, fork_name, accesses):
+    """Use v21 containers with an explicit historical execution-fork ID.
 
-
-def _fixture_protocol_fork(fork_name):
-    """Resolve the stable v0.6.2 schema byte for a fixture fork."""
-    from ethereum.forks.amsterdam.stateless import ProtocolFork
-
-    try:
-        return ProtocolFork[fork_name]
-    except KeyError as exc:
-        raise ValueError(f"unsupported stateless fixture fork: {fork_name}") from exc
-
-
-def _fixture_chain_config(fork_name, chain_id):
-    """Build the shared stateless-input chain config for one active fork."""
-    from ethereum.forks.amsterdam.stateless import (
-        ChainConfig,
-        ForkActivation,
-        ForkConfig,
-        ProtocolFork,
-    )
-
-    protocol_fork = _fixture_protocol_fork(fork_name)
-    timestamp_fork = protocol_fork >= ProtocolFork.Shanghai
-    return ChainConfig(
-        chain_id=U64(chain_id),
-        active_fork=ForkConfig(
-            activation=ForkActivation(
-                block_number=None if timestamp_fork else U64(0),
-                timestamp=U64(0) if timestamp_fork else None,
-            ),
-        ),
-    )
-
-
-def _quantity_bytes32(value):
-    return Bytes32(_hi(value).to_bytes(32, "big"))
-
-
-def _serialize_v062_pair(stateless_input, successful_validation, fork_name):
-    from devtools.harness.v062_compat import serialize_v062_pair
-
-    return serialize_v062_pair(
-        stateless_input,
-        successful_validation,
-        _fixture_protocol_fork(fork_name),
-    )
-
-
-def _build_state_test_guest(case):
-    """Build a fork-correct shared SSZ input from one state-test case."""
-    from ethereum.crypto.hash import Hash32
-    from ethereum.forks.amsterdam.execution_engine.requests import (
-        decode_execution_requests,
-    )
-    from ethereum.forks.amsterdam.execution_engine.types import (
-        ExecutionPayload,
-        NewPayloadRequest,
-    )
+    The fork-correct EELS blockchain filler authenticates execution and header
+    commitments. Its pre-state supplies complete witnesses using the pinned
+    EELS MPT implementation; Amsterdam's guest is never used as a historical
+    execution oracle.
+    """
+    from ethereum.crypto.hash import Hash32, keccak256
+    from ethereum.forks.amsterdam.blocks import Withdrawal
+    from ethereum.forks.amsterdam.execution_engine.requests import decode_execution_requests
+    from ethereum.forks.amsterdam.execution_engine.types import ExecutionPayload, NewPayloadRequest
     from ethereum.forks.amsterdam.fork_types import Bloom
+    from ethereum.forks.amsterdam.incremental_mpt import build_mpt, mpt_get, mpt_root
     from ethereum.forks.amsterdam.stateless import (
         ExecutionWitness,
+        ProtocolFork,
         StatelessInput,
+        StatelessValidationResult,
     )
-    from ethereum.forks.amsterdam.transactions import (
-        BlobTransaction,
-        decode_transaction,
-        recover_transaction_public_key,
-    )
+    from ethereum.merkle_patricia_trie import EMPTY_TRIE_ROOT
     from ethereum.state import Address, Root
+    from ethereum_rlp import rlp
+    from ethereum_types.bytes import Bytes, Bytes32
+    from ethereum_types.numeric import U16, U64, U256, Uint
 
-    env, pre, tx, idx = case["env"], case["pre"], case["tx"], case["idx"]
-    fork_name = case["fork"]
-    fk = _fork(fork_name.lower())
-    header_fields = {field.name for field in dataclasses.fields(fk.Header)}
-    chain_id = _hi(case.get("config", {}).get("chainid", env.get("currentChainId", "0x1")))
-    number = _hi(env.get("currentNumber", "0x1"))
-    if number == 0:
-        raise ValueError("stateless state-test blocks require a parent header")
-
-    root_hex, nodes = prestate_mpt.build(pre)
-    pre_root = bytes.fromhex(root_hex[2:])
-    base_fee = _hi(env.get("currentBaseFee", "0x0"))
-    gas_limit = _hi(env.get("currentGasLimit", "0x0"))
-    has_blob_fields = "excess_blob_gas" in header_fields
-    if has_blob_fields and ("parentExcessBlobGas" in env or "parentBlobGasUsed" in env):
-        parent_excess = _hi(env.get("parentExcessBlobGas", "0x0"))
-        parent_blob_used = _hi(env.get("parentBlobGasUsed", "0x0"))
-    elif has_blob_fields and "currentExcessBlobGas" in env:
-        parent_excess = _hi(env["currentExcessBlobGas"]) + _blob_target(fk)
-        parent_blob_used = 0
-    else:
-        parent_excess = parent_blob_used = 0
-
-    block_headers, block_hashes = _ancestor_headers(
-        fk,
-        pre_root,
-        number,
-        parent_excess,
-        parent_blob_used,
-        base_fee,
-        gas_limit,
-    )
-    randao = env.get("currentRandom", env.get("currentDifficulty", "0x0"))
-    t8n_env = {
-        "currentCoinbase": env["currentCoinbase"],
-        "currentGasLimit": env.get("currentGasLimit", "0x0"),
-        "currentNumber": hex(number),
-        "currentTimestamp": env.get("currentTimestamp", "0x0"),
-        "blockHeaders": block_headers,
-        "blockHashes": block_hashes,
+    state = fixture.pre._materialize_state()
+    storages = {
+        address: build_mpt(trie._data, secured=True, default=U256(0))
+        for address, trie in state._storage_tries.items()
     }
-    if "prev_randao" in header_fields:
-        t8n_env["currentRandom"] = randao
-    else:
-        t8n_env["currentDifficulty"] = env.get("currentDifficulty", "0x0")
-    if "base_fee_per_gas" in header_fields:
-        t8n_env["currentBaseFee"] = hex(base_fee)
-        t8n_env["parentBaseFee"] = hex(base_fee)
-    if "withdrawals_root" in header_fields:
-        t8n_env["withdrawals"] = []
-    if has_blob_fields:
-        t8n_env["parentExcessBlobGas"] = hex(parent_excess)
-        t8n_env["parentBlobGasUsed"] = hex(parent_blob_used)
-    if "parent_beacon_block_root" in header_fields:
-        t8n_env["parentBeaconBlockRoot"] = "0x" + Z32.hex()
-
-    tx_hex = case.get("txbytes")
-    txs_input = _t8n_rlp_transactions(tx_hex) if tx_hex else [_t8n_tx(tx, idx, chain_id)]
-    stdin_json = {
-        "alloc": pre,
-        "env": t8n_env,
-        "txs": txs_input,
-    }
-    global _T8N_CACHE
-    if _T8N_CACHE is None:
-        _T8N_CACHE = ForkCache()
-    t8n = T8N(
-        _t8n_options(
-            chain_id,
-            fork=fork_name,
-            no_stateless=True,
+    for address, trie in storages.items():
+        mpt_root(trie)
+        for key in state._storage_tries[address]._data:
+            mpt_get(trie, key)
+    accounts = build_mpt(
+        state._main_trie._data,
+        secured=True,
+        default=None,
+        get_storage_root=lambda address: (
+            mpt_root(storages[address]) if address in storages else EMPTY_TRIE_ROOT
         ),
-        io.StringIO(),
-        io.StringIO(json.dumps(stdin_json)),
-        _T8N_CACHE,
     )
-    t8n.run_blockchain_test()
-    result = t8n.result
+    if bytes(mpt_root(accounts)) != bytes(rlp.decode(Bytes(bytes(fixture.genesis_rlp)))[0][3]):
+        raise RuntimeError("historical witness root disagrees with EELS genesis")
+    for address in state._main_trie._data:
+        mpt_get(accounts, address)
+    nodes = dict(accounts.witness.accessed_nodes)
+    for trie in storages.values():
+        nodes.update(trie.witness.accessed_nodes)
+    block = fixture.blocks[0]
+    encoded_block = rlp.decode(Bytes(bytes(block.rlp)))
+    header = encoded_block[0]
 
-    if tx_hex:
-        tx_bytes = Bytes(bytes.fromhex(tx_hex.removeprefix("0x")))
-    else:
-        if len(t8n.txs.all_txs) != 1:
-            raise ValueError("t8n did not produce one signed transaction")
-        signed_tx = t8n.txs.all_txs[0]
-        tx_bytes = Bytes(
-            bytes(signed_tx) if isinstance(signed_tx, bytes) else rlp.encode(signed_tx)
+    def number(field):
+        return int.from_bytes(header[field], "big")
+
+    fork_id = int(ProtocolFork[fork_name])
+    if fork_id < 0x0E and (
+        header[13] != b"\0" * 32
+        or header[14] != b"\0" * 8
+        or keccak256(rlp.encode(())) != header[1]
+    ):
+        raise ValueError("historical PoW transport requires zero mix-hash/nonce and no ommers")
+    transactions = tuple(
+        Bytes(tx if isinstance(tx, bytes) else rlp.encode(tx)) for tx in encoded_block[1]
+    )
+    withdrawals = tuple(
+        Withdrawal(
+            U64(int.from_bytes(w[0], "big")),
+            U64(int.from_bytes(w[1], "big")),
+            Address(w[2]),
+            U64(int.from_bytes(w[3], "big")),
         )
-
-    decoded_tx = decode_transaction(tx_bytes)
-    public_key = recover_transaction_public_key(U64(chain_id), decoded_tx)
-    versioned_hashes = (
-        tuple(decoded_tx.blob_versioned_hashes) if isinstance(decoded_tx, BlobTransaction) else ()
-    )
-    execution_requests = decode_execution_requests(
-        tuple(Bytes(request) for request in (result.requests or ()))
-    )
-
-    parent_hash = Bytes32(bytes.fromhex(block_hashes[hex(number - 1)].removeprefix("0x")))
-    is_pos = "prev_randao" in header_fields
-    request_hash = (
-        result.requests_hash
-        if result.requests_hash is not None
-        else __import__("hashlib").sha256(b"").digest()
-    )
-    header = _header(
-        fk,
-        parent_hash=parent_hash,
-        coinbase=Bytes(bytes.fromhex(env["currentCoinbase"][2:])),
-        state_root=Bytes32(bytes(result.state_root)),
-        transactions_root=Bytes32(bytes(result.tx_root)),
-        receipt_root=Bytes32(bytes(result.receipt_root)),
-        bloom=Bytes(bytes(result.bloom)),
-        difficulty=Uint(0 if is_pos else int(result.difficulty)),
-        number=Uint(number),
-        gas_limit=Uint(gas_limit),
-        gas_used=Uint(int(result.gas_used)),
-        timestamp=U256(_hi(env.get("currentTimestamp", "0x0"))),
-        extra_data=Bytes(b""),
-        mix_digest=Bytes32(Z32),
-        prev_randao=_quantity_bytes32(randao),
-        base_fee_per_gas=Uint(int(result.base_fee or 0)),
-        withdrawals_root=Bytes32(bytes(result.withdrawals_root or EMPTY_TRIE)),
-        blob_gas_used=U64(int(result.blob_gas_used or 0)),
-        excess_blob_gas=U64(int(result.excess_blob_gas or 0)),
-        parent_beacon_block_root=Bytes32(Z32),
-        requests_hash=Bytes32(bytes(request_hash)),
-        slot_number=U64(_hi(env.get("slotNumber", "0x0"))),
-    )
-    block_hash = Hash32(keccak256(rlp.encode(header)))
-
-    witness_codes = sorted(
-        {
-            bytes.fromhex(account.get("code", "0x").removeprefix("0x"))
-            for account in pre.values()
-            if account.get("code", "0x") not in ("", "0x")
-        }
-    )
-    witness = ExecutionWitness(
-        state=tuple(Bytes(node) for node in nodes.values()),
-        codes=tuple(Bytes(code) for code in witness_codes),
-        headers=tuple(
-            Bytes(bytes.fromhex(encoded.removeprefix("0x"))) for encoded in block_headers.values()
-        ),
-    )
-    payload_prev_randao = (
-        _quantity_bytes32(randao) if is_pos else _quantity_bytes32(result.difficulty)
+        for w in (encoded_block[3] if len(encoded_block) > 3 else ())
     )
     payload = ExecutionPayload(
-        parent_hash=parent_hash,
-        fee_recipient=Address(bytes.fromhex(env["currentCoinbase"][2:])),
-        state_root=Root(bytes(result.state_root)),
-        receipts_root=Root(bytes(result.receipt_root)),
-        logs_bloom=Bloom(bytes(result.bloom)),
-        prev_randao=payload_prev_randao,
-        block_number=Uint(number),
-        gas_limit=Uint(gas_limit),
-        gas_used=Uint(int(result.gas_used)),
-        timestamp=U256(_hi(env.get("currentTimestamp", "0x0"))),
-        extra_data=Bytes(b""),
-        base_fee_per_gas=Uint(int(result.base_fee or 0)),
-        block_hash=block_hash,
-        transactions=(tx_bytes,),
-        withdrawals=(),
-        blob_gas_used=U64(int(result.blob_gas_used or 0)),
-        excess_blob_gas=U64(int(result.excess_blob_gas or 0)),
-        block_access_list=Bytes(rlp.encode([])),
-        slot_number=U64(_hi(env.get("slotNumber", "0x0"))),
-    )
-    stateless_input = StatelessInput(
-        new_payload_request=NewPayloadRequest(
-            execution_payload=payload,
-            versioned_hashes=versioned_hashes,
-            parent_beacon_block_root=Root(Z32),
-            execution_requests=execution_requests,
+        parent_hash=Hash32(header[0]),
+        fee_recipient=Address(header[2]),
+        state_root=Root(header[3]),
+        receipts_root=Root(header[5]),
+        logs_bloom=Bloom(header[6]),
+        prev_randao=Bytes32(header[13] if fork_id >= 0x0E else number(7).to_bytes(32, "big")),
+        block_number=Uint(number(8)),
+        gas_limit=Uint(number(9)),
+        gas_used=Uint(number(10)),
+        timestamp=U256(number(11)),
+        extra_data=Bytes(header[12]),
+        base_fee_per_gas=Uint(number(15) if fork_id >= 0x0B else 0),
+        block_hash=Hash32(keccak256(rlp.encode(header))),
+        transactions=transactions,
+        withdrawals=withdrawals,
+        blob_gas_used=U64(number(17) if fork_id >= 0x10 else 0),
+        excess_blob_gas=U64(number(18) if fork_id >= 0x10 else 0),
+        # Historical selectors use this otherwise inactive transport field
+        # as an uncommitted access schema. Zero markers reserve writable
+        # slots; they are not historical EIP-7928 change claims.
+        block_access_list=Bytes(
+            rlp.encode(
+                [
+                    [
+                        address,
+                        [
+                            [U256(int.from_bytes(slot, "big")), [[U64(0), U256(0)]]]
+                            for slot in sorted(slots)
+                        ],
+                        [],
+                        [],
+                        [],
+                        [],
+                    ]
+                    for address, slots in sorted(accesses.items())
+                ]
+            )
         ),
-        witness=witness,
-        chain_config=_fixture_chain_config(fork_name, chain_id),
-        public_keys=(Bytes(public_key),),
+        slot_number=U64(0),
     )
-    return _serialize_v062_pair(
-        stateless_input,
-        result.block_exception is None and not t8n.txs.rejected_txs,
-        fork_name,
+    versioned_hashes: list[bytes] = []
+    for raw in transactions:
+        # The reference may intentionally reject an otherwise canonical typed
+        # envelope (for example, a blob contract-creation transaction). Do not
+        # require Amsterdam's executable transaction type merely to retain its
+        # ordered versioned-hash commitment in historical transport.
+        if fork_id >= 0x10 and raw[:1] == b"\x03":
+            fields = rlp.decode(Bytes(raw[1:]))
+            versioned_hashes.extend(Hash32(value) for value in fields[10])
+    requests = decode_execution_requests(tuple(Bytes(bytes(r)) for r in (reference.requests or ())))
+    request = NewPayloadRequest(
+        execution_payload=payload,
+        versioned_hashes=tuple(versioned_hashes),
+        parent_beacon_block_root=Root(header[19] if fork_id >= 0x10 else b"\0" * 32),
+        execution_requests=requests,
     )
+    witness = ExecutionWitness(
+        state=tuple(Bytes(node) for node in sorted(nodes.values())),
+        codes=tuple(
+            sorted(
+                {
+                    Bytes(bytes(a.code))
+                    for a in fixture.pre.root.values()
+                    if a is not None and a.code
+                }
+            )
+        ),
+        headers=(Bytes(rlp.encode(rlp.decode(Bytes(bytes(fixture.genesis_rlp)))[0])),),
+    )
+    schema = (fork_id << 8) | 1
+    inp = StatelessInput(new_payload_request=request, witness=witness, chain_id=U64(chain_id))
+    successful = not reference.rejected_transactions and reference.block_exception is None
+    out = StatelessValidationResult(
+        new_payload_request_root=request.hash_tree_root(),
+        successful_validation=successful,
+        chain_id=U64(chain_id),
+        schema_id=U16(schema),
+    )
+    return schema.to_bytes(2, "big") + bytes(inp.encode_bytes()), bytes(out.encode_bytes())
 
 
 def build_guest(case):
-    """case: {env, pre, tx, fork, idx} -> (input_bytes, expected_output_bytes).
-    The model guest is Amsterdam-locked, but historical state tests are lifted
-    into an Amsterdam stateless input after their fork-specific EELS transition.
-    The expected validation verdict comes from EELS run_stateless_guest; the
-    isolated v0.6.2 adapter accounts for the two additional empty request lists
-    and their changed SSZ request root."""
-    return _build_state_test_guest(case)
+    """Return upstream Amsterdam bytes or the declared historical transport."""
+    _verify_source()
+    from execution_testing import Account, Address, Alloc, Environment, Transaction, forks
+    from execution_testing.client_clis.clis.execution_specs import ExecutionSpecsTransitionTool
+    from execution_testing.fixtures.blockchain import BlockchainFixture
+    from execution_testing.fixtures.common import FixtureTransactionReceipt
+    from execution_testing.fixtures.state import StateFixture
+    from execution_testing.specs.state import StateTest
+
+    if case["fork"] not in (*SUPPORTED_FORKS, *SUPPORTED_TRANSITIONS):
+        raise ValueError(f"unsupported execution fork: {case['fork']}")
+    fork = getattr(forks, case["fork"])
+    environment = Environment.model_validate(case["env"])
+    active_fork = fork.fork_at(
+        block_number=int(environment.number), timestamp=int(environment.timestamp)
+    ).__name__
+    chain_id = _chain_id(case)
+    transaction = _transaction(case, chain_id)
+    if case.get("expected_exception"):
+        from execution_testing.exceptions import ExceptionBase
+
+        expected = case["expected_exception"]
+        names = expected if isinstance(expected, list) else expected.split("|")
+        parsed = [ExceptionBase.from_str(name) for name in names]
+        transaction["error"] = parsed[0] if len(parsed) == 1 else parsed
+    test = StateTest(
+        fork=fork,
+        env=environment,
+        pre=Alloc.model_validate(case["pre"]),
+        post=Alloc.model_validate(case.get("expected_post", {})),
+        tx=Transaction.model_validate(transaction),
+        chain_id=chain_id,
+        is_exception_test=bool(case.get("expected_exception")),
+    )
+
+    class RecordingTool(ExecutionSpecsTransitionTool):
+        def _evaluate(self, **kwargs):
+            from functools import wraps
+
+            from execution_testing import Address
+
+            self.accesses: dict[bytes, set[bytes]] = {
+                bytes(Address(address)): set() for address in case["pre"]
+            }
+            self.accesses.setdefault(bytes(Address(case["env"]["currentCoinbase"])), set())
+            self.writes: set[bytes] = set()
+            for entry in transaction.get("accessList", ()):
+                slots = self.accesses.setdefault(bytes(Address(entry["address"])), set())
+                slots.update(
+                    (
+                        int(s, 16) if isinstance(s, str) else int.from_bytes(bytes(s), "big")
+                    ).to_bytes(32, "big")
+                    for s in entry.get("storageKeys", ())
+                )
+            original_get = self.fork_cache.get
+            replacements = []
+
+            def instrument(function, storage, write):
+                @wraps(function)
+                def record(*args, **kw):
+                    address = args[1] if len(args) > 1 else kw.get("address")
+                    if address is not None:
+                        slots = self.accesses.setdefault(bytes(address), set())
+                        if write:
+                            self.writes.add(bytes(address))
+                        if storage:
+                            key = args[2] if len(args) > 2 else kw["key"]
+                            slots.add(bytes(key))
+                    return function(*args, **kw)
+
+                return record
+
+            def tracked_get(*args, **kw):
+                hardfork = original_get(*args, **kw)
+                hardfork.module("fork")
+                tracker = hardfork.module("state_tracker")
+                functions = {}
+                for name in (
+                    "get_account_optional",
+                    "get_account",
+                    "set_account",
+                    "get_storage",
+                    "get_storage_original",
+                    "set_storage",
+                    "set_account_balance",
+                    "set_code",
+                    "destroy_account",
+                    "increment_nonce",
+                    "create_ether",
+                ):
+                    function = getattr(tracker, name, None)
+                    if function is not None:
+                        functions[function] = instrument(
+                            function,
+                            name in ("get_storage", "get_storage_original", "set_storage"),
+                            not name.startswith("get_"),
+                        )
+                interpreter = hardfork.module("vm.interpreter")
+                process_message = getattr(interpreter, "process_message", None)
+
+                if process_message is not None:
+
+                    @wraps(process_message)
+                    def record_message(*args, **kw):
+                        evm = process_message(*args, **kw)
+                        # A call target can become warm before a balance/depth
+                        # failure without its account being read. Retain these
+                        # accesses too; reservations are not state writes.
+                        for address in getattr(evm, "accessed_addresses", ()):
+                            self.accesses.setdefault(bytes(address), set())
+                        for address, key in getattr(evm, "accessed_storage_keys", ()):
+                            slot = key.to_bytes(32, "big") if isinstance(key, int) else bytes(key)
+                            self.accesses.setdefault(bytes(address), set()).add(slot)
+                        return evm
+
+                    functions[process_message] = record_message
+                for module_name, module in tuple(sys.modules.items()):
+                    if module is not None and module_name.startswith(hardfork.mod.__name__ + "."):
+                        for name, value in tuple(vars(module).items()):
+                            if callable(value) and value in functions:
+                                replacements.append((module, name, value))
+                                setattr(module, name, functions[value])
+                for address in hardfork.module(
+                    "vm.precompiled_contracts.mapping"
+                ).PRE_COMPILED_CONTRACTS:
+                    self.accesses.setdefault(bytes(address), set())
+                return hardfork
+
+            self.fork_cache.get = tracked_get
+            try:
+                output = super()._evaluate(**kwargs)
+                self.reference = output.result
+                return output
+            finally:
+                self.fork_cache.get = original_get
+                for module, name, value in reversed(replacements):
+                    setattr(module, name, value)
+
+    tool = RecordingTool()
+    try:
+        block_test = test
+        state_commitments = None
+        if (
+            case.get("expected_state_root")
+            or case.get("expected_logs_hash")
+            or case.get("expected_receipt")
+        ):
+            state_fixture = test.generate(tool, StateFixture).fixture
+            posts = [entry for entries in state_fixture.post.values() for entry in entries]
+            if len(posts) != 1:
+                raise RuntimeError("state-test synthesis must produce one indexed state result")
+            for key, actual in (
+                ("expected_state_root", posts[0].state_root),
+                ("expected_logs_hash", posts[0].logs_hash),
+            ):
+                expected = case.get(key)
+                if expected and bytes(actual).hex() != expected.removeprefix("0x").lower():
+                    raise ValueError(
+                        f"{key} differs from the pinned reference: expected {expected}, got {actual}"
+                    )
+            if case.get("expected_receipt") is not None:
+                expected_receipt = FixtureTransactionReceipt.model_validate(
+                    case["expected_receipt"]
+                )
+                if posts[0].receipt != expected_receipt:
+                    raise ValueError("state execution differs from the original fixture receipt")
+            state_commitments = (
+                bytes(tool.reference.logs_hash),
+                bytes(tool.reference.receipts_root),
+            )
+            # Preserve transaction postconditions across transport conversion.
+            # Untouched protocol predeploys may acquire block-system effects;
+            # all transaction writes/deletions remain asserted, and a mining
+            # reward is added explicitly to the original coinbase balance.
+            # Observable context changes therefore fail synthesis.
+            post = posts[0].state.model_copy(deep=True)
+            for address in getattr(forks, active_fork).pre_allocation():
+                if bytes(Address(address)) not in tool.writes:
+                    post.root.pop(Address(address), None)
+            for address in tool.writes:
+                post.root.setdefault(Address(address), None)
+            reward = getattr(forks, active_fork).get_reward()
+            if reward and not case.get("expected_exception"):
+                coinbase = environment.fee_recipient
+                account = post.root.get(coinbase)
+                if account is None:
+                    post.root[coinbase] = Account(balance=reward, nonce=0, code="0x", storage={})
+                else:
+                    post.root[coinbase] = account.model_copy(
+                        update={"balance": int(account.balance or 0) + reward}
+                    )
+            block_test = test.model_copy(update={"post": post})
+        if case["fork"] in SUPPORTED_TRANSITIONS:
+            blockchain = block_test.generate_blockchain_test()
+            genesis = blockchain.genesis_environment
+            parent_fork = fork.fork_at(block_number=int(environment.number) - 1, timestamp=0)
+            if parent_fork.__name__ == "Berlin":
+                updates: dict[str, Any] = {"base_fee_per_gas": None}
+                if active_fork == "London":
+                    if int(environment.base_fee_per_gas) != 1_000_000_000:
+                        raise ValueError("London activation requires the EIP-1559 initial base fee")
+                    updates["gas_limit"] = int(environment.gas_limit) // 2
+                    blockchain.blocks[0].base_fee_per_gas = environment.base_fee_per_gas
+                blockchain.genesis_environment = genesis.model_copy(update=updates)
+            fixture = blockchain.generate(tool, BlockchainFixture).fixture
+        else:
+            fixture = block_test.generate(tool, BlockchainFixture).fixture
+        if state_commitments is not None:
+            if bytes(tool.reference.logs_hash) != state_commitments[0]:
+                raise ValueError("converted block changes the original transaction logs")
+            if bytes(tool.reference.receipts_root) != state_commitments[1]:
+                raise ValueError("converted block changes the original transaction receipt")
+        if len(fixture.blocks) != 1:
+            raise RuntimeError("state-test synthesis must produce exactly one block")
+        block = fixture.blocks[0]
+        if active_fork != "Amsterdam":
+            return _historical_pair(fixture, tool.reference, chain_id, active_fork, tool.accesses)
+        if block.stateless_input_bytes is None or block.stateless_output_bytes is None:
+            raise RuntimeError("EELS did not produce a stateless reference pair")
+        return bytes(block.stateless_input_bytes), bytes(block.stateless_output_bytes)
+    finally:
+        tool.shutdown()
 
 
 def _serve():
-    """One case JSON per stdin line -> {input, expected} or {err}."""
-    logging.getLogger("T8N").setLevel(logging.ERROR)  # rejected-tx noise
     for line in sys.stdin:
-        line = line.strip()
-        if not line:
+        if not line.strip():
             continue
         try:
-            case = json.loads(line)
-            inp, exp = build_guest(case)
-            resp = {"input": inp.hex(), "expected": exp.hex()}
-        except Exception as e:
-            resp = {"err": f"{type(e).__name__}: {e}"}
-        sys.stdout.write(json.dumps(resp) + "\n")
-        sys.stdout.flush()
+            with redirect_stdout(sys.stderr):
+                inp, exp = build_guest(json.loads(line))
+            response = {"input": inp.hex(), "expected": exp.hex()}
+        except Exception as error:
+            response = {"err": f"{type(error).__name__}: {error}"}
+        print(json.dumps(response), flush=True)
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--serve":
         _serve()
     else:
-        with open(sys.argv[1]) as case_file:
-            case = json.load(case_file)
-        inp, exp = build_guest(case)
+        inp, exp = build_guest(json.loads(Path(sys.argv[1]).read_text()))
         print(json.dumps({"input": inp.hex(), "expected": exp.hex()}))

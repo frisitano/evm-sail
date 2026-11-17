@@ -97,12 +97,16 @@ function store_account_info(a : address, acc : Account, info : AccountInfo) -> u
     when that row was established; misses record the EIP-7928 account touch
     before consulting block-scoped state. */
 function k_aload(a : address) -> Account = {
+    require_historical_state_access(a, None());
     let tx_account = acct_tx_get(a);
     if tx_account.found then {
         return tx_account.account
     };
 
-    bal_account_touch(a);
+    let execution_profile = k_execution_profile;
+    if execution_profile.protocol.fork >= Amsterdam then {
+        bal_account_touch(a)
+    };
 
     let block_account = acct_block_get(a);
     if block_account.found then {

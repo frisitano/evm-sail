@@ -281,6 +281,169 @@ function bal_validate_accounts forall 'source_off 'source_len, source_valid_rang
 termination_measure bal_validate_accounts(cursor) =
     cursor.len
 
+/*! Historical transport slots are writable schema entries, not EIP-7928
+    changes. Their sole `[0, 0]` marker carries no execution claim. */
+function validate_historical_schema_slots forall 'off 'len, source_valid_range('off, 'len). (
+    cursor : RlpCursor('off, 'len),
+    previous : word,
+    have_previous : bool,
+    storage_root : hash,
+) -> (
+    unit
+) = {
+    if cursor.len == 0 then {
+        return ()
+    };
+    let entry = rlp_decode_item(cursor);
+    let next = rlp_cursor_advance(cursor, entry.source.len);
+    let fields = bal_ref_cursor(entry);
+    let slot_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, slot_field.source.len);
+    let markers = rlp_decode_item(fields);
+    bal_expect_end(rlp_cursor_advance(fields, markers.source.len));
+    let slot = bal_ref_word(slot_field);
+    if have_previous & not_bool(word_ult(previous, slot)) then {
+        fatal_error(InvalidBlockAccessList)
+    };
+    let values = bal_ref_cursor(markers);
+    let marker = rlp_decode_item(values);
+    bal_expect_end(rlp_cursor_advance(values, marker.source.len));
+    bal_compare_index_word(marker, 0, ZERO_WORD);
+    let _ = stateless_storage_by_key(storage_root, keccak256_word(slot));
+    validate_historical_schema_slots(next, slot, true, storage_root)
+}
+termination_measure validate_historical_schema_slots(cursor, previous, have_previous, storage_root) = cursor.len
+
+/*! Validate the uncommitted historical access schema identically on both
+    backends before optimized C uses it to provision its dense state store. */
+function validate_historical_schema_accounts forall 'off 'len, source_valid_range('off, 'len). (
+    cursor : RlpCursor('off, 'len),
+    previous : word,
+    have_previous : bool,
+) -> (
+    unit
+) = {
+    if cursor.len == 0 then {
+        return ()
+    };
+    let entry = rlp_decode_item(cursor);
+    let next = rlp_cursor_advance(cursor, entry.source.len);
+    let fields = bal_ref_cursor(entry);
+    let address_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, address_field.source.len);
+    let slots_field = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, slots_field.source.len);
+    let reads = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, reads.source.len);
+    let balances = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, balances.source.len);
+    let nonces = rlp_decode_item(fields);
+    let fields = rlp_cursor_advance(fields, nonces.source.len);
+    let codes = rlp_decode_item(fields);
+    bal_expect_end(rlp_cursor_advance(fields, codes.source.len));
+    let address_bytes = bal_ref_bytes(address_field);
+    let address = rlp_decode_word(address_field);
+    if address_bytes.len != 20 then {
+        fatal_error(InvalidBlockAccessList)
+    };
+    if have_previous & not_bool(word_ult(previous, address)) then {
+        fatal_error(InvalidBlockAccessList)
+    };
+    let account = stateless_account_by_key(k_parent_state_root, keccak256_address(word_to_address(address)));
+    let info = account.info;
+    validate_historical_schema_slots(bal_ref_cursor(slots_field), ZERO_WORD, false, info.storage_root);
+    bal_expect_end(bal_ref_cursor(reads));
+    bal_expect_end(bal_ref_cursor(balances));
+    bal_expect_end(bal_ref_cursor(nonces));
+    bal_expect_end(bal_ref_cursor(codes));
+    validate_historical_schema_accounts(next, address, true)
+}
+termination_measure validate_historical_schema_accounts(cursor, previous, have_previous) = cursor.len
+
+/*! Checks the complete historical access-schema framing and parent proofs. */
+function validate_historical_access_schema(bytes : StatelessInputSliceAtMost(block_access_list_length_bound)) -> unit = {
+    let root = rlp_single_ref(bytes);
+    validate_historical_schema_accounts(bal_ref_cursor(root), ZERO_WORD, false)
+}
+
+/*! Searches sorted historical slot reservations without materializing them. */
+function historical_schema_has_slot forall 'off 'len, source_valid_range('off, 'len). (
+    cursor : RlpCursor('off, 'len),
+    slot : word,
+) -> (
+    bool
+) = {
+    if cursor.len == 0 then {
+        return false
+    };
+    let entry = rlp_decode_item(cursor);
+    let next = rlp_cursor_advance(cursor, entry.source.len);
+    let fields = bal_ref_cursor(entry);
+    let field = rlp_decode_item(fields);
+    let candidate = bal_ref_word(field);
+    if candidate == slot then {
+        true
+    } else if word_ult(slot, candidate) then {
+        false
+    } else {
+        historical_schema_has_slot(next, slot)
+    }
+}
+termination_measure historical_schema_has_slot(cursor, slot) = cursor.len
+
+/*! Searches sorted historical account reservations and an optional slot. */
+function historical_schema_has_access forall 'off 'len, source_valid_range('off, 'len). (
+    cursor : RlpCursor('off, 'len),
+    address : word,
+    slot : option(word),
+) -> (
+    bool
+) = {
+    if cursor.len == 0 then {
+        return false
+    };
+    let entry = rlp_decode_item(cursor);
+    let next = rlp_cursor_advance(cursor, entry.source.len);
+    let fields = bal_ref_cursor(entry);
+    let field = rlp_decode_item(fields);
+    let candidate = rlp_decode_word(field);
+    if candidate == address then {
+        let fields = rlp_cursor_advance(fields, field.source.len);
+        let slots = rlp_decode_item(fields);
+        match slot {
+            None() => true,
+            Some(key) => historical_schema_has_slot(bal_ref_cursor(slots), key),
+        }
+    } else if word_ult(address, candidate) then {
+        false
+    } else {
+        historical_schema_has_access(next, address, slot)
+    }
+}
+termination_measure historical_schema_has_access(cursor, address, slot) = cursor.len
+
+/*! Enforces historical allocation-schema membership at kernel accesses. */
+function require_historical_state_access(address, slot) = {
+    let execution_profile = k_execution_profile;
+    let protocol = execution_profile.protocol;
+    if protocol.fork < Amsterdam then {
+        /* Raw host warm bits certify a previous schema check (or a storage
+           ID from the validated dense schema). Account warmth never proves
+           slot membership. Do not use the kernel's precompile shortcut. */
+        let already_checked : bool = match slot {
+            None() => account_is_warm(address),
+            Some(key) => storage_is_warm(address, key),
+        };
+        if not_bool(already_checked) then {
+            let root = rlp_single_ref(k_historical_access_schema);
+            let found = historical_schema_has_access(bal_ref_cursor(root), address_to_word(address), slot);
+            if not_bool(found) then {
+                fatal_error(InvalidBlockAccessList)
+            }
+        }
+    }
+}
+
 /*! Validates the canonical EIP-7928 BAL directly against the host recorder. */
 function validate_block_access_list(
     bytes : StatelessInputSliceAtMost(block_access_list_length_bound),

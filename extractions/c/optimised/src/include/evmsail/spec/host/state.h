@@ -39,9 +39,11 @@ bool account_is_warm(bytes20 /* arg_0 */);
 
 void account_mark_warm(bytes20 /* arg_0 */);
 
+bool storage_is_warm(bytes20 /* arg_0 */, u256 /* arg_1 */);
+
 void storage_mark_warm(bytes20 /* arg_0 */, u256 /* arg_1 */);
 
-void authorization_tracker_reset(uint16_t /* arg_0 */);
+void authorization_tracker_reset(uint32_t /* arg_0 */);
 
 bool authorization_tracker_seen(bytes20 /* arg_0 */);
 
@@ -70,7 +72,6 @@ bytes20 log_addr(uint64_t /* arg_0 */);
 uint64_t log_topic_count(uint64_t /* arg_0 */);
 
 u256 log_topic(uint64_t /* arg_0 */, uint64_t /* arg_1 */);
-
 
 #ifdef __cplusplus
 }

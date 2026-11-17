@@ -3,7 +3,6 @@
 
 const uint8_t MPT_HASH_LENGTH = UINT8_C(32);
 
-
 struct InlineNode inline_node_from_scratch_slice(Bytes bytes)
 {
   if (bytes.len < MPT_HASH_LENGTH) {
@@ -36,4 +35,3 @@ uint16_t branch_content_length_add(uint16_t current, uint8_t addition)
   }
   fatal_error(RlpDecode);
 }
-

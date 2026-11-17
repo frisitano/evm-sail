@@ -35,8 +35,6 @@ void scratch_rewind(uint32_t mark);
 
 void scratch_reset(void);
 
-uint32_t scratch_length_add(uint8_t left, uint32_t right);
-
 void scratch_push_b256_bytes32_uint8_t_to_unit(bytes32 data, uint8_t len);
 
 void scratch_push_word_be_u256_uint8_t_to_unit(u256 data, uint8_t len);
@@ -45,7 +43,6 @@ uint32_t scratch_reserve_uint8_t_to_uint32_t(uint8_t len);
 
 // register zscratch_arena
 extern Bytes scratch_arena;
-
 
 #ifdef __cplusplus
 }

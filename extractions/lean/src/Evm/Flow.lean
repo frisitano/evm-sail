@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -58,7 +59,7 @@ open BalIterEntry
 open AcctTxPopResult
 open AcctBlockIterResult
 
-/- Type quantifiers: k_ex545386_ : Bool, k_ex545385_ : Bool -/
+/- Type quantifiers: k_ex574728_ : Bool, k_ex574727_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

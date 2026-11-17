@@ -49,6 +49,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -180,7 +181,7 @@ def block_blob_gas_add (maximum_count : Nat) (accumulated : Nat) (transaction : 
 parent underused blobs, otherwise accumulates; from Osaka, EIP-7918
 substitutes the reserve-price form when the execution base fee
 dominates. -/
-/- Type quantifiers: k_ex550239_ : Nat, k_ex550238_ : Nat, k_ex550237_ : Nat, profile_dependentWitness9
+/- Type quantifiers: k_ex579766_ : Nat, k_ex579765_ : Nat, k_ex579764_ : Nat, profile_dependentWitness9
   : Nat, profile_dependentWitness8 : Nat, profile_dependentWitness7 : Nat, profile_dependentWitness6
   : Nat, profile_dependentWitness5 : Nat, profile_dependentWitness4 : Nat, profile_dependentWitness3
   : Nat, profile_dependentWitness2 : Nat, profile_dependentWitness1 : Nat, profile_dependentWitness0
@@ -262,11 +263,11 @@ dominates. -/
   profile_dependentWitness3 = 11684671 ∧
   profile_dependentWitness4 = 65536 ∧
   profile_dependentWitness5 = 131072 ∧
-  profile_dependentWitness6 = (2 ^ 64 - 1) ∧
+  profile_dependentWitness6 = (2 ^ 32 - 1) ∧
   profile_dependentWitness7 = (2 ^ 24) ∧
-  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5, 0 ≤ k_ex550237_ ∧
-  k_ex550237_ ≤ (256 * 11684671 + 21 * 2 ^ 17), 0 ≤ k_ex550238_ ∧ k_ex550238_ ≤ 21, 0 ≤
-  k_ex550239_ ∧ k_ex550239_ ≤ (2 ^ 256 - 1) -/
+  profile_dependentWitness8 = 6 ∧ profile_dependentWitness9 = 5, 0 ≤ k_ex579764_ ∧
+  k_ex579764_ ≤ (256 * 11684671 + 21 * 2 ^ 17), 0 ≤ k_ex579765_ ∧ k_ex579765_ ≤ 21, 0 ≤
+  k_ex579766_ ∧ k_ex579766_ ≤ (2 ^ 256 - 1) -/
 def next_excess_blob_gas (profile : (Sigma fun (k_fork : Nat) =>
   (Sigma fun (k_target : Nat) =>
   (Sigma fun (k_maximum : Nat) =>
@@ -381,15 +382,15 @@ abbrev G_initcode_word : Nat := 2
 
 def G_amsterdam_cold_account_access : gas_constant := 3000
 
-def G_amsterdam_cold_storage_access : gas_constant := 3000
+def G_amsterdam_cold_storage_access : gas_constant := 2100
 
 def G_amsterdam_storage_write : gas_constant := 10000
 
-def G_amsterdam_account_write : gas_constant := 8000
+def G_amsterdam_account_write : gas_constant := 9000
 
-def G_amsterdam_call_value : gas_constant := 10300
+def G_amsterdam_call_value : gas_constant := 11300
 
-def G_amsterdam_create_access : gas_constant := 11000
+def G_amsterdam_create_access : gas_constant := 12000
 
 def G_amsterdam_state_byte : gas_constant := 1530
 
@@ -399,7 +400,7 @@ def G_amsterdam_state_new_account : state_gas_spill := 183600
 
 def G_amsterdam_state_auth_base : state_gas_spill := 35190
 
-def R_amsterdam_storage_clear : Nat := 12480
+def R_amsterdam_storage_clear : Nat := 11616
 
 def G_sstore_sentry : gas_cost := 2301
 
@@ -428,13 +429,13 @@ def sstore_clear_refund (_ : Unit) : SailM Nat := do
   then (pure R_sclear_london)
   else (pure R_sclear_pre_london)
 
-/- Type quantifiers: left : Nat, 0 ≤ left ∧ left ≤ transaction_execution_gas_limit_value -/
+/- Type quantifiers: left : Nat, 0 ≤ left ∧ left ≤ frame_execution_gas_limit_value -/
 def state_gas_spill_room (left : Nat) : Nat :=
-  ((2 ^i 24) - left)
+  (30000000 - left)
 
 /-- Adds a nonnegative spill amount or rejects a value beyond the transaction cap. -/
 /- Type quantifiers: left : Nat, right : Nat, 0 ≤ left ∧
-  left ≤ transaction_execution_gas_limit_value ∧ 0 ≤ right -/
+  left ≤ frame_execution_gas_limit_value ∧ 0 ≤ right -/
 def state_gas_spill_add (left : Nat) (right : Nat) : SailM Nat := do
   let room := (state_gas_spill_room left)
   if ((right ≤b room) : Bool)
@@ -443,7 +444,7 @@ def state_gas_spill_add (left : Nat) (right : Nat) : SailM Nat := do
 
 /- Type quantifiers: state_gas_spilled : Nat, state_gas_remaining : Nat, g : Nat, amount : Nat, 0
   ≤ amount, 0 ≤ g ∧ g ≤ (2 ^ 64 - 1), 0 ≤ state_gas_remaining ∧
-  state_gas_remaining ≤ (2 ^ 64 - 1), 0 ≤ state_gas_spilled ∧ state_gas_spilled ≤ (2 ^ 24) -/
+  state_gas_remaining ≤ (2 ^ 64 - 1), 0 ≤ state_gas_spilled ∧ state_gas_spilled ≤ 30000000 -/
 def charge_state_gas (g : Nat) (state_gas_remaining : Nat) (state_gas_spilled : Nat) (amount : Nat) : SailM (Bool × Nat × Nat × Nat) := do
   if ((amount == 0) : Bool)
   then (pure (false, g, state_gas_remaining, state_gas_spilled))
@@ -465,7 +466,7 @@ def charge_state_gas (g : Nat) (state_gas_remaining : Nat) (state_gas_spilled : 
 
 /- Type quantifiers: amount : Nat, state_gas_spilled : Nat, state_gas_remaining : Nat, g : Nat, 0
   ≤ g ∧ g ≤ (2 ^ 64 - 1), 0 ≤ state_gas_remaining ∧ state_gas_remaining ≤ (2 ^ 64 - 1), 0
-  ≤ state_gas_spilled ∧ state_gas_spilled ≤ (2 ^ 24), 0 ≤ amount ∧ amount ≤ (2 ^ 24) -/
+  ≤ state_gas_spilled ∧ state_gas_spilled ≤ 30000000, 0 ≤ amount ∧ amount ≤ 30000000 -/
 def credit_state_gas_refund (g : Nat) (state_gas_remaining : Nat) (state_gas_spilled : Nat) (amount : Nat) : SailM (Nat × Nat × Nat) := do
   let spilled := state_gas_spilled
   if ((amount ≤b spilled) : Bool)
@@ -483,10 +484,23 @@ def credit_state_gas_refund (g : Nat) (state_gas_remaining : Nat) (state_gas_spi
       let to_state : Nat := (amount - spilled)
       (pure (credited, (← (conserved_gas_add state_gas_remaining to_state)), STATE_GAS_SPILL_ZERO)))
 
+/-- A successful child can return a refund in state gas for a charge funded
+by its parent's execution gas. Reunite the credit and outstanding spill
+before the parent resumes execution (EIP-8037). -/
+/- Type quantifiers: k_ex579854_ : Nat, k_ex579853_ : Nat, k_ex579852_ : Nat, 0 ≤ k_ex579852_ ∧
+  k_ex579852_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex579853_ ∧ k_ex579853_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex579854_ ∧ k_ex579854_ ≤ 30000000 -/
+def repay_state_gas_spill (g : Nat) (remaining : Nat) (spilled : Nat) : SailM (Nat × Nat × Nat) := do
+  let repayment :=
+    if ((remaining <b spilled) : Bool)
+    then remaining
+    else spilled
+  (pure ((← (conserved_gas_add g repayment)), (remaining - repayment), (spilled - repayment)))
+
 /- Type quantifiers: child_spilled : Nat, child_remaining : Nat, parent_spilled : Nat, parent_remaining
   : Nat, 0 ≤ parent_remaining ∧ parent_remaining ≤ (2 ^ 64 - 1), 0 ≤ parent_spilled ∧
-  parent_spilled ≤ (2 ^ 24), 0 ≤ child_remaining ∧ child_remaining ≤ (2 ^ 64 - 1), 0 ≤
-  child_spilled ∧ child_spilled ≤ (2 ^ 24) -/
+  parent_spilled ≤ 30000000, 0 ≤ child_remaining ∧ child_remaining ≤ (2 ^ 64 - 1), 0 ≤
+  child_spilled ∧ child_spilled ≤ 30000000 -/
 def return_child_state_gas (parent_remaining : Nat) (parent_spilled : Nat) (child_remaining : Nat) (child_spilled : Nat) : SailM (Nat × Nat) := do
   let state_room := (((2 ^i 64) - 1) - parent_remaining)
   if ((child_remaining ≤b state_room) : Bool)
@@ -502,8 +516,8 @@ def refund_gas (g : Nat) (amount : Nat) : SailM Nat := do
 
 /-- Total gas subtraction. Protocol callers establish affordability first;
 the saturated arm keeps the primitive representation-safe by construction. -/
-/- Type quantifiers: k_ex550332_ : Nat, k_ex550331_ : Nat, 0 ≤ k_ex550331_ ∧
-  k_ex550331_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550332_ ∧ k_ex550332_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex579862_ : Nat, k_ex579861_ : Nat, 0 ≤ k_ex579861_ ∧
+  k_ex579861_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex579862_ ∧ k_ex579862_ ≤ (2 ^ 64 - 1) -/
 def gas_sub (left : Nat) (right : Nat) : Nat :=
   if ((right ≤b left) : Bool)
   then (left - right)
@@ -615,7 +629,7 @@ def memory_expansion_gas_cost (mem : Nat) (requested_height : Nat) (available : 
   else GAS_CHARGE_UNAFFORDABLE
 
 /-- The account-access cost for a prior warm bit. -/
-/- Type quantifiers: k_ex550349_ : Bool -/
+/- Type quantifiers: k_ex579879_ : Bool -/
 def account_cost (warm : Bool) : SailM Nat := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -638,7 +652,7 @@ def external_code_read_cost (_ : Unit) : SailM Nat := do
   else (pure G_zero)
 
 /-- The `SLOAD` cost for a prior warm bit (cold = 2100, EIP-2929). -/
-/- Type quantifiers: k_ex550350_ : Bool -/
+/- Type quantifiers: k_ex579880_ : Bool -/
 def sload_cost (warm : Bool) : SailM Nat := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -674,8 +688,8 @@ def create_access_cost (_ : Unit) : SailM Nat := do
 Legacy forks charge per byte; Amsterdam charges the keccak word cost. The
 affordability guard bounds the native product without imposing a protocol
 code-size limit on Frontier or Homestead. -/
-/- Type quantifiers: k_ex550352_ : Nat, k_ex550351_ : Nat, 0 ≤ k_ex550351_ ∧
-  k_ex550351_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550352_ ∧ k_ex550352_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex579882_ : Nat, k_ex579881_ : Nat, 0 ≤ k_ex579881_ ∧
+  k_ex579881_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex579882_ ∧ k_ex579882_ ≤ (2 ^ 64 - 1) -/
 def code_deployment_execution_cost (byte_len : Nat) (available : Nat) : SailM GasCharge := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -781,7 +795,7 @@ as an unforwardable cost. Before Osaka the exact expression is below
 `2^768`, but an EVM caller can observe only whether that expression fits
 its available gas. The staged affordability checks below therefore keep
 every materialized intermediate at most 256 bits in optimized builds. -/
-/- Type quantifiers: k_ex550365_ : Nat, 0 ≤ k_ex550365_ ∧ k_ex550365_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex579895_ : Nat, 0 ≤ k_ex579895_ ∧ k_ex579895_ ≤ (2 ^ 64 - 1) -/
 def modexp_gas (input : CalldataSlice) (available : Nat) : SailM GasCharge := SailME.run do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -971,10 +985,10 @@ def BLS_G2_DISCOUNT : (Vector bls_discount 128) :=
 
 /-- EIP-2537 MSM gas: `(k · base · discount(k)) / 1000`, with the
 discount clamped to the `k = 128` entry beyond the table. -/
-/- Type quantifiers: k_ex550625_ : Nat, k_ex550624_ : Nat, k_ex550623_ : Nat, k_ex550622_ : Nat, 0
-  ≤ k_ex550622_ ∧ k_ex550622_ ≤ 45000, 0 ≤ k_ex550623_ ∧ k_ex550623_ ≤ (2 ^ 16 - 1), 0
-  ≤ k_ex550624_ ∧ k_ex550624_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550625_ ∧
-  k_ex550625_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580155_ : Nat, k_ex580154_ : Nat, k_ex580153_ : Nat, k_ex580152_ : Nat, 0
+  ≤ k_ex580152_ ∧ k_ex580152_ ≤ 45000, 0 ≤ k_ex580153_ ∧ k_ex580153_ ≤ (2 ^ 16 - 1), 0
+  ≤ k_ex580154_ ∧ k_ex580154_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580155_ ∧
+  k_ex580155_ ≤ (2 ^ 64 - 1) -/
 def bls_msm_gas (table : (Vector Nat 128)) (base : Nat) (maxd : Nat) (k : Nat) (available : Nat) : GasCharge :=
   if ((k == 0) : Bool)
   then (gas_charge GAS_COST_ZERO)
@@ -1005,9 +1019,9 @@ def bls_msm_gas (table : (Vector Nat 128)) (base : Nat) (maxd : Nat) (k : Nat) (
 
 /-- Returns a linear precompile cost only after the caller can afford its
 transaction-controlled multiplier. -/
-/- Type quantifiers: k_ex550629_ : Nat, k_ex550628_ : Nat, k_ex550627_ : Nat, k_ex550626_ : Nat, 0
-  ≤ k_ex550626_ ∧ k_ex550626_ ≤ 45000, 0 ≤ k_ex550627_ ∧ k_ex550627_ ≤ 45000, 0 ≤
-  k_ex550628_ ∧ k_ex550628_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550629_ ∧ k_ex550629_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580159_ : Nat, k_ex580158_ : Nat, k_ex580157_ : Nat, k_ex580156_ : Nat, 0
+  ≤ k_ex580156_ ∧ k_ex580156_ ≤ 45000, 0 ≤ k_ex580157_ ∧ k_ex580157_ ≤ 45000, 0 ≤
+  k_ex580158_ ∧ k_ex580158_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580159_ ∧ k_ex580159_ ≤ (2 ^ 64 - 1) -/
 def linear_gas (base : Nat) (per_unit : Nat) (units : Nat) (available : Nat) : GasCharge :=
   let variable_cost : Nat := (per_unit *i units)
   let exact_cost : Nat := (variable_cost + base)
@@ -1032,7 +1046,7 @@ output. Length-only costs
 derive from the word count; the two input-dependent curves (`MODEXP`,
 `BLAKE2F` rounds) read the input in place. The match arms are the
 precompile catalog with their addresses and pricing EIPs. -/
-/- Type quantifiers: k_ex550631_ : Nat, 0 ≤ k_ex550631_ ∧ k_ex550631_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580161_ : Nat, 0 ≤ k_ex580161_ ∧ k_ex580161_ ≤ (2 ^ 64 - 1) -/
 def precompile_gas (num : PrecompileId) (input : CalldataSlice) (available : Nat) : SailM GasCharge := do
   let input_len := (calldata_slice_length input)
   let input_length := input_len
@@ -1065,10 +1079,10 @@ def undefined_SstoreCosts (_ : Unit) : SailM SstoreCosts := do
   (pure { execution := ← (undefined_range 0 ((2 ^i 64) - 1)),
           refund := ← (undefined_range (Neg.neg (199 *i ((2 ^i 64) - 1))) (199 *i ((2 ^i 64) - 1))),
           state_charge := ← (undefined_range 0 ((2 ^i 64) - 1)),
-          state_credit := ← (undefined_range 0 (2 ^i 24)) })
+          state_credit := ← (undefined_range 0 30000000) })
 
 /-- Returns the Amsterdam execution-gas cost of accessing a storage slot. -/
-/- Type quantifiers: k_ex550632_ : Bool -/
+/- Type quantifiers: k_ex580162_ : Bool -/
 def amsterdam_storage_access_cost (cold : Bool) : Nat :=
   if (cold : Bool)
   then G_amsterdam_cold_storage_access
@@ -1076,7 +1090,7 @@ def amsterdam_storage_access_cost (cold : Bool) : Nat :=
 
 /-- Minimum execution gas required before an Amsterdam `SSTORE` may inspect
 or mutate authenticated state. -/
-/- Type quantifiers: k_ex550633_ : Bool -/
+/- Type quantifiers: k_ex580163_ : Bool -/
 def sstore_sentry_cost (cold : Bool) : Nat :=
   let access_cost := (amsterdam_storage_access_cost cold)
   if ((access_cost <b G_sstore_sentry) : Bool)
@@ -1089,9 +1103,9 @@ Writing the same value, or dirtying an already-dirty slot, costs warm
 access only; a clean slot going zero↔nonzero pays `G_sset` /
 `G_sreset`. Refunds track clearing/un-clearing and restoring the original
 value. The EIP-2929 cold surcharge is added when the slot was not warm. -/
-/- Type quantifiers: k_ex550637_ : Bool, k_ex550636_ : Nat, k_ex550635_ : Nat, k_ex550634_ : Nat, 0
-  ≤ k_ex550634_ ∧ k_ex550634_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550635_ ∧
-  k_ex550635_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550636_ ∧ k_ex550636_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex580167_ : Bool, k_ex580166_ : Nat, k_ex580165_ : Nat, k_ex580164_ : Nat, 0
+  ≤ k_ex580164_ ∧ k_ex580164_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580165_ ∧
+  k_ex580165_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580166_ ∧ k_ex580166_ ≤ (2 ^ 256 - 1) -/
 def legacy_sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (cold : Bool) : SailM SstoreCosts := do
   let cold_cost : Nat :=
     if (cold : Bool)
@@ -1149,9 +1163,9 @@ def legacy_sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (cold
 /-- Amsterdam `SSTORE` pricing (EIP-8037). Access and first-write work debit
 execution gas. Introducing a new non-zero slot debits state gas; restoring
 that slot to its transaction-start zero value returns the state charge. -/
-/- Type quantifiers: k_ex550641_ : Bool, k_ex550640_ : Nat, k_ex550639_ : Nat, k_ex550638_ : Nat, 0
-  ≤ k_ex550638_ ∧ k_ex550638_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550639_ ∧
-  k_ex550639_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550640_ ∧ k_ex550640_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex580171_ : Bool, k_ex580170_ : Nat, k_ex580169_ : Nat, k_ex580168_ : Nat, 0
+  ≤ k_ex580168_ ∧ k_ex580168_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580169_ ∧
+  k_ex580169_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580170_ ∧ k_ex580170_ ≤ (2 ^ 256 - 1) -/
 def amsterdam_sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (cold : Bool) : SstoreCosts :=
   let changed := (current != new_value)
   let clean_change := ((original == current) && changed)
@@ -1195,9 +1209,9 @@ def amsterdam_sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (c
 
 /-- Computes the fork-specific effects of one `SSTORE`. The refund delta is
 accumulated and capped at transaction settlement, not here. -/
-/- Type quantifiers: k_ex550645_ : Bool, k_ex550644_ : Nat, k_ex550643_ : Nat, k_ex550642_ : Nat, 0
-  ≤ k_ex550642_ ∧ k_ex550642_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550643_ ∧
-  k_ex550643_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550644_ ∧ k_ex550644_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex580175_ : Bool, k_ex580174_ : Nat, k_ex580173_ : Nat, k_ex580172_ : Nat, 0
+  ≤ k_ex580172_ ∧ k_ex580172_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580173_ ∧
+  k_ex580173_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580174_ ∧ k_ex580174_ ≤ (2 ^ 256 - 1) -/
 def sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (cold : Bool) : SailM SstoreCosts := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
@@ -1208,9 +1222,9 @@ def sstore_costs (original : Nat) (current : Nat) (new_value : Nat) (cold : Bool
 
 /-- Computes a word-sized unit cost only after proving the product affordable,
 so optimized builds never materialize an overflowing native gas cost. -/
-/- Type quantifiers: k_ex550648_ : Nat, k_ex550647_ : Nat, k_ex550646_ : Nat, 0 ≤ k_ex550646_ ∧
-  k_ex550646_ ≤ 45000, 0 ≤ k_ex550647_ ∧ k_ex550647_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550648_ ∧
-  k_ex550648_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580178_ : Nat, k_ex580177_ : Nat, k_ex580176_ : Nat, 0 ≤ k_ex580176_ ∧
+  k_ex580176_ ≤ 45000, 0 ≤ k_ex580177_ ∧ k_ex580177_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580178_ ∧
+  k_ex580178_ ≤ (2 ^ 64 - 1) -/
 def word_scaled_gas_cost (per_unit : Nat) (units : Nat) (available : Nat) : GasCharge :=
   if (((per_unit == 0) || (units == 0)) : Bool)
   then (gas_charge GAS_COST_ZERO)
@@ -1227,9 +1241,9 @@ def word_scaled_gas_cost (per_unit : Nat) (units : Nat) (available : Nat) : GasC
     else GAS_CHARGE_UNAFFORDABLE)
 
 /-- Computes an opcode base cost and its per-memory-word component. -/
-/- Type quantifiers: k_ex550652_ : Nat, k_ex550651_ : Nat, k_ex550650_ : Nat, k_ex550649_ : Nat, 0
-  ≤ k_ex550649_ ∧ k_ex550649_ ≤ 45000, 0 ≤ k_ex550650_ ∧ k_ex550650_ ≤ 45000, 0 ≤
-  k_ex550651_ ∧ k_ex550651_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550652_ ∧ k_ex550652_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580182_ : Nat, k_ex580181_ : Nat, k_ex580180_ : Nat, k_ex580179_ : Nat, 0
+  ≤ k_ex580179_ ∧ k_ex580179_ ≤ 45000, 0 ≤ k_ex580180_ ∧ k_ex580180_ ≤ 45000, 0 ≤
+  k_ex580181_ ∧ k_ex580181_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580182_ ∧ k_ex580182_ ≤ (2 ^ 64 - 1) -/
 def memory_word_gas_cost (base : Nat) (per_word : Nat) (size : Nat) (available : Nat) : GasCharge :=
   if ((base >b available) : Bool)
   then GAS_CHARGE_UNAFFORDABLE
@@ -1247,20 +1261,20 @@ def memory_word_gas_cost (base : Nat) (per_word : Nat) (size : Nat) (available :
       else GAS_CHARGE_UNAFFORDABLE)
     else GAS_CHARGE_UNAFFORDABLE)
 
-/- Type quantifiers: k_ex550654_ : Nat, k_ex550653_ : Nat, 0 ≤ k_ex550653_ ∧
-  k_ex550653_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550654_ ∧ k_ex550654_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580184_ : Nat, k_ex580183_ : Nat, 0 ≤ k_ex580183_ ∧
+  k_ex580183_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580184_ ∧ k_ex580184_ ≤ (2 ^ 64 - 1) -/
 def keccak_gas_cost (size : Nat) (available : Nat) : GasCharge :=
   (memory_word_gas_cost G_keccak G_keccak_word size available)
 
-/- Type quantifiers: k_ex550656_ : Nat, k_ex550655_ : Nat, 0 ≤ k_ex550655_ ∧
-  k_ex550655_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550656_ ∧ k_ex550656_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580186_ : Nat, k_ex580185_ : Nat, 0 ≤ k_ex580185_ ∧
+  k_ex580185_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580186_ ∧ k_ex580186_ ≤ (2 ^ 64 - 1) -/
 def copy_gas_cost (size : Nat) (available : Nat) : GasCharge :=
   (memory_word_gas_cost GAS_CONSTANT_ZERO G_copy_word size available)
 
 /-- Computes the base, topic, and data-byte components of a log operation. -/
-/- Type quantifiers: k_ex550659_ : Nat, k_ex550658_ : Nat, k_ex550657_ : Nat, 0 ≤ k_ex550657_ ∧
-  k_ex550657_ ≤ 4, 0 ≤ k_ex550658_ ∧ k_ex550658_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex550659_ ∧
-  k_ex550659_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580189_ : Nat, k_ex580188_ : Nat, k_ex580187_ : Nat, 0 ≤ k_ex580187_ ∧
+  k_ex580187_ ≤ 4, 0 ≤ k_ex580188_ ∧ k_ex580188_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex580189_ ∧
+  k_ex580189_ ≤ (2 ^ 64 - 1) -/
 def log_gas_cost (num_topics : Nat) (size : Nat) (available : Nat) : GasCharge :=
   let topic_cost := (G_logtopic *i num_topics)
   let fixed_cost := (G_log + topic_cost)
@@ -1300,8 +1314,8 @@ def transaction_initcode_gas (byte_len : Nat) : SailM Nat := do
   else (pure 0)
 
 /-- Applies the EIP-150 forwarding cap to a word-sized gas request. -/
-/- Type quantifiers: k_ex550663_ : Nat, k_ex550662_ : Nat, 0 ≤ k_ex550662_ ∧
-  k_ex550662_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550663_ ∧ k_ex550663_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex580193_ : Nat, k_ex580192_ : Nat, 0 ≤ k_ex580192_ ∧
+  k_ex580192_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580193_ ∧ k_ex580193_ ≤ (2 ^ 256 - 1) -/
 def call_gas_cap_word (available : Nat) (requested : Nat) : Nat :=
   let retained : Nat := (available / 64)
   let all_but_64th : Nat := (gas_sub available retained)

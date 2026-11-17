@@ -9,8 +9,11 @@
 extern "C" {
 #endif
 
-bytes32 block_header_hash_(struct BlockHeader header, bytes32 transactions_root, bytes32 withdrawals_root, bytes32 requests_hash, bytes32 block_access_list_hash);
+uint16_t block_header_rlp_lengths(struct BlockHeader header, uint16_t *restrict field_0_8_1568);
 
+bytes32 block_header_hash_(struct BlockHeader header, bytes32 transactions_root,
+                           bytes32 withdrawals_root, bytes32 requests_hash,
+                           bytes32 block_access_list_hash);
 
 #ifdef __cplusplus
 }

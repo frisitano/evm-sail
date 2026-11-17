@@ -40,6 +40,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -109,8 +110,8 @@ def SECP_N_HALF : word :=
 
 /-- Recovers the signer address from `(h, y_parity, r, s)`, returning
 recovery success and the recovered address (used by EIP-7702). -/
-/- Type quantifiers: k_ex546881_ : Nat, k_ex546880_ : Nat, k_ex546879_ : Nat, 0 ≤ k_ex546879_ ∧
-  k_ex546879_ ≤ 1, 0 ≤ k_ex546880_ ∧ k_ex546880_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex546881_ ∧
-  k_ex546881_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex576223_ : Nat, k_ex576222_ : Nat, k_ex576221_ : Nat, 0 ≤ k_ex576221_ ∧
+  k_ex576221_ ≤ 1, 0 ≤ k_ex576222_ ∧ k_ex576222_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex576223_ ∧
+  k_ex576223_ ≤ (2 ^ 256 - 1) -/
 def ecrecover_addr (h : (Vector (BitVec 8) 32)) (yparity : Nat) (r : Nat) (s : Nat) : SailM AddressResult := do
   (host_ecrecover h yparity r s)

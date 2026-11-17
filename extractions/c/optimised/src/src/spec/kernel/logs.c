@@ -3,7 +3,6 @@
 
 const uint16_t LOGS_BLOOM_BYTE_LENGTH = UINT16_C(256);
 
-
 void k_log_topics(struct LogTopics topics)
 {
   if (topics.kind != Kind_LogTopics0) {
@@ -64,12 +63,13 @@ Bytes read_log_data(uint64_t index)
 
 void k_emit_transfer_log(bytes20 src, bytes20 dst, u256 v)
 {
-  if ((k_execution_profile.protocol.fork < Amsterdam) || (eq_u256(v, WORD_ZERO) || eq_bytes20(src, dst))) {
+  if ((k_execution_profile.protocol.fork < Amsterdam) ||
+      (eq_u256(v, WORD_ZERO) || eq_bytes20(src, dst))) {
     return;
   }
   u256 source = address_to_word(src);
   u256 destination = address_to_word(dst);
-  struct LogTopics topics = LogTopics3(((struct tuple_u256_u256_u256){.tup0 = EIP7708_TRANSFER_TOPIC, .tup1 = source, .tup2 = destination}));
+  struct LogTopics topics = LogTopics3(((struct tuple_u256_u256_u256){
+      .tup0 = EIP7708_TRANSFER_TOPIC, .tup1 = source, .tup2 = destination}));
   k_log(EIP7708_SYSTEM_ADDRESS, topics, (LogDataWord(v)));
 }
-

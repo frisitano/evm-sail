@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -68,8 +69,8 @@ recovery parity. Legacy accepts `27`/`28` or an EIP-155 value binding the
 chain id; typed envelopes accept only an explicit zero-or-one parity.
 An invalid `v` rejects the block here, so an unvalidated parity is
 impossible to pass to sender recovery. -/
-/- Type quantifiers: k_ex549174_ : Nat, k_ex549173_ : Nat, 0 ≤ k_ex549173_ ∧
-  k_ex549173_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex549174_ ∧ k_ex549174_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex578631_ : Nat, k_ex578630_ : Nat, 0 ≤ k_ex578630_ ∧
+  k_ex578630_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex578631_ ∧ k_ex578631_ ≤ (2 ^ 256 - 1) -/
 def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) : SailM Nat := do
   match scheme with
   | .LegacySignature =>
@@ -94,17 +95,21 @@ def tx_signature_parity (chain_id : Nat) (scheme : TxSignatureScheme) (v : Nat) 
           then (pure 1)
           else (fatal_error InvalidSignature)))
 
-/-- Authenticates a transaction: enforce the EIP-2 low-`s` bound, recover the
-signer selected by `y_parity`, and bind it to the address derived from the
-witnessed 65-byte public key. -/
-/- Type quantifiers: k_ex549177_ : Nat, k_ex549176_ : Nat, k_ex549175_ : Nat, 0 ≤ k_ex549175_ ∧
-  k_ex549175_ ≤ 1, 0 ≤ k_ex549176_ ∧ k_ex549176_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex549177_ ∧
-  k_ex549177_ ≤ (2 ^ 256 - 1) -/
-def tx_auth_valid (sender : (Vector (BitVec 8) 20)) (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM Bool := do
-  let high_s := (word_ult SECP_N_HALF s)
-  if (high_s : Bool)
-  then (pure false)
-  else
-    (do
-      let recovered ← do (ecrecover_addr h parity r s)
-      (pure (recovered.success && (recovered.address == sender))))
+/-- Recovers the sender of a transaction: enforce the EIP-2 low-`s` bound and
+the `(0, n)` range of `r`, then recover the signer selected by
+`y_parity`. Any failure rejects the block. -/
+/- Type quantifiers: k_ex578634_ : Nat, k_ex578633_ : Nat, k_ex578632_ : Nat, 0 ≤ k_ex578632_ ∧
+  k_ex578632_ ≤ 1, 0 ≤ k_ex578633_ ∧ k_ex578633_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex578634_ ∧
+  k_ex578634_ ≤ (2 ^ 256 - 1) -/
+def tx_recover_sender (h : (Vector (BitVec 8) 32)) (parity : Nat) (r : Nat) (s : Nat) : SailM (Vector (BitVec 8) 20) := do
+  let valid_range :=
+    ((word_ult ZERO_WORD r) && ((word_ult r SECP_N_FULL) && ((word_ult ZERO_WORD s) && (word_ule s
+            SECP_N_HALF))))
+  let invalid_range := (! valid_range)
+  if (invalid_range : Bool)
+  then (fatal_error InvalidSignature)
+  else (pure ())
+  let recovered ← do (ecrecover_addr h parity r s)
+  if (recovered.success : Bool)
+  then (pure recovered.address)
+  else (fatal_error InvalidSignature)

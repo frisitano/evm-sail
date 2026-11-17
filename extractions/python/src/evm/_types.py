@@ -240,7 +240,6 @@ from .primitives.chain_config import (
     BlobSchedule as BlobSchedule,
     BlobScheduleFields as BlobScheduleFields,
     BlobScheduleFieldsValidity as BlobScheduleFieldsValidity,
-    ChainConfig as ChainConfig,
     ExecutionProfile as ExecutionProfile,
     ExecutionProfileFields as ExecutionProfileFields,
     ExecutionProfileFieldsValidity as ExecutionProfileFieldsValidity,
@@ -297,6 +296,9 @@ from .primitives.tx import (
     AuthorizationListRefFieldsValidity as AuthorizationListRefFieldsValidity,
     BlobHashesFields as BlobHashesFields,
     BlobHashesFieldsValidity as BlobHashesFieldsValidity,
+    DecodedTransaction as DecodedTransaction,
+    DecodedTransactionFields as DecodedTransactionFields,
+    DecodedTransactionFieldsValidity as DecodedTransactionFieldsValidity,
     LogSeriesRef as LogSeriesRef,
     LogTopics as LogTopics,
     LogTopics0 as LogTopics0,
@@ -676,7 +678,11 @@ from .executor.payload import (
 )
 
 from .lib.htr import (
+    HtrProgressiveSource as HtrProgressiveSource,
     HtrRequestKind as HtrRequestKind,
+    HtrRequestLeaves as HtrRequestLeaves,
+    HtrVersionedHashLeaves as HtrVersionedHashLeaves,
+    HtrWithdrawalLeaves as HtrWithdrawalLeaves,
     htr_depth as htr_depth,
     htr_leaf_count as htr_leaf_count,
 )

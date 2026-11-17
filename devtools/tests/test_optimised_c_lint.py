@@ -45,6 +45,19 @@ def test_read_baseline_normalizes_existing_keys(tmp_path: Path) -> None:
     }
 
 
+def test_written_normalized_baseline_round_trips(tmp_path: Path) -> None:
+    finding = Finding(
+        path="generated.c",
+        line=12,
+        column=3,
+        check="clang-analyzer-deadcode.DeadStores,-warnings-as-errors",
+        message="Value stored to '_8_1364_8_1661' is never read",
+    )
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps([finding_key(finding)]))
+    assert finding_key(finding) in read_baseline(baseline_path)
+
+
 def test_reserved_identifier_checks_are_portable(tmp_path: Path) -> None:
     baseline_path = tmp_path / "baseline.json"
     message = (

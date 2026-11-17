@@ -29,18 +29,19 @@ void acct_tx_reset(void);
 void bal_reset(void);
 void bal_prepare_iter(void);
 void bal_note_account_touch(bytes20 address);
-void bal_note_storage_change(uint64_t index, bytes20 address, u256 slot, u256 value);
+void bal_note_storage_change(uint64_t index, bytes20 address, u256 slot, u256 before, u256 value);
 void bal_note_storage_read(bytes20 address, u256 slot);
-void bal_note_balance_change(uint64_t index, bytes20 address, u256 value);
+void bal_note_balance_change(uint64_t index, bytes20 address, u256 before, u256 value);
 void bal_note_nonce_change(uint64_t index, bytes20 address, uint64_t nonce);
 void bal_note_code_change(uint64_t index, bytes20 address, bytes32 code_hash);
 
 void warm_reset(uint32_t current_transaction_epoch);
 bool account_is_warm(bytes20 address);
 void account_mark_warm(bytes20 address);
+bool storage_is_warm(bytes20 address, u256 slot);
 void storage_mark_warm(bytes20 address, u256 slot);
 
-void authorization_tracker_reset(uint16_t count_hint);
+void authorization_tracker_reset(uint32_t count_hint);
 bool authorization_tracker_seen(bytes20 authority);
 bool authorization_tracker_originally_delegated(bytes20 authority);
 bool authorization_tracker_delegation_set(bytes20 authority);

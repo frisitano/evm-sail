@@ -79,7 +79,7 @@ abbrev account_nonce := Nat
 
 /-- Largest value represented by an SSZ `uint64`. This is a wire-schema
 constraint, sourced from the consensus `ExecutionPayload` container and
-the Amsterdam `SszExecutionPayload`, rather than an implementation word
+the Amsterdam `ExecutionPayload`, rather than an implementation word
 size. -/
 abbrev ssz_uint_bound : Int := (2 ^ 64 - 1)
 
@@ -265,10 +265,14 @@ def protocol_initcode_size_limit_value (k_value : Int) : Prop :=
 EIP-3860 activates. -/
 abbrev protocol_initcode_size_limit := Nat
 
-/-- Whether a value is a supported per-transaction total-gas ceiling: the
-EIP-7825 cap or the unrestricted SSZ block-gas domain. -/
+/-- Amsterdam's complete transaction reservoir is a uint32 quantity. -/
+abbrev amsterdam_transaction_total_gas_limit : Int := (2 ^ 32 - 1)
+
+/-- Supported total-gas ceilings: EIP-7825, Amsterdam, or the earlier
+unrestricted SSZ block-gas domain. -/
 def protocol_transaction_total_gas_limit_value (k_value : Int) : Prop :=
-  k_value = eip7825_transaction_gas_limit ∨ k_value = ssz_uint_bound
+  k_value = eip7825_transaction_gas_limit ∨
+  k_value = amsterdam_transaction_total_gas_limit ∨ k_value = ssz_uint_bound
 
 /-- The fork-selected per-transaction total-gas ceiling. -/
 abbrev protocol_transaction_total_gas_limit := Nat
@@ -623,7 +627,7 @@ abbrev code_scan_position := Nat
 
 /-- The maximum block gas limit admitted by the execution-payload SSZ
 `uint64` field. Provenance: consensus `ExecutionPayload.gas_limit` and
-Amsterdam `SszExecutionPayload.gas_limit`. -/
+Amsterdam `ExecutionPayload.gas_limit`. -/
 abbrev block_gas_limit_bound : Int := (2 ^ 64 - 1)
 
 /-- EIP-7928 charges one BAL item against each 2,000 units of block gas. -/
@@ -719,8 +723,12 @@ abbrev transaction_execution_gas_limit_value : Int := (2 ^ 24)
 EIP-7825 per-transaction cap. -/
 abbrev transaction_execution_gas := Nat
 
-/-- Execution gas temporarily consumed by Amsterdam state charges. EIP-8037
-draws spill only from the regular-gas pool, which is capped by EIP-7825. -/
+/-- A system call grants 30M execution gas, exceeding the EIP-7825
+transaction allowance. State-gas spill must cover either frame kind. -/
+abbrev frame_execution_gas_limit_value : Int := 30000000
+
+/-- State charges temporarily drawn from a transaction or system frame's
+execution grant. -/
 abbrev state_gas_spill := Nat
 
 /-- A block header's gas limit. Its SSZ execution-payload field is `uint64`;
@@ -752,8 +760,9 @@ abbrev gas_refund_bound : Int := (199 * (2 ^ 64 - 1))
 /-- The signed transaction refund accumulator before capping. -/
 abbrev gas_refund := Int
 
-/-- EIP-8037's `SSTORE` storage-clear refund. -/
-abbrev amsterdam_storage_clear_refund : Int := 12480
+/-- The Amsterdam `SSTORE` storage-clear refund: 96% of the storage write plus
+the cold storage access (EIP-8038). -/
+abbrev amsterdam_storage_clear_refund : Int := 11616
 
 /-- One EIP-8037 `SSTORE` transition's signed refund delta. A transition either
 establishes the storage-clear refund or withdraws the one an earlier write
@@ -958,7 +967,7 @@ inductive ExceptionKind where | StackUnderflow | StackOverflow | OutOfGas | Inva
 
 /-- The reason a block fails validation; one variant per violated
 block-validity rule. -/
-inductive FatalError where | InvalidConfig | HeaderChainBroken | RlpDecode | InvalidSignature | InvalidGasLimit | GasUsedExceedsLimit | BlobGasLimitExceeded | ExecutionInvalid | InvalidGasUsed | InvalidBlobGasUsed | InvalidExcessBlobGas | InvalidStateRoot | InvalidReceiptsRoot | InvalidLogsBloom | InvalidBlockHash | InvalidParentHash | BlockAccessListTooLarge | InvalidBlockAccessList | InvalidExecutionRequests | WitnessDeficient | NumericOverflow
+inductive FatalError where | InvalidConfig | HeaderChainBroken | RlpDecode | InvalidSignature | InvalidGasLimit | GasUsedExceedsLimit | BlobGasLimitExceeded | ExecutionInvalid | InvalidGasUsed | InvalidBlobGasUsed | InvalidExcessBlobGas | InvalidStateRoot | InvalidReceiptsRoot | InvalidLogsBloom | InvalidBlockHash | InvalidParentHash | BlockAccessListTooLarge | InvalidBlockAccessList | InvalidExecutionRequests | InvalidVersionedHashes | WitnessDeficient | NumericOverflow
   deriving BEq, Inhabited, Repr
   open FatalError
 
@@ -984,18 +993,18 @@ inductive FrameStatus where
   deriving Inhabited, BEq, Repr
   open FrameStatus
 
-/-- Maximum transactions in the execution-payload SSZ list. Provenance:
-Bellatrix `MAX_TRANSACTIONS_PER_PAYLOAD` and Amsterdam
-`SszExecutionPayload.transactions`. -/
+/-- Maximum transactions in the execution-payload SSZ list. -/
 abbrev transaction_count_bound : Int := (2 ^ 20)
 
-/-- Maximum withdrawals in the execution-payload SSZ list. Provenance:
-Capella `MAX_WITHDRAWALS_PER_PAYLOAD` and Amsterdam
-`SszExecutionPayload.withdrawals`. -/
-abbrev withdrawal_count_bound : Int := (2 ^ 4)
+/-- Maximum withdrawals in the execution-payload SSZ list, the same capacity
+as the transactions: both are keyed into an indexed trie. -/
+abbrev withdrawal_count_bound : Int := (2 ^ 20)
 
-/-- Maximum blob commitments in the stateless-input SSZ list. -/
-abbrev blob_commitment_count_bound : Int := (2 ^ 12)
+/-- Maximum blob commitments in the stateless-input SSZ list: the model's
+capacity. The hash-tree-root computation merkleizes at most 22,369,621
+leaves (the thirteen progressive subtrees of 1, 4, ..., 4^12 leaves), so a
+longer list is rejected there. -/
+abbrev blob_commitment_count_bound : Int := (2 ^ 25)
 
 /-- Maximum witness trie nodes in the stateless-input SSZ list. -/
 abbrev witness_node_count_bound : Int := (2 ^ 22)
@@ -1006,37 +1015,34 @@ abbrev witness_code_count_bound : Int := (2 ^ 18)
 /-- Maximum witness headers in the stateless-input SSZ list. -/
 abbrev witness_header_count_bound : Int := (2 ^ 8)
 
-/-- Maximum witnessed public keys in the stateless-input SSZ list. -/
-abbrev public_key_count_bound : Int := (2 ^ 15)
-
-/-- Maximum deposit requests in their stateless-input SSZ list. -/
-abbrev deposit_request_count_bound : Int := (2 ^ 13)
+/-- Maximum deposit requests in their stateless-input SSZ list: the model's
+capacity, bounded by the same hash-tree-root leaf limit as the blob
+commitments. -/
+abbrev deposit_request_count_bound : Int := (2 ^ 25)
 
 /-- Maximum withdrawal requests in their stateless-input SSZ list. -/
-abbrev withdrawal_request_count_bound : Int := (2 ^ 4)
+abbrev withdrawal_request_count_bound : Int := (2 ^ 25)
 
 /-- Maximum consolidation requests in their stateless-input SSZ list. -/
-abbrev consolidation_request_count_bound : Int := (2 ^ 1)
+abbrev consolidation_request_count_bound : Int := (2 ^ 25)
 
 /-- Maximum builder deposit requests in their stateless-input SSZ list. -/
-abbrev builder_deposit_request_count_bound : Int := (2 ^ 6)
+abbrev builder_deposit_request_count_bound : Int := (2 ^ 25)
 
 /-- Maximum builder exit requests in their stateless-input SSZ list. -/
-abbrev builder_exit_request_count_bound : Int := (2 ^ 4)
+abbrev builder_exit_request_count_bound : Int := (2 ^ 25)
 
 /-- Maximum byte length of execution-payload extra data. Provenance:
 consensus `MAX_EXTRA_DATA_BYTES` and Amsterdam
-`SszExecutionPayload.extra_data`. -/
+`ExecutionPayload.extra_data`. -/
 abbrev extra_data_length_bound : Int := (2 ^ 5)
 
 /-- Maximum byte length of one encoded transaction envelope. Provenance:
-Amsterdam `MAX_BYTES_PER_TRANSACTION` in
-`SszExecutionPayload.transactions`. -/
+Bellatrix `MAX_BYTES_PER_TRANSACTION`. -/
 abbrev transaction_length_bound : Int := (2 ^ 30)
 
-/-- Maximum byte length of the block access list. Provenance: Amsterdam
-`SszExecutionPayload.block_access_list` uses
-`ByteList[MAX_BYTES_PER_TRANSACTION]`. -/
+/-- Maximum byte length of the block access list, the same capacity as one
+transaction envelope. -/
 abbrev block_access_list_length_bound : Int := (2 ^ 30)
 
 /-- Maximum byte length of one witnessed trie node. -/
@@ -1083,10 +1089,10 @@ abbrev TransactionListRef := (BoundedSszListRef (2 ^ 20))
 abbrev TransactionListCursor := (BoundedSszListCursor (2 ^ 20))
 
 /-- A schema-bounded source reference to withdrawals. -/
-abbrev WithdrawalListRef := (BoundedSszListRef (2 ^ 4))
+abbrev WithdrawalListRef := (BoundedSszListRef (2 ^ 20))
 
 /-- A sequential cursor over withdrawals. -/
-abbrev WithdrawalListCursor := (BoundedSszListCursor (2 ^ 4))
+abbrev WithdrawalListCursor := (BoundedSszListCursor (2 ^ 20))
 
 /-- A schema-bounded source reference to witnessed trie nodes. -/
 abbrev WitnessNodeListRef := (BoundedSszListRef (2 ^ 22))
@@ -1439,7 +1445,7 @@ def protocol_profile_parameters
   k_denominator = bpo2_blob_fee_update_fraction ∧
   k_code_limit = amsterdam_deployed_code_size_limit ∧
   k_initcode_limit = amsterdam_initcode_size_limit ∧
-  k_transaction_total_gas_limit = ssz_uint_bound ∧
+  k_transaction_total_gas_limit = amsterdam_transaction_total_gas_limit ∧
   k_transaction_regular_gas_limit = eip7825_transaction_gas_limit ∧
   k_transaction_blob_limit = cancun_blob_max_count ∧ k_refund_divisor = post_london_refund_divisor
 
@@ -1650,11 +1656,6 @@ abbrev ExecutionProfile :=
   (Sigma fun (k_transaction_regular_limit : Nat) =>
   (ExecutionProfileFields k_fork k_target k_maximum k_denominator k_code_limit k_initcode_limit k_profile_total_limit k_profile_regular_limit k_transaction_blob_limit k_refund_divisor k_block_limit k_transaction_total_limit k_transaction_regular_limit))))))))))))))
 
-/-- The decoded chain configuration for the executing payload. -/
-structure ChainConfig where
-  chain_id : chain_identifier
-  deriving BEq, Inhabited, Repr
-
 /-- Account state (Yellow Paper §4.1, the account tuple σ[a]).
 `storage_root` is the account's *pre-state* storage root — the witness
 anchor that stateless storage reads walk on a cached-state miss. It is
@@ -1837,11 +1838,11 @@ abbrev TransactionInputSlice :=
 /-- A collection count whose entries are encoded inside one transaction. -/
 abbrev transaction_item_count := Nat
 
-/-- EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
-Amsterdam's least expensive authorization costs 7,816 execution gas.
-Successful transaction validity therefore proves that no executable
-authorization list can contain more entries than this bound. -/
-abbrev prepared_authorization_count_bound : Int := (eip7825_transaction_gas_limit / 7816)
+/-- Prepared entries retain the structural transaction-envelope count bound.
+Prague predates the regular-gas cap, so Amsterdam's gas-derived bound
+cannot constrain this shared semantic representation. Each fork's actual
+intrinsic and transaction gas checks establish execution validity. -/
+abbrev prepared_authorization_count_bound : Int := (2 ^ 30)
 
 /-- The number of authorization tuples admitted by one valid transaction. -/
 abbrev prepared_authorization_count := Nat
@@ -1891,7 +1892,36 @@ abbrev transaction_calldata_floor_cost := Nat
 /-- The greatest EIP-3860 initcode charge admitted by an SSZ transaction. -/
 abbrev transaction_initcode_cost := Nat
 
-/-- A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
+/-- Structural envelope data. It carries signature material but has no sender
+and cannot be passed to transaction execution. -/
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+structure DecodedTransactionFields (k_blob_limit : Nat) where
+  tx_type : TxType
+  nonce : word
+  chain_id : chain_identifier
+  gas_limit : transaction_gas
+  is_create : Bool
+  recipient : address
+  value : word
+  raw : StatelessInputSlice
+  input_src : TransactionInputSlice
+  access_list : AccessListRef
+  max_fee : word
+  max_blob_fee : word
+  max_priority_fee : word
+  authorizations : AuthorizationListRef
+  blob_hashes : (BlobHashesFields k_blob_limit)
+  signing_hash : hash
+  sig_v : word
+  sig_r : word
+  sig_s : word
+  deriving BEq, Inhabited, Repr
+
+/-- A structural envelope retaining the admitted blob-count limit. -/
+abbrev DecodedTransaction :=
+  (Sigma fun (k_blob_limit : Nat) => (DecodedTransactionFields k_blob_limit))
+
+/-- A sender-recovered transaction. Covers the EIP-2718 typed envelopes 0–4:
 legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
 (blob), and EIP-7702 (set code); the type-specific fields are
 validity-relevant per their EIP. -/
@@ -1913,7 +1943,6 @@ structure TransactionFields (k_blob_limit : Nat) where
   max_priority_fee : word
   authorizations : AuthorizationListRef
   blob_hashes : (BlobHashesFields k_blob_limit)
-  pubkey : StatelessInputSlice
   signing_hash : hash
   sig_v : word
   sig_r : word
@@ -2451,11 +2480,11 @@ inductive FrameContinuation where
   deriving Inhabited, BEq, Repr
   open FrameContinuation
 
-/-- The guest's decoded input: the execution payload and the chain
-configuration it executes under. -/
+/-- The guest's decoded input: the execution payload and the chain id it
+executes under. -/
 structure StatelessInput where
   payload : ExecutionPayload
-  chain_config : ChainConfig
+  chain_id : chain_identifier
   deriving BEq, Inhabited, Repr
 
 /-- Authenticated facts about the parent block that validation rules
@@ -2464,6 +2493,9 @@ structure WitnessContext where
   parent_hash : hash
   parent_state_root : hash
   parent_base_fee_per_gas : word
+  parent_has_base_fee : Bool
+  parent_gas_limit : block_gas_limit
+  parent_gas_used : block_gas
   parent_blob_gas_used : blob_gas_used
   parent_excess_blob_gas : excess_blob_gas
   deriving BEq, Inhabited, Repr
@@ -3085,6 +3117,7 @@ abbrev rlp_index := Nat
 Consumers receive explicit source spans instead of re-reading nested
 SSZ offset tables. -/
 structure StatelessInputRef where
+  schema_id : (BitVec 16)
   protocol : ProtocolProfile
   new_payload_request : StatelessInputSlice
   execution_payload : (StatelessInputSliceAtLeast 540)
@@ -3101,8 +3134,7 @@ structure StatelessInputRef where
   witness_state : WitnessNodeListRef
   witness_codes : WitnessCodeListRef
   witness_headers : WitnessHeaderListRef
-  chain_config : StatelessInputSlice
-  public_keys : StatelessInputSlice
+  chain_id : chain_identifier
   deriving BEq, Inhabited, Repr
 
 /-- A sequential position within one SSZ container's variable region. The
@@ -3118,6 +3150,8 @@ structure ParentHeaderFields where
   parent_hash : hash
   state_root : hash
   base_fee : word
+  gas_limit : block_gas_limit
+  gas_used : block_gas
   blob_gas_used : blob_gas_used
   excess_blob_gas : excess_blob_gas
   have_parent : Bool
@@ -3138,6 +3172,9 @@ structure WitnessHeaderIndex where
   valid : Bool
   parent_state_root : hash
   parent_base_fee_per_gas : word
+  parent_has_base_fee : Bool
+  parent_gas_limit : block_gas_limit
+  parent_gas_used : block_gas
   parent_blob_gas_used : blob_gas_used
   parent_excess_blob_gas : excess_blob_gas
   parent_fields_valid : Bool
@@ -3223,19 +3260,30 @@ abbrev BlockGasUsageFor (k_limit : Int) :=
   (Sigma fun (k_state : Nat) =>
   (Sigma fun (k_receipts : Nat) => (BlockGasUsageFields k_limit k_execution k_state k_receipts))))
 
-/-- The largest Merkle depth required by the supported execution-layer SSZ
-schemas. ByteList[2^30] is the widest one, with 2^25 chunks. -/
+/-- The largest Merkle depth of a supported execution-layer SSZ subtree. A
+progressive tree chains subtrees of depth 0, 2, 4, ..., so the deepest
+(depth 24) bounds a progressive list at 22,369,621 chunks (about 715 MB
+of bytes); a longer list fails closed. -/
 abbrev htr_depth := Nat
 
 /-- A leaf count in any supported execution-layer SSZ Merkle tree. -/
 abbrev htr_leaf_count := Nat
 
-/-- The closed fixed-width leaf-operation algebra carried through the generic
-request-list recursion. [htr_request_leaf][] interprets it at depth zero,
-replacing a higher-order leaf function without duplicating merkleization. -/
+/-- Fixed-width execution-request leaf semantics. -/
 inductive HtrRequestKind where | HtrDeposit | HtrWithdrawalRequest | HtrConsolidationRequest | HtrBuilderDepositRequest | HtrBuilderExitRequest
   deriving BEq, Inhabited, Repr
   open HtrRequestKind
+
+/-- Progressive traversal for fixed-shape leaves. Byte lists and transaction
+lists retain their own traversal layers because transaction leaves recurse
+into progressive byte lists; this boundary avoids a mutually recursive
+type-erasing traversal while sharing the fixed-leaf algorithm. -/
+inductive HtrProgressiveSource where
+  | HtrWithdrawalLeaves (_ : WithdrawalListRef)
+  | HtrVersionedHashLeaves (_ : StatelessInputSlice)
+  | HtrRequestLeaves (_ : (StatelessInputSlice × HtrRequestKind))
+  deriving Inhabited, BEq, Repr
+  open HtrProgressiveSource
 
 inductive Register : Type where
   | k_current_transaction_epoch
@@ -3244,6 +3292,7 @@ inductive Register : Type where
   | k_execution_profile
   | k_chain_id
   | k_n_headers
+  | k_historical_access_schema
   | k_parent_state_root
   | scratch_arena
   deriving DecidableEq, Hashable, Repr
@@ -3256,6 +3305,7 @@ abbrev RegisterType : Register → Type
   | .k_execution_profile => ExecutionProfile
   | .k_chain_id => chain_identifier
   | .k_n_headers => ancestor_hash_count
+  | .k_historical_access_schema => StatelessInputSlice
   | .k_parent_state_root => hash
   | .scratch_arena => ScratchSlice
 
@@ -3265,6 +3315,8 @@ instance : Inhabited (RegisterRef RegisterType ExecutionProfile) where
   default := .Reg k_execution_profile
 instance : Inhabited (RegisterRef RegisterType ScratchSlice) where
   default := .Reg scratch_arena
+instance : Inhabited (RegisterRef RegisterType StatelessInputSlice) where
+  default := .Reg k_historical_access_schema
 instance : Inhabited (RegisterRef RegisterType TxEnv) where
   default := .Reg k_tx
 instance : Inhabited (RegisterRef RegisterType ancestor_hash_count) where

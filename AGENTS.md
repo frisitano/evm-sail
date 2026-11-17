@@ -81,7 +81,7 @@ duplicating instructions elsewhere.
   Both compile against the GENERATED model header (`-DEVMSAIL_MODEL_H`, `-I`
   build dir) and name its concrete types directly, so generated layouts are
   never hand-mirrored or hidden behind a second ABI alias layer. Optimized
-  headers include `evmsail/model.h`, the single generated-header selection
+  headers include `evmsail/prelude.h`, the single generated-header selection
   shim required because Sail emits `--c-include` headers before its own model
   header; it declares no wrapper types or runtime interface.
   `extractions/c/spec/contract/state.c` and
@@ -104,8 +104,9 @@ duplicating instructions elsewhere.
   executed directly. Fallible optimized-only C externs carry `$[c_throws]`;
   the custom compiler marks those calls as throwing and emits the ordinary
   generated `have_exception` unwind immediately after each call. Their C
-  implementations raise the generated `InvalidBlock` exception directly,
-  without result-union wrappers or process aborts. This annotation exists only
+  implementations report protocol-invalid input through `InvalidBlock`,
+  without result-union wrappers. Host invariant/resource exhaustion remains
+  an execution failure. This annotation exists only
   in the optimized C splice, while spec C and proof extraction retain the
   explicit Sail bodies and throws. SSZ decoding reads only from
   `StatelessInputSlice`; the old byte-at-a-time `ssz_src_*` oracle no longer
@@ -140,7 +141,7 @@ duplicating instructions elsewhere.
   spec build. Its source hierarchy follows Sail at established module
   boundaries. `extractions/c/optimised/contract/include/evmsail/` contains the Sail-facing public
   declarations; `extractions/c/optimised/contract/src/` contains implementations and private
-  headers. In particular, `src/host/state.c` adapts generated aggregate values
+  headers. In particular, `src/kernel/accounts.c` adapts generated aggregate values
   while `src/host/state/` owns the dense semantic state, transaction logs, BAL
   metadata, and state-root iterators. Large optimized storage is pointer-backed
   and bound once from `src/workspace.c` before model initialization. Modules
@@ -205,15 +206,55 @@ duplicating instructions elsewhere.
 - `devtools/harness/cli.py` is the SINGLE fixture harness for the single executable
   entry, built ONCE as a shared library and driven IN-PROCESS via ctypes
   (`devtools/harness/guest.py`). Each case is serialized to the SSZ
-  `SszStatelessInput` (`devtools/harness/ssz_builder.py`, under the
+  `StatelessInput` (`devtools/harness/ssz_builder.py`, under the
   execution-specs venv).
   The Amsterdam stateless full-block validator is gated BYTE-EXACT against the
-  EELS reference. State-test cases are executed through the in-process EELS
-  t8n, which builds a fully VALID single-tx block input and invokes
-  `run_stateless_guest`. The pinned EELS schema's three request lists are
-  extended with the two known-empty v0.6.2 builder lists; the adapter
-  recomputes only the request root and preserves the reference guest's
-  validation verdict. Fixtures that already carry
+  EELS reference. State-test synthesis (`ssz_builder.py`) uses the blockchain
+  filler at EELS `59c1473ddfba341babaeca1c97a50e996f639a0b`, matching
+  schema `0x1501`. Set `EXECSPECS_ROOT` and `EXECSPECS_PY` to that checkout
+  and its locked test environment (`uv sync --frozen --group test`). The
+  obsolete v0.6.2 adapters and handwritten witness builder are removed.
+  `ssz_builder.py` remains the integration layer: Amsterdam bytes come from
+  the upstream filler; historical access collection and transport conversion
+  are repository code using the pinned EELS trie/SSZ implementation.
+  `make memory-regression-test` runs the focused memory cases on both C
+  backends. Synthesis accepts secret-key transactions and canonical raw signed
+  type 0–4 envelopes. Historical selectors `0x0a01`–`0x1401` use the v21
+  transport with fork-specific EELS execution; upstream's Amsterdam guest
+  accepts only `0x1501`. Historical payloads carry an uncommitted account/slot
+  schema in the otherwise inactive BAL transport field; its zero markers
+  reserve writable slots and never seed state. Common Sail checks ordering,
+  membership, and proofs, including unused schema entries. Other inactive
+  fields must be empty/zero. Pre-Paris transport represents zero nonce and
+  mix-hash with no ommers and does not validate Ethash. Eight pinned fork
+  transitions through Amsterdam resolve to the active execution profile. Use
+  `make historical-regression-test` and `make stateless-boundary-test` for the
+  fork activation and authenticated-input mutation gates on both backends.
+  The complete Berlin-through-Amsterdam state-suite generation, opt-in
+  Glacier/BPO selection, SSZ export, provenance audit and standard-backend
+  replay commands are documented in README. Matrix results do not establish
+  full-suite coverage. Retain conversion failures and missing exports in the
+  inventory; synthetic state-only BLOCKHASH history cannot be substituted
+  for authenticated headers. `EVM_NATIVE_RESOURCES=historical` uses a separate
+  native build/cache with a 2 GiB optimized workspace (1 GiB memory and
+  64 MiB scratch/log-data/receipts). Production capacities remain explicit;
+  resource exhaustion must not be reported as protocol invalidity. Larger
+  native-profile results do not prove production resource sufficiency.
+  `make historical-suite-test` provisions the pinned EELS checkout/environment,
+  fills and audits both full historical groups, and replays both backends.
+  Its persistent cache validates source identities and content hashes; only
+  the eleven explicit conversion limits may lack exports. EIP-7928 recording
+  and its optimized history allocations are disabled before Amsterdam;
+  authenticated historical account/slot reservations remain required.
+  Before committing model, C-backend or fixture-tooling changes, run
+  `make historical-suite-test` and
+  `make memory-regression-test sender-regression-test historical-regression-test stateless-boundary-test`.
+  These manual checks exercise both native backends; the historical suite
+  is not a CI gate. CI retains the full pinned corpus gate. Local historical
+  cache hits still require hashes/audits, both native rebuilds and all replays.
+  `make sender-regression-test` runs the pinned signature and chain-ID cases
+  on both native backends, requiring every case to pass.
+  Fixtures that already carry
   `statelessInputBytes`/`statelessOutputBytes` are fed directly. `--spike`
   swaps the execution vehicle for the REAL RISC-V guest ELF on spike
   (`zkvm/build.sh`); the ELF is built once without input, and each fixture is
@@ -344,50 +385,57 @@ rtk make c-optimised
 `make fmt-check` may surface pre-existing formatting drift. Do not format
 unrelated files unless that is part of the requested task.
 
-## tests-zkevm v0.6.2 Fixture Corpus
+## tests-zkevm v21.0.6 Fixture Corpus
 
 The only retained fixture corpus is
-`zkvm/.fixtures/current-v062-full/`. It is ignored by git and workspace-local;
+`zkvm/.fixtures/current-v2106-full/`. It is ignored by git and workspace-local;
 do not assume it exists in a fresh checkout.
 
-- Source: `tests-zkevm@v0.6.2`, commit
-  `e5a8caf1b8055e4d805c7fb169edfa710914b7da`.
-- Generated 2026-07-19 with `t8n = 2.19.0` using
-  `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n 8`.
+- Source: `tests-zkevm@v21.0.6`, commit
+  `59c1473ddfba341babaeca1c97a50e996f639a0b`.
+- Generated 2026-10-19 with `t8n = 2.19.0` using
+  `fill -m "blockchain_test or blockchain_test_engine" --fork Amsterdam -n auto`.
 - Layout: `blockchain_tests/` and `blockchain_tests_engine/`, each containing
   Amsterdam and BPO2-to-Amsterdam transition fixtures.
-- Inventory: 6,333 JSON files containing 26,104 embedded
+- Inventory: 6,904 JSON files containing 67,685 embedded
   `statelessInputBytes`/`statelessOutputBytes` pairs.
 
 There are no checked-in smoke, EELS subset, historical state-test, or older
-zkevm fixture sets. Do not recreate or use pre-v0.6.2 corpora as aligned
+zkevm fixture sets. Do not recreate or use pre-v21.0.6 corpora as aligned
 evidence.
 
 Run one native embedded fixture from the repository root:
 
 ```sh
 rtk uv run --frozen python -m devtools.harness.cli --build optimized --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 Run the complete retained corpus with parallel native workers:
 
 ```sh
-rtk uv run --frozen python -m devtools.harness.cli --build optimized --jobs 8 --quiet \
-  zkvm/.fixtures/current-v062-full
+rtk make verify-corpus
 ```
+
+`make verify-corpus` is the complete-corpus gate. It passes only if every case
+passes and the number of cases run equals the manifest's `embedded_cases`.
+Output mismatches, execution/build errors, missing reference outputs and failed
+worker processes fail the run. There is no failure allowlist. Historical
+state-only conversion limits are documented separately and are not exceptions
+to this pinned corpus gate.
 
 The same fixture can drive the real RISC-V guest on Spike or the production
 ZisK guest:
 
 ```sh
 rtk uv run --frozen python -m devtools.harness.cli --spike --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 rtk env ZISKEMU=/path/to/matching/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
-  zkvm/.fixtures/current-v062-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
+  zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json
 ```
 
 The ELF is built once without fixture input; each embedded
 `statelessInputBytes` value is supplied at runtime through `extractions/c/zkvm_io.h`.
-Use `--rebuild` after generated C or FFI changes. A complete v0.6.2 result has
-not yet been recorded here; do not reuse pass counts from deleted corpora.
+Use `--rebuild` after generated C or FFI changes. The recorded v21.0.6 result
+is `make verify-corpus` passing all 67,685 cases; do not reuse pass counts from
+other corpora.

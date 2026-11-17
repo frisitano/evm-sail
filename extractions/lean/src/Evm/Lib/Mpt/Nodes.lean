@@ -44,6 +44,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -121,8 +122,8 @@ def inline_node_hash (node : InlineNode) : SailM (Vector (BitVec 8) 32) := do
   (pure digest)
 
 /-- Advances the branch payload length while preserving its structural bound. -/
-/- Type quantifiers: k_ex551587_ : Nat, k_ex551586_ : Nat, 0 ≤ k_ex551586_ ∧ k_ex551586_ ≤ 529, 0
-  ≤ k_ex551587_ ∧ k_ex551587_ ≤ 33 -/
+/- Type quantifiers: k_ex581117_ : Nat, k_ex581116_ : Nat, 0 ≤ k_ex581116_ ∧ k_ex581116_ ≤ 529, 0
+  ≤ k_ex581117_ ∧ k_ex581117_ ≤ 33 -/
 def branch_content_length_add (current : Nat) (addition : Nat) : SailM Nat := do
   if ((addition ≤b (529 - current)) : Bool)
   then (pure (current + addition))

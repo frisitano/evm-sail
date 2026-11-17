@@ -256,14 +256,14 @@ static struct Authorization prepare_authorization(const rlp_item *tuple)
 PreparedAuthorizationList prepare_authorizations(struct AuthorizationListRefFields authorizations)
 {
   if (authorizations.count > GUEST_PREPARED_AUTHORIZATIONS || prepared_authorizations == NULL) {
-    decode_failure(ExecutionInvalid, "optimized prepared authorization capacity");
+    GUEST_ABORT();
   }
-  const uint16_t count = (uint16_t)authorizations.count;
+  const uint32_t count = authorizations.count;
   rlp_cursor tuples = {
       .next = authorizations.encoded.bytes,
       .remaining = authorizations.encoded.len,
   };
-  for (uint16_t index = 0; index < count; ++index) {
+  for (uint32_t index = 0; index < count; ++index) {
     rlp_item tuple;
     if (!rlp_take_item(&tuples, &tuple)) {
       decode_failure(RlpDecode, "optimized prepared authorization item");
@@ -287,7 +287,7 @@ struct Authorization prepared_authorization_head(PreparedAuthorizationList autho
 }
 
 PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList authorizations,
-                                                      uint16_t count)
+                                                      uint32_t count)
 {
   if (count == 0) {
     decode_failure(ExecutionInvalid, "optimized prepared authorization tail");
@@ -297,7 +297,7 @@ PreparedAuthorizationList prepared_authorization_tail(PreparedAuthorizationList 
   return authorizations;
 }
 
-static bool decode_common_fields(struct TransactionFields *result, const rlp_item *nonce,
+static bool decode_common_fields(struct DecodedTransactionFields *result, const rlp_item *nonce,
                                  const rlp_item *gas, const rlp_item *recipient,
                                  const rlp_item *value, const rlp_item *data, const rlp_item *v,
                                  const rlp_item *r, const rlp_item *s, bool nonce_is_u64)
@@ -323,12 +323,11 @@ static bool decode_common_fields(struct TransactionFields *result, const rlp_ite
   return true;
 }
 
-struct TransactionFields decode_transaction(Bytes transaction, Bytes public_key, uint8_t blob_limit)
+struct DecodedTransactionFields decode_transaction(Bytes transaction, uint8_t blob_limit)
 {
-  struct TransactionFields result;
+  struct DecodedTransactionFields result;
   memset(&result, 0, sizeof(result));
   result.raw = transaction;
-  result.pubkey = public_key;
 
   const uint8_t *tx_bytes = transaction.bytes;
   if (transaction.len == 0) {
@@ -354,12 +353,6 @@ struct TransactionFields decode_transaction(Bytes transaction, Bytes public_key,
     decode_failure(RlpDecode, "optimized transaction fields");
   }
 
-  const Bytes public_key_body = {
-      .bytes = public_key.bytes + 1,
-      .len = 64,
-  };
-  const bytes32 sender_hash = host_keccak_stateless_input(public_key_body);
-  result.sender = hash_low_address(&sender_hash);
   result.tx_type = (enum TxType)type;
 
   const rlp_item *nonce = tx_field(f, layout->nonce);

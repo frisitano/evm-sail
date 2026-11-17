@@ -30,17 +30,21 @@ bool frame_jumpdest_valid(struct CodeFields frame_code, uint32_t dest);
 
 uint64_t conserved_gas_add(uint64_t available, uint64_t credit);
 
-__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining, uint32_t state_gas_spilled);
+__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining,
+                              uint32_t state_gas_spilled);
 
-__attribute__((__always_inline__)) struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k);
+struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining,
+                                                    uint32_t state_gas_spilled,
+                                                    uint64_t state_gas_reservoir,
+                                                    enum ExceptionKind k);
 
-__attribute__((__always_inline__)) uint16_t stack_height(StackPointer top);
+uint16_t stack_height(StackPointer top);
 
-__attribute__((__always_inline__)) u256 read_stack_word(StackPointer sp);
+u256 read_stack_word(StackPointer sp);
 
-__attribute__((__always_inline__)) void write_stack_word(StackPointer sp, u256 value);
+void write_stack_word(StackPointer sp, u256 value);
 
-__attribute__((__always_inline__)) void stack_set(StackPointer top, uint16_t n, u256 w);
+void stack_set(StackPointer top, uint16_t n, u256 w);
 
 Bytes returndata_clear(void);
 
@@ -58,7 +62,7 @@ uint32_t memory_absolute(uint32_t base, uint32_t relative);
 
 uint32_t memory_parent_base(uint32_t child_base, uint32_t parent_height);
 
-__attribute__((__always_inline__)) uint32_t expand_memory(uint32_t base, uint32_t height, uint32_t requested_height);
+uint32_t expand_memory(uint32_t base, uint32_t height, uint32_t requested_height);
 
 Bytes active_memory_slice(uint32_t base, uint32_t mem, uint32_t off, uint32_t len);
 
@@ -80,31 +84,39 @@ uint64_t conserved_gas_add_uint64_t_uint32_t_to_uint64_t(uint64_t available, uin
 
 __int128 record_refund___int128_uint16_t_to___int128(__int128 refund, uint16_t delta);
 
-__attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w);
+void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w);
 
-uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata, struct FrameCheckpoint *restrict framecheckpoint_8_1553, StackPointer *restrict stackpointer_8_1554, uint32_t *restrict field_2_8_1555);
+uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top,
+                       uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining,
+                       uint32_t state_gas_spilled, __int128 frame_refund,
+                       struct FrameStatus frame_status, struct Message message,
+                       struct CodeFields frame_code, struct CalldataSlice calldata,
+                       struct FrameCheckpoint *restrict framecheckpoint_8_1614,
+                       StackPointer *restrict stackpointer_8_1615,
+                       uint32_t *restrict field_2_8_1616);
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs);
+enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint16_t outputs);
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint8_t outputs);
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs);
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(
+    StackPointer top, uint8_t inputs, uint8_t outputs);
 
 __int128 validated_refund_add___int128_uint16_t_to___int128(__int128 left, uint16_t right);
 
 extern const uint16_t STACK_LIMIT;
 
-
 extern const uint32_t MEMORY_HEIGHT_ZERO;
 
-
 extern const uint32_t MEMORY_BASE_ZERO;
-
-
 
 #ifdef __cplusplus
 }

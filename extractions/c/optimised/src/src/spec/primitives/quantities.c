@@ -3,9 +3,7 @@
 
 struct MemoryRangeFields EMPTY_MEMORY_RANGE;
 
-
 struct MemoryAccessFields EMPTY_MEMORY_ACCESS;
-
 
 bool neq_anything_EPrecompileId__(enum PrecompileId x, enum PrecompileId y)
 {
@@ -42,24 +40,26 @@ struct MemoryRangeFields memory_range(uint32_t off, uint32_t len)
   return ((struct MemoryRangeFields){.len = len, .off = off});
 }
 
-void create_letbind_7(void) {
-    EMPTY_MEMORY_RANGE = ((struct MemoryRangeFields){.len = UINT32_C(0), .off = UINT32_C(0)});
+void create_letbind_7(void)
+{
+  EMPTY_MEMORY_RANGE = ((struct MemoryRangeFields){.len = UINT32_C(0), .off = UINT32_C(0)});
 }
-void kill_letbind_7(void) {
-}
+void kill_letbind_7(void) {}
 
-void create_letbind_8(void) {
-    EMPTY_MEMORY_ACCESS = ((struct MemoryAccessFields){.range = EMPTY_MEMORY_RANGE, .requested_height = UINT32_C(0)});
+void create_letbind_8(void)
+{
+  EMPTY_MEMORY_ACCESS =
+      ((struct MemoryAccessFields){.range = EMPTY_MEMORY_RANGE, .requested_height = UINT32_C(0)});
 }
-void kill_letbind_8(void) {
-}
+void kill_letbind_8(void) {}
 
 u256 word_of_source_byte_count(uint32_t value)
 {
   return word_of_nat_byte_count_uint32_t_to_u256(value);
 }
 
-struct MemoryRangeFields memory_range_uint8_t_uint8_t_to_struct_MemoryRangeFields(uint8_t off, uint8_t len)
+struct MemoryRangeFields memory_range_uint8_t_uint8_t_to_struct_MemoryRangeFields(uint8_t off,
+                                                                                  uint8_t len)
 {
   return ((struct MemoryRangeFields){.len = (uint32_t)len, .off = (uint32_t)off});
 }
@@ -88,4 +88,3 @@ u256 word_of_nat_byte_count_uint8_t_to_u256(uint8_t value)
 {
   return u256_uint8_t_to_u256(value);
 }
-

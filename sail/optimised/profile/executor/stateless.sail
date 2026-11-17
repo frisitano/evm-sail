@@ -16,6 +16,11 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     if (profile.fork >= Cancun) & (result.blob_gas_used != header.blob_gas_used) then {
         fatal_error(InvalidBlobGasUsed)
     };
+    if profile.fork >= Amsterdam then {
+        cycle_scope_start(20);
+        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit);
+        cycle_scope_end(20)
+    };
     cycle_scope_start(19);
     let poststate = compute_state_root();
     cycle_scope_end(19);
@@ -34,11 +39,6 @@ function validate_executed_block(block : Block, result : BlockExecutionResult) -
     };
     if not_bool(block_logs_bloom_matches(result.logs, header.logs_bloom)) then {
         fatal_error(InvalidLogsBloom)
-    };
-    if profile.fork >= Amsterdam then {
-        cycle_scope_start(20);
-        validate_block_access_list(block.body.block_access_list, execution_profile.gas.block_limit);
-        cycle_scope_end(20)
     };
     cycle_scope_end(16)
 }
@@ -64,13 +64,11 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
     cycle_scope_start(active_stage);
     let block = input.payload.block;
     let execution_profile = k_execution_profile;
-    if execution_profile.protocol.fork >= Amsterdam then {
-        initialize_block_access_list_state(
-            block.body.block_access_list,
-            k_parent_state_root,
-            block.body.transactions.count,
-        )
+    let protocol = execution_profile.protocol;
+    if protocol.fork < Amsterdam then {
+        validate_historical_access_schema(block.body.block_access_list)
     };
+    initialize_block_access_list_state(block.body.block_access_list, k_parent_state_root, block.body.transactions.count);
     let executed = execute_block_body(block.body, input_ref);
 
     cycle_scope_end(active_stage);

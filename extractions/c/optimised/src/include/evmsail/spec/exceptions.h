@@ -10,10 +10,46 @@ extern "C" {
 #endif
 
 // enum FatalError
-enum FatalError { InvalidConfig, HeaderChainBroken, RlpDecode, InvalidSignature, InvalidGasLimit, GasUsedExceedsLimit, BlobGasLimitExceeded, ExecutionInvalid, InvalidGasUsed, InvalidBlobGasUsed, InvalidExcessBlobGas, InvalidStateRoot, InvalidReceiptsRoot, InvalidLogsBloom, InvalidBlockHash, InvalidParentHash, BlockAccessListTooLarge, InvalidBlockAccessList, InvalidExecutionRequests, WitnessDeficient, NumericOverflow };
+enum FatalError {
+  InvalidConfig,
+  HeaderChainBroken,
+  RlpDecode,
+  InvalidSignature,
+  InvalidGasLimit,
+  GasUsedExceedsLimit,
+  BlobGasLimitExceeded,
+  ExecutionInvalid,
+  InvalidGasUsed,
+  InvalidBlobGasUsed,
+  InvalidExcessBlobGas,
+  InvalidStateRoot,
+  InvalidReceiptsRoot,
+  InvalidLogsBloom,
+  InvalidBlockHash,
+  InvalidParentHash,
+  BlockAccessListTooLarge,
+  InvalidBlockAccessList,
+  InvalidExecutionRequests,
+  InvalidVersionedHashes,
+  WitnessDeficient,
+  NumericOverflow
+};
 
 // enum ExceptionKind
-enum ExceptionKind { StackUnderflow, StackOverflow, OutOfGas, InvalidOpcode, InvalidJump, StaticViolation, CallDepthExceeded, InsufficientBalance, WriteProtection, InitCodeTooLarge, NonceOverflow, AddressCollision };
+enum ExceptionKind {
+  StackUnderflow,
+  StackOverflow,
+  OutOfGas,
+  InvalidOpcode,
+  InvalidJump,
+  StaticViolation,
+  CallDepthExceeded,
+  InsufficientBalance,
+  WriteProtection,
+  InitCodeTooLarge,
+  NonceOverflow,
+  AddressCollision
+};
 
 // struct tuple_bool_uint_32_uint_64
 struct tuple_bool_uint_32_uint_64 {
@@ -29,7 +65,6 @@ struct tuple_uint_64_uint_32 {
 };
 
 _Noreturn void fatal_error(enum FatalError _reason);
-
 
 #ifdef __cplusplus
 }

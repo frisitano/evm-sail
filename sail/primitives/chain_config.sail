@@ -2,10 +2,10 @@
 /*md
 # Chain configuration
 
-The decoded `SszChainConfig`. Its activation point is validated while decoding,
-so the resulting value only carries the chain id. The schema prefix selects the
-protocol profile, so neither the fork identifier nor its blob schedule is
-repeated inside the SSZ body. Pure data — no registers, no externs.
+The protocol profile the guest executes under: Amsterdam with its blob
+schedule, fixed by the model. The stateless input's schema id admits only this
+profile and its SSZ body carries just the chain id. Pure data — no registers,
+no externs.
 */
 /*! The base-fee update fractions used by some supported blob schedule. */
 type blob_fee_update_fraction_parameter('denominator : Int) -> Bool =
@@ -243,7 +243,7 @@ type protocol_profile_parameters(
            & 'denominator == bpo2_blob_fee_update_fraction
            & 'code_limit == amsterdam_deployed_code_size_limit
            & 'initcode_limit == amsterdam_initcode_size_limit
-           & 'transaction_total_gas_limit == ssz_uint_bound
+           & 'transaction_total_gas_limit == amsterdam_transaction_total_gas_limit
            & 'transaction_regular_gas_limit == eip7825_transaction_gas_limit
            & 'transaction_blob_limit == cancun_blob_max_count
            & 'refund_divisor == post_london_refund_divisor
@@ -1124,7 +1124,7 @@ function schema_protocol_profile(schema_fork : byte) -> ProtocolProfile =
                     );
             pack_protocol_profile(profile)
         },
-        _ => {
+        0x15 => {
             let profile = struct {
                     fork = Amsterdam,
                     blob_schedule =
@@ -1142,7 +1142,7 @@ function schema_protocol_profile(schema_fork : byte) -> ProtocolProfile =
                         ),
                     deployed_code_size_limit = sizeof(amsterdam_deployed_code_size_limit),
                     initcode_size_limit = sizeof(amsterdam_initcode_size_limit),
-                    transaction_total_gas_limit = sizeof(ssz_uint_bound),
+                    transaction_total_gas_limit = sizeof(amsterdam_transaction_total_gas_limit),
                     transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
                     transaction_blob_limit = sizeof(cancun_blob_max_count),
                     refund_divisor = sizeof(post_london_refund_divisor),
@@ -1154,13 +1154,14 @@ function schema_protocol_profile(schema_fork : byte) -> ProtocolProfile =
                         bpo2_blob_fee_update_fraction,
                         amsterdam_deployed_code_size_limit,
                         amsterdam_initcode_size_limit,
-                        ssz_uint_bound,
+                        amsterdam_transaction_total_gas_limit,
                         eip7825_transaction_gas_limit,
                         cancun_blob_max_count,
                         post_london_refund_divisor,
                     );
             pack_protocol_profile(profile)
         },
+        _ => fatal_error(InvalidConfig),
     }
 
 /*! Whether a schema fork byte has a protocol-profile branch. */
@@ -1178,11 +1179,43 @@ function schema_protocol_profile_forwards_matches(schema_fork : byte) -> bool =
     | (schema_fork == 0x14)
     | (schema_fork == 0x15)
 
-/*! The Amsterdam mapping entry initializes the kernel before input decoding. */
-let DEFAULT_PROTOCOL_PROFILE : ProtocolProfile = schema_protocol_profile(0x15)
-let DEFAULT_EXECUTION_PROFILE : ExecutionProfile = execution_profile_for(DEFAULT_PROTOCOL_PROFILE, 0)
-
-/*! The decoded chain configuration for the executing payload. */
-struct ChainConfig = {
-    chain_id : chain_identifier,
+/*! The Amsterdam protocol profile: the sole schema the guest admits. It also
+    initializes the kernel before input decoding. */
+let DEFAULT_PROTOCOL_PROFILE : ProtocolProfile = {
+    let profile = struct {
+            fork = Amsterdam,
+            blob_schedule =
+                blob_schedule(
+                    sizeof(bpo2_blob_target_count),
+                    sizeof(bpo2_blob_max_count),
+                    sizeof(bpo2_blob_fee_update_fraction),
+                ),
+            excess_blob_gas_limit =
+                compute_profile_excess_blob_gas_limit(
+                    Amsterdam,
+                    sizeof(bpo2_blob_target_count),
+                    sizeof(bpo2_blob_max_count),
+                    sizeof(bpo2_blob_fee_update_fraction),
+                ),
+            deployed_code_size_limit = sizeof(amsterdam_deployed_code_size_limit),
+            initcode_size_limit = sizeof(amsterdam_initcode_size_limit),
+            transaction_total_gas_limit = sizeof(amsterdam_transaction_total_gas_limit),
+            transaction_regular_gas_limit = sizeof(eip7825_transaction_gas_limit),
+            transaction_blob_limit = sizeof(cancun_blob_max_count),
+            refund_divisor = sizeof(post_london_refund_divisor),
+        } :
+            ProtocolProfileFields(
+                amsterdam_fork_value,
+                bpo2_blob_target_count,
+                bpo2_blob_max_count,
+                bpo2_blob_fee_update_fraction,
+                amsterdam_deployed_code_size_limit,
+                amsterdam_initcode_size_limit,
+                amsterdam_transaction_total_gas_limit,
+                eip7825_transaction_gas_limit,
+                cancun_blob_max_count,
+                post_london_refund_divisor,
+            );
+    pack_protocol_profile(profile)
 }
+let DEFAULT_EXECUTION_PROFILE : ExecutionProfile = execution_profile_for(DEFAULT_PROTOCOL_PROFILE, 0)

@@ -41,6 +41,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -170,6 +171,13 @@ def authorization_list_ref (encoded : (Sigma fun (k_off : Nat) =>
 def EMPTY_AUTHORIZATION_LIST_REF : AuthorizationListRef :=
   ⟨_, (authorization_list_ref ⟨_, ⟨_, EMPTY_STATELESS_INPUT_SLICE⟩⟩ 0)⟩
 
+/-- Packs structural data without creating an executable transaction. -/
+/- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
+def pack_decoded_transaction (tx : (DecodedTransactionFields k_blob_limit)) : (Sigma fun
+  (k_syn_blob_limit : Nat) => (DecodedTransactionFields k_syn_blob_limit)) :=
+  ((⟨_, tx⟩ : (Sigma fun (k_syn_blob_limit : Nat) => (DecodedTransactionFields k_syn_blob_limit))) : (Sigma
+  fun (k_syn_blob_limit : Nat) => (DecodedTransactionFields k_syn_blob_limit)))
+
 /-- Packs a transaction whose concrete blob limit is still in scope into the
 existential transaction surface used by envelope dispatch. -/
 /- Type quantifiers: k_blob_limit : Nat, (transaction_blob_limit_value k_blob_limit) -/
@@ -189,8 +197,8 @@ def log_store_index_increment (value : Nat) : SailM Nat := do
       throw Error.Exit)
 
 /-- Adds a relative log offset to its series start without wrapping. -/
-/- Type quantifiers: k_ex547769_ : Nat, k_ex547768_ : Nat, 0 ≤ k_ex547768_ ∧
-  k_ex547768_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex547769_ ∧ k_ex547769_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex577226_ : Nat, k_ex577225_ : Nat, 0 ≤ k_ex577225_ ∧
+  k_ex577225_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex577226_ ∧ k_ex577226_ ≤ (2 ^ 64 - 1) -/
 def log_store_index_add (left : Nat) (right : Nat) : SailM Nat := do
   if ((right ≤b (((2 ^i 64) - 1) - left)) : Bool)
   then (pure (left + right))
@@ -203,14 +211,14 @@ def undefined_LogSeriesRef (_ : Unit) : SailM LogSeriesRef := do
   (pure { start := ← (undefined_range 0 ((2 ^i 64) - 1)),
           count := ← (undefined_range 0 ((2 ^i 64) - 1)) })
 
-/- Type quantifiers: k_ex547825_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex577282_ : Bool, _limit : Nat, _regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation _limit _regular_limit gas_used execution_gas state_gas) -/
 def receipt_fields (_limit : Nat) (_regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (ReceiptFields _limit _regular_limit gas_used execution_gas state_gas) :=
   { tx_type := tx_type,
     success := success,
     logs := logs }
 
-/- Type quantifiers: k_ex547871_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
+/- Type quantifiers: k_ex577328_ : Bool, limit : Nat, regular_limit : Nat, gas_used : Nat, execution_gas
   : Nat, state_gas : Nat, (receipt_gas_relation limit regular_limit gas_used execution_gas state_gas) -/
 def receipt_within (limit : Nat) (regular_limit : Nat) (tx_type : TxType) (success : Bool) (gas_used : Nat) (execution_gas : Nat) (state_gas : Nat) (logs : LogSeriesRef) : (Sigma
   fun (k_syn_state_gas : Nat) =>

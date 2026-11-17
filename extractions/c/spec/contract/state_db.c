@@ -21,7 +21,8 @@
 /* Secure trie key derivation is deliberately separate from table identity.
  * These helpers are called only when a raw-key row first gains authenticated
  * witness material (or for a defensive write-before-read fallback). */
-static void secure_keccak_address(fixed_bytes_20 value, fixed_bytes_32 *out) {
+static void secure_keccak_address(fixed_bytes_20 value, fixed_bytes_32 *out)
+{
   zkvm_keccak256_hash digest = {{0}};
   if (zkvm_keccak256(value.bytes, sizeof(value.bytes), &digest) == ZKVM_EOK)
     memcpy(out->bytes, digest.data, sizeof(out->bytes));
@@ -29,7 +30,8 @@ static void secure_keccak_address(fixed_bytes_20 value, fixed_bytes_32 *out) {
     memset(out, 0, sizeof(*out));
 }
 
-static void secure_keccak_word(u256 value, fixed_bytes_32 *out) {
+static void secure_keccak_word(u256 value, fixed_bytes_32 *out)
+{
   uint8_t bytes[32];
   zkvm_keccak256_hash digest = {{0}};
   sail_word_to_be_bytes(bytes, value);
@@ -39,21 +41,26 @@ static void secure_keccak_word(u256 value, fixed_bytes_32 *out) {
     memset(out, 0, sizeof(*out));
 }
 
-void acct_secure_key(fixed_bytes_20 address, fixed_bytes_32 *address_hash) {
+void acct_secure_key(fixed_bytes_20 address, fixed_bytes_32 *address_hash)
+{
   secure_keccak_address(address, address_hash);
 }
 
-void storage_secure_key(u256 slot, fixed_bytes_32 *slot_hash) {
+void storage_secure_key(u256 slot, fixed_bytes_32 *slot_hash)
+{
   secure_keccak_word(slot, slot_hash);
 }
 
 #define ACCOUNT_INIT_CAP 64u
 
 /* Generic 4-word (big-endian order) comparator shared by state and BAL code. */
-static int compare_u64x4(const uint64_t *a, const uint64_t *b) {
+static int compare_u64x4(const uint64_t *a, const uint64_t *b)
+{
   for (int i = 0; i < 4; i++) {
-    if (a[i] < b[i]) return -1;
-    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i])
+      return -1;
+    if (a[i] > b[i])
+      return 1;
   }
   return 0;
 }
@@ -61,10 +68,8 @@ static int compare_u64x4(const uint64_t *a, const uint64_t *b) {
 /* zeroed account fields, returned by the overlay getters on an absent row */
 static const uint64_t account_zero_val[4] = {0, 0, 0, 0};
 static const fixed_bytes_32 account_empty_code_hash = {{
-    0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23, 0x3c,
-    0x92, 0x7e, 0x7d, 0xb2, 0xdc, 0xc7, 0x03, 0xc0,
-    0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82, 0x27, 0x3b,
-    0x7b, 0xfa, 0xd8, 0x04, 0x5d, 0x85, 0xa4, 0x70,
+    0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23, 0x3c, 0x92, 0x7e, 0x7d, 0xb2, 0xdc, 0xc7, 0x03, 0xc0,
+    0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82, 0x27, 0x3b, 0x7b, 0xfa, 0xd8, 0x04, 0x5d, 0x85, 0xa4, 0x70,
 }};
 
 /* ======================================================================== */
@@ -83,6 +88,7 @@ typedef struct {
   uint32_t index;
   uint32_t next;
   uint64_t value[4];
+  uint64_t before[4];
 } bal_word_history;
 
 typedef struct {
@@ -132,26 +138,30 @@ static enum bal_stream_phase bal_stream_phase = BAL_STREAM_ACCOUNT;
 
 #define STORAGE_INIT_CAP 64u
 
-static int compare_words(const uint64_t *a, const uint64_t *b, int n) {
+static int compare_words(const uint64_t *a, const uint64_t *b, int n)
+{
   for (int i = 0; i < n; i++) {
-    if (a[i] < b[i]) return -1;
-    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i])
+      return -1;
+    if (a[i] > b[i])
+      return 1;
   }
   return 0;
 }
 
-static int storage_key_cmp(const uint8_t aa[20], const uint64_t as[4],
-                           uint64_t ag, const uint8_t ba[20],
-                           const uint64_t bs[4], uint64_t bg) {
+static int storage_key_cmp(const uint8_t aa[20], const uint64_t as[4], uint64_t ag,
+                           const uint8_t ba[20], const uint64_t bs[4], uint64_t bg)
+{
   (void)ag;
   (void)bg;
   int c = memcmp(aa, ba, 20);
-  if (c) return c;
+  if (c)
+    return c;
   return compare_words(as, bs, 4);
 }
 
-static void storage_raw_key(fixed_bytes_20 a, u256 s,
-                            uint8_t address[20], uint64_t slot[4]) {
+static void storage_raw_key(fixed_bytes_20 a, u256 s, uint8_t address[20], uint64_t slot[4])
+{
   evmsail_address_to_be_bytes(address, a);
   sail_word_to_be_words4(slot, s);
 }
@@ -172,7 +182,7 @@ static const uint64_t storage_zero_val[4] = {0, 0, 0, 0};
 /* ======================================================================== */
 
 typedef struct {
-  uint8_t  raw_addr[20];
+  uint8_t raw_addr[20];
   uint64_t slot[4];
   uint64_t generation;
   fixed_bytes_32 acct_hash;
@@ -252,10 +262,10 @@ static uint32_t storage_undo_n = 0, storage_undo_cap = 0;
 /* drop the per-account compute_root snapshots when the block base changes
    (defined with the snapshot builders below) */
 static void storage_dump_invalidate(void);
-static void storage_block_account_range(const uint8_t address[20],
-                                        uint32_t *start, uint32_t *end);
+static void storage_block_account_range(const uint8_t address[20], uint32_t *start, uint32_t *end);
 
-static uint64_t point_hash_mix(uint64_t value) {
+static uint64_t point_hash_mix(uint64_t value)
+{
   value ^= value >> 30;
   value *= UINT64_C(0xbf58476d1ce4e5b9);
   value ^= value >> 27;
@@ -263,11 +273,13 @@ static uint64_t point_hash_mix(uint64_t value) {
   return value ^ (value >> 31);
 }
 
-static uint64_t point_hash_rotate_left(uint64_t value, uint32_t shift) {
+static uint64_t point_hash_rotate_left(uint64_t value, uint32_t shift)
+{
   return (value << shift) | (value >> (64 - shift));
 }
 
-static uint64_t acct_point_hash_seed(const uint8_t address[20]) {
+static uint64_t acct_point_hash_seed(const uint8_t address[20])
+{
   uint64_t first, second;
   uint32_t tail;
   memcpy(&first, address, sizeof(first));
@@ -277,29 +289,25 @@ static uint64_t acct_point_hash_seed(const uint8_t address[20]) {
          ((uint64_t)tail * UINT64_C(0x9e3779b97f4a7c15));
 }
 
-static uint64_t storage_point_hash(const uint8_t address[20],
-                                   const uint64_t slot[4],
-                                   uint64_t generation) {
+static uint64_t storage_point_hash(const uint8_t address[20], const uint64_t slot[4],
+                                   uint64_t generation)
+{
   (void)generation;
-  const uint64_t folded =
-      acct_point_hash_seed(address) ^
-      point_hash_rotate_left(slot[0], 7) ^
-      point_hash_rotate_left(slot[1], 19) ^
-      point_hash_rotate_left(slot[2], 37) ^
-      point_hash_rotate_left(slot[3], 53);
+  const uint64_t folded = acct_point_hash_seed(address) ^ point_hash_rotate_left(slot[0], 7) ^
+                          point_hash_rotate_left(slot[1], 19) ^
+                          point_hash_rotate_left(slot[2], 37) ^ point_hash_rotate_left(slot[3], 53);
   return point_hash_mix(folded);
 }
 
-static void storage_table_reindex(storage_state_table *table,
-                                  uint32_t bucket_cap) {
+static void storage_table_reindex(storage_state_table *table, uint32_t bucket_cap)
+{
   uint32_t *buckets = calloc(bucket_cap, sizeof(*buckets));
-  if (!buckets) abort();
+  if (!buckets)
+    abort();
   for (uint32_t i = 0; i < table->n; i++) {
     const storage_state_row *row = &table->rows[i];
     uint32_t bucket =
-        (uint32_t)storage_point_hash(row->raw_addr, row->slot,
-                                     row->generation) &
-        (bucket_cap - 1);
+        (uint32_t)storage_point_hash(row->raw_addr, row->slot, row->generation) & (bucket_cap - 1);
     while (buckets[bucket] != 0)
       bucket = (bucket + 1) & (bucket_cap - 1);
     buckets[bucket] = i + 1;
@@ -309,9 +317,10 @@ static void storage_table_reindex(storage_state_table *table,
   table->bucket_cap = bucket_cap;
 }
 
-static void storage_table_prepare_index(storage_state_table *table,
-                                        uint32_t row_count) {
-  if (!table->indexed) return;
+static void storage_table_prepare_index(storage_state_table *table, uint32_t row_count)
+{
+  if (!table->indexed)
+    return;
   uint32_t bucket_cap = table->bucket_cap ? table->bucket_cap : 128;
   while ((uint64_t)row_count * 10 >= (uint64_t)bucket_cap * 7)
     bucket_cap *= 2;
@@ -319,25 +328,21 @@ static void storage_table_prepare_index(storage_state_table *table,
     storage_table_reindex(table, bucket_cap);
 }
 
-static uint32_t storage_table_find(const storage_state_table *t,
-                                  const uint8_t address[20],
-                                  const uint64_t slot[4],
-                                  uint64_t generation,
-                                  int *found) {
+static uint32_t storage_table_find(const storage_state_table *t, const uint8_t address[20],
+                                   const uint64_t slot[4], uint64_t generation, int *found)
+{
   uint32_t lo = 0, hi = t->n;
   if (t->indexed) {
     if (t->bucket_cap == 0) {
       *found = 0;
       return t->n;
     }
-    uint32_t bucket =
-        (uint32_t)storage_point_hash(address, slot, generation) &
-        (t->bucket_cap - 1);
+    uint32_t bucket = (uint32_t)storage_point_hash(address, slot, generation) & (t->bucket_cap - 1);
     while (t->buckets[bucket] != 0) {
       uint32_t index = t->buckets[bucket] - 1;
       const storage_state_row *row = &t->rows[index];
-      if (storage_key_cmp(row->raw_addr, row->slot, row->generation,
-                          address, slot, generation) == 0) {
+      if (storage_key_cmp(row->raw_addr, row->slot, row->generation, address, slot, generation) ==
+          0) {
         *found = 1;
         return index;
       }
@@ -348,22 +353,21 @@ static uint32_t storage_table_find(const storage_state_table *t,
   }
   while (lo < hi) {
     uint32_t mid = lo + ((hi - lo) >> 1);
-    int c = storage_key_cmp(t->rows[mid].raw_addr, t->rows[mid].slot,
-                            t->rows[mid].generation, address, slot,
-                            generation);
-    if (c < 0) lo = mid + 1; else hi = mid;
+    int c = storage_key_cmp(t->rows[mid].raw_addr, t->rows[mid].slot, t->rows[mid].generation,
+                            address, slot, generation);
+    if (c < 0)
+      lo = mid + 1;
+    else
+      hi = mid;
   }
-  *found = (lo < t->n &&
-            storage_key_cmp(t->rows[lo].raw_addr, t->rows[lo].slot,
-                            t->rows[lo].generation, address, slot,
-                            generation) == 0);
+  *found = (lo < t->n && storage_key_cmp(t->rows[lo].raw_addr, t->rows[lo].slot,
+                                         t->rows[lo].generation, address, slot, generation) == 0);
   return lo;
 }
 
-static storage_state_row *storage_table_get(storage_state_table *t,
-                                             const uint8_t address[20],
-                                             const uint64_t slot[4],
-                                             uint64_t generation) {
+static storage_state_row *storage_table_get(storage_state_table *t, const uint8_t address[20],
+                                            const uint64_t slot[4], uint64_t generation)
+{
   int f = 0;
   uint32_t i = storage_table_find(t, address, slot, generation, &f);
   return f ? &t->rows[i] : NULL;
@@ -372,26 +376,30 @@ static storage_state_row *storage_table_get(storage_state_table *t,
 /* Insert if absent. Rows are append-stable and indexed by open addressing.
  * Ordering is constructed only as a temporary view for protocol serialization;
  * transaction execution and merge always consume insertion order. */
-static storage_state_row *storage_table_intern(storage_state_table *t,
-                                                const uint8_t address[20],
-                                                const uint64_t slot[4],
-                                                uint64_t generation,
-                                                const fixed_bytes_32 *ah,
-                                                const fixed_bytes_32 *sh) {
+static storage_state_row *storage_table_intern(storage_state_table *t, const uint8_t address[20],
+                                               const uint64_t slot[4], uint64_t generation,
+                                               const fixed_bytes_32 *ah, const fixed_bytes_32 *sh)
+{
   int f = 0;
   uint32_t i = storage_table_find(t, address, slot, generation, &f);
-  if (f) return &t->rows[i];
+  if (f)
+    return &t->rows[i];
   storage_table_prepare_index(t, t->n + 1);
   if (t->cap < t->n + 1) {
     uint32_t nc = t->cap ? t->cap * 2 : STORAGE_INIT_CAP;
-    while (nc < t->n + 1) nc *= 2;
-    storage_state_row *nr = (storage_state_row *)realloc(t->rows, (size_t)nc * sizeof(storage_state_row));
-    if (!nr) return NULL;
-    t->rows = nr; t->cap = nc;
+    while (nc < t->n + 1)
+      nc *= 2;
+    storage_state_row *nr =
+        (storage_state_row *)realloc(t->rows, (size_t)nc * sizeof(storage_state_row));
+    if (!nr)
+      return NULL;
+    t->rows = nr;
+    t->cap = nc;
   }
   if (!t->indexed && i < t->n)
     memmove(&t->rows[i + 1], &t->rows[i], (size_t)(t->n - i) * sizeof(storage_state_row));
-  if (t->indexed) i = t->n;
+  if (t->indexed)
+    i = t->n;
   storage_state_row *e = &t->rows[i];
   memset(e, 0, sizeof(*e));
   memcpy(e->raw_addr, address, sizeof(e->raw_addr));
@@ -403,9 +411,7 @@ static storage_state_row *storage_table_intern(storage_state_table *t,
   e->bal_change_tail = BAL_NO_HISTORY;
   t->n++;
   if (t->indexed) {
-    uint32_t bucket =
-        (uint32_t)storage_point_hash(address, slot, generation) &
-        (t->bucket_cap - 1);
+    uint32_t bucket = (uint32_t)storage_point_hash(address, slot, generation) & (t->bucket_cap - 1);
     while (t->buckets[bucket] != 0)
       bucket = (bucket + 1) & (t->bucket_cap - 1);
     t->buckets[bucket] = i + 1;
@@ -414,16 +420,21 @@ static storage_state_row *storage_table_intern(storage_state_table *t,
   return e;
 }
 
-static void storage_table_reset(storage_state_table *t) {
+static void storage_table_reset(storage_state_table *t)
+{
   const uint8_t indexed = t->indexed;
   free(t->rows);
   free(t->buckets);
-  t->rows = NULL; t->n = 0; t->cap = 0;
-  t->buckets = NULL; t->bucket_cap = 0;
+  t->rows = NULL;
+  t->n = 0;
+  t->cap = 0;
+  t->buckets = NULL;
+  t->bucket_cap = 0;
   t->indexed = indexed;
 }
 
-static uint32_t storage_epoch_find(const uint8_t address[20], int *found) {
+static uint32_t storage_epoch_find(const uint8_t address[20], int *found)
+{
   uint32_t lo = 0, hi = storage_epochs.n;
   while (lo < hi) {
     uint32_t mid = lo + ((hi - lo) >> 1);
@@ -432,27 +443,28 @@ static uint32_t storage_epoch_find(const uint8_t address[20], int *found) {
     else
       hi = mid;
   }
-  *found = lo < storage_epochs.n &&
-           memcmp(storage_epochs.rows[lo].raw_addr, address, 20) == 0;
+  *found = lo < storage_epochs.n && memcmp(storage_epochs.rows[lo].raw_addr, address, 20) == 0;
   return lo;
 }
 
-static storage_epoch_row *storage_epoch_get(const uint8_t address[20]) {
+static storage_epoch_row *storage_epoch_get(const uint8_t address[20])
+{
   int found = 0;
   uint32_t i = storage_epoch_find(address, &found);
   return found ? &storage_epochs.rows[i] : NULL;
 }
 
-static storage_epoch_row *storage_epoch_intern(const uint8_t address[20],
-                                               const fixed_bytes_32 *ah) {
+static storage_epoch_row *storage_epoch_intern(const uint8_t address[20], const fixed_bytes_32 *ah)
+{
   int found = 0;
   uint32_t i = storage_epoch_find(address, &found);
-  if (found) return &storage_epochs.rows[i];
+  if (found)
+    return &storage_epochs.rows[i];
   if (storage_epochs.cap < storage_epochs.n + 1) {
     uint32_t cap = storage_epochs.cap ? storage_epochs.cap * 2 : 16;
-    storage_epoch_row *rows = realloc(storage_epochs.rows,
-                                      (size_t)cap * sizeof(*rows));
-    if (!rows) return NULL;
+    storage_epoch_row *rows = realloc(storage_epochs.rows, (size_t)cap * sizeof(*rows));
+    if (!rows)
+      return NULL;
     storage_epochs.rows = rows;
     storage_epochs.cap = cap;
   }
@@ -468,17 +480,19 @@ static storage_epoch_row *storage_epoch_intern(const uint8_t address[20],
   return e;
 }
 
-static uint64_t storage_active_generation(const uint8_t address[20]) {
+static uint64_t storage_active_generation(const uint8_t address[20])
+{
   storage_epoch_row *e = storage_epoch_get(address);
   return e ? e->active_generation : STORAGE_INITIAL_GENERATION;
 }
 
-static storage_undo_entry *storage_undo_push(uint8_t tag) {
+static storage_undo_entry *storage_undo_push(uint8_t tag)
+{
   if (storage_undo_cap < storage_undo_n + 1) {
     uint32_t cap = storage_undo_cap ? storage_undo_cap * 2 : 64;
-    storage_undo_entry *entries = realloc(storage_undo,
-                                          (size_t)cap * sizeof(*entries));
-    if (!entries) return NULL;
+    storage_undo_entry *entries = realloc(storage_undo, (size_t)cap * sizeof(*entries));
+    if (!entries)
+      return NULL;
     storage_undo = entries;
     storage_undo_cap = cap;
   }
@@ -488,18 +502,19 @@ static storage_undo_entry *storage_undo_push(uint8_t tag) {
   return entry;
 }
 
-static void storage_tx_list(storage_state_row *row) {
-  if (row->tx_listed) return;
+static void storage_tx_list(storage_state_row *row)
+{
+  if (row->tx_listed)
+    return;
   if (storage_tx_rows_cap < storage_tx_rows_n + 1) {
     uint32_t cap = storage_tx_rows_cap ? storage_tx_rows_cap * 2 : 64;
-    uint32_t *rows =
-        realloc(storage_tx_rows, (size_t)cap * sizeof(*rows));
-    if (!rows) abort();
+    uint32_t *rows = realloc(storage_tx_rows, (size_t)cap * sizeof(*rows));
+    if (!rows)
+      abort();
     storage_tx_rows = rows;
     storage_tx_rows_cap = cap;
   }
-  storage_tx_rows[storage_tx_rows_n++] =
-      (uint32_t)(row - storage_table.rows);
+  storage_tx_rows[storage_tx_rows_n++] = (uint32_t)(row - storage_table.rows);
   row->tx_listed = 1;
 }
 
@@ -507,7 +522,8 @@ static void storage_tx_list(storage_state_row *row) {
 
 /* full world wipe (between independent blocks/fixtures) */
 /* Whole-overlay wipe (both layers): the harness `guest_reset`; no Sail caller. */
-unit storage_db_reset(const unit u) {
+unit storage_db_reset(const unit u)
+{
   (void)u;
   storage_tx_pop_cursor = 0;
   storage_next_generation = STORAGE_INITIAL_GENERATION;
@@ -535,7 +551,8 @@ unit storage_db_reset(const unit u) {
 }
 
 /* Transaction scratch reset: retain the allocation for the next transaction. */
-unit storage_tx_reset(const unit u) {
+unit storage_tx_reset(const unit u)
+{
   (void)u;
   for (uint32_t i = 0; i < storage_tx_rows_n; i++) {
     storage_state_row *row = &storage_table.rows[storage_tx_rows[i]];
@@ -550,19 +567,21 @@ unit storage_tx_reset(const unit u) {
   return UNIT;
 }
 
-void storage_tx_revert_last(void) {
-  if (storage_undo_n == 0) abort();
+void storage_tx_revert_last(void)
+{
+  if (storage_undo_n == 0)
+    abort();
   storage_undo_entry *undo = &storage_undo[--storage_undo_n];
   if (undo->tag == STORAGE_UNDO_WRITE) {
-    storage_state_row *row = storage_table_get(
-        &storage_table, undo->raw_addr, undo->slot, undo->generation);
-    if (!row) abort();
+    storage_state_row *row =
+        storage_table_get(&storage_table, undo->raw_addr, undo->slot, undo->generation);
+    if (!row)
+      abort();
     if (undo->prior_present) {
       row->tx_active = 1;
       row->generation = undo->generation;
       memcpy(row->tx_current, undo->prior_current, sizeof(row->tx_current));
-      memcpy(row->tx_original, undo->prior_original,
-             sizeof(row->tx_original));
+      memcpy(row->tx_original, undo->prior_original, sizeof(row->tx_original));
     } else {
       row->tx_active = 0;
     }
@@ -571,25 +590,31 @@ void storage_tx_revert_last(void) {
     if (!acct_cached_secure_key(be_bytes_to_sail_address(undo->raw_addr), &ah))
       secure_keccak_address(be_bytes_to_sail_address(undo->raw_addr), &ah);
     storage_epoch_row *epoch = storage_epoch_intern(undo->raw_addr, &ah);
-    if (!epoch) abort();
+    if (!epoch)
+      abort();
     epoch->active_generation = undo->generation;
   } else {
     abort();
   }
 }
 
-unit storage_tx_clear(fixed_bytes_20 a) {
+unit storage_tx_clear(fixed_bytes_20 a)
+{
   uint8_t address[20];
   fixed_bytes_32 ah;
   evmsail_address_to_be_bytes(address, a);
-  if (!acct_cached_secure_key(a, &ah)) secure_keccak_address(a, &ah);
+  if (!acct_cached_secure_key(a, &ah))
+    secure_keccak_address(a, &ah);
   storage_epoch_row *epoch = storage_epoch_intern(address, &ah);
-  if (!epoch) return UNIT;
+  if (!epoch)
+    return UNIT;
   storage_undo_entry *undo = storage_undo_push(STORAGE_UNDO_CLEAR);
-  if (!undo) return UNIT;
+  if (!undo)
+    return UNIT;
   memcpy(undo->raw_addr, address, sizeof(undo->raw_addr));
   undo->generation = epoch->active_generation;
-  if (storage_next_generation == UINT64_MAX) abort();
+  if (storage_next_generation == UINT64_MAX)
+    abort();
   epoch->active_generation = ++storage_next_generation;
   state_journal_push_storage_undo();
   return UNIT;
@@ -597,13 +622,11 @@ unit storage_tx_clear(fixed_bytes_20 a) {
 
 /* Drain active transaction writes. Obsolete generations remain private
    rollback history and are skipped. */
-uint64_t storage_tx_pop_probe(fixed_bytes_20 *addr, u256 *slot,
-                              u256 *curr, u256 *orig) {
+uint64_t storage_tx_pop_probe(fixed_bytes_20 *addr, u256 *slot, u256 *curr, u256 *orig)
+{
   while (storage_tx_pop_cursor < storage_tx_rows_n) {
-    const storage_state_row *row =
-        &storage_table.rows[storage_tx_rows[storage_tx_pop_cursor++]];
-    if (!row->tx_active ||
-        row->generation != storage_active_generation(row->raw_addr))
+    const storage_state_row *row = &storage_table.rows[storage_tx_rows[storage_tx_pop_cursor++]];
+    if (!row->tx_active || row->generation != storage_active_generation(row->raw_addr))
       continue;
     *addr = be_bytes_to_sail_address(row->raw_addr);
     *slot = be_words4_to_sail_word(row->slot);
@@ -618,27 +641,27 @@ uint64_t storage_tx_pop_probe(fixed_bytes_20 *addr, u256 *slot,
    Point identity is raw (address, slot). Cached secure keys are copied from
    the transaction row and are never recomputed on a normal merge. */
 /* net change: a fresh block row freezes orig as the pre-state; curr lands */
-unit storage_block_put_raw(fixed_bytes_20 a, u256 s_, u256 curr,
-                           u256 orig) {
+unit storage_block_put_raw(fixed_bytes_20 a, u256 s_, u256 curr, u256 orig)
+{
   uint8_t address[20];
   uint64_t slot[4], c4[4], o4[4];
   fixed_bytes_32 ah, sh;
   storage_raw_key(a, s_, address, slot);
   const uint64_t generation = storage_active_generation(address);
-  storage_state_row *b =
-      storage_table_get(&storage_table, address, slot, generation);
+  storage_state_row *b = storage_table_get(&storage_table, address, slot, generation);
   if (b && b->secure_keys_valid) {
     ah = b->acct_hash;
     sh = b->slot_hash;
   } else {
-    if (!acct_cached_secure_key(a, &ah)) secure_keccak_address(a, &ah);
+    if (!acct_cached_secure_key(a, &ah))
+      secure_keccak_address(a, &ah);
     secure_keccak_word(s_, &sh);
   }
   int fresh = (b == NULL || !b->state_valid);
   if (!b)
-    b = storage_table_intern(&storage_table, address, slot, generation, &ah,
-                             &sh);
-  if (!b) return UNIT;
+    b = storage_table_intern(&storage_table, address, slot, generation, &ah, &sh);
+  if (!b)
+    return UNIT;
   if (!b->secure_keys_valid) {
     b->acct_hash = ah;
     b->slot_hash = sh;
@@ -658,19 +681,19 @@ unit storage_block_put_raw(fixed_bytes_20 a, u256 s_, u256 curr,
 }
 
 /* read member: fresh binds curr == orig = value; existing is only marked */
-unit storage_block_cache_raw(fixed_bytes_20 a, u256 s_, fixed_bytes_32 slot_hash,
-                             u256 v) {
+unit storage_block_cache_raw(fixed_bytes_20 a, u256 s_, fixed_bytes_32 slot_hash, u256 v)
+{
   uint8_t address[20];
   uint64_t slot[4], v4[4];
   fixed_bytes_32 ah;
   storage_raw_key(a, s_, address, slot);
-  if (!acct_cached_secure_key(a, &ah)) secure_keccak_address(a, &ah);
-  storage_state_row *b = storage_table_get(
-      &storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
+  if (!acct_cached_secure_key(a, &ah))
+    secure_keccak_address(a, &ah);
+  storage_state_row *b =
+      storage_table_get(&storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
   if (!b) {
-    b = storage_table_intern(
-        &storage_block_table, address, slot, STORAGE_BLOCK_GENERATION, &ah,
-        &slot_hash);
+    b = storage_table_intern(&storage_block_table, address, slot, STORAGE_BLOCK_GENERATION, &ah,
+                             &slot_hash);
   }
   if (b && !b->state_valid) {
     b->acct_hash = ah;
@@ -685,41 +708,41 @@ unit storage_block_cache_raw(fixed_bytes_20 a, u256 s_, fixed_bytes_32 slot_hash
   return UNIT;
 }
 
-
 /* A hit is an actual cached row in the requested semantic layer. A fresh
    transaction storage generation is intentionally not reported as a hit:
    k_sload must record the first slot read in the BAL before resolving that
    separately-observed clear generation to zero. */
-uint64_t storage_row_probe(uint64_t layer, fixed_bytes_20 a, u256 s,
-                           u256 *cur, u256 *orig) {
+uint64_t storage_row_probe(uint64_t layer, fixed_bytes_20 a, u256 s, u256 *cur, u256 *orig)
+{
   uint8_t address[20];
   uint64_t slot[4];
   storage_raw_key(a, s, address, slot);
   if (layer != 0) {
-    storage_state_row *e = storage_table_get(
-        &storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
-    if (!e || !e->state_valid) return 0;
+    storage_state_row *e =
+        storage_table_get(&storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
+    if (!e || !e->state_valid)
+      return 0;
     *cur = be_words4_to_sail_word(e->current);
     *orig = be_words4_to_sail_word(e->original);
     return 1;
   }
 
   const uint64_t generation = storage_active_generation(address);
-  storage_state_row *row = storage_table_get(
-      &storage_tx_table, address, slot, generation);
+  storage_state_row *row = storage_table_get(&storage_tx_table, address, slot, generation);
   if (row && row->tx_active && row->generation == generation) {
     *cur = be_words4_to_sail_word(row->tx_current);
     *orig = be_words4_to_sail_word(row->tx_original);
     return 1;
   }
-  if (generation != STORAGE_INITIAL_GENERATION) return 2;
+  if (generation != STORAGE_INITIAL_GENERATION)
+    return 2;
   return 0;
 }
 
 /* Write the active generation. Sail supplies the transaction original from
    the preceding semantic SLOAD. */
-unit storage_tx_update_raw(fixed_bytes_20 a, u256 s, u256 v,
-                           u256 orig) {
+unit storage_tx_update_raw(fixed_bytes_20 a, u256 s, u256 v, u256 orig)
+{
   uint8_t address[20];
   uint64_t slot[4], w[4], o[4];
   fixed_bytes_32 ah, sh;
@@ -727,30 +750,27 @@ unit storage_tx_update_raw(fixed_bytes_20 a, u256 s, u256 v,
   sail_word_to_be_words4(w, v);
   sail_word_to_be_words4(o, orig);
   const uint64_t generation = storage_active_generation(address);
-  storage_state_row *e =
-      storage_table_get(&storage_tx_table, address, slot, generation);
+  storage_state_row *e = storage_table_get(&storage_tx_table, address, slot, generation);
   const int prior_present = e && e->tx_active;
-  const int fresh_generation =
-      !prior_present || e->generation != generation;
+  const int fresh_generation = !prior_present || e->generation != generation;
   if (!e || !e->secure_keys_valid) {
-    if (!acct_cached_secure_key(a, &ah)) secure_keccak_address(a, &ah);
+    if (!acct_cached_secure_key(a, &ah))
+      secure_keccak_address(a, &ah);
     secure_keccak_word(s, &sh);
   }
   storage_undo_entry *undo = storage_undo_push(STORAGE_UNDO_WRITE);
-  if (!undo) return UNIT;
+  if (!undo)
+    return UNIT;
   memcpy(undo->raw_addr, address, sizeof(undo->raw_addr));
   memcpy(undo->slot, slot, sizeof(undo->slot));
   undo->generation = prior_present ? e->generation : generation;
   undo->prior_present = prior_present;
   if (prior_present) {
-    memcpy(undo->prior_current, e->tx_current,
-           sizeof(undo->prior_current));
-    memcpy(undo->prior_original, e->tx_original,
-           sizeof(undo->prior_original));
+    memcpy(undo->prior_current, e->tx_current, sizeof(undo->prior_current));
+    memcpy(undo->prior_original, e->tx_original, sizeof(undo->prior_original));
   }
   if (!e) {
-    e = storage_table_intern(&storage_tx_table, address, slot, generation,
-                             &ah, &sh);
+    e = storage_table_intern(&storage_tx_table, address, slot, generation, &ah, &sh);
     if (!e) {
       storage_undo_n--;
       return UNIT;
@@ -773,14 +793,14 @@ unit storage_tx_update_raw(fixed_bytes_20 a, u256 s, u256 v,
 
 /* Clear the generation-free block storage for an account. Transaction
    generations are retained until transaction reset for checkpoint reverts. */
-unit storage_block_clear(fixed_bytes_20 a) {
+unit storage_block_clear(fixed_bytes_20 a)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   uint32_t start, end;
   storage_block_account_range(address, &start, &end);
   for (uint32_t i = start; i < end; i++) {
-    storage_state_row *row =
-        &storage_block_table.rows[storage_block_raw_order[i]];
+    storage_state_row *row = &storage_block_table.rows[storage_block_raw_order[i]];
     row->state_valid = 0;
     row->written = 0;
   }
@@ -793,46 +813,49 @@ unit storage_block_clear(fixed_bytes_20 a) {
    account traversal; state-root traversal then orders that group by each
    row's cached secure slot key. */
 
-typedef struct { uint64_t slot[4]; uint64_t val[4]; } storage_dump_entry;
+typedef struct {
+  uint64_t slot[4];
+  uint64_t val[4];
+} storage_dump_entry;
 
-static int storage_block_raw_order_cmp(const void *a, const void *b) {
-  const storage_state_row *left =
-      &storage_block_table.rows[*(const uint32_t *)a];
-  const storage_state_row *right =
-      &storage_block_table.rows[*(const uint32_t *)b];
-  return storage_key_cmp(left->raw_addr, left->slot, left->generation,
-                         right->raw_addr, right->slot, right->generation);
+static int storage_block_raw_order_cmp(const void *a, const void *b)
+{
+  const storage_state_row *left = &storage_block_table.rows[*(const uint32_t *)a];
+  const storage_state_row *right = &storage_block_table.rows[*(const uint32_t *)b];
+  return storage_key_cmp(left->raw_addr, left->slot, left->generation, right->raw_addr, right->slot,
+                         right->generation);
 }
 
-static void storage_block_prepare_raw_order(void) {
-  if (storage_block_raw_order_valid) return;
+static void storage_block_prepare_raw_order(void)
+{
+  if (storage_block_raw_order_valid)
+    return;
   if (storage_block_raw_order_cap < storage_block_table.n) {
-    uint32_t cap =
-        storage_block_raw_order_cap ? storage_block_raw_order_cap : 64;
-    while (cap < storage_block_table.n) cap *= 2;
-    uint32_t *order =
-        realloc(storage_block_raw_order, (size_t)cap * sizeof(*order));
-    if (!order) abort();
+    uint32_t cap = storage_block_raw_order_cap ? storage_block_raw_order_cap : 64;
+    while (cap < storage_block_table.n)
+      cap *= 2;
+    uint32_t *order = realloc(storage_block_raw_order, (size_t)cap * sizeof(*order));
+    if (!order)
+      abort();
     storage_block_raw_order = order;
     storage_block_raw_order_cap = cap;
   }
   for (uint32_t i = 0; i < storage_block_table.n; i++)
     storage_block_raw_order[i] = i;
   if (storage_block_table.n > 1)
-    qsort(storage_block_raw_order, storage_block_table.n,
-          sizeof(*storage_block_raw_order), storage_block_raw_order_cmp);
+    qsort(storage_block_raw_order, storage_block_table.n, sizeof(*storage_block_raw_order),
+          storage_block_raw_order_cmp);
   storage_block_raw_order_valid = 1;
 }
 
 /* [start,end) positions in raw order with raw address == address. */
-static void storage_block_account_range(const uint8_t address[20],
-                                        uint32_t *start, uint32_t *end) {
+static void storage_block_account_range(const uint8_t address[20], uint32_t *start, uint32_t *end)
+{
   storage_block_prepare_raw_order();
   uint32_t lo = 0, hi = storage_block_table.n;
   while (lo < hi) {
     const uint32_t mid = lo + ((hi - lo) >> 1);
-    const storage_state_row *row =
-        &storage_block_table.rows[storage_block_raw_order[mid]];
+    const storage_state_row *row = &storage_block_table.rows[storage_block_raw_order[mid]];
     if (memcmp(row->raw_addr, address, 20) < 0)
       lo = mid + 1;
     else
@@ -840,9 +863,9 @@ static void storage_block_account_range(const uint8_t address[20],
   }
   uint32_t finish = lo;
   while (finish < storage_block_table.n) {
-    const storage_state_row *row =
-        &storage_block_table.rows[storage_block_raw_order[finish]];
-    if (memcmp(row->raw_addr, address, 20) != 0) break;
+    const storage_state_row *row = &storage_block_table.rows[storage_block_raw_order[finish]];
+    if (memcmp(row->raw_addr, address, 20) != 0)
+      break;
     finish++;
   }
   *start = lo;
@@ -852,40 +875,38 @@ static void storage_block_account_range(const uint8_t address[20],
 /* EELS account_has_storage: a nonempty write map in either the surviving
    transaction generation or the cumulative block overlay counts as storage.
    The authenticated pre-state root is checked in Sail. */
-bool storage_has_writes(fixed_bytes_20 a) {
+bool storage_has_writes(fixed_bytes_20 a)
+{
   uint8_t address[20];
   uint32_t start, end;
   evmsail_address_to_be_bytes(address, a);
 
   const uint64_t generation = storage_active_generation(address);
   for (uint32_t i = 0; i < storage_tx_rows_n; i++) {
-    const storage_state_row *row =
-        &storage_table.rows[storage_tx_rows[i]];
-    if (memcmp(row->raw_addr, address, sizeof(row->raw_addr)) == 0 &&
-        row->tx_active &&
-        row->generation == generation &&
-        compare_words(row->tx_current, storage_zero_val, 4) != 0)
+    const storage_state_row *row = &storage_table.rows[storage_tx_rows[i]];
+    if (memcmp(row->raw_addr, address, sizeof(row->raw_addr)) == 0 && row->tx_active &&
+        row->generation == generation && compare_words(row->tx_current, storage_zero_val, 4) != 0)
       return true;
   }
 
-  if (generation != STORAGE_INITIAL_GENERATION) return false;
+  if (generation != STORAGE_INITIAL_GENERATION)
+    return false;
   storage_block_account_range(address, &start, &end);
   for (uint32_t i = start; i < end; i++) {
-    const storage_state_row *row =
-        &storage_block_table.rows[storage_block_raw_order[i]];
-    if (row->state_valid &&
-        compare_words(row->current,
-                      storage_zero_val, 4) != 0)
+    const storage_state_row *row = &storage_block_table.rows[storage_block_raw_order[i]];
+    if (row->state_valid && compare_words(row->current, storage_zero_val, 4) != 0)
       return true;
   }
   return false;
 }
 
 static void storage_dump_push(storage_dump_entry **rows, uint32_t *n, uint32_t *cap,
-                          const uint64_t slot[4], const uint64_t val[4]) {
+                              const uint64_t slot[4], const uint64_t val[4])
+{
   if (*cap < *n + 1) {
     uint32_t nc = *cap ? *cap * 2 : 16;
-    while (nc < *n + 1) nc *= 2;
+    while (nc < *n + 1)
+      nc *= 2;
     *rows = (storage_dump_entry *)realloc(*rows, (size_t)nc * sizeof(storage_dump_entry));
     *cap = nc;
   }
@@ -897,15 +918,15 @@ static void storage_dump_push(storage_dump_entry **rows, uint32_t *n, uint32_t *
 /* Non-destructive ascending iteration over one account's cumulative storage
    rows. Keeping the cursor private avoids exporting a host-sized index into
    the Sail model while leaving the underlying table available for debug. */
-static int storage_secure_order_cmp(const void *a, const void *b) {
-  const storage_state_row *aa =
-      &storage_block_table.rows[*(const uint32_t *)a];
-  const storage_state_row *bb =
-      &storage_block_table.rows[*(const uint32_t *)b];
+static int storage_secure_order_cmp(const void *a, const void *b)
+{
+  const storage_state_row *aa = &storage_block_table.rows[*(const uint32_t *)a];
+  const storage_state_row *bb = &storage_block_table.rows[*(const uint32_t *)b];
   return evmsail_hash_compare(&aa->slot_hash, &bb->slot_hash);
 }
 
-uint32_t storage_block_updates_prepare(fixed_bytes_20 a) {
+uint32_t storage_block_updates_prepare(fixed_bytes_20 a)
+{
   uint32_t start, end;
   evmsail_address_to_be_bytes(storage_block_iter_key, a);
   storage_block_account_range(storage_block_iter_key, &start, &end);
@@ -914,9 +935,9 @@ uint32_t storage_block_updates_prepare(fixed_bytes_20 a) {
     if (storage_block_table.rows[storage_block_raw_order[i]].state_valid)
       count++;
   if (storage_block_iter_order_cap < count) {
-    uint32_t *order =
-        realloc(storage_block_iter_order, (size_t)count * sizeof(*order));
-    if (!order && count) abort();
+    uint32_t *order = realloc(storage_block_iter_order, (size_t)count * sizeof(*order));
+    if (!order && count)
+      abort();
     storage_block_iter_order = order;
     storage_block_iter_order_cap = count;
   }
@@ -924,7 +945,8 @@ uint32_t storage_block_updates_prepare(fixed_bytes_20 a) {
   for (uint32_t i = start; i < end; i++)
     if (storage_block_table.rows[storage_block_raw_order[i]].state_valid)
       storage_block_iter_order[order_length++] = storage_block_raw_order[i];
-  if (order_length != count) abort();
+  if (order_length != count)
+    abort();
   if (count > 1)
     qsort(storage_block_iter_order, count, sizeof(*storage_block_iter_order),
           storage_secure_order_cmp);
@@ -932,13 +954,12 @@ uint32_t storage_block_updates_prepare(fixed_bytes_20 a) {
   return count;
 }
 
-uint64_t storage_block_update_probe_at(uint32_t index, u256 *slot,
-                                       u256 *curr, u256 *orig,
-                                       fixed_bytes_32 *address_hash,
-                                       fixed_bytes_32 *slot_hash) {
-  if (index >= storage_block_iter_end) return 0;
-  const storage_state_row *entry =
-      &storage_block_table.rows[storage_block_iter_order[index]];
+uint64_t storage_block_update_probe_at(uint32_t index, u256 *slot, u256 *curr, u256 *orig,
+                                       fixed_bytes_32 *address_hash, fixed_bytes_32 *slot_hash)
+{
+  if (index >= storage_block_iter_end)
+    return 0;
+  const storage_state_row *entry = &storage_block_table.rows[storage_block_iter_order[index]];
   *slot = be_words4_to_sail_word(entry->slot);
   *curr = be_words4_to_sail_word(entry->current);
   *orig = be_words4_to_sail_word(entry->original);
@@ -947,25 +968,24 @@ uint64_t storage_block_update_probe_at(uint32_t index, u256 *slot,
   return 1;
 }
 
-unit storage_block_iter_begin(fixed_bytes_20 a) {
+unit storage_block_iter_begin(fixed_bytes_20 a)
+{
   (void)storage_block_updates_prepare(a);
   storage_block_iter_position = 0;
   storage_block_iter_active = true;
   return UNIT;
 }
 
-uint64_t storage_block_iter_next_probe(fixed_bytes_20 a, u256 *slot,
-                                       u256 *curr, u256 *orig,
-                                       fixed_bytes_32 *address_hash,
-                                       fixed_bytes_32 *slot_hash) {
+uint64_t storage_block_iter_next_probe(fixed_bytes_20 a, u256 *slot, u256 *curr, u256 *orig,
+                                       fixed_bytes_32 *address_hash, fixed_bytes_32 *slot_hash)
+{
   uint8_t key[20];
   evmsail_address_to_be_bytes(key, a);
-  if (!storage_block_iter_active ||
-      memcmp(key, storage_block_iter_key, 20) != 0 ||
+  if (!storage_block_iter_active || memcmp(key, storage_block_iter_key, 20) != 0 ||
       storage_block_iter_end <= storage_block_iter_position)
     return 0;
-  return storage_block_update_probe_at(storage_block_iter_position++, slot,
-                                       curr, orig, address_hash, slot_hash);
+  return storage_block_update_probe_at(storage_block_iter_position++, slot, curr, orig,
+                                       address_hash, slot_hash);
 }
 
 /* All cumulative block entries for an account, including read-only entries.
@@ -976,39 +996,46 @@ static uint32_t storage_dump_len = 0, storage_dump_cap = 0;
 static fixed_bytes_32 storage_dump_account_hash;
 static int storage_dump_valid = 0;
 
-static void storage_dump_build(const fixed_bytes_32 *ak) {
-  if (storage_dump_valid &&
-      evmsail_hash_equal(&storage_dump_account_hash, ak)) return;
+static void storage_dump_build(const fixed_bytes_32 *ak)
+{
+  if (storage_dump_valid && evmsail_hash_equal(&storage_dump_account_hash, ak))
+    return;
   storage_dump_len = 0;
   for (uint32_t bi = 0; bi < storage_block_table.n; bi++) {
     if (!storage_block_table.rows[bi].state_valid ||
         !evmsail_hash_equal(&storage_block_table.rows[bi].acct_hash, ak))
       continue;
     storage_dump_push(&storage_dump_entries, &storage_dump_len, &storage_dump_cap,
-                  storage_block_table.rows[bi].slot, storage_block_table.rows[bi].current);
+                      storage_block_table.rows[bi].slot, storage_block_table.rows[bi].current);
   }
   storage_dump_account_hash = *ak;
   storage_dump_valid = 1;
 }
 
-static void storage_dump_invalidate(void) {
+static void storage_dump_invalidate(void)
+{
   storage_dump_valid = 0;
 }
 
-uint64_t storage_dump_count(u256 ak) {
+uint64_t storage_dump_count(u256 ak)
+{
   fixed_bytes_32 key = evmsail_hash_from_sail_word(ak);
   storage_dump_build(&key);
   return storage_dump_len;
 }
-u256 storage_dump_slot(u256 ak, uint64_t j) {
+u256 storage_dump_slot(u256 ak, uint64_t j)
+{
   fixed_bytes_32 key = evmsail_hash_from_sail_word(ak);
   storage_dump_build(&key);
-  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].slot : storage_zero_val);
+  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].slot
+                                                     : storage_zero_val);
 }
-u256 storage_dump_value(u256 ak, uint64_t j) {
+u256 storage_dump_value(u256 ak, uint64_t j)
+{
   fixed_bytes_32 key = evmsail_hash_from_sail_word(ak);
   storage_dump_build(&key);
-  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].val : storage_zero_val);
+  return be_words4_to_sail_word(j < storage_dump_len ? storage_dump_entries[j].val
+                                                     : storage_zero_val);
 }
 
 /* ======================================================================== */
@@ -1026,15 +1053,18 @@ u256 storage_dump_value(u256 ak, uint64_t j) {
 
 typedef struct {
   uint8_t raw_addr[20];
-  fixed_bytes_32 hkey;       /* cached secure trie key, not table identity */
-  uint64_t cur_nonce;  uint64_t cur_bal[4];
+  fixed_bytes_32 hkey; /* cached secure trie key, not table identity */
+  uint64_t cur_nonce;
+  uint64_t cur_bal[4];
   fixed_bytes_32 cur_sroot, cur_chash;
   uint8_t cur_exists, cur_storage_cleared, cur_created, cur_selfdestructed;
-  uint64_t orig_nonce; uint64_t orig_bal[4];
+  uint64_t orig_nonce;
+  uint64_t orig_bal[4];
   fixed_bytes_32 orig_sroot, orig_chash;
   uint8_t orig_exists, orig_storage_cleared, orig_created, orig_selfdestructed;
   /* Transaction-start snapshot for the active overlay. */
-  uint64_t tx_orig_nonce; uint64_t tx_orig_bal[4];
+  uint64_t tx_orig_nonce;
+  uint64_t tx_orig_bal[4];
   fixed_bytes_32 tx_orig_sroot, tx_orig_chash;
   uint8_t tx_orig_exists, tx_orig_storage_cleared;
   uint32_t snapshot_cursor;
@@ -1092,22 +1122,22 @@ static acct_undo_entry *acct_undo = NULL;
 static uint32_t acct_undo_n = 0, acct_undo_cap = 0;
 static const uint32_t ACCT_NO_SNAPSHOT = UINT32_MAX;
 
-
 /* per-account compute_root snapshots are invalidated when the block base
    changes (defined with the builders below) */
 static void acct_dump_invalidate(void);
 
-static uint64_t acct_point_hash(const uint8_t address[20]) {
+static uint64_t acct_point_hash(const uint8_t address[20])
+{
   return point_hash_mix(acct_point_hash_seed(address));
 }
 
-static void acct_table_reindex(acct_state_table *table, uint32_t bucket_cap) {
+static void acct_table_reindex(acct_state_table *table, uint32_t bucket_cap)
+{
   uint32_t *buckets = calloc(bucket_cap, sizeof(*buckets));
-  if (!buckets) abort();
+  if (!buckets)
+    abort();
   for (uint32_t i = 0; i < table->n; i++) {
-    uint32_t bucket =
-        (uint32_t)acct_point_hash(table->rows[i].raw_addr) &
-        (bucket_cap - 1);
+    uint32_t bucket = (uint32_t)acct_point_hash(table->rows[i].raw_addr) & (bucket_cap - 1);
     while (buckets[bucket] != 0)
       bucket = (bucket + 1) & (bucket_cap - 1);
     buckets[bucket] = i + 1;
@@ -1117,9 +1147,10 @@ static void acct_table_reindex(acct_state_table *table, uint32_t bucket_cap) {
   table->bucket_cap = bucket_cap;
 }
 
-static void acct_table_prepare_index(acct_state_table *table,
-                                     uint32_t row_count) {
-  if (!table->indexed) return;
+static void acct_table_prepare_index(acct_state_table *table, uint32_t row_count)
+{
+  if (!table->indexed)
+    return;
   uint32_t bucket_cap = table->bucket_cap ? table->bucket_cap : 128;
   while ((uint64_t)row_count * 10 >= (uint64_t)bucket_cap * 7)
     bucket_cap *= 2;
@@ -1127,16 +1158,15 @@ static void acct_table_prepare_index(acct_state_table *table,
     acct_table_reindex(table, bucket_cap);
 }
 
-static uint32_t acct_table_find(const acct_state_table *t,
-                                const uint8_t address[20], int *found) {
+static uint32_t acct_table_find(const acct_state_table *t, const uint8_t address[20], int *found)
+{
   uint32_t lo = 0, hi = t->n;
   if (t->indexed) {
     if (t->bucket_cap == 0) {
       *found = 0;
       return t->n;
     }
-    uint32_t bucket =
-        (uint32_t)acct_point_hash(address) & (t->bucket_cap - 1);
+    uint32_t bucket = (uint32_t)acct_point_hash(address) & (t->bucket_cap - 1);
     while (t->buckets[bucket] != 0) {
       const uint32_t index = t->buckets[bucket] - 1;
       if (memcmp(t->rows[index].raw_addr, address, 20) == 0) {
@@ -1155,66 +1185,74 @@ static uint32_t acct_table_find(const acct_state_table *t,
     else
       hi = mid;
   }
-  *found = lo < t->n &&
-           memcmp(t->rows[lo].raw_addr, address, 20) == 0;
+  *found = lo < t->n && memcmp(t->rows[lo].raw_addr, address, 20) == 0;
   return lo;
 }
 
-static acct_state_row *acct_table_get(acct_state_table *t,
-                                      const uint8_t address[20]) {
+static acct_state_row *acct_table_get(acct_state_table *t, const uint8_t address[20])
+{
   int f = 0;
   uint32_t i = acct_table_find(t, address, &f);
   return f ? &t->rows[i] : NULL;
 }
 
-static void acct_block_update_list(acct_state_row *row) {
-  if (row->update_listed) return;
+static void acct_block_update_list(acct_state_row *row)
+{
+  if (row->update_listed)
+    return;
   if (acct_block_update_rows_cap < acct_block_update_rows_n + 1) {
-    uint32_t cap =
-        acct_block_update_rows_cap ? acct_block_update_rows_cap * 2 : 64;
-    uint32_t *rows =
-        realloc(acct_block_update_rows, (size_t)cap * sizeof(*rows));
-    if (!rows) abort();
+    uint32_t cap = acct_block_update_rows_cap ? acct_block_update_rows_cap * 2 : 64;
+    uint32_t *rows = realloc(acct_block_update_rows, (size_t)cap * sizeof(*rows));
+    if (!rows)
+      abort();
     acct_block_update_rows = rows;
     acct_block_update_rows_cap = cap;
   }
-  acct_block_update_rows[acct_block_update_rows_n++] =
-      (uint32_t)(row - acct_table.rows);
+  acct_block_update_rows[acct_block_update_rows_n++] = (uint32_t)(row - acct_table.rows);
   row->update_listed = 1;
 }
 
-static void acct_block_update_mark_raw(const uint8_t address[20]) {
+static void acct_block_update_mark_raw(const uint8_t address[20])
+{
   acct_state_row *row = acct_table_get(&acct_block_table, address);
-  if (!row || !row->state_valid) abort();
+  if (!row || !row->state_valid)
+    abort();
   acct_block_update_list(row);
 }
 
-static bool acct_cached_secure_key(fixed_bytes_20 a, fixed_bytes_32 *out) {
+static bool acct_cached_secure_key(fixed_bytes_20 a, fixed_bytes_32 *out)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   const acct_state_row *row = acct_table_get(&acct_block_table, address);
-  if (!row || !row->secure_key_valid) return false;
+  if (!row || !row->secure_key_valid)
+    return false;
   *out = row->hkey;
   return true;
 }
 
-static acct_state_row *acct_table_intern(acct_state_table *t,
-                                         const uint8_t address[20],
-                                         const fixed_bytes_32 *h) {
+static acct_state_row *acct_table_intern(acct_state_table *t, const uint8_t address[20],
+                                         const fixed_bytes_32 *h)
+{
   int f = 0;
   uint32_t i = acct_table_find(t, address, &f);
-  if (f) return &t->rows[i];
+  if (f)
+    return &t->rows[i];
   acct_table_prepare_index(t, t->n + 1);
   if (t->cap < t->n + 1) {
     uint32_t nc = t->cap ? t->cap * 2 : ACCOUNT_INIT_CAP;
-    while (nc < t->n + 1) nc *= 2;
+    while (nc < t->n + 1)
+      nc *= 2;
     acct_state_row *nr = (acct_state_row *)realloc(t->rows, (size_t)nc * sizeof(acct_state_row));
-    if (!nr) return NULL;
-    t->rows = nr; t->cap = nc;
+    if (!nr)
+      return NULL;
+    t->rows = nr;
+    t->cap = nc;
   }
   if (!t->indexed && i < t->n)
     memmove(&t->rows[i + 1], &t->rows[i], (size_t)(t->n - i) * sizeof(acct_state_row));
-  if (t->indexed) i = t->n;
+  if (t->indexed)
+    i = t->n;
   acct_state_row *e = &t->rows[i];
   memset(e, 0, sizeof(*e));
   memcpy(e->raw_addr, address, sizeof(e->raw_addr));
@@ -1225,8 +1263,7 @@ static acct_state_row *acct_table_intern(acct_state_table *t,
   e->bal_code_head = e->bal_code_tail = BAL_NO_HISTORY;
   t->n++;
   if (t->indexed) {
-    uint32_t bucket =
-        (uint32_t)acct_point_hash(address) & (t->bucket_cap - 1);
+    uint32_t bucket = (uint32_t)acct_point_hash(address) & (t->bucket_cap - 1);
     while (t->buckets[bucket] != 0)
       bucket = (bucket + 1) & (t->bucket_cap - 1);
     t->buckets[bucket] = i + 1;
@@ -1234,21 +1271,28 @@ static acct_state_row *acct_table_intern(acct_state_table *t,
   return e;
 }
 
-static void acct_table_reset(acct_state_table *t) {
+static void acct_table_reset(acct_state_table *t)
+{
   const uint8_t indexed = t->indexed;
   free(t->rows);
   free(t->buckets);
-  t->rows = NULL; t->n = 0; t->cap = 0;
-  t->buckets = NULL; t->bucket_cap = 0;
+  t->rows = NULL;
+  t->n = 0;
+  t->cap = 0;
+  t->buckets = NULL;
+  t->bucket_cap = 0;
   t->indexed = indexed;
 }
 
-static void acct_tx_list(acct_state_row *row) {
-  if (row->tx_listed) return;
+static void acct_tx_list(acct_state_row *row)
+{
+  if (row->tx_listed)
+    return;
   if (acct_tx_rows_cap < acct_tx_rows_n + 1) {
     uint32_t cap = acct_tx_rows_cap ? acct_tx_rows_cap * 2 : 64;
     uint32_t *rows = realloc(acct_tx_rows, (size_t)cap * sizeof(*rows));
-    if (!rows) abort();
+    if (!rows)
+      abort();
     acct_tx_rows = rows;
     acct_tx_rows_cap = cap;
   }
@@ -1256,14 +1300,16 @@ static void acct_tx_list(acct_state_row *row) {
   row->tx_listed = 1;
 }
 
-static acct_state_row *acct_tx_bind_write(fixed_bytes_20 a,
-                                          int *fresh) {
+static acct_state_row *acct_tx_bind_write(fixed_bytes_20 a, int *fresh)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   acct_state_row *row = acct_table_get(&acct_tx_table, address);
-  if (!row || !row->state_valid) return NULL;
+  if (!row || !row->state_valid)
+    return NULL;
   *fresh = !row->tx_active;
-  if (!*fresh) return row;
+  if (!*fresh)
+    return row;
   row->tx_orig_nonce = row->cur_nonce;
   memcpy(row->tx_orig_bal, row->cur_bal, sizeof(row->tx_orig_bal));
   row->tx_orig_sroot = row->cur_sroot;
@@ -1279,16 +1325,16 @@ static acct_state_row *acct_tx_bind_write(fixed_bytes_20 a,
  * saves its reversible projection at most once per open frame; successful
  * child records remain ordered in the journal for a possible enclosing
  * revert. */
-static int acct_snapshot_for_write(acct_state_row *row, int prior_present) {
+static int acct_snapshot_for_write(acct_state_row *row, int prior_present)
+{
   const uint32_t frame_marker = state_journal_current_frame_marker();
-  if (frame_marker == ACCT_NO_SNAPSHOT ||
-      row->snapshot_cursor == frame_marker)
+  if (frame_marker == ACCT_NO_SNAPSHOT || row->snapshot_cursor == frame_marker)
     return 1;
   if (acct_undo_cap < acct_undo_n + 1) {
     uint32_t cap = acct_undo_cap ? acct_undo_cap * 2 : 64;
-    acct_undo_entry *entries = realloc(acct_undo,
-                                       (size_t)cap * sizeof(*entries));
-    if (!entries) return 0;
+    acct_undo_entry *entries = realloc(acct_undo, (size_t)cap * sizeof(*entries));
+    if (!entries)
+      return 0;
     acct_undo = entries;
     acct_undo_cap = cap;
   }
@@ -1312,7 +1358,8 @@ static int acct_snapshot_for_write(acct_state_row *row, int prior_present) {
 
 /* --- lifecycle --- */
 /* whole-overlay wipe (both layers): the HARNESS world reset; no Sail caller. */
-unit acct_db_reset(const unit u) {
+unit acct_db_reset(const unit u)
+{
   (void)u;
   acct_tx_pop_cursor = 0;
   acct_table_reset(&acct_table);
@@ -1333,7 +1380,8 @@ unit acct_db_reset(const unit u) {
   return UNIT;
 }
 
-unit acct_tx_reset(const unit u) {
+unit acct_tx_reset(const unit u)
+{
   (void)u;
   for (uint32_t i = 0; i < acct_tx_rows_n; i++) {
     acct_state_row *row = &acct_table.rows[acct_tx_rows[i]];
@@ -1357,11 +1405,14 @@ unit acct_tx_reset(const unit u) {
   return UNIT;
 }
 
-void acct_tx_revert_last(void) {
-  if (acct_undo_n == 0) abort();
+void acct_tx_revert_last(void)
+{
+  if (acct_undo_n == 0)
+    abort();
   const acct_undo_entry *undo = &acct_undo[--acct_undo_n];
   acct_state_row *current = acct_table_get(&acct_tx_table, undo->raw_addr);
-  if (!current) abort();
+  if (!current)
+    abort();
   current->cur_nonce = undo->nonce;
   memcpy(current->cur_bal, undo->balance, sizeof(current->cur_bal));
   current->cur_sroot = undo->storage_root;
@@ -1380,23 +1431,21 @@ void acct_tx_revert_last(void) {
 /* Drain-one pop for the standard Sail merge in transaction insertion order.
    The order is not protocol-visible; only the account-before-storage phase
    boundary matters. */
-uint64_t acct_tx_pop_probe(fixed_bytes_20 *addr,
-                           uint64_t *cn, u256 *cb,
-                           fixed_bytes_32 *cs, fixed_bytes_32 *cc,
-                           bool *ce, bool *csc, bool *ccr, bool *csd,
-                           uint64_t *on, u256 *ob,
-                           fixed_bytes_32 *os, fixed_bytes_32 *oc,
-                           bool *oe, bool *osc, bool *ocr, bool *osd) {
+uint64_t acct_tx_pop_probe(fixed_bytes_20 *addr, uint64_t *cn, u256 *cb, fixed_bytes_32 *cs,
+                           fixed_bytes_32 *cc, bool *ce, bool *csc, bool *ccr, bool *csd,
+                           uint64_t *on, u256 *ob, fixed_bytes_32 *os, fixed_bytes_32 *oc, bool *oe,
+                           bool *osc, bool *ocr, bool *osd)
+{
   const acct_state_row *e = NULL;
   while (acct_tx_pop_cursor < acct_tx_rows_n) {
-    const acct_state_row *candidate =
-        &acct_table.rows[acct_tx_rows[acct_tx_pop_cursor++]];
+    const acct_state_row *candidate = &acct_table.rows[acct_tx_rows[acct_tx_pop_cursor++]];
     if (candidate->tx_active) {
       e = candidate;
       break;
     }
   }
-  if (!e) return 0;
+  if (!e)
+    return 0;
   *addr = be_bytes_to_sail_address(e->raw_addr);
   *cn = e->cur_nonce;
   *cb = le_words4_to_sail_word(e->cur_bal);
@@ -1419,9 +1468,9 @@ uint64_t acct_tx_pop_probe(fixed_bytes_20 *addr,
 
 /* Block-layer propagation hooks. Raw address is the point key; secure_key is
    supplied on witness materialization and copied thereafter. */
-static acct_state_row *acct_block_bind(fixed_bytes_20 a,
-                                       const fixed_bytes_32 *secure_key,
-                                       int *fresh) {
+static acct_state_row *acct_block_bind(fixed_bytes_20 a, const fixed_bytes_32 *secure_key,
+                                       int *fresh)
+{
   uint8_t address[20];
   fixed_bytes_32 fallback;
   evmsail_address_to_be_bytes(address, a);
@@ -1446,15 +1495,15 @@ static acct_state_row *acct_block_bind(fixed_bytes_20 a,
 }
 
 /* changed account: fresh freezes orig; curr always lands */
-unit acct_block_write_raw(fixed_bytes_20 a, uint64_t nonce, u256 bal,
-                          fixed_bytes_32 sroot, fixed_bytes_32 chash,
-                          bool exists, bool storage_cleared,
-                          uint64_t ononce, u256 obal,
-                          fixed_bytes_32 osroot, fixed_bytes_32 ochash,
-                          bool oexists, bool ostorage_cleared) {
+unit acct_block_write_raw(fixed_bytes_20 a, uint64_t nonce, u256 bal, fixed_bytes_32 sroot,
+                          fixed_bytes_32 chash, bool exists, bool storage_cleared, uint64_t ononce,
+                          u256 obal, fixed_bytes_32 osroot, fixed_bytes_32 ochash, bool oexists,
+                          bool ostorage_cleared)
+{
   int fresh = 0;
   acct_state_row *b = acct_block_bind(a, NULL, &fresh);
-  if (!b) return UNIT;
+  if (!b)
+    return UNIT;
   if (fresh) {
     b->orig_nonce = ononce;
     sail_word_to_le_words4(b->orig_bal, obal);
@@ -1482,22 +1531,25 @@ unit acct_block_write_raw(fixed_bytes_20 a, uint64_t nonce, u256 bal,
 }
 
 /* read member: fresh binds curr == orig; an existing row is untouched */
-unit acct_block_cache_raw(fixed_bytes_20 a, fixed_bytes_32 address_hash,
-                          uint64_t nonce, u256 bal,
-                          fixed_bytes_32 sroot, fixed_bytes_32 chash,
-                          bool exists, bool storage_cleared) {
+unit acct_block_cache_raw(fixed_bytes_20 a, fixed_bytes_32 address_hash, uint64_t nonce, u256 bal,
+                          fixed_bytes_32 sroot, fixed_bytes_32 chash, bool exists,
+                          bool storage_cleared)
+{
   int fresh = 0;
   acct_state_row *b = acct_block_bind(a, &address_hash, &fresh);
-  if (!b) return UNIT;
+  if (!b)
+    return UNIT;
   if (fresh) {
-    b->cur_nonce = nonce;  b->orig_nonce = nonce;
+    b->cur_nonce = nonce;
+    b->orig_nonce = nonce;
     sail_word_to_le_words4(b->cur_bal, bal);
     sail_word_to_le_words4(b->orig_bal, bal);
     b->cur_sroot = sroot;
     b->orig_sroot = b->cur_sroot;
     b->cur_chash = chash;
     b->orig_chash = b->cur_chash;
-    b->cur_exists = exists; b->orig_exists = exists;
+    b->cur_exists = exists;
+    b->orig_exists = exists;
     b->cur_storage_cleared = storage_cleared;
     b->orig_storage_cleared = storage_cleared;
     b->state_valid = 1;
@@ -1510,14 +1562,15 @@ unit acct_block_cache_raw(fixed_bytes_20 a, fixed_bytes_32 address_hash,
 /* Per-layer account probe (layer 0 = tx, 1 = block): returns presence and
    writes the explicit AccountRow payload fields when present. The tx-over-
    block precedence lives in Sail (account_lookup). */
-uint64_t acct_row_probe(uint64_t layer, fixed_bytes_20 a, uint64_t *nonce,
-                        u256 *bal, fixed_bytes_32 *sroot, fixed_bytes_32 *chash,
-                        bool *exists, bool *storage_cleared,
-                        bool *created, bool *selfdestructed) {
+uint64_t acct_row_probe(uint64_t layer, fixed_bytes_20 a, uint64_t *nonce, u256 *bal,
+                        fixed_bytes_32 *sroot, fixed_bytes_32 *chash, bool *exists,
+                        bool *storage_cleared, bool *created, bool *selfdestructed)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   acct_state_row *e = acct_table_get(&acct_table, address);
-  if (!e || !e->state_valid || (layer == 0 && !e->tx_active)) return 0;
+  if (!e || !e->state_valid || (layer == 0 && !e->tx_active))
+    return 0;
   *nonce = e->cur_nonce;
   *bal = le_words4_to_sail_word(e->cur_bal);
   *sroot = e->cur_sroot;
@@ -1533,31 +1586,34 @@ uint64_t acct_row_probe(uint64_t layer, fixed_bytes_20 a, uint64_t *nonce,
 static uint32_t acct_block_iter_position = 0;
 static bool acct_block_iter_active = false;
 
-static int acct_secure_order_cmp(const void *a, const void *b) {
+static int acct_secure_order_cmp(const void *a, const void *b)
+{
   const acct_state_row *aa = &acct_block_table.rows[*(const uint32_t *)a];
   const acct_state_row *bb = &acct_block_table.rows[*(const uint32_t *)b];
   return evmsail_hash_compare(&aa->hkey, &bb->hkey);
 }
 
-uint32_t acct_block_updates_prepare(void) {
+uint32_t acct_block_updates_prepare(void)
+{
   if (acct_block_iter_order_cap < acct_block_update_rows_n) {
-    uint32_t *order = realloc(
-        acct_block_iter_order,
-        (size_t)acct_block_update_rows_n * sizeof(*acct_block_iter_order));
-    if (!order && acct_block_update_rows_n) abort();
+    uint32_t *order = realloc(acct_block_iter_order,
+                              (size_t)acct_block_update_rows_n * sizeof(*acct_block_iter_order));
+    if (!order && acct_block_update_rows_n)
+      abort();
     acct_block_iter_order = order;
     acct_block_iter_order_cap = acct_block_update_rows_n;
   }
   for (uint32_t i = 0; i < acct_block_update_rows_n; i++)
     acct_block_iter_order[i] = acct_block_update_rows[i];
   if (acct_block_update_rows_n > 1)
-    qsort(acct_block_iter_order, acct_block_update_rows_n,
-          sizeof(*acct_block_iter_order), acct_secure_order_cmp);
+    qsort(acct_block_iter_order, acct_block_update_rows_n, sizeof(*acct_block_iter_order),
+          acct_secure_order_cmp);
   acct_block_iter_end = acct_block_update_rows_n;
   return acct_block_iter_end;
 }
 
-unit acct_block_iter_begin(const unit u) {
+unit acct_block_iter_begin(const unit u)
+{
   (void)u;
   (void)acct_block_updates_prepare();
   acct_block_iter_position = 0;
@@ -1565,16 +1621,14 @@ unit acct_block_iter_begin(const unit u) {
   return UNIT;
 }
 
-static uint64_t acct_entry_probe(const acct_state_row *entry,
-                                 fixed_bytes_20 *addr, uint64_t *cn,
-                                 u256 *cb, fixed_bytes_32 *cs,
-                                 fixed_bytes_32 *cc, bool *ce, bool *csc,
-                                 bool *ccr, bool *csd, uint64_t *on,
-                                 u256 *ob, fixed_bytes_32 *os,
-                                 fixed_bytes_32 *oc, bool *oe, bool *osc,
-                                 bool *ocr, bool *osd,
-                                 fixed_bytes_32 *address_hash) {
-  if (!entry || !entry->state_valid) return 0;
+static uint64_t acct_entry_probe(const acct_state_row *entry, fixed_bytes_20 *addr, uint64_t *cn,
+                                 u256 *cb, fixed_bytes_32 *cs, fixed_bytes_32 *cc, bool *ce,
+                                 bool *csc, bool *ccr, bool *csd, uint64_t *on, u256 *ob,
+                                 fixed_bytes_32 *os, fixed_bytes_32 *oc, bool *oe, bool *osc,
+                                 bool *ocr, bool *osd, fixed_bytes_32 *address_hash)
+{
+  if (!entry || !entry->state_valid)
+    return 0;
   *addr = be_bytes_to_sail_address(entry->raw_addr);
   *cn = entry->cur_nonce;
   *cb = le_words4_to_sail_word(entry->cur_bal);
@@ -1592,59 +1646,55 @@ static uint64_t acct_entry_probe(const acct_state_row *entry,
   *osc = entry->orig_storage_cleared;
   *ocr = entry->orig_created;
   *osd = entry->orig_selfdestructed;
-  if (address_hash) *address_hash = entry->hkey;
+  if (address_hash)
+    *address_hash = entry->hkey;
   return 1;
 }
 
-static uint64_t acct_iter_next_probe(uint32_t *position, bool *active,
-                                     const bool candidates_only,
-                                     const uint32_t *order,
-                                     fixed_bytes_20 *addr, uint64_t *cn,
-                                     u256 *cb, fixed_bytes_32 *cs,
-                                     fixed_bytes_32 *cc, bool *ce, bool *csc,
-                                     bool *ccr, bool *csd, uint64_t *on,
-                                     u256 *ob, fixed_bytes_32 *os,
-                                     fixed_bytes_32 *oc, bool *oe, bool *osc,
-                                     bool *ocr, bool *osd,
-                                     fixed_bytes_32 *address_hash) {
-  if (!*active) return 0;
-  const uint32_t end =
-      candidates_only ? acct_block_iter_end : acct_block_table.n;
+static uint64_t acct_iter_next_probe(uint32_t *position, bool *active, const bool candidates_only,
+                                     const uint32_t *order, fixed_bytes_20 *addr, uint64_t *cn,
+                                     u256 *cb, fixed_bytes_32 *cs, fixed_bytes_32 *cc, bool *ce,
+                                     bool *csc, bool *ccr, bool *csd, uint64_t *on, u256 *ob,
+                                     fixed_bytes_32 *os, fixed_bytes_32 *oc, bool *oe, bool *osc,
+                                     bool *ocr, bool *osd, fixed_bytes_32 *address_hash)
+{
+  if (!*active)
+    return 0;
+  const uint32_t end = candidates_only ? acct_block_iter_end : acct_block_table.n;
   while (*position < end) {
     const uint32_t index = order ? order[(*position)++] : (*position)++;
     const acct_state_row *entry = &acct_block_table.rows[index];
-    if (acct_entry_probe(entry, addr, cn, cb, cs, cc, ce, csc, ccr, csd, on,
-                         ob, os, oc, oe, osc, ocr, osd, address_hash))
+    if (acct_entry_probe(entry, addr, cn, cb, cs, cc, ce, csc, ccr, csd, on, ob, os, oc, oe, osc,
+                         ocr, osd, address_hash))
       return 1;
   }
   return 0;
 }
 
-uint64_t acct_block_iter_next_probe(fixed_bytes_20 *addr, uint64_t *cn,
-                                    u256 *cb, fixed_bytes_32 *cs,
-                                    fixed_bytes_32 *cc, bool *ce, bool *csc,
-                                    bool *ccr, bool *csd, uint64_t *on,
-                                    u256 *ob, fixed_bytes_32 *os,
-                                    fixed_bytes_32 *oc, bool *oe, bool *osc,
-                                    bool *ocr, bool *osd,
-                                    fixed_bytes_32 *address_hash) {
-  return acct_iter_next_probe(
-      &acct_block_iter_position, &acct_block_iter_active, true,
-      acct_block_iter_order, addr, cn, cb, cs, cc, ce, csc, ccr, csd, on, ob,
-      os, oc, oe, osc, ocr, osd, address_hash);
+uint64_t acct_block_iter_next_probe(fixed_bytes_20 *addr, uint64_t *cn, u256 *cb,
+                                    fixed_bytes_32 *cs, fixed_bytes_32 *cc, bool *ce, bool *csc,
+                                    bool *ccr, bool *csd, uint64_t *on, u256 *ob,
+                                    fixed_bytes_32 *os, fixed_bytes_32 *oc, bool *oe, bool *osc,
+                                    bool *ocr, bool *osd, fixed_bytes_32 *address_hash)
+{
+  return acct_iter_next_probe(&acct_block_iter_position, &acct_block_iter_active, true,
+                              acct_block_iter_order, addr, cn, cb, cs, cc, ce, csc, ccr, csd, on,
+                              ob, os, oc, oe, osc, ocr, osd, address_hash);
 }
 
 /* A first transaction write activates the transaction projection already
    carried by the cumulative account row established by k_aload. */
-unit acct_tx_update_raw(fixed_bytes_20 a, uint64_t nonce,
-                        u256 bal, fixed_bytes_32 sroot, fixed_bytes_32 chash,
-                        bool exists, bool storage_cleared, bool created,
-                        bool selfdestructed) {
+unit acct_tx_update_raw(fixed_bytes_20 a, uint64_t nonce, u256 bal, fixed_bytes_32 sroot,
+                        fixed_bytes_32 chash, bool exists, bool storage_cleared, bool created,
+                        bool selfdestructed)
+{
   int fresh = 0;
   acct_state_row *e = acct_tx_bind_write(a, &fresh);
-  if (!e) return UNIT;
+  if (!e)
+    return UNIT;
   if (!acct_snapshot_for_write(e, !fresh)) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   uint64_t b4[4];
@@ -1660,51 +1710,63 @@ unit acct_tx_update_raw(fixed_bytes_20 a, uint64_t nonce,
   return UNIT;
 }
 
-unit acct_tx_set_balance(fixed_bytes_20 a, const u256 balance) {
+unit acct_tx_set_balance(fixed_bytes_20 a, const u256 balance)
+{
   uint64_t value[4];
   int fresh = 0;
   sail_word_to_le_words4(value, (balance));
   acct_state_row *e = acct_tx_bind_write(a, &fresh);
-  if (!e) return UNIT;
+  if (!e)
+    return UNIT;
   if (compare_u64x4(e->cur_bal, value) == 0) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   if (!acct_snapshot_for_write(e, !fresh)) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   memcpy(e->cur_bal, value, sizeof(e->cur_bal));
   return UNIT;
 }
 
-unit acct_tx_set_nonce(fixed_bytes_20 a, uint64_t nonce) {
+unit acct_tx_set_nonce(fixed_bytes_20 a, uint64_t nonce)
+{
   int fresh = 0;
   acct_state_row *e = acct_tx_bind_write(a, &fresh);
-  if (!e) return UNIT;
+  if (!e)
+    return UNIT;
   if (e->cur_nonce == nonce) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   if (!acct_snapshot_for_write(e, !fresh)) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   e->cur_nonce = nonce;
   return UNIT;
 }
 
-unit acct_tx_set_code_hash(fixed_bytes_20 a, fixed_bytes_32 code_hash) {
+unit acct_tx_set_code_hash(fixed_bytes_20 a, fixed_bytes_32 code_hash)
+{
   fixed_bytes_32 value = code_hash;
   int fresh = 0;
   acct_state_row *e = acct_tx_bind_write(a, &fresh);
-  if (!e) return UNIT;
+  if (!e)
+    return UNIT;
   if (evmsail_hash_equal(&e->cur_chash, &value)) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   if (!acct_snapshot_for_write(e, !fresh)) {
-    if (fresh) e->tx_active = 0;
+    if (fresh)
+      e->tx_active = 0;
     return UNIT;
   }
   e->cur_chash = value;
@@ -1717,20 +1779,19 @@ unit acct_tx_set_code_hash(fixed_bytes_20 a, fixed_bytes_32 code_hash) {
  * decisions are committed before the active storage generation is drained.
  * The standard executable retains the structurally identical Sail equation.
  */
-unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later,
-                      uint64_t block_access_index) {
+unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later, uint64_t block_access_index)
+{
   for (uint32_t i = 0; i < acct_tx_rows_n; i++) {
     acct_state_row *tx = &acct_table.rows[acct_tx_rows[i]];
-    if (!tx->tx_active) continue;
-    const bool deleted =
-        tx->cur_selfdestructed && (!cancun_or_later || tx->cur_created);
+    if (!tx->tx_active)
+      continue;
+    const bool deleted = tx->cur_selfdestructed && (!cancun_or_later || tx->cur_created);
 
     if (deleted) {
       tx->cur_nonce = 0;
       tx->cur_chash = account_empty_code_hash;
       tx->cur_storage_cleared = true;
-      if (!amsterdam_or_later ||
-          compare_u64x4(tx->cur_bal, account_zero_val) == 0) {
+      if (!amsterdam_or_later || compare_u64x4(tx->cur_bal, account_zero_val) == 0) {
         memcpy(tx->cur_bal, account_zero_val, sizeof(tx->cur_bal));
         tx->cur_exists = false;
       } else {
@@ -1741,28 +1802,26 @@ unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later,
       storage_tx_clear(be_bytes_to_sail_address(tx->raw_addr));
     }
 
-    if (deleted ||
-        (tx->cur_storage_cleared && !tx->tx_orig_storage_cleared))
+    if (deleted || (tx->cur_storage_cleared && !tx->tx_orig_storage_cleared))
       storage_block_clear(be_bytes_to_sail_address(tx->raw_addr));
 
     const fixed_bytes_20 address = be_bytes_to_sail_address(tx->raw_addr);
     if (tx->cur_nonce != tx->tx_orig_nonce)
       bal_note_nonce_change(block_access_index, address, tx->cur_nonce);
     if (compare_u64x4(tx->cur_bal, tx->tx_orig_bal) != 0)
-      bal_note_balance_change(
-          block_access_index, address, le_words4_to_sail_word(tx->cur_bal));
+      bal_note_balance_change(block_access_index, address, le_words4_to_sail_word(tx->tx_orig_bal),
+                              le_words4_to_sail_word(tx->cur_bal));
     if (!evmsail_hash_equal(&tx->cur_chash, &tx->tx_orig_chash))
       bal_note_code_change(block_access_index, address, tx->cur_chash);
 
     tx->cur_created = false;
     tx->cur_selfdestructed = false;
-    const bool changed =
-        tx->cur_nonce != tx->tx_orig_nonce ||
-        compare_u64x4(tx->cur_bal, tx->tx_orig_bal) != 0 ||
-        !evmsail_hash_equal(&tx->cur_sroot, &tx->tx_orig_sroot) ||
-        !evmsail_hash_equal(&tx->cur_chash, &tx->tx_orig_chash) ||
-        tx->cur_exists != tx->tx_orig_exists ||
-        tx->cur_storage_cleared != tx->tx_orig_storage_cleared;
+    const bool changed = tx->cur_nonce != tx->tx_orig_nonce ||
+                         compare_u64x4(tx->cur_bal, tx->tx_orig_bal) != 0 ||
+                         !evmsail_hash_equal(&tx->cur_sroot, &tx->tx_orig_sroot) ||
+                         !evmsail_hash_equal(&tx->cur_chash, &tx->tx_orig_chash) ||
+                         tx->cur_exists != tx->tx_orig_exists ||
+                         tx->cur_storage_cleared != tx->tx_orig_storage_cleared;
     if (changed) {
       /*
        * The transaction worklist already names the shared physical row.
@@ -1778,13 +1837,10 @@ unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later,
   }
 
   for (uint32_t i = 0; i < storage_tx_rows_n; i++) {
-    storage_state_row *tx =
-        &storage_table.rows[storage_tx_rows[i]];
-    if (!tx->tx_active ||
-        tx->generation != storage_active_generation(tx->raw_addr))
+    storage_state_row *tx = &storage_table.rows[storage_tx_rows[i]];
+    if (!tx->tx_active || tx->generation != storage_active_generation(tx->raw_addr))
       continue;
-    acct_state_row *account =
-        acct_table_get(&acct_block_table, tx->raw_addr);
+    acct_state_row *account = acct_table_get(&acct_block_table, tx->raw_addr);
     if (!account || !account->state_valid || !account->cur_exists ||
         compare_u64x4(tx->tx_current, tx->tx_original) == 0)
       continue;
@@ -1792,7 +1848,8 @@ unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later,
     const fixed_bytes_20 address = be_bytes_to_sail_address(tx->raw_addr);
     const u256 slot = be_words4_to_sail_word(tx->slot);
     const u256 current = be_words4_to_sail_word(tx->tx_current);
-    bal_note_storage_change(block_access_index, address, slot, current);
+    bal_note_storage_change(block_access_index, address, slot,
+                            be_words4_to_sail_word(tx->tx_original), current);
     /*
      * As above, this is already the cumulative storage row. Freeze its
      * pre-block original only when the row had no cumulative value, then land
@@ -1820,26 +1877,28 @@ unit evmsail_tx_merge(bool cancun_or_later, bool amsterdam_or_later,
 typedef struct {
   fixed_bytes_32 hkey;
   uint8_t raw_addr[20];
-  uint64_t nonce; uint64_t bal[4];
+  uint64_t nonce;
+  uint64_t bal[4];
   fixed_bytes_32 sroot, chash;
 
 } acct_dump_entry;
 
 static void acct_dump_push(acct_dump_entry **rows, uint32_t *n, uint32_t *cap,
-                           const fixed_bytes_32 *hkey,
-                           const uint8_t raw_addr[20],
-                           uint64_t nonce, const uint64_t bal[4],
-                           const fixed_bytes_32 *sroot,
-                           const fixed_bytes_32 *chash) {
+                           const fixed_bytes_32 *hkey, const uint8_t raw_addr[20], uint64_t nonce,
+                           const uint64_t bal[4], const fixed_bytes_32 *sroot,
+                           const fixed_bytes_32 *chash)
+{
   if (*cap < *n + 1) {
     uint32_t nc = *cap ? *cap * 2 : 16;
-    while (nc < *n + 1) nc *= 2;
+    while (nc < *n + 1)
+      nc *= 2;
     *rows = (acct_dump_entry *)realloc(*rows, (size_t)nc * sizeof(acct_dump_entry));
     *cap = nc;
   }
   acct_dump_entry *r = &(*rows)[*n];
   r->hkey = *hkey;
-  memcpy(r->raw_addr, raw_addr, 20); r->nonce = nonce;
+  memcpy(r->raw_addr, raw_addr, 20);
+  r->nonce = nonce;
   memcpy(r->bal, bal, 32);
   r->sroot = *sroot;
   r->chash = *chash;
@@ -1851,120 +1910,139 @@ static acct_dump_entry *acct_dump_entries = NULL;
 static uint32_t acct_dump_len = 0, acct_dump_cap = 0;
 static int acct_dump_valid = 0;
 
-static void acct_dump_build(void) {
-  if (acct_dump_valid) return;
+static void acct_dump_build(void)
+{
+  if (acct_dump_valid)
+    return;
   acct_dump_len = 0;
   for (uint32_t bi = 0; bi < acct_block_table.n; bi++) {
     const acct_state_row *b = &acct_block_table.rows[bi];
-    if (!b->state_valid || !b->cur_exists) continue;
-    acct_dump_push(&acct_dump_entries, &acct_dump_len, &acct_dump_cap,
-                   &b->hkey, b->raw_addr, b->cur_nonce, b->cur_bal,
-                   &b->cur_sroot, &b->cur_chash);
+    if (!b->state_valid || !b->cur_exists)
+      continue;
+    acct_dump_push(&acct_dump_entries, &acct_dump_len, &acct_dump_cap, &b->hkey, b->raw_addr,
+                   b->cur_nonce, b->cur_bal, &b->cur_sroot, &b->cur_chash);
   }
   acct_dump_valid = 1;
 }
 
-uint64_t acct_dump_count(const unit u) { (void)u; acct_dump_build(); return acct_dump_len; }
-u256 acct_dump_hkey(uint64_t i) {
+uint64_t acct_dump_count(const unit u)
+{
+  (void)u;
+  acct_dump_build();
+  return acct_dump_len;
+}
+u256 acct_dump_hkey(uint64_t i)
+{
   acct_dump_build();
   if (i < acct_dump_len)
     return evmsail_hash_to_sail_word(&acct_dump_entries[i].hkey);
   return be_words4_to_sail_word(account_zero_val);
 }
-fixed_bytes_20 acct_dump_address(uint64_t i) {
+fixed_bytes_20 acct_dump_address(uint64_t i)
+{
   acct_dump_build();
-  return be_bytes_to_sail_address(i < acct_dump_len
-                                      ? acct_dump_entries[i].raw_addr
-                                      : (const uint8_t[20]){0});
+  return be_bytes_to_sail_address(i < acct_dump_len ? acct_dump_entries[i].raw_addr
+                                                    : (const uint8_t[20]){0});
 }
-uint64_t acct_dump_nonce(uint64_t i) { acct_dump_build(); return i < acct_dump_len ? acct_dump_entries[i].nonce : 0; }
-u256 acct_dump_balance(uint64_t i) {
-  acct_dump_build(); return le_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].bal : account_zero_val);
+uint64_t acct_dump_nonce(uint64_t i)
+{
+  acct_dump_build();
+  return i < acct_dump_len ? acct_dump_entries[i].nonce : 0;
 }
-u256 acct_dump_storage_root(uint64_t i) {
+u256 acct_dump_balance(uint64_t i)
+{
+  acct_dump_build();
+  return le_words4_to_sail_word(i < acct_dump_len ? acct_dump_entries[i].bal : account_zero_val);
+}
+u256 acct_dump_storage_root(uint64_t i)
+{
   static const fixed_bytes_32 zero = {{0}};
   acct_dump_build();
-  return evmsail_hash_to_sail_word(
-      i < acct_dump_len ? &acct_dump_entries[i].sroot : &zero);
+  return evmsail_hash_to_sail_word(i < acct_dump_len ? &acct_dump_entries[i].sroot : &zero);
 }
-u256 acct_dump_code_hash(uint64_t i) {
+u256 acct_dump_code_hash(uint64_t i)
+{
   static const fixed_bytes_32 zero = {{0}};
   acct_dump_build();
-  return evmsail_hash_to_sail_word(
-      i < acct_dump_len ? &acct_dump_entries[i].chash : &zero);
+  return evmsail_hash_to_sail_word(i < acct_dump_len ? &acct_dump_entries[i].chash : &zero);
 }
 
-static void acct_dump_invalidate(void) {
+static void acct_dump_invalidate(void)
+{
   acct_dump_valid = 0;
 }
 
-static void *bal_reserve(void *rows, uint32_t *cap, uint32_t need,
-                         size_t element_size) {
-  if (*cap >= need) return rows;
+static void *bal_reserve(void *rows, uint32_t *cap, uint32_t need, size_t element_size)
+{
+  if (*cap >= need)
+    return rows;
   uint32_t next = *cap ? *cap * 2 : 64;
-  while (next < need) next *= 2;
+  while (next < need)
+    next *= 2;
   rows = realloc(rows, (size_t)next * element_size);
-  if (!rows) abort();
+  if (!rows)
+    abort();
   *cap = next;
   return rows;
 }
 
-static acct_state_row *bal_account_activate(const uint8_t address[20]) {
+static acct_state_row *bal_account_activate(const uint8_t address[20])
+{
   static const fixed_bytes_32 zero = {{0}};
-  if (bal_prepared) abort();
+  if (bal_prepared)
+    abort();
   acct_state_row *row = acct_table_get(&acct_block_table, address);
   if (!row)
     row = acct_table_intern(&acct_block_table, address, &zero);
-  if (!row) abort();
+  if (!row)
+    abort();
   if (row->bal_epoch != bal_epoch) {
     row->bal_epoch = bal_epoch;
     row->bal_touched = 0;
     row->bal_balance_head = row->bal_balance_tail = BAL_NO_HISTORY;
     row->bal_nonce_head = row->bal_nonce_tail = BAL_NO_HISTORY;
     row->bal_code_head = row->bal_code_tail = BAL_NO_HISTORY;
-    bal_account_order = bal_reserve(
-        bal_account_order, &bal_account_order_cap, bal_account_order_n + 1,
-        sizeof(*bal_account_order));
-    bal_account_order[bal_account_order_n++] =
-        (uint32_t)(row - acct_block_table.rows);
+    bal_account_order = bal_reserve(bal_account_order, &bal_account_order_cap,
+                                    bal_account_order_n + 1, sizeof(*bal_account_order));
+    bal_account_order[bal_account_order_n++] = (uint32_t)(row - acct_block_table.rows);
   }
   row->bal_touched = 1;
   return row;
 }
 
-static storage_state_row *bal_storage_activate(const uint8_t address[20],
-                                               const uint64_t slot[4]) {
+static storage_state_row *bal_storage_activate(const uint8_t address[20], const uint64_t slot[4])
+{
   static const fixed_bytes_32 zero = {{0}};
-  storage_state_row *row = storage_table_get(
-      &storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
+  storage_state_row *row =
+      storage_table_get(&storage_block_table, address, slot, STORAGE_BLOCK_GENERATION);
   if (!row)
-    row = storage_table_intern(&storage_block_table, address, slot,
-                               STORAGE_BLOCK_GENERATION, &zero, &zero);
-  if (!row) abort();
+    row = storage_table_intern(&storage_block_table, address, slot, STORAGE_BLOCK_GENERATION, &zero,
+                               &zero);
+  if (!row)
+    abort();
   if (row->bal_epoch != bal_epoch) {
     row->bal_epoch = bal_epoch;
     row->bal_read = 0;
     row->bal_change_head = row->bal_change_tail = BAL_NO_HISTORY;
-    bal_storage_order = bal_reserve(
-        bal_storage_order, &bal_storage_order_cap, bal_storage_order_n + 1,
-        sizeof(*bal_storage_order));
-    bal_storage_order[bal_storage_order_n++] =
-        (uint32_t)(row - storage_block_table.rows);
+    bal_storage_order = bal_reserve(bal_storage_order, &bal_storage_order_cap,
+                                    bal_storage_order_n + 1, sizeof(*bal_storage_order));
+    bal_storage_order[bal_storage_order_n++] = (uint32_t)(row - storage_block_table.rows);
   }
   return row;
 }
 
-static void bal_append_word(bal_word_history **rows, uint32_t *length,
-                            uint32_t *capacity, uint32_t *head,
-                            uint32_t *tail, uint32_t index,
-                            const uint64_t value[4]) {
+static void bal_append_word(bal_word_history **rows, uint32_t *length, uint32_t *capacity,
+                            uint32_t *head, uint32_t *tail, uint32_t index,
+                            const uint64_t before[4], const uint64_t value[4])
+{
   if (*tail != BAL_NO_HISTORY) {
     bal_word_history *last = &(*rows)[*tail];
     if (last->index == index) {
       memcpy(last->value, value, sizeof(last->value));
       return;
     }
-    if (last->index > index) abort();
+    if (last->index > index)
+      abort();
   }
   *rows = bal_reserve(*rows, capacity, *length + 1, sizeof(**rows));
   const uint32_t position = (*length)++;
@@ -1972,6 +2050,7 @@ static void bal_append_word(bal_word_history **rows, uint32_t *length,
   entry->index = index;
   entry->next = BAL_NO_HISTORY;
   memcpy(entry->value, value, sizeof(entry->value));
+  memcpy(entry->before, before, sizeof(entry->before));
   if (*tail == BAL_NO_HISTORY)
     *head = position;
   else
@@ -1979,19 +2058,19 @@ static void bal_append_word(bal_word_history **rows, uint32_t *length,
   *tail = position;
 }
 
-static void bal_append_nonce(uint32_t *head, uint32_t *tail, uint32_t index,
-                             uint64_t value) {
+static void bal_append_nonce(uint32_t *head, uint32_t *tail, uint32_t index, uint64_t value)
+{
   if (*tail != BAL_NO_HISTORY) {
     bal_nonce_history *last = &bal_nonce_histories[*tail];
     if (last->index == index) {
       last->value = value;
       return;
     }
-    if (last->index > index) abort();
+    if (last->index > index)
+      abort();
   }
-  bal_nonce_histories =
-      bal_reserve(bal_nonce_histories, &bal_nonce_history_cap,
-                  bal_nonce_history_n + 1, sizeof(*bal_nonce_histories));
+  bal_nonce_histories = bal_reserve(bal_nonce_histories, &bal_nonce_history_cap,
+                                    bal_nonce_history_n + 1, sizeof(*bal_nonce_histories));
   const uint32_t position = bal_nonce_history_n++;
   bal_nonce_history *entry = &bal_nonce_histories[position];
   entry->index = index;
@@ -2005,18 +2084,19 @@ static void bal_append_nonce(uint32_t *head, uint32_t *tail, uint32_t index,
 }
 
 static void bal_append_code(uint32_t *head, uint32_t *tail, uint32_t index,
-                            const fixed_bytes_32 *value) {
+                            const fixed_bytes_32 *value)
+{
   if (*tail != BAL_NO_HISTORY) {
     bal_code_history *last = &bal_code_histories[*tail];
     if (last->index == index) {
       last->value = *value;
       return;
     }
-    if (last->index > index) abort();
+    if (last->index > index)
+      abort();
   }
-  bal_code_histories =
-      bal_reserve(bal_code_histories, &bal_code_history_cap,
-                  bal_code_history_n + 1, sizeof(*bal_code_histories));
+  bal_code_histories = bal_reserve(bal_code_histories, &bal_code_history_cap,
+                                   bal_code_history_n + 1, sizeof(*bal_code_histories));
   const uint32_t position = bal_code_history_n++;
   bal_code_history *entry = &bal_code_histories[position];
   entry->index = index;
@@ -2029,30 +2109,34 @@ static void bal_append_code(uint32_t *head, uint32_t *tail, uint32_t index,
   *tail = position;
 }
 
-unit bal_note_account_touch(fixed_bytes_20 a) {
+unit bal_note_account_touch(fixed_bytes_20 a)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   (void)bal_account_activate(address);
   return UNIT;
 }
 
-unit bal_note_storage_change(uint64_t index, fixed_bytes_20 a,
-                             const u256 slot,
-                             const u256 value) {
+unit bal_note_storage_change(uint64_t index, fixed_bytes_20 a, const u256 slot, const u256 before,
+                             const u256 value)
+{
   uint8_t address[20];
-  uint64_t slot_words[4], value_words[4];
+  uint64_t slot_words[4], value_words[4], before_words[4];
   evmsail_address_to_be_bytes(address, a);
   sail_word_to_be_words4(slot_words, (slot));
   sail_word_to_be_words4(value_words, (value));
+  sail_word_to_be_words4(before_words, before);
   (void)bal_account_activate(address);
   storage_state_row *row = bal_storage_activate(address, slot_words);
-  bal_append_word(&bal_storage_history, &bal_storage_history_n,
-                  &bal_storage_history_cap, &row->bal_change_head,
-                  &row->bal_change_tail, (uint32_t)index, value_words);
+  bal_append_word(&bal_storage_history, &bal_storage_history_n, &bal_storage_history_cap,
+                  &row->bal_change_head, &row->bal_change_tail, (uint32_t)index, before_words,
+                  value_words);
+  row->bal_read = 1;
   return UNIT;
 }
 
-unit bal_note_storage_read(fixed_bytes_20 a, const u256 slot) {
+unit bal_note_storage_read(fixed_bytes_20 a, const u256 slot)
+{
   uint8_t address[20];
   uint64_t slot_words[4];
   evmsail_address_to_be_bytes(address, a);
@@ -2062,57 +2146,57 @@ unit bal_note_storage_read(fixed_bytes_20 a, const u256 slot) {
   return UNIT;
 }
 
-unit bal_note_balance_change(uint64_t index, fixed_bytes_20 a,
-                             const u256 value) {
+unit bal_note_balance_change(uint64_t index, fixed_bytes_20 a, const u256 before, const u256 value)
+{
   uint8_t address[20];
-  uint64_t value_words[4];
+  uint64_t value_words[4], before_words[4];
   evmsail_address_to_be_bytes(address, a);
   sail_word_to_le_words4(value_words, (value));
+  sail_word_to_le_words4(before_words, before);
   acct_state_row *row = bal_account_activate(address);
-  bal_append_word(&bal_balance_history, &bal_balance_history_n,
-                  &bal_balance_history_cap, &row->bal_balance_head,
-                  &row->bal_balance_tail, (uint32_t)index, value_words);
+  bal_append_word(&bal_balance_history, &bal_balance_history_n, &bal_balance_history_cap,
+                  &row->bal_balance_head, &row->bal_balance_tail, (uint32_t)index, before_words,
+                  value_words);
   return UNIT;
 }
 
-unit bal_note_nonce_change(uint64_t index, fixed_bytes_20 a, uint64_t nonce) {
+unit bal_note_nonce_change(uint64_t index, fixed_bytes_20 a, uint64_t nonce)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   acct_state_row *row = bal_account_activate(address);
-  bal_append_nonce(&row->bal_nonce_head, &row->bal_nonce_tail,
-                   (uint32_t)index, nonce);
+  bal_append_nonce(&row->bal_nonce_head, &row->bal_nonce_tail, (uint32_t)index, nonce);
   return UNIT;
 }
 
-unit bal_note_code_change(uint64_t index, fixed_bytes_20 a, fixed_bytes_32 code_hash) {
+unit bal_note_code_change(uint64_t index, fixed_bytes_20 a, fixed_bytes_32 code_hash)
+{
   uint8_t address[20];
   evmsail_address_to_be_bytes(address, a);
   acct_state_row *row = bal_account_activate(address);
-  bal_append_code(&row->bal_code_head, &row->bal_code_tail,
-                  (uint32_t)index, &code_hash);
+  bal_append_code(&row->bal_code_head, &row->bal_code_tail, (uint32_t)index, &code_hash);
   return UNIT;
 }
 
-static int bal_account_order_compare(const void *a, const void *b) {
-  const acct_state_row *left =
-      &acct_block_table.rows[*(const uint32_t *)a];
-  const acct_state_row *right =
-      &acct_block_table.rows[*(const uint32_t *)b];
+static int bal_account_order_compare(const void *a, const void *b)
+{
+  const acct_state_row *left = &acct_block_table.rows[*(const uint32_t *)a];
+  const acct_state_row *right = &acct_block_table.rows[*(const uint32_t *)b];
   return memcmp(left->raw_addr, right->raw_addr, sizeof(left->raw_addr));
 }
 
-static int bal_storage_order_compare(const void *a, const void *b) {
-  const storage_state_row *left =
-      &storage_block_table.rows[*(const uint32_t *)a];
-  const storage_state_row *right =
-      &storage_block_table.rows[*(const uint32_t *)b];
-  int comparison =
-      memcmp(left->raw_addr, right->raw_addr, sizeof(left->raw_addr));
-  if (comparison) return comparison;
+static int bal_storage_order_compare(const void *a, const void *b)
+{
+  const storage_state_row *left = &storage_block_table.rows[*(const uint32_t *)a];
+  const storage_state_row *right = &storage_block_table.rows[*(const uint32_t *)b];
+  int comparison = memcmp(left->raw_addr, right->raw_addr, sizeof(left->raw_addr));
+  if (comparison)
+    return comparison;
   return compare_u64x4(left->slot, right->slot);
 }
 
-static void bal_reset_cursors(void) {
+static void bal_reset_cursors(void)
+{
   bal_account_cursor = 0;
   bal_storage_cursor = 0;
   bal_active_account_index = BAL_NO_HISTORY;
@@ -2121,7 +2205,8 @@ static void bal_reset_cursors(void) {
   bal_stream_phase = BAL_STREAM_ACCOUNT;
 }
 
-unit bal_reset(const unit u) {
+unit bal_reset(const unit u)
+{
   (void)u;
   if (bal_epoch == UINT64_MAX) {
     for (uint32_t i = 0; i < acct_block_table.n; i++)
@@ -2143,7 +2228,17 @@ unit bal_reset(const unit u) {
   return UNIT;
 }
 
-unit bal_prepare_iter(const unit u) {
+static uint32_t bal_next_word_change(const bal_word_history *rows, uint32_t index)
+{
+  while (index != BAL_NO_HISTORY &&
+         memcmp(rows[index].before, rows[index].value, sizeof(rows[index].before)) == 0) {
+    index = rows[index].next;
+  }
+  return index;
+}
+
+unit bal_prepare_iter(const unit u)
+{
   (void)u;
   /*
    * First activation appends each shared row once for this BAL epoch, so
@@ -2151,35 +2246,38 @@ unit bal_prepare_iter(const unit u) {
    * larger state caches.
    */
   if (bal_account_order_n > 1)
-    qsort(bal_account_order, bal_account_order_n,
-          sizeof(*bal_account_order), bal_account_order_compare);
+    qsort(bal_account_order, bal_account_order_n, sizeof(*bal_account_order),
+          bal_account_order_compare);
   if (bal_storage_order_n > 1)
-    qsort(bal_storage_order, bal_storage_order_n,
-          sizeof(*bal_storage_order), bal_storage_order_compare);
+    qsort(bal_storage_order, bal_storage_order_n, sizeof(*bal_storage_order),
+          bal_storage_order_compare);
   bal_prepared = 1;
   bal_reset_cursors();
   return UNIT;
 }
 
-static void bal_ensure_prepared(void) {
-  if (!bal_prepared) (void)bal_prepare_iter(UNIT);
+static void bal_ensure_prepared(void)
+{
+  if (!bal_prepared)
+    (void)bal_prepare_iter(UNIT);
 }
 
-static const acct_state_row *bal_active_account(void) {
-  if (bal_active_account_index == BAL_NO_HISTORY) return NULL;
+static const acct_state_row *bal_active_account(void)
+{
+  if (bal_active_account_index == BAL_NO_HISTORY)
+    return NULL;
   return &acct_block_table.rows[bal_active_account_index];
 }
 
-static int bal_storage_belongs_to_active(const storage_state_row *storage) {
+static int bal_storage_belongs_to_active(const storage_state_row *storage)
+{
   const acct_state_row *account = bal_active_account();
-  return account &&
-         memcmp(storage->raw_addr, account->raw_addr,
-                sizeof(storage->raw_addr)) == 0;
+  return account && memcmp(storage->raw_addr, account->raw_addr, sizeof(storage->raw_addr)) == 0;
 }
 
-enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
-                                      uint64_t *index, u256 *value,
-                                      uint64_t *nonce, fixed_bytes_32 *code_hash) {
+enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot, uint64_t *index,
+                                      u256 *value, uint64_t *nonce, fixed_bytes_32 *code_hash)
+{
   bal_ensure_prepared();
   for (;;) {
     const acct_state_row *account = bal_active_account();
@@ -2194,7 +2292,8 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
       while (bal_storage_cursor < bal_storage_order_n) {
         const storage_state_row *candidate =
             &storage_block_table.rows[bal_storage_order[bal_storage_cursor]];
-        if (memcmp(candidate->raw_addr, account->raw_addr, 20) >= 0) break;
+        if (memcmp(candidate->raw_addr, account->raw_addr, 20) >= 0)
+          break;
         bal_storage_cursor++;
       }
       bal_active_storage_history = BAL_NO_HISTORY;
@@ -2205,12 +2304,13 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
     }
 
     case BAL_STREAM_STORAGE_CHANGE: {
+      bal_active_storage_history =
+          bal_next_word_change(bal_storage_history, bal_active_storage_history);
       if (bal_active_storage_history != BAL_NO_HISTORY) {
-        const bal_word_history *history =
-            &bal_storage_history[bal_active_storage_history];
+        const bal_word_history *history = &bal_storage_history[bal_active_storage_history];
         const storage_state_row *storage =
             &storage_block_table.rows[bal_storage_order[bal_storage_cursor]];
-        bal_active_storage_history = history->next;
+        bal_active_storage_history = bal_next_word_change(bal_storage_history, history->next);
         *slot = be_words4_to_sail_word(storage->slot);
         *index = history->index;
         *value = be_words4_to_sail_word(history->value);
@@ -2221,18 +2321,22 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
       while (bal_storage_cursor < bal_storage_order_n) {
         const storage_state_row *storage =
             &storage_block_table.rows[bal_storage_order[bal_storage_cursor]];
-        if (!bal_storage_belongs_to_active(storage)) break;
-        if (storage->bal_change_head != BAL_NO_HISTORY) {
-          bal_active_storage_history = storage->bal_change_head;
+        if (!bal_storage_belongs_to_active(storage))
+          break;
+        const uint32_t first = bal_next_word_change(bal_storage_history, storage->bal_change_head);
+        if (first != BAL_NO_HISTORY) {
+          bal_active_storage_history = first;
           break;
         }
         bal_storage_cursor++;
       }
-      if (bal_active_storage_history != BAL_NO_HISTORY) continue;
+      if (bal_active_storage_history != BAL_NO_HISTORY)
+        continue;
       while (bal_storage_cursor > 0) {
         const storage_state_row *prior =
             &storage_block_table.rows[bal_storage_order[bal_storage_cursor - 1]];
-        if (!bal_storage_belongs_to_active(prior)) break;
+        if (!bal_storage_belongs_to_active(prior))
+          break;
         bal_storage_cursor--;
       }
       bal_stream_phase = BAL_STREAM_STORAGE_READ;
@@ -2248,7 +2352,7 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
           break;
         }
         if (!storage->bal_read ||
-            storage->bal_change_head != BAL_NO_HISTORY)
+            bal_next_word_change(bal_storage_history, storage->bal_change_head) != BAL_NO_HISTORY)
           continue;
         *slot = be_words4_to_sail_word(storage->slot);
         return BAL_ITER_STORAGE_READ;
@@ -2258,9 +2362,10 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
       continue;
 
     case BAL_STREAM_BALANCE:
+      bal_active_field_history =
+          bal_next_word_change(bal_balance_history, bal_active_field_history);
       if (bal_active_field_history != BAL_NO_HISTORY) {
-        const bal_word_history *history =
-            &bal_balance_history[bal_active_field_history];
+        const bal_word_history *history = &bal_balance_history[bal_active_field_history];
         bal_active_field_history = history->next;
         *index = history->index;
         *value = le_words4_to_sail_word(history->value);
@@ -2272,8 +2377,7 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
 
     case BAL_STREAM_NONCE:
       if (bal_active_field_history != BAL_NO_HISTORY) {
-        const bal_nonce_history *history =
-            &bal_nonce_histories[bal_active_field_history];
+        const bal_nonce_history *history = &bal_nonce_histories[bal_active_field_history];
         bal_active_field_history = history->next;
         *index = history->index;
         *nonce = history->value;
@@ -2285,8 +2389,7 @@ enum bal_iter_tag bal_iter_next_probe(fixed_bytes_20 *address, u256 *slot,
 
     case BAL_STREAM_CODE:
       if (bal_active_field_history != BAL_NO_HISTORY) {
-        const bal_code_history *history =
-            &bal_code_histories[bal_active_field_history];
+        const bal_code_history *history = &bal_code_histories[bal_active_field_history];
         bal_active_field_history = history->next;
         *index = history->index;
         *code_hash = history->value;

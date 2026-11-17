@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 from .._runtime import (
+    SailMatchFailure,
     SailReturn,
     Uint,
 )
 from evm.HostContract import (
+    account_is_warm as _host_account_is_warm,
     bal_iter_next as _host_bal_iter_next,
     bal_prepare_iter as _host_bal_prepare_iter,
     input_code_slices_equal as _host_input_code_slices_equal,
+    keccak256_address as _host_keccak256_address,
+    keccak256_word as _host_keccak256_word,
+    storage_is_warm as _host_storage_is_warm,
 )
 from evm.prelude import (
+    address,
     hash,
     word,
     word_to_address,
+    word_ult,
+    address_to_word,
+    ZERO_WORD,
 )
 from evm.primitives.quantities import account_nonce
 from evm.primitives.gas import (
@@ -32,6 +41,7 @@ from evm.primitives.rlp import (
     RlpCursor,
     RlpFieldRef,
 )
+from evm.primitives.fork import Amsterdam
 from evm.host.code import code_db_resolve
 from evm.lib.rlp.decoding import (
     rlp_decode_item,
@@ -56,6 +66,8 @@ from evm.lib.rlp.codecs.block_access_list import (
     bal_ref_uint64,
     bal_expect_end,
 )
+from evm.kernel import environment
+from evm.lib import state_trie
 
 def bal_compare_index_word(pair: RlpFieldRef, index: block_access_index, value: word) -> None:
     fields = bal_ref_cursor(pair)
@@ -253,6 +265,138 @@ def bal_validate_accounts(cursor: RlpCursor) -> Uint:
             case _:
                 fatal_error(FatalError.InvalidBlockAccessList)
         return Uint((int((int((1 + int(storage_changes))) + int(storage_reads))) + int(bal_validate_accounts(next))))
+
+def validate_historical_schema_slots(cursor: StatelessInputSliceFields, previous: word, have_previous: bool, storage_root: hash) -> None:
+    try:
+        if ((cursor.len) == (0)):
+            raise SailReturn(None)
+        entry = rlp_decode_item(cursor)
+        next = rlp_cursor_advance(cursor, entry.source.len)
+        fields = bal_ref_cursor(entry)
+        slot_field = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, slot_field.source.len)
+        markers = rlp_decode_item(fields)
+        bal_expect_end(rlp_cursor_advance(fields, markers.source.len))
+        slot = bal_ref_word(slot_field)
+        if ((have_previous) & ((not (word_ult(previous, slot))))):
+            fatal_error(FatalError.InvalidBlockAccessList)
+        values = bal_ref_cursor(markers)
+        marker = rlp_decode_item(values)
+        bal_expect_end(rlp_cursor_advance(values, marker.source.len))
+        bal_compare_index_word(marker, 0, ZERO_WORD)
+        state_trie.stateless_storage_by_key(storage_root, _host_keccak256_word(slot))
+        return validate_historical_schema_slots(next, slot, True, storage_root)
+    except SailReturn as _sail_return:
+        return _sail_return.value
+
+def validate_historical_schema_accounts(cursor: StatelessInputSliceFields, previous: word, have_previous: bool) -> None:
+    try:
+        if ((cursor.len) == (0)):
+            raise SailReturn(None)
+        entry = rlp_decode_item(cursor)
+        next = rlp_cursor_advance(cursor, entry.source.len)
+        fields = bal_ref_cursor(entry)
+        address_field = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, address_field.source.len)
+        slots_field = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, slots_field.source.len)
+        reads = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, reads.source.len)
+        balances = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, balances.source.len)
+        nonces = rlp_decode_item(fields)
+        fields = rlp_cursor_advance(fields, nonces.source.len)
+        codes = rlp_decode_item(fields)
+        bal_expect_end(rlp_cursor_advance(fields, codes.source.len))
+        address_bytes = bal_ref_bytes(address_field)
+        address_ = rlp_decode_word(address_field)
+        if ((address_bytes.len) != (20)):
+            fatal_error(FatalError.InvalidBlockAccessList)
+        if ((have_previous) & ((not (word_ult(previous, address_))))):
+            fatal_error(FatalError.InvalidBlockAccessList)
+        account = state_trie.stateless_account_by_key(environment.k_parent_state_root, _host_keccak256_address(word_to_address(address_)))
+        info = account.info
+        validate_historical_schema_slots(bal_ref_cursor(slots_field), ZERO_WORD, False, info.storage_root)
+        bal_expect_end(bal_ref_cursor(reads))
+        bal_expect_end(bal_ref_cursor(balances))
+        bal_expect_end(bal_ref_cursor(nonces))
+        bal_expect_end(bal_ref_cursor(codes))
+        return validate_historical_schema_accounts(next, address_, True)
+    except SailReturn as _sail_return:
+        return _sail_return.value
+
+def validate_historical_access_schema(bytes: StatelessInputSliceFields) -> None:
+    root = rlp_single_ref(bytes)
+    return validate_historical_schema_accounts(bal_ref_cursor(root), ZERO_WORD, False)
+
+def historical_schema_has_slot(cursor: StatelessInputSliceFields, slot: word) -> bool:
+    try:
+        if ((cursor.len) == (0)):
+            raise SailReturn(False)
+        entry = rlp_decode_item(cursor)
+        next = rlp_cursor_advance(cursor, entry.source.len)
+        fields = bal_ref_cursor(entry)
+        field = rlp_decode_item(fields)
+        candidate = bal_ref_word(field)
+        if ((candidate) == (slot)):
+            return True
+        else:
+            if word_ult(slot, candidate):
+                return False
+            else:
+                return historical_schema_has_slot(next, slot)
+    except SailReturn as _sail_return:
+        return _sail_return.value
+
+def historical_schema_has_access(cursor: StatelessInputSliceFields, address_: word, slot: word | None) -> bool:
+    try:
+        if ((cursor.len) == (0)):
+            raise SailReturn(False)
+        entry = rlp_decode_item(cursor)
+        next = rlp_cursor_advance(cursor, entry.source.len)
+        fields = bal_ref_cursor(entry)
+        field = rlp_decode_item(fields)
+        candidate = rlp_decode_word(field)
+        if ((candidate) == (address_)):
+            fields = rlp_cursor_advance(fields, field.source.len)
+            slots = rlp_decode_item(fields)
+            match slot:
+                case None:
+                    return True
+                case (key as _sail_some_value_0) if _sail_some_value_0 is not None:
+                    return historical_schema_has_slot(bal_ref_cursor(slots), key)
+                case _:
+                    raise SailMatchFailure("no Sail match clause applied")
+        else:
+            if word_ult(address_, candidate):
+                return False
+            else:
+                return historical_schema_has_access(next, address_, slot)
+    except SailReturn as _sail_return:
+        return _sail_return.value
+
+def require_historical_state_access(address_: address, slot: word | None) -> None:
+    execution_profile = environment.k_execution_profile
+    protocol = execution_profile.protocol
+    if (int(protocol.fork) < int(Amsterdam)):
+        match slot:
+            case None:
+                already_checked = _host_account_is_warm(address_)
+            case (key as _sail_some_value_1) if _sail_some_value_1 is not None:
+                already_checked = _host_storage_is_warm(address_, key)
+            case _:
+                raise SailMatchFailure("no Sail match clause applied")
+        if (not (already_checked)):
+            root = rlp_single_ref(environment.k_historical_access_schema)
+            found = historical_schema_has_access(bal_ref_cursor(root), address_to_word(address_), slot)
+            if (not (found)):
+                return fatal_error(FatalError.InvalidBlockAccessList)
+            else:
+                return None
+        else:
+            return None
+    else:
+        return None
 
 def validate_block_access_list(bytes: StatelessInputSliceFields, block_gas_limit_: block_gas) -> None:
     _host_bal_prepare_iter()

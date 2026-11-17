@@ -6,13 +6,11 @@ transaction codec has established the envelope's canonical wire shape.
 */
 
 /*md
-## The sender authentication
+## The sender recovery
 
-`public_keys[i]` is a witness, not trusted input. The sender address is
-derived from the key, then authenticated by recovering the signature's
-address with its envelope `y_parity` and requiring the two addresses to
-match. A forged key, wrong parity, or bad signature therefore rejects the
-block.
+The input carries no sender or public key. The sender is the address recovered
+from the signature over the signing hash, selected by the envelope `y_parity`.
+A bad `r`, `s`, or `v` therefore rejects the block.
 */
 /*! Validates the selected signature scheme's `v` domain and returns its
     recovery parity. Legacy accepts `27`/`28` or an EIP-155 value binding the
@@ -47,14 +45,22 @@ function tx_signature_parity(chain_id : chain_identifier, scheme : TxSignatureSc
         },
     }
 
-/*! Authenticates a transaction: enforce the EIP-2 low-`s` bound, recover the
-    signer selected by `y_parity`, and bind it to the address derived from the
-    witnessed 65-byte public key. */
-function tx_auth_valid(sender : address, h : hash, parity : y_parity, r : word, s : word) -> bool =
-    let high_s = word_ult(SECP_N_HALF, s) in
-    if high_s then {
-        false
+/*! Recovers the sender of a transaction: enforce the EIP-2 low-`s` bound and
+    the `(0, n)` range of `r`, then recover the signer selected by
+    `y_parity`. Any failure rejects the block. */
+function tx_recover_sender(h : hash, parity : y_parity, r : word, s : word) -> address = {
+    let valid_range =   word_ult(ZERO_WORD, r)
+                      & word_ult(r, SECP_N_FULL)
+                      & word_ult(ZERO_WORD, s)
+                      & word_ule(s, SECP_N_HALF);
+    let invalid_range = not_bool(valid_range);
+    if invalid_range then {
+        fatal_error(InvalidSignature)
+    };
+    let recovered = ecrecover_addr(h, parity, r, s);
+    if recovered.success then {
+        recovered.address
     } else {
-        let recovered = ecrecover_addr(h, parity, r, s);
-        recovered.success & (recovered.address == sender)
+        fatal_error(InvalidSignature)
     }
+}

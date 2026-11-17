@@ -152,5 +152,3 @@ def ssz_u256(input: StatelessInputSlice, offset: int) -> word:
     return word(result)
 
 SSZ_OFF_BYTES: Annotated[int, IntegerRange(4, 4)] = 4
-
-SSZ_UINT_BYTES: Annotated[int, IntegerRange(8, 8)] = 8

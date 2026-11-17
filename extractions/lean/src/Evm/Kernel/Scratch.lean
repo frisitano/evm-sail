@@ -41,6 +41,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -165,7 +166,7 @@ def scratch_push_address (data : (Vector (BitVec 8) 20)) : SailM Unit := do
   writeReg scratch_arena ⟨_, ⟨_, (((← (host_scratch_store_address arena.len data))).2).2⟩⟩
 
 /-- Appends a evm_prefix of a fixed 32-byte value at the cursor. -/
-/- Type quantifiers: k_ex546811_ : Nat, 0 ≤ k_ex546811_ ∧ k_ex546811_ ≤ 32 -/
+/- Type quantifiers: k_ex576153_ : Nat, 0 ≤ k_ex576153_ ∧ k_ex576153_ ≤ 32 -/
 def scratch_push_b256 (data : (Vector (BitVec 8) 32)) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then
@@ -180,8 +181,8 @@ def scratch_push_fixed_bytes_256 (data : (Vector (BitVec 8) 256)) : SailM Unit :
   writeReg scratch_arena ⟨_, ⟨_, (((← (host_scratch_store_fixed_bytes_256 arena.len data))).2).2⟩⟩
 
 /-- Appends the low `len` bytes of a word in canonical big-endian order. -/
-/- Type quantifiers: k_ex546813_ : Nat, k_ex546812_ : Nat, 0 ≤ k_ex546812_ ∧
-  k_ex546812_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex546813_ ∧ k_ex546813_ ≤ 32 -/
+/- Type quantifiers: k_ex576155_ : Nat, k_ex576154_ : Nat, 0 ≤ k_ex576154_ ∧
+  k_ex576154_ ≤ (2 ^ 256 - 1), 0 ≤ k_ex576155_ ∧ k_ex576155_ ≤ 32 -/
 def scratch_push_word_be (data : Nat) (len : Nat) : SailM Unit := do
   if ((len != 0) : Bool)
   then

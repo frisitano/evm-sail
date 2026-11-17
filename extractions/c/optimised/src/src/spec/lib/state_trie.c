@@ -1,6 +1,18 @@
 #include "evmsail/spec.h"
 #include "evmsail/spec/support.h"
 
+u256 stateless_storage_by_key(bytes32 root, bytes32 slot_hash)
+{
+  validate_secured_state_root(root);
+  struct TriePath path = path_new(slot_hash, UINT8_C(64));
+  Bytes value = trie_lookup(root, path);
+  if (value.len == UINT8_C(0)) {
+    return ZERO_WORD;
+  }
+  struct RlpFieldRef encoded_value = rlp_single_ref(value);
+  return rlp_decode_u256(encoded_value);
+}
+
 struct TrieUpdate account_update(struct AcctTrieEntry trie_entry, bytes32 storage_root)
 {
   struct Account current = trie_entry.entry.value.curr;
@@ -15,9 +27,12 @@ struct TrieUpdate account_update(struct AcctTrieEntry trie_entry, bytes32 storag
 
 bool account_value_changed(struct AcctValue value)
 {
-  if ((value.curr.info.nonce == value.orig.info.nonce) && eq_u256(value.curr.info.balance, value.orig.info.balance)) {
-    if (eq_bytes32(value.curr.info.storage_root, value.orig.info.storage_root) && eq_bytes32(value.curr.info.code_hash, value.orig.info.code_hash)) {
-      return (bool)((value.curr.present != value.orig.present) || (value.curr.storage_cleared != value.orig.storage_cleared));
+  if ((value.curr.info.nonce == value.orig.info.nonce) &&
+      eq_u256(value.curr.info.balance, value.orig.info.balance)) {
+    if (eq_bytes32(value.curr.info.storage_root, value.orig.info.storage_root) &&
+        eq_bytes32(value.curr.info.code_hash, value.orig.info.code_hash)) {
+      return (bool)((value.curr.present != value.orig.present) ||
+                    (value.curr.storage_cleared != value.orig.storage_cleared));
     }
     return true;
   }
@@ -45,15 +60,16 @@ bool storage_value_changed(struct StorageValue value)
 struct TrieUpdateFetch next_storage_trie_update(bytes20 addr)
 {
   bool searching = true;
-  struct TrieUpdateFetch result = ((struct TrieUpdateFetch){.available = false, .update = EMPTY_TRIE_UPDATE});
+  struct TrieUpdateFetch result =
+      ((struct TrieUpdateFetch){.available = false, .update = EMPTY_TRIE_UPDATE});
   while (searching) {
     struct StorageBlockIterResult iterator_item = storage_block_iter_next(addr);
     switch (iterator_item.kind) {
-    case Kind_StorageBlockIterRow:
-    {
+    case Kind_StorageBlockIterRow: {
       struct StorageTrieEntry trie_entry = iterator_item.variants.StorageBlockIterRow;
       if (storage_value_changed(trie_entry.entry.value)) {
-        result = ((struct TrieUpdateFetch){.available = true, .update = (storage_update(trie_entry))});
+        result =
+            ((struct TrieUpdateFetch){.available = true, .update = (storage_update(trie_entry))});
         searching = false;
       }
       break;
@@ -66,3 +82,13 @@ struct TrieUpdateFetch next_storage_trie_update(bytes20 addr)
   return result;
 }
 
+struct Account stateless_account_by_key(bytes32 root, bytes32 address_hash)
+{
+  struct TriePath path = path_new(address_hash, UINT8_C(64));
+  Bytes value = trie_lookup(root, path);
+  if (value.len == UINT8_C(0)) {
+    return EMPTY_ACCOUNT;
+  }
+  struct AccountInfo account_info = decode_state_account(value);
+  return account_from_info(account_info);
+}

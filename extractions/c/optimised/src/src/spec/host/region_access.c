@@ -175,7 +175,8 @@ void calldata_slice_copy_word_offset(struct CalldataSlice s, uint32_t dst, u256 
   }
 }
 
-uint64_t calldata_slice_byte_struct_CalldataSlice_uint8_t_to_uint64_t(struct CalldataSlice s, uint8_t off)
+uint64_t calldata_slice_byte_struct_CalldataSlice_uint8_t_to_uint64_t(struct CalldataSlice s,
+                                                                      uint8_t off)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
@@ -235,49 +236,60 @@ u256 memory_slice_load_Bytes_uint8_t_to_u256(Bytes s, uint8_t off)
   return ZERO_WORD;
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   return memory_slice_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
   return memory_slice_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
+bool memory_slice_strided_zero_value_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
 {
   return memory_slice_strided_zero(s, start, stride, (uint32_t)width, count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   return memory_slice_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
   return memory_slice_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
-  return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
+  return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width,
+                                   (uint32_t)count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
-  return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
+  return memory_slice_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width,
+                                   (uint32_t)count);
 }
 
 uint64_t output_byte(Bytes s, uint8_t off)
@@ -288,7 +300,8 @@ uint64_t output_byte(Bytes s, uint8_t off)
   return UINT64_C(0x00);
 }
 
-void output_slice_copy_Bytes_uint32_t_uint8_t_uint32_t_to_unit(Bytes s, uint32_t dst, uint8_t off, uint32_t len)
+void output_slice_copy_Bytes_uint32_t_uint8_t_uint32_t_to_unit(Bytes s, uint32_t dst, uint8_t off,
+                                                               uint32_t len)
 {
   output_slice_copy_to_memory(s, dst, (uint32_t)off, len);
 }
@@ -309,93 +322,120 @@ u256 scratch_slice_load(Bytes s, uint8_t off)
   return ZERO_WORD;
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(struct CalldataSlice s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(struct CalldataSlice s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(
+    struct CalldataSlice s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(struct CalldataSlice s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(struct CalldataSlice s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(struct CalldataSlice s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(
+    struct CalldataSlice s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(struct CalldataSlice s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(struct CalldataSlice s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(
+    struct CalldataSlice s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(struct CalldataSlice s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(
+    struct CalldataSlice s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
-bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(struct CalldataSlice s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool slice_strided_zero_struct_CalldataSlice_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(
+    struct CalldataSlice s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
   switch (s.kind) {
   case Kind_InputCalldata:
-    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(s.variants.InputCalldata, start, stride, width, count);
+    return stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(
+        s.variants.InputCalldata, start, stride, width, count);
   case Kind_MemoryCalldata:
-    return memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(s.variants.MemoryCalldata, start, stride, width, count);
+    return memory_slice_strided_zero_value_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(
+        s.variants.MemoryCalldata, start, stride, width, count);
   }
 }
 
@@ -439,48 +479,58 @@ u256 stateless_input_slice_load_n_Bytes_uint8_t_uint8_t_to_u256(Bytes s, uint8_t
   return ZERO_WORD;
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   return stateless_input_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint16_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint32_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
   return stateless_input_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint32_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint32_t stride, uint8_t width, uint32_t count)
 {
   return stateless_input_strided_zero(s, start, stride, (uint32_t)width, count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   return stateless_input_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint32_t_uint8_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint32_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
   return stateless_input_strided_zero(s, start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint32_t count)
 {
   return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint16_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint8_t start, uint16_t stride, uint8_t width, uint8_t count)
 {
-  return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
+  return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width,
+                                      (uint32_t)count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint32_t_to_bool(
+    Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint32_t count)
 {
   return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, count);
 }
 
-bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
+bool stateless_input_slice_strided_zero_Bytes_uint8_t_uint8_t_uint8_t_uint8_t_to_bool(
+    Bytes s, uint8_t start, uint8_t stride, uint8_t width, uint8_t count)
 {
-  return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width, (uint32_t)count);
+  return stateless_input_strided_zero(s, (uint32_t)start, (uint32_t)stride, (uint32_t)width,
+                                      (uint32_t)count);
 }
-

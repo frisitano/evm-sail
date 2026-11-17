@@ -46,6 +46,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -172,11 +173,11 @@ def k_blobhash (index_word : Nat) : SailM Nat := do
   else (pure ZERO_WORD)
 
 /-- The `CREATE` address rule, in kernel form. -/
-/- Type quantifiers: k_ex549868_ : Nat, 0 ≤ k_ex549868_ ∧ k_ex549868_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex579285_ : Nat, 0 ≤ k_ex579285_ ∧ k_ex579285_ ≤ (2 ^ 64 - 1) -/
 def k_create_addr (a : (Vector (BitVec 8) 20)) (nonce : Nat) : SailM (Vector (BitVec 8) 20) := do
   (create_address a nonce)
 
 /-- The `CREATE2` address rule, in kernel form. -/
-/- Type quantifiers: k_ex549869_ : Nat, 0 ≤ k_ex549869_ ∧ k_ex549869_ ≤ (2 ^ 256 - 1) -/
+/- Type quantifiers: k_ex579286_ : Nat, 0 ≤ k_ex579286_ ∧ k_ex579286_ ≤ (2 ^ 256 - 1) -/
 def k_create2_addr (a : (Vector (BitVec 8) 20)) (salt : Nat) (inithash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 20) := do
   (create2_address a salt inithash)

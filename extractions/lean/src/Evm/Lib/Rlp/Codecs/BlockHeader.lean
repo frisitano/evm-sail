@@ -49,6 +49,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -68,17 +69,18 @@ open AcctBlockIterResult
 Canonical execution-header encoding and hashing over already recomputed payload
 commitments. -/
 
-/-- The block header hash: `keccak256(rlp(header))` with the recomputed
-body roots spliced in (YP §4.4; post-merge constants for ommers,
-difficulty, and nonce). -/
-def block_header_hash (header : BlockHeader) (transactions_root : (Vector (BitVec 8) 32)) (withdrawals_root : (Vector (BitVec 8) 32)) (requests_hash : (Vector (BitVec 8) 32)) (block_access_list_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 32) := do
+/-- Encoded header width, shared by hashing and the EIP-7934 block-size check. -/
+def block_header_rlp_lengths (header : BlockHeader) : SailM (Nat × Nat) := do
   let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
     readReg k_execution_profile
   let profile := execution_profile.protocol
   let word_length := (rlp_word_size ())
   let address_length := (rlp_addr_size ())
   let bloom_length := (3 + LOGS_BLOOM_BYTE_LENGTH)
-  let difficulty_length := (rlp_uint_word_size 0)
+  let difficulty_length :=
+    if ((profile.fork <b Paris) : Bool)
+    then (rlp_uint_word_size header.prev_randao)
+    else (rlp_uint_word_size 0)
   let number_length := (rlp_uint_word_size header.number)
   let gas_limit_length := (rlp_uint_word_size header.gas_limit)
   let gas_used_length := (rlp_uint_word_size header.gas_used)
@@ -138,6 +140,16 @@ def block_header_hash (header : BlockHeader) (transactions_root : (Vector (BitVe
   let bounded_content_length : Nat := (Nat.mod content_length 750)
   let content_len := bounded_content_length
   let encoded_length ← do (rlp_list_size content_len)
+  (pure (content_len, encoded_length))
+
+/-- The block header hash: `keccak256(rlp(header))` with the recomputed
+body roots spliced in (YP §4.4; post-merge constants for ommers,
+difficulty, and nonce). -/
+def block_header_hash (header : BlockHeader) (transactions_root : (Vector (BitVec 8) 32)) (withdrawals_root : (Vector (BitVec 8) 32)) (requests_hash : (Vector (BitVec 8) 32)) (block_access_list_hash : (Vector (BitVec 8) 32)) : SailM (Vector (BitVec 8) 32) := do
+  let ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, ⟨_, execution_profile⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩⟩ ← do
+    readReg k_execution_profile
+  let profile := execution_profile.protocol
+  let (content_len, encoded_length) ← do (block_header_rlp_lengths header)
   let encoder ← do (rlp_encoder_begin encoded_length)
   (rlp_write_list_prefix content_len)
   let parent_hash := (hash_to_word header.parent_hash)
@@ -153,13 +165,18 @@ def block_header_hash (header : BlockHeader) (transactions_root : (Vector (BitVe
   (rlp_write_word receipts_root)
   let logs_bloom ← do (logs_bloom_from_ref header.logs_bloom)
   (rlp_write_logs_bloom logs_bloom)
-  (rlp_write_uint_word 0)
+  if ((profile.fork <b Paris) : Bool)
+  then (rlp_write_uint_word header.prev_randao)
+  else (rlp_write_uint_word 0)
   (rlp_write_uint_word header.number)
   (rlp_write_uint_word header.gas_limit)
   (rlp_write_uint_word header.gas_used)
   (rlp_write_uint_word header.timestamp)
   (rlp_write_input_slice header.extra_data)
-  (rlp_write_word header.prev_randao)
+  (rlp_write_word
+    (if ((profile.fork <b Paris) : Bool)
+    then ZERO_WORD
+    else header.prev_randao))
   (rlp_write_string_prefix EIGHT_BYTE_LENGTH 0x00#8)
   (scratch_push_word_be ZERO_WORD EIGHT_BYTE_LENGTH)
   if ((profile.fork ≥b London) : Bool)

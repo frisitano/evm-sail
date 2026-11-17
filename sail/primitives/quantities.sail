@@ -29,7 +29,7 @@ type account_nonce = range(0, account_nonce_bound)
 
 /*! Largest value represented by an SSZ `uint64`. This is a wire-schema
     constraint, sourced from the consensus `ExecutionPayload` container and
-    the Amsterdam `SszExecutionPayload`, rather than an implementation word
+    the Amsterdam `ExecutionPayload`, rather than an implementation word
     size. */
 type ssz_uint_bound : Int = 2 ^ 64 - 1
 
@@ -229,10 +229,13 @@ type protocol_initcode_size_limit = {
     int('value)
 }
 
-/*! Whether a value is a supported per-transaction total-gas ceiling: the
-    EIP-7825 cap or the unrestricted SSZ block-gas domain. */
+/*! Amsterdam's complete transaction reservoir is a uint32 quantity. */
+type amsterdam_transaction_total_gas_limit : Int = 2 ^ 32 - 1
+/*! Supported total-gas ceilings: EIP-7825, Amsterdam, or the earlier
+    unrestricted SSZ block-gas domain. */
 type protocol_transaction_total_gas_limit_value('value : Int) -> Bool =
        'value == eip7825_transaction_gas_limit
+    |  'value == amsterdam_transaction_total_gas_limit
     |  'value == ssz_uint_bound
 /*! The fork-selected per-transaction total-gas ceiling. */
 type protocol_transaction_total_gas_limit = {

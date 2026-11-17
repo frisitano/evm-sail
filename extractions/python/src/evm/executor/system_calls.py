@@ -31,7 +31,6 @@ from evm.primitives.gas import (
     state_gas,
     state_gas_spill,
     STATE_GAS_SPILL_ZERO,
-    STATE_GAS_ZERO,
     SYSTEM_CALL_GAS_LIMIT,
     GAS_REFUND_ZERO,
 )
@@ -98,6 +97,7 @@ from evm.evm.machine import (
     MEMORY_HEIGHT_ZERO,
     MEMORY_BASE_ZERO,
 )
+from evm.evm.gas import G_amsterdam_state_storage_set
 from evm.evm.interpreter import (
     interpret,
     frame_succeeded,
@@ -108,7 +108,13 @@ from evm.kernel import environment
 def run_system_call_frame(tgt: address, code: Code, input: CalldataSlice, memory_base_: code_length) -> tuple[gas, state_gas, state_gas_spill, gas_refund, FrameStatus, OutputSlice]:
     k_journal_checkpoint()
     stack_top = stack_reset()
-    return interpret(SYSTEM_CALL_GAS_LIMIT, STATE_GAS_ZERO, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_top, memory_base_, MEMORY_HEIGHT_ZERO, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, STATE_GAS_ZERO, False, 0, code, input)
+    execution_profile = environment.k_execution_profile
+    protocol = execution_profile.protocol
+    if (int(protocol.fork) >= int(Amsterdam)):
+        reservoir = (16 * int(G_amsterdam_state_storage_set))
+    else:
+        reservoir = 0
+    return interpret(SYSTEM_CALL_GAS_LIMIT, reservoir, STATE_GAS_SPILL_ZERO, GAS_REFUND_ZERO, stack_top, memory_base_, MEMORY_HEIGHT_ZERO, SYSTEM_ADDRESS, tgt, tgt, ZERO_WORD, reservoir, False, 0, code, input)
 
 def system_call(tgt: address, input: hash) -> None:
     try:

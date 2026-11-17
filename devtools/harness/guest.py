@@ -30,6 +30,7 @@ _EXT = "dylib" if sys.platform == "darwin" else "so"
 _guest = None
 _guest_profile = None
 _guest_build_mode = None
+_guest_native_resources = None
 
 
 class GuestExecutionError(RuntimeError):
@@ -39,7 +40,11 @@ class GuestExecutionError(RuntimeError):
 def _build_paths(build_mode):
     if build_mode not in ("standard", "optimized"):
         raise ValueError("build_mode must be 'standard' or 'optimized'")
-    build_dir = os.path.join(_NR, f".build-{build_mode}")
+    resources = os.environ.get("EVM_NATIVE_RESOURCES", "default")
+    if resources not in ("default", "historical"):
+        raise ValueError("EVM_NATIVE_RESOURCES must be default or historical")
+    suffix = "" if resources == "default" else "-historical"
+    build_dir = os.path.join(_NR, f".build-{build_mode}{suffix}")
     return (
         build_dir,
         os.path.join(build_dir, f"libevmsail_guest.{_EXT}"),
@@ -86,11 +91,16 @@ def _last_error(lib):
 
 def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     """Load main.sail's native shared library, building it if needed."""
-    global _guest, _guest_profile, _guest_build_mode
+    global _guest, _guest_profile, _guest_build_mode, _guest_native_resources
     build_dir, guest_lib, profile_marker = _build_paths(build_mode)
+    resources = os.environ.get("EVM_NATIVE_RESOURCES", "default")
     wanted = "on" if profile else "off"
     if _guest is not None:
-        if _guest_profile != wanted or _guest_build_mode != build_mode:
+        if (
+            _guest_profile != wanted
+            or _guest_build_mode != build_mode
+            or _guest_native_resources != resources
+        ):
             raise RuntimeError(
                 "cannot switch EVM_PROFILE or build mode after loading the guest library"
             )
@@ -116,6 +126,7 @@ def load_guest(rebuild=False, profile=False, build_mode="optimized"):
     _guest = _bind(guest_lib)
     _guest_profile = wanted
     _guest_build_mode = build_mode
+    _guest_native_resources = resources
     return _guest
 
 
@@ -165,8 +176,8 @@ def _run(lib, inp):
 
 
 def run_once_guest(inp):
-    """Wipe state, run one SszStatelessInput through main.sail, returning its
-    canonical SSZ SszStatelessValidationResult bytes."""
+    """Wipe state, run one StatelessInput through main.sail, returning its
+    canonical SSZ StatelessValidationResult bytes."""
     lib = _guest if _guest is not None else load_guest()
     return _run(lib, inp)
 
@@ -200,7 +211,9 @@ BLOCK_ERRORS = [
     "BlockAccessListTooLarge",
     "InvalidBlockAccessList",
     "InvalidExecutionRequests",
+    "InvalidVersionedHashes",
     "WitnessDeficient",
+    "NumericOverflow",
 ]
 
 VALIDATION_SCOPES = [

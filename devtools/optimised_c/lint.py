@@ -34,7 +34,7 @@ DIAGNOSTIC = re.compile(
     r"(?P<severity>warning|error): (?P<message>.*?)(?: \[(?P<check>[^]]+)\])?$"
 )
 TYPEDEF_ALIAS = re.compile(r" \(aka '[^']+'\)")
-GENERATED_WORKER_ID = re.compile(r"_\d+_")
+GENERATED_WORKER_ID = re.compile(r"_\d+_(\d+)(?=_|\b)")
 
 
 @dataclass(frozen=True, order=True)
@@ -112,7 +112,7 @@ def normalize_message(message: str) -> str:
         "reserved identifier" in message or "is reserved because" in message
     ):
         message = f"identifier '{identifier.group(1)}' is reserved"
-    return GENERATED_WORKER_ID.sub("_worker_", message)
+    return GENERATED_WORKER_ID.sub(r"_worker_\1", message)
 
 
 def normalize_check(check: str, message: str) -> str:

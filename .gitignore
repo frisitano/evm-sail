@@ -34,7 +34,7 @@ devtools/harness/.rtcache/
 /.venv/
 /.venv-docs/
 
-# Workspace-local tests-zkevm@v0.6.2 conformance corpus.
+# Workspace-local tests-zkevm@v21.0.6 conformance corpus.
 zkvm/.fixtures/
 
 # native conformance runner build artifacts

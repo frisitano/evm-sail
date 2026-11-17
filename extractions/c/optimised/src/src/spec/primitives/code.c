@@ -1,14 +1,11 @@
 #include "evmsail/spec.h"
 #include "evmsail/spec/support.h"
 
-uint8_t * const EMPTY_JUMP_TABLE = INT64_C(0);
-
+uint8_t *const EMPTY_JUMP_TABLE = INT64_C(0);
 
 Bytes EMPTY_CODE_SLICE;
 
-
 struct CodeFields EMPTY_CODE;
-
 
 Bytes code_slice(Bytes bytes)
 {
@@ -23,11 +20,11 @@ Bytes validated_code_slice(Bytes bytes)
   return code_slice(bytes);
 }
 
-void create_letbind_34(void) {
-    EMPTY_CODE_SLICE = (code_slice(EMPTY_CODE_REGION_SLICE));
+void create_letbind_34(void)
+{
+  EMPTY_CODE_SLICE = (code_slice(EMPTY_CODE_REGION_SLICE));
 }
-void kill_letbind_34(void) {
-}
+void kill_letbind_34(void) {}
 
 enum DeepStackOperation deep_stack_operation(uint8_t opcode)
 {
@@ -66,7 +63,7 @@ bool deep_stack_operation_immediate_valid(enum DeepStackOperation operation, uin
   }
 }
 
-struct CodeFields analyzed_code(Bytes bytes, uint8_t * jumpdests)
+struct CodeFields analyzed_code(Bytes bytes, uint8_t *jumpdests)
 {
   return ((struct CodeFields){.bytes = bytes.bytes, .jumpdests = jumpdests, .len = bytes.len});
 }
@@ -76,9 +73,8 @@ Bytes code_bytes(struct CodeFields code)
   return ((Bytes){.bytes = code.bytes, .len = code.len});
 }
 
-void create_letbind_35(void) {
-    EMPTY_CODE = (analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE));
+void create_letbind_35(void)
+{
+  EMPTY_CODE = (analyzed_code(EMPTY_CODE_SLICE, EMPTY_JUMP_TABLE));
 }
-void kill_letbind_35(void) {
-}
-
+void kill_letbind_35(void) {}

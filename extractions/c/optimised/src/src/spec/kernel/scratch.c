@@ -104,14 +104,6 @@ void scratch_reset(void)
   scratch_truncate(UINT32_C(0));
 }
 
-uint32_t scratch_length_add(uint8_t left, uint32_t right)
-{
-  if (right > (UINT32_C(4294967295) - (uint32_t)left)) {
-    __builtin_trap();
-  }
-  return (right + (uint32_t)left);
-}
-
 void scratch_push_b256_bytes32_uint8_t_to_unit(bytes32 data, uint8_t len)
 {
   scratch_arena = scratch_store_b256((scratch_arena).len, data, len);
@@ -131,4 +123,3 @@ uint32_t scratch_reserve_uint8_t_to_uint32_t(uint8_t len)
   }
   return arena.len;
 }
-

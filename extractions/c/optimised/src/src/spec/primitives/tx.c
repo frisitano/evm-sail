@@ -3,7 +3,6 @@
 
 struct BlobHashesFields EMPTY_BLOB_HASHES;
 
-
 uint64_t tx_envelope_type(enum TxType t)
 {
   switch (t) {
@@ -24,22 +23,33 @@ struct TxTypeSemantics tx_type_semantics(enum TxType t)
 {
   switch (t) {
   case LegacyTx:
-    return ((struct TxTypeSemantics){.blob = false, .minimum_fork = Frontier, .set_code = false, .signature = LegacySignature});
+    return ((struct TxTypeSemantics){
+        .blob = false, .minimum_fork = Frontier, .set_code = false, .signature = LegacySignature});
   case AccessListTx:
-    return ((struct TxTypeSemantics){.blob = false, .minimum_fork = Berlin, .set_code = false, .signature = TypedSignature});
+    return ((struct TxTypeSemantics){
+        .blob = false, .minimum_fork = Berlin, .set_code = false, .signature = TypedSignature});
   case FeeMarketTx:
-    return ((struct TxTypeSemantics){.blob = false, .minimum_fork = London, .set_code = false, .signature = TypedSignature});
+    return ((struct TxTypeSemantics){
+        .blob = false, .minimum_fork = London, .set_code = false, .signature = TypedSignature});
   case BlobTx:
-    return ((struct TxTypeSemantics){.blob = true, .minimum_fork = Cancun, .set_code = false, .signature = TypedSignature});
+    return ((struct TxTypeSemantics){
+        .blob = true, .minimum_fork = Cancun, .set_code = false, .signature = TypedSignature});
   case SetCodeTx:
-    return ((struct TxTypeSemantics){.blob = false, .minimum_fork = Prague, .set_code = true, .signature = TypedSignature});
+    return ((struct TxTypeSemantics){
+        .blob = false, .minimum_fork = Prague, .set_code = true, .signature = TypedSignature});
   }
 }
 
-void create_letbind_73(void) {
-    EMPTY_BLOB_HASHES = ((struct BlobHashesFields){.bytes = EMPTY_STATELESS_INPUT_SLICE, .count = UINT8_C(0)});
+void create_letbind_73(void)
+{
+  EMPTY_BLOB_HASHES =
+      ((struct BlobHashesFields){.bytes = EMPTY_STATELESS_INPUT_SLICE, .count = UINT8_C(0)});
 }
-void kill_letbind_73(void) {
+void kill_letbind_73(void) {}
+
+struct TransactionFields pack_transaction(struct TransactionFields tx)
+{
+  return tx;
 }
 
 uint64_t log_store_index_increment(uint64_t value)
@@ -58,12 +68,21 @@ uint64_t log_store_index_add(uint64_t left, uint64_t right)
   return (right + left);
 }
 
-struct ReceiptFields receipt_fields(enum TxType tx_type, bool success, uint64_t gas_used, uint64_t execution_gas, uint64_t state_gas, struct LogSeriesRef logs)
+struct ReceiptFields receipt_fields(enum TxType tx_type, bool success, uint64_t gas_used,
+                                    uint64_t execution_gas, uint64_t state_gas,
+                                    struct LogSeriesRef logs)
 {
-  return ((struct ReceiptFields){.execution_gas = execution_gas, .gas_used = gas_used, .logs = logs, .state_gas = state_gas, .success = success, .tx_type = tx_type});
+  return ((struct ReceiptFields){.execution_gas = execution_gas,
+                                 .gas_used = gas_used,
+                                 .logs = logs,
+                                 .state_gas = state_gas,
+                                 .success = success,
+                                 .tx_type = tx_type});
 }
 
-struct ReceiptFields receipt_within(enum TxType tx_type, bool success, uint64_t gas_used, uint64_t execution_gas, uint64_t state_gas, struct LogSeriesRef logs)
+struct ReceiptFields receipt_within(enum TxType tx_type, bool success, uint64_t gas_used,
+                                    uint64_t execution_gas, uint64_t state_gas,
+                                    struct LogSeriesRef logs)
 {
   return receipt_fields(tx_type, success, gas_used, execution_gas, state_gas, logs);
 }
@@ -72,4 +91,3 @@ struct AuthorizationListRefFields authorization_list_ref(Bytes encoded, uint8_t 
 {
   return ((struct AuthorizationListRefFields){.count = (uint32_t)count, .encoded = encoded});
 }
-

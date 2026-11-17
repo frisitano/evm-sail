@@ -22,6 +22,7 @@ function stateless_account_by_key(root : hash, address_hash : hash) -> Account =
 /*! The witnessed storage value of `slot` under a storage root, reading
     the secure trie at `keccak256(slot)`; absent slots are zero. */
 function stateless_storage_by_key(root : hash, slot_hash : hash) -> word = {
+    validate_secured_state_root(root);
     let path = path_new(slot_hash, 64);
     let value = trie_lookup(root, path);
     if value.len == 0 then {

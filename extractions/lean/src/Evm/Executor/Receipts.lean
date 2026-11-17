@@ -53,6 +53,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -235,7 +236,7 @@ def indexed_trie_pop (source : IndexedTrieSource) (cursor : IndexedTrieCursor) :
           fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))))))
     | .IndexedReceipts _ =>
       (do
-        let (t__95, remaining) ← (( do
+        let (t__120, remaining) ← (( do
           if _sailIf0 : ((index_item.index == 0) : Bool) = true
           then
             (pure (((ScratchTrieLeaf cursor.receipt_zero) : TrieLeafValue), ((⟨_, ⟨_, remaining⟩⟩ : (Sigma
@@ -254,7 +255,7 @@ def indexed_trie_pop (source : IndexedTrieSource) (cursor : IndexedTrieCursor) :
           ) : SailM
           (TrieLeafValue × (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) )
-        (pure ((t__95 : TrieLeafValue), (remaining : (Sigma fun (k_off : Nat) =>
+        (pure ((t__120 : TrieLeafValue), (remaining : (Sigma fun (k_off : Nat) =>
           (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len))))))) ) : SailM
     (TrieLeafValue × (Sigma fun (k_off : Nat) =>
     (Sigma fun (k_len : Nat) => (ScratchSliceFields k_off k_len)))) )
@@ -344,8 +345,8 @@ def indexed_receipt_trie_root (receipts : ReceiptRecordsRef) : SailM (Vector (Bi
 
 /-- Computes the canonical receipts root over the retained records after the
 last transaction has executed, then releases the retained region. -/
-/- Type quantifiers: k_ex552523_ : Nat, k_ex552522_ : Nat, 0 ≤ k_ex552522_ ∧
-  k_ex552522_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex552523_ ∧ k_ex552523_ ≤ (2 ^ 20) -/
+/- Type quantifiers: k_ex582067_ : Nat, k_ex582066_ : Nat, 0 ≤ k_ex582066_ ∧
+  k_ex582066_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex582067_ ∧ k_ex582067_ ≤ (2 ^ 20) -/
 def receipt_store_root (records_start : Nat) (count : Nat) : SailM (Vector (BitVec 8) 32) := do
   let ⟨_, ⟨_, records⟩⟩ ← do (scratch_finish records_start)
   let root ← do

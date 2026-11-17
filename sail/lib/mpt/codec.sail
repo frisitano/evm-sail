@@ -288,8 +288,10 @@ function input_field_to_ref forall 'source_off 'source_len 'content_len,
         let word = rlp_decode_word(f);
         let hash = word_to_hash(word);
         HashRef(hash)
-    } else {
+    } else if f.content_len == 0 then {
         EmptyRef()
+    } else {
+        fatal_error(RlpDecode)
     }
 
 /*! [input_field_to_ref][] for a scratch-backed child field; an inline
@@ -306,8 +308,10 @@ function scratch_field_to_ref forall 'source_off 'source_len 'content_len,
         let word = scratch_rlp_decode_word(f);
         let hash = word_to_hash(word);
         HashRef(hash)
-    } else {
+    } else if f.content_len == 0 then {
         EmptyRef()
+    } else {
+        fatal_error(RlpDecode)
     }
 
 /*! Decodes branch children 2 through 15, followed by the branch value. */
@@ -372,6 +376,9 @@ function decode_input_trie_node(node : StatelessInputSlice) -> InputTrieNode = {
     if fields.len == 0 then {
         let (is_leaf, path) = hex_prefix_decode_ref(first);
         if is_leaf then {
+            if second.is_list then {
+                fatal_error(RlpDecode)
+            };
             let value = rlp_item_content(second);
             InputLeafNode(path, value)
         } else {
@@ -404,6 +411,9 @@ function decode_scratch_trie_node(node : ScratchSlice) -> ScratchTrieNode = {
     if fields.len == 0 then {
         let (is_leaf, path) = scratch_hex_prefix_decode_ref(first);
         if is_leaf then {
+            if second.is_list then {
+                fatal_error(RlpDecode)
+            };
             let value = scratch_rlp_item_content(second);
             ScratchLeafNode(path, value)
         } else {

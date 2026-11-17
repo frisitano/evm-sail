@@ -848,7 +848,7 @@ Definition EMPTY_MEMORY_ACCESS : MemoryAccessFields 0 0 0 :=
 #[export] Hint Unfold EMPTY_MEMORY_ACCESS : sail.
 Definition word_of_nat_byte_count (value : Z) (*0 <=? value*) : M (word) :=
    ((if Z.ltb (value) ((pow2 (256))) then returnM (((u256 (value)).(word_value)))
-     else assert_exp' false "sail/primitives/quantities.sail:615.20-615.21" >>= fun _ => exit tt)
+     else assert_exp' false "sail/primitives/quantities.sail:618.20-618.21" >>= fun _ => exit tt)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
@@ -881,7 +881,7 @@ Definition TRANSACTION_EXECUTION_GAS_LIMIT : Z := pow2 (24).
 #[export] Hint Unfold TRANSACTION_EXECUTION_GAS_LIMIT : sail.
 Definition STATE_GAS_SPILL_ZERO : Z := 0.
 #[export] Hint Unfold STATE_GAS_SPILL_ZERO : sail.
-Definition STATE_GAS_SPILL_LIMIT : state_gas_spill := (Build_state_gas_spill (pow2 (24))).
+Definition STATE_GAS_SPILL_LIMIT : state_gas_spill := (Build_state_gas_spill (30000000)).
 #[export] Hint Unfold STATE_GAS_SPILL_LIMIT : sail.
 Definition GAS_ZERO : Z := 0.
 #[export] Hint Unfold GAS_ZERO : sail.
@@ -904,9 +904,9 @@ Definition calldata_slice_length (s : CalldataSlice) : source_length :=
    | MemoryCalldata (@existT _ _ len (@existT _ _ off bytes)) => bytes.(EvmMemorySliceFields_len)
    end)).
 
-Definition stateless_input_slice_length {ex548886_ : Z} {ex548885_ : Z}
-(s : StatelessInputSliceFields ex548885_ ex548886_)
-(*(0 <=? ex548885_) && ((0 <=? ex548886_) && ((ex548885_ + ex548886_) <=? (2 ^ 32 - 1)))*)
+Definition stateless_input_slice_length {ex579544_ : Z} {ex579543_ : Z}
+(s : StatelessInputSliceFields ex579543_ ex579544_)
+(*(0 <=? ex579543_) && ((0 <=? ex579544_) && ((ex579543_ + ex579544_) <=? (2 ^ 32 - 1)))*)
 : source_length :=
    (Build_source_length (s.(StatelessInputSliceFields_len))).
 
@@ -1065,6 +1065,7 @@ Definition undefined_FatalError '(tt : unit) : M (FatalError) :=
       BlockAccessListTooLarge;
       InvalidBlockAccessList;
       InvalidExecutionRequests;
+      InvalidVersionedHashes;
       WitnessDeficient;
       NumericOverflow]))
     : M (FatalError).
@@ -1079,9 +1080,9 @@ Definition code_slice {off : Z} {len : Z} (bytes : CodeRegionSliceFields off len
 : CodeSlice :=
    @existT _ _ len (@existT _ _ off ((bytes : CodeRegionSliceFields off len))).
 
-Definition validated_code_slice {ex549189_ : Z} {ex549188_ : Z}
-(bytes : CodeRegionSliceFields ex549188_ ex549189_)
-(*(0 <=? ex549188_) && ((0 <=? ex549189_) && ((ex549188_ + ex549189_) <=? (2 ^ 32 - 1)))*)
+Definition validated_code_slice {ex579847_ : Z} {ex579846_ : Z}
+(bytes : CodeRegionSliceFields ex579846_ ex579847_)
+(*(0 <=? ex579846_) && ((0 <=? ex579847_) && ((ex579846_ + ex579847_) <=? (2 ^ 32 - 1)))*)
 : M (CodeSlice) :=
    (if Z.leb (bytes.(CodeRegionSliceFields_len)) ((Z.sub ((Z.sub ((pow2 (32))) (1))) (32))) then
       returnM ((code_slice (bytes)) : {len & {off & (CodeRegionSliceFields off len)}}%type)
@@ -1152,8 +1153,8 @@ Axiom accelerator_modexp :
   forall
 
   (_ : CalldataSlice) (_ : calldata_length) (_ : calldata_length) (_ : calldata_length)
-  (*(0 <=? ex626947_) && (ex626947_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex626948_) &&
-    (ex626948_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex626949_) && (ex626949_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662605_) && (ex662605_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662606_) &&
+    (ex662606_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662607_) && (ex662607_ <=? (2 ^ 32 - 1))*),
   M (bool).
 
 Axiom accelerator_bn254_add : forall  (_ : CalldataSlice) , M (bool).
@@ -1166,7 +1167,7 @@ Axiom accelerator_blake2f :
   forall
 
   (_ : CalldataSlice) (_ : blake2_rounds) (_ : y_parity)
-  (*(0 <=? ex626950_) && (ex626950_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex626951_) && (ex626951_ <=? 1)*),
+  (*(0 <=? ex662608_) && (ex662608_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662609_) && (ex662609_ <=? 1)*),
   M (bool).
 
 Axiom accelerator_kzg_point_evaluation : forall  (_ : CalldataSlice) , M (bool).
@@ -1191,9 +1192,9 @@ Axiom host_ecrecover :
   forall
 
   (_ : hash) (_ : y_parity) (_ : word) (_ : word)
-  (*(0 <=? ex626952_) && (ex626952_ <=? 1)*) (*(0 <=? ex626953_) && (ex626953_ <=? (2 ^ 256 - 1))*) (*(0 <=?
-    ex626954_) &&
-    (ex626954_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex662610_) && (ex662610_ <=? 1)*) (*(0 <=? ex662611_) && (ex662611_ <=? (2 ^ 256 - 1))*) (*(0 <=?
+    ex662612_) &&
+    (ex662612_ <=? (2 ^ 256 - 1))*),
   M (AddressResult).
 
 Axiom stateless_input : forall  (_ : unit) , M (StatelessInputSlice).
@@ -1202,305 +1203,305 @@ Axiom stateless_input_byte_at :
   forall
 
   (_ : StatelessInputSlice) (_ : stateless_input_length)
-  (*(0 <=? ex626957_) && ((0 <=? ex626958_) && ((ex626957_ + ex626958_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626959_) &&
-    (ex626959_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662615_) && ((0 <=? ex662616_) && ((ex662615_ + ex662616_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662617_) &&
+    (ex662617_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom memory_slice_byte_at :
   forall
 
   (_ : EvmMemorySlice) (_ : memory_length)
-  (*(0 <=? ex626962_) && ((0 <=? ex626963_) && ((ex626962_ + ex626963_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626964_) &&
-    (ex626964_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662620_) && ((0 <=? ex662621_) && ((ex662620_ + ex662621_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662622_) &&
+    (ex662622_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom code_region_byte_at :
   forall
 
   (_ : CodeRegionSlice) (_ : code_length)
-  (*(0 <=? ex626967_) && ((0 <=? ex626968_) && ((ex626967_ + ex626968_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626969_) &&
-    (ex626969_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662625_) && ((0 <=? ex662626_) && ((ex662625_ + ex662626_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662627_) &&
+    (ex662627_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom scratch_slice_byte_at :
   forall
 
   (_ : ScratchSlice) (_ : scratch_length)
-  (*(0 <=? ex626972_) && ((0 <=? ex626973_) && ((ex626972_ + ex626973_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626974_) &&
-    (ex626974_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662630_) && ((0 <=? ex662631_) && ((ex662630_ + ex662631_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662632_) &&
+    (ex662632_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom log_data_slice_byte_at :
   forall
 
   (_ : LogDataSlice) (_ : log_data_length)
-  (*(0 <=? ex626977_) && ((0 <=? ex626978_) && ((ex626977_ + ex626978_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626979_) &&
-    (ex626979_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662635_) && ((0 <=? ex662636_) && ((ex662635_ + ex662636_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662637_) &&
+    (ex662637_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom output_slice_byte_at :
   forall
 
   (_ : OutputSlice) (_ : output_length)
-  (*(0 <=? ex626982_) && ((0 <=? ex626983_) && ((ex626982_ + ex626983_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626984_) &&
-    (ex626984_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662640_) && ((0 <=? ex662641_) && ((ex662640_ + ex662641_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662642_) &&
+    (ex662642_ <=? (2 ^ 32 - 1))*),
   M (byte).
 
 Axiom stateless_input_count_nonzero :
   forall
 
   (_ : StatelessInputSlice)
-  (*(0 <=? ex626987_) && ((0 <=? ex626988_) && ((ex626987_ + ex626988_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex662645_) && ((0 <=? ex662646_) && ((ex662645_ + ex662646_) <=? (2 ^ 32 - 1)))*),
   M (stateless_input_length).
 
 Axiom stateless_input_strided_zero :
   forall
 
   (_ : StatelessInputSlice) (_ : stateless_input_length) (_ : stateless_input_length) (_ : stateless_input_length) (_ : stateless_input_length)
-  (*(0 <=? ex626991_) && ((0 <=? ex626992_) && ((ex626991_ + ex626992_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex626993_) &&
-    (ex626993_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex626994_) && (ex626994_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex626995_) &&
-    (ex626995_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex626996_) && (ex626996_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662649_) && ((0 <=? ex662650_) && ((ex662649_ + ex662650_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662651_) &&
+    (ex662651_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662652_) && (ex662652_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662653_) &&
+    (ex662653_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662654_) && (ex662654_ <=? (2 ^ 32 - 1))*),
   M (bool).
 
 Axiom memory_slice_strided_zero :
   forall
 
   (_ : EvmMemorySlice) (_ : memory_length) (_ : memory_length) (_ : memory_length) (_ : memory_length)
-  (*(0 <=? ex626999_) && ((0 <=? ex627000_) && ((ex626999_ + ex627000_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627001_) &&
-    (ex627001_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627002_) && (ex627002_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex627003_) &&
-    (ex627003_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627004_) && (ex627004_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662657_) && ((0 <=? ex662658_) && ((ex662657_ + ex662658_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662659_) &&
+    (ex662659_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662660_) && (ex662660_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662661_) &&
+    (ex662661_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662662_) && (ex662662_ <=? (2 ^ 32 - 1))*),
   M (bool).
 
 Axiom stateless_input_load_word :
   forall
 
   (_ : StatelessInputSlice) (_ : stateless_input_length)
-  (*(0 <=? ex627007_) && ((0 <=? ex627008_) && ((ex627007_ + ex627008_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627009_) &&
-    (ex627009_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662665_) && ((0 <=? ex662666_) && ((ex662665_ + ex662666_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662667_) &&
+    (ex662667_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom memory_slice_load_word :
   forall
 
   (_ : EvmMemorySlice) (_ : memory_length)
-  (*(0 <=? ex627012_) && ((0 <=? ex627013_) && ((ex627012_ + ex627013_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627014_) &&
-    (ex627014_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662670_) && ((0 <=? ex662671_) && ((ex662670_ + ex662671_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662672_) &&
+    (ex662672_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom code_region_load_word :
   forall
 
   (_ : CodeRegionSlice) (_ : code_length)
-  (*(0 <=? ex627017_) && ((0 <=? ex627018_) && ((ex627017_ + ex627018_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627019_) &&
-    (ex627019_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662675_) && ((0 <=? ex662676_) && ((ex662675_ + ex662676_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662677_) &&
+    (ex662677_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom scratch_slice_load_word :
   forall
 
   (_ : ScratchSlice) (_ : scratch_length)
-  (*(0 <=? ex627022_) && ((0 <=? ex627023_) && ((ex627022_ + ex627023_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627024_) &&
-    (ex627024_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662680_) && ((0 <=? ex662681_) && ((ex662680_ + ex662681_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662682_) &&
+    (ex662682_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom log_data_slice_load_word :
   forall
 
   (_ : LogDataSlice) (_ : log_data_length)
-  (*(0 <=? ex627027_) && ((0 <=? ex627028_) && ((ex627027_ + ex627028_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627029_) &&
-    (ex627029_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662685_) && ((0 <=? ex662686_) && ((ex662685_ + ex662686_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662687_) &&
+    (ex662687_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom output_slice_load_word :
   forall
 
   (_ : OutputSlice) (_ : output_length)
-  (*(0 <=? ex627032_) && ((0 <=? ex627033_) && ((ex627032_ + ex627033_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627034_) &&
-    (ex627034_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662690_) && ((0 <=? ex662691_) && ((ex662690_ + ex662691_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662692_) &&
+    (ex662692_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom stateless_input_load_n_word :
   forall
 
   (_ : StatelessInputSlice) (_ : stateless_input_length) (_ : word_byte_count)
-  (*(0 <=? ex627037_) && ((0 <=? ex627038_) && ((ex627037_ + ex627038_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627039_) &&
-    (ex627039_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627040_) && (ex627040_ <=? 32)*),
+  (*(0 <=? ex662695_) && ((0 <=? ex662696_) && ((ex662695_ + ex662696_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662697_) &&
+    (ex662697_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662698_) && (ex662698_ <=? 32)*),
   M (word).
 
 Axiom code_region_load_n_word :
   forall
 
   (_ : CodeRegionSlice) (_ : code_length) (_ : word_byte_count)
-  (*(0 <=? ex627043_) && ((0 <=? ex627044_) && ((ex627043_ + ex627044_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627045_) &&
-    (ex627045_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627046_) && (ex627046_ <=? 32)*),
+  (*(0 <=? ex662701_) && ((0 <=? ex662702_) && ((ex662701_ + ex662702_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662703_) &&
+    (ex662703_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662704_) && (ex662704_ <=? 32)*),
   M (word).
 
 Axiom scratch_slice_load_n_word :
   forall
 
   (_ : ScratchSlice) (_ : scratch_length) (_ : word_byte_count)
-  (*(0 <=? ex627049_) && ((0 <=? ex627050_) && ((ex627049_ + ex627050_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627051_) &&
-    (ex627051_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627052_) && (ex627052_ <=? 32)*),
+  (*(0 <=? ex662707_) && ((0 <=? ex662708_) && ((ex662707_ + ex662708_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662709_) &&
+    (ex662709_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662710_) && (ex662710_ <=? 32)*),
   M (word).
 
 Axiom stateless_input_copy_to_memory :
   forall
 
   (_ : StatelessInputSlice) (_ : memory_base_typ) (_ : stateless_input_length) (_ : memory_length)
-  (*(0 <=? ex627055_) && ((0 <=? ex627056_) && ((ex627055_ + ex627056_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627057_) &&
-    (ex627057_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627058_) && (ex627058_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex627059_) &&
-    (ex627059_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662713_) && ((0 <=? ex662714_) && ((ex662713_ + ex662714_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662715_) &&
+    (ex662715_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662716_) && (ex662716_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662717_) &&
+    (ex662717_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom memory_slice_copy_to_memory :
   forall
 
   (_ : EvmMemorySlice) (_ : memory_base_typ) (_ : memory_length) (_ : memory_length)
-  (*(0 <=? ex627062_) && ((0 <=? ex627063_) && ((ex627062_ + ex627063_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627064_) &&
-    (ex627064_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627065_) && (ex627065_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex627066_) &&
-    (ex627066_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662720_) && ((0 <=? ex662721_) && ((ex662720_ + ex662721_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662722_) &&
+    (ex662722_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662723_) && (ex662723_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662724_) &&
+    (ex662724_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom code_region_copy_to_memory :
   forall
 
   (_ : CodeRegionSlice) (_ : memory_base_typ) (_ : code_length) (_ : memory_length)
-  (*(0 <=? ex627069_) && ((0 <=? ex627070_) && ((ex627069_ + ex627070_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627071_) &&
-    (ex627071_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627072_) && (ex627072_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex627073_) &&
-    (ex627073_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662727_) && ((0 <=? ex662728_) && ((ex662727_ + ex662728_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662729_) &&
+    (ex662729_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662730_) && (ex662730_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662731_) &&
+    (ex662731_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom output_slice_copy_to_memory :
   forall
 
   (_ : OutputSlice) (_ : memory_base_typ) (_ : output_length) (_ : memory_length)
-  (*(0 <=? ex627076_) && ((0 <=? ex627077_) && ((ex627076_ + ex627077_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627078_) &&
-    (ex627078_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex627079_) && (ex627079_ <=? (2 ^ 32 - 1))*) (*(0 <=?
-    ex627080_) &&
-    (ex627080_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex662734_) && ((0 <=? ex662735_) && ((ex662734_ + ex662735_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662736_) &&
+    (ex662736_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex662737_) && (ex662737_ <=? (2 ^ 32 - 1))*) (*(0 <=?
+    ex662738_) &&
+    (ex662738_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom scratch_input_slices_equal :
   forall
 
   (_ : ScratchSlice) (_ : StatelessInputSlice)
-  (*(0 <=? ex627083_) && ((0 <=? ex627084_) && ((ex627083_ + ex627084_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627087_) &&
-    ((0 <=? ex627088_) && ((ex627087_ + ex627088_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex662741_) && ((0 <=? ex662742_) && ((ex662741_ + ex662742_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662745_) &&
+    ((0 <=? ex662746_) && ((ex662745_ + ex662746_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
 Axiom log_input_slices_equal :
   forall
 
   (_ : LogDataSlice) (_ : StatelessInputSlice)
-  (*(0 <=? ex627091_) && ((0 <=? ex627092_) && ((ex627091_ + ex627092_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627095_) &&
-    ((0 <=? ex627096_) && ((ex627095_ + ex627096_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex662749_) && ((0 <=? ex662750_) && ((ex662749_ + ex662750_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662753_) &&
+    ((0 <=? ex662754_) && ((ex662753_ + ex662754_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
 Axiom input_code_slices_equal :
   forall
 
   (_ : StatelessInputSlice) (_ : CodeRegionSlice)
-  (*(0 <=? ex627099_) && ((0 <=? ex627100_) && ((ex627099_ + ex627100_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
-    ex627103_) &&
-    ((0 <=? ex627104_) && ((ex627103_ + ex627104_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex662757_) && ((0 <=? ex662758_) && ((ex662757_ + ex662758_) <=? (2 ^ 32 - 1)))*) (*(0 <=?
+    ex662761_) &&
+    ((0 <=? ex662762_) && ((ex662761_ + ex662762_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
-Definition stateless_input_slice_byte {ex549507_ : Z} {ex549506_ : Z}
-(s : StatelessInputSliceFields ex549506_ ex549507_) (off : Z)
+Definition stateless_input_slice_byte {ex580165_ : Z} {ex580164_ : Z}
+(s : StatelessInputSliceFields ex580164_ ex580165_) (off : Z)
 (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549506_) && ((0 <=? ex549507_) && ((ex549506_ + ex549507_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580164_) && ((0 <=? ex580165_) && ((ex580164_ + ex580165_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549507_ return M (mword 8) then
+   (if Z.ltb (off) ex580165_ return M (mword 8) then
       (stateless_input_byte_at
-         (@existT _ _ ex549507_ (@existT _ _ ex549506_ ((s : StatelessInputSliceFields ex549506_ ex549507_))))
+         (@existT _ _ ex580165_ (@existT _ _ ex580164_ ((s : StatelessInputSliceFields ex580164_ ex580165_))))
          (Build_stateless_input_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition memory_slice_byte {ex549511_ : Z} {ex549510_ : Z}
-(s : EvmMemorySliceFields ex549510_ ex549511_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549510_) && ((0 <=? ex549511_) && ((ex549510_ + ex549511_) <=? (2 ^ 32 - 1)))*)
+Definition memory_slice_byte {ex580169_ : Z} {ex580168_ : Z}
+(s : EvmMemorySliceFields ex580168_ ex580169_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580168_) && ((0 <=? ex580169_) && ((ex580168_ + ex580169_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549511_ return M (mword 8) then
+   (if Z.ltb (off) ex580169_ return M (mword 8) then
       (memory_slice_byte_at
-         (@existT _ _ ex549511_ (@existT _ _ ex549510_ ((s : EvmMemorySliceFields ex549510_ ex549511_))))
+         (@existT _ _ ex580169_ (@existT _ _ ex580168_ ((s : EvmMemorySliceFields ex580168_ ex580169_))))
          (Build_memory_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition code_slice_byte {ex549515_ : Z} {ex549514_ : Z}
-(s : CodeRegionSliceFields ex549514_ ex549515_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549514_) && ((0 <=? ex549515_) && ((ex549514_ + ex549515_) <=? (2 ^ 32 - 1)))*)
+Definition code_slice_byte {ex580173_ : Z} {ex580172_ : Z}
+(s : CodeRegionSliceFields ex580172_ ex580173_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580172_) && ((0 <=? ex580173_) && ((ex580172_ + ex580173_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549515_ return M (mword 8) then
+   (if Z.ltb (off) ex580173_ return M (mword 8) then
       (code_region_byte_at
-         (@existT _ _ ex549515_ (@existT _ _ ex549514_ ((s : CodeRegionSliceFields ex549514_ ex549515_))))
+         (@existT _ _ ex580173_ (@existT _ _ ex580172_ ((s : CodeRegionSliceFields ex580172_ ex580173_))))
          (Build_code_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition scratch_byte {ex549519_ : Z} {ex549518_ : Z}
-(s : ScratchSliceFields ex549518_ ex549519_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549518_) && ((0 <=? ex549519_) && ((ex549518_ + ex549519_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_byte {ex580177_ : Z} {ex580176_ : Z}
+(s : ScratchSliceFields ex580176_ ex580177_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580176_) && ((0 <=? ex580177_) && ((ex580176_ + ex580177_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549519_ return M (mword 8) then
+   (if Z.ltb (off) ex580177_ return M (mword 8) then
       (scratch_slice_byte_at
-         (@existT _ _ ex549519_ (@existT _ _ ex549518_ ((s : ScratchSliceFields ex549518_ ex549519_))))
+         (@existT _ _ ex580177_ (@existT _ _ ex580176_ ((s : ScratchSliceFields ex580176_ ex580177_))))
          (Build_scratch_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition log_data_byte {ex549523_ : Z} {ex549522_ : Z}
-(s : LogDataSliceFields ex549522_ ex549523_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549522_) && ((0 <=? ex549523_) && ((ex549522_ + ex549523_) <=? (2 ^ 32 - 1)))*)
+Definition log_data_byte {ex580181_ : Z} {ex580180_ : Z}
+(s : LogDataSliceFields ex580180_ ex580181_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580180_) && ((0 <=? ex580181_) && ((ex580180_ + ex580181_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549523_ return M (mword 8) then
+   (if Z.ltb (off) ex580181_ return M (mword 8) then
       (log_data_slice_byte_at
-         (@existT _ _ ex549523_ (@existT _ _ ex549522_ ((s : LogDataSliceFields ex549522_ ex549523_))))
+         (@existT _ _ ex580181_ (@existT _ _ ex580180_ ((s : LogDataSliceFields ex580180_ ex580181_))))
          (Build_log_data_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
     : M (mword 8).
 
-Definition output_byte {ex549527_ : Z} {ex549526_ : Z}
-(s : OutputSliceFields ex549526_ ex549527_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549526_) && ((0 <=? ex549527_) && ((ex549526_ + ex549527_) <=? (2 ^ 32 - 1)))*)
+Definition output_byte {ex580185_ : Z} {ex580184_ : Z}
+(s : OutputSliceFields ex580184_ ex580185_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580184_) && ((0 <=? ex580185_) && ((ex580184_ + ex580185_) <=? (2 ^ 32 - 1)))*)
 : M (byte) :=
-   (if Z.ltb (off) ex549527_ return M (mword 8) then
+   (if Z.ltb (off) ex580185_ return M (mword 8) then
       (output_slice_byte_at
-         (@existT _ _ ex549527_ (@existT _ _ ex549526_ ((s : OutputSliceFields ex549526_ ex549527_))))
+         (@existT _ _ ex580185_ (@existT _ _ ex580184_ ((s : OutputSliceFields ex580184_ ex580185_))))
          (Build_output_length ((off))))
        : M (mword 8)
     else returnM ((Ox"00")))
@@ -1517,38 +1518,38 @@ Definition calldata_slice_byte (s : CalldataSlice) (off : Z)
    end
     : M (mword 8).
 
-Definition slice_count_nonzero {ex549531_ : Z} {ex549530_ : Z}
-(s : StatelessInputSliceFields ex549530_ ex549531_)
-(*(0 <=? ex549530_) && ((0 <=? ex549531_) && ((ex549530_ + ex549531_) <=? (2 ^ 32 - 1)))*)
+Definition slice_count_nonzero {ex580189_ : Z} {ex580188_ : Z}
+(s : StatelessInputSliceFields ex580188_ ex580189_)
+(*(0 <=? ex580188_) && ((0 <=? ex580189_) && ((ex580188_ + ex580189_) <=? (2 ^ 32 - 1)))*)
 : M (stateless_input_length) :=
    (((stateless_input_count_nonzero
-        (@existT _ _ ex549531_ (@existT _ _ ex549530_ ((s : StatelessInputSliceFields ex549530_ ex549531_))))) >>= fun semanticResult =>
+        (@existT _ _ ex580189_ (@existT _ _ ex580188_ ((s : StatelessInputSliceFields ex580188_ ex580189_))))) >>= fun semanticResult =>
      returnM (semanticResult).(stateless_input_length_value))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_stateless_input_length (semanticResult)).
 
-Definition stateless_input_slice_strided_zero {ex549547_ : Z} {ex549546_ : Z}
-(s : StatelessInputSliceFields ex549546_ ex549547_) (start : Z) (stride : Z) (width : Z) (count : Z)
+Definition stateless_input_slice_strided_zero {ex580205_ : Z} {ex580204_ : Z}
+(s : StatelessInputSliceFields ex580204_ ex580205_) (start : Z) (stride : Z) (width : Z) (count : Z)
 (*(0 <=? start) && (start <=? (2 ^ 32 - 1)) &&
   ((0 <=? stride) && (stride <=? (2 ^ 32 - 1)) &&
     ((0 <=? width) && (width <=? (2 ^ 32 - 1)) && ((0 <=? count) && (count <=? (2 ^ 32 - 1)))))*)
-(*(0 <=? ex549546_) && ((0 <=? ex549547_) && ((ex549546_ + ex549547_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580204_) && ((0 <=? ex580205_) && ((ex580204_ + ex580205_) <=? (2 ^ 32 - 1)))*)
 : M (bool) :=
    (stateless_input_strided_zero
-      (@existT _ _ ex549547_ (@existT _ _ ex549546_ ((s : StatelessInputSliceFields ex549546_ ex549547_))))
+      (@existT _ _ ex580205_ (@existT _ _ ex580204_ ((s : StatelessInputSliceFields ex580204_ ex580205_))))
       (Build_stateless_input_length ((start))) (Build_stateless_input_length ((stride)))
       (Build_stateless_input_length ((width))) (Build_stateless_input_length ((count))))
     : M (bool).
 
-Definition memory_slice_strided_zero_value {ex549571_ : Z} {ex549570_ : Z}
-(s : EvmMemorySliceFields ex549570_ ex549571_) (start : Z) (stride : Z) (width : Z) (count : Z)
+Definition memory_slice_strided_zero_value {ex580229_ : Z} {ex580228_ : Z}
+(s : EvmMemorySliceFields ex580228_ ex580229_) (start : Z) (stride : Z) (width : Z) (count : Z)
 (*(0 <=? start) && (start <=? (2 ^ 32 - 1)) &&
   ((0 <=? stride) && (stride <=? (2 ^ 32 - 1)) &&
     ((0 <=? width) && (width <=? (2 ^ 32 - 1)) && ((0 <=? count) && (count <=? (2 ^ 32 - 1)))))*)
-(*(0 <=? ex549570_) && ((0 <=? ex549571_) && ((ex549570_ + ex549571_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580228_) && ((0 <=? ex580229_) && ((ex580228_ + ex580229_) <=? (2 ^ 32 - 1)))*)
 : M (bool) :=
    (memory_slice_strided_zero
-      (@existT _ _ ex549571_ (@existT _ _ ex549570_ ((s : EvmMemorySliceFields ex549570_ ex549571_))))
+      (@existT _ _ ex580229_ (@existT _ _ ex580228_ ((s : EvmMemorySliceFields ex580228_ ex580229_))))
       (Build_memory_length ((start))) (Build_memory_length ((stride)))
       (Build_memory_length ((width))) (Build_memory_length ((count))))
     : M (bool).
@@ -1566,14 +1567,14 @@ Definition slice_strided_zero (s : CalldataSlice) (start : Z) (stride : Z) (widt
    end
     : M (bool).
 
-Definition stateless_input_slice_load {ex549606_ : Z} {ex549605_ : Z}
-(s : StatelessInputSliceFields ex549605_ ex549606_) (off : Z)
+Definition stateless_input_slice_load {ex580264_ : Z} {ex580263_ : Z}
+(s : StatelessInputSliceFields ex580263_ ex580264_) (off : Z)
 (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549605_) && ((0 <=? ex549606_) && ((ex549605_ + ex549606_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580263_) && ((0 <=? ex580264_) && ((ex580263_ + ex580264_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549606_ return M (Z) then
+   ((if Z.ltb (off) ex580264_ return M (Z) then
        ((stateless_input_load_word
-           (@existT _ _ ex549606_ (@existT _ _ ex549605_ ((s : StatelessInputSliceFields ex549605_ ex549606_))))
+           (@existT _ _ ex580264_ (@existT _ _ ex580263_ ((s : StatelessInputSliceFields ex580263_ ex580264_))))
            (Build_stateless_input_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1581,13 +1582,13 @@ Definition stateless_input_slice_load {ex549606_ : Z} {ex549605_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition memory_slice_load {ex549615_ : Z} {ex549614_ : Z}
-(s : EvmMemorySliceFields ex549614_ ex549615_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549614_) && ((0 <=? ex549615_) && ((ex549614_ + ex549615_) <=? (2 ^ 32 - 1)))*)
+Definition memory_slice_load {ex580273_ : Z} {ex580272_ : Z}
+(s : EvmMemorySliceFields ex580272_ ex580273_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580272_) && ((0 <=? ex580273_) && ((ex580272_ + ex580273_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549615_ return M (Z) then
+   ((if Z.ltb (off) ex580273_ return M (Z) then
        ((memory_slice_load_word
-           (@existT _ _ ex549615_ (@existT _ _ ex549614_ ((s : EvmMemorySliceFields ex549614_ ex549615_))))
+           (@existT _ _ ex580273_ (@existT _ _ ex580272_ ((s : EvmMemorySliceFields ex580272_ ex580273_))))
            (Build_memory_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1595,13 +1596,13 @@ Definition memory_slice_load {ex549615_ : Z} {ex549614_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition code_slice_load {ex549624_ : Z} {ex549623_ : Z}
-(s : CodeRegionSliceFields ex549623_ ex549624_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549623_) && ((0 <=? ex549624_) && ((ex549623_ + ex549624_) <=? (2 ^ 32 - 1)))*)
+Definition code_slice_load {ex580282_ : Z} {ex580281_ : Z}
+(s : CodeRegionSliceFields ex580281_ ex580282_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580281_) && ((0 <=? ex580282_) && ((ex580281_ + ex580282_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549624_ return M (Z) then
+   ((if Z.ltb (off) ex580282_ return M (Z) then
        ((code_region_load_word
-           (@existT _ _ ex549624_ (@existT _ _ ex549623_ ((s : CodeRegionSliceFields ex549623_ ex549624_))))
+           (@existT _ _ ex580282_ (@existT _ _ ex580281_ ((s : CodeRegionSliceFields ex580281_ ex580282_))))
            (Build_code_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1609,13 +1610,13 @@ Definition code_slice_load {ex549624_ : Z} {ex549623_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition scratch_slice_load {ex549633_ : Z} {ex549632_ : Z}
-(s : ScratchSliceFields ex549632_ ex549633_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549632_) && ((0 <=? ex549633_) && ((ex549632_ + ex549633_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_slice_load {ex580291_ : Z} {ex580290_ : Z}
+(s : ScratchSliceFields ex580290_ ex580291_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580290_) && ((0 <=? ex580291_) && ((ex580290_ + ex580291_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549633_ return M (Z) then
+   ((if Z.ltb (off) ex580291_ return M (Z) then
        ((scratch_slice_load_word
-           (@existT _ _ ex549633_ (@existT _ _ ex549632_ ((s : ScratchSliceFields ex549632_ ex549633_))))
+           (@existT _ _ ex580291_ (@existT _ _ ex580290_ ((s : ScratchSliceFields ex580290_ ex580291_))))
            (Build_scratch_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1623,13 +1624,13 @@ Definition scratch_slice_load {ex549633_ : Z} {ex549632_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition log_data_slice_load {ex549642_ : Z} {ex549641_ : Z}
-(s : LogDataSliceFields ex549641_ ex549642_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549641_) && ((0 <=? ex549642_) && ((ex549641_ + ex549642_) <=? (2 ^ 32 - 1)))*)
+Definition log_data_slice_load {ex580300_ : Z} {ex580299_ : Z}
+(s : LogDataSliceFields ex580299_ ex580300_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580299_) && ((0 <=? ex580300_) && ((ex580299_ + ex580300_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549642_ return M (Z) then
+   ((if Z.ltb (off) ex580300_ return M (Z) then
        ((log_data_slice_load_word
-           (@existT _ _ ex549642_ (@existT _ _ ex549641_ ((s : LogDataSliceFields ex549641_ ex549642_))))
+           (@existT _ _ ex580300_ (@existT _ _ ex580299_ ((s : LogDataSliceFields ex580299_ ex580300_))))
            (Build_log_data_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1637,13 +1638,13 @@ Definition log_data_slice_load {ex549642_ : Z} {ex549641_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition output_slice_load {ex549651_ : Z} {ex549650_ : Z}
-(s : OutputSliceFields ex549650_ ex549651_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex549650_) && ((0 <=? ex549651_) && ((ex549650_ + ex549651_) <=? (2 ^ 32 - 1)))*)
+Definition output_slice_load {ex580309_ : Z} {ex580308_ : Z}
+(s : OutputSliceFields ex580308_ ex580309_) (off : Z) (*(0 <=? off) && (off <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex580308_) && ((0 <=? ex580309_) && ((ex580308_ + ex580309_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549651_ return M (Z) then
+   ((if Z.ltb (off) ex580309_ return M (Z) then
        ((output_slice_load_word
-           (@existT _ _ ex549651_ (@existT _ _ ex549650_ ((s : OutputSliceFields ex549650_ ex549651_))))
+           (@existT _ _ ex580309_ (@existT _ _ ex580308_ ((s : OutputSliceFields ex580308_ ex580309_))))
            (Build_output_length ((off)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1667,9 +1668,9 @@ Definition calldata_slice_load (s : CalldataSlice) (off : Z)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition stateless_input_slice_load_word_offset {ex549662_ : Z} {ex549661_ : Z}
-(s : StatelessInputSliceFields ex549661_ ex549662_) (off : word)
-(*(0 <=? ex549661_) && ((0 <=? ex549662_) && ((ex549661_ + ex549662_) <=? (2 ^ 32 - 1)))*)
+Definition stateless_input_slice_load_word_offset {ex580320_ : Z} {ex580319_ : Z}
+(s : StatelessInputSliceFields ex580319_ ex580320_) (off : word)
+(*(0 <=? ex580319_) && ((0 <=? ex580320_) && ((ex580319_ + ex580320_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 : M (word) :=
    let off := (off).(word_value) in
@@ -1681,9 +1682,9 @@ Definition stateless_input_slice_load_word_offset {ex549662_ : Z} {ex549661_ : Z
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition memory_slice_load_word_offset {ex549667_ : Z} {ex549666_ : Z}
-(s : EvmMemorySliceFields ex549666_ ex549667_) (off : word)
-(*(0 <=? ex549666_) && ((0 <=? ex549667_) && ((ex549666_ + ex549667_) <=? (2 ^ 32 - 1)))*)
+Definition memory_slice_load_word_offset {ex580325_ : Z} {ex580324_ : Z}
+(s : EvmMemorySliceFields ex580324_ ex580325_) (off : word)
+(*(0 <=? ex580324_) && ((0 <=? ex580325_) && ((ex580324_ + ex580325_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 : M (word) :=
    let off := (off).(word_value) in
@@ -1695,9 +1696,9 @@ Definition memory_slice_load_word_offset {ex549667_ : Z} {ex549666_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition code_slice_load_word_offset {ex549672_ : Z} {ex549671_ : Z}
-(s : CodeRegionSliceFields ex549671_ ex549672_) (off : word)
-(*(0 <=? ex549671_) && ((0 <=? ex549672_) && ((ex549671_ + ex549672_) <=? (2 ^ 32 - 1)))*)
+Definition code_slice_load_word_offset {ex580330_ : Z} {ex580329_ : Z}
+(s : CodeRegionSliceFields ex580329_ ex580330_) (off : word)
+(*(0 <=? ex580329_) && ((0 <=? ex580330_) && ((ex580329_ + ex580330_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 : M (word) :=
    let off := (off).(word_value) in
@@ -1725,14 +1726,14 @@ Definition calldata_slice_load_word_offset (s : CalldataSlice) (off : word)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition stateless_input_slice_load_n {ex549678_ : Z} {ex549677_ : Z}
-(s : StatelessInputSliceFields ex549677_ ex549678_) (off : Z) (n : Z)
+Definition stateless_input_slice_load_n {ex580336_ : Z} {ex580335_ : Z}
+(s : StatelessInputSliceFields ex580335_ ex580336_) (off : Z) (n : Z)
 (*(0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? n) && (n <=? 32)))*)
-(*(0 <=? ex549677_) && ((0 <=? ex549678_) && ((ex549677_ + ex549678_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580335_) && ((0 <=? ex580336_) && ((ex580335_ + ex580336_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549678_ return M (Z) then
+   ((if Z.ltb (off) ex580336_ return M (Z) then
        ((stateless_input_load_n_word
-           (@existT _ _ ex549678_ (@existT _ _ ex549677_ ((s : StatelessInputSliceFields ex549677_ ex549678_))))
+           (@existT _ _ ex580336_ (@existT _ _ ex580335_ ((s : StatelessInputSliceFields ex580335_ ex580336_))))
            (Build_stateless_input_length ((off))) (Build_word_byte_count ((n)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1740,14 +1741,14 @@ Definition stateless_input_slice_load_n {ex549678_ : Z} {ex549677_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition code_slice_load_n {ex549682_ : Z} {ex549681_ : Z}
-(s : CodeRegionSliceFields ex549681_ ex549682_) (off : Z) (n : Z)
+Definition code_slice_load_n {ex580340_ : Z} {ex580339_ : Z}
+(s : CodeRegionSliceFields ex580339_ ex580340_) (off : Z) (n : Z)
 (*(0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? n) && (n <=? 32)))*)
-(*(0 <=? ex549681_) && ((0 <=? ex549682_) && ((ex549681_ + ex549682_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580339_) && ((0 <=? ex580340_) && ((ex580339_ + ex580340_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549682_ return M (Z) then
+   ((if Z.ltb (off) ex580340_ return M (Z) then
        ((code_region_load_n_word
-           (@existT _ _ ex549682_ (@existT _ _ ex549681_ ((s : CodeRegionSliceFields ex549681_ ex549682_))))
+           (@existT _ _ ex580340_ (@existT _ _ ex580339_ ((s : CodeRegionSliceFields ex580339_ ex580340_))))
            (Build_code_length ((off))) (Build_word_byte_count ((n)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1755,14 +1756,14 @@ Definition code_slice_load_n {ex549682_ : Z} {ex549681_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition scratch_slice_load_n {ex549686_ : Z} {ex549685_ : Z}
-(s : ScratchSliceFields ex549685_ ex549686_) (off : Z) (n : Z)
+Definition scratch_slice_load_n {ex580344_ : Z} {ex580343_ : Z}
+(s : ScratchSliceFields ex580343_ ex580344_) (off : Z) (n : Z)
 (*(0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? n) && (n <=? 32)))*)
-(*(0 <=? ex549685_) && ((0 <=? ex549686_) && ((ex549685_ + ex549686_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580343_) && ((0 <=? ex580344_) && ((ex580343_ + ex580344_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
-   ((if Z.ltb (off) ex549686_ return M (Z) then
+   ((if Z.ltb (off) ex580344_ return M (Z) then
        ((scratch_slice_load_n_word
-           (@existT _ _ ex549686_ (@existT _ _ ex549685_ ((s : ScratchSliceFields ex549685_ ex549686_))))
+           (@existT _ _ ex580344_ (@existT _ _ ex580343_ ((s : ScratchSliceFields ex580343_ ex580344_))))
            (Build_scratch_length ((off))) (Build_word_byte_count ((n)))) >>= fun semanticResult =>
         returnM (semanticResult).(word_value))
         : M (Z)
@@ -1770,59 +1771,59 @@ Definition scratch_slice_load_n {ex549686_ : Z} {ex549685_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_word (semanticResult)).
 
-Definition stateless_input_slice_copy {ex549690_ : Z} {ex549689_ : Z}
-(s : StatelessInputSliceFields ex549689_ ex549690_) (dst : Z) (off : Z) (len : Z)
+Definition stateless_input_slice_copy {ex580348_ : Z} {ex580347_ : Z}
+(s : StatelessInputSliceFields ex580347_ ex580348_) (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) &&
   ((dst <=? (2 ^ 32 - 1)) &&
     ((0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? len) && (len <=? (2 ^ 32 - 1))))))*)
-(*(0 <=? ex549689_) && ((0 <=? ex549690_) && ((ex549689_ + ex549690_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580347_) && ((0 <=? ex580348_) && ((ex580347_ + ex580348_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (stateless_input_copy_to_memory
-      (@existT _ _ ex549690_ (@existT _ _ ex549689_ ((s : StatelessInputSliceFields ex549689_ ex549690_))))
+      (@existT _ _ ex580348_ (@existT _ _ ex580347_ ((s : StatelessInputSliceFields ex580347_ ex580348_))))
       (Build_memory_base_typ ((dst))) (Build_stateless_input_length ((off)))
       (Build_memory_length ((len))))
     : M (unit).
 
-Definition memory_slice_copy {ex549694_ : Z} {ex549693_ : Z}
-(s : EvmMemorySliceFields ex549693_ ex549694_) (dst : Z) (off : Z) (len : Z)
+Definition memory_slice_copy {ex580352_ : Z} {ex580351_ : Z}
+(s : EvmMemorySliceFields ex580351_ ex580352_) (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) &&
   ((dst <=? (2 ^ 32 - 1)) &&
     ((0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? len) && (len <=? (2 ^ 32 - 1))))))*)
-(*(0 <=? ex549693_) && ((0 <=? ex549694_) && ((ex549693_ + ex549694_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580351_) && ((0 <=? ex580352_) && ((ex580351_ + ex580352_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (memory_slice_copy_to_memory
-      (@existT _ _ ex549694_ (@existT _ _ ex549693_ ((s : EvmMemorySliceFields ex549693_ ex549694_))))
+      (@existT _ _ ex580352_ (@existT _ _ ex580351_ ((s : EvmMemorySliceFields ex580351_ ex580352_))))
       (Build_memory_base_typ ((dst))) (Build_memory_length ((off))) (Build_memory_length ((len))))
     : M (unit).
 
-Definition code_slice_copy {ex549698_ : Z} {ex549697_ : Z}
-(s : CodeRegionSliceFields ex549697_ ex549698_) (dst : Z) (off : Z) (len : Z)
+Definition code_slice_copy {ex580356_ : Z} {ex580355_ : Z}
+(s : CodeRegionSliceFields ex580355_ ex580356_) (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) &&
   ((dst <=? (2 ^ 32 - 1)) &&
     ((0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? len) && (len <=? (2 ^ 32 - 1))))))*)
-(*(0 <=? ex549697_) && ((0 <=? ex549698_) && ((ex549697_ + ex549698_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580355_) && ((0 <=? ex580356_) && ((ex580355_ + ex580356_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (code_region_copy_to_memory
-      (@existT _ _ ex549698_ (@existT _ _ ex549697_ ((s : CodeRegionSliceFields ex549697_ ex549698_))))
+      (@existT _ _ ex580356_ (@existT _ _ ex580355_ ((s : CodeRegionSliceFields ex580355_ ex580356_))))
       (Build_memory_base_typ ((dst))) (Build_code_length ((off))) (Build_memory_length ((len))))
     : M (unit).
 
-Definition output_slice_copy {ex549702_ : Z} {ex549701_ : Z}
-(s : OutputSliceFields ex549701_ ex549702_) (dst : Z) (off : Z) (len : Z)
+Definition output_slice_copy {ex580360_ : Z} {ex580359_ : Z}
+(s : OutputSliceFields ex580359_ ex580360_) (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) &&
   ((dst <=? (2 ^ 32 - 1)) &&
     ((0 <=? off) && ((off <=? (2 ^ 32 - 1)) && ((0 <=? len) && (len <=? (2 ^ 32 - 1))))))*)
-(*(0 <=? ex549701_) && ((0 <=? ex549702_) && ((ex549701_ + ex549702_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580359_) && ((0 <=? ex580360_) && ((ex580359_ + ex580360_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (output_slice_copy_to_memory
-      (@existT _ _ ex549702_ (@existT _ _ ex549701_ ((s : OutputSliceFields ex549701_ ex549702_))))
+      (@existT _ _ ex580360_ (@existT _ _ ex580359_ ((s : OutputSliceFields ex580359_ ex580360_))))
       (Build_memory_base_typ ((dst))) (Build_output_length ((off))) (Build_memory_length ((len))))
     : M (unit).
 
-Definition stateless_input_slice_copy_word_offset {ex549706_ : Z} {ex549705_ : Z}
-(s : StatelessInputSliceFields ex549705_ ex549706_) (dst : memory_base_typ) (off : word)
+Definition stateless_input_slice_copy_word_offset {ex580364_ : Z} {ex580363_ : Z}
+(s : StatelessInputSliceFields ex580363_ ex580364_) (dst : memory_base_typ) (off : word)
 (len : memory_length)
-(*(0 <=? ex549705_) && ((0 <=? ex549706_) && ((ex549705_ + ex549706_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580363_) && ((0 <=? ex580364_) && ((ex580363_ + ex580364_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? dst) && (dst <=? (2 ^ 32 - 1))*) (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 (*(0 <=? len) && (len <=? (2 ^ 32 - 1))*)
 : M (unit) :=
@@ -1840,10 +1841,10 @@ Definition stateless_input_slice_copy_word_offset {ex549706_ : Z} {ex549705_ : Z
        : M (unit))
     : M (unit).
 
-Definition memory_slice_copy_word_offset {ex549713_ : Z} {ex549712_ : Z}
-(s : EvmMemorySliceFields ex549712_ ex549713_) (dst : memory_base_typ) (off : word)
+Definition memory_slice_copy_word_offset {ex580371_ : Z} {ex580370_ : Z}
+(s : EvmMemorySliceFields ex580370_ ex580371_) (dst : memory_base_typ) (off : word)
 (len : memory_length)
-(*(0 <=? ex549712_) && ((0 <=? ex549713_) && ((ex549712_ + ex549713_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580370_) && ((0 <=? ex580371_) && ((ex580370_ + ex580371_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? dst) && (dst <=? (2 ^ 32 - 1))*) (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 (*(0 <=? len) && (len <=? (2 ^ 32 - 1))*)
 : M (unit) :=
@@ -1861,10 +1862,10 @@ Definition memory_slice_copy_word_offset {ex549713_ : Z} {ex549712_ : Z}
        : M (unit))
     : M (unit).
 
-Definition code_slice_copy_word_offset {ex549720_ : Z} {ex549719_ : Z}
-(s : CodeRegionSliceFields ex549719_ ex549720_) (dst : memory_base_typ) (off : word)
+Definition code_slice_copy_word_offset {ex580378_ : Z} {ex580377_ : Z}
+(s : CodeRegionSliceFields ex580377_ ex580378_) (dst : memory_base_typ) (off : word)
 (len : memory_length)
-(*(0 <=? ex549719_) && ((0 <=? ex549720_) && ((ex549719_ + ex549720_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex580377_) && ((0 <=? ex580378_) && ((ex580377_ + ex580378_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? dst) && (dst <=? (2 ^ 32 - 1))*) (*(0 <=? off) && (off <=? (2 ^ 256 - 1))*)
 (*(0 <=? len) && (len <=? (2 ^ 32 - 1))*)
 : M (unit) :=
@@ -1905,95 +1906,95 @@ Definition calldata_slice_copy_word_offset
 Axiom host_scratch_reserve :
   forall
 
-  (fv21566_off : Z) (fv21565_len : Z)
-  (*(0 <=? fv21566_off) &&
-    ((fv21566_off <=? (2 ^ 32 - 1)) && ((0 <=? fv21565_len) && (fv21565_len <=? (2 ^ 32 - 1))))*),
+  (fv23098_off : Z) (fv23097_len : Z)
+  (*(0 <=? fv23098_off) &&
+    ((fv23098_off <=? (2 ^ 32 - 1)) && ((0 <=? fv23097_len) && (fv23097_len <=? (2 ^ 32 - 1))))*),
   M (bool).
 
 Axiom host_scratch_store_byte :
   forall
 
-  (fv21567_off : Z) (_ : byte)
-  (*(0 <=? fv21567_off) && (fv21567_off <=? (2 ^ 32 - 1))*),
-  M (ScratchSliceLength (fv21567_off + 1)).
+  (fv23099_off : Z) (_ : byte)
+  (*(0 <=? fv23099_off) && (fv23099_off <=? (2 ^ 32 - 1))*),
+  M (ScratchSliceLength (fv23099_off + 1)).
 
 Axiom host_scratch_store_stateless_input :
   forall
-  {fv21570_off : Z} {fv21569_len : Z}
-  (fv21568_dst : Z) (_ : StatelessInputSliceFields fv21570_off fv21569_len)
-  (*(0 <=? fv21568_dst) &&
-    ((fv21568_dst <=? (2 ^ 32 - 1)) &&
-      ((0 <=? fv21570_off) &&
-        ((0 <=? fv21569_len) && ((fv21570_off + fv21569_len) <=? (2 ^ 32 - 1)))))*),
-  M (ScratchSliceLength (fv21568_dst + fv21569_len)).
+  {fv23102_off : Z} {fv23101_len : Z}
+  (fv23100_dst : Z) (_ : StatelessInputSliceFields fv23102_off fv23101_len)
+  (*(0 <=? fv23100_dst) &&
+    ((fv23100_dst <=? (2 ^ 32 - 1)) &&
+      ((0 <=? fv23102_off) &&
+        ((0 <=? fv23101_len) && ((fv23102_off + fv23101_len) <=? (2 ^ 32 - 1)))))*),
+  M (ScratchSliceLength (fv23100_dst + fv23101_len)).
 
 Axiom host_scratch_store_scratch :
   forall
-  {fv21573_off : Z} {fv21572_len : Z}
-  (fv21571_dst : Z) (_ : ScratchSliceFields fv21573_off fv21572_len)
-  (*(0 <=? fv21571_dst) &&
-    ((fv21571_dst <=? (2 ^ 32 - 1)) &&
-      ((0 <=? fv21573_off) &&
-        ((0 <=? fv21572_len) && ((fv21573_off + fv21572_len) <=? (2 ^ 32 - 1)))))*),
-  M (ScratchSliceLength (fv21571_dst + fv21572_len)).
+  {fv23105_off : Z} {fv23104_len : Z}
+  (fv23103_dst : Z) (_ : ScratchSliceFields fv23105_off fv23104_len)
+  (*(0 <=? fv23103_dst) &&
+    ((fv23103_dst <=? (2 ^ 32 - 1)) &&
+      ((0 <=? fv23105_off) &&
+        ((0 <=? fv23104_len) && ((fv23105_off + fv23104_len) <=? (2 ^ 32 - 1)))))*),
+  M (ScratchSliceLength (fv23103_dst + fv23104_len)).
 
 Axiom host_scratch_store_log_data :
   forall
-  {fv21576_off : Z} {fv21575_len : Z}
-  (fv21574_dst : Z) (_ : LogDataSliceFields fv21576_off fv21575_len)
-  (*(0 <=? fv21574_dst) &&
-    ((fv21574_dst <=? (2 ^ 32 - 1)) &&
-      ((0 <=? fv21576_off) &&
-        ((0 <=? fv21575_len) && ((fv21576_off + fv21575_len) <=? (2 ^ 32 - 1)))))*),
-  M (ScratchSliceLength (fv21574_dst + fv21575_len)).
+  {fv23108_off : Z} {fv23107_len : Z}
+  (fv23106_dst : Z) (_ : LogDataSliceFields fv23108_off fv23107_len)
+  (*(0 <=? fv23106_dst) &&
+    ((fv23106_dst <=? (2 ^ 32 - 1)) &&
+      ((0 <=? fv23108_off) &&
+        ((0 <=? fv23107_len) && ((fv23108_off + fv23107_len) <=? (2 ^ 32 - 1)))))*),
+  M (ScratchSliceLength (fv23106_dst + fv23107_len)).
 
 Axiom host_scratch_store_output :
   forall
-  {fv21579_off : Z} {fv21578_len : Z}
-  (fv21577_dst : Z) (_ : OutputSliceFields fv21579_off fv21578_len)
-  (*(0 <=? fv21577_dst) &&
-    ((fv21577_dst <=? (2 ^ 32 - 1)) &&
-      ((0 <=? fv21579_off) &&
-        ((0 <=? fv21578_len) && ((fv21579_off + fv21578_len) <=? (2 ^ 32 - 1)))))*),
-  M (ScratchSliceLength (fv21577_dst + fv21578_len)).
+  {fv23111_off : Z} {fv23110_len : Z}
+  (fv23109_dst : Z) (_ : OutputSliceFields fv23111_off fv23110_len)
+  (*(0 <=? fv23109_dst) &&
+    ((fv23109_dst <=? (2 ^ 32 - 1)) &&
+      ((0 <=? fv23111_off) &&
+        ((0 <=? fv23110_len) && ((fv23111_off + fv23110_len) <=? (2 ^ 32 - 1)))))*),
+  M (ScratchSliceLength (fv23109_dst + fv23110_len)).
 
 Axiom host_scratch_store_address :
   forall
 
-  (fv21580_off : Z) (_ : address_typ)
-  (*(0 <=? fv21580_off) && (fv21580_off <=? (2 ^ 32 - 1))*),
-  M (ScratchSliceLength (fv21580_off + 20)).
+  (fv23112_off : Z) (_ : address_typ)
+  (*(0 <=? fv23112_off) && (fv23112_off <=? (2 ^ 32 - 1))*),
+  M (ScratchSliceLength (fv23112_off + 20)).
 
 Axiom host_scratch_store_b256 :
   forall
 
-  (fv21582_off : Z) (_ : b256) (fv21581_len : Z)
-  (*(0 <=? fv21582_off) &&
-    ((fv21582_off <=? (2 ^ 32 - 1)) && ((0 <=? fv21581_len) && (fv21581_len <=? 32)))*),
-  M (ScratchSliceLength (fv21582_off + fv21581_len)).
+  (fv23114_off : Z) (_ : b256) (fv23113_len : Z)
+  (*(0 <=? fv23114_off) &&
+    ((fv23114_off <=? (2 ^ 32 - 1)) && ((0 <=? fv23113_len) && (fv23113_len <=? 32)))*),
+  M (ScratchSliceLength (fv23114_off + fv23113_len)).
 
 Axiom host_scratch_store_fixed_bytes_256 :
   forall
 
-  (fv21583_off : Z) (_ : vec byte 256)
-  (*(0 <=? fv21583_off) && (fv21583_off <=? (2 ^ 32 - 1))*),
-  M (ScratchSliceLength (fv21583_off + 256)).
+  (fv23115_off : Z) (_ : vec byte 256)
+  (*(0 <=? fv23115_off) && (fv23115_off <=? (2 ^ 32 - 1))*),
+  M (ScratchSliceLength (fv23115_off + 256)).
 
 Axiom host_scratch_store_word :
   forall
 
   (off : Z) (_ : word) (len : Z)
-  (*(0 <=? fv21585_off) &&
-    ((fv21585_off <=? (2 ^ 32 - 1)) && ((0 <=? fv21584_len) && (fv21584_len <=? 32)))*) (*(0 <=?
-    ex627392_) &&
-    (ex627392_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? fv23117_off) &&
+    ((fv23117_off <=? (2 ^ 32 - 1)) && ((0 <=? fv23116_len) && (fv23116_len <=? 32)))*) (*(0 <=?
+    ex663050_) &&
+    (ex663050_ <=? (2 ^ 256 - 1))*),
   M (ScratchSliceLength (off + len)).
 
 Axiom host_scratch_truncate :
   forall
 
   (_ : scratch_pointer)
-  (*(0 <=? ex627393_) && (ex627393_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex663051_) && (ex663051_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Definition scratch_length_add (left' : Z) (right' : Z)
@@ -2022,9 +2023,9 @@ Definition scratch_push_byte (data : mword 8) : M (unit) :=
    write_reg scratch_arena (@existT _ _ _ (@existT _ _ _ (w__0)))
     : M (unit).
 
-Definition stateless_input_scratch_push_slice {ex549796_ : Z} {ex549795_ : Z}
-(data : StatelessInputSliceFields ex549795_ ex549796_)
-(*(0 <=? ex549795_) && ((0 <=? ex549796_) && ((ex549795_ + ex549796_) <=? (2 ^ 32 - 1)))*)
+Definition stateless_input_scratch_push_slice {ex580454_ : Z} {ex580453_ : Z}
+(data : StatelessInputSliceFields ex580453_ ex580454_)
+(*(0 <=? ex580453_) && ((0 <=? ex580454_) && ((ex580453_ + ex580454_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if neq_int (data.(StatelessInputSliceFields_len)) (0) return M (unit) then
       read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
@@ -2034,9 +2035,9 @@ Definition stateless_input_scratch_push_slice {ex549796_ : Z} {ex549795_ : Z}
     else returnM (tt))
     : M (unit).
 
-Definition scratch_scratch_push_slice {ex549800_ : Z} {ex549799_ : Z}
-(data : ScratchSliceFields ex549799_ ex549800_)
-(*(0 <=? ex549799_) && ((0 <=? ex549800_) && ((ex549799_ + ex549800_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_scratch_push_slice {ex580458_ : Z} {ex580457_ : Z}
+(data : ScratchSliceFields ex580457_ ex580458_)
+(*(0 <=? ex580457_) && ((0 <=? ex580458_) && ((ex580457_ + ex580458_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if neq_int (data.(ScratchSliceFields_len)) (0) return M (unit) then
       read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
@@ -2046,9 +2047,9 @@ Definition scratch_scratch_push_slice {ex549800_ : Z} {ex549799_ : Z}
     else returnM (tt))
     : M (unit).
 
-Definition log_data_scratch_push_slice {ex549804_ : Z} {ex549803_ : Z}
-(data : LogDataSliceFields ex549803_ ex549804_)
-(*(0 <=? ex549803_) && ((0 <=? ex549804_) && ((ex549803_ + ex549804_) <=? (2 ^ 32 - 1)))*)
+Definition log_data_scratch_push_slice {ex580462_ : Z} {ex580461_ : Z}
+(data : LogDataSliceFields ex580461_ ex580462_)
+(*(0 <=? ex580461_) && ((0 <=? ex580462_) && ((ex580461_ + ex580462_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if neq_int (data.(LogDataSliceFields_len)) (0) return M (unit) then
       read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
@@ -2058,9 +2059,9 @@ Definition log_data_scratch_push_slice {ex549804_ : Z} {ex549803_ : Z}
     else returnM (tt))
     : M (unit).
 
-Definition output_scratch_push_slice {ex549808_ : Z} {ex549807_ : Z}
-(data : OutputSliceFields ex549807_ ex549808_)
-(*(0 <=? ex549807_) && ((0 <=? ex549808_) && ((ex549807_ + ex549808_) <=? (2 ^ 32 - 1)))*)
+Definition output_scratch_push_slice {ex580466_ : Z} {ex580465_ : Z}
+(data : OutputSliceFields ex580465_ ex580466_)
+(*(0 <=? ex580465_) && ((0 <=? ex580466_) && ((ex580465_ + ex580466_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if neq_int (data.(OutputSliceFields_len)) (0) return M (unit) then
       read_reg scratch_arena >>= fun '(@existT _ _ __arena1 (@existT _ _ __arena0 arena)) =>
@@ -2146,63 +2147,63 @@ Axiom stateless_input_keccak256 :
   forall
 
   (_ : StatelessInputSlice)
-  (*(0 <=? ex627459_) && ((0 <=? ex627460_) && ((ex627459_ + ex627460_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663117_) && ((0 <=? ex663118_) && ((ex663117_ + ex663118_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom scratch_keccak256 :
   forall
 
   (_ : ScratchSlice)
-  (*(0 <=? ex627463_) && ((0 <=? ex627464_) && ((ex627463_ + ex627464_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663121_) && ((0 <=? ex663122_) && ((ex663121_ + ex663122_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom memory_keccak256 :
   forall
 
   (_ : EvmMemorySlice)
-  (*(0 <=? ex627467_) && ((0 <=? ex627468_) && ((ex627467_ + ex627468_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663125_) && ((0 <=? ex663126_) && ((ex663125_ + ex663126_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom code_keccak256 :
   forall
 
   (_ : CodeRegionSlice)
-  (*(0 <=? ex627471_) && ((0 <=? ex627472_) && ((ex627471_ + ex627472_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663129_) && ((0 <=? ex663130_) && ((ex663129_ + ex663130_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom output_keccak256 :
   forall
 
   (_ : OutputSlice)
-  (*(0 <=? ex627475_) && ((0 <=? ex627476_) && ((ex627475_ + ex627476_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663133_) && ((0 <=? ex663134_) && ((ex663133_ + ex663134_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom log_data_keccak256 :
   forall
 
   (_ : LogDataSlice)
-  (*(0 <=? ex627479_) && ((0 <=? ex627480_) && ((ex627479_ + ex627480_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663137_) && ((0 <=? ex663138_) && ((ex663137_ + ex663138_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom stateless_input_sha256 :
   forall
 
   (_ : StatelessInputSlice)
-  (*(0 <=? ex627483_) && ((0 <=? ex627484_) && ((ex627483_ + ex627484_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663141_) && ((0 <=? ex663142_) && ((ex663141_ + ex663142_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom scratch_sha256 :
   forall
 
   (_ : ScratchSlice)
-  (*(0 <=? ex627487_) && ((0 <=? ex627488_) && ((ex627487_ + ex627488_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663145_) && ((0 <=? ex663146_) && ((ex663145_ + ex663146_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom memory_sha256 :
   forall
 
   (_ : EvmMemorySlice)
-  (*(0 <=? ex627491_) && ((0 <=? ex627492_) && ((ex627491_ + ex627492_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex663149_) && ((0 <=? ex663150_) && ((ex663149_ + ex663150_) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Definition calldata_keccak256 (input : CalldataSlice) : M (hash) :=
@@ -2227,7 +2228,7 @@ Axiom keccak256_word :
   forall
 
   (_ : word)
-  (*(0 <=? ex627509_) && (ex627509_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex663167_) && (ex663167_ <=? (2 ^ 256 - 1))*),
   M (hash).
 
 Axiom keccak256_address : forall  (_ : address_typ) , M (hash).
@@ -2398,7 +2399,7 @@ Definition pack_protocol_profile {fork : Z} {target : Z} {maximum : Z} {denomina
                       ((denominator =? 11684671) &&
                         ((code_limit =? 65536) &&
                           ((initcode_limit =? 131072) &&
-                            ((transaction_total_gas_limit =? (2 ^ 64 - 1)) &&
+                            ((transaction_total_gas_limit =? (2 ^ 32 - 1)) &&
                               ((transaction_regular_gas_limit =? (2 ^ 24)) &&
                                 ((transaction_blob_limit =? 6) && (refund_divisor =? 5))))))))))))))))*)
 : ProtocolProfile :=
@@ -2487,7 +2488,7 @@ Definition gas_limits_for {fork : Z} {target : Z} {maximum : Z} {denominator : Z
                       ((denominator =? 11684671) &&
                         ((code_limit =? 65536) &&
                           ((initcode_limit =? 131072) &&
-                            ((profile_total_limit =? (2 ^ 64 - 1)) &&
+                            ((profile_total_limit =? (2 ^ 32 - 1)) &&
                               ((profile_regular_limit =? (2 ^ 24)) &&
                                 ((transaction_blob_limit =? 6) && (refund_divisor =? 5))))))))))))))))) &&
   ((0 <=? block_limit) && (block_limit <=? (2 ^ 64 - 1)))*)
@@ -2591,7 +2592,7 @@ Definition execution_profile_for {fork : Z} {target : Z} {maximum : Z} {denomina
                       ((denominator =? 11684671) &&
                         ((code_limit =? 65536) &&
                           ((initcode_limit =? 131072) &&
-                            ((profile_total_limit =? (2 ^ 64 - 1)) &&
+                            ((profile_total_limit =? (2 ^ 32 - 1)) &&
                               ((profile_regular_limit =? (2 ^ 24)) &&
                                 ((transaction_blob_limit =? 6) && (refund_divisor =? 5))))))))))))))))) &&
   ((0 <=? block_limit) && (block_limit <=? (2 ^ 64 - 1)))*)
@@ -2603,176 +2604,180 @@ ExecutionProfileFields fork target maximum denominator code_limit initcode_limit
    {| ExecutionProfileFields_protocol := protocol;
       ExecutionProfileFields_gas := gas_limits_for (protocol) (block_limit) |}.
 
-Definition schema_protocol_profile (schema_fork : mword 8) : ProtocolProfile :=
+Definition schema_protocol_profile (schema_fork : mword 8) : M (ProtocolProfile) :=
    let p0_ := schema_fork in
-   if eq_vec (p0_) ((Ox"0A")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Berlin;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Berlin) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 0;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 2 |})
-        : ProtocolProfileFields 5 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 2 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"0B")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := London;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (London) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 0;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 6 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"0C")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := ArrowGlacier;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (ArrowGlacier) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 0;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 7 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"0D")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := GrayGlacier;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (GrayGlacier) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 0;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 8 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"0E")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Paris;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Paris) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 0;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 9 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"0F")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Shanghai;
-           ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Shanghai) (0) (0) (1);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 0;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 10 0 0 1 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"10")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Cancun;
-           ProtocolProfileFields_blob_schedule := blob_schedule (3) (6) (3338477);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Cancun) (3) (6) (3338477);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 6;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 11 3 6 3338477 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 6 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"11")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Prague;
-           ProtocolProfileFields_blob_schedule := blob_schedule (6) (9) (5007716);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Prague) (6) (9) (5007716);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_blob_limit := 9;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 12 6 9 5007716 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 9 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"12")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := Osaka;
-           ProtocolProfileFields_blob_schedule := blob_schedule (6) (9) (5007716);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Osaka) (6) (9) (5007716);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_blob_limit := 6;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 13 6 9 5007716 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"13")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := BPO1;
-           ProtocolProfileFields_blob_schedule := blob_schedule (10) (15) (8346193);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (BPO1) (10) (15) (8346193);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_blob_limit := 6;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 14 10 15 8346193 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
-     pack_protocol_profile (profile)
-   else if eq_vec (p0_) ((Ox"14")) then
-     let profile :=
-       ({| ProtocolProfileFields_fork := BPO2;
-           ProtocolProfileFields_blob_schedule := blob_schedule (14) (21) (11684671);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (BPO2) (14) (21) (11684671);
-           ProtocolProfileFields_deployed_code_size_limit := 24576;
-           ProtocolProfileFields_initcode_size_limit := 49152;
-           ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_blob_limit := 6;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 15 14 21 11684671 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
-     pack_protocol_profile (profile)
-   else
-     let profile :=
-       ({| ProtocolProfileFields_fork := Amsterdam;
-           ProtocolProfileFields_blob_schedule := blob_schedule (14) (21) (11684671);
-           ProtocolProfileFields_excess_blob_gas_limit :=
-             compute_profile_excess_blob_gas_limit (Amsterdam) (14) (21) (11684671);
-           ProtocolProfileFields_deployed_code_size_limit := 65536;
-           ProtocolProfileFields_initcode_size_limit := 131072;
-           ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
-           ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
-           ProtocolProfileFields_transaction_blob_limit := 6;
-           ProtocolProfileFields_refund_divisor := 5 |})
-        : ProtocolProfileFields 16 14 21 11684671 65536 131072 (2 ^ 64 - 1) (2 ^ 24) 6 5 in
-     pack_protocol_profile (profile).
+   (if eq_vec (p0_) ((Ox"0A")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Berlin;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Berlin) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 0;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 2 |})
+         : ProtocolProfileFields 5 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 2 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"0B")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := London;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (London) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 0;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 6 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"0C")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := ArrowGlacier;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (ArrowGlacier) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 0;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 7 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"0D")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := GrayGlacier;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (GrayGlacier) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 0;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 8 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"0E")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Paris;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Paris) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 0;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 9 0 0 1 24576 0 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"0F")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Shanghai;
+            ProtocolProfileFields_blob_schedule := blob_schedule (0) (0) (1);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Shanghai) (0) (0) (1);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 0;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 10 0 0 1 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 0 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"10")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Cancun;
+            ProtocolProfileFields_blob_schedule := blob_schedule (3) (6) (3338477);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Cancun) (3) (6) (3338477);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 6;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 11 3 6 3338477 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 6 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"11")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Prague;
+            ProtocolProfileFields_blob_schedule := blob_schedule (6) (9) (5007716);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Prague) (6) (9) (5007716);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := Z.sub ((pow2 (64))) (1);
+            ProtocolProfileFields_transaction_blob_limit := 9;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 12 6 9 5007716 24576 49152 (2 ^ 64 - 1) (2 ^ 64 - 1) 9 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"12")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Osaka;
+            ProtocolProfileFields_blob_schedule := blob_schedule (6) (9) (5007716);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Osaka) (6) (9) (5007716);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_blob_limit := 6;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 13 6 9 5007716 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"13")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := BPO1;
+            ProtocolProfileFields_blob_schedule := blob_schedule (10) (15) (8346193);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (BPO1) (10) (15) (8346193);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_blob_limit := 6;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 14 10 15 8346193 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"14")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := BPO2;
+            ProtocolProfileFields_blob_schedule := blob_schedule (14) (21) (11684671);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (BPO2) (14) (21) (11684671);
+            ProtocolProfileFields_deployed_code_size_limit := 24576;
+            ProtocolProfileFields_initcode_size_limit := 49152;
+            ProtocolProfileFields_transaction_total_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_blob_limit := 6;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 15 14 21 11684671 24576 49152 (2 ^ 24) (2 ^ 24) 6 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else if eq_vec (p0_) ((Ox"15")) then
+      let profile :=
+        ({| ProtocolProfileFields_fork := Amsterdam;
+            ProtocolProfileFields_blob_schedule := blob_schedule (14) (21) (11684671);
+            ProtocolProfileFields_excess_blob_gas_limit :=
+              compute_profile_excess_blob_gas_limit (Amsterdam) (14) (21) (11684671);
+            ProtocolProfileFields_deployed_code_size_limit := 65536;
+            ProtocolProfileFields_initcode_size_limit := 131072;
+            ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (32))) (1);
+            ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
+            ProtocolProfileFields_transaction_blob_limit := 6;
+            ProtocolProfileFields_refund_divisor := 5 |})
+         : ProtocolProfileFields 16 14 21 11684671 65536 131072 (2 ^ 32 - 1) (2 ^ 24) 6 5 in
+      returnM ((pack_protocol_profile (profile)) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type)
+    else
+      (fatal_error (InvalidConfig))
+       : M ({refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type))
+    : M ({refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type).
 
 Definition schema_protocol_profile_forwards_matches (schema_fork : mword 8) : bool :=
    orb ((eq_vec (schema_fork) ((Ox"0A"))))
@@ -2789,7 +2794,19 @@ Definition schema_protocol_profile_forwards_matches (schema_fork : mword 8) : bo
                                              ((eq_vec (schema_fork) ((Ox"15")))))))))))))))))))))))).
 
 Definition DEFAULT_PROTOCOL_PROFILE :=
-(schema_protocol_profile ((Ox"15")))
+(let profile :=
+  ({| ProtocolProfileFields_fork := Amsterdam;
+      ProtocolProfileFields_blob_schedule := blob_schedule (14) (21) (11684671);
+      ProtocolProfileFields_excess_blob_gas_limit :=
+        compute_profile_excess_blob_gas_limit (Amsterdam) (14) (21) (11684671);
+      ProtocolProfileFields_deployed_code_size_limit := 65536;
+      ProtocolProfileFields_initcode_size_limit := 131072;
+      ProtocolProfileFields_transaction_total_gas_limit := Z.sub ((pow2 (32))) (1);
+      ProtocolProfileFields_transaction_regular_gas_limit := pow2 (24);
+      ProtocolProfileFields_transaction_blob_limit := 6;
+      ProtocolProfileFields_refund_divisor := 5 |})
+   : ProtocolProfileFields 16 14 21 11684671 65536 131072 (2 ^ 32 - 1) (2 ^ 24) 6 5 in
+pack_protocol_profile (profile))
  : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type.
 #[export] Hint Unfold DEFAULT_PROTOCOL_PROFILE : sail.
 Definition DEFAULT_EXECUTION_PROFILE :=
@@ -2798,10 +2815,6 @@ Definition DEFAULT_EXECUTION_PROFILE :=
                                                                                                                                                                                                       (0)))))))))))))))
  : {transaction_regular_limit & {transaction_total_limit & {block_limit & {refund_divisor & {transaction_blob_limit & {profile_regular_limit & {profile_total_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ExecutionProfileFields fork target maximum denominator code_limit initcode_limit profile_total_limit profile_regular_limit transaction_blob_limit refund_divisor block_limit transaction_total_limit transaction_regular_limit)}}}}}}}}}}}}}%type.
 #[export] Hint Unfold DEFAULT_EXECUTION_PROFILE : sail.
-Definition undefined_ChainConfig '(tt : unit) : M (ChainConfig) :=
-   (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__0 : Z) =>
-   returnM (({| ChainConfig_chain_id := (Build_chain_identifier (w__0)) |})).
-
 Definition SYSTEM_ADDRESS : address_typ :=
 address_from_bits ((Ox"000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE")).
 #[export] Hint Unfold SYSTEM_ADDRESS : sail.
@@ -3019,19 +3032,24 @@ Definition EMPTY_ACCESS_LIST_REF : AccessListRef :=
    AccessListRef_address_count := (Build_transaction_item_count (0));
    AccessListRef_slot_count := (Build_transaction_item_count (0)) |}.
 #[export] Hint Unfold EMPTY_ACCESS_LIST_REF : sail.
-Definition authorization_list_ref {ex550684_ : Z} {ex550683_ : Z}
-(encoded : StatelessInputSliceFields ex550683_ ex550684_) (count : Z)
+Definition authorization_list_ref {ex581427_ : Z} {ex581426_ : Z}
+(encoded : StatelessInputSliceFields ex581426_ ex581427_) (count : Z)
 (*(0 <=? count) && (count <=? (2 ^ 30))*)
-(*(0 <=? ex550683_) && ((0 <=? ex550684_) && ((ex550683_ + ex550684_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex581426_) && ((0 <=? ex581427_) && ((ex581426_ + ex581427_) <=? (2 ^ 32 - 1)))*)
 : AuthorizationListRefFields count :=
    {| AuthorizationListRefFields_encoded :=
-        @existT _ _ ex550684_ (@existT _ _ ex550683_ ((encoded : StatelessInputSliceFields ex550683_ ex550684_)));
+        @existT _ _ ex581427_ (@existT _ _ ex581426_ ((encoded : StatelessInputSliceFields ex581426_ ex581427_)));
       AuthorizationListRefFields_count := count |}.
 
 Definition EMPTY_AUTHORIZATION_LIST_REF :=
 (@existT _ _ 0 ((authorization_list_ref (EMPTY_STATELESS_INPUT_SLICE) (0) : AuthorizationListRefFields 0)))
  : {count & (AuthorizationListRefFields count)}%type.
 #[export] Hint Unfold EMPTY_AUTHORIZATION_LIST_REF : sail.
+Definition pack_decoded_transaction {blob_limit : Z} (tx : DecodedTransactionFields blob_limit)
+(*(blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9))*)
+: DecodedTransaction :=
+   @existT _ _ blob_limit ((tx : DecodedTransactionFields blob_limit)).
+
 Definition pack_transaction {blob_limit : Z} (tx : TransactionFields blob_limit)
 (*(blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9))*)
 : Transaction :=
@@ -3115,10 +3133,10 @@ Definition logs_bloom_equal (a : vec (mword 8) 256) (b : vec (mword 8) 256) : bo
      (fun i '(equal) =>
        andb (equal) ((eq_vec ((vec_access_dec (a) (i))) ((vec_access_dec (b) (i))))))).
 
-Definition logs_bloom_from_ref {ex550856_ : Z} (reference : StatelessInputSliceFields ex550856_ 256)
-(ex550857_ := 256)
-(*(0 <=? ex550856_) && ((0 <=? ex550857_) && ((ex550856_ + ex550857_) <=? (2 ^ 32 - 1))) &&
-  (ex550857_ =? 256)*)
+Definition logs_bloom_from_ref {ex581628_ : Z} (reference : StatelessInputSliceFields ex581628_ 256)
+(ex581629_ := 256)
+(*(0 <=? ex581628_) && ((0 <=? ex581629_) && ((ex581628_ + ex581629_) <=? (2 ^ 32 - 1))) &&
+  (ex581629_ =? 256)*)
 : M (LogsBloom) :=
    let out : vec (mword 8) 256 := EMPTY_LOGS_BLOOM in
    (let '(loop_i_lower) := 0 in
@@ -3130,11 +3148,11 @@ Definition logs_bloom_from_ref {ex550856_ : Z} (reference : StatelessInputSliceF
        returnM (out))))
     : M (vec (mword 8) 256).
 
-Definition logs_bloom_matches_ref {ex550860_ : Z}
-(computed : vec (mword 8) 256) (reference : StatelessInputSliceFields ex550860_ 256)
-(ex550861_ := 256)
-(*(0 <=? ex550860_) && ((0 <=? ex550861_) && ((ex550860_ + ex550861_) <=? (2 ^ 32 - 1))) &&
-  (ex550861_ =? 256)*)
+Definition logs_bloom_matches_ref {ex581632_ : Z}
+(computed : vec (mword 8) 256) (reference : StatelessInputSliceFields ex581632_ 256)
+(ex581633_ := 256)
+(*(0 <=? ex581632_) && ((0 <=? ex581633_) && ((ex581632_ + ex581633_) <=? (2 ^ 32 - 1))) &&
+  (ex581633_ =? 256)*)
 : M (bool) :=
    (logs_bloom_from_ref
       (autocast (T := fun _sz => (StatelessInputSliceFields _ _sz)%type)
@@ -3280,21 +3298,21 @@ Axiom code_region_from_input :
   forall
 
   (_ : StatelessInputSlice)
-  (*(0 <=? ex629772_) && ((0 <=? ex629773_) && ((ex629772_ + ex629773_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex664949_) && ((0 <=? ex664950_) && ((ex664949_ + ex664950_) <=? (2 ^ 32 - 1)))*),
   M (CodeRegionSlice).
 
 Axiom code_region_from_memory :
   forall
 
   (_ : EvmMemorySlice)
-  (*(0 <=? ex629776_) && ((0 <=? ex629777_) && ((ex629776_ + ex629777_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex664953_) && ((0 <=? ex664954_) && ((ex664953_ + ex664954_) <=? (2 ^ 32 - 1)))*),
   M (CodeRegionSlice).
 
 Axiom code_region_from_output :
   forall
 
   (_ : OutputSlice)
-  (*(0 <=? ex629780_) && ((0 <=? ex629781_) && ((ex629780_ + ex629781_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex664957_) && ((0 <=? ex664958_) && ((ex664957_ + ex664958_) <=? (2 ^ 32 - 1)))*),
   M (CodeRegionSlice).
 
 Axiom code_region_from_delegation : forall  (_ : address_typ) , M (CodeRegionSlice).
@@ -3303,41 +3321,41 @@ Axiom jumpdest_table_alloc :
   forall
 
   (_ : CodeSlice)
-  (*(0 <=? ex629784_) && ((0 <=? ex629785_) && ((ex629784_ + ex629785_) <=? (2 ^ 32 - 1))) &&
-    ((0 <=? ex629785_) && ((ex629785_ + 32) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex664961_) && ((0 <=? ex664962_) && ((ex664961_ + ex664962_) <=? (2 ^ 32 - 1))) &&
+    ((0 <=? ex664962_) && ((ex664962_ + 32) <=? (2 ^ 32 - 1)))*),
   M (jump_table_index).
 
 Axiom jumpdest_table_mark :
   forall
 
   (_ : jump_table_index) (_ : code_length) (_ : code_pointer)
-  (*(0 <=? ex629786_) && (ex629786_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex629787_) &&
-    (ex629787_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex629788_) && (ex629788_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex664963_) && (ex664963_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex664964_) &&
+    (ex664964_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex664965_) && (ex664965_ <=? (2 ^ 32 - 1))*),
   M (bool).
 
 Axiom code_db_store :
   forall
 
   (_ : Code)
-  (*(0 <=? ex629791_) && ((0 <=? ex629792_) && ((ex629791_ + ex629792_) <=? (2 ^ 32 - 1))) &&
-    ((0 <=? ex629792_) && ((ex629792_ + 32) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex664968_) && ((0 <=? ex664969_) && ((ex664968_ + ex664969_) <=? (2 ^ 32 - 1))) &&
+    ((0 <=? ex664969_) && ((ex664969_ + 32) <=? (2 ^ 32 - 1)))*),
   M (hash).
 
 Axiom jumpdest_ref_contains :
   forall
 
   (_ : jump_table_index) (_ : code_length) (_ : code_pointer)
-  (*(0 <=? ex629793_) && (ex629793_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex629794_) &&
-    (ex629794_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex629795_) && (ex629795_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex664970_) && (ex664970_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex664971_) &&
+    (ex664971_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex664972_) && (ex664972_ <=? (2 ^ 32 - 1))*),
   M (bool).
 
 Axiom code_db_read_delegation : forall  (_ : hash) , M (AddressResult).
 
-Definition analyze_code_from {ex551319_ : Z} {ex551318_ : Z}
-(code : CodeRegionSliceFields ex551318_ ex551319_) (fork : Fork) (table : jump_table_index) (pc : Z)
+Definition analyze_code_from {ex582091_ : Z} {ex582090_ : Z}
+(code : CodeRegionSliceFields ex582090_ ex582091_) (fork : Fork) (table : jump_table_index) (pc : Z)
 (*(0 <=? pc) && ((pc + 32) <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex551318_) && ((0 <=? ex551319_) && ((ex551318_ + ex551319_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex551319_) && ((ex551319_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
+(*(0 <=? ex582090_) && ((0 <=? ex582091_) && ((ex582090_ + ex582091_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex582091_) && ((ex582091_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
 (*(0 <=? table) && (table <=? (2 ^ 64 - 1))*)
 : M (unit) :=
    let fork := (fork).(Fork_value) in
@@ -3347,15 +3365,15 @@ Definition analyze_code_from {ex551319_ : Z} {ex551318_ : Z}
    let position : Z := pc in
    (whileMT
      (position, scanning)
-     (fun '(position, scanning) => Z.sub ex551319_ (position))
+     (fun '(position, scanning) => Z.sub ex582091_ (position))
      (fun '(position, scanning) =>
-       returnM ((andb (scanning) (((Z.ltb (position) ex551319_)  : bool)))))
+       returnM ((andb (scanning) (((Z.ltb (position) ex582091_)  : bool)))))
      (fun '(position, scanning) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         let current := position in
         (code_slice_byte (code) (current)) >>= fun opcode =>
         (if eq_vec (opcode) ((Ox"5B")) return M (unit) then
-           (jumpdest_table_mark (Build_jump_table_index ((table))) (Build_code_length (ex551319_))
+           (jumpdest_table_mark (Build_jump_table_index ((table))) (Build_code_length (ex582091_))
               (Build_code_pointer ((current)))) >>= fun marked =>
            (assert_exp marked "JUMPDEST mark")
             : M (unit)
@@ -3370,7 +3388,7 @@ Definition analyze_code_from {ex551319_ : Z} {ex551318_ : Z}
            returnM ((if immediate_valid then 2 else 1))
          else returnM (1)) >>= fun (step : Z) =>
         let '((position, scanning)) :=
-          (if Z.ltb (step) ((Z.sub ex551319_ (current))) then
+          (if Z.ltb (step) ((Z.sub ex582091_ (current))) then
              let position : Z := Z.add (current) (step) in
              (position, scanning)
            else
@@ -3382,17 +3400,17 @@ Definition analyze_code_from {ex551319_ : Z} {ex551318_ : Z}
    : (Z * bool)) =>
    returnM (tt).
 
-Definition analyze_code {ex551327_ : Z} {ex551326_ : Z}
-(code : CodeRegionSliceFields ex551326_ ex551327_) (fork : Fork)
-(*(0 <=? ex551326_) && ((0 <=? ex551327_) && ((ex551326_ + ex551327_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex551327_) && ((ex551327_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
+Definition analyze_code {ex582099_ : Z} {ex582098_ : Z}
+(code : CodeRegionSliceFields ex582098_ ex582099_) (fork : Fork)
+(*(0 <=? ex582098_) && ((0 <=? ex582099_) && ((ex582098_ + ex582099_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex582099_) && ((ex582099_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
 : M (jump_table_index) :=
    let fork := (fork).(Fork_value) in
    ((if Z.eqb (code.(CodeRegionSliceFields_len)) (0) then
        returnM ((EMPTY_JUMP_TABLE).(jump_table_index_value))
      else
        ((jumpdest_table_alloc
-           (@existT _ _ ex551327_ (@existT _ _ ex551326_ ((code : CodeRegionSliceFields ex551326_ ex551327_))))) >>= fun semanticResult =>
+           (@existT _ _ ex582099_ (@existT _ _ ex582098_ ((code : CodeRegionSliceFields ex582098_ ex582099_))))) >>= fun semanticResult =>
         returnM (semanticResult).(jump_table_index_value)) >>= fun table =>
        assert_exp' (neq_int (table) ((EMPTY_JUMP_TABLE).(jump_table_index_value))) "JUMPDEST table allocation" >>= fun _ =>
        (analyze_code_from (code) (Build_Fork ((fork))) (Build_jump_table_index ((table))) (0)) >>
@@ -3400,43 +3418,43 @@ Definition analyze_code {ex551327_ : Z} {ex551326_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_jump_table_index (semanticResult)).
 
-Definition code_db_insert {ex551332_ : Z} {ex551331_ : Z}
-(code : CodeRegionSliceFields ex551331_ ex551332_) (fork : Fork)
-(*(0 <=? ex551331_) && ((0 <=? ex551332_) && ((ex551331_ + ex551332_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex551332_) && ((ex551332_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
+Definition code_db_insert {ex582104_ : Z} {ex582103_ : Z}
+(code : CodeRegionSliceFields ex582103_ ex582104_) (fork : Fork)
+(*(0 <=? ex582103_) && ((0 <=? ex582104_) && ((ex582103_ + ex582104_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex582104_) && ((ex582104_ + 32) <=? (2 ^ 32 - 1)))*) (*(0 <=? fork) && (fork <=? 16)*)
 : M (hash) :=
    let fork := (fork).(Fork_value) in
    ((analyze_code (code) (Build_Fork ((fork)))) >>= fun semanticResult =>
     returnM (semanticResult).(jump_table_index_value)) >>= fun jumpdest_table =>
    let analyzed := analyzed_code (code) (Build_jump_table_index ((jumpdest_table))) in
    (code_db_store
-      (@existT _ _ ex551332_ (@existT _ _ ex551331_ ((analyzed : CodeFields ex551331_ ex551332_)))))
+      (@existT _ _ ex582104_ (@existT _ _ ex582103_ ((analyzed : CodeFields ex582103_ ex582104_)))))
     : M (vec (mword 8) 32).
 
-Definition code_db_intern_input {ex551337_ : Z} {ex551336_ : Z}
-(bytes : StatelessInputSliceFields ex551336_ ex551337_)
-(*(0 <=? ex551336_) && ((0 <=? ex551337_) && ((ex551336_ + ex551337_) <=? (2 ^ 32 - 1)))*)
+Definition code_db_intern_input {ex582109_ : Z} {ex582108_ : Z}
+(bytes : StatelessInputSliceFields ex582108_ ex582109_)
+(*(0 <=? ex582108_) && ((0 <=? ex582109_) && ((ex582108_ + ex582109_) <=? (2 ^ 32 - 1)))*)
 : M (CodeSlice) :=
    (code_region_from_input
-      (@existT _ _ ex551337_ (@existT _ _ ex551336_ ((bytes : StatelessInputSliceFields ex551336_ ex551337_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
+      (@existT _ _ ex582109_ (@existT _ _ ex582108_ ((bytes : StatelessInputSliceFields ex582108_ ex582109_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
    (validated_code_slice (region))
     : M ({__region1 & {__region0 & (CodeRegionSliceFields __region0 __region1)}}%type).
 
-Definition code_db_intern_memory {ex551341_ : Z} {ex551340_ : Z}
-(bytes : EvmMemorySliceFields ex551340_ ex551341_)
-(*(0 <=? ex551340_) && ((0 <=? ex551341_) && ((ex551340_ + ex551341_) <=? (2 ^ 32 - 1)))*)
+Definition code_db_intern_memory {ex582113_ : Z} {ex582112_ : Z}
+(bytes : EvmMemorySliceFields ex582112_ ex582113_)
+(*(0 <=? ex582112_) && ((0 <=? ex582113_) && ((ex582112_ + ex582113_) <=? (2 ^ 32 - 1)))*)
 : M (CodeSlice) :=
    (code_region_from_memory
-      (@existT _ _ ex551341_ (@existT _ _ ex551340_ ((bytes : EvmMemorySliceFields ex551340_ ex551341_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
+      (@existT _ _ ex582113_ (@existT _ _ ex582112_ ((bytes : EvmMemorySliceFields ex582112_ ex582113_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
    (validated_code_slice (region))
     : M ({__region1 & {__region0 & (CodeRegionSliceFields __region0 __region1)}}%type).
 
-Definition code_db_intern_output {ex551345_ : Z} {ex551344_ : Z}
-(bytes : OutputSliceFields ex551344_ ex551345_)
-(*(0 <=? ex551344_) && ((0 <=? ex551345_) && ((ex551344_ + ex551345_) <=? (2 ^ 32 - 1)))*)
+Definition code_db_intern_output {ex582117_ : Z} {ex582116_ : Z}
+(bytes : OutputSliceFields ex582116_ ex582117_)
+(*(0 <=? ex582116_) && ((0 <=? ex582117_) && ((ex582116_ + ex582117_) <=? (2 ^ 32 - 1)))*)
 : M (CodeSlice) :=
    (code_region_from_output
-      (@existT _ _ ex551345_ (@existT _ _ ex551344_ ((bytes : OutputSliceFields ex551344_ ex551345_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
+      (@existT _ _ ex582117_ (@existT _ _ ex582116_ ((bytes : OutputSliceFields ex582116_ ex582117_))))) >>= fun '(@existT _ _ __region1 (@existT _ _ __region0 region)) =>
    (validated_code_slice (region))
     : M ({__region1 & {__region0 & (CodeRegionSliceFields __region0 __region1)}}%type).
 
@@ -3461,16 +3479,14 @@ Axiom nodedb_insert :
   forall
 
   (_ : hash) (_ : stateless_input_pointer) (_ : stateless_input_length)
-  (*(0 <=? ex629867_) && (ex629867_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex629868_) &&
-    (ex629868_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex665044_) && (ex665044_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex665045_) &&
+    (ex665045_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom nodedb_lookup : forall  (_ : hash) , M (StatelessInputSlice).
 
 Definition SSZ_OFF_BYTES : Z := 4.
 #[export] Hint Unfold SSZ_OFF_BYTES : sail.
-Definition SSZ_UINT_BYTES : Z := 8.
-#[export] Hint Unfold SSZ_UINT_BYTES : sail.
 Definition ssz_field_offset (base : Z) (delta : Z)
 (*(0 <=? base) && ((0 <=? delta) && ((base + delta) <=? (2 ^ 32 - 1)))*)
 : Z :=
@@ -3481,10 +3497,10 @@ Definition scratch_field_offset (base : Z) (delta : Z)
 : Z :=
    Z.add (base) (delta).
 
-Definition ssz_u32_at {ex551377_ : Z} {ex551376_ : Z}
-(input : StatelessInputSliceFields ex551376_ ex551377_) (offset : Z)
+Definition ssz_u32_at {ex582149_ : Z} {ex582148_ : Z}
+(input : StatelessInputSliceFields ex582148_ ex582149_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 4) && ((offset + 4) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551376_) && ((0 <=? ex551377_) && ((ex551376_ + ex551377_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582148_) && ((0 <=? ex582149_) && ((ex582148_ + ex582149_) <=? (2 ^ 32 - 1)))*)
 : M (ssz_offset) :=
    ((stateless_input_slice_byte (input) (offset)) >>= fun byte0 =>
    let offset1 := ssz_field_offset (offset) (1) in
@@ -3506,19 +3522,19 @@ Definition ssz_u32_at {ex551377_ : Z} {ex551376_ : Z}
    returnM ((uint (result)))) >>= fun semanticResult =>
    returnM (Build_ssz_offset (semanticResult)).
 
-Definition ssz_u32 {ex551391_ : Z} {ex551390_ : Z}
-(input : StatelessInputSliceFields ex551390_ ex551391_) (offset : Z)
+Definition ssz_u32 {ex582163_ : Z} {ex582162_ : Z}
+(input : StatelessInputSliceFields ex582162_ ex582163_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 4) && ((offset + 4) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551390_) && ((0 <=? ex551391_) && ((ex551390_ + ex551391_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582162_) && ((0 <=? ex582163_) && ((ex582162_ + ex582163_) <=? (2 ^ 32 - 1)))*)
 : M (ssz_offset) :=
    (((ssz_u32_at (input) (offset)) >>= fun semanticResult =>
      returnM (semanticResult).(ssz_offset_value))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_ssz_offset (semanticResult)).
 
-Definition ssz_u32_in_slice {ex551399_ : Z} {ex551398_ : Z}
-(input : StatelessInputSliceFields ex551398_ ex551399_) (offset : ssz_offset)
-(*(0 <=? ex551398_) && ((0 <=? ex551399_) && ((ex551398_ + ex551399_) <=? (2 ^ 32 - 1)))*)
+Definition ssz_u32_in_slice {ex582171_ : Z} {ex582170_ : Z}
+(input : StatelessInputSliceFields ex582170_ ex582171_) (offset : ssz_offset)
+(*(0 <=? ex582170_) && ((0 <=? ex582171_) && ((ex582170_ + ex582171_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? offset) && (offset <=? (2 ^ 32 - 1))*)
 : M (ssz_offset) :=
    let offset := (offset).(ssz_offset_value) in
@@ -3538,10 +3554,10 @@ Definition ssz_offset_to_source_pointer (value : ssz_offset)
 : stateless_input_pointer :=
    let value := (value).(ssz_offset_value) in (Build_stateless_input_pointer (value)).
 
-Definition decode_ssz_uint {ex551411_ : Z} {ex551410_ : Z}
-(input : StatelessInputSliceFields ex551410_ ex551411_) (offset : Z)
+Definition decode_ssz_uint {ex582183_ : Z} {ex582182_ : Z}
+(input : StatelessInputSliceFields ex582182_ ex582183_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 8) && ((offset + 8) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551410_) && ((0 <=? ex551411_) && ((ex551410_ + ex551411_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582182_) && ((0 <=? ex582183_) && ((ex582182_ + ex582183_) <=? (2 ^ 32 - 1)))*)
 : M (ssz_uint) :=
    ((stateless_input_slice_byte (input) (offset)) >>= fun byte0 =>
    let offset1 := ssz_field_offset (offset) (1) in
@@ -3573,10 +3589,10 @@ Definition decode_ssz_uint {ex551411_ : Z} {ex551410_ : Z}
                ((Z.mul ((uint (byte7))) ((pow2 (56)))))))) >>= fun semanticResult =>
    returnM (Build_ssz_uint (semanticResult)).
 
-Definition decode_scratch_uint {ex551425_ : Z} {ex551424_ : Z}
-(input : ScratchSliceFields ex551424_ ex551425_) (offset : Z)
+Definition decode_scratch_uint {ex582197_ : Z} {ex582196_ : Z}
+(input : ScratchSliceFields ex582196_ ex582197_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 8) && ((offset + 8) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551424_) && ((0 <=? ex551425_) && ((ex551424_ + ex551425_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582196_) && ((0 <=? ex582197_) && ((ex582196_ + ex582197_) <=? (2 ^ 32 - 1)))*)
 : M (ssz_uint) :=
    ((scratch_byte (input) (offset)) >>= fun byte0 =>
    let offset1 := scratch_field_offset (offset) (1) in
@@ -3608,19 +3624,19 @@ Definition decode_scratch_uint {ex551425_ : Z} {ex551424_ : Z}
                ((Z.mul ((uint (byte7))) ((pow2 (56)))))))) >>= fun semanticResult =>
    returnM (Build_ssz_uint (semanticResult)).
 
-Definition ssz_addr {ex551439_ : Z} {ex551438_ : Z}
-(input : StatelessInputSliceFields ex551438_ ex551439_) (offset : Z)
+Definition ssz_addr {ex582211_ : Z} {ex582210_ : Z}
+(input : StatelessInputSliceFields ex582210_ ex582211_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 20) && ((offset + 20) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551438_) && ((0 <=? ex551439_) && ((ex551438_ + ex551439_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582210_) && ((0 <=? ex582211_) && ((ex582210_ + ex582211_) <=? (2 ^ 32 - 1)))*)
 : M (address_typ) :=
    ((stateless_input_slice_load_n (input) (offset) (ADDRESS_BYTE_LENGTH)) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun value =>
    returnM ((word_to_address (Build_word ((value))))).
 
-Definition ssz_bytes32 {ex551453_ : Z} {ex551452_ : Z}
-(input : StatelessInputSliceFields ex551452_ ex551453_) (offset : Z)
+Definition ssz_bytes32 {ex582225_ : Z} {ex582224_ : Z}
+(input : StatelessInputSliceFields ex582224_ ex582225_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 32) && ((offset + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551452_) && ((0 <=? ex551453_) && ((ex551452_ + ex551453_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582224_) && ((0 <=? ex582225_) && ((ex582224_ + ex582225_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((stateless_input_slice_load (input) (offset)) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun value =>
@@ -3629,10 +3645,10 @@ Definition ssz_bytes32 {ex551453_ : Z} {ex551452_ : Z}
 Definition ssz_logs_bloom_index (index : Z) (*(0 <=? index) && (index <=? 255)*) : Z :=
    Z.sub (255) (index).
 
-Definition ssz_logs_bloom {ex551467_ : Z} {ex551466_ : Z}
-(input : StatelessInputSliceFields ex551466_ ex551467_) (offset : Z)
+Definition ssz_logs_bloom {ex582239_ : Z} {ex582238_ : Z}
+(input : StatelessInputSliceFields ex582238_ ex582239_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 256) && ((offset + 256) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551466_) && ((0 <=? ex551467_) && ((ex551466_ + ex551467_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582238_) && ((0 <=? ex582239_) && ((ex582238_ + ex582239_) <=? (2 ^ 32 - 1)))*)
 : M (LogsBloom) :=
    let out : vec (mword 8) 256 := vector_init (256) ((Ox"00")) in
    (let '(loop_k_lower) := 0 in
@@ -3648,10 +3664,10 @@ Definition ssz_logs_bloom {ex551467_ : Z} {ex551466_ : Z}
 
 Definition ssz_u256_index (index : Z) (*(0 <=? index) && (index <=? 31)*) : Z := Z.sub (31) (index).
 
-Definition ssz_u256 {ex551481_ : Z} {ex551480_ : Z}
-(input : StatelessInputSliceFields ex551480_ ex551481_) (offset : Z)
+Definition ssz_u256 {ex582253_ : Z} {ex582252_ : Z}
+(input : StatelessInputSliceFields ex582252_ ex582253_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 32) && ((offset + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex551480_) && ((0 <=? ex551481_) && ((ex551480_ + ex551481_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582252_) && ((0 <=? ex582253_) && ((ex582252_ + ex582253_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
    (let result : Z := (WORD_ZERO).(word_value) in
    (let '(loop_k_lower) := 0 in
@@ -3763,9 +3779,9 @@ Definition rlp_materialized_slice_size (length : rlp_scratch_length) (first : mw
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition rlp_scratch_region_size {ex551520_ : Z} {ex551519_ : Z}
-(data : ScratchSliceFields ex551519_ ex551520_)
-(*(0 <=? ex551519_) && ((0 <=? ex551520_) && ((ex551519_ + ex551520_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_scratch_region_size {ex582292_ : Z} {ex582291_ : Z}
+(data : ScratchSliceFields ex582291_ ex582292_)
+(*(0 <=? ex582291_) && ((0 <=? ex582292_) && ((ex582291_ + ex582292_) <=? (2 ^ 32 - 1)))*)
 : M (rlp_scratch_length) :=
    ((if Z.eqb (data.(ScratchSliceFields_len)) (0) then returnM ((Ox"00"))
      else (scratch_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3775,9 +3791,9 @@ Definition rlp_scratch_region_size {ex551520_ : Z} {ex551519_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition rlp_log_data_size {ex551524_ : Z} {ex551523_ : Z}
-(data : LogDataSliceFields ex551523_ ex551524_)
-(*(0 <=? ex551523_) && ((0 <=? ex551524_) && ((ex551523_ + ex551524_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_log_data_size {ex582296_ : Z} {ex582295_ : Z}
+(data : LogDataSliceFields ex582295_ ex582296_)
+(*(0 <=? ex582295_) && ((0 <=? ex582296_) && ((ex582295_ + ex582296_) <=? (2 ^ 32 - 1)))*)
 : M (rlp_scratch_length) :=
    ((if Z.eqb (data.(LogDataSliceFields_len)) (0) then returnM ((Ox"00"))
      else (log_data_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3835,9 +3851,9 @@ Definition rlp_scratch_list_size (content_len : rlp_scratch_length)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition rlp_input_scratch_slice_size {ex551534_ : Z} {ex551533_ : Z}
-(data : StatelessInputSliceFields ex551533_ ex551534_)
-(*(0 <=? ex551533_) && ((0 <=? ex551534_) && ((ex551533_ + ex551534_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_input_scratch_slice_size {ex582306_ : Z} {ex582305_ : Z}
+(data : StatelessInputSliceFields ex582305_ ex582306_)
+(*(0 <=? ex582305_) && ((0 <=? ex582306_) && ((ex582305_ + ex582306_) <=? (2 ^ 32 - 1)))*)
 : M (rlp_scratch_length) :=
    ((if Z.eqb (data.(StatelessInputSliceFields_len)) (0) then returnM ((Ox"00"))
      else (stateless_input_slice_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3847,18 +3863,18 @@ Definition rlp_input_scratch_slice_size {ex551534_ : Z} {ex551533_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition rlp_scratch_scratch_slice_size {ex551538_ : Z} {ex551537_ : Z}
-(data : ScratchSliceFields ex551537_ ex551538_)
-(*(0 <=? ex551537_) && ((0 <=? ex551538_) && ((ex551537_ + ex551538_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_scratch_scratch_slice_size {ex582310_ : Z} {ex582309_ : Z}
+(data : ScratchSliceFields ex582309_ ex582310_)
+(*(0 <=? ex582309_) && ((0 <=? ex582310_) && ((ex582309_ + ex582310_) <=? (2 ^ 32 - 1)))*)
 : M (rlp_scratch_length) :=
    (((rlp_scratch_region_size (data)) >>= fun semanticResult =>
      returnM (semanticResult).(rlp_scratch_length_value))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition rlp_log_scratch_slice_size {ex551542_ : Z} {ex551541_ : Z}
-(data : LogDataSliceFields ex551541_ ex551542_)
-(*(0 <=? ex551541_) && ((0 <=? ex551542_) && ((ex551541_ + ex551542_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_log_scratch_slice_size {ex582314_ : Z} {ex582313_ : Z}
+(data : LogDataSliceFields ex582313_ ex582314_)
+(*(0 <=? ex582313_) && ((0 <=? ex582314_) && ((ex582313_ + ex582314_) <=? (2 ^ 32 - 1)))*)
 : M (rlp_scratch_length) :=
    (((rlp_log_data_size (data)) >>= fun semanticResult =>
      returnM (semanticResult).(rlp_scratch_length_value))
@@ -3900,9 +3916,9 @@ Definition rlp_write_list_prefix (content_len : Z) (*0 <=? content_len*) : M (un
        : M (unit))
     : M (unit).
 
-Definition rlp_write_input_slice {ex551546_ : Z} {ex551545_ : Z}
-(data : StatelessInputSliceFields ex551545_ ex551546_)
-(*(0 <=? ex551545_) && ((0 <=? ex551546_) && ((ex551545_ + ex551546_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_write_input_slice {ex582318_ : Z} {ex582317_ : Z}
+(data : StatelessInputSliceFields ex582317_ ex582318_)
+(*(0 <=? ex582317_) && ((0 <=? ex582318_) && ((ex582317_ + ex582318_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if Z.eqb (data.(StatelessInputSliceFields_len)) (0) then returnM ((Ox"00"))
     else (stateless_input_slice_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3910,9 +3926,9 @@ Definition rlp_write_input_slice {ex551546_ : Z} {ex551545_ : Z}
    (stateless_input_scratch_push_slice (data))
     : M (unit).
 
-Definition rlp_write_scratch_slice {ex551550_ : Z} {ex551549_ : Z}
-(data : ScratchSliceFields ex551549_ ex551550_)
-(*(0 <=? ex551549_) && ((0 <=? ex551550_) && ((ex551549_ + ex551550_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_write_scratch_slice {ex582322_ : Z} {ex582321_ : Z}
+(data : ScratchSliceFields ex582321_ ex582322_)
+(*(0 <=? ex582321_) && ((0 <=? ex582322_) && ((ex582321_ + ex582322_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if Z.eqb (data.(ScratchSliceFields_len)) (0) then returnM ((Ox"00"))
     else (scratch_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3920,9 +3936,9 @@ Definition rlp_write_scratch_slice {ex551550_ : Z} {ex551549_ : Z}
    (scratch_scratch_push_slice (data))
     : M (unit).
 
-Definition rlp_write_log_data_slice {ex551554_ : Z} {ex551553_ : Z}
-(data : LogDataSliceFields ex551553_ ex551554_)
-(*(0 <=? ex551553_) && ((0 <=? ex551554_) && ((ex551553_ + ex551554_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_write_log_data_slice {ex582326_ : Z} {ex582325_ : Z}
+(data : LogDataSliceFields ex582325_ ex582326_)
+(*(0 <=? ex582325_) && ((0 <=? ex582326_) && ((ex582325_ + ex582326_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (if Z.eqb (data.(LogDataSliceFields_len)) (0) then returnM ((Ox"00"))
     else (log_data_byte (data) (0))  : M (mword 8)) >>= fun first =>
@@ -3992,10 +4008,10 @@ Definition rlp_uint64_append (_width : Z) (prefix : Z) (next : mword 8)
 : Z :=
    Z.add ((Z.mul (prefix) (256))) ((uint (next))).
 
-Fixpoint _rec_rlp_uint64_width {ex551569_ : Z} {ex551568_ : Z}
-(content : StatelessInputSliceFields ex551568_ ex551569_) (width : Z) (_reclimit : Z)
+Fixpoint _rec_rlp_uint64_width {ex582341_ : Z} {ex582340_ : Z}
+(content : StatelessInputSliceFields ex582340_ ex582341_) (width : Z) (_reclimit : Z)
 (*(0 <=? width) && (width <=? 8)*)
-(*(0 <=? ex551568_) && ((0 <=? ex551569_) && ((ex551568_ + ex551569_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582340_) && ((0 <=? ex582341_) && ((ex582340_ + ex582341_) <=? (2 ^ 32 - 1)))*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (Z).
 exact (
@@ -4011,16 +4027,16 @@ exact (
 Defined.
 
 
-Definition rlp_uint64_width {ex551574_ : Z} {ex551573_ : Z}
-(content : StatelessInputSliceFields ex551573_ ex551574_) (width : Z)
+Definition rlp_uint64_width {ex582346_ : Z} {ex582345_ : Z}
+(content : StatelessInputSliceFields ex582345_ ex582346_) (width : Z)
 (*(0 <=? width) && (width <=? 8)*)
-(*(0 <=? ex551573_) && ((0 <=? ex551574_) && ((ex551573_ + ex551574_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582345_) && ((0 <=? ex582346_) && ((ex582345_ + ex582346_) <=? (2 ^ 32 - 1)))*)
 : M (Z) :=
    (_rec_rlp_uint64_width (content) (width) ((width  : Z)) (Zwf_guarded _))  : M (Z).
 
-Definition rlp_ref_hdr {ex551579_ : Z} {ex551578_ : Z}
-(b : StatelessInputSliceFields ex551578_ ex551579_)
-(*(0 <=? ex551578_) && ((0 <=? ex551579_) && ((ex551578_ + ex551579_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_ref_hdr {ex582351_ : Z} {ex582350_ : Z}
+(b : StatelessInputSliceFields ex582350_ ex582351_)
+(*(0 <=? ex582350_) && ((0 <=? ex582351_) && ((ex582350_ + ex582351_) <=? (2 ^ 32 - 1)))*)
 : M ((bool * source_pointer * Z)) :=
    (let source_len := b.(StatelessInputSliceFields_len) in
    (if Z.eqb (source_len) (0) return M (unit) then (fatal_error (RlpDecode))  : M (unit)
@@ -4134,9 +4150,9 @@ Definition rlp_single_ref {source_off : Z} {source_len : Z}
        : M ({syn_content_len & (RlpFieldRef source_off source_len syn_content_len)}%type))
     : M ({content_len & (RlpFieldRef source_off source_len content_len)}%type).
 
-Definition rlp_node_cursor {ex551689_ : Z} {ex551688_ : Z}
-(node : StatelessInputSliceFields ex551688_ ex551689_)
-(*(0 <=? ex551688_) && ((0 <=? ex551689_) && ((ex551688_ + ex551689_) <=? (2 ^ 32 - 1)))*)
+Definition rlp_node_cursor {ex582461_ : Z} {ex582460_ : Z}
+(node : StatelessInputSliceFields ex582460_ ex582461_)
+(*(0 <=? ex582460_) && ((0 <=? ex582461_) && ((ex582460_ + ex582461_) <=? (2 ^ 32 - 1)))*)
 : M ({source_len & {source_off & (RlpCursor source_off source_len)}}%type) :=
    (if Z.eqb (node.(StatelessInputSliceFields_len)) (0)
       return
@@ -4146,7 +4162,7 @@ Definition rlp_node_cursor {ex551689_ : Z} {ex551688_ : Z}
     else
       (rlp_single_ref (node)) >>= fun '(@existT _ _ __item item) =>
       (rlp_decode_list (item)) >>= fun dependentResult =>
-      returnM (@existT _ _ __item (@existT _ _ (ex551688_ + (ex551689_ - __item)) (dependentResult)) : {source_len & {source_off & (StatelessInputSliceFields source_off source_len)}}%type))
+      returnM (@existT _ _ __item (@existT _ _ (ex582460_ + (ex582461_ - __item)) (dependentResult)) : {source_len & {source_off & (StatelessInputSliceFields source_off source_len)}}%type))
     : M ({source_len & {source_off & (StatelessInputSliceFields source_off source_len)}}%type).
 
 Definition rlp_item_content {source_off : Z} {source_len : Z} {content_len : Z}
@@ -4161,10 +4177,10 @@ Definition rlp_item_content {source_off : Z} {source_len : Z} {content_len : Z}
                                                                                           content_len))
                                                                                       content_len : StatelessInputSliceFields (source_off + (source_len - content_len)) content_len))).
 
-Fixpoint _rec_scratch_rlp_uint64_width {ex551711_ : Z} {ex551710_ : Z}
-(content : ScratchSliceFields ex551710_ ex551711_) (width : Z) (_reclimit : Z)
+Fixpoint _rec_scratch_rlp_uint64_width {ex582483_ : Z} {ex582482_ : Z}
+(content : ScratchSliceFields ex582482_ ex582483_) (width : Z) (_reclimit : Z)
 (*(0 <=? width) && (width <=? 8)*)
-(*(0 <=? ex551710_) && ((0 <=? ex551711_) && ((ex551710_ + ex551711_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex582482_) && ((0 <=? ex582483_) && ((ex582482_ + ex582483_) <=? (2 ^ 32 - 1)))*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (Z).
 exact (
@@ -4180,15 +4196,15 @@ exact (
 Defined.
 
 
-Definition scratch_rlp_uint64_width {ex551716_ : Z} {ex551715_ : Z}
-(content : ScratchSliceFields ex551715_ ex551716_) (width : Z) (*(0 <=? width) && (width <=? 8)*)
-(*(0 <=? ex551715_) && ((0 <=? ex551716_) && ((ex551715_ + ex551716_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_rlp_uint64_width {ex582488_ : Z} {ex582487_ : Z}
+(content : ScratchSliceFields ex582487_ ex582488_) (width : Z) (*(0 <=? width) && (width <=? 8)*)
+(*(0 <=? ex582487_) && ((0 <=? ex582488_) && ((ex582487_ + ex582488_) <=? (2 ^ 32 - 1)))*)
 : M (Z) :=
    (_rec_scratch_rlp_uint64_width (content) (width) ((width  : Z)) (Zwf_guarded _))  : M (Z).
 
-Definition scratch_rlp_ref_hdr {ex551721_ : Z} {ex551720_ : Z}
-(b : ScratchSliceFields ex551720_ ex551721_)
-(*(0 <=? ex551720_) && ((0 <=? ex551721_) && ((ex551720_ + ex551721_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_rlp_ref_hdr {ex582493_ : Z} {ex582492_ : Z}
+(b : ScratchSliceFields ex582492_ ex582493_)
+(*(0 <=? ex582492_) && ((0 <=? ex582493_) && ((ex582492_ + ex582493_) <=? (2 ^ 32 - 1)))*)
 : M ((bool * source_pointer * Z)) :=
    (let source_len := b.(ScratchSliceFields_len) in
    (if Z.eqb (source_len) (0) return M (unit) then (fatal_error (RlpDecode))  : M (unit)
@@ -4302,13 +4318,13 @@ Definition scratch_rlp_single_ref {source_off : Z} {source_len : Z}
        : M ({syn_content_len & (ScratchRlpFieldRef source_off source_len syn_content_len)}%type))
     : M ({content_len & (ScratchRlpFieldRef source_off source_len content_len)}%type).
 
-Definition scratch_rlp_node_cursor {ex551831_ : Z} {ex551830_ : Z}
-(node : ScratchSliceFields ex551830_ ex551831_)
-(*(0 <=? ex551830_) && ((0 <=? ex551831_) && ((ex551830_ + ex551831_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_rlp_node_cursor {ex582603_ : Z} {ex582602_ : Z}
+(node : ScratchSliceFields ex582602_ ex582603_)
+(*(0 <=? ex582602_) && ((0 <=? ex582603_) && ((ex582602_ + ex582603_) <=? (2 ^ 32 - 1)))*)
 : M ({source_len & {source_off & (ScratchRlpCursor source_off source_len)}}%type) :=
    (scratch_rlp_single_ref (node)) >>= fun '(@existT _ _ __item item) =>
    (scratch_rlp_decode_list (item)) >>= fun dependentResult =>
-   returnM (@existT _ _ __item (@existT _ _ (ex551830_ + (ex551831_ - __item)) (dependentResult)) : {source_len & {source_off & (ScratchSliceFields source_off source_len)}}%type).
+   returnM (@existT _ _ __item (@existT _ _ (ex582602_ + (ex582603_ - __item)) (dependentResult)) : {source_len & {source_off & (ScratchSliceFields source_off source_len)}}%type).
 
 Definition scratch_rlp_item_content {source_off : Z} {source_len : Z} {content_len : Z}
 (f : ScratchRlpFieldRef source_off source_len content_len)
@@ -4561,11 +4577,9 @@ Definition legacy_sig_chain_id (v : word) (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
 
 Definition LEGACY_SIGNATURE_SUFFIX_LENGTH : Z := 2.
 #[export] Hint Unfold LEGACY_SIGNATURE_SUFFIX_LENGTH : sail.
-Definition PUBLIC_KEY_BODY_LENGTH : Z := DOUBLE_WORD_BYTE_LENGTH.
-#[export] Hint Unfold PUBLIC_KEY_BODY_LENGTH : sail.
-Definition tx_signing_hash {ex552054_ : Z} {ex552053_ : Z}
-(t : TxType) (content_src : StatelessInputSliceFields ex552053_ ex552054_) (v : word)
-(*(0 <=? ex552053_) && ((0 <=? ex552054_) && ((ex552053_ + ex552054_) <=? (2 ^ 32 - 1)))*)
+Definition tx_signing_hash {ex582826_ : Z} {ex582825_ : Z}
+(t : TxType) (content_src : StatelessInputSliceFields ex582825_ ex582826_) (v : word)
+(*(0 <=? ex582825_) && ((0 <=? ex582826_) && ((ex582825_ + ex582826_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? v) && (v <=? (2 ^ 256 - 1))*)
 : M (hash) :=
    let v := (v).(word_value) in
@@ -4650,21 +4664,25 @@ Definition tx_signature_parity (chain_id : chain_identifier) (scheme : TxSignatu
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_y_parity (semanticResult)).
 
-Definition tx_auth_valid
-(sender : vec (mword 8) 20) (h : vec (mword 8) 32) (parity : y_parity) (r : word) (s : word)
+Definition tx_recover_sender (h : vec (mword 8) 32) (parity : y_parity) (r : word) (s : word)
 (*(0 <=? parity) && (parity <=? 1)*) (*(0 <=? r) && (r <=? (2 ^ 256 - 1))*)
 (*(0 <=? s) && (s <=? (2 ^ 256 - 1))*)
-: M (bool) :=
+: M (address_typ) :=
    let parity := (parity).(y_parity_value) in
    let r := (r).(word_value) in
    let s := (s).(word_value) in
-   let high_s := word_ult ((SECP_N_HALF).(word_value)) (s) in
-   (if high_s then returnM (false)
-    else
-      (ecrecover_addr (h) (Build_y_parity ((parity))) (Build_word ((r))) (Build_word ((s)))) >>= fun recovered =>
-      returnM ((andb (recovered.(AddressResult_success))
-                  ((generic_eq (recovered.(AddressResult_address)) (sender))))))
-    : M (bool).
+   let valid_range :=
+     andb ((word_ult ((ZERO_WORD).(word_value)) (r)))
+       ((andb ((word_ult (r) ((SECP_N_FULL).(word_value))))
+           ((andb ((word_ult ((ZERO_WORD).(word_value)) (s)))
+               ((word_ule (s) ((SECP_N_HALF).(word_value)))))))) in
+   let invalid_range := negb (valid_range) in
+   (if invalid_range return M (unit) then (fatal_error (InvalidSignature))  : M (unit)
+    else returnM (tt)) >>
+   (ecrecover_addr (h) (Build_y_parity ((parity))) (Build_word ((r))) (Build_word ((s)))) >>= fun recovered =>
+   (if recovered.(AddressResult_success) then returnM (recovered.(AddressResult_address))
+    else (fatal_error (InvalidSignature))  : M (vec (mword 8) 20))
+    : M (vec (mword 8) 20).
 
 Definition undefined_AccessListDecode (atom_address_bound : Z) (atom_slot_bound : Z)
 (*(0 <=? atom_address_bound) && (atom_address_bound <=? (2 ^ 32 - 1)) &&
@@ -4984,7 +5002,7 @@ Fixpoint _rec_prepare_authorization_entries {source_off : Z} {source_len : Z}
 (cursor : StatelessInputSliceFields source_off source_len) (count : prepared_authorization_count)
 (_reclimit : Z)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*) (_acc : Acc (Zwf 0) _reclimit)
+(*(0 <=? count) && (count <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (list Authorization).
 exact (
    let count := (count).(prepared_authorization_count_value) in
@@ -5012,7 +5030,7 @@ Defined.
 Definition prepare_authorization_entries {source_off : Z} {source_len : Z}
 (cursor : StatelessInputSliceFields source_off source_len) (count : prepared_authorization_count)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*)
+(*(0 <=? count) && (count <=? (2 ^ 30))*)
 : M (list Authorization) :=
    let count := (count).(prepared_authorization_count_value) in
    (_rec_prepare_authorization_entries (cursor) (Build_prepared_authorization_count ((count)))
@@ -5020,22 +5038,17 @@ Definition prepare_authorization_entries {source_off : Z} {source_len : Z}
        : Z)) (Zwf_guarded _))
     : M (list Authorization).
 
-Definition prepare_authorizations {ex552380_ : Z}
-(authorizations : AuthorizationListRefFields ex552380_)
-(*(0 <=? ex552380_) && (ex552380_ <=? (2 ^ 30))*)
+Definition prepare_authorizations {ex583152_ : Z}
+(authorizations : AuthorizationListRefFields ex583152_)
+(*(0 <=? ex583152_) && (ex583152_ <=? (2 ^ 30))*)
 : M (PreparedAuthorizationList) :=
-   (if Z.leb (authorizations.(AuthorizationListRefFields_count)) ((e_div ((pow2 (24))) (7816)))
-      return
-      M (PreparedAuthorizationList) then
-      let '(@existT _ _ encoded__'len (@existT _ _ encoded__'off encoded)) :=
-        (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (authorizations.(AuthorizationListRefFields_encoded))))) : StatelessInputSlice) in
-      (prepare_authorization_entries (encoded)
-         (Build_prepared_authorization_count ((authorizations.(AuthorizationListRefFields_count))))) >>= fun entries =>
-      returnM (({| PreparedAuthorizationList_entries := entries;
-                   PreparedAuthorizationList_count :=
-                     (Build_prepared_authorization_count (authorizations.(AuthorizationListRefFields_count))) |}))
-    else (fatal_error (ExecutionInvalid))  : M (PreparedAuthorizationList))
-    : M (PreparedAuthorizationList).
+   let '(@existT _ _ encoded__'len (@existT _ _ encoded__'off encoded)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (authorizations.(AuthorizationListRefFields_encoded))))) : StatelessInputSlice) in
+   (prepare_authorization_entries (encoded)
+      (Build_prepared_authorization_count ((authorizations.(AuthorizationListRefFields_count))))) >>= fun entries =>
+   returnM (({| PreparedAuthorizationList_entries := entries;
+                PreparedAuthorizationList_count :=
+                  (Build_prepared_authorization_count (authorizations.(AuthorizationListRefFields_count))) |})).
 
 Definition prepared_authorization_head (authorizations : PreparedAuthorizationList)
 : M (Authorization) :=
@@ -5046,7 +5059,7 @@ Definition prepared_authorization_head (authorizations : PreparedAuthorizationLi
     : M (Authorization).
 
 Definition prepared_authorization_tail (authorizations : PreparedAuthorizationList) (count : Z)
-(*(0 <? count) && (count <=? (e_div (2 ^ 24) 7816))*)
+(*(0 <? count) && (count <=? (2 ^ 30))*)
 : M (PreparedAuthorizationList) :=
    match authorizations.(PreparedAuthorizationList_entries) with
    | _ :: entries =>
@@ -5101,16 +5114,13 @@ Definition rlp_decode_gas {source_off : Z} {source_len : Z} {content_len : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_transaction_gas (semanticResult)).
 
-Definition decode_legacy_tx {ex552469_ : Z} {ex552468_ : Z} {ex552465_ : Z} {ex552464_ : Z}
-{source_off : Z} {source_len : Z}
-(tx : StatelessInputSliceFields ex552464_ ex552465_)
-(pubkey : StatelessInputSliceFields ex552468_ ex552469_) (sender : vec (mword 8) 20)
+Definition decode_legacy_tx {ex583237_ : Z} {ex583236_ : Z} {source_off : Z} {source_len : Z}
+(tx : StatelessInputSliceFields ex583236_ ex583237_)
 (fields : StatelessInputSliceFields source_off source_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex552464_) && ((0 <=? ex552465_) && ((ex552464_ + ex552465_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552465_) && (ex552465_ <=? (2 ^ 30)))*)
-(*(0 <=? ex552468_) && ((0 <=? ex552469_) && ((ex552468_ + ex552469_) <=? (2 ^ 32 - 1)))*)
-: M (TransactionFields 0) :=
+(*(0 <=? ex583236_) && ((0 <=? ex583237_) && ((ex583236_ + ex583237_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583237_) && (ex583237_ <=? (2 ^ 30)))*)
+: M (DecodedTransactionFields 0) :=
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __nonce_f1 (@existT _ _ __nonce_f0 nonce_f)) =>
    let fields :=
      rlp_cursor_advance (fields) (nonce_f.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
@@ -5153,40 +5163,34 @@ Definition decode_legacy_tx {ex552469_ : Z} {ex552468_ : Z} {ex552465_ : Z} {ex5
    (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__31 (@existT _ _ __w__30 w__3)) =>
    ((rlp_decode_u256 (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__4 : Z) =>
    ((rlp_decode_u256 (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__5 : Z) =>
-   returnM (({| TransactionFields_tx_type := LegacyTx;
-                TransactionFields_sender := sender;
-                TransactionFields_raw :=
-                  @existT _ _ ex552465_ (@existT _ _ ex552464_ ((tx : StatelessInputSliceFields ex552464_ ex552465_)));
-                TransactionFields_nonce := (Build_word (w__0));
-                TransactionFields_chain_id := (Build_chain_identifier (0));
-                TransactionFields_gas_limit := (Build_transaction_gas (w__1));
-                TransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
-                TransactionFields_recipient := recipient;
-                TransactionFields_value := (Build_word (w__2));
-                TransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__3));
-                TransactionFields_access_list := EMPTY_ACCESS_LIST_REF;
-                TransactionFields_max_fee := (Build_word (gp));
-                TransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                TransactionFields_max_priority_fee := (Build_word (gp));
-                TransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
-                TransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
-                TransactionFields_pubkey :=
-                  @existT _ _ ex552469_ (@existT _ _ ex552468_ ((pubkey : StatelessInputSliceFields ex552468_ ex552469_)));
-                TransactionFields_signing_hash := signing_hash;
-                TransactionFields_sig_v := (Build_word (v));
-                TransactionFields_sig_r := (Build_word (w__4));
-                TransactionFields_sig_s := (Build_word (w__5)) |})).
+   returnM (({| DecodedTransactionFields_tx_type := LegacyTx;
+                DecodedTransactionFields_raw :=
+                  @existT _ _ ex583237_ (@existT _ _ ex583236_ ((tx : StatelessInputSliceFields ex583236_ ex583237_)));
+                DecodedTransactionFields_nonce := (Build_word (w__0));
+                DecodedTransactionFields_chain_id := (Build_chain_identifier (0));
+                DecodedTransactionFields_gas_limit := (Build_transaction_gas (w__1));
+                DecodedTransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                DecodedTransactionFields_recipient := recipient;
+                DecodedTransactionFields_value := (Build_word (w__2));
+                DecodedTransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__3));
+                DecodedTransactionFields_access_list := EMPTY_ACCESS_LIST_REF;
+                DecodedTransactionFields_max_fee := (Build_word (gp));
+                DecodedTransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                DecodedTransactionFields_max_priority_fee := (Build_word (gp));
+                DecodedTransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
+                DecodedTransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
+                DecodedTransactionFields_signing_hash := signing_hash;
+                DecodedTransactionFields_sig_v := (Build_word (v));
+                DecodedTransactionFields_sig_r := (Build_word (w__4));
+                DecodedTransactionFields_sig_s := (Build_word (w__5)) |})).
 
-Definition decode_access_list_tx {ex552490_ : Z} {ex552489_ : Z} {ex552486_ : Z} {ex552485_ : Z}
-{source_off : Z} {source_len : Z}
-(tx : StatelessInputSliceFields ex552485_ ex552486_)
-(pubkey : StatelessInputSliceFields ex552489_ ex552490_) (sender : vec (mword 8) 20)
+Definition decode_access_list_tx {ex583254_ : Z} {ex583253_ : Z} {source_off : Z} {source_len : Z}
+(tx : StatelessInputSliceFields ex583253_ ex583254_)
 (fields : StatelessInputSliceFields source_off source_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex552485_) && ((0 <=? ex552486_) && ((ex552485_ + ex552486_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552486_) && (ex552486_ <=? (2 ^ 30)))*)
-(*(0 <=? ex552489_) && ((0 <=? ex552490_) && ((ex552489_ + ex552490_) <=? (2 ^ 32 - 1)))*)
-: M (TransactionFields 0) :=
+(*(0 <=? ex583253_) && ((0 <=? ex583254_) && ((ex583253_ + ex583254_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583254_) && (ex583254_ <=? (2 ^ 30)))*)
+: M (DecodedTransactionFields 0) :=
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __chain_f1 (@existT _ _ __chain_f0 chain_f)) =>
    let fields :=
      rlp_cursor_advance (fields) (chain_f.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
@@ -5238,40 +5242,34 @@ Definition decode_access_list_tx {ex552490_ : Z} {ex552489_ : Z} {ex552486_ : Z}
    (tx_input_span (data_f)) >>= fun '(@existT _ _ __w__41 (@existT _ _ __w__40 w__4)) =>
    ((rlp_decode_u256 (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__5 : Z) =>
    ((rlp_decode_u256 (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
-   returnM (({| TransactionFields_tx_type := AccessListTx;
-                TransactionFields_sender := sender;
-                TransactionFields_raw :=
-                  @existT _ _ ex552486_ (@existT _ _ ex552485_ ((tx : StatelessInputSliceFields ex552485_ ex552486_)));
-                TransactionFields_nonce := (Build_word (w__0));
-                TransactionFields_chain_id := (Build_chain_identifier (w__1));
-                TransactionFields_gas_limit := (Build_transaction_gas (w__2));
-                TransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
-                TransactionFields_recipient := recipient;
-                TransactionFields_value := (Build_word (w__3));
-                TransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
-                TransactionFields_access_list := access_list;
-                TransactionFields_max_fee := (Build_word (gp));
-                TransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                TransactionFields_max_priority_fee := (Build_word (gp));
-                TransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
-                TransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
-                TransactionFields_pubkey :=
-                  @existT _ _ ex552490_ (@existT _ _ ex552489_ ((pubkey : StatelessInputSliceFields ex552489_ ex552490_)));
-                TransactionFields_signing_hash := signing_hash;
-                TransactionFields_sig_v := (Build_word (v));
-                TransactionFields_sig_r := (Build_word (w__5));
-                TransactionFields_sig_s := (Build_word (w__6)) |})).
+   returnM (({| DecodedTransactionFields_tx_type := AccessListTx;
+                DecodedTransactionFields_raw :=
+                  @existT _ _ ex583254_ (@existT _ _ ex583253_ ((tx : StatelessInputSliceFields ex583253_ ex583254_)));
+                DecodedTransactionFields_nonce := (Build_word (w__0));
+                DecodedTransactionFields_chain_id := (Build_chain_identifier (w__1));
+                DecodedTransactionFields_gas_limit := (Build_transaction_gas (w__2));
+                DecodedTransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                DecodedTransactionFields_recipient := recipient;
+                DecodedTransactionFields_value := (Build_word (w__3));
+                DecodedTransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
+                DecodedTransactionFields_access_list := access_list;
+                DecodedTransactionFields_max_fee := (Build_word (gp));
+                DecodedTransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                DecodedTransactionFields_max_priority_fee := (Build_word (gp));
+                DecodedTransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
+                DecodedTransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
+                DecodedTransactionFields_signing_hash := signing_hash;
+                DecodedTransactionFields_sig_v := (Build_word (v));
+                DecodedTransactionFields_sig_r := (Build_word (w__5));
+                DecodedTransactionFields_sig_s := (Build_word (w__6)) |})).
 
-Definition decode_fee_market_tx {ex552511_ : Z} {ex552510_ : Z} {ex552507_ : Z} {ex552506_ : Z}
-{source_off : Z} {source_len : Z}
-(tx : StatelessInputSliceFields ex552506_ ex552507_)
-(pubkey : StatelessInputSliceFields ex552510_ ex552511_) (sender : vec (mword 8) 20)
+Definition decode_fee_market_tx {ex583271_ : Z} {ex583270_ : Z} {source_off : Z} {source_len : Z}
+(tx : StatelessInputSliceFields ex583270_ ex583271_)
 (fields : StatelessInputSliceFields source_off source_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex552506_) && ((0 <=? ex552507_) && ((ex552506_ + ex552507_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552507_) && (ex552507_ <=? (2 ^ 30)))*)
-(*(0 <=? ex552510_) && ((0 <=? ex552511_) && ((ex552510_ + ex552511_) <=? (2 ^ 32 - 1)))*)
-: M (TransactionFields 0) :=
+(*(0 <=? ex583270_) && ((0 <=? ex583271_) && ((ex583270_ + ex583271_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583271_) && (ex583271_ <=? (2 ^ 30)))*)
+: M (DecodedTransactionFields 0) :=
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __chain_f1 (@existT _ _ __chain_f0 chain_f)) =>
    let fields :=
      rlp_cursor_advance (fields) (chain_f.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
@@ -5327,41 +5325,35 @@ Definition decode_fee_market_tx {ex552511_ : Z} {ex552510_ : Z} {ex552507_ : Z} 
    ((rlp_decode_u256 (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
    ((rlp_decode_u256 (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
    ((rlp_decode_u256 (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__8 : Z) =>
-   returnM (({| TransactionFields_tx_type := FeeMarketTx;
-                TransactionFields_sender := sender;
-                TransactionFields_raw :=
-                  @existT _ _ ex552507_ (@existT _ _ ex552506_ ((tx : StatelessInputSliceFields ex552506_ ex552507_)));
-                TransactionFields_nonce := (Build_word (w__0));
-                TransactionFields_chain_id := (Build_chain_identifier (w__1));
-                TransactionFields_gas_limit := (Build_transaction_gas (w__2));
-                TransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
-                TransactionFields_recipient := recipient;
-                TransactionFields_value := (Build_word (w__3));
-                TransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
-                TransactionFields_access_list := access_list;
-                TransactionFields_max_fee := (Build_word (w__5));
-                TransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                TransactionFields_max_priority_fee := (Build_word (w__6));
-                TransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
-                TransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
-                TransactionFields_pubkey :=
-                  @existT _ _ ex552511_ (@existT _ _ ex552510_ ((pubkey : StatelessInputSliceFields ex552510_ ex552511_)));
-                TransactionFields_signing_hash := signing_hash;
-                TransactionFields_sig_v := (Build_word (v));
-                TransactionFields_sig_r := (Build_word (w__7));
-                TransactionFields_sig_s := (Build_word (w__8)) |})).
+   returnM (({| DecodedTransactionFields_tx_type := FeeMarketTx;
+                DecodedTransactionFields_raw :=
+                  @existT _ _ ex583271_ (@existT _ _ ex583270_ ((tx : StatelessInputSliceFields ex583270_ ex583271_)));
+                DecodedTransactionFields_nonce := (Build_word (w__0));
+                DecodedTransactionFields_chain_id := (Build_chain_identifier (w__1));
+                DecodedTransactionFields_gas_limit := (Build_transaction_gas (w__2));
+                DecodedTransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                DecodedTransactionFields_recipient := recipient;
+                DecodedTransactionFields_value := (Build_word (w__3));
+                DecodedTransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
+                DecodedTransactionFields_access_list := access_list;
+                DecodedTransactionFields_max_fee := (Build_word (w__5));
+                DecodedTransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                DecodedTransactionFields_max_priority_fee := (Build_word (w__6));
+                DecodedTransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
+                DecodedTransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
+                DecodedTransactionFields_signing_hash := signing_hash;
+                DecodedTransactionFields_sig_v := (Build_word (v));
+                DecodedTransactionFields_sig_r := (Build_word (w__7));
+                DecodedTransactionFields_sig_s := (Build_word (w__8)) |})).
 
-Definition decode_blob_tx {ex552535_ : Z} {ex552534_ : Z} {ex552531_ : Z} {ex552530_ : Z}
-{source_off : Z} {source_len : Z}
-(tx : StatelessInputSliceFields ex552530_ ex552531_)
-(pubkey : StatelessInputSliceFields ex552534_ ex552535_) (blob_limit : Z)
-(sender : vec (mword 8) 20) (fields : StatelessInputSliceFields source_off source_len)
+Definition decode_blob_tx {ex583291_ : Z} {ex583290_ : Z} {source_off : Z} {source_len : Z}
+(tx : StatelessInputSliceFields ex583290_ ex583291_) (blob_limit : Z)
+(fields : StatelessInputSliceFields source_off source_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
   ((blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9)))*)
-(*(0 <=? ex552530_) && ((0 <=? ex552531_) && ((ex552530_ + ex552531_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552531_) && (ex552531_ <=? (2 ^ 30)))*)
-(*(0 <=? ex552534_) && ((0 <=? ex552535_) && ((ex552534_ + ex552535_) <=? (2 ^ 32 - 1)))*)
-: M (TransactionFields blob_limit) :=
+(*(0 <=? ex583290_) && ((0 <=? ex583291_) && ((ex583290_ + ex583291_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583291_) && (ex583291_ <=? (2 ^ 30)))*)
+: M (DecodedTransactionFields blob_limit) :=
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __chain_f1 (@existT _ _ __chain_f0 chain_f)) =>
    let fields :=
      rlp_cursor_advance (fields) (chain_f.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
@@ -5425,40 +5417,34 @@ Definition decode_blob_tx {ex552535_ : Z} {ex552534_ : Z} {ex552531_ : Z} {ex552
    ((rlp_decode_u256 (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
    ((rlp_decode_u256 (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__8 : Z) =>
    ((rlp_decode_u256 (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__9 : Z) =>
-   returnM (({| TransactionFields_tx_type := BlobTx;
-                TransactionFields_sender := sender;
-                TransactionFields_raw :=
-                  @existT _ _ ex552531_ (@existT _ _ ex552530_ ((tx : StatelessInputSliceFields ex552530_ ex552531_)));
-                TransactionFields_nonce := (Build_word (w__0));
-                TransactionFields_chain_id := (Build_chain_identifier (w__1));
-                TransactionFields_gas_limit := (Build_transaction_gas (w__2));
-                TransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
-                TransactionFields_recipient := recipient;
-                TransactionFields_value := (Build_word (w__3));
-                TransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
-                TransactionFields_access_list := access_list;
-                TransactionFields_max_fee := (Build_word (w__5));
-                TransactionFields_max_blob_fee := (Build_word (w__6));
-                TransactionFields_max_priority_fee := (Build_word (w__7));
-                TransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
-                TransactionFields_blob_hashes := blob_hashes;
-                TransactionFields_pubkey :=
-                  @existT _ _ ex552535_ (@existT _ _ ex552534_ ((pubkey : StatelessInputSliceFields ex552534_ ex552535_)));
-                TransactionFields_signing_hash := signing_hash;
-                TransactionFields_sig_v := (Build_word (v));
-                TransactionFields_sig_r := (Build_word (w__8));
-                TransactionFields_sig_s := (Build_word (w__9)) |})).
+   returnM (({| DecodedTransactionFields_tx_type := BlobTx;
+                DecodedTransactionFields_raw :=
+                  @existT _ _ ex583291_ (@existT _ _ ex583290_ ((tx : StatelessInputSliceFields ex583290_ ex583291_)));
+                DecodedTransactionFields_nonce := (Build_word (w__0));
+                DecodedTransactionFields_chain_id := (Build_chain_identifier (w__1));
+                DecodedTransactionFields_gas_limit := (Build_transaction_gas (w__2));
+                DecodedTransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                DecodedTransactionFields_recipient := recipient;
+                DecodedTransactionFields_value := (Build_word (w__3));
+                DecodedTransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__4));
+                DecodedTransactionFields_access_list := access_list;
+                DecodedTransactionFields_max_fee := (Build_word (w__5));
+                DecodedTransactionFields_max_blob_fee := (Build_word (w__6));
+                DecodedTransactionFields_max_priority_fee := (Build_word (w__7));
+                DecodedTransactionFields_authorizations := EMPTY_AUTHORIZATION_LIST_REF;
+                DecodedTransactionFields_blob_hashes := blob_hashes;
+                DecodedTransactionFields_signing_hash := signing_hash;
+                DecodedTransactionFields_sig_v := (Build_word (v));
+                DecodedTransactionFields_sig_r := (Build_word (w__8));
+                DecodedTransactionFields_sig_s := (Build_word (w__9)) |})).
 
-Definition decode_set_code_tx {ex552558_ : Z} {ex552557_ : Z} {ex552554_ : Z} {ex552553_ : Z}
-{source_off : Z} {source_len : Z}
-(tx : StatelessInputSliceFields ex552553_ ex552554_)
-(pubkey : StatelessInputSliceFields ex552557_ ex552558_) (sender : vec (mword 8) 20)
+Definition decode_set_code_tx {ex583310_ : Z} {ex583309_ : Z} {source_off : Z} {source_len : Z}
+(tx : StatelessInputSliceFields ex583309_ ex583310_)
 (fields : StatelessInputSliceFields source_off source_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex552553_) && ((0 <=? ex552554_) && ((ex552553_ + ex552554_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552554_) && (ex552554_ <=? (2 ^ 30)))*)
-(*(0 <=? ex552557_) && ((0 <=? ex552558_) && ((ex552557_ + ex552558_) <=? (2 ^ 32 - 1)))*)
-: M (TransactionFields 0) :=
+(*(0 <=? ex583309_) && ((0 <=? ex583310_) && ((ex583309_ + ex583310_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583310_) && (ex583310_ <=? (2 ^ 30)))*)
+: M (DecodedTransactionFields 0) :=
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __chain_f1 (@existT _ _ __chain_f0 chain_f)) =>
    let fields :=
      rlp_cursor_advance (fields) (chain_f.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
@@ -5521,44 +5507,33 @@ Definition decode_set_code_tx {ex552558_ : Z} {ex552557_ : Z} {ex552554_ : Z} {e
    ((rlp_decode_u256 (mp_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__5 : Z) =>
    ((rlp_decode_u256 (r_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__6 : Z) =>
    ((rlp_decode_u256 (s_f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__7 : Z) =>
-   returnM (({| TransactionFields_tx_type := SetCodeTx;
-                TransactionFields_sender := sender;
-                TransactionFields_raw :=
-                  @existT _ _ ex552554_ (@existT _ _ ex552553_ ((tx : StatelessInputSliceFields ex552553_ ex552554_)));
-                TransactionFields_nonce := (Build_word (nonce));
-                TransactionFields_chain_id := (Build_chain_identifier (w__0));
-                TransactionFields_gas_limit := (Build_transaction_gas (w__1));
-                TransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
-                TransactionFields_recipient := recipient;
-                TransactionFields_value := (Build_word (w__2));
-                TransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__3));
-                TransactionFields_access_list := access_list;
-                TransactionFields_max_fee := (Build_word (w__4));
-                TransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
-                TransactionFields_max_priority_fee := (Build_word (w__5));
-                TransactionFields_authorizations := @existT _ _ _ (authorizations);
-                TransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
-                TransactionFields_pubkey :=
-                  @existT _ _ ex552558_ (@existT _ _ ex552557_ ((pubkey : StatelessInputSliceFields ex552557_ ex552558_)));
-                TransactionFields_signing_hash := signing_hash;
-                TransactionFields_sig_v := (Build_word (v));
-                TransactionFields_sig_r := (Build_word (w__6));
-                TransactionFields_sig_s := (Build_word (w__7)) |})).
+   returnM (({| DecodedTransactionFields_tx_type := SetCodeTx;
+                DecodedTransactionFields_raw :=
+                  @existT _ _ ex583310_ (@existT _ _ ex583309_ ((tx : StatelessInputSliceFields ex583309_ ex583310_)));
+                DecodedTransactionFields_nonce := (Build_word (nonce));
+                DecodedTransactionFields_chain_id := (Build_chain_identifier (w__0));
+                DecodedTransactionFields_gas_limit := (Build_transaction_gas (w__1));
+                DecodedTransactionFields_is_create := Z.eqb (to_f.(RlpFieldRef_content_len)) (0);
+                DecodedTransactionFields_recipient := recipient;
+                DecodedTransactionFields_value := (Build_word (w__2));
+                DecodedTransactionFields_input_src := @existT _ _ _ (@existT _ _ _ (w__3));
+                DecodedTransactionFields_access_list := access_list;
+                DecodedTransactionFields_max_fee := (Build_word (w__4));
+                DecodedTransactionFields_max_blob_fee := (Build_word ((ZERO_WORD).(word_value)));
+                DecodedTransactionFields_max_priority_fee := (Build_word (w__5));
+                DecodedTransactionFields_authorizations := @existT _ _ _ (authorizations);
+                DecodedTransactionFields_blob_hashes := EMPTY_BLOB_HASHES;
+                DecodedTransactionFields_signing_hash := signing_hash;
+                DecodedTransactionFields_sig_v := (Build_word (v));
+                DecodedTransactionFields_sig_r := (Build_word (w__6));
+                DecodedTransactionFields_sig_s := (Build_word (w__7)) |})).
 
-Definition rlp_decode_tx {tx_off : Z} {tx_len : Z} {public_key_off : Z}
-(tx : StatelessInputSliceFields tx_off tx_len)
-(pubkey : StatelessInputSliceFields public_key_off 65) (blob_limit : Z)
+Definition rlp_decode_tx {tx_off : Z} {tx_len : Z}
+(tx : StatelessInputSliceFields tx_off tx_len) (blob_limit : Z)
 (*(0 <=? tx_off) && ((0 <=? tx_len) && ((tx_off + tx_len) <=? (2 ^ 32 - 1))) &&
   ((0 <=? tx_len) &&
-    ((tx_len <=? (2 ^ 30)) &&
-      ((0 <=? public_key_off) && ((0 <=? 65) && ((public_key_off + 65) <=? (2 ^ 32 - 1))) &&
-        ((blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9))))))*)
-: M (Transaction) :=
-   let public_key_body := stateless_input_sub_slice (pubkey) (1) (PUBLIC_KEY_BODY_LENGTH) in
-   (stateless_input_keccak256
-      (@existT _ _ 64 (@existT _ _ (public_key_off + 1) ((public_key_body : StatelessInputSliceFields (public_key_off + 1) 64))))) >>= fun public_key_hash =>
-   let public_key_word := (hash_to_word (public_key_hash)).(word_value) in
-   let sender := word_to_address (Build_word ((public_key_word))) in
+    ((tx_len <=? (2 ^ 30)) && ((blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9)))))*)
+: M (DecodedTransaction) :=
    let tx_length := tx.(StatelessInputSliceFields_len) in
    (if Z.eqb tx_len (0) return M (mword 8) then (fatal_error (RlpDecode))  : M (mword 8)
     else (stateless_input_slice_byte (tx) (0))  : M (mword 8)) >>= fun (b0 : mword 8) =>
@@ -5587,22 +5562,22 @@ Definition rlp_decode_tx {tx_off : Z} {tx_len : Z} {public_key_off : Z}
     else (fatal_error (RlpDecode))  : M (TxType)) >>= fun (tx_type : TxType) =>
    match tx_type with
    | LegacyTx =>
-      (decode_legacy_tx (tx) (pubkey) (sender) (fields)) >>= fun decoded =>
-      returnM ((pack_transaction (decoded)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (decode_legacy_tx (tx) (fields)) >>= fun decoded =>
+      returnM ((pack_decoded_transaction (decoded)) : {syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type)
    | AccessListTx =>
-      (decode_access_list_tx (tx) (pubkey) (sender) (fields)) >>= fun decoded =>
-      returnM ((pack_transaction (decoded)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (decode_access_list_tx (tx) (fields)) >>= fun decoded =>
+      returnM ((pack_decoded_transaction (decoded)) : {syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type)
    | FeeMarketTx =>
-      (decode_fee_market_tx (tx) (pubkey) (sender) (fields)) >>= fun decoded =>
-      returnM ((pack_transaction (decoded)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (decode_fee_market_tx (tx) (fields)) >>= fun decoded =>
+      returnM ((pack_decoded_transaction (decoded)) : {syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type)
    | BlobTx =>
-      (decode_blob_tx (tx) (pubkey) (blob_limit) (sender) (fields)) >>= fun decoded =>
-      returnM ((pack_transaction (decoded)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (decode_blob_tx (tx) (blob_limit) (fields)) >>= fun decoded =>
+      returnM ((pack_decoded_transaction (decoded)) : {syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type)
    | SetCodeTx =>
-      (decode_set_code_tx (tx) (pubkey) (sender) (fields)) >>= fun decoded =>
-      returnM ((pack_transaction (decoded)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (decode_set_code_tx (tx) (fields)) >>= fun decoded =>
+      returnM ((pack_decoded_transaction (decoded)) : {syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type)
    end
-    : M ({syn_blob_limit & (TransactionFields syn_blob_limit)}%type).
+    : M ({syn_blob_limit & (DecodedTransactionFields syn_blob_limit)}%type).
 
 Definition undefined_JournalTransientChange '(tt : unit) : M (JournalTransientChange) :=
    (undefined_bitvector (8)) >>= fun (w__0 : mword 8) =>
@@ -5705,15 +5680,15 @@ Axiom transient_store :
   forall
 
   (_ : address_typ) (_ : word) (_ : word)
-  (*(0 <=? ex634836_) && (ex634836_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex634837_) &&
-    (ex634837_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex669983_) && (ex669983_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex669984_) &&
+    (ex669984_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom transient_load :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex634838_) && (ex634838_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex669985_) && (ex669985_ <=? (2 ^ 256 - 1))*),
   M (word).
 
 Axiom storage_tx_update : forall  (_ : StorageEntry) , M (unit).
@@ -5736,7 +5711,7 @@ Axiom storage_block_cache :
   forall
 
   (_ : StorageKey) (_ : hash) (_ : word)
-  (*(0 <=? ex634839_) && (ex634839_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex669986_) && (ex669986_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom storage_block_clear : forall  (_ : address_typ) , M (unit).
@@ -5753,14 +5728,14 @@ Axiom acct_tx_set_balance :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex634840_) && (ex634840_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex669987_) && (ex669987_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_nonce :
   forall
 
   (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex634841_) && (ex634841_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex669988_) && (ex669988_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom acct_tx_set_code_hash : forall  (_ : address_typ) (_ : hash) , M (unit).
@@ -5786,39 +5761,41 @@ Axiom bal_account_touch : forall  (_ : address_typ) , M (unit).
 Axiom bal_storage_change :
   forall
 
-  (_ : block_access_index) (_ : address_typ) (_ : word) (_ : word)
-  (*(0 <=? ex634842_) && (ex634842_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex634843_) &&
-    (ex634843_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex634844_) && (ex634844_ <=? (2 ^ 256 - 1))*),
+  (_ : block_access_index) (_ : address_typ) (_ : word) (_ : word) (_ : word)
+  (*(0 <=? ex669989_) && (ex669989_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex669990_) &&
+    (ex669990_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex669991_) && (ex669991_ <=? (2 ^ 256 - 1))*) (*(0 <=?
+    ex669992_) &&
+    (ex669992_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_storage_read :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex634845_) && (ex634845_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex669993_) && (ex669993_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_balance_change :
   forall
 
-  (_ : block_access_index) (_ : address_typ) (_ : word)
-  (*(0 <=? ex634846_) && (ex634846_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex634847_) &&
-    (ex634847_ <=? (2 ^ 256 - 1))*),
+  (_ : block_access_index) (_ : address_typ) (_ : word) (_ : word)
+  (*(0 <=? ex669994_) && (ex669994_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex669995_) &&
+    (ex669995_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex669996_) && (ex669996_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom bal_nonce_change :
   forall
 
   (_ : block_access_index) (_ : address_typ) (_ : account_nonce)
-  (*(0 <=? ex634848_) && (ex634848_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex634849_) &&
-    (ex634849_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex669997_) && (ex669997_ <=? (2 ^ 20 + 1))*) (*(0 <=? ex669998_) &&
+    (ex669998_ <=? (2 ^ 64 - 1))*),
   M (unit).
 
 Axiom bal_code_change :
   forall
 
   (_ : block_access_index) (_ : address_typ) (_ : hash)
-  (*(0 <=? ex634850_) && (ex634850_ <=? (2 ^ 20 + 1))*),
+  (*(0 <=? ex669999_) && (ex669999_ <=? (2 ^ 20 + 1))*),
   M (unit).
 
 Definition undefined_BalStorageChangeEntry '(tt : unit) : M (BalStorageChangeEntry) :=
@@ -5856,7 +5833,7 @@ Axiom warm_reset :
   forall
 
   (_ : block_access_index)
-  (*(0 <=? ex634851_) && (ex634851_ <=? (2 ^ 20 + 1))*),
+  (*(0 <=? ex670000_) && (ex670000_ <=? (2 ^ 20 + 1))*),
   M (unit).
 
 Axiom account_is_warm : forall  (_ : address_typ) , M (bool).
@@ -5867,21 +5844,21 @@ Axiom storage_is_warm :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex634852_) && (ex634852_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670001_) && (ex670001_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom storage_mark_warm :
   forall
 
   (_ : address_typ) (_ : word)
-  (*(0 <=? ex634853_) && (ex634853_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670002_) && (ex670002_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom authorization_tracker_reset :
   forall
 
   (_ : prepared_authorization_count)
-  (*(0 <=? ex634854_) && (ex634854_ <=? (e_div (2 ^ 24) 7816))*),
+  (*(0 <=? ex670003_) && (ex670003_ <=? (2 ^ 30))*),
   M (unit).
 
 Axiom authorization_tracker_seen : forall  (_ : address_typ) , M (bool).
@@ -5900,21 +5877,21 @@ Axiom log_add_topic :
   forall
 
   (_ : word)
-  (*(0 <=? ex634857_) && (ex634857_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670006_) && (ex670006_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom log_add_data_memory :
   forall
 
   (_ : EvmMemorySlice)
-  (*(0 <=? ex634860_) && ((0 <=? ex634861_) && ((ex634860_ + ex634861_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex670009_) && ((0 <=? ex670010_) && ((ex670009_ + ex670010_) <=? (2 ^ 32 - 1)))*),
   M (unit).
 
 Axiom log_add_data_word :
   forall
 
   (_ : word)
-  (*(0 <=? ex634862_) && (ex634862_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670011_) && (ex670011_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom logs_tx_start : forall  (_ : unit) , M (log_store_index).
@@ -5925,50 +5902,50 @@ Axiom log_address :
   forall
 
   (_ : log_store_index)
-  (*(0 <=? ex634863_) && (ex634863_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex670012_) && (ex670012_ <=? (2 ^ 64 - 1))*),
   M (address_typ).
 
 Axiom log_topics_count :
   forall
 
   (_ : log_store_index)
-  (*(0 <=? ex634864_) && (ex634864_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex670013_) && (ex670013_ <=? (2 ^ 64 - 1))*),
   M (log_store_index).
 
 Axiom log_topic :
   forall
 
   (_ : log_store_index) (_ : log_store_index)
-  (*(0 <=? ex634865_) && (ex634865_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex634866_) &&
-    (ex634866_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex670014_) && (ex670014_ <=? (2 ^ 64 - 1))*) (*(0 <=? ex670015_) &&
+    (ex670015_ <=? (2 ^ 64 - 1))*),
   M (word).
 
 Axiom log_data_offset :
   forall
 
   (_ : log_store_index)
-  (*(0 <=? ex634867_) && (ex634867_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex670016_) && (ex670016_ <=? (2 ^ 64 - 1))*),
   M (log_data_pointer).
 
 Axiom log_data_length :
   forall
 
   (_ : log_store_index)
-  (*(0 <=? ex634868_) && (ex634868_ <=? (2 ^ 64 - 1))*),
+  (*(0 <=? ex670017_) && (ex670017_ <=? (2 ^ 64 - 1))*),
   M (log_data_length).
 
 Axiom ancestor_hash_write :
   forall
 
   (_ : ancestor_index) (_ : hash)
-  (*(0 <=? ex634869_) && (ex634869_ <=? 255)*),
+  (*(0 <=? ex670018_) && (ex670018_ <=? 255)*),
   M (unit).
 
 Axiom ancestor_hash_read :
   forall
 
   (_ : ancestor_index)
-  (*(0 <=? ex634870_) && (ex634870_ <=? 255)*),
+  (*(0 <=? ex670019_) && (ex670019_ <=? 255)*),
   M (hash).
 
 Axiom stack_reset_host : forall  (_ : unit) , M (bits 64).
@@ -5983,35 +5960,35 @@ Axiom stack_slot_read_host :
   forall
 
   (_ : bits 64) (_ : stack_index)
-  (*(0 <=? ex634879_) && (ex634879_ <=? 1023)*),
+  (*(0 <=? ex670028_) && (ex670028_ <=? 1023)*),
   M (word).
 
 Axiom stack_slot_write_host :
   forall
 
   (_ : bits 64) (_ : stack_index) (_ : word)
-  (*(0 <=? ex634885_) && (ex634885_ <=? 1023)*) (*(0 <=? ex634886_) && (ex634886_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670034_) && (ex670034_ <=? 1023)*) (*(0 <=? ex670035_) && (ex670035_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom stack_slot_write_next_host :
   forall
 
   (_ : bits 64) (_ : word)
-  (*(0 <=? ex634892_) && (ex634892_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670041_) && (ex670041_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom stack_top_advance_host :
   forall
 
   (_ : bits 64) (_ : stack_slot_count)
-  (*(0 <=? ex634899_) && (ex634899_ <=? 1024)*),
+  (*(0 <=? ex670048_) && (ex670048_ <=? 1024)*),
   M (bits 64).
 
 Axiom stack_top_retreat_host :
   forall
 
   (_ : bits 64) (_ : stack_slot_count)
-  (*(0 <=? ex634906_) && (ex634906_ <=? 1024)*),
+  (*(0 <=? ex670055_) && (ex670055_ <=? 1024)*),
   M (bits 64).
 
 Definition stack_reset '(tt : unit) : M (StackPointer) :=
@@ -6082,86 +6059,86 @@ Axiom mem_write_byte :
   forall
 
   (_ : memory_base_typ) (_ : byte)
-  (*(0 <=? ex634922_) && (ex634922_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex670071_) && (ex670071_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom mem_expand :
   forall
 
-  (fv23132_base : Z) (fv23133_established : Z) (fv23134_required : Z)
-  (*(0 <=? fv23132_base) &&
-    ((0 <=? fv23134_required) && ((fv23132_base + fv23134_required) <=? (2 ^ 32 - 1))) &&
-    ((0 <=? fv23133_established) && (fv23133_established <? fv23134_required))*),
+  (fv24664_base : Z) (fv24665_established : Z) (fv24666_required : Z)
+  (*(0 <=? fv24664_base) &&
+    ((0 <=? fv24666_required) && ((fv24664_base + fv24666_required) <=? (2 ^ 32 - 1))) &&
+    ((0 <=? fv24665_established) && (fv24665_established <? fv24666_required))*),
   M (unit).
 
 Axiom mem_view :
   forall
 
-  (fv23135_base : Z) (fv23136_established : Z) (fv23137_required : Z)
-  (*(0 <=? fv23135_base) &&
-    ((0 <=? fv23136_established) && ((fv23135_base + fv23136_established) <=? (2 ^ 32 - 1))) &&
-    ((0 <=? fv23135_base) &&
-      ((0 <=? fv23137_required) && ((fv23135_base + fv23137_required) <=? (2 ^ 32 - 1))) &&
-      ((0 <=? fv23137_required) && (fv23137_required <=? fv23136_established)))*),
-  M (EvmMemorySliceLength fv23137_required).
+  (fv24667_base : Z) (fv24668_established : Z) (fv24669_required : Z)
+  (*(0 <=? fv24667_base) &&
+    ((0 <=? fv24668_established) && ((fv24667_base + fv24668_established) <=? (2 ^ 32 - 1))) &&
+    ((0 <=? fv24667_base) &&
+      ((0 <=? fv24669_required) && ((fv24667_base + fv24669_required) <=? (2 ^ 32 - 1))) &&
+      ((0 <=? fv24669_required) && (fv24669_required <=? fv24668_established)))*),
+  M (EvmMemorySliceLength fv24669_required).
 
 Axiom mem_move :
   forall
 
   (_ : memory_base_typ) (_ : memory_base_typ) (_ : memory_length)
-  (*(0 <=? ex634960_) && (ex634960_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex634961_) &&
-    (ex634961_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex634962_) && (ex634962_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex670109_) && (ex670109_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex670110_) &&
+    (ex670110_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex670111_) && (ex670111_ <=? (2 ^ 32 - 1))*),
   M (unit).
 
 Axiom mem_load_word :
   forall
 
   (_ : memory_base_typ)
-  (*(0 <=? ex634963_) && (ex634963_ <=? (2 ^ 32 - 1))*),
+  (*(0 <=? ex670112_) && (ex670112_ <=? (2 ^ 32 - 1))*),
   M (word).
 
 Axiom mem_store_word :
   forall
 
   (_ : memory_base_typ) (_ : word)
-  (*(0 <=? ex634964_) && (ex634964_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex634965_) &&
-    (ex634965_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670113_) && (ex670113_ <=? (2 ^ 32 - 1))*) (*(0 <=? ex670114_) &&
+    (ex670114_ <=? (2 ^ 256 - 1))*),
   M (unit).
 
 Axiom output_buffer_store_memory :
   forall
 
   (_ : EvmMemorySlice)
-  (*(0 <=? ex634968_) && ((0 <=? ex634969_) && ((ex634968_ + ex634969_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex670117_) && ((0 <=? ex670118_) && ((ex670117_ + ex670118_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
 Axiom output_buffer_store_input :
   forall
 
   (_ : StatelessInputSlice)
-  (*(0 <=? ex634972_) && ((0 <=? ex634973_) && ((ex634972_ + ex634973_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex670121_) && ((0 <=? ex670122_) && ((ex670121_ + ex670122_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
 Axiom output_buffer_store_word :
   forall
 
   (_ : word)
-  (*(0 <=? ex634974_) && (ex634974_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670123_) && (ex670123_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom output_buffer_store_words :
   forall
 
   (_ : word) (_ : word)
-  (*(0 <=? ex634975_) && (ex634975_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex634976_) &&
-    (ex634976_ <=? (2 ^ 256 - 1))*),
+  (*(0 <=? ex670124_) && (ex670124_ <=? (2 ^ 256 - 1))*) (*(0 <=? ex670125_) &&
+    (ex670125_ <=? (2 ^ 256 - 1))*),
   M (bool).
 
 Axiom public_output_write :
   forall
 
   (_ : ScratchSlice)
-  (*(0 <=? ex634979_) && ((0 <=? ex634980_) && ((ex634979_ + ex634980_) <=? (2 ^ 32 - 1)))*),
+  (*(0 <=? ex670128_) && ((0 <=? ex670129_) && ((ex670128_ + ex670129_) <=? (2 ^ 32 - 1)))*),
   M (bool).
 
 Definition output_buffer_slice (len : Z) (*(0 <=? len) && (len <=? (2 ^ 32 - 1))*) : OutputSlice :=
@@ -6169,30 +6146,30 @@ Definition output_buffer_slice (len : Z) (*(0 <=? len) && (len <=? (2 ^ 32 - 1))
      @existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))
    else @existT _ _ len (@existT _ _ 0 ((output_slice (0) (len) : OutputSliceFields 0 len))).
 
-Definition freeze_memory_output {ex552705_ : Z} {ex552704_ : Z}
-(data : EvmMemorySliceFields ex552704_ ex552705_)
-(*(0 <=? ex552704_) && ((0 <=? ex552705_) && ((ex552704_ + ex552705_) <=? (2 ^ 32 - 1)))*)
+Definition freeze_memory_output {ex583447_ : Z} {ex583446_ : Z}
+(data : EvmMemorySliceFields ex583446_ ex583447_)
+(*(0 <=? ex583446_) && ((0 <=? ex583447_) && ((ex583446_ + ex583447_) <=? (2 ^ 32 - 1)))*)
 : M (OutputSlice) :=
    let len := data.(EvmMemorySliceFields_len) in
    (if Z.eqb (len) (0) then
       returnM ((@existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))) : {len & {off & (OutputSliceFields off len)}}%type)
     else
       (output_buffer_store_memory
-         (@existT _ _ ex552705_ (@existT _ _ ex552704_ ((data : EvmMemorySliceFields ex552704_ ex552705_))))) >>= fun stored =>
+         (@existT _ _ ex583447_ (@existT _ _ ex583446_ ((data : EvmMemorySliceFields ex583446_ ex583447_))))) >>= fun stored =>
       returnM ((if stored then output_buffer_slice (len)
                 else @existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))) : {len & {off & (OutputSliceFields off len)}}%type))
     : M ({len & {off & (OutputSliceFields off len)}}%type).
 
-Definition freeze_input_output {ex552709_ : Z} {ex552708_ : Z}
-(data : StatelessInputSliceFields ex552708_ ex552709_)
-(*(0 <=? ex552708_) && ((0 <=? ex552709_) && ((ex552708_ + ex552709_) <=? (2 ^ 32 - 1)))*)
+Definition freeze_input_output {ex583451_ : Z} {ex583450_ : Z}
+(data : StatelessInputSliceFields ex583450_ ex583451_)
+(*(0 <=? ex583450_) && ((0 <=? ex583451_) && ((ex583450_ + ex583451_) <=? (2 ^ 32 - 1)))*)
 : M (OutputSlice) :=
    let len := data.(StatelessInputSliceFields_len) in
    (if Z.eqb (len) (0) then
       returnM ((@existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))) : {len & {off & (OutputSliceFields off len)}}%type)
     else
       (output_buffer_store_input
-         (@existT _ _ ex552709_ (@existT _ _ ex552708_ ((data : StatelessInputSliceFields ex552708_ ex552709_))))) >>= fun stored =>
+         (@existT _ _ ex583451_ (@existT _ _ ex583450_ ((data : StatelessInputSliceFields ex583450_ ex583451_))))) >>= fun stored =>
       returnM ((if stored then output_buffer_slice (len)
                 else @existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))) : {len & {off & (OutputSliceFields off len)}}%type))
     : M ({len & {off & (OutputSliceFields off len)}}%type).
@@ -6482,10 +6459,161 @@ Definition k_account_is_warm (a : vec (mword 8) 20) : M (bool) :=
     else (account_is_warm (a))  : M (bool))
     : M (bool).
 
+Definition bal_ref_cursor {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (RlpCursor (source_off + (source_len - content_len)) content_len) :=
+   (rlp_ref_framing_canonical (f)) >>= fun framing_canonical =>
+   (if andb (f.(RlpFieldRef_is_list)) (framing_canonical)
+      return
+      M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len) then
+      (rlp_decode_list (f))
+       : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len)
+    else
+      (fatal_error (InvalidBlockAccessList))
+       : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len))
+    : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len).
+
+Definition bal_ref_word {source_off : Z} {source_len : Z} {content_len : Z}
+(f : RlpFieldRef source_off source_len content_len)
+(*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? content_len) && (content_len <=? source_len))*)
+: M (word) :=
+   ((rlp_item_uint_canonical (f)) >>= fun canonical =>
+   (if andb (canonical) ((Z.leb content_len (32))) return M (Z) then
+      ((rlp_decode_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value))
+       : M (Z)
+    else (fatal_error (InvalidBlockAccessList))  : M (Z))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_word (semanticResult)).
+
+Fixpoint _rec_historical_schema_has_slot {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (slot : word) (_reclimit : Z)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (bool).
+exact (
+   let slot := (slot).(word_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb len (0) then returnM (false)
+    else
+      (rlp_decode_item (cursor)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 entry)) =>
+      let next :=
+        rlp_cursor_advance (cursor) (entry.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (bal_ref_cursor (entry)) >>= fun fields =>
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 field')) =>
+      ((bal_ref_word (field')) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun candidate =>
+      (if Z.eqb (candidate) (slot) then returnM (true)
+       else if word_ult (slot) (candidate) then returnM (false)
+       else
+         (_rec_historical_schema_has_slot _ _ (next) (Build_word ((slot))) ((Z.sub (_reclimit) (1)))
+            (_limit_reduces_bool _acc ltac:(assumption)))
+          : M (bool))
+       : M (bool))
+    : M (bool)
+).
+Defined.
+
+
+Definition historical_schema_has_slot {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (slot : word)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? slot) && (slot <=? (2 ^ 256 - 1))*)
+: M (bool) :=
+   let slot := (slot).(word_value) in
+   (_rec_historical_schema_has_slot (cursor) (Build_word ((slot)))
+      ((cursor.(StatelessInputSliceFields_len)
+       : Z)) (Zwf_guarded _))
+    : M (bool).
+
+Fixpoint _rec_historical_schema_has_access {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (address : word) (slot : option word) (_reclimit : Z)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? address) && (address <=? (2 ^ 256 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (bool).
+exact (
+   let address := (address).(word_value) in
+   let slot := (option_map (fun semanticValue => (semanticValue).(word_value)) (slot)) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb len (0) then returnM (false)
+    else
+      (rlp_decode_item (cursor)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 entry)) =>
+      let next :=
+        rlp_cursor_advance (cursor) (entry.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (bal_ref_cursor (entry)) >>= fun fields =>
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 field')) =>
+      ((rlp_decode_word (field')) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun candidate =>
+      (if Z.eqb (candidate) (address) return M (bool) then
+         let fields :=
+           rlp_cursor_advance (fields) (field'.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+         (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 slots)) =>
+         match slot with
+         | None => returnM (true)
+         | Some key =>
+            (bal_ref_cursor (slots)) >>= fun w__0 =>
+            (historical_schema_has_slot (w__0) (Build_word ((key))))
+             : M (bool)
+         end
+          : M (bool)
+       else if word_ult (address) (candidate) then returnM (false)
+       else
+         (_rec_historical_schema_has_access _ _ (next) (Build_word ((address)))
+            (option_map (fun semanticValue => (Build_word (semanticValue))) ((slot)))
+            ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
+          : M (bool))
+       : M (bool))
+    : M (bool)
+).
+Defined.
+
+
+Definition historical_schema_has_access {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (address : word) (slot : option word)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? address) && (address <=? (2 ^ 256 - 1))*)
+: M (bool) :=
+   let address := (address).(word_value) in
+   let slot := (option_map (fun semanticValue => (semanticValue).(word_value)) (slot)) in
+   (_rec_historical_schema_has_access (cursor) (Build_word ((address)))
+      (option_map (fun semanticValue => (Build_word (semanticValue))) ((slot)))
+      ((cursor.(StatelessInputSliceFields_len)
+       : Z)) (Zwf_guarded _))
+    : M (bool).
+
+Definition require_historical_state_access (address : vec (mword 8) 20) (slot : option word)
+: M (unit) :=
+   let slot := (option_map (fun semanticValue => (semanticValue).(word_value)) (slot)) in
+   read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
+   let protocol := execution_profile.(ExecutionProfileFields_protocol) in
+   (if Z.ltb (protocol.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
+      match slot with
+      | None => (account_is_warm (address))  : M (bool)
+      | Some key => (storage_is_warm (address) (Build_word ((key))))  : M (bool)
+      end >>= fun (already_checked : bool) =>
+      (if negb (already_checked) return M (unit) then
+         read_reg k_historical_access_schema >>= fun '(@existT _ _ __w__21 (@existT _ _ __w__20 w__2)) =>
+         (rlp_single_ref (w__2)) >>= fun '(@existT _ _ __root root) =>
+         (bal_ref_cursor (root)) >>= fun w__3 =>
+         (historical_schema_has_access (w__3)
+            (Build_word ((((address_to_word (address)).(word_value)))))
+            (option_map (fun semanticValue => (Build_word (semanticValue))) ((slot)))) >>= fun found =>
+         (if negb (found) return M (unit) then (fatal_error (InvalidBlockAccessList))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+    else returnM (tt))
+    : M (unit).
+
 Definition k_account_mark_warm (a : vec (mword 8) 20) : M (unit) :=
    (precompile_id_for_address (a)) >>= fun precompile_id =>
    (if generic_neq (precompile_id) (NotPrecompile) then returnM (tt)
-    else (account_mark_warm (a))  : M (unit))
+    else
+      (require_historical_state_access (a)
+         (option_map (fun semanticValue => (Build_word (semanticValue))) ((None)))) >>
+      (account_mark_warm (a))
+       : M (unit))
     : M (unit).
 
 Definition k_slot_is_warm (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=? (2 ^ 256 - 1))*)
@@ -6494,15 +6622,23 @@ Definition k_slot_is_warm (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=
 
 Definition k_slot_mark_warm (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=? (2 ^ 256 - 1))*)
 : M (unit) :=
-   let s := (s).(word_value) in (storage_mark_warm (a) (Build_word ((s))))  : M (unit).
+   let s := (s).(word_value) in
+   (require_historical_state_access (a)
+      (option_map (fun semanticValue => (Build_word (semanticValue))) (((Some (s)))))) >>
+   (storage_mark_warm (a) (Build_word ((s))))
+    : M (unit).
 
 Definition k_prewarm_slot (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=? (2 ^ 256 - 1))*)
 : M (unit) :=
-   let s := (s).(word_value) in (storage_mark_warm (a) (Build_word ((s))))  : M (unit).
+   let s := (s).(word_value) in
+   (require_historical_state_access (a)
+      (option_map (fun semanticValue => (Build_word (semanticValue))) (((Some (s)))))) >>
+   (storage_mark_warm (a) (Build_word ((s))))
+    : M (unit).
 
-Definition decode_state_account {ex552724_ : Z} {ex552723_ : Z}
-(value : StatelessInputSliceFields ex552723_ ex552724_)
-(*(0 <=? ex552723_) && ((0 <=? ex552724_) && ((ex552723_ + ex552724_) <=? (2 ^ 32 - 1)))*)
+Definition decode_state_account {ex583560_ : Z} {ex583559_ : Z}
+(value : StatelessInputSliceFields ex583559_ ex583560_)
+(*(0 <=? ex583559_) && ((0 <=? ex583560_) && ((ex583559_ + ex583560_) <=? (2 ^ 32 - 1)))*)
 : M (AccountInfo) :=
    (rlp_node_cursor (value)) >>= fun '(@existT _ _ __fields1 (@existT _ _ __fields0 fields)) =>
    (rlp_decode_item (fields)) >>= fun '(@existT _ _ __nonce1 (@existT _ _ __nonce0 nonce)) =>
@@ -6578,7 +6714,8 @@ Definition input_field_to_ref {source_off : Z} {source_len : Z} {content_len : Z
       ((rlp_decode_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun word =>
       let hash := word_to_hash (Build_word ((word))) in
       returnM ((HashRef (hash)))
-    else returnM ((EmptyRef (tt))))
+    else if Z.eqb content_len (0) then returnM ((EmptyRef (tt)))
+    else (fatal_error (RlpDecode))  : M (NodeRef))
     : M (NodeRef).
 
 Fixpoint _rec_decode_input_branch_node {source_off : Z} {source_len : Z}
@@ -6678,9 +6815,9 @@ Definition hex_prefix_decode_ref {source_off : Z} {source_len : Z} {content_len 
 Definition path_len (path : TriePath) : trie_path_len :=
    (Build_trie_path_len ((path.(TriePath_len)).(trie_path_len_value))).
 
-Definition decode_input_trie_node {ex552800_ : Z} {ex552799_ : Z}
-(node : StatelessInputSliceFields ex552799_ ex552800_)
-(*(0 <=? ex552799_) && ((0 <=? ex552800_) && ((ex552799_ + ex552800_) <=? (2 ^ 32 - 1)))*)
+Definition decode_input_trie_node {ex583636_ : Z} {ex583635_ : Z}
+(node : StatelessInputSliceFields ex583635_ ex583636_)
+(*(0 <=? ex583635_) && ((0 <=? ex583636_) && ((ex583635_ + ex583636_) <=? (2 ^ 32 - 1)))*)
 : M (InputTrieNode) :=
    (if Z.eqb (node.(StatelessInputSliceFields_len)) (0) return M (unit) then
       (fatal_error (RlpDecode))
@@ -6695,7 +6832,9 @@ Definition decode_input_trie_node {ex552800_ : Z} {ex552799_ : Z}
      rlp_cursor_advance (fields) (second.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
    (if Z.eqb (fields.(StatelessInputSliceFields_len)) (0) return M (InputTrieNode) then
       (hex_prefix_decode_ref (first)) >>= fun '((is_leaf, path)) =>
-      (if is_leaf then
+      (if is_leaf return M (InputTrieNode) then
+         (if second.(RlpFieldRef_is_list) return M (unit) then (fatal_error (RlpDecode))  : M (unit)
+          else returnM (tt)) >>
          let '(@existT _ _ value__'len (@existT _ _ value__'off value)) :=
            (rlp_item_content (second) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
          returnM ((InputLeafNode ((path, @existT _ _ _ (@existT _ _ _ (value))))))
@@ -6803,10 +6942,10 @@ Definition resolve_witness_ref (r : NodeRef) : M (StatelessInputSlice) :=
    end
     : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
 
-Fixpoint _rec_trie_walk {ex552807_ : Z} {ex552806_ : Z}
-(node : StatelessInputSliceFields ex552806_ ex552807_) (key : TriePath) (pos : trie_path_cursor)
+Fixpoint _rec_trie_walk {ex583643_ : Z} {ex583642_ : Z}
+(node : StatelessInputSliceFields ex583642_ ex583643_) (key : TriePath) (pos : trie_path_cursor)
 (_reclimit : Z)
-(*(0 <=? ex552806_) && ((0 <=? ex552807_) && ((ex552806_ + ex552807_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex583642_) && ((0 <=? ex583643_) && ((ex583642_ + ex583643_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? pos) && (pos <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (StatelessInputSlice).
 exact (
@@ -6873,9 +7012,9 @@ exact (
 Defined.
 
 
-Definition trie_walk {ex552813_ : Z} {ex552812_ : Z}
-(node : StatelessInputSliceFields ex552812_ ex552813_) (key : TriePath) (pos : trie_path_cursor)
-(*(0 <=? ex552812_) && ((0 <=? ex552813_) && ((ex552812_ + ex552813_) <=? (2 ^ 32 - 1)))*)
+Definition trie_walk {ex583649_ : Z} {ex583648_ : Z}
+(node : StatelessInputSliceFields ex583648_ ex583649_) (key : TriePath) (pos : trie_path_cursor)
+(*(0 <=? ex583648_) && ((0 <=? ex583649_) && ((ex583648_ + ex583649_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? pos) && (pos <=? 64)*)
 : M (StatelessInputSlice) :=
    let pos := (pos).(trie_path_cursor_value) in
@@ -6910,10 +7049,19 @@ Definition stateless_account_by_key (root : vec (mword 8) 32) (address_hash : ve
     : M (Account).
 
 Definition k_aload (a : vec (mword 8) 20) : M (Account) :=
+   (require_historical_state_access (a)
+      (option_map (fun semanticValue => (Build_word (semanticValue))) ((None)))) >>
    (acct_tx_get (a)) >>= fun tx_account =>
    (if tx_account.(AccountRow_found) then returnM (tx_account.(AccountRow_account))
     else
-      (bal_account_touch (a)) >>
+      read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
+      (if Z.geb (execution_profile.(ExecutionProfileFields_protocol).(ProtocolProfileFields_fork))
+            (Amsterdam)
+         return
+         M (unit) then
+         (bal_account_touch (a))
+          : M (unit)
+       else returnM (tt)) >>
       (acct_block_get (a)) >>= fun block_account =>
       (if block_account.(AccountRow_found) then returnM (block_account.(AccountRow_account))
        else
@@ -6924,9 +7072,111 @@ Definition k_aload (a : vec (mword 8) 20) : M (Account) :=
        : M (Account))
     : M (Account).
 
+Fixpoint _rec_validate_secured_witness_node {ex583655_ : Z} {ex583654_ : Z}
+(node : StatelessInputSliceFields ex583654_ ex583655_) (remaining : Z) (_reclimit : Z)
+(*(0 <=? ex583654_) && ((0 <=? ex583655_) && ((ex583654_ + ex583655_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? remaining) && (remaining <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb ex583655_ (0) then returnM (tt)
+    else
+      (decode_input_trie_node (node)) >>= fun decoded =>
+      match decoded with
+      | InputLeafNode (path, @existT _ _ len (@existT _ _ off _)) =>
+         (if neq_int (((path_len (path)).(trie_path_len_value))) (remaining) return M (unit) then
+            (fatal_error (WitnessDeficient))
+             : M (unit)
+          else returnM (tt))
+          : M (unit)
+      | InputExtensionNode (path, childref) =>
+         let length := (path_len (path)).(trie_path_len_value) in
+         (if andb ((Z.ltb (0) (length))) ((Z.ltb (length) (remaining))) then
+            returnM ((Z.sub (remaining) (length)))
+          else (fatal_error (WitnessDeficient))  : M (Z)) >>= fun (next_remaining : Z) =>
+         match childref with
+         | EmptyRef tt => (fatal_error (WitnessDeficient))  : M (StatelessInputSlice)
+         | InputInlineRef (@existT _ _ len (@existT _ _ off bytes)) =>
+            returnM ((@existT _ _ _ (@existT _ _ _ (bytes))) : StatelessInputSlice)
+         | ScratchInlineRef _ => (fatal_error (WitnessDeficient))  : M (StatelessInputSlice)
+         | HashRef h => (node_db_lookup (h))  : M (StatelessInputSlice)
+         end >>= fun '(@existT _ _ __child1 (@existT _ _ __child0 child)) =>
+         (if neq_int (child.(StatelessInputSliceFields_len)) (0) return M (unit) then
+            (decode_input_trie_node (child)) >>= fun (w__4 : InputTrieNode) =>
+            match w__4 with
+            | InputBranchNode (_, @existT _ _ __child1 (@existT _ _ __child0 _)) => returnM (tt)
+            | _ => (fatal_error (WitnessDeficient))  : M (unit)
+            end
+             : M (unit)
+          else returnM (tt)) >>
+         (_rec_validate_secured_witness_node _ _ (child) (next_remaining) ((Z.sub (_reclimit) (1)))
+            (_limit_reduces_bool _acc ltac:(assumption)))
+          : M (unit)
+      | InputBranchNode (children, @existT _ _ len (@existT _ _ off value)) =>
+         (if andb ((Z.ltb (0) (remaining))) ((Z.eqb (value.(StatelessInputSliceFields_len)) (0)))
+          then
+            returnM ((Z.sub (remaining) (1)))
+          else (fatal_error (WitnessDeficient))  : M (Z)) >>= fun (next_remaining : Z) =>
+         let occupied : Z := 0 in
+         (let '(loop_i_lower) := 0 in
+         let '(loop_i_upper) := 15 in
+         (foreach_ZM_up loop_i_lower loop_i_upper 1 occupied
+           (fun i '(occupied) =>
+             let occupied : Z :=
+               match vec_access_dec (children) (i) with
+               | EmptyRef tt => occupied
+               | _ =>
+                  let count := occupied in
+                  if Z.ltb (count) (16) then
+                    let occupied : Z := Z.add (count) (1) in
+                    occupied
+                  else occupied
+               end in
+             match vec_access_dec (children) (i) with
+             | EmptyRef tt =>
+                returnM ((@existT _ _ 0 (@existT _ _ 0 ((EMPTY_STATELESS_INPUT_SLICE : StatelessInputSliceFields 0 0)))) : StatelessInputSlice)
+             | InputInlineRef (@existT _ _ len (@existT _ _ off bytes)) =>
+                returnM ((@existT _ _ _ (@existT _ _ _ (bytes))) : StatelessInputSlice)
+             | ScratchInlineRef _ => (fatal_error (WitnessDeficient))  : M (StatelessInputSlice)
+             | HashRef h => (node_db_lookup (h))  : M (StatelessInputSlice)
+             end >>= fun '(@existT _ _ __child1 (@existT _ _ __child0 child)) =>
+             (_rec_validate_secured_witness_node _ _ (child) (next_remaining)
+                ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>
+             returnM (occupied)))) >>= fun (occupied : Z) =>
+         (if Z.ltb (occupied) (2) return M (unit) then (fatal_error (WitnessDeficient))  : M (unit)
+          else returnM (tt))
+          : M (unit)
+      end
+       : M (unit))
+    : M (unit)
+).
+Defined.
+
+
+Definition validate_secured_witness_node {ex583661_ : Z} {ex583660_ : Z}
+(node : StatelessInputSliceFields ex583660_ ex583661_) (remaining : Z)
+(*(0 <=? ex583660_) && ((0 <=? ex583661_) && ((ex583660_ + ex583661_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? remaining) && (remaining <=? 64)*)
+: M (unit) :=
+   (_rec_validate_secured_witness_node (node) (remaining) ((remaining  : Z)) (Zwf_guarded _))
+    : M (unit).
+
+Definition validate_secured_state_root (root : vec (mword 8) 32) : M (unit) :=
+   (if generic_neq (root) (EMPTY_TRIE_ROOT) return M (unit) then
+      (node_db_lookup (root)) >>= fun '(@existT _ _ __node1 (@existT _ _ __node0 node)) =>
+      (if Z.eqb (node.(StatelessInputSliceFields_len)) (0) return M (unit) then
+         (fatal_error (WitnessDeficient))
+          : M (unit)
+       else returnM (tt)) >>
+      (validate_secured_witness_node (node) (64))
+       : M (unit)
+    else returnM (tt))
+    : M (unit).
+
 Definition stateless_storage_by_key (root : vec (mword 8) 32) (slot_hash : vec (mword 8) 32)
 : M (word) :=
-   (let path := path_new (slot_hash) (Build_trie_path_len ((64))) in
+   ((validate_secured_state_root (root)) >>
+   let path := path_new (slot_hash) (Build_trie_path_len ((64))) in
    (trie_lookup (root) (path)) >>= fun '(@existT _ _ __value1 (@existT _ _ __value0 value)) =>
    (if Z.eqb (value.(StatelessInputSliceFields_len)) (0) then returnM ((ZERO_WORD).(word_value))
     else
@@ -6941,20 +7191,36 @@ Definition k_sload (a : vec (mword 8) 20) (s : word) (*(0 <=? s) && (s <=? (2 ^ 
 : M (StorageValue) :=
    let s := (s).(word_value) in
    catch_early_return
-     (let key := storage_key (a) (Build_word ((s))) in
+     (liftR ((require_historical_state_access (a)
+                (option_map (fun semanticValue => (Build_word (semanticValue))) (((Some (s))))))) >>
+     let key := storage_key (a) (Build_word ((s))) in
      liftR ((storage_tx_get (key))) >>= fun tx_value =>
+     liftR (read_reg k_execution_profile) >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
      match tx_value with
      | StorageTxHit value =>
         (early_return (value  : StorageValue) : MR StorageValue unit)  : MR (StorageValue) (unit)
      | StorageTxCleared _ =>
-        liftR ((bal_storage_read (a) (Build_word ((s))))) >>
+        (if Z.geb (execution_profile.(ExecutionProfileFields_protocol).(ProtocolProfileFields_fork))
+              (Amsterdam)
+           return
+           MR (StorageValue) (unit) then
+           liftR ((bal_storage_read (a) (Build_word ((s)))))
+            : MR (StorageValue) (unit)
+         else returnR (StorageValue) (tt)) >>
         (early_return (({| StorageValue_curr := (Build_word ((ZERO_WORD).(word_value)));
                            StorageValue_orig := (Build_word ((ZERO_WORD).(word_value))) |})
          : StorageValue) :
           MR StorageValue unit)
          : MR (StorageValue) (unit)
      | StorageTxMiss _ =>
-        liftR ((bal_storage_read (a) (Build_word ((s)))))  : MR (StorageValue) (unit)
+        (if Z.geb (execution_profile.(ExecutionProfileFields_protocol).(ProtocolProfileFields_fork))
+              (Amsterdam)
+           return
+           MR (StorageValue) (unit) then
+           liftR ((bal_storage_read (a) (Build_word ((s)))))
+            : MR (StorageValue) (unit)
+         else returnR (StorageValue) (tt))
+         : MR (StorageValue) (unit)
      end >>
      liftR ((storage_block_get (key))) >>= fun block_value =>
      (if block_value.(StorageBlockRow_found) then
@@ -7403,10 +7669,10 @@ Definition k_get_codehash (a : vec (mword 8) 20) : M (hash) :=
    let missing := negb (acc.(Account_present)) in
    returnM ((if missing then ZERO_HASH else acc.(Account_info).(AccountInfo_code_hash))).
 
-Definition k_deploy_code {ex552832_ : Z} {ex552831_ : Z}
-(a : vec (mword 8) 20) (code : CodeRegionSliceFields ex552831_ ex552832_)
-(*(0 <=? ex552831_) && ((0 <=? ex552832_) && ((ex552831_ + ex552832_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552832_) && ((ex552832_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition k_deploy_code {ex583680_ : Z} {ex583679_ : Z}
+(a : vec (mword 8) 20) (code : CodeRegionSliceFields ex583679_ ex583680_)
+(*(0 <=? ex583679_) && ((0 <=? ex583680_) && ((ex583679_ + ex583680_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583680_) && ((ex583680_ + 32) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
@@ -7492,10 +7758,10 @@ Definition k_journal_checkpoint '(tt : unit) : M (unit) :=
 
 Definition k_set_header (h : BlockHeader) : M (unit) := write_reg k_header (h)  : M (unit).
 
-Definition k_set_tx {ex552837_ : Z} (env : TxEnvFields ex552837_)
-(*(ex552837_ =? 0) || ((ex552837_ =? 6) || (ex552837_ =? 9))*)
+Definition k_set_tx {ex583685_ : Z} (env : TxEnvFields ex583685_)
+(*(ex583685_ =? 0) || ((ex583685_ =? 6) || (ex583685_ =? 9))*)
 : M (unit) :=
-   write_reg k_tx (@existT _ _ ex552837_ ((env : TxEnvFields ex552837_)))  : M (unit).
+   write_reg k_tx (@existT _ _ ex583685_ ((env : TxEnvFields ex583685_)))  : M (unit).
 
 Definition k_tx_reset '(tt : unit) : M (unit) :=
    (storage_tx_reset (tt)) >>
@@ -7562,8 +7828,10 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
               (storage_block_clear (e.(AcctEntry_addr)))
                : M (unit)
             else returnM (tt)) >>
-           (if neq_int ((curr.(Account_info).(AccountInfo_nonce)).(account_nonce_value))
-                 ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_nonce)).(account_nonce_value))
+           (if andb ((Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam)))
+                 (((neq_int ((curr.(Account_info).(AccountInfo_nonce)).(account_nonce_value))
+                      ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_nonce)).(account_nonce_value)))
+                  : bool))
               return
               M (unit) then
               (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
@@ -7572,18 +7840,22 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                  (Build_account_nonce (((curr.(Account_info).(AccountInfo_nonce)).(account_nonce_value)))))
                : M (unit)
             else returnM (tt)) >>
-           (if neq_int ((curr.(Account_info).(AccountInfo_balance)).(word_value))
-                 ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_balance)).(word_value))
+           (if andb ((Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam)))
+                 (((neq_int ((curr.(Account_info).(AccountInfo_balance)).(word_value))
+                      ((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_balance)).(word_value)))
+                  : bool))
               return
               M (unit) then
               (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
               returnM (semanticResult).(block_access_index_value) >>= fun (w__1 : Z) =>
               (bal_balance_change (Build_block_access_index ((w__1))) (e.(AcctEntry_addr))
+                 (Build_word (((e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_balance)).(word_value))))
                  (Build_word (((curr.(Account_info).(AccountInfo_balance)).(word_value)))))
                : M (unit)
             else returnM (tt)) >>
-           (if generic_neq (curr.(Account_info).(AccountInfo_code_hash))
-                 (e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_code_hash))
+           (if andb ((Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam)))
+                 ((generic_neq (curr.(Account_info).(AccountInfo_code_hash))
+                     (e.(AcctEntry_value).(AcctValue_orig).(Account_info).(AccountInfo_code_hash))))
               return
               M (unit) then
               (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
@@ -7631,12 +7903,16 @@ Definition k_tx_merge '(tt : unit) : M (unit) :=
                      : bool))
                  return
                  M (unit) then
-                 (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
-                 returnM (semanticResult).(block_access_index_value) >>= fun (w__3 : Z) =>
-                 (bal_storage_change (Build_block_access_index ((w__3)))
-                    (e.(StorageEntry_key).(StorageKey_addr))
-                    (Build_word (((e.(StorageEntry_key).(StorageKey_slot)).(word_value))))
-                    (Build_word (((e.(StorageEntry_value).(StorageValue_curr)).(word_value))))) >>
+                 (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
+                    (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
+                    returnM (semanticResult).(block_access_index_value) >>= fun (w__3 : Z) =>
+                    (bal_storage_change (Build_block_access_index ((w__3)))
+                       (e.(StorageEntry_key).(StorageKey_addr))
+                       (Build_word (((e.(StorageEntry_key).(StorageKey_slot)).(word_value))))
+                       (Build_word (((e.(StorageEntry_value).(StorageValue_orig)).(word_value))))
+                       (Build_word (((e.(StorageEntry_value).(StorageValue_curr)).(word_value)))))
+                     : M (unit)
+                  else returnM (tt)) >>
                  (storage_block_put (e))
                   : M (unit)
                else returnM (tt))
@@ -7676,25 +7952,25 @@ Definition record_refund (refund : gas_refund) (delta : Z)
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_gas_refund (semanticResult)).
 
-Definition frame_code_len {ex552843_ : Z} {ex552842_ : Z}
-(frame_code : CodeFields ex552842_ ex552843_)
-(*(0 <=? ex552842_) && ((0 <=? ex552843_) && ((ex552842_ + ex552843_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552843_) && ((ex552843_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition frame_code_len {ex583691_ : Z} {ex583690_ : Z}
+(frame_code : CodeFields ex583690_ ex583691_)
+(*(0 <=? ex583690_) && ((0 <=? ex583691_) && ((ex583690_ + ex583691_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583691_) && ((ex583691_ + 32) <=? (2 ^ 32 - 1)))*)
 : code_length :=
    (Build_code_length (let code := frame_code in
    let length := code.(CodeFields_len) in
    length)).
 
-Definition frame_jumpdest_valid {ex552850_ : Z} {ex552849_ : Z}
-(frame_code : CodeFields ex552849_ ex552850_) (dest : Z) (*(0 <=? dest) && (dest <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex552849_) && ((0 <=? ex552850_) && ((ex552849_ + ex552850_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552850_) && ((ex552850_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition frame_jumpdest_valid {ex583698_ : Z} {ex583697_ : Z}
+(frame_code : CodeFields ex583697_ ex583698_) (dest : Z) (*(0 <=? dest) && (dest <=? (2 ^ 32 - 1))*)
+(*(0 <=? ex583697_) && ((0 <=? ex583698_) && ((ex583697_ + ex583698_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583698_) && ((ex583698_ + 32) <=? (2 ^ 32 - 1)))*)
 : M (bool) :=
    let code := frame_code in
    let length := code.(CodeFields_len) in
    (jumpdest_ref_contains
       (Build_jump_table_index (((code.(CodeFields_jumpdests)).(jump_table_index_value))))
-      (Build_code_length (ex552850_)) (Build_code_pointer ((dest))))
+      (Build_code_length (ex583698_)) (Build_code_pointer ((dest))))
     : M (bool).
 
 Definition STACK_LIMIT : operand_stack_height := (Build_operand_stack_height (1024)).
@@ -7716,7 +7992,7 @@ Definition frame_state_gas_used
 (state_gas_spilled : state_gas_spill)
 (*(0 <=? state_gas_reservoir) && (state_gas_reservoir <=? (2 ^ 64 - 1))*)
 (*(0 <=? state_gas_remaining) && (state_gas_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? (2 ^ 24))*)
+(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? 30000000)*)
 : frame_state_gas_delta :=
    let state_gas_reservoir := (state_gas_reservoir).(state_gas_value) in
    let state_gas_remaining := (state_gas_remaining).(state_gas_value) in
@@ -7730,7 +8006,7 @@ Definition exceptional_state
 (state_gas_remaining : state_gas_typ) (state_gas_spilled : state_gas_spill)
 (state_gas_reservoir : state_gas_typ) (k : ExceptionKind)
 (*(0 <=? state_gas_remaining) && (state_gas_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? (2 ^ 24))*)
+(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? 30000000)*)
 (*(0 <=? state_gas_reservoir) && (state_gas_reservoir <=? (2 ^ 64 - 1))*)
 : M (ExceptionalStateTransition) :=
    let state_gas_remaining := (state_gas_remaining).(state_gas_value) in
@@ -7800,24 +8076,24 @@ Definition calldata_install (data : CalldataSlice) : CalldataSlice := data.
 Definition returndata_clear '(tt : unit) : OutputSlice :=
    @existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0))).
 
-Definition returndata_size {ex552871_ : Z} {ex552870_ : Z}
-(returndata : OutputSliceFields ex552870_ ex552871_)
-(*(0 <=? ex552870_) && ((0 <=? ex552871_) && ((ex552870_ + ex552871_) <=? (2 ^ 32 - 1)))*)
+Definition returndata_size {ex583719_ : Z} {ex583718_ : Z}
+(returndata : OutputSliceFields ex583718_ ex583719_)
+(*(0 <=? ex583718_) && ((0 <=? ex583719_) && ((ex583718_ + ex583719_) <=? (2 ^ 32 - 1)))*)
 : source_pointer :=
    (Build_source_pointer (let data := returndata in
    data.(OutputSliceFields_len))).
 
-Definition returndata_copy {ex552884_ : Z} {ex552883_ : Z}
-(returndata : OutputSliceFields ex552883_ ex552884_) (dst : Z) (off : Z) (len : Z)
+Definition returndata_copy {ex583732_ : Z} {ex583731_ : Z}
+(returndata : OutputSliceFields ex583731_ ex583732_) (dst : Z) (off : Z) (len : Z)
 (*(0 <=? dst) && (dst <=? (2 ^ 32 - 1)) &&
   ((0 <=? off) && (off <=? (2 ^ 32 - 1)) && ((0 <=? len) && (len <=? (2 ^ 32 - 1))))*)
-(*(0 <=? ex552883_) && ((0 <=? ex552884_) && ((ex552883_ + ex552884_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex583731_) && ((0 <=? ex583732_) && ((ex583731_ + ex583732_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (output_slice_copy (returndata) (dst) (off) (len))  : M (unit).
 
-Definition returndata_copy_prefix {ex552894_ : Z} {ex552893_ : Z}
-(returndata : OutputSliceFields ex552893_ ex552894_) (dst : memory_base_typ) (want : memory_length)
-(*(0 <=? ex552893_) && ((0 <=? ex552894_) && ((ex552893_ + ex552894_) <=? (2 ^ 32 - 1)))*)
+Definition returndata_copy_prefix {ex583742_ : Z} {ex583741_ : Z}
+(returndata : OutputSliceFields ex583741_ ex583742_) (dst : memory_base_typ) (want : memory_length)
+(*(0 <=? ex583741_) && ((0 <=? ex583742_) && ((ex583741_ + ex583742_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? dst) && (dst <=? (2 ^ 32 - 1))*) (*(0 <=? want) && (want <=? (2 ^ 32 - 1))*)
 : M (unit) :=
    let dst := (dst).(memory_base_value) in
@@ -7922,21 +8198,21 @@ Definition memory_code_slice (base : memory_base_typ) (mem : memory_height_typ) 
        : M ({syn_len & {syn_off & (CodeRegionSliceFields syn_off syn_len)}}%type))
     : M ({syn_len & {syn_off & (CodeRegionSliceFields syn_off syn_len)}}%type).
 
-Definition suspend_frame {ex552948_ : Z} {ex552947_ : Z}
+Definition suspend_frame {ex583796_ : Z} {ex583795_ : Z}
 (pc : code_pointer) (gas_remaining : gas_typ) (stack_top : StackPointer)
 (memory_base : memory_base_typ) (memory_height : memory_height_typ)
 (state_gas_remaining : state_gas_typ) (state_gas_spilled : state_gas_spill)
 (frame_refund : gas_refund) (frame_status : FrameStatus) (message : Message)
-(frame_code : CodeFields ex552947_ ex552948_) (calldata : CalldataSlice)
+(frame_code : CodeFields ex583795_ ex583796_) (calldata : CalldataSlice)
 (*(0 <=? pc) && (pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? gas_remaining) && (gas_remaining <=? (2 ^ 64 - 1))*)
 (*(0 <=? memory_base) && (memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? memory_height) && (memory_height <=? (2 ^ 32 - 1))*)
 (*(0 <=? state_gas_remaining) && (state_gas_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? (2 ^ 24))*)
+(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? frame_refund) && (frame_refund <=? (199 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex552947_) && ((0 <=? ex552948_) && ((ex552947_ + ex552948_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex552948_) && ((ex552948_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex583795_) && ((0 <=? ex583796_) && ((ex583795_ + ex583796_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex583796_) && ((ex583796_ + 32) <=? (2 ^ 32 - 1)))*)
 : M ((FrameCheckpoint * StackPointer * memory_base_typ * memory_height_typ)) :=
    let pc := (pc).(code_pointer_value) in
    let gas_remaining := (gas_remaining).(gas_value) in
@@ -7960,7 +8236,7 @@ Definition suspend_frame {ex552948_ : Z} {ex552947_ : Z}
         FrameCheckpoint_status := frame_status;
         FrameCheckpoint_message := message;
         FrameCheckpoint_code :=
-          @existT _ _ ex552948_ (@existT _ _ ex552947_ ((frame_code : CodeFields ex552947_ ex552948_)));
+          @existT _ _ ex583796_ (@existT _ _ ex583795_ ((frame_code : CodeFields ex583795_ ex583796_)));
         FrameCheckpoint_calldata := calldata;
         FrameCheckpoint_memory_height := (Build_memory_length (memory_height)) |} in
    returnM ((checkpoint, child_stack, child_memory_base, child_memory_height))) >>= fun semanticResult =>
@@ -8031,10 +8307,10 @@ Definition mem_mcopy
     else returnM (tt))
     : M (unit).
 
-Definition mem_keccak {ex552968_ : Z} {ex552967_ : Z}
-(base : memory_base_typ) (mem : memory_height_typ) (range : MemoryRangeFields ex552967_ ex552968_)
+Definition mem_keccak {ex583816_ : Z} {ex583815_ : Z}
+(base : memory_base_typ) (mem : memory_height_typ) (range : MemoryRangeFields ex583815_ ex583816_)
 (*(0 <=? base) && (base <=? (2 ^ 32 - 1))*) (*(0 <=? mem) && (mem <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex552967_) && ((0 <=? ex552968_) && ((ex552967_ + ex552968_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex583815_) && ((0 <=? ex583816_) && ((ex583815_ + ex583816_) <=? (2 ^ 32 - 1)))*)
 : M (word) :=
    let base := (base).(memory_base_value) in
    let mem := (mem).(memory_length_value) in
@@ -8136,87 +8412,87 @@ Definition block_blob_gas_add (maximum_count : Z) (accumulated : Z) (transaction
     else (fatal_error (BlobGasLimitExceeded))  : M (Z))
     : M (Z).
 
-Definition next_excess_blob_gas {ex553031_ : Z} {ex553030_ : Z} {ex553029_ : Z} {ex553028_ : Z}
-{ex553027_ : Z} {ex553026_ : Z} {ex553025_ : Z} {ex553024_ : Z} {ex553023_ : Z} {ex553022_ : Z}
-(profile : ProtocolProfileFields ex553022_ ex553023_ ex553024_ ex553025_ ex553026_ ex553027_ ex553028_ ex553029_ ex553030_ ex553031_)
+Definition next_excess_blob_gas {ex583879_ : Z} {ex583878_ : Z} {ex583877_ : Z} {ex583876_ : Z}
+{ex583875_ : Z} {ex583874_ : Z} {ex583873_ : Z} {ex583872_ : Z} {ex583871_ : Z} {ex583870_ : Z}
+(profile : ProtocolProfileFields ex583870_ ex583871_ ex583872_ ex583873_ ex583874_ ex583875_ ex583876_ ex583877_ ex583878_ ex583879_)
 (parent_excess_blob_gas : excess_blob_gas_typ) (parent_blob_gas_used : Z)
 (parent_base_fee_per_gas : word)
-(*(ex553022_ =? 5) &&
-  ((ex553023_ =? 0) &&
-    ((ex553024_ =? 0) &&
-      ((ex553025_ =? 1) &&
-        ((ex553026_ =? 24576) &&
-          ((ex553027_ =? 0) &&
-            ((ex553028_ =? (2 ^ 64 - 1)) &&
-              ((ex553029_ =? (2 ^ 64 - 1)) && ((ex553030_ =? 0) && (ex553031_ =? 2))))))))) ||
-  ((6 <=? ex553022_) && (ex553022_ <=? 9) &&
-    ((ex553023_ =? 0) &&
-      ((ex553024_ =? 0) &&
-        ((ex553025_ =? 1) &&
-          ((ex553026_ =? 24576) &&
-            ((ex553027_ =? 0) &&
-              ((ex553028_ =? (2 ^ 64 - 1)) &&
-                ((ex553029_ =? (2 ^ 64 - 1)) && ((ex553030_ =? 0) && (ex553031_ =? 5))))))))) ||
-    ((ex553022_ =? 10) &&
-      ((ex553023_ =? 0) &&
-        ((ex553024_ =? 0) &&
-          ((ex553025_ =? 1) &&
-            ((ex553026_ =? 24576) &&
-              ((ex553027_ =? 49152) &&
-                ((ex553028_ =? (2 ^ 64 - 1)) &&
-                  ((ex553029_ =? (2 ^ 64 - 1)) && ((ex553030_ =? 0) && (ex553031_ =? 5))))))))) ||
-      ((ex553022_ =? 11) &&
-        ((ex553023_ =? 3) &&
-          ((ex553024_ =? 6) &&
-            ((ex553025_ =? 3338477) &&
-              ((ex553026_ =? 24576) &&
-                ((ex553027_ =? 49152) &&
-                  ((ex553028_ =? (2 ^ 64 - 1)) &&
-                    ((ex553029_ =? (2 ^ 64 - 1)) && ((ex553030_ =? 6) && (ex553031_ =? 5))))))))) ||
-        ((ex553022_ =? 12) &&
-          ((ex553023_ =? 6) &&
-            ((ex553024_ =? 9) &&
-              ((ex553025_ =? 5007716) &&
-                ((ex553026_ =? 24576) &&
-                  ((ex553027_ =? 49152) &&
-                    ((ex553028_ =? (2 ^ 64 - 1)) &&
-                      ((ex553029_ =? (2 ^ 64 - 1)) && ((ex553030_ =? 9) && (ex553031_ =? 5))))))))) ||
-          ((ex553022_ =? 13) &&
-            ((ex553023_ =? 6) &&
-              ((ex553024_ =? 9) &&
-                ((ex553025_ =? 5007716) &&
-                  ((ex553026_ =? 24576) &&
-                    ((ex553027_ =? 49152) &&
-                      ((ex553028_ =? (2 ^ 24)) &&
-                        ((ex553029_ =? (2 ^ 24)) && ((ex553030_ =? 6) && (ex553031_ =? 5))))))))) ||
-            ((ex553022_ =? 14) &&
-              ((ex553023_ =? 10) &&
-                ((ex553024_ =? 15) &&
-                  ((ex553025_ =? 8346193) &&
-                    ((ex553026_ =? 24576) &&
-                      ((ex553027_ =? 49152) &&
-                        ((ex553028_ =? (2 ^ 24)) &&
-                          ((ex553029_ =? (2 ^ 24)) && ((ex553030_ =? 6) && (ex553031_ =? 5))))))))) ||
-              ((ex553022_ =? 15) &&
-                ((ex553023_ =? 14) &&
-                  ((ex553024_ =? 21) &&
-                    ((ex553025_ =? 11684671) &&
-                      ((ex553026_ =? 24576) &&
-                        ((ex553027_ =? 49152) &&
-                          ((ex553028_ =? (2 ^ 24)) &&
-                            ((ex553029_ =? (2 ^ 24)) && ((ex553030_ =? 6) && (ex553031_ =? 5))))))))) ||
-                (ex553022_ =? 16) &&
-                  ((ex553023_ =? 14) &&
-                    ((ex553024_ =? 21) &&
-                      ((ex553025_ =? 11684671) &&
-                        ((ex553026_ =? 65536) &&
-                          ((ex553027_ =? 131072) &&
-                            ((ex553028_ =? (2 ^ 64 - 1)) &&
-                              ((ex553029_ =? (2 ^ 24)) && ((ex553030_ =? 6) && (ex553031_ =? 5))))))))))))))))*)
+(*(ex583870_ =? 5) &&
+  ((ex583871_ =? 0) &&
+    ((ex583872_ =? 0) &&
+      ((ex583873_ =? 1) &&
+        ((ex583874_ =? 24576) &&
+          ((ex583875_ =? 0) &&
+            ((ex583876_ =? (2 ^ 64 - 1)) &&
+              ((ex583877_ =? (2 ^ 64 - 1)) && ((ex583878_ =? 0) && (ex583879_ =? 2))))))))) ||
+  ((6 <=? ex583870_) && (ex583870_ <=? 9) &&
+    ((ex583871_ =? 0) &&
+      ((ex583872_ =? 0) &&
+        ((ex583873_ =? 1) &&
+          ((ex583874_ =? 24576) &&
+            ((ex583875_ =? 0) &&
+              ((ex583876_ =? (2 ^ 64 - 1)) &&
+                ((ex583877_ =? (2 ^ 64 - 1)) && ((ex583878_ =? 0) && (ex583879_ =? 5))))))))) ||
+    ((ex583870_ =? 10) &&
+      ((ex583871_ =? 0) &&
+        ((ex583872_ =? 0) &&
+          ((ex583873_ =? 1) &&
+            ((ex583874_ =? 24576) &&
+              ((ex583875_ =? 49152) &&
+                ((ex583876_ =? (2 ^ 64 - 1)) &&
+                  ((ex583877_ =? (2 ^ 64 - 1)) && ((ex583878_ =? 0) && (ex583879_ =? 5))))))))) ||
+      ((ex583870_ =? 11) &&
+        ((ex583871_ =? 3) &&
+          ((ex583872_ =? 6) &&
+            ((ex583873_ =? 3338477) &&
+              ((ex583874_ =? 24576) &&
+                ((ex583875_ =? 49152) &&
+                  ((ex583876_ =? (2 ^ 64 - 1)) &&
+                    ((ex583877_ =? (2 ^ 64 - 1)) && ((ex583878_ =? 6) && (ex583879_ =? 5))))))))) ||
+        ((ex583870_ =? 12) &&
+          ((ex583871_ =? 6) &&
+            ((ex583872_ =? 9) &&
+              ((ex583873_ =? 5007716) &&
+                ((ex583874_ =? 24576) &&
+                  ((ex583875_ =? 49152) &&
+                    ((ex583876_ =? (2 ^ 64 - 1)) &&
+                      ((ex583877_ =? (2 ^ 64 - 1)) && ((ex583878_ =? 9) && (ex583879_ =? 5))))))))) ||
+          ((ex583870_ =? 13) &&
+            ((ex583871_ =? 6) &&
+              ((ex583872_ =? 9) &&
+                ((ex583873_ =? 5007716) &&
+                  ((ex583874_ =? 24576) &&
+                    ((ex583875_ =? 49152) &&
+                      ((ex583876_ =? (2 ^ 24)) &&
+                        ((ex583877_ =? (2 ^ 24)) && ((ex583878_ =? 6) && (ex583879_ =? 5))))))))) ||
+            ((ex583870_ =? 14) &&
+              ((ex583871_ =? 10) &&
+                ((ex583872_ =? 15) &&
+                  ((ex583873_ =? 8346193) &&
+                    ((ex583874_ =? 24576) &&
+                      ((ex583875_ =? 49152) &&
+                        ((ex583876_ =? (2 ^ 24)) &&
+                          ((ex583877_ =? (2 ^ 24)) && ((ex583878_ =? 6) && (ex583879_ =? 5))))))))) ||
+              ((ex583870_ =? 15) &&
+                ((ex583871_ =? 14) &&
+                  ((ex583872_ =? 21) &&
+                    ((ex583873_ =? 11684671) &&
+                      ((ex583874_ =? 24576) &&
+                        ((ex583875_ =? 49152) &&
+                          ((ex583876_ =? (2 ^ 24)) &&
+                            ((ex583877_ =? (2 ^ 24)) && ((ex583878_ =? 6) && (ex583879_ =? 5))))))))) ||
+                (ex583870_ =? 16) &&
+                  ((ex583871_ =? 14) &&
+                    ((ex583872_ =? 21) &&
+                      ((ex583873_ =? 11684671) &&
+                        ((ex583874_ =? 65536) &&
+                          ((ex583875_ =? 131072) &&
+                            ((ex583876_ =? (2 ^ 32 - 1)) &&
+                              ((ex583877_ =? (2 ^ 24)) && ((ex583878_ =? 6) && (ex583879_ =? 5))))))))))))))))*)
 (*(0 <=? parent_excess_blob_gas) && (parent_excess_blob_gas <=? (256 * 11684671 + 21 * 2 ^ 17))*)
-(*(0 <=? ex553033_) && (ex553033_ <=? 21)*)
+(*(0 <=? ex583881_) && (ex583881_ <=? 21)*)
 (*(0 <=? parent_base_fee_per_gas) && (parent_base_fee_per_gas <=? (2 ^ 256 - 1))*)
-(*parent_blob_gas_used =? (2 ^ 17 * ex553033_)*)
+(*parent_blob_gas_used =? (2 ^ 17 * ex583881_)*)
 : M (excess_blob_gas_typ) :=
    let parent_excess_blob_gas := (parent_excess_blob_gas).(excess_blob_gas_value) in
    let parent_base_fee_per_gas := (parent_base_fee_per_gas).(word_value) in
@@ -8319,15 +8595,15 @@ Definition G_initcode_word : Z := 2.
 #[export] Hint Unfold G_initcode_word : sail.
 Definition G_amsterdam_cold_account_access : gas_constant := (Build_gas_constant (3000)).
 #[export] Hint Unfold G_amsterdam_cold_account_access : sail.
-Definition G_amsterdam_cold_storage_access : gas_constant := (Build_gas_constant (3000)).
+Definition G_amsterdam_cold_storage_access : gas_constant := (Build_gas_constant (2100)).
 #[export] Hint Unfold G_amsterdam_cold_storage_access : sail.
 Definition G_amsterdam_storage_write : gas_constant := (Build_gas_constant (10000)).
 #[export] Hint Unfold G_amsterdam_storage_write : sail.
-Definition G_amsterdam_account_write : gas_constant := (Build_gas_constant (8000)).
+Definition G_amsterdam_account_write : gas_constant := (Build_gas_constant (9000)).
 #[export] Hint Unfold G_amsterdam_account_write : sail.
-Definition G_amsterdam_call_value : gas_constant := (Build_gas_constant (10300)).
+Definition G_amsterdam_call_value : gas_constant := (Build_gas_constant (11300)).
 #[export] Hint Unfold G_amsterdam_call_value : sail.
-Definition G_amsterdam_create_access : gas_constant := (Build_gas_constant (11000)).
+Definition G_amsterdam_create_access : gas_constant := (Build_gas_constant (12000)).
 #[export] Hint Unfold G_amsterdam_create_access : sail.
 Definition G_amsterdam_state_byte : gas_constant := (Build_gas_constant (1530)).
 #[export] Hint Unfold G_amsterdam_state_byte : sail.
@@ -8337,7 +8613,7 @@ Definition G_amsterdam_state_new_account : state_gas_spill := (Build_state_gas_s
 #[export] Hint Unfold G_amsterdam_state_new_account : sail.
 Definition G_amsterdam_state_auth_base : state_gas_spill := (Build_state_gas_spill (35190)).
 #[export] Hint Unfold G_amsterdam_state_auth_base : sail.
-Definition R_amsterdam_storage_clear := (12480)  : Z.
+Definition R_amsterdam_storage_clear := (11616)  : Z.
 #[export] Hint Unfold R_amsterdam_storage_clear : sail.
 Definition G_sstore_sentry : gas_cost := (Build_gas_cost (2301)).
 #[export] Hint Unfold G_sstore_sentry : sail.
@@ -8360,11 +8636,11 @@ Definition sstore_clear_refund '(tt : unit) : M (gas_constant) :=
              else (R_sclear_pre_london).(gas_constant_value)))) >>= fun semanticResult =>
    returnM (Build_gas_constant (semanticResult)).
 
-Definition state_gas_spill_room (left' : Z) (*(0 <=? left') && (left' <=? (2 ^ 24))*) : Z :=
-   Z.sub ((pow2 (24))) (left').
+Definition state_gas_spill_room (left' : Z) (*(0 <=? left') && (left' <=? 30000000)*) : Z :=
+   Z.sub (30000000) (left').
 
 Definition state_gas_spill_add (left' : Z) (right' : Z)
-(*(0 <=? left') && ((left' <=? (2 ^ 24)) && (0 <=? right'))*)
+(*(0 <=? left') && ((left' <=? 30000000) && (0 <=? right'))*)
 : M (Z) :=
    let room := state_gas_spill_room (left') in
    (if Z.leb (right') (room) then returnM ((Z.add (left') (right')))
@@ -8375,7 +8651,7 @@ Definition charge_state_gas
 (g : gas_typ) (state_gas_remaining : state_gas_typ) (state_gas_spilled : state_gas_spill)
 (amount : Z) (*0 <=? amount*) (*(0 <=? g) && (g <=? (2 ^ 64 - 1))*)
 (*(0 <=? state_gas_remaining) && (state_gas_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? (2 ^ 24))*)
+(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? 30000000)*)
 : M ((bool * gas_typ * state_gas_typ * state_gas_spill)) :=
    let g := (g).(gas_value) in
    let state_gas_remaining := (state_gas_remaining).(state_gas_value) in
@@ -8401,8 +8677,8 @@ Definition credit_state_gas_refund
 (g : gas_typ) (state_gas_remaining : state_gas_typ) (state_gas_spilled : state_gas_spill)
 (amount : state_gas_spill) (*(0 <=? g) && (g <=? (2 ^ 64 - 1))*)
 (*(0 <=? state_gas_remaining) && (state_gas_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? (2 ^ 24))*)
-(*(0 <=? amount) && (amount <=? (2 ^ 24))*)
+(*(0 <=? state_gas_spilled) && (state_gas_spilled <=? 30000000)*)
+(*(0 <=? amount) && (amount <=? 30000000)*)
 : M ((gas_typ * state_gas_typ * state_gas_spill)) :=
    let g := (g).(gas_value) in
    let state_gas_remaining := (state_gas_remaining).(state_gas_value) in
@@ -8429,13 +8705,27 @@ Definition credit_state_gas_refund
     : M ((Z * Z * Z))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)))).
 
+Definition repay_state_gas_spill
+(g : gas_typ) (remaining : state_gas_typ) (spilled : state_gas_spill)
+(*(0 <=? g) && (g <=? (2 ^ 64 - 1))*) (*(0 <=? remaining) && (remaining <=? (2 ^ 64 - 1))*)
+(*(0 <=? spilled) && (spilled <=? 30000000)*)
+: M ((gas_typ * state_gas_typ * state_gas_spill)) :=
+   let g := (g).(gas_value) in
+   let remaining := (remaining).(state_gas_value) in
+   let spilled := (spilled).(state_gas_spill_value) in
+   (let repayment := if Z.ltb (remaining) (spilled) then remaining else spilled in
+   ((conserved_gas_add (Build_gas_typ ((g))) (Build_gas_typ ((repayment)))) >>= fun semanticResult =>
+    returnM (semanticResult).(gas_value)) >>= fun (w__0 : Z) =>
+   returnM ((w__0, Z.sub (remaining) (repayment), Z.sub (spilled) (repayment)))) >>= fun semanticResult =>
+   returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)))).
+
 Definition return_child_state_gas
 (parent_remaining : state_gas_typ) (parent_spilled : state_gas_spill)
 (child_remaining : state_gas_typ) (child_spilled : state_gas_spill)
 (*(0 <=? parent_remaining) && (parent_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? parent_spilled) && (parent_spilled <=? (2 ^ 24))*)
+(*(0 <=? parent_spilled) && (parent_spilled <=? 30000000)*)
 (*(0 <=? child_remaining) && (child_remaining <=? (2 ^ 64 - 1))*)
-(*(0 <=? child_spilled) && (child_spilled <=? (2 ^ 24))*)
+(*(0 <=? child_spilled) && (child_spilled <=? 30000000)*)
 : M ((state_gas_typ * state_gas_spill)) :=
    let parent_remaining := (parent_remaining).(state_gas_value) in
    let parent_spilled := (parent_spilled).(state_gas_spill_value) in
@@ -9049,7 +9339,7 @@ Definition undefined_SstoreCosts '(tt : unit) : M (SstoreCosts) :=
    (undefined_range ((Z.opp ((Z.mul (199) ((Z.sub ((pow2 (64))) (1)))))))
       ((Z.mul (199) ((Z.sub ((pow2 (64))) (1)))))) >>= fun (w__1 : Z) =>
    (undefined_range (0) ((Z.sub ((pow2 (64))) (1)))) >>= fun (w__2 : Z) =>
-   (undefined_range (0) ((pow2 (24)))) >>= fun (w__3 : Z) =>
+   (undefined_range (0) (30000000)) >>= fun (w__3 : Z) =>
    returnM (({| SstoreCosts_execution := (Build_gas_cost (w__0));
                 SstoreCosts_refund := (Build_gas_refund (w__1));
                 SstoreCosts_state_charge := (Build_gas_cost (w__2));
@@ -9350,13 +9640,13 @@ Definition TWO_COMPONENTS : Z := 2.
 #[export] Hint Unfold TWO_COMPONENTS : sail.
 Definition BLS_G2_POINT_OFFSET : Z := 128.
 #[export] Hint Unfold BLS_G2_POINT_OFFSET : sail.
-Definition precompile_success {ex553471_ : Z} {ex553470_ : Z}
-(output : OutputSliceFields ex553470_ ex553471_)
-(*(0 <=? ex553470_) && ((0 <=? ex553471_) && ((ex553470_ + ex553471_) <=? (2 ^ 32 - 1)))*)
+Definition precompile_success {ex584322_ : Z} {ex584321_ : Z}
+(output : OutputSliceFields ex584321_ ex584322_)
+(*(0 <=? ex584321_) && ((0 <=? ex584322_) && ((ex584321_ + ex584322_) <=? (2 ^ 32 - 1)))*)
 : PrecompileResult :=
    {| PrecompileResult_success := true;
       PrecompileResult_output :=
-        @existT _ _ ex553471_ (@existT _ _ ex553470_ ((output : OutputSliceFields ex553470_ ex553471_))) |}.
+        @existT _ _ ex584322_ (@existT _ _ ex584321_ ((output : OutputSliceFields ex584321_ ex584322_))) |}.
 
 Definition precompile_failure '(tt : unit) : PrecompileResult :=
    {| PrecompileResult_success := false;
@@ -9717,12 +10007,12 @@ Definition guard_static (g : gas_typ) (is_static : bool) (*(0 <=? g) && (g <=? (
      ((GAS_ZERO, Failed (WriteProtection)))
    else ((g, Continue (tt))) in ((Build_gas_typ (semanticValue0)), semanticValue1)).
 
-Definition do_jump {ex553530_ : Z} {ex553529_ : Z}
-(pc_in : code_pointer) (g : gas_typ) (frame_code : CodeFields ex553529_ ex553530_)
+Definition do_jump {ex584381_ : Z} {ex584380_ : Z}
+(pc_in : code_pointer) (g : gas_typ) (frame_code : CodeFields ex584380_ ex584381_)
 (destination_value : word) (*(0 <=? pc_in) && (pc_in <=? (2 ^ 32 - 1))*)
 (*(0 <=? g) && (g <=? (2 ^ 64 - 1))*)
-(*(0 <=? ex553529_) && ((0 <=? ex553530_) && ((ex553529_ + ex553530_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553530_) && ((ex553530_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584380_) && ((0 <=? ex584381_) && ((ex584380_ + ex584381_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584381_) && ((ex584381_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? destination_value) && (destination_value <=? (2 ^ 256 - 1))*)
 : M ((code_pointer * gas_typ * OpcodeOutcome)) :=
    let pc_in := (pc_in).(code_pointer_value) in
@@ -10718,10 +11008,10 @@ Definition execute_calldatacopy
     : M ((Z * StackPointer * Z * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, (Build_memory_length (semanticValue2)), semanticValue3)).
 
-Definition execute_codesize {ex553578_ : Z} {ex553577_ : Z}
-(carried_code : CodeFields ex553577_ ex553578_) (carried_gas : gas_typ) (carried_sp : StackPointer)
-(*(0 <=? ex553577_) && ((0 <=? ex553578_) && ((ex553577_ + ex553578_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553578_) && ((ex553578_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition execute_codesize {ex584429_ : Z} {ex584428_ : Z}
+(carried_code : CodeFields ex584428_ ex584429_) (carried_gas : gas_typ) (carried_sp : StackPointer)
+(*(0 <=? ex584428_) && ((0 <=? ex584429_) && ((ex584428_ + ex584429_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584429_) && ((ex584429_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 : M ((gas_typ * StackPointer * OpcodeOutcome)) :=
    let carried_gas := (carried_gas).(gas_value) in
@@ -10745,11 +11035,11 @@ Definition execute_codesize {ex553578_ : Z} {ex553577_ : Z}
     : M ((Z * StackPointer * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, semanticValue2)).
 
-Definition execute_codecopy {ex553583_ : Z} {ex553582_ : Z}
-(carried_code : CodeFields ex553582_ ex553583_) (memory_base : memory_base_typ)
+Definition execute_codecopy {ex584434_ : Z} {ex584433_ : Z}
+(carried_code : CodeFields ex584433_ ex584434_) (memory_base : memory_base_typ)
 (carried_gas : gas_typ) (carried_sp : StackPointer) (carried_memory_height : memory_height_typ)
-(*(0 <=? ex553582_) && ((0 <=? ex553583_) && ((ex553582_ + ex553583_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553583_) && ((ex553583_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584433_) && ((0 <=? ex584434_) && ((ex584433_ + ex584434_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584434_) && ((ex584434_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? memory_base) && (memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
@@ -11012,10 +11302,10 @@ Definition execute_extcodehash (carried_gas : gas_typ) (carried_sp : StackPointe
     : M ((Z * StackPointer * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, semanticValue2)).
 
-Definition execute_returndatasize {ex553597_ : Z} {ex553596_ : Z}
-(carried_returndata : OutputSliceFields ex553596_ ex553597_) (carried_gas : gas_typ)
+Definition execute_returndatasize {ex584448_ : Z} {ex584447_ : Z}
+(carried_returndata : OutputSliceFields ex584447_ ex584448_) (carried_gas : gas_typ)
 (carried_sp : StackPointer)
-(*(0 <=? ex553596_) && ((0 <=? ex553597_) && ((ex553596_ + ex553597_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584447_) && ((0 <=? ex584448_) && ((ex584447_ + ex584448_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 : M ((gas_typ * StackPointer * OpcodeOutcome)) :=
    let carried_gas := (carried_gas).(gas_value) in
@@ -11039,10 +11329,10 @@ Definition execute_returndatasize {ex553597_ : Z} {ex553596_ : Z}
     : M ((Z * StackPointer * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, semanticValue2)).
 
-Definition execute_returndatacopy {ex553602_ : Z} {ex553601_ : Z}
-(carried_returndata : OutputSliceFields ex553601_ ex553602_) (memory_base : memory_base_typ)
+Definition execute_returndatacopy {ex584453_ : Z} {ex584452_ : Z}
+(carried_returndata : OutputSliceFields ex584452_ ex584453_) (memory_base : memory_base_typ)
 (carried_gas : gas_typ) (carried_sp : StackPointer) (carried_memory_height : memory_height_typ)
-(*(0 <=? ex553601_) && ((0 <=? ex553602_) && ((ex553601_ + ex553602_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584452_) && ((0 <=? ex584453_) && ((ex584452_ + ex584453_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? memory_base) && (memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
@@ -11710,7 +12000,7 @@ Definition execute_sstore
 (carried_refund : gas_refund) (carried_sp : StackPointer) (*(0 <=? fork) && (fork <=? 16)*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * StackPointer * OpcodeOutcome)) :=
    let fork := (fork).(Fork_value) in
@@ -11916,11 +12206,11 @@ Definition execute_tstore
     : M ((Z * StackPointer * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, semanticValue2)).
 
-Definition execute_jump {ex553646_ : Z} {ex553645_ : Z}
-(carried_code : CodeFields ex553645_ ex553646_) (carried_pc : code_pointer) (carried_gas : gas_typ)
+Definition execute_jump {ex584497_ : Z} {ex584496_ : Z}
+(carried_code : CodeFields ex584496_ ex584497_) (carried_pc : code_pointer) (carried_gas : gas_typ)
 (carried_sp : StackPointer)
-(*(0 <=? ex553645_) && ((0 <=? ex553646_) && ((ex553645_ + ex553646_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553646_) && ((ex553646_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584496_) && ((0 <=? ex584497_) && ((ex584496_ + ex584497_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584497_) && ((ex584497_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? carried_pc) && (carried_pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 : M ((code_pointer * gas_typ * StackPointer * OpcodeOutcome)) :=
@@ -11954,11 +12244,11 @@ Definition execute_jump {ex553646_ : Z} {ex553645_ : Z}
     : M ((Z * Z * StackPointer * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in ((Build_code_pointer (semanticValue0)), (Build_gas_typ (semanticValue1)), semanticValue2, semanticValue3)).
 
-Definition execute_jumpi {ex553652_ : Z} {ex553651_ : Z}
-(carried_code : CodeFields ex553651_ ex553652_) (carried_pc : code_pointer) (carried_gas : gas_typ)
+Definition execute_jumpi {ex584503_ : Z} {ex584502_ : Z}
+(carried_code : CodeFields ex584502_ ex584503_) (carried_pc : code_pointer) (carried_gas : gas_typ)
 (carried_sp : StackPointer)
-(*(0 <=? ex553651_) && ((0 <=? ex553652_) && ((ex553651_ + ex553652_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553652_) && ((ex553652_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584502_) && ((0 <=? ex584503_) && ((ex584502_ + ex584503_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584503_) && ((ex584503_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? carried_pc) && (carried_pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 : M ((code_pointer * gas_typ * StackPointer * OpcodeOutcome)) :=
@@ -12357,7 +12647,7 @@ Definition execute_revert
 (*(0 <=? memory_base) && (memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * StackPointer * memory_height_typ * FrameStatus)) :=
    let carried_state_gas_reservoir := (carried_state_gas_reservoir).(state_gas_value) in
@@ -12433,7 +12723,7 @@ Definition execute_selfdestruct
 (carried_refund : gas_refund) (carried_sp : StackPointer) (*(0 <=? fork) && (fork <=? 16)*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * StackPointer * FrameStatus)) :=
    let fork := (fork).(Fork_value) in
@@ -12640,10 +12930,10 @@ Definition execute_selfdestruct
       : MR ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * StackPointer * FrameStatus)) ((Z * Z * Z * Z * StackPointer * FrameStatus))) >>= fun semanticResult =>
      returnR ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * StackPointer * FrameStatus)) (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)), (Build_gas_refund (semanticValue3)), semanticValue4, semanticValue5))).
 
-Definition read_push {ex553693_ : Z} {ex553692_ : Z}
-(code : CodeRegionSliceFields ex553692_ ex553693_) (offset : code_pointer) (n : push_width)
-(*(0 <=? ex553692_) && ((0 <=? ex553693_) && ((ex553692_ + ex553693_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553693_) && ((ex553693_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition read_push {ex584544_ : Z} {ex584543_ : Z}
+(code : CodeRegionSliceFields ex584543_ ex584544_) (offset : code_pointer) (n : push_width)
+(*(0 <=? ex584543_) && ((0 <=? ex584544_) && ((ex584543_ + ex584544_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584544_) && ((ex584544_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? offset) && (offset <=? (2 ^ 32 - 1))*) (*(0 <=? n) && (n <=? 32)*)
 : M (word) :=
    let offset := (offset).(code_pointer_value) in
@@ -12673,11 +12963,11 @@ Definition opcode_available (opcode : opcode) (fork : Fork) (*(0 <=? opcode) && 
    else if Z.eqb (l__0) (232) then Z.geb (fork) (Amsterdam)
    else true.
 
-Definition decode_push_immediate {ex553701_ : Z} {ex553700_ : Z}
-(frame_code : CodeFields ex553700_ ex553701_) (immediate_offset : code_scan_position)
+Definition decode_push_immediate {ex584552_ : Z} {ex584551_ : Z}
+(frame_code : CodeFields ex584551_ ex584552_) (immediate_offset : code_scan_position)
 (width : push_width)
-(*(0 <=? ex553700_) && ((0 <=? ex553701_) && ((ex553700_ + ex553701_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553701_) && ((ex553701_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584551_) && ((0 <=? ex584552_) && ((ex584551_ + ex584552_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584552_) && ((ex584552_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? immediate_offset) && (immediate_offset <=? (2 ^ 32 - 1 - 32))*)
 (*(0 <=? width) && (width <=? 32)*)
 : M ((code_pointer * word)) :=
@@ -12689,11 +12979,11 @@ Definition decode_push_immediate {ex553701_ : Z} {ex553700_ : Z}
    returnM ((Z.add (immediate_offset) (width), value))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1) := semanticResult in ((Build_code_pointer (semanticValue0)), (Build_word (semanticValue1)))).
 
-Definition decode_deep_immediate {ex553707_ : Z} {ex553706_ : Z}
-(frame_code : CodeFields ex553706_ ex553707_) (immediate_offset : code_scan_position)
+Definition decode_deep_immediate {ex584558_ : Z} {ex584557_ : Z}
+(frame_code : CodeFields ex584557_ ex584558_) (immediate_offset : code_scan_position)
 (operation : DeepStackOperation)
-(*(0 <=? ex553706_) && ((0 <=? ex553707_) && ((ex553706_ + ex553707_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553707_) && ((ex553707_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584557_) && ((0 <=? ex584558_) && ((ex584557_ + ex584558_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584558_) && ((ex584558_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? immediate_offset) && (immediate_offset <=? (2 ^ 32 - 1 - 32))*)
 : M ((code_pointer * byte)) :=
    let immediate_offset := (immediate_offset).(code_scan_position_value) in
@@ -12704,11 +12994,11 @@ Definition decode_deep_immediate {ex553707_ : Z} {ex553706_ : Z}
    returnM ((next_pc, immediate))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1) := semanticResult in ((Build_code_pointer (semanticValue0)), semanticValue1)).
 
-Definition execute_push_encoded {ex553712_ : Z} {ex553711_ : Z}
-(frame_code : CodeFields ex553711_ ex553712_) (opcode : opcode)
+Definition execute_push_encoded {ex584563_ : Z} {ex584562_ : Z}
+(frame_code : CodeFields ex584562_ ex584563_) (opcode : opcode)
 (immediate_offset : code_scan_position) (execution_gas : gas_typ) (sp : StackPointer)
-(*(0 <=? ex553711_) && ((0 <=? ex553712_) && ((ex553711_ + ex553712_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553712_) && ((ex553712_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584562_) && ((0 <=? ex584563_) && ((ex584562_ + ex584563_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584563_) && ((ex584563_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? opcode) && (opcode <=? 255)*)
 (*(0 <=? immediate_offset) && (immediate_offset <=? (2 ^ 32 - 1 - 32))*)
 (*(0 <=? execution_gas) && (execution_gas <=? (2 ^ 64 - 1))*)
@@ -12798,11 +13088,11 @@ Definition execute_log_encoded
     : M ((Z * StackPointer * Z * OpcodeOutcome))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3) := semanticResult in ((Build_gas_typ (semanticValue0)), semanticValue1, (Build_memory_length (semanticValue2)), semanticValue3)).
 
-Definition execute_deep_stack_encoded {ex553728_ : Z} {ex553727_ : Z}
-(frame_code : CodeFields ex553727_ ex553728_) (opcode : opcode)
+Definition execute_deep_stack_encoded {ex584579_ : Z} {ex584578_ : Z}
+(frame_code : CodeFields ex584578_ ex584579_) (opcode : opcode)
 (immediate_offset : code_scan_position) (execution_gas : gas_typ) (sp : StackPointer)
-(*(0 <=? ex553727_) && ((0 <=? ex553728_) && ((ex553727_ + ex553728_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553728_) && ((ex553728_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584578_) && ((0 <=? ex584579_) && ((ex584578_ + ex584579_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584579_) && ((ex584579_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? opcode) && (opcode <=? 255)*)
 (*(0 <=? immediate_offset) && (immediate_offset <=? (2 ^ 32 - 1 - 32))*)
 (*(0 <=? execution_gas) && (execution_gas <=? (2 ^ 64 - 1))*)
@@ -12932,10 +13222,10 @@ Definition decode_simple (opcode : opcode) (fork : Fork) (*(0 <=? opcode) && (op
      else if Z.eqb (l__0) (255) then SELFDESTRUCT (tt)
      else INVALID (tt).
 
-Definition fetch {ex553737_ : Z} {ex553736_ : Z}
-(frame_code : CodeFields ex553736_ ex553737_) (current : code_pointer) (fork : Fork)
-(*(0 <=? ex553736_) && ((0 <=? ex553737_) && ((ex553736_ + ex553737_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553737_) && ((ex553737_ + 32) <=? (2 ^ 32 - 1)))*)
+Definition fetch {ex584588_ : Z} {ex584587_ : Z}
+(frame_code : CodeFields ex584587_ ex584588_) (current : code_pointer) (fork : Fork)
+(*(0 <=? ex584587_) && ((0 <=? ex584588_) && ((ex584587_ + ex584588_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584588_) && ((ex584588_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? current) && (current <=? (2 ^ 32 - 1))*) (*(0 <=? fork) && (fork <=? 16)*)
 : M ((code_pointer * ast)) :=
    let current := (current).(code_pointer_value) in
@@ -13000,15 +13290,15 @@ Definition frame_succeeded (frame_status : FrameStatus) : bool :=
    | Exceptional _ => false
    end.
 
-Definition resume_call {ex553743_ : Z} {ex553742_ : Z}
-(continuation : CallContinuation) (output : OutputSliceFields ex553742_ ex553743_)
+Definition resume_call {ex584594_ : Z} {ex584593_ : Z}
+(continuation : CallContinuation) (output : OutputSliceFields ex584593_ ex584594_)
 (child_memory_base : memory_base_typ) (child_gas : gas_typ) (child_state_gas : state_gas_typ)
 (child_state_spill : state_gas_spill) (child_refund : gas_refund) (child_status : FrameStatus)
-(*(0 <=? ex553742_) && ((0 <=? ex553743_) && ((ex553742_ + ex553743_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584593_) && ((0 <=? ex584594_) && ((ex584593_ + ex584594_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? child_memory_base) && (child_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? child_gas) && (child_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? child_state_gas) && (child_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? child_state_spill) && (child_state_spill <=? (2 ^ 24))*)
+(*(0 <=? child_state_spill) && (child_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? child_refund) && (child_refund <=? (199 * (2 ^ 64 - 1)))*)
 : M (FrameTransition) :=
    let child_memory_base := (child_memory_base).(memory_base_value) in
@@ -13043,12 +13333,19 @@ Definition resume_call {ex553743_ : Z} {ex553742_ : Z}
    (returndata_copy_prefix (output) (Build_memory_base_typ ((return_destination)))
       (Build_memory_length (((continuation.(CallContinuation_return_length)).(memory_length_value))))) >>
    (if succeeded return M ((Z * Z * StackPointer * Z * Z)) then
+      ((repay_state_gas_spill (Build_gas_typ ((parent_gas)))
+          (Build_state_gas_typ ((parent_state_gas))) (Build_state_gas_spill ((parent_state_spill)))) >>= fun semanticResult =>
+       returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__1 : (Z * Z * Z)) =>
+      let '((tup__0, tup__1, tup__2)) := w__1  : (Z * Z * Z) in
+      let parent_gas : Z := tup__0 in
+      let parent_state_gas : Z := tup__1 in
+      let parent_state_spill : Z := tup__2 in
       ((record_refund (Build_gas_refund ((parent_refund))) (child_refund)) >>= fun semanticResult =>
-       returnM (semanticResult).(gas_refund_value)) >>= fun (w__1 : Z) =>
-      let parent_refund := w__1  : Z in
+       returnM (semanticResult).(gas_refund_value)) >>= fun (w__2 : Z) =>
+      let parent_refund := w__2  : Z in
       (k_journal_commit (tt)) >>
-      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__2 : StackPointer) =>
-      let parent_sp := w__2  : StackPointer in
+      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__3 : StackPointer) =>
+      let parent_sp := w__3  : StackPointer in
       (write_stack_word (parent_sp) (Build_word (((WORD_ONE).(word_value))))) >>
       returnM ((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill))
     else
@@ -13058,16 +13355,16 @@ Definition resume_call {ex553743_ : Z} {ex553742_ : Z}
              (Build_state_gas_typ ((parent_state_gas)))
              (Build_state_gas_spill ((parent_state_spill)))
              (Build_state_gas_spill (((G_amsterdam_state_new_account).(state_gas_spill_value))))) >>= fun semanticResult =>
-          returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__3 : (Z * Z * Z)) =>
-         let '((tup__0, tup__1, tup__2)) := w__3  : (Z * Z * Z) in
+          returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__4 : (Z * Z * Z)) =>
+         let '((tup__0, tup__1, tup__2)) := w__4  : (Z * Z * Z) in
          let parent_gas : Z := tup__0 in
          let parent_state_gas : Z := tup__1 in
          let parent_state_spill : Z := tup__2 in
          returnM ((parent_gas, parent_state_gas, parent_state_spill))
        else returnM ((parent_gas, parent_state_gas, parent_state_spill))) >>= fun '((parent_gas, parent_state_gas, parent_state_spill)
       : (Z * Z * Z)) =>
-      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__4 : StackPointer) =>
-      let parent_sp := w__4  : StackPointer in
+      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__5 : StackPointer) =>
+      let parent_sp := w__5  : StackPointer in
       (write_stack_word (parent_sp) (Build_word (((WORD_ZERO).(word_value))))) >>
       returnM ((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill))) >>= fun '((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill)
    : (Z * Z * StackPointer * Z * Z)) =>
@@ -13087,18 +13384,18 @@ Definition resume_call {ex553743_ : Z} {ex553742_ : Z}
                   @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (checkpoint.(FrameCheckpoint_code)))));
                 FrameTransition_calldata := checkpoint.(FrameCheckpoint_calldata);
                 FrameTransition_returndata :=
-                  @existT _ _ ex553743_ (@existT _ _ ex553742_ ((output : OutputSliceFields ex553742_ ex553743_))) |})).
+                  @existT _ _ ex584594_ (@existT _ _ ex584593_ ((output : OutputSliceFields ex584593_ ex584594_))) |})).
 
-Definition resume_create {ex553752_ : Z} {ex553751_ : Z}
-(continuation : CreateContinuation) (output : OutputSliceFields ex553751_ ex553752_)
+Definition resume_create {ex584603_ : Z} {ex584602_ : Z}
+(continuation : CreateContinuation) (output : OutputSliceFields ex584602_ ex584603_)
 (child_memory_base : memory_base_typ) (child_gas : gas_typ) (child_state_gas : state_gas_typ)
 (child_state_spill : state_gas_spill) (child_refund : gas_refund) (child_status : FrameStatus)
 (child_state_gas_reservoir : state_gas_typ)
-(*(0 <=? ex553751_) && ((0 <=? ex553752_) && ((ex553751_ + ex553752_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584602_) && ((0 <=? ex584603_) && ((ex584602_ + ex584603_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? child_memory_base) && (child_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? child_gas) && (child_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? child_state_gas) && (child_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? child_state_spill) && (child_state_spill <=? (2 ^ 24))*)
+(*(0 <=? child_state_spill) && (child_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? child_refund) && (child_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? child_state_gas_reservoir) && (child_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 : M (FrameTransition) :=
@@ -13215,21 +13512,28 @@ Definition resume_create {ex553752_ : Z} {ex553751_ : Z}
    let parent_refund : Z := (checkpoint.(FrameCheckpoint_refund)).(gas_refund_value) in
    let parent_sp : StackPointer := checkpoint.(FrameCheckpoint_stack_top) in
    (if deploy_succeeds return M ((Z * Z * StackPointer * Z * Z)) then
+      ((repay_state_gas_spill (Build_gas_typ ((parent_gas)))
+          (Build_state_gas_typ ((parent_state_gas))) (Build_state_gas_spill ((parent_state_spill)))) >>= fun semanticResult =>
+       returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__2 : (Z * Z * Z)) =>
+      let '((tup__0, tup__1, tup__2)) := w__2  : (Z * Z * Z) in
+      let parent_gas : Z := tup__0 in
+      let parent_state_gas : Z := tup__1 in
+      let parent_state_spill : Z := tup__2 in
       ((record_refund (Build_gas_refund ((parent_refund))) (child_refund)) >>= fun semanticResult =>
-       returnM (semanticResult).(gas_refund_value)) >>= fun (w__2 : Z) =>
-      let parent_refund := w__2  : Z in
+       returnM (semanticResult).(gas_refund_value)) >>= fun (w__3 : Z) =>
+      let parent_refund := w__3  : Z in
       let '(@existT _ _ deployed_bytes__'len (@existT _ _ deployed_bytes__'off deployed_bytes)) :=
         (if frontier_empty_deposit then
           @existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0)))
         else
-          @existT _ _ ex553752_ (@existT _ _ ex553751_ ((output : OutputSliceFields ex553751_ ex553752_))) : OutputSlice) in
+          @existT _ _ ex584603_ (@existT _ _ ex584602_ ((output : OutputSliceFields ex584602_ ex584603_))) : OutputSlice) in
       (code_db_intern_output (deployed_bytes)) >>= fun '(@existT _ _ __deployed_code1 (@existT _ _ __deployed_code0 deployed_code)) =>
       (k_deploy_code (continuation.(CreateContinuation_address)) (deployed_code)) >>
       (k_journal_commit (tt)) >>
       let deployed_address :=
         (address_to_word (continuation.(CreateContinuation_address))).(word_value) in
-      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__3 : StackPointer) =>
-      let parent_sp := w__3  : StackPointer in
+      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__4 : StackPointer) =>
+      let parent_sp := w__4  : StackPointer in
       (write_stack_word (parent_sp) (Build_word ((deployed_address)))) >>
       returnM ((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill))
     else
@@ -13239,23 +13543,23 @@ Definition resume_create {ex553752_ : Z} {ex553751_ : Z}
              (Build_state_gas_typ ((parent_state_gas)))
              (Build_state_gas_spill ((parent_state_spill)))
              (Build_state_gas_spill (((G_amsterdam_state_new_account).(state_gas_spill_value))))) >>= fun semanticResult =>
-          returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__4 : (Z * Z * Z)) =>
-         let '((tup__0, tup__1, tup__2)) := w__4  : (Z * Z * Z) in
+          returnM (let '(semanticValue0, semanticValue1, semanticValue2) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value)))) >>= fun (w__5 : (Z * Z * Z)) =>
+         let '((tup__0, tup__1, tup__2)) := w__5  : (Z * Z * Z) in
          let parent_gas : Z := tup__0 in
          let parent_state_gas : Z := tup__1 in
          let parent_state_spill : Z := tup__2 in
          returnM ((parent_gas, parent_state_gas, parent_state_spill))
        else returnM ((parent_gas, parent_state_gas, parent_state_spill))) >>= fun '((parent_gas, parent_state_gas, parent_state_spill)
       : (Z * Z * Z)) =>
-      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__5 : StackPointer) =>
-      let parent_sp := w__5  : StackPointer in
+      (stack_top_advance (parent_sp) (Build_stack_slot_count ((1)))) >>= fun (w__6 : StackPointer) =>
+      let parent_sp := w__6  : StackPointer in
       (write_stack_word (parent_sp) (Build_word (((WORD_ZERO).(word_value))))) >>
       returnM ((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill))) >>= fun '((parent_gas, parent_refund, parent_sp, parent_state_gas, parent_state_spill)
    : (Z * Z * StackPointer * Z * Z)) =>
    let '(@existT _ _ parent_returndata__'len (@existT _ _ parent_returndata__'off parent_returndata)) :=
      (if initcode_succeeded then returndata_clear (tt)
      else
-       @existT _ _ ex553752_ (@existT _ _ ex553751_ ((output : OutputSliceFields ex553751_ ex553752_))) : {len & {off & (OutputSliceFields off len)}}%type) in
+       @existT _ _ ex584603_ (@existT _ _ ex584602_ ((output : OutputSliceFields ex584602_ ex584603_))) : {len & {off & (OutputSliceFields off len)}}%type) in
    returnM (({| FrameTransition_pc :=
                   (Build_code_pointer ((checkpoint.(FrameCheckpoint_pc)).(code_pointer_value)));
                 FrameTransition_gas_remaining := (Build_gas_typ (parent_gas));
@@ -13273,16 +13577,16 @@ Definition resume_create {ex553752_ : Z} {ex553751_ : Z}
                 FrameTransition_calldata := checkpoint.(FrameCheckpoint_calldata);
                 FrameTransition_returndata := @existT _ _ _ (@existT _ _ _ (parent_returndata)) |})).
 
-Definition resume_frame {ex553762_ : Z} {ex553761_ : Z}
-(continuation : FrameContinuation) (output : OutputSliceFields ex553761_ ex553762_)
+Definition resume_frame {ex584613_ : Z} {ex584612_ : Z}
+(continuation : FrameContinuation) (output : OutputSliceFields ex584612_ ex584613_)
 (child_memory_base : memory_base_typ) (child_gas : gas_typ) (child_state_gas : state_gas_typ)
 (child_state_spill : state_gas_spill) (child_refund : gas_refund) (child_status : FrameStatus)
 (child_state_gas_reservoir : state_gas_typ)
-(*(0 <=? ex553761_) && ((0 <=? ex553762_) && ((ex553761_ + ex553762_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584612_) && ((0 <=? ex584613_) && ((ex584612_ + ex584613_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? child_memory_base) && (child_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? child_gas) && (child_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? child_state_gas) && (child_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? child_state_spill) && (child_state_spill <=? (2 ^ 24))*)
+(*(0 <=? child_state_spill) && (child_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? child_refund) && (child_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? child_state_gas_reservoir) && (child_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 : M (FrameTransition) :=
@@ -13359,28 +13663,28 @@ Definition executable_code (target : vec (mword 8) 20) (dele : bool) (dtgt : vec
        : M ({len & {off & (CodeFields off len)}}%type))
     : M ({len & {off & (CodeFields off len)}}%type).
 
-Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ : Z}
+Definition run_call {ex584639_ : Z} {ex584638_ : Z} {ex584635_ : Z} {ex584634_ : Z}
 (carried_pc : code_pointer) (carried_gas : gas_typ) (carried_state_gas : state_gas_typ)
 (carried_state_spill : state_gas_spill) (carried_refund : gas_refund) (carried_sp : StackPointer)
 (carried_memory_base : memory_base_typ) (carried_memory_height : memory_height_typ)
 (carried_caller : vec (mword 8) 20) (carried_address : vec (mword 8) 20)
 (carried_code_address : vec (mword 8) 20) (carried_value : word)
 (carried_state_gas_reservoir : state_gas_typ) (carried_is_static : bool)
-(carried_depth : frame_depth) (carried_code : CodeFields ex553783_ ex553784_)
-(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex553787_ ex553788_)
+(carried_depth : frame_depth) (carried_code : CodeFields ex584634_ ex584635_)
+(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex584638_ ex584639_)
 (kind : CallKind) (*(0 <=? carried_pc) && (carried_pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? carried_memory_base) && (carried_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_value) && (carried_value <=? (2 ^ 256 - 1))*)
 (*(0 <=? carried_state_gas_reservoir) && (carried_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_depth) && (carried_depth <=? 1024)*)
-(*(0 <=? ex553783_) && ((0 <=? ex553784_) && ((ex553783_ + ex553784_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553784_) && ((ex553784_ + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex553787_) && ((0 <=? ex553788_) && ((ex553787_ + ex553788_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584634_) && ((0 <=? ex584635_) && ((ex584634_ + ex584635_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584635_) && ((ex584635_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584638_) && ((0 <=? ex584639_) && ((ex584638_ + ex584639_) <=? (2 ^ 32 - 1)))*)
 : M (FrameTransition) :=
    let carried_pc := (carried_pc).(code_pointer_value) in
    let carried_gas := (carried_gas).(gas_value) in
@@ -13430,10 +13734,10 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                             Message_is_static := carried_is_static;
                                             Message_depth := (Build_frame_depth (carried_depth)) |};
                                        FrameTransition_code :=
-                                         @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                         @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                        FrameTransition_calldata := carried_calldata;
                                        FrameTransition_returndata :=
-                                         @existT _ _ ex553788_ (@existT _ _ ex553787_ ((carried_returndata : OutputSliceFields ex553787_ ex553788_))) |}))
+                                         @existT _ _ ex584639_ (@existT _ _ ex584638_ ((carried_returndata : OutputSliceFields ex584638_ ex584639_))) |}))
      | Continue tt =>
         let pc_after : Z := carried_pc in
         let gas_after : Z := carried_gas in
@@ -13443,7 +13747,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
         let sp_after : StackPointer := carried_sp in
         let memory_after : Z := carried_memory_height in
         let '(@existT _ _ returndata_after__'len (@existT _ _ returndata_after__'off returndata_after)) :=
-          (@existT _ _ ex553788_ (@existT _ _ ex553787_ ((carried_returndata : OutputSliceFields ex553787_ ex553788_))) : OutputSlice) in
+          (@existT _ _ ex584639_ (@existT _ _ ex584638_ ((carried_returndata : OutputSliceFields ex584638_ ex584639_))) : OutputSlice) in
         let parent_message : Message :=
           {| Message_caller := carried_caller;
              Message_address := carried_address;
@@ -13523,7 +13827,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                             (Build_memory_length (memory_after));
                                           FrameTransition_message := parent_message;
                                           FrameTransition_code :=
-                                            @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                            @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                           FrameTransition_calldata := carried_calldata;
                                           FrameTransition_returndata :=
                                             @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -13573,7 +13877,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                (Build_memory_length (memory_after));
                                              FrameTransition_message := parent_message;
                                              FrameTransition_code :=
-                                               @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                               @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                              FrameTransition_calldata := carried_calldata;
                                              FrameTransition_returndata :=
                                                @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -13610,7 +13914,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                   (Build_memory_length (memory_after));
                                                 FrameTransition_message := parent_message;
                                                 FrameTransition_code :=
-                                                  @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                  @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                 FrameTransition_calldata := carried_calldata;
                                                 FrameTransition_returndata :=
                                                   @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -13669,7 +13973,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                      (Build_memory_length (memory_after));
                                                    FrameTransition_message := parent_message;
                                                    FrameTransition_code :=
-                                                     @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                     @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                    FrameTransition_calldata := carried_calldata;
                                                    FrameTransition_returndata :=
                                                      @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -13726,7 +14030,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                   (Build_memory_length (memory_after));
                                                 FrameTransition_message := parent_message;
                                                 FrameTransition_code :=
-                                                  @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                  @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                 FrameTransition_calldata := carried_calldata;
                                                 FrameTransition_returndata :=
                                                   @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -13772,7 +14076,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                (Build_memory_length (memory_after));
                                              FrameTransition_message := parent_message;
                                              FrameTransition_code :=
-                                               @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                               @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                              FrameTransition_calldata := carried_calldata;
                                              FrameTransition_returndata :=
                                                @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -13819,7 +14123,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                (Build_memory_length (memory_after));
                                              FrameTransition_message := parent_message;
                                              FrameTransition_code :=
-                                               @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                               @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                              FrameTransition_calldata := carried_calldata;
                                              FrameTransition_returndata :=
                                                @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -13913,7 +14217,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                         (Build_memory_length (memory_after));
                                                       FrameTransition_message := parent_message;
                                                       FrameTransition_code :=
-                                                        @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                        @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                       FrameTransition_calldata := carried_calldata;
                                                       FrameTransition_returndata :=
                                                         @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -13983,7 +14287,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                                FrameTransition_message :=
                                                                  parent_message;
                                                                FrameTransition_code :=
-                                                                 @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                                 @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                                FrameTransition_calldata :=
                                                                  carried_calldata;
                                                                FrameTransition_returndata :=
@@ -14032,7 +14336,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                                FrameTransition_message :=
                                                                  parent_message;
                                                                FrameTransition_code :=
-                                                                 @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                                 @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                                FrameTransition_calldata :=
                                                                  carried_calldata;
                                                                FrameTransition_returndata :=
@@ -14079,7 +14383,7 @@ Definition run_call {ex553788_ : Z} {ex553787_ : Z} {ex553784_ : Z} {ex553783_ :
                                                             FrameTransition_message :=
                                                               parent_message;
                                                             FrameTransition_code :=
-                                                              @existT _ _ ex553784_ (@existT _ _ ex553783_ ((carried_code : CodeFields ex553783_ ex553784_)));
+                                                              @existT _ _ ex584635_ (@existT _ _ ex584634_ ((carried_code : CodeFields ex584634_ ex584635_)));
                                                             FrameTransition_calldata :=
                                                               carried_calldata;
                                                             FrameTransition_returndata :=
@@ -14189,28 +14493,28 @@ Definition create_semantics (kind : CreateKind) : CreateSemantics :=
 Definition create_stack_inputs (kind : CreateKind) : operand_stack_height :=
    (Build_operand_stack_height (match kind with | CreateByNonce => 3 | CreateBySalt => 4 end)).
 
-Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_ : Z}
+Definition run_create {ex584658_ : Z} {ex584657_ : Z} {ex584654_ : Z} {ex584653_ : Z}
 (carried_pc : code_pointer) (carried_gas : gas_typ) (carried_state_gas : state_gas_typ)
 (carried_state_spill : state_gas_spill) (carried_refund : gas_refund) (carried_sp : StackPointer)
 (carried_memory_base : memory_base_typ) (carried_memory_height : memory_height_typ)
 (carried_caller : vec (mword 8) 20) (carried_address : vec (mword 8) 20)
 (carried_code_address : vec (mword 8) 20) (carried_value : word)
 (carried_state_gas_reservoir : state_gas_typ) (carried_is_static : bool)
-(carried_depth : frame_depth) (carried_code : CodeFields ex553802_ ex553803_)
-(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex553806_ ex553807_)
+(carried_depth : frame_depth) (carried_code : CodeFields ex584653_ ex584654_)
+(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex584657_ ex584658_)
 (kind : CreateKind) (*(0 <=? carried_pc) && (carried_pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? carried_memory_base) && (carried_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_value) && (carried_value <=? (2 ^ 256 - 1))*)
 (*(0 <=? carried_state_gas_reservoir) && (carried_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_depth) && (carried_depth <=? 1024)*)
-(*(0 <=? ex553802_) && ((0 <=? ex553803_) && ((ex553802_ + ex553803_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553803_) && ((ex553803_ + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex553806_) && ((0 <=? ex553807_) && ((ex553806_ + ex553807_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584653_) && ((0 <=? ex584654_) && ((ex584653_ + ex584654_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584654_) && ((ex584654_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584657_) && ((0 <=? ex584658_) && ((ex584657_ + ex584658_) <=? (2 ^ 32 - 1)))*)
 : M (FrameTransition) :=
    let carried_pc := (carried_pc).(code_pointer_value) in
    let carried_gas := (carried_gas).(gas_value) in
@@ -14260,10 +14564,10 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                             Message_is_static := carried_is_static;
                                             Message_depth := (Build_frame_depth (carried_depth)) |};
                                        FrameTransition_code :=
-                                         @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                         @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                        FrameTransition_calldata := carried_calldata;
                                        FrameTransition_returndata :=
-                                         @existT _ _ ex553807_ (@existT _ _ ex553806_ ((carried_returndata : OutputSliceFields ex553806_ ex553807_))) |}))
+                                         @existT _ _ ex584658_ (@existT _ _ ex584657_ ((carried_returndata : OutputSliceFields ex584657_ ex584658_))) |}))
      | Continue tt =>
         let pc_after : Z := carried_pc in
         let gas_after : Z := carried_gas in
@@ -14273,7 +14577,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
         let sp_after : StackPointer := carried_sp in
         let memory_after : Z := carried_memory_height in
         let '(@existT _ _ returndata_after__'len (@existT _ _ returndata_after__'off returndata_after)) :=
-          (@existT _ _ ex553807_ (@existT _ _ ex553806_ ((carried_returndata : OutputSliceFields ex553806_ ex553807_))) : OutputSlice) in
+          (@existT _ _ ex584658_ (@existT _ _ ex584657_ ((carried_returndata : OutputSliceFields ex584657_ ex584658_))) : OutputSlice) in
         let parent_message : Message :=
           {| Message_caller := carried_caller;
              Message_address := carried_address;
@@ -14336,7 +14640,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                             (Build_memory_length (memory_after));
                                           FrameTransition_message := parent_message;
                                           FrameTransition_code :=
-                                            @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                            @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                           FrameTransition_calldata := carried_calldata;
                                           FrameTransition_returndata :=
                                             @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -14374,7 +14678,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                (Build_memory_length (memory_after));
                                              FrameTransition_message := parent_message;
                                              FrameTransition_code :=
-                                               @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                               @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                              FrameTransition_calldata := carried_calldata;
                                              FrameTransition_returndata :=
                                                @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -14419,7 +14723,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                   (Build_memory_length (memory_after));
                                                 FrameTransition_message := parent_message;
                                                 FrameTransition_code :=
-                                                  @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                                  @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                                 FrameTransition_calldata := carried_calldata;
                                                 FrameTransition_returndata :=
                                                   @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -14465,7 +14769,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                             (Build_memory_length (memory_after));
                                           FrameTransition_message := parent_message;
                                           FrameTransition_code :=
-                                            @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                            @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                           FrameTransition_calldata := carried_calldata;
                                           FrameTransition_returndata :=
                                             @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -14518,7 +14822,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                             (Build_memory_length (memory_after));
                                           FrameTransition_message := parent_message;
                                           FrameTransition_code :=
-                                            @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                            @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                           FrameTransition_calldata := carried_calldata;
                                           FrameTransition_returndata :=
                                             @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -14567,7 +14871,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                      (Build_memory_length (memory_after));
                                                    FrameTransition_message := parent_message;
                                                    FrameTransition_code :=
-                                                     @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                                     @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                                    FrameTransition_calldata := carried_calldata;
                                                    FrameTransition_returndata :=
                                                      @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -14641,7 +14945,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                         (Build_memory_length (memory_after));
                                                       FrameTransition_message := parent_message;
                                                       FrameTransition_code :=
-                                                        @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                                        @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                                       FrameTransition_calldata := carried_calldata;
                                                       FrameTransition_returndata :=
                                                         @existT _ _ _ (@existT _ _ _ (returndata_after)) |}))
@@ -14699,7 +15003,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                   (Build_memory_length (memory_after));
                                                 FrameTransition_message := parent_message;
                                                 FrameTransition_code :=
-                                                  @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                                  @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                                 FrameTransition_calldata := carried_calldata;
                                                 FrameTransition_returndata :=
                                                   @existT _ _ _ (@existT _ _ _ (returndata_after)) |})
@@ -14764,7 +15068,7 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
                                                            (Build_memory_length (memory_after));
                                                          FrameTransition_message := parent_message;
                                                          FrameTransition_code :=
-                                                           @existT _ _ ex553803_ (@existT _ _ ex553802_ ((carried_code : CodeFields ex553802_ ex553803_)));
+                                                           @existT _ _ ex584654_ (@existT _ _ ex584653_ ((carried_code : CodeFields ex584653_ ex584654_)));
                                                          FrameTransition_calldata :=
                                                            carried_calldata;
                                                          FrameTransition_returndata :=
@@ -14840,24 +15144,24 @@ Definition run_create {ex553807_ : Z} {ex553806_ : Z} {ex553803_ : Z} {ex553802_
      end
       : MR (FrameTransition) (FrameTransition)).
 
-Definition interpret {ex553821_ : Z} {ex553820_ : Z}
+Definition interpret {ex584672_ : Z} {ex584671_ : Z}
 (initial_gas : gas_typ) (initial_state_gas : state_gas_typ) (initial_state_spill : state_gas_spill)
 (initial_refund : gas_refund) (initial_sp : StackPointer) (initial_memory_base : memory_base_typ)
 (initial_memory_height : memory_height_typ) (initial_caller : vec (mword 8) 20)
 (initial_address : vec (mword 8) 20) (initial_code_address : vec (mword 8) 20)
 (initial_value : word) (initial_state_gas_reservoir : state_gas_typ) (initial_is_static : bool)
-(initial_depth : frame_depth) (initial_code : CodeFields ex553820_ ex553821_)
+(initial_depth : frame_depth) (initial_code : CodeFields ex584671_ ex584672_)
 (initial_calldata : CalldataSlice) (*(0 <=? initial_gas) && (initial_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? initial_state_gas) && (initial_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? initial_state_spill) && (initial_state_spill <=? (2 ^ 24))*)
+(*(0 <=? initial_state_spill) && (initial_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? initial_refund) && (initial_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? initial_memory_base) && (initial_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? initial_memory_height) && (initial_memory_height <=? (2 ^ 32 - 1))*)
 (*(0 <=? initial_value) && (initial_value <=? (2 ^ 256 - 1))*)
 (*(0 <=? initial_state_gas_reservoir) && (initial_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 (*(0 <=? initial_depth) && (initial_depth <=? 1024)*)
-(*(0 <=? ex553820_) && ((0 <=? ex553821_) && ((ex553820_ + ex553821_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553821_) && ((ex553821_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584671_) && ((0 <=? ex584672_) && ((ex584671_ + ex584672_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584672_) && ((ex584672_ + 32) <=? (2 ^ 32 - 1)))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * FrameStatus * OutputSlice)) :=
    let initial_gas := (initial_gas).(gas_value) in
    let initial_state_gas := (initial_state_gas).(state_gas_value) in
@@ -14871,11 +15175,14 @@ Definition interpret {ex553821_ : Z} {ex553820_ : Z}
    (read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    let fork := profile.(ProtocolProfileFields_fork) in
-   read_reg k_header >>= fun (w__0 : BlockHeader) =>
-   ((blob_base_fee (fork) (profile.(ProtocolProfileFields_blob_schedule))
-       (profile.(ProtocolProfileFields_excess_blob_gas_limit))
-       ((w__0.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))) >>= fun semanticResult =>
-    returnM (semanticResult).(word_value)) >>= fun blob_fee =>
+   (if Z.geb (fork) (Cancun) return M (Z) then
+      read_reg k_header >>= fun (w__0 : BlockHeader) =>
+      ((blob_base_fee (fork) (profile.(ProtocolProfileFields_blob_schedule))
+          (profile.(ProtocolProfileFields_excess_blob_gas_limit))
+          ((w__0.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))) >>= fun semanticResult =>
+       returnM (semanticResult).(word_value))
+       : M (Z)
+    else returnM ((ZERO_WORD).(word_value))) >>= fun blob_fee =>
    (frame_stack_reset (tt)) >>
    let interpreting : bool := true in
    let '(@existT _ _ result__'len (@existT _ _ result__'off result)) :=
@@ -14899,7 +15206,7 @@ Definition interpret {ex553821_ : Z} {ex553820_ : Z}
    let carried_is_static : bool := initial_is_static in
    let carried_depth : Z := initial_depth in
    let '(@existT _ _ carried_code__'len (@existT _ _ carried_code__'off carried_code)) :=
-     (@existT _ _ ex553821_ (@existT _ _ ex553820_ ((initial_code : CodeFields ex553820_ ex553821_))) : Code) in
+     (@existT _ _ ex584672_ (@existT _ _ ex584671_ ((initial_code : CodeFields ex584671_ ex584672_))) : Code) in
    let carried_calldata : CalldataSlice := initial_calldata in
    let '(@existT _ _ carried_returndata__'len (@existT _ _ carried_returndata__'off carried_returndata)) :=
      (@existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0))) : OutputSlice) in
@@ -15705,9 +16012,9 @@ Definition interpret {ex553821_ : Z} {ex553820_ : Z}
                  let status_after := exceptional.(ExceptionalStateTransition_status) in
                  returnM ((pc_after, GAS_ZERO, state_gas_after, state_spill_after, refund_after, sp_after, memory_after, status_after))
               | _ => returnM (result)
-              end >>= fun (w__7 : (Z * Z * Z * Z * Z * StackPointer * Z * FrameStatus)) =>
+              end >>= fun (w__8 : (Z * Z * Z * Z * Z * StackPointer * Z * FrameStatus)) =>
               let '((tup__0, tup__1, tup__2, tup__3, tup__4, tup__5, tup__6, tup__7)) :=
-                w__7
+                w__8
                  : (Z * Z * Z * Z * Z * StackPointer * Z * FrameStatus) in
               let carried_pc : Z := tup__0 in
               let carried_gas : Z := tup__1 in
@@ -15803,28 +16110,28 @@ Definition undefined_CreateSemantics '(tt : unit) : M (CreateSemantics) :=
    (undefined_bool (tt)) >>= fun (w__0 : bool) =>
    returnM (({| CreateSemantics_uses_salt := w__0 |})).
 
-Definition run_frame_entry_encoded {ex553840_ : Z} {ex553839_ : Z} {ex553836_ : Z} {ex553835_ : Z}
+Definition run_frame_entry_encoded {ex584691_ : Z} {ex584690_ : Z} {ex584687_ : Z} {ex584686_ : Z}
 (carried_pc : code_pointer) (carried_gas : gas_typ) (carried_state_gas : state_gas_typ)
 (carried_state_spill : state_gas_spill) (carried_refund : gas_refund) (carried_sp : StackPointer)
 (carried_memory_base : memory_base_typ) (carried_memory_height : memory_height_typ)
 (carried_caller : vec (mword 8) 20) (carried_address : vec (mword 8) 20)
 (carried_code_address : vec (mword 8) 20) (carried_value : word)
 (carried_state_gas_reservoir : state_gas_typ) (carried_is_static : bool)
-(carried_depth : frame_depth) (carried_code : CodeFields ex553835_ ex553836_)
-(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex553839_ ex553840_)
+(carried_depth : frame_depth) (carried_code : CodeFields ex584686_ ex584687_)
+(carried_calldata : CalldataSlice) (carried_returndata : OutputSliceFields ex584690_ ex584691_)
 (opcode : opcode) (*(0 <=? carried_pc) && (carried_pc <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? carried_memory_base) && (carried_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_value) && (carried_value <=? (2 ^ 256 - 1))*)
 (*(0 <=? carried_state_gas_reservoir) && (carried_state_gas_reservoir <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_depth) && (carried_depth <=? 1024)*)
-(*(0 <=? ex553835_) && ((0 <=? ex553836_) && ((ex553835_ + ex553836_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553836_) && ((ex553836_ + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex553839_) && ((0 <=? ex553840_) && ((ex553839_ + ex553840_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584686_) && ((0 <=? ex584687_) && ((ex584686_ + ex584687_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584687_) && ((ex584687_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584690_) && ((0 <=? ex584691_) && ((ex584690_ + ex584691_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? opcode) && (opcode <=? 255)*)
 : M (FrameTransition) :=
    let carried_pc := (carried_pc).(code_pointer_value) in
@@ -15933,10 +16240,10 @@ Definition run_frame_entry_encoded {ex553840_ : Z} {ex553839_ : Z} {ex553836_ : 
                         Message_is_static := carried_is_static;
                         Message_depth := (Build_frame_depth (carried_depth)) |};
                    FrameTransition_code :=
-                     @existT _ _ ex553836_ (@existT _ _ ex553835_ ((carried_code : CodeFields ex553835_ ex553836_)));
+                     @existT _ _ ex584687_ (@existT _ _ ex584686_ ((carried_code : CodeFields ex584686_ ex584687_)));
                    FrameTransition_calldata := carried_calldata;
                    FrameTransition_returndata :=
-                     @existT _ _ ex553840_ (@existT _ _ ex553839_ ((carried_returndata : OutputSliceFields ex553839_ ex553840_))) |})))
+                     @existT _ _ ex584691_ (@existT _ _ ex584690_ ((carried_returndata : OutputSliceFields ex584690_ ex584691_))) |})))
     : M (FrameTransition).
 
 Definition G_transaction : Z := 21000.
@@ -15957,17 +16264,15 @@ Definition PER_EMPTY_ACCOUNT : Z := 25000.
 #[export] Hint Unfold PER_EMPTY_ACCOUNT : sail.
 Definition AMSTERDAM_TX_BASE : Z := 12000.
 #[export] Hint Unfold AMSTERDAM_TX_BASE : sail.
-Definition AMSTERDAM_CREATE_ACCESS : Z := 11000.
+Definition AMSTERDAM_CREATE_ACCESS : Z := 12000.
 #[export] Hint Unfold AMSTERDAM_CREATE_ACCESS : sail.
 Definition AMSTERDAM_COLD_ACCOUNT_ACCESS : Z := 3000.
 #[export] Hint Unfold AMSTERDAM_COLD_ACCOUNT_ACCESS : sail.
-Definition AMSTERDAM_TX_VALUE_COST : Z := 4244.
+Definition AMSTERDAM_TX_VALUE_COST : Z := 6000.
 #[export] Hint Unfold AMSTERDAM_TX_VALUE_COST : sail.
-Definition AMSTERDAM_TRANSFER_LOG_COST : Z := 1756.
-#[export] Hint Unfold AMSTERDAM_TRANSFER_LOG_COST : sail.
-Definition AMSTERDAM_ACCESS_LIST_ADDRESS : Z := 3000.
+Definition AMSTERDAM_ACCESS_LIST_ADDRESS : Z := 2900.
 #[export] Hint Unfold AMSTERDAM_ACCESS_LIST_ADDRESS : sail.
-Definition AMSTERDAM_ACCESS_LIST_SLOT : Z := 3000.
+Definition AMSTERDAM_ACCESS_LIST_SLOT : Z := 2000.
 #[export] Hint Unfold AMSTERDAM_ACCESS_LIST_SLOT : sail.
 Definition AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : Z := 1280.
 #[export] Hint Unfold AMSTERDAM_ACCESS_LIST_ADDRESS_FLOOR : sail.
@@ -15985,10 +16290,10 @@ Definition undefined_IntrinsicGasCost '(tt : unit) : M (IntrinsicGasCost) :=
                 IntrinsicGasCost_state := (Build_gas_cost (w__1));
                 IntrinsicGasCost_calldata_floor := (Build_gas_cost (w__2)) |})).
 
-Definition transaction_initcode_slice {ex553845_ : Z} {ex553844_ : Z}
-(input : StatelessInputSliceFields ex553844_ ex553845_)
-(*(0 <=? ex553844_) && ((0 <=? ex553845_) && ((ex553844_ + ex553845_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553845_) && (ex553845_ <=? (2 ^ 30)))*)
+Definition transaction_initcode_slice {ex584696_ : Z} {ex584695_ : Z}
+(input : StatelessInputSliceFields ex584695_ ex584696_)
+(*(0 <=? ex584695_) && ((0 <=? ex584696_) && ((ex584695_ + ex584696_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584696_) && (ex584696_ <=? (2 ^ 30)))*)
 : M (CodeSlice) :=
    let input_slice :=
      stateless_input_slice (input.(StatelessInputSliceFields_bytes))
@@ -16002,10 +16307,10 @@ Definition undefined_TxUpfrontResult '(tt : unit) : M (TxUpfrontResult) :=
    returnM (({| TxUpfrontResult_authorization_refund := (Build_authorization_refund_typ (w__0));
                 TxUpfrontResult_create_target_prestate_empty := w__1 |})).
 
-Definition calldata_cost {ex553849_ : Z} {ex553848_ : Z}
-(input : StatelessInputSliceFields ex553848_ ex553849_)
-(*(0 <=? ex553848_) && ((0 <=? ex553849_) && ((ex553848_ + ex553849_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553849_) && (ex553849_ <=? (2 ^ 30)))*)
+Definition calldata_cost {ex584700_ : Z} {ex584699_ : Z}
+(input : StatelessInputSliceFields ex584699_ ex584700_)
+(*(0 <=? ex584699_) && ((0 <=? ex584700_) && ((ex584699_ + ex584700_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584700_) && (ex584700_ <=? (2 ^ 30)))*)
 : M (transaction_calldata_cost) :=
    (((slice_count_nonzero (input)) >>= fun semanticResult =>
      returnM (semanticResult).(stateless_input_length_value)) >>= fun nonzeroes =>
@@ -16017,8 +16322,8 @@ Definition calldata_cost {ex553849_ : Z} {ex553848_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_transaction_calldata_cost (semanticResult)).
 
-Definition legacy_intrinsic_gas {ex553851_ : Z} (tx : TransactionFields ex553851_)
-(*(ex553851_ =? 0) || ((ex553851_ =? 6) || (ex553851_ =? 9))*)
+Definition legacy_intrinsic_gas {ex584702_ : Z} (tx : TransactionFields ex584702_)
+(*(ex584702_ =? 0) || ((ex584702_ =? 6) || (ex584702_ =? 9))*)
 : M (gas_cost) :=
    (((calldata_cost (projT2 (projT2 (tx.(TransactionFields_input_src))))) >>= fun semanticResult =>
      returnM (semanticResult).(transaction_calldata_cost_value)) >>= fun data_cost =>
@@ -16045,10 +16350,10 @@ Definition legacy_intrinsic_gas {ex553851_ : Z} (tx : TransactionFields ex553851
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_gas_cost (semanticResult)).
 
-Definition legacy_calldata_floor {ex553855_ : Z} {ex553854_ : Z}
-(input : StatelessInputSliceFields ex553854_ ex553855_)
-(*(0 <=? ex553854_) && ((0 <=? ex553855_) && ((ex553854_ + ex553855_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex553855_) && (ex553855_ <=? (2 ^ 30)))*)
+Definition legacy_calldata_floor {ex584706_ : Z} {ex584705_ : Z}
+(input : StatelessInputSliceFields ex584705_ ex584706_)
+(*(0 <=? ex584705_) && ((0 <=? ex584706_) && ((ex584705_ + ex584706_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584706_) && (ex584706_ <=? (2 ^ 30)))*)
 : M (transaction_calldata_floor_cost) :=
    (((slice_count_nonzero (input)) >>= fun semanticResult =>
      returnM (semanticResult).(stateless_input_length_value)) >>= fun nonzeroes =>
@@ -16060,31 +16365,30 @@ Definition legacy_calldata_floor {ex553855_ : Z} {ex553854_ : Z}
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_transaction_calldata_floor_cost (semanticResult)).
 
-Definition amsterdam_recipient_execution_cost {ex553857_ : Z} (tx : TransactionFields ex553857_)
-(*(ex553857_ =? 0) || ((ex553857_ =? 6) || (ex553857_ =? 9))*)
+Definition amsterdam_recipient_execution_cost {ex584708_ : Z} (tx : TransactionFields ex584708_)
+(*(ex584708_ =? 0) || ((ex584708_ =? 6) || (ex584708_ =? 9))*)
 : amsterdam_recipient_cost :=
    (Build_amsterdam_recipient_cost (let transfers_value :=
      word_nonzero ((tx.(TransactionFields_value)).(word_value)) in
-   if tx.(TransactionFields_is_create) then
-     if transfers_value then Z.add (AMSTERDAM_CREATE_ACCESS) (AMSTERDAM_TRANSFER_LOG_COST)
-     else AMSTERDAM_CREATE_ACCESS
+   if tx.(TransactionFields_is_create) then AMSTERDAM_CREATE_ACCESS
    else if generic_neq (tx.(TransactionFields_recipient)) (tx.(TransactionFields_sender)) then
-     if transfers_value then
-       Z.add ((Z.add (AMSTERDAM_COLD_ACCOUNT_ACCESS) (AMSTERDAM_TX_VALUE_COST)))
-         (AMSTERDAM_TRANSFER_LOG_COST)
+     if transfers_value then Z.add (AMSTERDAM_COLD_ACCOUNT_ACCESS) (AMSTERDAM_TX_VALUE_COST)
      else AMSTERDAM_COLD_ACCOUNT_ACCESS
    else 0)).
 
-Definition intrinsic_gas {ex553859_ : Z} (tx : TransactionFields ex553859_)
-(*(ex553859_ =? 0) || ((ex553859_ =? 6) || (ex553859_ =? 9))*)
+Definition intrinsic_gas {ex584710_ : Z} (tx : TransactionFields ex584710_)
+(*(ex584710_ =? 0) || ((ex584710_ =? 6) || (ex584710_ =? 9))*)
 : M (IntrinsicGasCost) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    (if Z.ltb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (IntrinsicGasCost) then
       ((legacy_intrinsic_gas (tx)) >>= fun semanticResult =>
        returnM (semanticResult).(gas_cost_value)) >>= fun execution =>
-      ((legacy_calldata_floor (projT2 (projT2 (tx.(TransactionFields_input_src))))) >>= fun semanticResult =>
-       returnM (semanticResult).(transaction_calldata_floor_cost_value)) >>= fun calldata_floor =>
+      (if Z.geb (profile.(ProtocolProfileFields_fork)) (Prague) return M (Z) then
+         ((legacy_calldata_floor (projT2 (projT2 (tx.(TransactionFields_input_src))))) >>= fun semanticResult =>
+          returnM (semanticResult).(transaction_calldata_floor_cost_value))
+          : M (Z)
+       else returnM (0)) >>= fun calldata_floor =>
       returnM (({| IntrinsicGasCost_execution := (Build_gas_cost (execution));
                    IntrinsicGasCost_state := (Build_gas_cost (0));
                    IntrinsicGasCost_calldata_floor := (Build_gas_cost (calldata_floor)) |}))
@@ -16114,11 +16418,11 @@ Definition intrinsic_gas {ex553859_ : Z} (tx : TransactionFields ex553859_)
           : M (Z)
        else returnM (0)) >>= fun create_execution =>
       ((calldata_cost (projT2 (projT2 (tx.(TransactionFields_input_src))))) >>= fun semanticResult =>
-       returnM (semanticResult).(transaction_calldata_cost_value)) >>= fun (w__1 : Z) =>
+       returnM (semanticResult).(transaction_calldata_cost_value)) >>= fun (w__2 : Z) =>
       let execution :=
         Z.add
           ((Z.add
-              ((Z.add ((Z.add ((Z.add (w__1) (AMSTERDAM_TX_BASE))) (recipient))) (access_execution)))
+              ((Z.add ((Z.add ((Z.add (w__2) (AMSTERDAM_TX_BASE))) (recipient))) (access_execution)))
               (authorization_execution))) (create_execution) in
       let input_length := input.(StatelessInputSliceFields_len) in
       let floor :=
@@ -16153,85 +16457,85 @@ Definition transaction_upfront_cost
 : Z :=
    Z.add ((Z.add ((Z.mul (max_fee) (gas_limit))) (value))) ((Z.mul (max_blob_fee) (blob_gas))).
 
-Definition transaction_costs {ex553881_ : Z} {ex553879_ : Z} {ex553878_ : Z} {ex553877_ : Z}
-{ex553876_ : Z} {ex553875_ : Z} {ex553874_ : Z} {ex553873_ : Z} {ex553872_ : Z} {ex553871_ : Z}
-{ex553870_ : Z}
-(profile : ProtocolProfileFields ex553870_ ex553871_ ex553872_ ex553873_ ex553874_ ex553875_ ex553876_ ex553877_ ex553878_ ex553879_)
-(tx : TransactionFields ex553881_) (gas_limit : block_gas_limit)
+Definition transaction_costs {ex584732_ : Z} {ex584730_ : Z} {ex584729_ : Z} {ex584728_ : Z}
+{ex584727_ : Z} {ex584726_ : Z} {ex584725_ : Z} {ex584724_ : Z} {ex584723_ : Z} {ex584722_ : Z}
+{ex584721_ : Z}
+(profile : ProtocolProfileFields ex584721_ ex584722_ ex584723_ ex584724_ ex584725_ ex584726_ ex584727_ ex584728_ ex584729_ ex584730_)
+(tx : TransactionFields ex584732_) (gas_limit : block_gas_limit)
 (excess_blob_gas : excess_blob_gas_typ)
-(*(ex553870_ =? 5) &&
-  ((ex553871_ =? 0) &&
-    ((ex553872_ =? 0) &&
-      ((ex553873_ =? 1) &&
-        ((ex553874_ =? 24576) &&
-          ((ex553875_ =? 0) &&
-            ((ex553876_ =? (2 ^ 64 - 1)) &&
-              ((ex553877_ =? (2 ^ 64 - 1)) && ((ex553878_ =? 0) && (ex553879_ =? 2))))))))) ||
-  ((6 <=? ex553870_) && (ex553870_ <=? 9) &&
-    ((ex553871_ =? 0) &&
-      ((ex553872_ =? 0) &&
-        ((ex553873_ =? 1) &&
-          ((ex553874_ =? 24576) &&
-            ((ex553875_ =? 0) &&
-              ((ex553876_ =? (2 ^ 64 - 1)) &&
-                ((ex553877_ =? (2 ^ 64 - 1)) && ((ex553878_ =? 0) && (ex553879_ =? 5))))))))) ||
-    ((ex553870_ =? 10) &&
-      ((ex553871_ =? 0) &&
-        ((ex553872_ =? 0) &&
-          ((ex553873_ =? 1) &&
-            ((ex553874_ =? 24576) &&
-              ((ex553875_ =? 49152) &&
-                ((ex553876_ =? (2 ^ 64 - 1)) &&
-                  ((ex553877_ =? (2 ^ 64 - 1)) && ((ex553878_ =? 0) && (ex553879_ =? 5))))))))) ||
-      ((ex553870_ =? 11) &&
-        ((ex553871_ =? 3) &&
-          ((ex553872_ =? 6) &&
-            ((ex553873_ =? 3338477) &&
-              ((ex553874_ =? 24576) &&
-                ((ex553875_ =? 49152) &&
-                  ((ex553876_ =? (2 ^ 64 - 1)) &&
-                    ((ex553877_ =? (2 ^ 64 - 1)) && ((ex553878_ =? 6) && (ex553879_ =? 5))))))))) ||
-        ((ex553870_ =? 12) &&
-          ((ex553871_ =? 6) &&
-            ((ex553872_ =? 9) &&
-              ((ex553873_ =? 5007716) &&
-                ((ex553874_ =? 24576) &&
-                  ((ex553875_ =? 49152) &&
-                    ((ex553876_ =? (2 ^ 64 - 1)) &&
-                      ((ex553877_ =? (2 ^ 64 - 1)) && ((ex553878_ =? 9) && (ex553879_ =? 5))))))))) ||
-          ((ex553870_ =? 13) &&
-            ((ex553871_ =? 6) &&
-              ((ex553872_ =? 9) &&
-                ((ex553873_ =? 5007716) &&
-                  ((ex553874_ =? 24576) &&
-                    ((ex553875_ =? 49152) &&
-                      ((ex553876_ =? (2 ^ 24)) &&
-                        ((ex553877_ =? (2 ^ 24)) && ((ex553878_ =? 6) && (ex553879_ =? 5))))))))) ||
-            ((ex553870_ =? 14) &&
-              ((ex553871_ =? 10) &&
-                ((ex553872_ =? 15) &&
-                  ((ex553873_ =? 8346193) &&
-                    ((ex553874_ =? 24576) &&
-                      ((ex553875_ =? 49152) &&
-                        ((ex553876_ =? (2 ^ 24)) &&
-                          ((ex553877_ =? (2 ^ 24)) && ((ex553878_ =? 6) && (ex553879_ =? 5))))))))) ||
-              ((ex553870_ =? 15) &&
-                ((ex553871_ =? 14) &&
-                  ((ex553872_ =? 21) &&
-                    ((ex553873_ =? 11684671) &&
-                      ((ex553874_ =? 24576) &&
-                        ((ex553875_ =? 49152) &&
-                          ((ex553876_ =? (2 ^ 24)) &&
-                            ((ex553877_ =? (2 ^ 24)) && ((ex553878_ =? 6) && (ex553879_ =? 5))))))))) ||
-                (ex553870_ =? 16) &&
-                  ((ex553871_ =? 14) &&
-                    ((ex553872_ =? 21) &&
-                      ((ex553873_ =? 11684671) &&
-                        ((ex553874_ =? 65536) &&
-                          ((ex553875_ =? 131072) &&
-                            ((ex553876_ =? (2 ^ 64 - 1)) &&
-                              ((ex553877_ =? (2 ^ 24)) && ((ex553878_ =? 6) && (ex553879_ =? 5))))))))))))))))*)
-(*(ex553881_ =? 0) || ((ex553881_ =? 6) || (ex553881_ =? 9))*)
+(*(ex584721_ =? 5) &&
+  ((ex584722_ =? 0) &&
+    ((ex584723_ =? 0) &&
+      ((ex584724_ =? 1) &&
+        ((ex584725_ =? 24576) &&
+          ((ex584726_ =? 0) &&
+            ((ex584727_ =? (2 ^ 64 - 1)) &&
+              ((ex584728_ =? (2 ^ 64 - 1)) && ((ex584729_ =? 0) && (ex584730_ =? 2))))))))) ||
+  ((6 <=? ex584721_) && (ex584721_ <=? 9) &&
+    ((ex584722_ =? 0) &&
+      ((ex584723_ =? 0) &&
+        ((ex584724_ =? 1) &&
+          ((ex584725_ =? 24576) &&
+            ((ex584726_ =? 0) &&
+              ((ex584727_ =? (2 ^ 64 - 1)) &&
+                ((ex584728_ =? (2 ^ 64 - 1)) && ((ex584729_ =? 0) && (ex584730_ =? 5))))))))) ||
+    ((ex584721_ =? 10) &&
+      ((ex584722_ =? 0) &&
+        ((ex584723_ =? 0) &&
+          ((ex584724_ =? 1) &&
+            ((ex584725_ =? 24576) &&
+              ((ex584726_ =? 49152) &&
+                ((ex584727_ =? (2 ^ 64 - 1)) &&
+                  ((ex584728_ =? (2 ^ 64 - 1)) && ((ex584729_ =? 0) && (ex584730_ =? 5))))))))) ||
+      ((ex584721_ =? 11) &&
+        ((ex584722_ =? 3) &&
+          ((ex584723_ =? 6) &&
+            ((ex584724_ =? 3338477) &&
+              ((ex584725_ =? 24576) &&
+                ((ex584726_ =? 49152) &&
+                  ((ex584727_ =? (2 ^ 64 - 1)) &&
+                    ((ex584728_ =? (2 ^ 64 - 1)) && ((ex584729_ =? 6) && (ex584730_ =? 5))))))))) ||
+        ((ex584721_ =? 12) &&
+          ((ex584722_ =? 6) &&
+            ((ex584723_ =? 9) &&
+              ((ex584724_ =? 5007716) &&
+                ((ex584725_ =? 24576) &&
+                  ((ex584726_ =? 49152) &&
+                    ((ex584727_ =? (2 ^ 64 - 1)) &&
+                      ((ex584728_ =? (2 ^ 64 - 1)) && ((ex584729_ =? 9) && (ex584730_ =? 5))))))))) ||
+          ((ex584721_ =? 13) &&
+            ((ex584722_ =? 6) &&
+              ((ex584723_ =? 9) &&
+                ((ex584724_ =? 5007716) &&
+                  ((ex584725_ =? 24576) &&
+                    ((ex584726_ =? 49152) &&
+                      ((ex584727_ =? (2 ^ 24)) &&
+                        ((ex584728_ =? (2 ^ 24)) && ((ex584729_ =? 6) && (ex584730_ =? 5))))))))) ||
+            ((ex584721_ =? 14) &&
+              ((ex584722_ =? 10) &&
+                ((ex584723_ =? 15) &&
+                  ((ex584724_ =? 8346193) &&
+                    ((ex584725_ =? 24576) &&
+                      ((ex584726_ =? 49152) &&
+                        ((ex584727_ =? (2 ^ 24)) &&
+                          ((ex584728_ =? (2 ^ 24)) && ((ex584729_ =? 6) && (ex584730_ =? 5))))))))) ||
+              ((ex584721_ =? 15) &&
+                ((ex584722_ =? 14) &&
+                  ((ex584723_ =? 21) &&
+                    ((ex584724_ =? 11684671) &&
+                      ((ex584725_ =? 24576) &&
+                        ((ex584726_ =? 49152) &&
+                          ((ex584727_ =? (2 ^ 24)) &&
+                            ((ex584728_ =? (2 ^ 24)) && ((ex584729_ =? 6) && (ex584730_ =? 5))))))))) ||
+                (ex584721_ =? 16) &&
+                  ((ex584722_ =? 14) &&
+                    ((ex584723_ =? 21) &&
+                      ((ex584724_ =? 11684671) &&
+                        ((ex584725_ =? 65536) &&
+                          ((ex584726_ =? 131072) &&
+                            ((ex584727_ =? (2 ^ 32 - 1)) &&
+                              ((ex584728_ =? (2 ^ 24)) && ((ex584729_ =? 6) && (ex584730_ =? 5))))))))))))))))*)
+(*(ex584732_ =? 0) || ((ex584732_ =? 6) || (ex584732_ =? 9))*)
 (*(0 <=? gas_limit) && (gas_limit <=? (2 ^ 64 - 1))*)
 (*(0 <=? excess_blob_gas) && (excess_blob_gas <=? (256 * 11684671 + 21 * 2 ^ 17))*)
 : M (TransactionCosts) :=
@@ -16296,7 +16600,7 @@ Definition tx_frame_gas_snapshot {limit0 : Z} {regular0 : Z} {intrinsic_executio
                     limit0) &&
                     (initial_execution <=? (regular0 - intrinsic_execution))))))))))) &&
   ((0 <=? execution) && (execution <=? (2 ^ 64 - 1)) && ((0 <=? state) && (state <=? (2 ^ 64 - 1))))*)
-(*(((- (2 * (2 ^ 64 - 1)))) <=? state_delta) && (state_delta <=? (2 * (2 ^ 64 - 1 + 2 ^ 24)))*)
+(*(((- (2 * (2 ^ 64 - 1)))) <=? state_delta) && (state_delta <=? (2 * (2 ^ 64 - 1 + 30000000)))*)
 : M (TxFrameGasSnapshotForLimits limit0 regular0) :=
    let state_delta := (state_delta).(state_gas_delta_value) in
    let limit := initial.(TransactionInitialGasFields_admitted_limit) in
@@ -16494,7 +16798,7 @@ Definition authorization_refund_add
 
 Fixpoint _rec_process_auth_cursor
 (authorizations : PreparedAuthorizationList) (count : prepared_authorization_count) (_reclimit : Z)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*) (_acc : Acc (Zwf 0) _reclimit)
+(*(0 <=? count) && (count <=? (2 ^ 30))*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (authorization_refund_typ).
 exact (
    let count := (count).(prepared_authorization_count_value) in
@@ -16521,7 +16825,7 @@ Defined.
 
 Definition process_auth_cursor
 (authorizations : PreparedAuthorizationList) (count : prepared_authorization_count)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*)
+(*(0 <=? count) && (count <=? (2 ^ 30))*)
 : M (authorization_refund_typ) :=
    let count := (count).(prepared_authorization_count_value) in
    (((_rec_process_auth_cursor (authorizations) (Build_prepared_authorization_count ((count)))
@@ -16544,7 +16848,7 @@ Definition process_amsterdam_auth
 (transfers_value : bool) (carried_gas : gas_typ) (carried_state_gas : state_gas_typ)
 (carried_state_spill : state_gas_spill) (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 : M ((bool * gas_typ * state_gas_typ * state_gas_spill)) :=
    let carried_gas := (carried_gas).(gas_value) in
    let carried_state_gas := (carried_state_gas).(state_gas_value) in
@@ -16685,9 +16989,9 @@ Fixpoint _rec_process_amsterdam_auth_cursor
 (authorizations : PreparedAuthorizationList) (count : prepared_authorization_count)
 (sender : vec (mword 8) 20) (current_target : vec (mword 8) 20) (transfers_value : bool)
 (gas : gas_typ) (state_gas : state_gas_typ) (state_spill : state_gas_spill) (_reclimit : Z)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*) (*(0 <=? gas) && (gas <=? (2 ^ 64 - 1))*)
+(*(0 <=? count) && (count <=? (2 ^ 30))*) (*(0 <=? gas) && (gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? state_gas) && (state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_spill) && (state_spill <=? (2 ^ 24))*) (_acc : Acc (Zwf 0) _reclimit)
+(*(0 <=? state_spill) && (state_spill <=? 30000000)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((bool * gas_typ * state_gas_typ * state_gas_spill)).
 exact (
    let count := (count).(prepared_authorization_count_value) in
@@ -16724,9 +17028,9 @@ Definition process_amsterdam_auth_cursor
 (authorizations : PreparedAuthorizationList) (count : prepared_authorization_count)
 (sender : vec (mword 8) 20) (current_target : vec (mword 8) 20) (transfers_value : bool)
 (gas : gas_typ) (state_gas : state_gas_typ) (state_spill : state_gas_spill)
-(*(0 <=? count) && (count <=? (e_div (2 ^ 24) 7816))*) (*(0 <=? gas) && (gas <=? (2 ^ 64 - 1))*)
+(*(0 <=? count) && (count <=? (2 ^ 30))*) (*(0 <=? gas) && (gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? state_gas) && (state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? state_spill) && (state_spill <=? (2 ^ 24))*)
+(*(0 <=? state_spill) && (state_spill <=? 30000000)*)
 : M ((bool * gas_typ * state_gas_typ * state_gas_spill)) :=
    let count := (count).(prepared_authorization_count_value) in
    let gas := (gas).(gas_value) in
@@ -16810,8 +17114,8 @@ Definition warm_access_list {source_off : Z} {source_len : Z}
    (_rec_warm_access_list (cursor) ((cursor.(StatelessInputSliceFields_len)  : Z)) (Zwf_guarded _))
     : M (unit).
 
-Definition prewarm {ex554017_ : Z} (tx : TransactionFields ex554017_)
-(*(ex554017_ =? 0) || ((ex554017_ =? 6) || (ex554017_ =? 9))*)
+Definition prewarm {ex584868_ : Z} (tx : TransactionFields ex584868_)
+(*(ex584868_ =? 0) || ((ex584868_ =? 6) || (ex584868_ =? 9))*)
 : M (unit) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
@@ -16848,30 +17152,19 @@ Definition eff_gas_price_for (base_fee : word) (max_fee : word) (max_priority_fe
      else (ZERO_WORD).(word_value) in
    ((price, priority)) in ((Build_word (semanticValue0)), (Build_word (semanticValue1)))).
 
-Definition check_transaction_validity {ex554024_ : Z} {total : Z} {regular : Z}
-(tx : TransactionFields ex554024_) (allowance : TransactionGasAllowanceFields total regular)
+Definition check_transaction_validity {ex584875_ : Z} {total : Z} {regular : Z}
+(tx : TransactionFields ex584875_) (allowance : TransactionGasAllowanceFields total regular)
 (*(0 <=? regular) && ((regular <=? total) && (total <=? (2 ^ 64 - 1)))*)
-(*(ex554024_ =? 0) || ((ex554024_ =? 6) || (ex554024_ =? 9))*)
+(*(ex584875_ =? 0) || ((ex584875_ =? 6) || (ex584875_ =? 9))*)
 : M (TxValidityForLimits total regular) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    let tx_semantics := tx_type_semantics (tx.(TransactionFields_tx_type)) in
-   (read_reg k_chain_id) >>= fun semanticResult => returnM (semanticResult).(chain_identifier_value) >>= fun (w__0 : Z) =>
-   ((tx_signature_parity (Build_chain_identifier ((w__0)))
-       (tx_semantics.(TxTypeSemantics_signature))
-       (Build_word (((tx.(TransactionFields_sig_v)).(word_value))))) >>= fun semanticResult =>
-    returnM (semanticResult).(y_parity_value)) >>= fun parity =>
-   (tx_auth_valid (tx.(TransactionFields_sender)) (tx.(TransactionFields_signing_hash))
-      (Build_y_parity ((parity))) (Build_word (((tx.(TransactionFields_sig_r)).(word_value))))
-      (Build_word (((tx.(TransactionFields_sig_s)).(word_value))))) >>= fun authenticated =>
-   let invalid_signature := negb (authenticated) in
-   (if invalid_signature return M (unit) then (fatal_error (InvalidSignature))  : M (unit)
-    else returnM (tt)) >>
    let gas_limit := allowance.(TransactionGasAllowanceFields_total) in
-   read_reg k_header >>= fun (w__1 : BlockHeader) =>
+   read_reg k_header >>= fun (w__0 : BlockHeader) =>
    let '((eff_gas_price, eff_priority_fee)) :=
      (let '(semanticValue0, semanticValue1) := eff_gas_price_for
-                                                 (Build_word (((w__1.(BlockHeader_base_fee)).(word_value))))
+                                                 (Build_word (((w__0.(BlockHeader_base_fee)).(word_value))))
                                                  (Build_word (((tx.(TransactionFields_max_fee)).(word_value))))
                                                  (Build_word (((tx.(TransactionFields_max_priority_fee)).(word_value)))) in ((semanticValue0).(word_value), (semanticValue1).(word_value))) in
    let sender := tx.(TransactionFields_sender) in
@@ -16879,9 +17172,9 @@ Definition check_transaction_validity {ex554024_ : Z} {total : Z} {regular : Z}
      (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(TransactionFields_input_src))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
    let input_len := input.(StatelessInputSliceFields_len) in
    ((k_get_nonce (sender)) >>= fun semanticResult => returnM (semanticResult).(account_nonce_value)) >>= fun nonce_before =>
-   read_reg k_header >>= fun (w__2 : BlockHeader) =>
+   read_reg k_header >>= fun (w__1 : BlockHeader) =>
    (transaction_costs (profile) (tx) (Build_block_gas_limit (total))
-      (Build_excess_blob_gas_typ (((w__2.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))))) >>= fun costs =>
+      (Build_excess_blob_gas_typ (((w__1.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))))) >>= fun costs =>
    let expected_nonce :=
      (word_of_account_nonce (Build_account_nonce ((nonce_before)))).(account_nonce_value) in
    (if neq_int ((tx.(TransactionFields_nonce)).(word_value)) (expected_nonce) return M (unit) then
@@ -16926,9 +17219,9 @@ Definition check_transaction_validity {ex554024_ : Z} {total : Z} {regular : Z}
       (fatal_error (ExecutionInvalid))
        : M (unit)
     else returnM (tt)) >>
-   read_reg k_header >>= fun (w__3 : BlockHeader) =>
+   read_reg k_header >>= fun (w__2 : BlockHeader) =>
    let base_fee_affordable :=
-     word_ule ((w__3.(BlockHeader_base_fee)).(word_value))
+     word_ule ((w__2.(BlockHeader_base_fee)).(word_value))
        ((tx.(TransactionFields_max_fee)).(word_value)) in
    let base_fee_exceeds_cap := negb (base_fee_affordable) in
    (if base_fee_exceeds_cap return M (unit) then (fatal_error (ExecutionInvalid))  : M (unit)
@@ -16970,10 +17263,10 @@ Definition check_transaction_validity {ex554024_ : Z} {total : Z} {regular : Z}
    let typed_signature := generic_eq (tx_semantics.(TxTypeSemantics_signature)) (TypedSignature) in
    (and_boolM (returnM (typed_signature))
       ((read_reg k_chain_id) >>= fun semanticResult =>
-       returnM (semanticResult).(chain_identifier_value) >>= fun (w__4 : Z) =>
-       returnM (((neq_int ((tx.(TransactionFields_chain_id)).(chain_identifier_value)) (w__4))
-        : bool)))) >>= fun w__5 =>
-   (if w__5 return M (unit) then (fatal_error (ExecutionInvalid))  : M (unit)
+       returnM (semanticResult).(chain_identifier_value) >>= fun (w__3 : Z) =>
+       returnM (((neq_int ((tx.(TransactionFields_chain_id)).(chain_identifier_value)) (w__3))
+        : bool)))) >>= fun w__4 =>
+   (if w__4 return M (unit) then (fatal_error (ExecutionInvalid))  : M (unit)
     else returnM (tt)) >>
    (if Z.eqb (nonce_before) ((Z.sub ((pow2 (64))) (1))) return M (unit) then
       (fatal_error (ExecutionInvalid))
@@ -16991,23 +17284,23 @@ Definition check_transaction_validity {ex554024_ : Z} {total : Z} {regular : Z}
                                                                                           (Build_word ((eff_gas_price)))
                                                                                           (Build_word ((eff_priority_fee))))))))) : {__initial_gas4 & {__initial_gas3 & {calldata_floor & {intrinsic_state & {intrinsic_execution & (TxValidityFields total regular intrinsic_execution intrinsic_state calldata_floor __initial_gas3 __initial_gas4)}}}}}%type).
 
-Definition apply_transaction_upfront_effects {ex554040_ : Z} {ex554039_ : Z} {ex554038_ : Z}
-{ex554037_ : Z} {ex554036_ : Z} {ex554035_ : Z} {ex554034_ : Z} {ex554026_ : Z}
-(tx : TransactionFields ex554026_)
-(v : TxValidityFields ex554034_ ex554035_ ex554036_ ex554037_ ex554038_ ex554039_ ex554040_)
+Definition apply_transaction_upfront_effects {ex584891_ : Z} {ex584890_ : Z} {ex584889_ : Z}
+{ex584888_ : Z} {ex584887_ : Z} {ex584886_ : Z} {ex584885_ : Z} {ex584877_ : Z}
+(tx : TransactionFields ex584877_)
+(v : TxValidityFields ex584885_ ex584886_ ex584887_ ex584888_ ex584889_ ex584890_ ex584891_)
 (authorizations : PreparedAuthorizationList)
-(*(ex554026_ =? 0) || ((ex554026_ =? 6) || (ex554026_ =? 9))*)
-(*(0 <=? ex554036_) &&
-  ((0 <=? ex554037_) &&
-    ((0 <=? ex554038_) &&
-      ((ex554036_ <=? ex554035_) &&
-        ((ex554038_ <=? ex554035_) &&
-          ((ex554035_ <=? ex554034_) &&
-            ((ex554034_ <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554039_) &&
-                ((0 <=? ex554040_) &&
-                  (((ex554039_ + ex554040_ + ex554036_ + ex554037_) =? ex554034_) &&
-                    (ex554039_ <=? (ex554035_ - ex554036_)))))))))))*)
+(*(ex584877_ =? 0) || ((ex584877_ =? 6) || (ex584877_ =? 9))*)
+(*(0 <=? ex584887_) &&
+  ((0 <=? ex584888_) &&
+    ((0 <=? ex584889_) &&
+      ((ex584887_ <=? ex584886_) &&
+        ((ex584889_ <=? ex584886_) &&
+          ((ex584886_ <=? ex584885_) &&
+            ((ex584885_ <=? (2 ^ 64 - 1)) &&
+              ((0 <=? ex584890_) &&
+                ((0 <=? ex584891_) &&
+                  (((ex584890_ + ex584891_ + ex584887_ + ex584888_) =? ex584885_) &&
+                    (ex584890_ <=? (ex584886_ - ex584887_)))))))))))*)
 : M (TxUpfrontResult) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
@@ -17041,20 +17334,20 @@ Definition apply_transaction_upfront_effects {ex554040_ : Z} {ex554039_ : Z} {ex
                   (Build_authorization_refund_typ (authorization_refund));
                 TxUpfrontResult_create_target_prestate_empty := create_target_prestate_empty |})).
 
-Definition enter_transaction_frame {ex554054_ : Z} {ex554053_ : Z} {ex554052_ : Z} {ex554051_ : Z}
-{ex554050_ : Z} {ex554049_ : Z} {ex554048_ : Z}
-(v : TxValidityFields ex554048_ ex554049_ ex554050_ ex554051_ ex554052_ ex554053_ ex554054_)
-(*(0 <=? ex554050_) &&
-  ((0 <=? ex554051_) &&
-    ((0 <=? ex554052_) &&
-      ((ex554050_ <=? ex554049_) &&
-        ((ex554052_ <=? ex554049_) &&
-          ((ex554049_ <=? ex554048_) &&
-            ((ex554048_ <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554053_) &&
-                ((0 <=? ex554054_) &&
-                  (((ex554053_ + ex554054_ + ex554050_ + ex554051_) =? ex554048_) &&
-                    (ex554053_ <=? (ex554049_ - ex554050_)))))))))))*)
+Definition enter_transaction_frame {ex584905_ : Z} {ex584904_ : Z} {ex584903_ : Z} {ex584902_ : Z}
+{ex584901_ : Z} {ex584900_ : Z} {ex584899_ : Z}
+(v : TxValidityFields ex584899_ ex584900_ ex584901_ ex584902_ ex584903_ ex584904_ ex584905_)
+(*(0 <=? ex584901_) &&
+  ((0 <=? ex584902_) &&
+    ((0 <=? ex584903_) &&
+      ((ex584901_ <=? ex584900_) &&
+        ((ex584903_ <=? ex584900_) &&
+          ((ex584900_ <=? ex584899_) &&
+            ((ex584899_ <=? (2 ^ 64 - 1)) &&
+              ((0 <=? ex584904_) &&
+                ((0 <=? ex584905_) &&
+                  (((ex584904_ + ex584905_ + ex584901_ + ex584902_) =? ex584899_) &&
+                    (ex584904_ <=? (ex584900_ - ex584901_)))))))))))*)
 :
 M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * StackPointer * memory_base_typ * memory_height_typ)) :=
    (let initial_gas := v.(TxValidityFields_gas) in
@@ -17067,27 +17360,27 @@ Definition undefined_TransactionPreparation '(tt : unit) : M (TransactionPrepara
    (undefined_bool (tt)) >>= fun (w__1 : bool) =>
    returnM (({| TransactionPreparation_ready := w__0;  TransactionPreparation_delegated := w__1 |})).
 
-Definition prepare_amsterdam_transaction_dispatch {ex554070_ : Z} {ex554069_ : Z} {ex554068_ : Z}
-{ex554067_ : Z} {ex554066_ : Z} {ex554065_ : Z} {ex554064_ : Z} {ex554056_ : Z}
-(tx : TransactionFields ex554056_)
-(v : TxValidityFields ex554064_ ex554065_ ex554066_ ex554067_ ex554068_ ex554069_ ex554070_)
+Definition prepare_amsterdam_transaction_dispatch {ex584921_ : Z} {ex584920_ : Z} {ex584919_ : Z}
+{ex584918_ : Z} {ex584917_ : Z} {ex584916_ : Z} {ex584915_ : Z} {ex584907_ : Z}
+(tx : TransactionFields ex584907_)
+(v : TxValidityFields ex584915_ ex584916_ ex584917_ ex584918_ ex584919_ ex584920_ ex584921_)
 (upfront : TxUpfrontResult) (carried_gas : gas_typ) (carried_state_gas : state_gas_typ)
 (carried_state_spill : state_gas_spill)
-(*(ex554056_ =? 0) || ((ex554056_ =? 6) || (ex554056_ =? 9))*)
-(*(0 <=? ex554066_) &&
-  ((0 <=? ex554067_) &&
-    ((0 <=? ex554068_) &&
-      ((ex554066_ <=? ex554065_) &&
-        ((ex554068_ <=? ex554065_) &&
-          ((ex554065_ <=? ex554064_) &&
-            ((ex554064_ <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554069_) &&
-                ((0 <=? ex554070_) &&
-                  (((ex554069_ + ex554070_ + ex554066_ + ex554067_) =? ex554064_) &&
-                    (ex554069_ <=? (ex554065_ - ex554066_)))))))))))*)
+(*(ex584907_ =? 0) || ((ex584907_ =? 6) || (ex584907_ =? 9))*)
+(*(0 <=? ex584917_) &&
+  ((0 <=? ex584918_) &&
+    ((0 <=? ex584919_) &&
+      ((ex584917_ <=? ex584916_) &&
+        ((ex584919_ <=? ex584916_) &&
+          ((ex584916_ <=? ex584915_) &&
+            ((ex584915_ <=? (2 ^ 64 - 1)) &&
+              ((0 <=? ex584920_) &&
+                ((0 <=? ex584921_) &&
+                  (((ex584920_ + ex584921_ + ex584917_ + ex584918_) =? ex584915_) &&
+                    (ex584920_ <=? (ex584916_ - ex584917_)))))))))))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 :
 M ((TransactionPreparation * gas_typ * state_gas_typ * state_gas_spill * address_typ * address_typ * Code * CalldataSlice)) :=
    let carried_gas := (carried_gas).(gas_value) in
@@ -17237,22 +17530,22 @@ M ((TransactionPreparation * gas_typ * state_gas_typ * state_gas_spill * address
       : MR ((TransactionPreparation * gas_typ * state_gas_typ * state_gas_spill * address_typ * address_typ * Code * CalldataSlice)) ((TransactionPreparation * Z * Z * Z * vec (mword 8) 20 * vec (mword 8) 20 * {len & {off & (CodeFields off len)}}%type * CalldataSlice))) >>= fun semanticResult =>
      returnR ((TransactionPreparation * gas_typ * state_gas_typ * state_gas_spill * address_typ * address_typ * Code * CalldataSlice)) (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5, semanticValue6, semanticValue7) := semanticResult in (semanticValue0, (Build_gas_typ (semanticValue1)), (Build_state_gas_typ (semanticValue2)), (Build_state_gas_spill (semanticValue3)), semanticValue4, semanticValue5, semanticValue6, semanticValue7))).
 
-Definition run_create_transaction_frame {ex554086_ : Z} {ex554085_ : Z} {ex554075_ : Z}
-(tx : TransactionFields ex554075_) (sender : vec (mword 8) 20) (nonce_before : account_nonce)
+Definition run_create_transaction_frame {ex584937_ : Z} {ex584936_ : Z} {ex584926_ : Z}
+(tx : TransactionFields ex584926_) (sender : vec (mword 8) 20) (nonce_before : account_nonce)
 (carried_gas : gas_typ) (carried_state_gas : state_gas_typ) (carried_state_spill : state_gas_spill)
 (carried_refund : gas_refund) (carried_stack : StackPointer) (carried_memory_base : memory_base_typ)
-(carried_memory_height : memory_height_typ) (carried_code : CodeFields ex554085_ ex554086_)
+(carried_memory_height : memory_height_typ) (carried_code : CodeFields ex584936_ ex584937_)
 (carried_calldata : CalldataSlice) (state_gas_reservoir : state_gas_typ)
-(*(ex554075_ =? 0) || ((ex554075_ =? 6) || (ex554075_ =? 9))*)
+(*(ex584926_ =? 0) || ((ex584926_ =? 6) || (ex584926_ =? 9))*)
 (*(0 <=? nonce_before) && (nonce_before <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? carried_memory_base) && (carried_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex554085_) && ((0 <=? ex554086_) && ((ex554085_ + ex554086_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex554086_) && ((ex554086_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584936_) && ((0 <=? ex584937_) && ((ex584936_ + ex584937_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584937_) && ((ex584937_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? state_gas_reservoir) && (state_gas_reservoir <=? (2 ^ 64 - 1))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * FrameStatus * OutputSlice)) :=
    let nonce_before := (nonce_before).(account_nonce_value) in
@@ -17299,7 +17592,7 @@ Definition run_create_transaction_frame {ex554086_ : Z} {ex554085_ : Z} {ex55407
           : M (unit)
        else returnM (tt)) >>
       let '(@existT _ _ frame_code__'len (@existT _ _ frame_code__'off frame_code)) :=
-        (@existT _ _ ex554086_ (@existT _ _ ex554085_ ((carried_code : CodeFields ex554085_ ex554086_))) : Code) in
+        (@existT _ _ ex584937_ (@existT _ _ ex584936_ ((carried_code : CodeFields ex584936_ ex584937_))) : Code) in
       let frame_calldata : CalldataSlice := carried_calldata in
       (if Z.ltb (profile.(ProtocolProfileFields_fork)) (Amsterdam)
          return
@@ -17414,21 +17707,21 @@ Definition run_create_transaction_frame {ex554086_ : Z} {ex554085_ : Z} {ex55407
    returnM ((gas_after, state_gas_after, state_spill_after, refund_after, status_after, @existT _ _ _ (@existT _ _ _ (output_after))))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)), (Build_gas_refund (semanticValue3)), semanticValue4, semanticValue5)).
 
-Definition run_call_transaction_frame {ex554100_ : Z} {ex554099_ : Z} {ex554089_ : Z}
-(tx : TransactionFields ex554089_) (sender : vec (mword 8) 20) (delegated : bool)
+Definition run_call_transaction_frame {ex584951_ : Z} {ex584950_ : Z} {ex584940_ : Z}
+(tx : TransactionFields ex584940_) (sender : vec (mword 8) 20) (delegated : bool)
 (carried_gas : gas_typ) (carried_state_gas : state_gas_typ) (carried_state_spill : state_gas_spill)
 (carried_refund : gas_refund) (carried_stack : StackPointer) (carried_memory_base : memory_base_typ)
 (carried_memory_height : memory_height_typ) (carried_code_address : vec (mword 8) 20)
-(carried_code : CodeFields ex554099_ ex554100_) (carried_calldata : CalldataSlice)
-(state_gas_reservoir : state_gas_typ) (*(ex554089_ =? 0) || ((ex554089_ =? 6) || (ex554089_ =? 9))*)
+(carried_code : CodeFields ex584950_ ex584951_) (carried_calldata : CalldataSlice)
+(state_gas_reservoir : state_gas_typ) (*(ex584940_ =? 0) || ((ex584940_ =? 6) || (ex584940_ =? 9))*)
 (*(0 <=? carried_gas) && (carried_gas <=? (2 ^ 64 - 1))*)
 (*(0 <=? carried_state_gas) && (carried_state_gas <=? (2 ^ 64 - 1))*)
-(*(0 <=? carried_state_spill) && (carried_state_spill <=? (2 ^ 24))*)
+(*(0 <=? carried_state_spill) && (carried_state_spill <=? 30000000)*)
 (*(((- (199 * (2 ^ 64 - 1)))) <=? carried_refund) && (carried_refund <=? (199 * (2 ^ 64 - 1)))*)
 (*(0 <=? carried_memory_base) && (carried_memory_base <=? (2 ^ 32 - 1))*)
 (*(0 <=? carried_memory_height) && (carried_memory_height <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex554099_) && ((0 <=? ex554100_) && ((ex554099_ + ex554100_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex554100_) && ((ex554100_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex584950_) && ((0 <=? ex584951_) && ((ex584950_ + ex584951_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex584951_) && ((ex584951_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? state_gas_reservoir) && (state_gas_reservoir <=? (2 ^ 64 - 1))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * FrameStatus * OutputSlice)) :=
    let carried_gas := (carried_gas).(gas_value) in
@@ -17449,7 +17742,7 @@ Definition run_call_transaction_frame {ex554100_ : Z} {ex554099_ : Z} {ex554089_
      (@existT _ _ 0 (@existT _ _ 0 ((EMPTY_OUTPUT_SLICE : OutputSliceFields 0 0))) : OutputSlice) in
    let code_address : vec (mword 8) 20 := carried_code_address in
    let '(@existT _ _ frame_code__'len (@existT _ _ frame_code__'off frame_code)) :=
-     (@existT _ _ ex554100_ (@existT _ _ ex554099_ ((carried_code : CodeFields ex554099_ ex554100_))) : Code) in
+     (@existT _ _ ex584951_ (@existT _ _ ex584950_ ((carried_code : CodeFields ex584950_ ex584951_))) : Code) in
    let frame_calldata : CalldataSlice := carried_calldata in
    (k_aload (tx.(TransactionFields_recipient))) >>= fun '(_) =>
    let transfers_value := word_nonzero ((tx.(TransactionFields_value)).(word_value)) in
@@ -17554,23 +17847,23 @@ Definition run_call_transaction_frame {ex554100_ : Z} {ex554099_ : Z} {ex554089_
    returnM ((gas_after, state_gas_after, state_spill_after, refund_after, status_after, @existT _ _ _ (@existT _ _ _ (output_after))))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)), (Build_gas_refund (semanticValue3)), semanticValue4, semanticValue5)).
 
-Definition run_legacy_transaction_frame {ex554115_ : Z} {ex554114_ : Z} {ex554113_ : Z}
-{ex554112_ : Z} {ex554111_ : Z} {ex554105_ : Z} {limit : Z} {regular : Z}
-(tx : TransactionFields ex554105_)
-(v : TxValidityFields limit regular ex554111_ ex554112_ ex554113_ ex554114_ ex554115_)
+Definition run_legacy_transaction_frame {ex584966_ : Z} {ex584965_ : Z} {ex584964_ : Z}
+{ex584963_ : Z} {ex584962_ : Z} {ex584956_ : Z} {limit : Z} {regular : Z}
+(tx : TransactionFields ex584956_)
+(v : TxValidityFields limit regular ex584962_ ex584963_ ex584964_ ex584965_ ex584966_)
 (*(0 <=? regular) && ((regular <=? limit) && (limit <=? (2 ^ 64 - 1)))*)
-(*(ex554105_ =? 0) || ((ex554105_ =? 6) || (ex554105_ =? 9))*)
-(*(0 <=? ex554111_) &&
-  ((0 <=? ex554112_) &&
-    ((0 <=? ex554113_) &&
-      ((ex554111_ <=? regular) &&
-        ((ex554113_ <=? regular) &&
+(*(ex584956_ =? 0) || ((ex584956_ =? 6) || (ex584956_ =? 9))*)
+(*(0 <=? ex584962_) &&
+  ((0 <=? ex584963_) &&
+    ((0 <=? ex584964_) &&
+      ((ex584962_ <=? regular) &&
+        ((ex584964_ <=? regular) &&
           ((regular <=? limit) &&
             ((limit <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554114_) &&
-                ((0 <=? ex554115_) &&
-                  (((ex554114_ + ex554115_ + ex554111_ + ex554112_) =? limit) &&
-                    (ex554114_ <=? (regular - ex554111_)))))))))))*)
+              ((0 <=? ex584965_) &&
+                ((0 <=? ex584966_) &&
+                  (((ex584965_ + ex584966_ + ex584962_ + ex584963_) =? limit) &&
+                    (ex584965_ <=? (regular - ex584962_)))))))))))*)
 : M (TxFrameResultFields limit regular) :=
    let initial_gas := v.(TxValidityFields_gas) in
    (k_journal_checkpoint (tt)) >>
@@ -17613,24 +17906,24 @@ Definition run_legacy_transaction_frame {ex554115_ : Z} {ex554114_ : Z} {ex55411
                 TxFrameResultFields_gas := @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (w__2)));
                 TxFrameResultFields_refund := (Build_gas_refund (retained_refund)) |})).
 
-Definition run_amsterdam_transaction_frame {ex554129_ : Z} {ex554128_ : Z} {ex554127_ : Z}
-{ex554126_ : Z} {ex554125_ : Z} {ex554119_ : Z} {limit : Z} {regular : Z}
-(tx : TransactionFields ex554119_)
-(v : TxValidityFields limit regular ex554125_ ex554126_ ex554127_ ex554128_ ex554129_)
+Definition run_amsterdam_transaction_frame {ex584980_ : Z} {ex584979_ : Z} {ex584978_ : Z}
+{ex584977_ : Z} {ex584976_ : Z} {ex584970_ : Z} {limit : Z} {regular : Z}
+(tx : TransactionFields ex584970_)
+(v : TxValidityFields limit regular ex584976_ ex584977_ ex584978_ ex584979_ ex584980_)
 (upfront : TxUpfrontResult) (authorizations : PreparedAuthorizationList)
 (*(0 <=? regular) && ((regular <=? limit) && (limit <=? (2 ^ 64 - 1)))*)
-(*(ex554119_ =? 0) || ((ex554119_ =? 6) || (ex554119_ =? 9))*)
-(*(0 <=? ex554125_) &&
-  ((0 <=? ex554126_) &&
-    ((0 <=? ex554127_) &&
-      ((ex554125_ <=? regular) &&
-        ((ex554127_ <=? regular) &&
+(*(ex584970_ =? 0) || ((ex584970_ =? 6) || (ex584970_ =? 9))*)
+(*(0 <=? ex584976_) &&
+  ((0 <=? ex584977_) &&
+    ((0 <=? ex584978_) &&
+      ((ex584976_ <=? regular) &&
+        ((ex584978_ <=? regular) &&
           ((regular <=? limit) &&
             ((limit <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554128_) &&
-                ((0 <=? ex554129_) &&
-                  (((ex554128_ + ex554129_ + ex554125_ + ex554126_) =? limit) &&
-                    (ex554128_ <=? (regular - ex554125_)))))))))))*)
+              ((0 <=? ex584979_) &&
+                ((0 <=? ex584980_) &&
+                  (((ex584979_ + ex584980_ + ex584976_ + ex584977_) =? limit) &&
+                    (ex584979_ <=? (regular - ex584976_)))))))))))*)
 : M (TxFrameResultFields limit regular) :=
    ((enter_transaction_frame (v)) >>= fun semanticResult =>
     returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5, semanticValue6) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value), (semanticValue3).(gas_refund_value), semanticValue4, (semanticValue5).(memory_base_value), (semanticValue6).(memory_length_value)))) >>= fun '((entered_gas, entered_state_gas, entered_state_spill, entered_refund, entered_stack, entered_memory_base, entered_memory)) =>
@@ -17701,7 +17994,7 @@ Definition run_amsterdam_transaction_frame {ex554129_ : Z} {ex554128_ : Z} {ex55
       (k_journal_revert (tt)) >>
       let state_gas_after : Z := preparation_reservoir in
       let state_spill_after : Z := STATE_GAS_SPILL_ZERO in
-      (tx_frame_gas_snapshot (initial_gas) (GAS_ZERO) (STATE_GAS_ZERO)
+      (tx_frame_gas_snapshot (initial_gas) (GAS_ZERO) (state_gas_after)
          (Build_state_gas_delta (((FRAME_STATE_GAS_DELTA_ZERO).(frame_state_gas_delta_value))))) >>= fun '(@existT _ _ __w__22 (@existT _ _ __w__21 (@existT _ _ __w__20 w__2))) =>
       returnM (({| TxFrameResultFields_success := false;
                    TxFrameResultFields_gas := @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (w__2)));
@@ -17766,24 +18059,24 @@ Definition run_amsterdam_transaction_frame {ex554129_ : Z} {ex554128_ : Z} {ex55
                    TxFrameResultFields_refund := (Build_gas_refund (retained_refund)) |})))
     : M (TxFrameResultFields limit regular).
 
-Definition run_transaction_frame {ex554143_ : Z} {ex554142_ : Z} {ex554141_ : Z} {ex554140_ : Z}
-{ex554139_ : Z} {ex554133_ : Z} {limit : Z} {regular : Z}
-(tx : TransactionFields ex554133_)
-(v : TxValidityFields limit regular ex554139_ ex554140_ ex554141_ ex554142_ ex554143_)
+Definition run_transaction_frame {ex584994_ : Z} {ex584993_ : Z} {ex584992_ : Z} {ex584991_ : Z}
+{ex584990_ : Z} {ex584984_ : Z} {limit : Z} {regular : Z}
+(tx : TransactionFields ex584984_)
+(v : TxValidityFields limit regular ex584990_ ex584991_ ex584992_ ex584993_ ex584994_)
 (upfront : TxUpfrontResult) (authorizations : PreparedAuthorizationList)
 (*(0 <=? regular) && ((regular <=? limit) && (limit <=? (2 ^ 64 - 1)))*)
-(*(ex554133_ =? 0) || ((ex554133_ =? 6) || (ex554133_ =? 9))*)
-(*(0 <=? ex554139_) &&
-  ((0 <=? ex554140_) &&
-    ((0 <=? ex554141_) &&
-      ((ex554139_ <=? regular) &&
-        ((ex554141_ <=? regular) &&
+(*(ex584984_ =? 0) || ((ex584984_ =? 6) || (ex584984_ =? 9))*)
+(*(0 <=? ex584990_) &&
+  ((0 <=? ex584991_) &&
+    ((0 <=? ex584992_) &&
+      ((ex584990_ <=? regular) &&
+        ((ex584992_ <=? regular) &&
           ((regular <=? limit) &&
             ((limit <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554142_) &&
-                ((0 <=? ex554143_) &&
-                  (((ex554142_ + ex554143_ + ex554139_ + ex554140_) =? limit) &&
-                    (ex554142_ <=? (regular - ex554139_)))))))))))*)
+              ((0 <=? ex584993_) &&
+                ((0 <=? ex584994_) &&
+                  (((ex584993_ + ex584994_ + ex584990_ + ex584991_) =? limit) &&
+                    (ex584993_ <=? (regular - ex584990_)))))))))))*)
 : M (TxFrameResultFields limit regular) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
@@ -17805,24 +18098,24 @@ Definition remaining_gas_after_refund (_limit : Z) (total : Z) (remaining : Z) (
    let refund := if Z.leb (total) (0) then 0 else if Z.leb (total) (cap) then total else cap in
    Z.add (remaining) (refund).
 
-Definition settle_transaction {ex554159_ : Z} {ex554158_ : Z} {ex554157_ : Z} {ex554156_ : Z}
-{ex554155_ : Z} {ex554149_ : Z} {limit : Z} {regular : Z}
-(tx : TransactionFields ex554149_)
-(v : TxValidityFields limit regular ex554155_ ex554156_ ex554157_ ex554158_ ex554159_)
+Definition settle_transaction {ex585010_ : Z} {ex585009_ : Z} {ex585008_ : Z} {ex585007_ : Z}
+{ex585006_ : Z} {ex585000_ : Z} {limit : Z} {regular : Z}
+(tx : TransactionFields ex585000_)
+(v : TxValidityFields limit regular ex585006_ ex585007_ ex585008_ ex585009_ ex585010_)
 (authorization_refund : authorization_refund_typ) (fr : TxFrameResultFields limit regular)
 (*(0 <=? regular) && ((regular <=? limit) && (limit <=? (2 ^ 64 - 1)))*)
-(*(ex554149_ =? 0) || ((ex554149_ =? 6) || (ex554149_ =? 9))*)
-(*(0 <=? ex554155_) &&
-  ((0 <=? ex554156_) &&
-    ((0 <=? ex554157_) &&
-      ((ex554155_ <=? regular) &&
-        ((ex554157_ <=? regular) &&
+(*(ex585000_ =? 0) || ((ex585000_ =? 6) || (ex585000_ =? 9))*)
+(*(0 <=? ex585006_) &&
+  ((0 <=? ex585007_) &&
+    ((0 <=? ex585008_) &&
+      ((ex585006_ <=? regular) &&
+        ((ex585008_ <=? regular) &&
           ((regular <=? limit) &&
             ((limit <=? (2 ^ 64 - 1)) &&
-              ((0 <=? ex554158_) &&
-                ((0 <=? ex554159_) &&
-                  (((ex554158_ + ex554159_ + ex554155_ + ex554156_) =? limit) &&
-                    (ex554158_ <=? (regular - ex554155_)))))))))))*)
+              ((0 <=? ex585009_) &&
+                ((0 <=? ex585010_) &&
+                  (((ex585009_ + ex585010_ + ex585006_ + ex585007_) =? limit) &&
+                    (ex585009_ <=? (regular - ex585006_)))))))))))*)
 (*(0 <=? authorization_refund) && (authorization_refund <=? (12500 * 2 ^ 30))*)
 : M (ReceiptWithin limit regular) :=
    let authorization_refund := (authorization_refund).(authorization_refund_value) in
@@ -17875,10 +18168,10 @@ Definition settle_transaction {ex554159_ : Z} {ex554158_ : Z} {ex554157_ : Z} {e
        : M ({syn_gas_used & {syn_execution_gas & {syn_state_gas & (ReceiptFields limit regular syn_gas_used syn_execution_gas syn_state_gas)}}}%type))
     : M ({syn_gas_used & {syn_execution_gas & {syn_state_gas & (ReceiptFields limit regular syn_gas_used syn_execution_gas syn_state_gas)}}}%type).
 
-Definition process_transaction {ex554164_ : Z} {total : Z} {regular : Z}
-(tx : TransactionFields ex554164_) (allowance : TransactionGasAllowanceFields total regular)
+Definition process_transaction {ex585015_ : Z} {total : Z} {regular : Z}
+(tx : TransactionFields ex585015_) (allowance : TransactionGasAllowanceFields total regular)
 (*(0 <=? regular) && ((regular <=? total) && (total <=? (2 ^ 64 - 1)))*)
-(*(ex554164_ =? 0) || ((ex554164_ =? 6) || (ex554164_ =? 9))*)
+(*(ex585015_ =? 0) || ((ex585015_ =? 6) || (ex585015_ =? 9))*)
 : M (ReceiptWithin total regular) :=
    (k_tx_reset (tt)) >>
    (check_transaction_validity (tx) (allowance)) >>= fun '(@existT _ _ __validity4 (@existT _ _ __validity3 (@existT _ _ __validity2 (@existT _ _ __validity1 (@existT _ _ __validity0 validity))))) =>
@@ -18097,9 +18390,9 @@ Definition undefined_InlineNode '(tt : unit) : M (InlineNode) :=
    (undefined_range (0) (31)) >>= fun (w__2 : Z) =>
    returnM (({| InlineNode_data := w__1;  InlineNode_len := w__2 |})).
 
-Definition inline_node_from_scratch_slice {ex554196_ : Z} {ex554195_ : Z}
-(bytes : ScratchSliceFields ex554195_ ex554196_)
-(*(0 <=? ex554195_) && ((0 <=? ex554196_) && ((ex554195_ + ex554196_) <=? (2 ^ 32 - 1)))*)
+Definition inline_node_from_scratch_slice {ex585047_ : Z} {ex585046_ : Z}
+(bytes : ScratchSliceFields ex585046_ ex585047_)
+(*(0 <=? ex585046_) && ((0 <=? ex585047_) && ((ex585046_ + ex585047_) <=? (2 ^ 32 - 1)))*)
 : M (InlineNode) :=
    let length := bytes.(ScratchSliceFields_len) in
    (if Z.ltb (length) (MPT_HASH_LENGTH) return M (InlineNode) then
@@ -18110,9 +18403,9 @@ Definition inline_node_from_scratch_slice {ex554196_ : Z} {ex554195_ : Z}
     else (fatal_error (WitnessDeficient))  : M (InlineNode))
     : M (InlineNode).
 
-Definition inline_node_from_input_slice {ex554200_ : Z} {ex554199_ : Z}
-(bytes : StatelessInputSliceFields ex554199_ ex554200_)
-(*(0 <=? ex554199_) && ((0 <=? ex554200_) && ((ex554199_ + ex554200_) <=? (2 ^ 32 - 1)))*)
+Definition inline_node_from_input_slice {ex585051_ : Z} {ex585050_ : Z}
+(bytes : StatelessInputSliceFields ex585050_ ex585051_)
+(*(0 <=? ex585050_) && ((0 <=? ex585051_) && ((ex585050_ + ex585051_) <=? (2 ^ 32 - 1)))*)
 : M (InlineNode) :=
    let length := bytes.(StatelessInputSliceFields_len) in
    (if Z.ltb (length) (MPT_HASH_LENGTH) return M (InlineNode) then
@@ -18200,16 +18493,16 @@ Definition rlp_write_hex_prefix (path : TriePath) (is_leaf : bool) : M (unit) :=
         : M (Z))) >>= fun (index : Z) =>
    returnM (tt).
 
-Definition child_ref {ex554208_ : Z} {ex554207_ : Z}
-(encoded : ScratchSliceFields ex554207_ ex554208_)
-(*(0 <=? ex554207_) && ((0 <=? ex554208_) && ((ex554207_ + ex554208_) <=? (2 ^ 32 - 1)))*)
+Definition child_ref {ex585059_ : Z} {ex585058_ : Z}
+(encoded : ScratchSliceFields ex585058_ ex585059_)
+(*(0 <=? ex585058_) && ((0 <=? ex585059_) && ((ex585058_ + ex585059_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    (if Z.ltb (encoded.(ScratchSliceFields_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
       (inline_node_from_scratch_slice (encoded)) >>= fun inline_node =>
       returnM ((ScratchInlineRef (inline_node)))
     else
       (scratch_keccak256
-         (@existT _ _ ex554208_ (@existT _ _ ex554207_ ((encoded : ScratchSliceFields ex554207_ ex554208_))))) >>= fun node_hash =>
+         (@existT _ _ ex585059_ (@existT _ _ ex585058_ ((encoded : ScratchSliceFields ex585058_ ex585059_))))) >>= fun node_hash =>
       returnM ((HashRef (node_hash))))
     : M (NodeRef).
 
@@ -18225,9 +18518,9 @@ Definition branch_mask_set (mask : mword 16) (index : mword 4) : branch_mask :=
    let index_mask := branch_mask_for (index) in
    or_vec (mask) (index_mask).
 
-Definition input_leaf_child_ref {ex554213_ : Z} {ex554212_ : Z}
-(key : TriePath) (value : StatelessInputSliceFields ex554212_ ex554213_)
-(*(0 <=? ex554212_) && ((0 <=? ex554213_) && ((ex554212_ + ex554213_) <=? (2 ^ 32 - 1)))*)
+Definition input_leaf_child_ref {ex585064_ : Z} {ex585063_ : Z}
+(key : TriePath) (value : StatelessInputSliceFields ex585063_ ex585064_)
+(*(0 <=? ex585063_) && ((0 <=? ex585064_) && ((ex585063_ + ex585064_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    (rlp_hex_prefix_size (key) (true)) >>= fun path_size =>
    ((rlp_input_scratch_slice_size (value)) >>= fun semanticResult =>
@@ -18243,9 +18536,9 @@ Definition input_leaf_child_ref {ex554213_ : Z} {ex554212_ : Z}
    (rlp_encoder_finish (encoder)) >>= fun '(@existT _ _ __encoded1 (@existT _ _ __encoded0 encoded)) =>
    (child_ref (encoded)) >>= fun result => (rlp_encoder_rewind (encoder)) >> returnM (result).
 
-Definition scratch_leaf_child_ref {ex554217_ : Z} {ex554216_ : Z}
-(key : TriePath) (value : ScratchSliceFields ex554216_ ex554217_)
-(*(0 <=? ex554216_) && ((0 <=? ex554217_) && ((ex554216_ + ex554217_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_leaf_child_ref {ex585068_ : Z} {ex585067_ : Z}
+(key : TriePath) (value : ScratchSliceFields ex585067_ ex585068_)
+(*(0 <=? ex585067_) && ((0 <=? ex585068_) && ((ex585067_ + ex585068_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    (rlp_hex_prefix_size (key) (true)) >>= fun path_size =>
    ((rlp_scratch_scratch_slice_size (value)) >>= fun semanticResult =>
@@ -18337,23 +18630,23 @@ Definition trie_ref_to_root (r : NodeRef) : M (hash) :=
    end
     : M (vec (mword 8) 32).
 
-Definition input_node_to_ref {ex554221_ : Z} {ex554220_ : Z}
-(node : StatelessInputSliceFields ex554220_ ex554221_)
-(*(0 <=? ex554220_) && ((0 <=? ex554221_) && ((ex554220_ + ex554221_) <=? (2 ^ 32 - 1)))*)
+Definition input_node_to_ref {ex585072_ : Z} {ex585071_ : Z}
+(node : StatelessInputSliceFields ex585071_ ex585072_)
+(*(0 <=? ex585071_) && ((0 <=? ex585072_) && ((ex585071_ + ex585072_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    (if Z.eqb (node.(StatelessInputSliceFields_len)) (0) then returnM ((EmptyRef (tt)))
     else if Z.ltb (node.(StatelessInputSliceFields_len)) (MPT_HASH_LENGTH) then
       returnM ((InputInlineRef
-                  (@existT _ _ ex554221_ (@existT _ _ ex554220_ ((node : StatelessInputSliceFields ex554220_ ex554221_))))))
+                  (@existT _ _ ex585072_ (@existT _ _ ex585071_ ((node : StatelessInputSliceFields ex585071_ ex585072_))))))
     else
       (stateless_input_keccak256
-         (@existT _ _ ex554221_ (@existT _ _ ex554220_ ((node : StatelessInputSliceFields ex554220_ ex554221_))))) >>= fun node_hash =>
+         (@existT _ _ ex585072_ (@existT _ _ ex585071_ ((node : StatelessInputSliceFields ex585071_ ex585072_))))) >>= fun node_hash =>
       returnM ((HashRef (node_hash))))
     : M (NodeRef).
 
-Definition scratch_node_to_ref {ex554225_ : Z} {ex554224_ : Z}
-(node : ScratchSliceFields ex554224_ ex554225_)
-(*(0 <=? ex554224_) && ((0 <=? ex554225_) && ((ex554224_ + ex554225_) <=? (2 ^ 32 - 1)))*)
+Definition scratch_node_to_ref {ex585076_ : Z} {ex585075_ : Z}
+(node : ScratchSliceFields ex585075_ ex585076_)
+(*(0 <=? ex585075_) && ((0 <=? ex585076_) && ((ex585075_ + ex585076_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    (if Z.eqb (node.(ScratchSliceFields_len)) (0) then returnM ((EmptyRef (tt)))
     else if Z.ltb (node.(ScratchSliceFields_len)) (MPT_HASH_LENGTH) return M (NodeRef) then
@@ -18361,7 +18654,7 @@ Definition scratch_node_to_ref {ex554225_ : Z} {ex554224_ : Z}
       returnM ((ScratchInlineRef (inline_node)))
     else
       (scratch_keccak256
-         (@existT _ _ ex554225_ (@existT _ _ ex554224_ ((node : ScratchSliceFields ex554224_ ex554225_))))) >>= fun node_hash =>
+         (@existT _ _ ex585076_ (@existT _ _ ex585075_ ((node : ScratchSliceFields ex585075_ ex585076_))))) >>= fun node_hash =>
       returnM ((HashRef (node_hash))))
     : M (NodeRef).
 
@@ -18377,7 +18670,8 @@ Definition scratch_field_to_ref {source_off : Z} {source_len : Z} {content_len :
       ((scratch_rlp_decode_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun word =>
       let hash := word_to_hash (Build_word ((word))) in
       returnM ((HashRef (hash)))
-    else returnM ((EmptyRef (tt))))
+    else if Z.eqb content_len (0) then returnM ((EmptyRef (tt)))
+    else (fatal_error (RlpDecode))  : M (NodeRef))
     : M (NodeRef).
 
 Fixpoint _rec_decode_scratch_branch_node {source_off : Z} {source_len : Z}
@@ -18422,9 +18716,9 @@ Definition decode_scratch_branch_node {source_off : Z} {source_len : Z}
       (Zwf_guarded _))
     : M (ScratchTrieNode).
 
-Definition decode_scratch_trie_node {ex554275_ : Z} {ex554274_ : Z}
-(node : ScratchSliceFields ex554274_ ex554275_)
-(*(0 <=? ex554274_) && ((0 <=? ex554275_) && ((ex554274_ + ex554275_) <=? (2 ^ 32 - 1)))*)
+Definition decode_scratch_trie_node {ex585126_ : Z} {ex585125_ : Z}
+(node : ScratchSliceFields ex585125_ ex585126_)
+(*(0 <=? ex585125_) && ((0 <=? ex585126_) && ((ex585125_ + ex585126_) <=? (2 ^ 32 - 1)))*)
 : M (ScratchTrieNode) :=
    (scratch_rlp_node_cursor (node)) >>= fun '(@existT _ _ __fields1 (@existT _ _ __fields0 fields)) =>
    (scratch_rlp_decode_item (fields)) >>= fun '(@existT _ _ __first1 (@existT _ _ __first0 first)) =>
@@ -18437,7 +18731,11 @@ Definition decode_scratch_trie_node {ex554275_ : Z} {ex554274_ : Z}
        (second.(ScratchRlpFieldRef_source).(ScratchSliceFields_len)) in
    (if Z.eqb (fields.(ScratchSliceFields_len)) (0) return M (ScratchTrieNode) then
       (scratch_hex_prefix_decode_ref (first)) >>= fun '((is_leaf, path)) =>
-      (if is_leaf then
+      (if is_leaf return M (ScratchTrieNode) then
+         (if second.(ScratchRlpFieldRef_is_list) return M (unit) then
+            (fatal_error (RlpDecode))
+             : M (unit)
+          else returnM (tt)) >>
          let '(@existT _ _ value__'len (@existT _ _ value__'off value)) :=
            (scratch_rlp_item_content (second) : {len & {off & (ScratchSliceFields off len)}}%type) in
          returnM ((ScratchLeafNode ((path, @existT _ _ _ (@existT _ _ _ (value))))))
@@ -18462,9 +18760,9 @@ Definition decode_scratch_trie_node {ex554275_ : Z} {ex554274_ : Z}
        : M (ScratchTrieNode))
     : M (ScratchTrieNode).
 
-Definition merge_ext_node {ex554279_ : Z} {ex554278_ : Z}
-(prefix : TriePath) (childnode : StatelessInputSliceFields ex554278_ ex554279_)
-(*(0 <=? ex554278_) && ((0 <=? ex554279_) && ((ex554278_ + ex554279_) <=? (2 ^ 32 - 1)))*)
+Definition merge_ext_node {ex585130_ : Z} {ex585129_ : Z}
+(prefix : TriePath) (childnode : StatelessInputSliceFields ex585129_ ex585130_)
+(*(0 <=? ex585129_) && ((0 <=? ex585130_) && ((ex585129_ + ex585130_) <=? (2 ^ 32 - 1)))*)
 : M (NodeRef) :=
    let prefix_length := (path_len (prefix)).(trie_path_len_value) in
    (if Z.eqb (prefix_length) (0) return M (NodeRef) then
@@ -18703,13 +19001,13 @@ Definition trie_children_finish (prefix : TriePath) (children : TrieChildren) : 
 Definition trie_leaf (path : TriePath) (value : TrieLeafValue) : TrieItem :=
    {| TrieItem_path := path;  TrieItem_value := LeafItem (value) |}.
 
-Definition trie_scratch_leaf {ex554289_ : Z} {ex554288_ : Z}
-(path : TriePath) (value : ScratchSliceFields ex554288_ ex554289_)
-(*(0 <=? ex554288_) && ((0 <=? ex554289_) && ((ex554288_ + ex554289_) <=? (2 ^ 32 - 1)))*)
+Definition trie_scratch_leaf {ex585140_ : Z} {ex585139_ : Z}
+(path : TriePath) (value : ScratchSliceFields ex585139_ ex585140_)
+(*(0 <=? ex585139_) && ((0 <=? ex585140_) && ((ex585139_ + ex585140_) <=? (2 ^ 32 - 1)))*)
 : TrieItem :=
    let leaf_value :=
      ScratchTrieLeaf
-       (@existT _ _ ex554289_ (@existT _ _ ex554288_ ((value : ScratchSliceFields ex554288_ ex554289_)))) in
+       (@existT _ _ ex585140_ (@existT _ _ ex585139_ ((value : ScratchSliceFields ex585139_ ex585140_)))) in
    trie_leaf (path) (leaf_value).
 
 Definition trie_updates_descend (updates : TrieUpdateCursor) : M (TrieUpdateCursor) :=
@@ -18793,13 +19091,13 @@ Definition overlay_child_ranges_remaining
      else existing_position in
    returnM ((Z.sub (17) (next_position))).
 
-Definition trie_input_leaf {ex554294_ : Z} {ex554293_ : Z}
-(path : TriePath) (value : StatelessInputSliceFields ex554293_ ex554294_)
-(*(0 <=? ex554293_) && ((0 <=? ex554294_) && ((ex554293_ + ex554294_) <=? (2 ^ 32 - 1)))*)
+Definition trie_input_leaf {ex585145_ : Z} {ex585144_ : Z}
+(path : TriePath) (value : StatelessInputSliceFields ex585144_ ex585145_)
+(*(0 <=? ex585144_) && ((0 <=? ex585145_) && ((ex585144_ + ex585145_) <=? (2 ^ 32 - 1)))*)
 : TrieItem :=
    let leaf_value :=
      InputTrieLeaf
-       (@existT _ _ ex554294_ (@existT _ _ ex554293_ ((value : StatelessInputSliceFields ex554293_ ex554294_)))) in
+       (@existT _ _ ex585145_ (@existT _ _ ex585144_ ((value : StatelessInputSliceFields ex585144_ ex585145_)))) in
    trie_leaf (path) (leaf_value).
 
 Definition trie_subtree (path : TriePath) (childref : NodeRef) : TrieItem :=
@@ -18875,10 +19173,10 @@ with _rec_overlay_extension_subtree
 (cursor : trie_path_cursor) (_reclimit : Z) (*(0 <=? cursor) && (cursor <=? 64)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItem * TrieUpdateCursor))
-with _rec_overlay_leaf_subtree {ex554317_ : Z} {ex554316_ : Z}
+with _rec_overlay_leaf_subtree {ex585168_ : Z} {ex585167_ : Z}
 (updates : TrieUpdateCursor) (prefix : TriePath) (key : TriePath)
-(value : StatelessInputSliceFields ex554316_ ex554317_) (cursor : trie_path_cursor) (_reclimit : Z)
-(*(0 <=? ex554316_) && ((0 <=? ex554317_) && ((ex554316_ + ex554317_) <=? (2 ^ 32 - 1)))*)
+(value : StatelessInputSliceFields ex585167_ ex585168_) (cursor : trie_path_cursor) (_reclimit : Z)
+(*(0 <=? ex585167_) && ((0 <=? ex585168_) && ((ex585167_ + ex585168_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? cursor) && (cursor <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItem * TrieUpdateCursor))
 with _rec_trie_root_cursor
@@ -18898,10 +19196,10 @@ with _rec_updates_subtree
 (updates : TrieUpdateCursor) (prefix : TriePath) (cursor : trie_path_cursor) (_reclimit : Z)
 (*(0 <=? cursor) && (cursor <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItem * TrieUpdateCursor))
-with _rec_witness_subtree {ex554299_ : Z} {ex554298_ : Z}
-(node : StatelessInputSliceFields ex554298_ ex554299_) (prefix : TriePath)
+with _rec_witness_subtree {ex585150_ : Z} {ex585149_ : Z}
+(node : StatelessInputSliceFields ex585149_ ex585150_) (prefix : TriePath)
 (updates : TrieUpdateCursor) (cursor : trie_path_cursor) (_reclimit : Z)
-(*(0 <=? ex554298_) && ((0 <=? ex554299_) && ((ex554298_ + ex554299_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585149_) && ((0 <=? ex585150_) && ((ex585149_ + ex585150_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? cursor) && (cursor <=? 64)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M ((TrieItem * TrieUpdateCursor)).
 (*#rec#account_trie_update*) exact (
@@ -19354,7 +19652,7 @@ with _rec_witness_subtree {ex554299_ : Z} {ex554298_ : Z}
       (fatal_error (WitnessDeficient))
        : M (unit)
     else returnM (tt)) >>
-   (if Z.eqb ex554299_ (0) return M ((TrieItem * TrieUpdateCursor)) then
+   (if Z.eqb ex585150_ (0) return M ((TrieItem * TrieUpdateCursor)) then
       (_rec_updates_subtree (updates) (prefix) (Build_trie_path_cursor ((cursor)))
          ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
        : M ((TrieItem * TrieUpdateCursor))
@@ -19475,10 +19773,10 @@ Definition overlay_extension_subtree
       (Build_trie_path_cursor ((cursor))) (((Z.sub (64) (cursor))  : Z)) (Zwf_guarded _))
     : M ((TrieItem * TrieUpdateCursor)).
 
-Definition overlay_leaf_subtree {ex554323_ : Z} {ex554322_ : Z}
+Definition overlay_leaf_subtree {ex585174_ : Z} {ex585173_ : Z}
 (updates : TrieUpdateCursor) (prefix : TriePath) (key : TriePath)
-(value : StatelessInputSliceFields ex554322_ ex554323_) (cursor : trie_path_cursor)
-(*(0 <=? ex554322_) && ((0 <=? ex554323_) && ((ex554322_ + ex554323_) <=? (2 ^ 32 - 1)))*)
+(value : StatelessInputSliceFields ex585173_ ex585174_) (cursor : trie_path_cursor)
+(*(0 <=? ex585173_) && ((0 <=? ex585174_) && ((ex585173_ + ex585174_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? cursor) && (cursor <=? 64)*)
 : M ((TrieItem * TrieUpdateCursor)) :=
    let cursor := (cursor).(trie_path_cursor_value) in
@@ -19511,10 +19809,10 @@ Definition updates_subtree
        : Z)) (Zwf_guarded _))
     : M ((TrieItem * TrieUpdateCursor)).
 
-Definition witness_subtree {ex554305_ : Z} {ex554304_ : Z}
-(node : StatelessInputSliceFields ex554304_ ex554305_) (prefix : TriePath)
+Definition witness_subtree {ex585156_ : Z} {ex585155_ : Z}
+(node : StatelessInputSliceFields ex585155_ ex585156_) (prefix : TriePath)
 (updates : TrieUpdateCursor) (cursor : trie_path_cursor)
-(*(0 <=? ex554304_) && ((0 <=? ex554305_) && ((ex554304_ + ex554305_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585155_) && ((0 <=? ex585156_) && ((ex585155_ + ex585156_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? cursor) && (cursor <=? 64)*)
 : M ((TrieItem * TrieUpdateCursor)) :=
    let cursor := (cursor).(trie_path_cursor_value) in
@@ -19705,14 +20003,14 @@ Definition debug_account_storage_root (_a : vec (mword 8) 20) : hash := EMPTY_TR
 
 Definition SSZ_BODY : Z := 2.
 #[export] Hint Unfold SSZ_BODY : sail.
+Definition STATELESS_SCHEMA_ID : bits 16 := (Ox"1501").
+#[export] Hint Unfold STATELESS_SCHEMA_ID : sail.
 Definition IN_NPR_OFF : Z := 0.
 #[export] Hint Unfold IN_NPR_OFF : sail.
 Definition IN_WITNESS_OFF : Z := 4.
 #[export] Hint Unfold IN_WITNESS_OFF : sail.
-Definition IN_CHAIN_CONFIG_OFF : Z := 8.
-#[export] Hint Unfold IN_CHAIN_CONFIG_OFF : sail.
-Definition IN_PUBLIC_KEYS_OFF : Z := 12.
-#[export] Hint Unfold IN_PUBLIC_KEYS_OFF : sail.
+Definition IN_CHAIN_ID : Z := 8.
+#[export] Hint Unfold IN_CHAIN_ID : sail.
 Definition NPR_PAYLOAD_OFF : Z := 0.
 #[export] Hint Unfold NPR_PAYLOAD_OFF : sail.
 Definition NPR_VHASHES_OFF : Z := 4.
@@ -19777,16 +20075,16 @@ Definition WD_ADDRESS : Z := 16.
 #[export] Hint Unfold WD_ADDRESS : sail.
 Definition WD_AMOUNT : Z := 36.
 #[export] Hint Unfold WD_AMOUNT : sail.
-Definition CC_CHAIN_ID : Z := 0.
-#[export] Hint Unfold CC_CHAIN_ID : sail.
-Definition CC_ACTIVE_FORK_OFF : Z := 8.
-#[export] Hint Unfold CC_ACTIVE_FORK_OFF : sail.
-Definition FC_ACTIVATION_OFF : Z := 0.
-#[export] Hint Unfold FC_ACTIVATION_OFF : sail.
-Definition FA_BLOCK_NUMBER_OFF : Z := 0.
-#[export] Hint Unfold FA_BLOCK_NUMBER_OFF : sail.
-Definition FA_TIMESTAMP_OFF : Z := 4.
-#[export] Hint Unfold FA_TIMESTAMP_OFF : sail.
+Definition REQ_DEPOSIT_SIZE : Z := 192.
+#[export] Hint Unfold REQ_DEPOSIT_SIZE : sail.
+Definition REQ_WITHDRAWAL_REQUEST_SIZE : Z := 76.
+#[export] Hint Unfold REQ_WITHDRAWAL_REQUEST_SIZE : sail.
+Definition REQ_CONSOLIDATION_REQUEST_SIZE : Z := 116.
+#[export] Hint Unfold REQ_CONSOLIDATION_REQUEST_SIZE : sail.
+Definition REQ_BUILDER_DEPOSIT_SIZE : Z := 184.
+#[export] Hint Unfold REQ_BUILDER_DEPOSIT_SIZE : sail.
+Definition REQ_BUILDER_EXIT_SIZE : Z := 68.
+#[export] Hint Unfold REQ_BUILDER_EXIT_SIZE : sail.
 Definition WIT_STATE_OFF : Z := 0.
 #[export] Hint Unfold WIT_STATE_OFF : sail.
 Definition WIT_CODES_OFF : Z := 4.
@@ -19805,23 +20103,17 @@ Definition EXECUTION_REQUESTS_FIXED_LENGTH : Z := 20.
 #[export] Hint Unfold EXECUTION_REQUESTS_FIXED_LENGTH : sail.
 Definition EXECUTION_WITNESS_FIXED_LENGTH : Z := 12.
 #[export] Hint Unfold EXECUTION_WITNESS_FIXED_LENGTH : sail.
-Definition PUBLIC_KEY_LENGTH : Z := 65.
-#[export] Hint Unfold PUBLIC_KEY_LENGTH : sail.
-Definition CHAIN_CONFIG_HEADER_LENGTH : Z := 12.
-#[export] Hint Unfold CHAIN_CONFIG_HEADER_LENGTH : sail.
-Definition CHAIN_CONFIG_MIN_LENGTH : Z := 24.
-#[export] Hint Unfold CHAIN_CONFIG_MIN_LENGTH : sail.
 Definition MAX_EXTRA_DATA_LENGTH := ((pow2 (5)))  : Z.
 #[export] Hint Unfold MAX_EXTRA_DATA_LENGTH : sail.
 Definition MAX_TRANSACTION_LENGTH := ((pow2 (30)))  : Z.
 #[export] Hint Unfold MAX_TRANSACTION_LENGTH : sail.
 Definition MAX_TRANSACTIONS_PER_PAYLOAD := ((pow2 (20)))  : Z.
 #[export] Hint Unfold MAX_TRANSACTIONS_PER_PAYLOAD : sail.
-Definition MAX_WITHDRAWALS_PER_PAYLOAD := ((pow2 (4)))  : Z.
+Definition MAX_WITHDRAWALS_PER_PAYLOAD := ((pow2 (20)))  : Z.
 #[export] Hint Unfold MAX_WITHDRAWALS_PER_PAYLOAD : sail.
 Definition MAX_BLOCK_ACCESS_LIST_LENGTH := ((pow2 (30)))  : Z.
 #[export] Hint Unfold MAX_BLOCK_ACCESS_LIST_LENGTH : sail.
-Definition MAX_BLOB_COMMITMENTS_PER_BLOCK := ((pow2 (12)))  : Z.
+Definition MAX_BLOB_COMMITMENTS_PER_BLOCK := ((pow2 (25)))  : Z.
 #[export] Hint Unfold MAX_BLOB_COMMITMENTS_PER_BLOCK : sail.
 Definition MAX_WITNESS_NODES := ((pow2 (22)))  : Z.
 #[export] Hint Unfold MAX_WITNESS_NODES : sail.
@@ -19835,8 +20127,6 @@ Definition MAX_WITNESS_HEADERS := ((pow2 (8)))  : Z.
 #[export] Hint Unfold MAX_WITNESS_HEADERS : sail.
 Definition MAX_WITNESS_HEADER_LENGTH := ((pow2 (10)))  : Z.
 #[export] Hint Unfold MAX_WITNESS_HEADER_LENGTH : sail.
-Definition MAX_PUBLIC_KEYS := ((pow2 (15)))  : Z.
-#[export] Hint Unfold MAX_PUBLIC_KEYS : sail.
 Definition ssz_offset_table_position (index : ssz_offset_index)
 (*(0 <=? index) && (index <=? (2 ^ 30 - 1))*)
 : ssz_offset :=
@@ -19950,6 +20240,41 @@ Definition ssz_list_at {maximum : Z} (items : BoundedSszListRef maximum) (index 
        : M ({len & {off & (StatelessInputSliceFields off len)}}%type))
     : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
 
+Fixpoint _rec_ssz_validate_variable_list_cursor {maximum : Z}
+(cursor : BoundedSszListCursor maximum) (_reclimit : Z)
+(*(0 <=? maximum) && (maximum <=? (2 ^ 32 - 1)) && (maximum <=? (2 ^ 30 - 1))*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   let cursor_empty := ssz_list_cursor_empty (cursor) in
+   (if cursor_empty then returnM (tt)
+    else
+      (ssz_list_pop (cursor)) >>= fun '((@existT _ _ len (@existT _ _ off _), next)) =>
+      (_rec_ssz_validate_variable_list_cursor _ (next) ((Z.sub (_reclimit) (1)))
+         (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit))
+    : M (unit)
+).
+Defined.
+
+
+Definition ssz_validate_variable_list_cursor {maximum : Z} (cursor : BoundedSszListCursor maximum)
+(*(0 <=? maximum) && (maximum <=? (2 ^ 32 - 1)) && (maximum <=? (2 ^ 30 - 1))*)
+: M (unit) :=
+   (_rec_ssz_validate_variable_list_cursor (cursor)
+      (((Z.sub (cursor.(BoundedSszListCursor_items).(BoundedSszListRef_count))
+           (cursor.(BoundedSszListCursor_index)))
+       : Z)) (Zwf_guarded _))
+    : M (unit).
+
+Definition ssz_validate_variable_list {maximum : Z} (items : BoundedSszListRef maximum)
+(*(0 <=? maximum) && (maximum <=? (2 ^ 32 - 1)) && (maximum <=? (2 ^ 30 - 1))*)
+: M (unit) :=
+   (ssz_list_cursor (items)) >>= fun cursor =>
+   (ssz_validate_variable_list_cursor (cursor))
+    : M (unit).
+
 Definition ssz_fixed_list_at {maximum : Z}
 (items : BoundedSszListRef maximum) (index : Z) (item_size : Z)
 (*(0 <=? maximum) && (maximum <=? (2 ^ 32 - 1)) &&
@@ -19992,25 +20317,25 @@ Definition ssz_fixed_list_pop {maximum : Z} (items : BoundedSszListRef maximum) 
        : M (({len & {off & (StatelessInputSliceFields off len)}}%type * BoundedSszListRef maximum)))
     : M (({len & {off & (StatelessInputSliceFields off len)}}%type * BoundedSszListRef maximum)).
 
-Definition ssz_container_bytes {ex554709_ : Z} {ex554708_ : Z}
-(bytes : StatelessInputSliceFields ex554708_ ex554709_) (minimum : Z) (*0 <=? minimum*)
-(*(0 <=? ex554708_) && ((0 <=? ex554709_) && ((ex554708_ + ex554709_) <=? (2 ^ 32 - 1)))*)
+Definition ssz_container_bytes {ex585585_ : Z} {ex585584_ : Z}
+(bytes : StatelessInputSliceFields ex585584_ ex585585_) (minimum : Z) (*0 <=? minimum*)
+(*(0 <=? ex585584_) && ((0 <=? ex585585_) && ((ex585584_ + ex585585_) <=? (2 ^ 32 - 1)))*)
 : M (StatelessInputSliceAtLeast minimum) :=
    let fields := bytes in
-   (if Z.leb (minimum) ex554709_ then
-      returnM ((@existT _ _ ex554709_ (@existT _ _ ex554708_ ((fields : StatelessInputSliceFields ex554708_ ex554709_)))) : {len & {off & (StatelessInputSliceFields off len)}}%type)
+   (if Z.leb (minimum) ex585585_ then
+      returnM ((@existT _ _ ex585585_ (@existT _ _ ex585584_ ((fields : StatelessInputSliceFields ex585584_ ex585585_)))) : {len & {off & (StatelessInputSliceFields off len)}}%type)
     else
       (fatal_error (InvalidConfig))
        : M ({len & {off & (StatelessInputSliceFields off len)}}%type))
     : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
 
-Definition ssz_container_cursor {ex554714_ : Z} {ex554713_ : Z}
-(bytes : StatelessInputSliceFields ex554713_ ex554714_) (fixed_length : Z) (*0 <=? fixed_length*)
-(*(0 <=? ex554713_) && ((0 <=? ex554714_) && ((ex554713_ + ex554714_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? fixed_length) && (fixed_length <=? ex554714_))*)
+Definition ssz_container_cursor {ex585590_ : Z} {ex585589_ : Z}
+(bytes : StatelessInputSliceFields ex585589_ ex585590_) (fixed_length : Z) (*0 <=? fixed_length*)
+(*(0 <=? ex585589_) && ((0 <=? ex585590_) && ((ex585589_ + ex585590_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? fixed_length) && (fixed_length <=? ex585590_))*)
 : SszContainerCursor :=
    {| SszContainerCursor_bytes :=
-        @existT _ _ ex554714_ (@existT _ _ ex554713_ ((bytes : StatelessInputSliceFields ex554713_ ex554714_)));
+        @existT _ _ ex585590_ (@existT _ _ ex585589_ ((bytes : StatelessInputSliceFields ex585589_ ex585590_)));
       SszContainerCursor_current := (Build_source_pointer (fixed_length)) |}.
 
 Definition ssz_take (cursor : SszContainerCursor) (stop : ssz_offset)
@@ -20048,12 +20373,12 @@ Definition ssz_finish (cursor : SszContainerCursor) : M (StatelessInputSlice) :=
        : M ({len & {off & (StatelessInputSliceFields off len)}}%type))
     : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
 
-Definition ssz_bounded_variable_list_ref {ex554726_ : Z} {ex554725_ : Z}
-(bytes : StatelessInputSliceFields ex554725_ ex554726_) (maximum_count : Z)
+Definition ssz_bounded_variable_list_ref {ex585602_ : Z} {ex585601_ : Z}
+(bytes : StatelessInputSliceFields ex585601_ ex585602_) (maximum_count : Z)
 (maximum_item_length : Z)
 (*(0 <=? maximum_count) && (maximum_count <=? (2 ^ 32 - 1)) &&
   ((0 <=? maximum_item_length) && (maximum_item_length <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex554725_) && ((0 <=? ex554726_) && ((ex554725_ + ex554726_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585601_) && ((0 <=? ex585602_) && ((ex585601_ + ex585602_) <=? (2 ^ 32 - 1)))*)
 : M (BoundedSszListRef maximum_count) :=
    let span := bytes.(StatelessInputSliceFields_len) in
    (if Z.eqb (span) (0) then returnM (0)
@@ -20076,15 +20401,15 @@ Definition ssz_bounded_variable_list_ref {ex554726_ : Z} {ex554725_ : Z}
    (if Z.leb (raw_count) (maximum_count) then returnM (raw_count)
     else (fatal_error (InvalidConfig))  : M (Z)) >>= fun (count : Z) =>
    returnM (({| BoundedSszListRef_bytes :=
-                  @existT _ _ ex554726_ (@existT _ _ ex554725_ ((bytes : StatelessInputSliceFields ex554725_ ex554726_)));
+                  @existT _ _ ex585602_ (@existT _ _ ex585601_ ((bytes : StatelessInputSliceFields ex585601_ ex585602_)));
                 BoundedSszListRef_count := count;
                 BoundedSszListRef_max_item_length := (Build_source_length (maximum_item_length)) |})).
 
-Definition ssz_bounded_fixed_list_ref {ex554741_ : Z} {ex554740_ : Z}
-(bytes : StatelessInputSliceFields ex554740_ ex554741_) (item_size : Z) (maximum_count : Z)
+Definition ssz_bounded_fixed_list_ref {ex585617_ : Z} {ex585616_ : Z}
+(bytes : StatelessInputSliceFields ex585616_ ex585617_) (item_size : Z) (maximum_count : Z)
 (*(0 <=? maximum_count) && (maximum_count <=? (2 ^ 32 - 1)) &&
   ((0 <=? item_size) && (item_size <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex554740_) && ((0 <=? ex554741_) && ((ex554740_ + ex554741_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585616_) && ((0 <=? ex585617_) && ((ex585616_ + ex585617_) <=? (2 ^ 32 - 1)))*)
 : M (BoundedSszListRef maximum_count) :=
    (if Z.ltb (0) (item_size) then returnM (item_size)
     else (fatal_error (InvalidConfig))  : M (Z)) >>= fun (width : Z) =>
@@ -20097,31 +20422,31 @@ Definition ssz_bounded_fixed_list_ref {ex554741_ : Z} {ex554740_ : Z}
    (if Z.leb (raw_count) (maximum_count) then returnM (raw_count)
     else (fatal_error (InvalidConfig))  : M (Z)) >>= fun (count : Z) =>
    returnM (({| BoundedSszListRef_bytes :=
-                  @existT _ _ ex554741_ (@existT _ _ ex554740_ ((bytes : StatelessInputSliceFields ex554740_ ex554741_)));
+                  @existT _ _ ex585617_ (@existT _ _ ex585616_ ((bytes : StatelessInputSliceFields ex585616_ ex585617_)));
                 BoundedSszListRef_count := count;
                 BoundedSszListRef_max_item_length := (Build_source_length (item_size)) |})).
 
-Definition decode_stateless_input_ref {ex554749_ : Z} {ex554748_ : Z}
-(input : StatelessInputSliceFields ex554748_ ex554749_)
-(*(0 <=? ex554748_) && ((0 <=? ex554749_) && ((ex554748_ + ex554749_) <=? (2 ^ 32 - 1)))*)
+Definition decode_stateless_input_ref {ex585625_ : Z} {ex585624_ : Z}
+(input : StatelessInputSliceFields ex585624_ ex585625_)
+(*(0 <=? ex585624_) && ((0 <=? ex585625_) && ((ex585624_ + ex585625_) <=? (2 ^ 32 - 1)))*)
 : M (StatelessInputRef) :=
    let fixed_length := STATELESS_INPUT_FIXED_LENGTH in
    let body_offset_value := SSZ_BODY in
    (if Z.leb (fixed_length) (input.(StatelessInputSliceFields_len)) then
-      returnM ((@existT _ _ ex554749_ (@existT _ _ ex554748_ ((input : StatelessInputSliceFields ex554748_ ex554749_)))) : StatelessInputSliceAtLeast 18)
+      returnM ((@existT _ _ ex585625_ (@existT _ _ ex585624_ ((input : StatelessInputSliceFields ex585624_ ex585625_)))) : StatelessInputSliceAtLeast 18)
     else (fatal_error (InvalidConfig))  : M (StatelessInputSliceAtLeast 18)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 input_fields)) =>
-   (stateless_input_slice_byte (input_fields) (1)) >>= fun schema_version =>
-   (if neq_vec (schema_version) ((Ox"01")) return M (unit) then
+   (stateless_input_slice_byte (input_fields) (0)) >>= fun (w__1 : mword 8) =>
+   (stateless_input_slice_byte (input_fields) (1)) >>= fun (w__2 : mword 8) =>
+   let schema_id : mword 16 := concat_vec (w__1) (w__2) in
+   let schema_fork := subrange_vec_dec (schema_id) (15) (8) in
+   (if orb ((neq_vec ((subrange_vec_dec (schema_id) (7) (0))) ((Ox"01"))))
+         ((negb ((schema_protocol_profile_forwards_matches (schema_fork)))))
+      return
+      M (unit) then
       (fatal_error (InvalidConfig))
        : M (unit)
     else returnM (tt)) >>
-   (stateless_input_slice_byte (input_fields) (0)) >>= fun schema_fork =>
-   let schema_matches := schema_protocol_profile_forwards_matches (schema_fork) in
-   let schema_mismatch := negb (schema_matches) in
-   (if schema_mismatch return M (unit) then (fatal_error (InvalidConfig))  : M (unit)
-    else returnM (tt)) >>
-   let '(@existT _ _ protocol__'refund_divisor (@existT _ _ protocol__'transaction_blob_limit (@existT _ _ protocol__'transaction_regular_gas_limit (@existT _ _ protocol__'transaction_total_gas_limit (@existT _ _ protocol__'initcode_limit (@existT _ _ protocol__'code_limit (@existT _ _ protocol__'denominator (@existT _ _ protocol__'maximum (@existT _ _ protocol__'target (@existT _ _ protocol__'fork protocol)))))))))) :=
-     (schema_protocol_profile (schema_fork) : ProtocolProfile) in
+   (schema_protocol_profile (schema_fork)) >>= fun '(@existT _ _ __protocol9 (@existT _ _ __protocol8 (@existT _ _ __protocol7 (@existT _ _ __protocol6 (@existT _ _ __protocol5 (@existT _ _ __protocol4 (@existT _ _ __protocol3 (@existT _ _ __protocol2 (@existT _ _ __protocol1 (@existT _ _ __protocol0 protocol)))))))))) =>
    let body_bytes := stateless_input_slice_suffix (input_fields) (body_offset_value) in
    (ssz_container_bytes (body_bytes) (STATELESS_INPUT_BODY_FIXED_LENGTH)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 body)) =>
    let container_start : Z := 0 in
@@ -20131,12 +20456,9 @@ Definition decode_stateless_input_ref {ex554749_ : Z} {ex554748_ : Z}
    let witness_position := ssz_field_offset (container_start) (IN_WITNESS_OFF) in
    ((ssz_u32 (body) (witness_position)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_offset_value)) >>= fun witness_offset =>
-   let chain_config_position := ssz_field_offset (container_start) (IN_CHAIN_CONFIG_OFF) in
-   ((ssz_u32 (body) (chain_config_position)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun chain_config_offset =>
-   let public_keys_position := ssz_field_offset (container_start) (IN_PUBLIC_KEYS_OFF) in
-   ((ssz_u32 (body) (public_keys_position)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun public_keys_offset =>
+   let chain_id_position := ssz_field_offset (container_start) (IN_CHAIN_ID) in
+   ((decode_ssz_uint (body) (chain_id_position)) >>= fun semanticResult =>
+    returnM (semanticResult).(ssz_uint_value)) >>= fun (chain_id : Z) =>
    let body_fixed_length := STATELESS_INPUT_BODY_FIXED_LENGTH in
    (if neq_int (new_payload_request_offset) (body_fixed_length) return M (unit) then
       (fatal_error (InvalidConfig))
@@ -20145,10 +20467,8 @@ Definition decode_stateless_input_ref {ex554749_ : Z} {ex554748_ : Z}
    let body_cursor := ssz_container_cursor (body) (STATELESS_INPUT_BODY_FIXED_LENGTH) in
    (ssz_take (body_cursor) (Build_ssz_offset ((witness_offset)))) >>= fun '((@existT _ _ __input_fields1 (@existT _ _ __input_fields0 new_payload_request_bytes), body_after_payload_request)) =>
    (ssz_container_bytes (new_payload_request_bytes) (NEW_PAYLOAD_REQUEST_FIXED_LENGTH)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 new_payload_request)) =>
-   (ssz_take (body_after_payload_request) (Build_ssz_offset ((chain_config_offset)))) >>= fun '((@existT _ _ __input_fields1 (@existT _ _ __input_fields0 execution_witness_bytes), body_after_witness)) =>
+   (ssz_finish (body_after_payload_request)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 execution_witness_bytes)) =>
    (ssz_container_bytes (execution_witness_bytes) (EXECUTION_WITNESS_FIXED_LENGTH)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 execution_witness)) =>
-   (ssz_take (body_after_witness) (Build_ssz_offset ((public_keys_offset)))) >>= fun '((@existT _ _ __input_fields1 (@existT _ _ __input_fields0 chain_config), body_after_chain_config)) =>
-   (ssz_finish (body_after_chain_config)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 public_keys)) =>
    let npr_start : Z := 0 in
    let payload_position := ssz_field_offset (npr_start) (NPR_PAYLOAD_OFF) in
    ((ssz_u32 (new_payload_request) (payload_position)) >>= fun semanticResult =>
@@ -20258,22 +20578,20 @@ Definition decode_stateless_input_ref {ex554749_ : Z} {ex554748_ : Z}
    (ssz_finish (witness_after_codes)) >>= fun '(@existT _ _ __input_fields1 (@existT _ _ __input_fields0 witness_header_bytes)) =>
    (ssz_bounded_variable_list_ref (witness_header_bytes) (MAX_WITNESS_HEADERS)
       (MAX_WITNESS_HEADER_LENGTH)) >>= fun witness_headers =>
-   let public_key_bytes := public_keys.(StatelessInputSliceFields_len) in
-   let public_key_length := PUBLIC_KEY_LENGTH in
-   let public_key_count := e_div (public_key_bytes) (public_key_length) in
-   (if neq_int (public_key_bytes) ((Z.mul (public_key_count) (public_key_length)))
-      return
-      M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   (if Z.ltb (MAX_PUBLIC_KEYS) (public_key_count) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
    (ssz_bounded_fixed_list_ref (versioned_hashes) (WORD_BYTE_LENGTH)
       (MAX_BLOB_COMMITMENTS_PER_BLOCK)) >>= fun '(_) =>
-   returnM (({| StatelessInputRef_protocol :=
+   (ssz_bounded_fixed_list_ref (deposits) (REQ_DEPOSIT_SIZE) ((pow2 (25)))) >>= fun '(_) =>
+   (ssz_bounded_fixed_list_ref (withdrawal_requests) (REQ_WITHDRAWAL_REQUEST_SIZE) ((pow2 (25)))) >>= fun '(_) =>
+   (ssz_bounded_fixed_list_ref (consolidation_requests) (REQ_CONSOLIDATION_REQUEST_SIZE)
+      ((pow2 (25)))) >>= fun '(_) =>
+   (ssz_bounded_fixed_list_ref (builder_deposit_requests) (REQ_BUILDER_DEPOSIT_SIZE) ((pow2 (25)))) >>= fun '(_) =>
+   (ssz_bounded_fixed_list_ref (builder_exit_requests) (REQ_BUILDER_EXIT_SIZE) ((pow2 (25)))) >>= fun '(_) =>
+   (ssz_validate_variable_list (transactions)) >>
+   (ssz_validate_variable_list (witness_state)) >>
+   (ssz_validate_variable_list (witness_codes)) >>
+   (ssz_validate_variable_list (witness_headers)) >>
+   returnM (({| StatelessInputRef_schema_id := schema_id;
+                StatelessInputRef_protocol :=
                   @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (protocol))))))))));
                 StatelessInputRef_new_payload_request :=
                   @existT _ _ _ (@existT _ _ _ (new_payload_request));
@@ -20308,12 +20626,11 @@ Definition decode_stateless_input_ref {ex554749_ : Z} {ex554748_ : Z}
                 StatelessInputRef_witness_headers :=
                   autocast (T := fun _sz => (BoundedSszListRef _sz)%type)
                   witness_headers;
-                StatelessInputRef_chain_config := @existT _ _ _ (@existT _ _ _ (chain_config));
-                StatelessInputRef_public_keys := @existT _ _ _ (@existT _ _ _ (public_keys)) |})).
+                StatelessInputRef_chain_id := (Build_chain_identifier (chain_id)) |})).
 
-Definition sha256_request_digest {ex554753_ : Z} {ex554752_ : Z}
-(request_type : mword 8) (s : StatelessInputSliceFields ex554752_ ex554753_)
-(*(0 <=? ex554752_) && ((0 <=? ex554753_) && ((ex554752_ + ex554753_) <=? (2 ^ 32 - 1)))*)
+Definition sha256_request_digest {ex585629_ : Z} {ex585628_ : Z}
+(request_type : mword 8) (s : StatelessInputSliceFields ex585628_ ex585629_)
+(*(0 <=? ex585628_) && ((0 <=? ex585629_) && ((ex585628_ + ex585629_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((scratch_length_add (1) (s.(StatelessInputSliceFields_len))) >>= fun semanticResult =>
     returnM (semanticResult).(source_length_value)) >>= fun digest_length =>
@@ -20396,6 +20713,8 @@ Definition EMPTY_PARENT_HEADER_FIELDS : ParentHeaderFields :=
 {| ParentHeaderFields_parent_hash := ZERO_HASH;
    ParentHeaderFields_state_root := ZERO_HASH;
    ParentHeaderFields_base_fee := (Build_word ((ZERO_WORD).(word_value)));
+   ParentHeaderFields_gas_limit := (Build_block_gas_limit (0));
+   ParentHeaderFields_gas_used := (Build_block_gas (0));
    ParentHeaderFields_blob_gas_used := 0;
    ParentHeaderFields_excess_blob_gas := (Build_excess_blob_gas_typ (0));
    ParentHeaderFields_have_parent := false;
@@ -20442,10 +20761,24 @@ exact (
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_state := true ]} in
          returnM (decoded)
-       else if Z.eqb (field_index) (15) return M (ParentHeaderFields) then
-         ((rlp_decode_u256 (field')) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__0 : Z) =>
+       else if Z.eqb (field_index) (9) return M (ParentHeaderFields) then
+         ((rlp_decode_uint64 (field')) >>= fun semanticResult =>
+          returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
          let decoded :=
-           {[ decoded with ParentHeaderFields_base_fee := (Build_word (w__0)) ]}
+           {[ decoded with ParentHeaderFields_gas_limit := (Build_block_gas_limit (w__0)) ]}
+            : ParentHeaderFields in
+         returnM (decoded)
+       else if Z.eqb (field_index) (10) return M (ParentHeaderFields) then
+         ((rlp_decode_uint64 (field')) >>= fun semanticResult =>
+          returnM (semanticResult).(ssz_uint_value)) >>= fun (w__1 : Z) =>
+         let decoded :=
+           {[ decoded with ParentHeaderFields_gas_used := (Build_block_gas (w__1)) ]}
+            : ParentHeaderFields in
+         returnM (decoded)
+       else if Z.eqb (field_index) (15) return M (ParentHeaderFields) then
+         ((rlp_decode_u256 (field')) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun (w__2 : Z) =>
+         let decoded :=
+           {[ decoded with ParentHeaderFields_base_fee := (Build_word (w__2)) ]}
             : ParentHeaderFields in
          let decoded : ParentHeaderFields :=
            {[ decoded with ParentHeaderFields_have_base_fee := true ]} in
@@ -20545,6 +20878,18 @@ exact (
                    (Build_word ((decoded.(ParentHeaderFields_base_fee)).(word_value))) ]} in
              let result : WitnessHeaderIndex :=
                {[ result with
+                 WitnessHeaderIndex_parent_has_base_fee :=
+                   decoded.(ParentHeaderFields_have_base_fee) ]} in
+             let result : WitnessHeaderIndex :=
+               {[ result with
+                 WitnessHeaderIndex_parent_gas_limit :=
+                   (Build_block_gas_limit ((decoded.(ParentHeaderFields_gas_limit)).(block_gas_limit_value))) ]} in
+             let result : WitnessHeaderIndex :=
+               {[ result with
+                 WitnessHeaderIndex_parent_gas_used :=
+                   (Build_block_gas ((decoded.(ParentHeaderFields_gas_used)).(block_gas_value))) ]} in
+             let result : WitnessHeaderIndex :=
+               {[ result with
                  WitnessHeaderIndex_parent_blob_gas_used :=
                    decoded.(ParentHeaderFields_blob_gas_used) ]} in
              let result : WitnessHeaderIndex :=
@@ -20554,6 +20899,11 @@ exact (
              let result : WitnessHeaderIndex :=
                {[ result with
                  WitnessHeaderIndex_parent_fields_valid := decoded.(ParentHeaderFields_have_state) ]} in
+             let result : WitnessHeaderIndex :=
+               if andb ((Z.gtb (profile.(ProtocolProfileFields_fork)) (London)))
+                    ((negb (decoded.(ParentHeaderFields_have_base_fee)))) then
+                 {[ result with WitnessHeaderIndex_parent_fields_valid := false ]}
+               else result in
              if Z.geb (profile.(ProtocolProfileFields_fork)) (Cancun) then
                let result : WitnessHeaderIndex :=
                  if negb (decoded.(ParentHeaderFields_have_base_fee)) then
@@ -20604,6 +20954,9 @@ Definition index_witness_headers (headers : BoundedSszListRef (2 ^ 8)) : M (Witn
         WitnessHeaderIndex_valid := neq_int (headers.(BoundedSszListRef_count)) (0);
         WitnessHeaderIndex_parent_state_root := ZERO_HASH;
         WitnessHeaderIndex_parent_base_fee_per_gas := (Build_word ((ZERO_WORD).(word_value)));
+        WitnessHeaderIndex_parent_has_base_fee := false;
+        WitnessHeaderIndex_parent_gas_limit := (Build_block_gas_limit (0));
+        WitnessHeaderIndex_parent_gas_used := (Build_block_gas (0));
         WitnessHeaderIndex_parent_blob_gas_used := 0;
         WitnessHeaderIndex_parent_excess_blob_gas := (Build_excess_blob_gas_typ (0));
         WitnessHeaderIndex_parent_fields_valid := false |} in
@@ -20619,89 +20972,95 @@ Definition index_witness_headers (headers : BoundedSszListRef (2 ^ 8)) : M (Witn
                 WitnessContext_parent_state_root := indexed.(WitnessHeaderIndex_parent_state_root);
                 WitnessContext_parent_base_fee_per_gas :=
                   (Build_word ((indexed.(WitnessHeaderIndex_parent_base_fee_per_gas)).(word_value)));
+                WitnessContext_parent_has_base_fee :=
+                  indexed.(WitnessHeaderIndex_parent_has_base_fee);
+                WitnessContext_parent_gas_limit :=
+                  (Build_block_gas_limit ((indexed.(WitnessHeaderIndex_parent_gas_limit)).(block_gas_limit_value)));
+                WitnessContext_parent_gas_used :=
+                  (Build_block_gas ((indexed.(WitnessHeaderIndex_parent_gas_used)).(block_gas_value)));
                 WitnessContext_parent_blob_gas_used :=
                   indexed.(WitnessHeaderIndex_parent_blob_gas_used);
                 WitnessContext_parent_excess_blob_gas :=
                   (Build_excess_blob_gas_typ ((indexed.(WitnessHeaderIndex_parent_excess_blob_gas)).(excess_blob_gas_value))) |})).
 
-Definition decode_payload_blob_gas_used {ex554815_ : Z} {ex554814_ : Z} {ex554813_ : Z}
-{ex554812_ : Z} {ex554811_ : Z} {ex554810_ : Z} {ex554809_ : Z} {ex554808_ : Z} {ex554807_ : Z}
-{ex554806_ : Z} {ex554795_ : Z} {ex554794_ : Z}
-(payload : StatelessInputSliceFields ex554794_ ex554795_)
-(profile : ProtocolProfileFields ex554806_ ex554807_ ex554808_ ex554809_ ex554810_ ex554811_ ex554812_ ex554813_ ex554814_ ex554815_)
-(*(0 <=? ex554794_) && ((0 <=? ex554795_) && ((ex554794_ + ex554795_) <=? (2 ^ 32 - 1)))*)
-(*(ex554806_ =? 5) &&
-  ((ex554807_ =? 0) &&
-    ((ex554808_ =? 0) &&
-      ((ex554809_ =? 1) &&
-        ((ex554810_ =? 24576) &&
-          ((ex554811_ =? 0) &&
-            ((ex554812_ =? (2 ^ 64 - 1)) &&
-              ((ex554813_ =? (2 ^ 64 - 1)) && ((ex554814_ =? 0) && (ex554815_ =? 2))))))))) ||
-  ((6 <=? ex554806_) && (ex554806_ <=? 9) &&
-    ((ex554807_ =? 0) &&
-      ((ex554808_ =? 0) &&
-        ((ex554809_ =? 1) &&
-          ((ex554810_ =? 24576) &&
-            ((ex554811_ =? 0) &&
-              ((ex554812_ =? (2 ^ 64 - 1)) &&
-                ((ex554813_ =? (2 ^ 64 - 1)) && ((ex554814_ =? 0) && (ex554815_ =? 5))))))))) ||
-    ((ex554806_ =? 10) &&
-      ((ex554807_ =? 0) &&
-        ((ex554808_ =? 0) &&
-          ((ex554809_ =? 1) &&
-            ((ex554810_ =? 24576) &&
-              ((ex554811_ =? 49152) &&
-                ((ex554812_ =? (2 ^ 64 - 1)) &&
-                  ((ex554813_ =? (2 ^ 64 - 1)) && ((ex554814_ =? 0) && (ex554815_ =? 5))))))))) ||
-      ((ex554806_ =? 11) &&
-        ((ex554807_ =? 3) &&
-          ((ex554808_ =? 6) &&
-            ((ex554809_ =? 3338477) &&
-              ((ex554810_ =? 24576) &&
-                ((ex554811_ =? 49152) &&
-                  ((ex554812_ =? (2 ^ 64 - 1)) &&
-                    ((ex554813_ =? (2 ^ 64 - 1)) && ((ex554814_ =? 6) && (ex554815_ =? 5))))))))) ||
-        ((ex554806_ =? 12) &&
-          ((ex554807_ =? 6) &&
-            ((ex554808_ =? 9) &&
-              ((ex554809_ =? 5007716) &&
-                ((ex554810_ =? 24576) &&
-                  ((ex554811_ =? 49152) &&
-                    ((ex554812_ =? (2 ^ 64 - 1)) &&
-                      ((ex554813_ =? (2 ^ 64 - 1)) && ((ex554814_ =? 9) && (ex554815_ =? 5))))))))) ||
-          ((ex554806_ =? 13) &&
-            ((ex554807_ =? 6) &&
-              ((ex554808_ =? 9) &&
-                ((ex554809_ =? 5007716) &&
-                  ((ex554810_ =? 24576) &&
-                    ((ex554811_ =? 49152) &&
-                      ((ex554812_ =? (2 ^ 24)) &&
-                        ((ex554813_ =? (2 ^ 24)) && ((ex554814_ =? 6) && (ex554815_ =? 5))))))))) ||
-            ((ex554806_ =? 14) &&
-              ((ex554807_ =? 10) &&
-                ((ex554808_ =? 15) &&
-                  ((ex554809_ =? 8346193) &&
-                    ((ex554810_ =? 24576) &&
-                      ((ex554811_ =? 49152) &&
-                        ((ex554812_ =? (2 ^ 24)) &&
-                          ((ex554813_ =? (2 ^ 24)) && ((ex554814_ =? 6) && (ex554815_ =? 5))))))))) ||
-              ((ex554806_ =? 15) &&
-                ((ex554807_ =? 14) &&
-                  ((ex554808_ =? 21) &&
-                    ((ex554809_ =? 11684671) &&
-                      ((ex554810_ =? 24576) &&
-                        ((ex554811_ =? 49152) &&
-                          ((ex554812_ =? (2 ^ 24)) &&
-                            ((ex554813_ =? (2 ^ 24)) && ((ex554814_ =? 6) && (ex554815_ =? 5))))))))) ||
-                (ex554806_ =? 16) &&
-                  ((ex554807_ =? 14) &&
-                    ((ex554808_ =? 21) &&
-                      ((ex554809_ =? 11684671) &&
-                        ((ex554810_ =? 65536) &&
-                          ((ex554811_ =? 131072) &&
-                            ((ex554812_ =? (2 ^ 64 - 1)) &&
-                              ((ex554813_ =? (2 ^ 24)) && ((ex554814_ =? 6) && (ex554815_ =? 5))))))))))))))))*)
+Definition decode_payload_blob_gas_used {ex585693_ : Z} {ex585692_ : Z} {ex585691_ : Z}
+{ex585690_ : Z} {ex585689_ : Z} {ex585688_ : Z} {ex585687_ : Z} {ex585686_ : Z} {ex585685_ : Z}
+{ex585684_ : Z} {ex585673_ : Z} {ex585672_ : Z}
+(payload : StatelessInputSliceFields ex585672_ ex585673_)
+(profile : ProtocolProfileFields ex585684_ ex585685_ ex585686_ ex585687_ ex585688_ ex585689_ ex585690_ ex585691_ ex585692_ ex585693_)
+(*(0 <=? ex585672_) && ((0 <=? ex585673_) && ((ex585672_ + ex585673_) <=? (2 ^ 32 - 1)))*)
+(*(ex585684_ =? 5) &&
+  ((ex585685_ =? 0) &&
+    ((ex585686_ =? 0) &&
+      ((ex585687_ =? 1) &&
+        ((ex585688_ =? 24576) &&
+          ((ex585689_ =? 0) &&
+            ((ex585690_ =? (2 ^ 64 - 1)) &&
+              ((ex585691_ =? (2 ^ 64 - 1)) && ((ex585692_ =? 0) && (ex585693_ =? 2))))))))) ||
+  ((6 <=? ex585684_) && (ex585684_ <=? 9) &&
+    ((ex585685_ =? 0) &&
+      ((ex585686_ =? 0) &&
+        ((ex585687_ =? 1) &&
+          ((ex585688_ =? 24576) &&
+            ((ex585689_ =? 0) &&
+              ((ex585690_ =? (2 ^ 64 - 1)) &&
+                ((ex585691_ =? (2 ^ 64 - 1)) && ((ex585692_ =? 0) && (ex585693_ =? 5))))))))) ||
+    ((ex585684_ =? 10) &&
+      ((ex585685_ =? 0) &&
+        ((ex585686_ =? 0) &&
+          ((ex585687_ =? 1) &&
+            ((ex585688_ =? 24576) &&
+              ((ex585689_ =? 49152) &&
+                ((ex585690_ =? (2 ^ 64 - 1)) &&
+                  ((ex585691_ =? (2 ^ 64 - 1)) && ((ex585692_ =? 0) && (ex585693_ =? 5))))))))) ||
+      ((ex585684_ =? 11) &&
+        ((ex585685_ =? 3) &&
+          ((ex585686_ =? 6) &&
+            ((ex585687_ =? 3338477) &&
+              ((ex585688_ =? 24576) &&
+                ((ex585689_ =? 49152) &&
+                  ((ex585690_ =? (2 ^ 64 - 1)) &&
+                    ((ex585691_ =? (2 ^ 64 - 1)) && ((ex585692_ =? 6) && (ex585693_ =? 5))))))))) ||
+        ((ex585684_ =? 12) &&
+          ((ex585685_ =? 6) &&
+            ((ex585686_ =? 9) &&
+              ((ex585687_ =? 5007716) &&
+                ((ex585688_ =? 24576) &&
+                  ((ex585689_ =? 49152) &&
+                    ((ex585690_ =? (2 ^ 64 - 1)) &&
+                      ((ex585691_ =? (2 ^ 64 - 1)) && ((ex585692_ =? 9) && (ex585693_ =? 5))))))))) ||
+          ((ex585684_ =? 13) &&
+            ((ex585685_ =? 6) &&
+              ((ex585686_ =? 9) &&
+                ((ex585687_ =? 5007716) &&
+                  ((ex585688_ =? 24576) &&
+                    ((ex585689_ =? 49152) &&
+                      ((ex585690_ =? (2 ^ 24)) &&
+                        ((ex585691_ =? (2 ^ 24)) && ((ex585692_ =? 6) && (ex585693_ =? 5))))))))) ||
+            ((ex585684_ =? 14) &&
+              ((ex585685_ =? 10) &&
+                ((ex585686_ =? 15) &&
+                  ((ex585687_ =? 8346193) &&
+                    ((ex585688_ =? 24576) &&
+                      ((ex585689_ =? 49152) &&
+                        ((ex585690_ =? (2 ^ 24)) &&
+                          ((ex585691_ =? (2 ^ 24)) && ((ex585692_ =? 6) && (ex585693_ =? 5))))))))) ||
+              ((ex585684_ =? 15) &&
+                ((ex585685_ =? 14) &&
+                  ((ex585686_ =? 21) &&
+                    ((ex585687_ =? 11684671) &&
+                      ((ex585688_ =? 24576) &&
+                        ((ex585689_ =? 49152) &&
+                          ((ex585690_ =? (2 ^ 24)) &&
+                            ((ex585691_ =? (2 ^ 24)) && ((ex585692_ =? 6) && (ex585693_ =? 5))))))))) ||
+                (ex585684_ =? 16) &&
+                  ((ex585685_ =? 14) &&
+                    ((ex585686_ =? 21) &&
+                      ((ex585687_ =? 11684671) &&
+                        ((ex585688_ =? 65536) &&
+                          ((ex585689_ =? 131072) &&
+                            ((ex585690_ =? (2 ^ 32 - 1)) &&
+                              ((ex585691_ =? (2 ^ 24)) && ((ex585692_ =? 6) && (ex585693_ =? 5))))))))))))))))*)
 : M (blob_gas_used_typ) :=
    ((decode_ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
@@ -20713,84 +21072,84 @@ Definition decode_payload_blob_gas_used {ex554815_ : Z} {ex554814_ : Z} {ex55481
     else (fatal_error (InvalidBlobGasUsed))  : M (Z))
     : M (Z).
 
-Definition decode_payload_excess_blob_gas {ex554839_ : Z} {ex554838_ : Z} {ex554837_ : Z}
-{ex554836_ : Z} {ex554835_ : Z} {ex554834_ : Z} {ex554833_ : Z} {ex554832_ : Z} {ex554831_ : Z}
-{ex554830_ : Z} {ex554819_ : Z} {ex554818_ : Z}
-(payload : StatelessInputSliceFields ex554818_ ex554819_)
-(profile : ProtocolProfileFields ex554830_ ex554831_ ex554832_ ex554833_ ex554834_ ex554835_ ex554836_ ex554837_ ex554838_ ex554839_)
-(*(0 <=? ex554818_) && ((0 <=? ex554819_) && ((ex554818_ + ex554819_) <=? (2 ^ 32 - 1)))*)
-(*(ex554830_ =? 5) &&
-  ((ex554831_ =? 0) &&
-    ((ex554832_ =? 0) &&
-      ((ex554833_ =? 1) &&
-        ((ex554834_ =? 24576) &&
-          ((ex554835_ =? 0) &&
-            ((ex554836_ =? (2 ^ 64 - 1)) &&
-              ((ex554837_ =? (2 ^ 64 - 1)) && ((ex554838_ =? 0) && (ex554839_ =? 2))))))))) ||
-  ((6 <=? ex554830_) && (ex554830_ <=? 9) &&
-    ((ex554831_ =? 0) &&
-      ((ex554832_ =? 0) &&
-        ((ex554833_ =? 1) &&
-          ((ex554834_ =? 24576) &&
-            ((ex554835_ =? 0) &&
-              ((ex554836_ =? (2 ^ 64 - 1)) &&
-                ((ex554837_ =? (2 ^ 64 - 1)) && ((ex554838_ =? 0) && (ex554839_ =? 5))))))))) ||
-    ((ex554830_ =? 10) &&
-      ((ex554831_ =? 0) &&
-        ((ex554832_ =? 0) &&
-          ((ex554833_ =? 1) &&
-            ((ex554834_ =? 24576) &&
-              ((ex554835_ =? 49152) &&
-                ((ex554836_ =? (2 ^ 64 - 1)) &&
-                  ((ex554837_ =? (2 ^ 64 - 1)) && ((ex554838_ =? 0) && (ex554839_ =? 5))))))))) ||
-      ((ex554830_ =? 11) &&
-        ((ex554831_ =? 3) &&
-          ((ex554832_ =? 6) &&
-            ((ex554833_ =? 3338477) &&
-              ((ex554834_ =? 24576) &&
-                ((ex554835_ =? 49152) &&
-                  ((ex554836_ =? (2 ^ 64 - 1)) &&
-                    ((ex554837_ =? (2 ^ 64 - 1)) && ((ex554838_ =? 6) && (ex554839_ =? 5))))))))) ||
-        ((ex554830_ =? 12) &&
-          ((ex554831_ =? 6) &&
-            ((ex554832_ =? 9) &&
-              ((ex554833_ =? 5007716) &&
-                ((ex554834_ =? 24576) &&
-                  ((ex554835_ =? 49152) &&
-                    ((ex554836_ =? (2 ^ 64 - 1)) &&
-                      ((ex554837_ =? (2 ^ 64 - 1)) && ((ex554838_ =? 9) && (ex554839_ =? 5))))))))) ||
-          ((ex554830_ =? 13) &&
-            ((ex554831_ =? 6) &&
-              ((ex554832_ =? 9) &&
-                ((ex554833_ =? 5007716) &&
-                  ((ex554834_ =? 24576) &&
-                    ((ex554835_ =? 49152) &&
-                      ((ex554836_ =? (2 ^ 24)) &&
-                        ((ex554837_ =? (2 ^ 24)) && ((ex554838_ =? 6) && (ex554839_ =? 5))))))))) ||
-            ((ex554830_ =? 14) &&
-              ((ex554831_ =? 10) &&
-                ((ex554832_ =? 15) &&
-                  ((ex554833_ =? 8346193) &&
-                    ((ex554834_ =? 24576) &&
-                      ((ex554835_ =? 49152) &&
-                        ((ex554836_ =? (2 ^ 24)) &&
-                          ((ex554837_ =? (2 ^ 24)) && ((ex554838_ =? 6) && (ex554839_ =? 5))))))))) ||
-              ((ex554830_ =? 15) &&
-                ((ex554831_ =? 14) &&
-                  ((ex554832_ =? 21) &&
-                    ((ex554833_ =? 11684671) &&
-                      ((ex554834_ =? 24576) &&
-                        ((ex554835_ =? 49152) &&
-                          ((ex554836_ =? (2 ^ 24)) &&
-                            ((ex554837_ =? (2 ^ 24)) && ((ex554838_ =? 6) && (ex554839_ =? 5))))))))) ||
-                (ex554830_ =? 16) &&
-                  ((ex554831_ =? 14) &&
-                    ((ex554832_ =? 21) &&
-                      ((ex554833_ =? 11684671) &&
-                        ((ex554834_ =? 65536) &&
-                          ((ex554835_ =? 131072) &&
-                            ((ex554836_ =? (2 ^ 64 - 1)) &&
-                              ((ex554837_ =? (2 ^ 24)) && ((ex554838_ =? 6) && (ex554839_ =? 5))))))))))))))))*)
+Definition decode_payload_excess_blob_gas {ex585717_ : Z} {ex585716_ : Z} {ex585715_ : Z}
+{ex585714_ : Z} {ex585713_ : Z} {ex585712_ : Z} {ex585711_ : Z} {ex585710_ : Z} {ex585709_ : Z}
+{ex585708_ : Z} {ex585697_ : Z} {ex585696_ : Z}
+(payload : StatelessInputSliceFields ex585696_ ex585697_)
+(profile : ProtocolProfileFields ex585708_ ex585709_ ex585710_ ex585711_ ex585712_ ex585713_ ex585714_ ex585715_ ex585716_ ex585717_)
+(*(0 <=? ex585696_) && ((0 <=? ex585697_) && ((ex585696_ + ex585697_) <=? (2 ^ 32 - 1)))*)
+(*(ex585708_ =? 5) &&
+  ((ex585709_ =? 0) &&
+    ((ex585710_ =? 0) &&
+      ((ex585711_ =? 1) &&
+        ((ex585712_ =? 24576) &&
+          ((ex585713_ =? 0) &&
+            ((ex585714_ =? (2 ^ 64 - 1)) &&
+              ((ex585715_ =? (2 ^ 64 - 1)) && ((ex585716_ =? 0) && (ex585717_ =? 2))))))))) ||
+  ((6 <=? ex585708_) && (ex585708_ <=? 9) &&
+    ((ex585709_ =? 0) &&
+      ((ex585710_ =? 0) &&
+        ((ex585711_ =? 1) &&
+          ((ex585712_ =? 24576) &&
+            ((ex585713_ =? 0) &&
+              ((ex585714_ =? (2 ^ 64 - 1)) &&
+                ((ex585715_ =? (2 ^ 64 - 1)) && ((ex585716_ =? 0) && (ex585717_ =? 5))))))))) ||
+    ((ex585708_ =? 10) &&
+      ((ex585709_ =? 0) &&
+        ((ex585710_ =? 0) &&
+          ((ex585711_ =? 1) &&
+            ((ex585712_ =? 24576) &&
+              ((ex585713_ =? 49152) &&
+                ((ex585714_ =? (2 ^ 64 - 1)) &&
+                  ((ex585715_ =? (2 ^ 64 - 1)) && ((ex585716_ =? 0) && (ex585717_ =? 5))))))))) ||
+      ((ex585708_ =? 11) &&
+        ((ex585709_ =? 3) &&
+          ((ex585710_ =? 6) &&
+            ((ex585711_ =? 3338477) &&
+              ((ex585712_ =? 24576) &&
+                ((ex585713_ =? 49152) &&
+                  ((ex585714_ =? (2 ^ 64 - 1)) &&
+                    ((ex585715_ =? (2 ^ 64 - 1)) && ((ex585716_ =? 6) && (ex585717_ =? 5))))))))) ||
+        ((ex585708_ =? 12) &&
+          ((ex585709_ =? 6) &&
+            ((ex585710_ =? 9) &&
+              ((ex585711_ =? 5007716) &&
+                ((ex585712_ =? 24576) &&
+                  ((ex585713_ =? 49152) &&
+                    ((ex585714_ =? (2 ^ 64 - 1)) &&
+                      ((ex585715_ =? (2 ^ 64 - 1)) && ((ex585716_ =? 9) && (ex585717_ =? 5))))))))) ||
+          ((ex585708_ =? 13) &&
+            ((ex585709_ =? 6) &&
+              ((ex585710_ =? 9) &&
+                ((ex585711_ =? 5007716) &&
+                  ((ex585712_ =? 24576) &&
+                    ((ex585713_ =? 49152) &&
+                      ((ex585714_ =? (2 ^ 24)) &&
+                        ((ex585715_ =? (2 ^ 24)) && ((ex585716_ =? 6) && (ex585717_ =? 5))))))))) ||
+            ((ex585708_ =? 14) &&
+              ((ex585709_ =? 10) &&
+                ((ex585710_ =? 15) &&
+                  ((ex585711_ =? 8346193) &&
+                    ((ex585712_ =? 24576) &&
+                      ((ex585713_ =? 49152) &&
+                        ((ex585714_ =? (2 ^ 24)) &&
+                          ((ex585715_ =? (2 ^ 24)) && ((ex585716_ =? 6) && (ex585717_ =? 5))))))))) ||
+              ((ex585708_ =? 15) &&
+                ((ex585709_ =? 14) &&
+                  ((ex585710_ =? 21) &&
+                    ((ex585711_ =? 11684671) &&
+                      ((ex585712_ =? 24576) &&
+                        ((ex585713_ =? 49152) &&
+                          ((ex585714_ =? (2 ^ 24)) &&
+                            ((ex585715_ =? (2 ^ 24)) && ((ex585716_ =? 6) && (ex585717_ =? 5))))))))) ||
+                (ex585708_ =? 16) &&
+                  ((ex585709_ =? 14) &&
+                    ((ex585710_ =? 21) &&
+                      ((ex585711_ =? 11684671) &&
+                        ((ex585712_ =? 65536) &&
+                          ((ex585713_ =? 131072) &&
+                            ((ex585714_ =? (2 ^ 32 - 1)) &&
+                              ((ex585715_ =? (2 ^ 24)) && ((ex585716_ =? 6) && (ex585717_ =? 5))))))))))))))))*)
 : M (excess_blob_gas_typ) :=
    (((decode_ssz_uint (payload) (PL_EXCESS_BLOB_GAS)) >>= fun semanticResult =>
      returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
@@ -20847,9 +21206,9 @@ Definition decode_block_header_ssz (input_ref : StatelessInputRef) : M (BlockHea
                 BlockHeader_extra_data :=
                   @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_extra_data))))) |})).
 
-Definition decode_withdrawal {ex554843_ : Z} {ex554842_ : Z}
-(withdrawal : StatelessInputSliceFields ex554842_ ex554843_)
-(*(0 <=? ex554842_) && ((0 <=? ex554843_) && ((ex554842_ + ex554843_) <=? (2 ^ 32 - 1)))*)
+Definition decode_withdrawal {ex585721_ : Z} {ex585720_ : Z}
+(withdrawal : StatelessInputSliceFields ex585720_ ex585721_)
+(*(0 <=? ex585720_) && ((0 <=? ex585721_) && ((ex585720_ + ex585721_) <=? (2 ^ 32 - 1)))*)
 : M (Withdrawal) :=
    ((decode_ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun (w__0 : Z) =>
@@ -20863,109 +21222,86 @@ Definition decode_withdrawal {ex554843_ : Z} {ex554842_ : Z}
                 Withdrawal_address := w__2;
                 Withdrawal_amount := (Build_withdrawal_amount (w__3)) |})).
 
-Definition decode_chain_config {ex554847_ : Z} {ex554846_ : Z}
-(cc : StatelessInputSliceFields ex554846_ ex554847_) (number : block_number)
-(timestamp : block_timestamp)
-(*(0 <=? ex554846_) && ((0 <=? ex554847_) && ((ex554846_ + ex554847_) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? number) && (number <=? (2 ^ 64 - 1))*)
-(*(0 <=? timestamp) && (timestamp <=? (2 ^ 64 - 1))*)
-: M (ChainConfig) :=
-   let number := (number).(block_number_value) in
-   let timestamp := (timestamp).(block_timestamp_value) in
-   let cc_length := cc.(StatelessInputSliceFields_len) in
-   let header_length := CHAIN_CONFIG_HEADER_LENGTH in
-   let minimum_length := CHAIN_CONFIG_MIN_LENGTH in
-   (if Z.ltb (cc_length) (header_length) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   ((ssz_u32 (cc) (CC_ACTIVE_FORK_OFF)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun f_offset =>
-   (if orb ((neq_int (f_offset) (12))) ((Z.ltb (cc_length) (minimum_length))) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   let f : Z := 12 in
-   let activation_position := ssz_field_offset (f) (FC_ACTIVATION_OFF) in
-   ((ssz_u32 (cc) (activation_position)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun activation_offset =>
-   (if neq_int (activation_offset) (4) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   let activation_start : Z := 16 in
-   let activation_fixed_end : Z := 24 in
-   let a : Z := 16 in
-   let block_number_position := ssz_field_offset (a) (FA_BLOCK_NUMBER_OFF) in
-   ((ssz_u32 (cc) (block_number_position)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun block_number_offset =>
-   let timestamp_position := ssz_field_offset (a) (FA_TIMESTAMP_OFF) in
-   ((ssz_u32 (cc) (timestamp_position)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_offset_value)) >>= fun timestamp_offset =>
-   (if Z.leb (block_number_offset) ((Z.sub (cc_length) (activation_start))) then
-      returnM ((Z.add (activation_start) (block_number_offset)))
-    else (fatal_error (InvalidConfig))  : M (Z)) >>= fun (block_number_start : Z) =>
-   (if Z.leb (timestamp_offset) ((Z.sub (cc_length) (activation_start))) then
-      returnM ((Z.add (activation_start) (timestamp_offset)))
-    else (fatal_error (InvalidConfig))  : M (Z)) >>= fun (timestamp_start : Z) =>
-   (if neq_int (activation_fixed_end) (block_number_start) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   (if Z.ltb (timestamp_start) (block_number_start) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   (if Z.ltb (cc_length) (timestamp_start) return M (unit) then
-      (fatal_error (InvalidConfig))
-       : M (unit)
-    else returnM (tt)) >>
-   let bn_length := Z.sub (timestamp_start) (block_number_start) in
-   let ts_length := Z.sub (cc_length) (timestamp_start) in
-   (if orb ((andb ((neq_int (bn_length) (0))) ((neq_int (bn_length) (SSZ_UINT_BYTES)))))
-         ((andb ((neq_int (ts_length) (0))) ((neq_int (ts_length) (SSZ_UINT_BYTES)))))
+Definition decode_stateless_input (input_ref : StatelessInputRef) : M (StatelessInput) :=
+   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   (decode_block_header_ssz (input_ref)) >>= fun header =>
+   let '(@existT _ _ protocol__'refund_divisor (@existT _ _ protocol__'transaction_blob_limit (@existT _ _ protocol__'transaction_regular_gas_limit (@existT _ _ protocol__'transaction_total_gas_limit (@existT _ _ protocol__'initcode_limit (@existT _ _ protocol__'code_limit (@existT _ _ protocol__'denominator (@existT _ _ protocol__'maximum (@existT _ _ protocol__'target (@existT _ _ protocol__'fork protocol)))))))))) :=
+     (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (input_ref.(StatelessInputRef_protocol))))))))))))))))))))) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type) in
+   let fork := protocol.(ProtocolProfileFields_fork) in
+   let '(@existT _ _ versioned_hashes__'len (@existT _ _ versioned_hashes__'off versioned_hashes)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_versioned_hashes))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   let '(@existT _ _ deposits__'len (@existT _ _ deposits__'off deposits)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_deposits))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   let '(@existT _ _ withdrawal_requests__'len (@existT _ _ withdrawal_requests__'off withdrawal_requests)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_withdrawal_requests))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   let '(@existT _ _ consolidation_requests__'len (@existT _ _ consolidation_requests__'off consolidation_requests)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_consolidation_requests))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   let '(@existT _ _ builder_deposits__'len (@existT _ _ builder_deposits__'off builder_deposits)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_builder_deposit_requests))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   let '(@existT _ _ builder_exits__'len (@existT _ _ builder_exits__'off builder_exits)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_builder_exit_requests))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   (if andb ((Z.ltb (fork) (London)))
+         (((neq_int ((header.(BlockHeader_base_fee)).(word_value)) ((ZERO_WORD).(word_value)))
+          : bool))
       return
       M (unit) then
       (fatal_error (InvalidConfig))
        : M (unit)
     else returnM (tt)) >>
-   (if andb ((Z.eqb (bn_length) (0))) ((Z.eqb (ts_length) (0))) return M (unit) then
+   (if andb ((Z.ltb (fork) (Shanghai)))
+         (((neq_int (input_ref.(StatelessInputRef_withdrawals).(BoundedSszListRef_count)) (0))
+          : bool))
+      return
+      M (unit) then
       (fatal_error (InvalidConfig))
        : M (unit)
     else returnM (tt)) >>
-   (if Z.eqb (bn_length) (SSZ_UINT_BYTES) return M (unit) then
-      ((decode_ssz_uint (cc) (block_number_start)) >>= fun semanticResult =>
-       returnM (semanticResult).(ssz_uint_value)) >>= fun (activation_block : Z) =>
-      (if Z.ltb (number) (activation_block) return M (unit) then
+   (if Z.ltb (fork) (Cancun) return M (unit) then
+      (if orb ((neq_int (versioned_hashes.(StatelessInputSliceFields_len)) (0)))
+            (((orb ((neq_int (header.(BlockHeader_blob_gas_used)) (0)))
+                 (((orb
+                      ((neq_int ((header.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value)) (0)))
+                      ((generic_neq (header.(BlockHeader_parent_beacon_block_root)) (ZERO_HASH))))
+                  : bool)))
+             : bool))
+         return
+         M (unit) then
          (fatal_error (InvalidConfig))
           : M (unit)
        else returnM (tt))
        : M (unit)
     else returnM (tt)) >>
-   (if Z.eqb (ts_length) (SSZ_UINT_BYTES) return M (unit) then
-      ((decode_ssz_uint (cc) (timestamp_start)) >>= fun semanticResult =>
-       returnM (semanticResult).(ssz_uint_value)) >>= fun (activation_timestamp : Z) =>
-      (if Z.ltb (timestamp) (activation_timestamp) return M (unit) then
+   (if Z.ltb (fork) (Prague) return M (unit) then
+      (if orb ((neq_int (deposits.(StatelessInputSliceFields_len)) (0)))
+            ((orb ((neq_int (withdrawal_requests.(StatelessInputSliceFields_len)) (0)))
+                ((neq_int (consolidation_requests.(StatelessInputSliceFields_len)) (0)))))
+         return
+         M (unit) then
          (fatal_error (InvalidConfig))
           : M (unit)
        else returnM (tt))
        : M (unit)
     else returnM (tt)) >>
-   ((decode_ssz_uint (cc) (CC_CHAIN_ID)) >>= fun semanticResult =>
-    returnM (semanticResult).(ssz_uint_value)) >>= fun (w__2 : Z) =>
-   returnM (({| ChainConfig_chain_id := (Build_chain_identifier (w__2)) |})).
-
-Definition decode_stateless_input (input_ref : StatelessInputRef) : M (StatelessInput) :=
-   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
-     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
-   (decode_block_header_ssz (input_ref)) >>= fun header =>
-   (decode_chain_config (projT2 (projT2 (input_ref.(StatelessInputRef_chain_config))))
-      (Build_block_number (((header.(BlockHeader_number)).(block_number_value))))
-      (Build_block_timestamp (((header.(BlockHeader_timestamp)).(block_timestamp_value))))) >>= fun chain_config =>
+   (if Z.ltb (fork) (Amsterdam) return M (unit) then
+      (if orb ((neq_int (builder_deposits.(StatelessInputSliceFields_len)) (0)))
+            ((orb ((neq_int (builder_exits.(StatelessInputSliceFields_len)) (0)))
+                (((neq_int ((header.(BlockHeader_slot_number)).(slot_number_value)) (0))
+                 : bool))))
+         return
+         M (unit) then
+         (fatal_error (InvalidConfig))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+    else returnM (tt)) >>
    (k_set_header (header)) >>
    write_reg
+     k_historical_access_schema
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_block_access_list)))))) >>
+   write_reg
      k_chain_id
-     (Build_chain_identifier (((chain_config.(ChainConfig_chain_id)).(chain_identifier_value)))) >>
+     (Build_chain_identifier (((input_ref.(StatelessInputRef_chain_id)).(chain_identifier_value)))) >>
    write_reg
      k_execution_profile
      (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (execution_profile_for
@@ -20981,37 +21317,80 @@ Definition decode_stateless_input (input_ref : StatelessInputRef) : M (Stateless
                                BlockBody_withdrawals := input_ref.(StatelessInputRef_withdrawals);
                                BlockBody_block_access_list :=
                                  @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_block_access_list))))) |} |} |};
-                StatelessInput_chain_config := chain_config |})).
+                StatelessInput_chain_id :=
+                  (Build_chain_identifier ((input_ref.(StatelessInputRef_chain_id)).(chain_identifier_value))) |})).
 
 Definition index_execution_witness (input_ref : StatelessInputRef) : M (WitnessContext) :=
    (nodedb_reset (tt)) >>
    (index_witness_nodes (input_ref.(StatelessInputRef_witness_state))) >>
    (index_witness_codes (input_ref.(StatelessInputRef_witness_codes))) >>
    (index_witness_headers (input_ref.(StatelessInputRef_witness_headers))) >>= fun witness =>
+   (validate_secured_state_root (witness.(WitnessContext_parent_state_root))) >>
    write_reg k_parent_state_root (witness.(WitnessContext_parent_state_root)) >> returnM (witness).
 
-Definition decode_transaction {transaction_off : Z} {transaction_len : Z} {public_key_off : Z}
+Definition recover_transaction_sender {blob_limit : Z} (tx : DecodedTransactionFields blob_limit)
+(*(blob_limit =? 0) || ((blob_limit =? 6) || (blob_limit =? 9))*)
+: M (Transaction) :=
+   let tx_semantics := tx_type_semantics (tx.(DecodedTransactionFields_tx_type)) in
+   (read_reg k_chain_id) >>= fun semanticResult => returnM (semanticResult).(chain_identifier_value) >>= fun (w__0 : Z) =>
+   ((tx_signature_parity (Build_chain_identifier ((w__0)))
+       (tx_semantics.(TxTypeSemantics_signature))
+       (Build_word (((tx.(DecodedTransactionFields_sig_v)).(word_value))))) >>= fun semanticResult =>
+    returnM (semanticResult).(y_parity_value)) >>= fun parity =>
+   (tx_recover_sender (tx.(DecodedTransactionFields_signing_hash)) (Build_y_parity ((parity)))
+      (Build_word (((tx.(DecodedTransactionFields_sig_r)).(word_value))))
+      (Build_word (((tx.(DecodedTransactionFields_sig_s)).(word_value))))) >>= fun sender =>
+   let recovered : TransactionFields blob_limit :=
+     {| TransactionFields_tx_type := tx.(DecodedTransactionFields_tx_type);
+        TransactionFields_sender := sender;
+        TransactionFields_nonce := (Build_word ((tx.(DecodedTransactionFields_nonce)).(word_value)));
+        TransactionFields_chain_id :=
+          (Build_chain_identifier ((tx.(DecodedTransactionFields_chain_id)).(chain_identifier_value)));
+        TransactionFields_gas_limit :=
+          (Build_transaction_gas ((tx.(DecodedTransactionFields_gas_limit)).(transaction_gas_value)));
+        TransactionFields_is_create := tx.(DecodedTransactionFields_is_create);
+        TransactionFields_recipient := tx.(DecodedTransactionFields_recipient);
+        TransactionFields_value := (Build_word ((tx.(DecodedTransactionFields_value)).(word_value)));
+        TransactionFields_raw :=
+          @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(DecodedTransactionFields_raw)))));
+        TransactionFields_input_src :=
+          @existT _ _ _ (@existT _ _ _ (projT2 (projT2 (tx.(DecodedTransactionFields_input_src)))));
+        TransactionFields_access_list := tx.(DecodedTransactionFields_access_list);
+        TransactionFields_max_fee :=
+          (Build_word ((tx.(DecodedTransactionFields_max_fee)).(word_value)));
+        TransactionFields_max_blob_fee :=
+          (Build_word ((tx.(DecodedTransactionFields_max_blob_fee)).(word_value)));
+        TransactionFields_max_priority_fee :=
+          (Build_word ((tx.(DecodedTransactionFields_max_priority_fee)).(word_value)));
+        TransactionFields_authorizations :=
+          @existT _ _ _ (projT2 (tx.(DecodedTransactionFields_authorizations)));
+        TransactionFields_blob_hashes := tx.(DecodedTransactionFields_blob_hashes);
+        TransactionFields_signing_hash := tx.(DecodedTransactionFields_signing_hash);
+        TransactionFields_sig_v := (Build_word ((tx.(DecodedTransactionFields_sig_v)).(word_value)));
+        TransactionFields_sig_r := (Build_word ((tx.(DecodedTransactionFields_sig_r)).(word_value)));
+        TransactionFields_sig_s := (Build_word ((tx.(DecodedTransactionFields_sig_s)).(word_value))) |} in
+   returnM ((pack_transaction (recovered)) : {syn_blob_limit & (TransactionFields syn_blob_limit)}%type).
+
+Definition decode_transaction {transaction_off : Z} {transaction_len : Z}
 (transaction : StatelessInputSliceFields transaction_off transaction_len)
-(public_key : StatelessInputSliceFields public_key_off 65)
 (*(0 <=? transaction_off) &&
-  ((0 <=? transaction_len) && ((transaction_off + transaction_len) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? public_key_off) && ((0 <=? 65) && ((public_key_off + 65) <=? (2 ^ 32 - 1))))*)
+  ((0 <=? transaction_len) && ((transaction_off + transaction_len) <=? (2 ^ 32 - 1)))*)
 : M (Transaction) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    (if Z.leb transaction_len ((pow2 (30)))
       return
       M ({blob_limit & (TransactionFields blob_limit)}%type) then
-      (rlp_decode_tx (transaction) (public_key)
-         (profile.(ProtocolProfileFields_transaction_blob_limit)))
-       : M ({syn_blob_limit & (TransactionFields syn_blob_limit)}%type)
+      (rlp_decode_tx (transaction) (profile.(ProtocolProfileFields_transaction_blob_limit))) >>= fun '(@existT _ _ __decoded decoded) =>
+      (recover_transaction_sender (decoded))
+       : M ({__decoded & (TransactionFields __decoded)}%type)
     else (fatal_error (InvalidConfig))  : M ({blob_limit & (TransactionFields blob_limit)}%type))
     : M ({blob_limit & (TransactionFields blob_limit)}%type).
 
-Definition withdrawal_rlp {ex554877_ : Z} (withdrawal : StatelessInputSliceFields ex554877_ 44)
-(ex554878_ := 44)
-(*(0 <=? ex554877_) && ((0 <=? ex554878_) && ((ex554877_ + ex554878_) <=? (2 ^ 32 - 1))) &&
-  (ex554878_ =? 44)*)
+Definition withdrawal_rlp {ex585743_ : Z} (withdrawal : StatelessInputSliceFields ex585743_ 44)
+(ex585744_ := 44)
+(*(0 <=? ex585743_) && ((0 <=? ex585744_) && ((ex585743_ + ex585744_) <=? (2 ^ 32 - 1))) &&
+  (ex585744_ =? 44)*)
 : M (ScratchSlice) :=
    ((decode_ssz_uint (withdrawal) (WD_INDEX)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun index =>
@@ -21209,37 +21588,37 @@ Definition rlp_write_logs_bloom (bloom : vec (mword 8) 256) : M (unit) :=
    (scratch_push_fixed_bytes_256 (bloom))
     : M (unit).
 
-Definition receipt_write_logs_bloom {ex554894_ : Z} {ex554893_ : Z} {ex554892_ : Z} {ex554891_ : Z}
-{ex554890_ : Z} (receipt : ReceiptFields ex554894_ ex554893_ ex554892_ ex554891_ ex554890_)
-(*(0 <=? ex554894_) &&
-  ((ex554894_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554893_) &&
-      ((ex554893_ <=? ex554894_) &&
-        ((0 <=? ex554892_) &&
-          ((ex554892_ <=? ex554894_) &&
-            ((0 <=? ex554891_) &&
-              ((ex554891_ <=? ex554893_) &&
-                ((0 <=? ex554890_) &&
-                  ((ex554890_ <=? ex554894_) && (ex554892_ <=? (ex554891_ + ex554890_)))))))))))*)
+Definition receipt_write_logs_bloom {ex585760_ : Z} {ex585759_ : Z} {ex585758_ : Z} {ex585757_ : Z}
+{ex585756_ : Z} (receipt : ReceiptFields ex585760_ ex585759_ ex585758_ ex585757_ ex585756_)
+(*(0 <=? ex585760_) &&
+  ((ex585760_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585759_) &&
+      ((ex585759_ <=? ex585760_) &&
+        ((0 <=? ex585758_) &&
+          ((ex585758_ <=? ex585760_) &&
+            ((0 <=? ex585757_) &&
+              ((ex585757_ <=? ex585759_) &&
+                ((0 <=? ex585756_) &&
+                  ((ex585756_ <=? ex585760_) && (ex585758_ <=? (ex585757_ + ex585756_)))))))))))*)
 : M (unit) :=
    (logs_bloom_for_logs (receipt.(ReceiptFields_logs))) >>= fun bloom =>
    (rlp_write_logs_bloom (bloom))
     : M (unit).
 
-Definition receipt_payload_content_size {ex554907_ : Z} {ex554906_ : Z} {ex554905_ : Z}
-{ex554904_ : Z} {ex554903_ : Z}
-(r : ReceiptFields ex554907_ ex554906_ ex554905_ ex554904_ ex554903_) (cumulative_gas_used : Z)
+Definition receipt_payload_content_size {ex585773_ : Z} {ex585772_ : Z} {ex585771_ : Z}
+{ex585770_ : Z} {ex585769_ : Z}
+(r : ReceiptFields ex585773_ ex585772_ ex585771_ ex585770_ ex585769_) (cumulative_gas_used : Z)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554907_) &&
-  ((ex554907_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554906_) &&
-      ((ex554906_ <=? ex554907_) &&
-        ((0 <=? ex554905_) &&
-          ((ex554905_ <=? ex554907_) &&
-            ((0 <=? ex554904_) &&
-              ((ex554904_ <=? ex554906_) &&
-                ((0 <=? ex554903_) &&
-                  ((ex554903_ <=? ex554907_) && (ex554905_ <=? (ex554904_ + ex554903_)))))))))))*)
+(*(0 <=? ex585773_) &&
+  ((ex585773_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585772_) &&
+      ((ex585772_ <=? ex585773_) &&
+        ((0 <=? ex585771_) &&
+          ((ex585771_ <=? ex585773_) &&
+            ((0 <=? ex585770_) &&
+              ((ex585770_ <=? ex585772_) &&
+                ((0 <=? ex585769_) &&
+                  ((ex585769_ <=? ex585773_) && (ex585771_ <=? (ex585770_ + ex585769_)))))))))))*)
 : M (rlp_scratch_length) :=
    (let status : Z := if r.(ReceiptFields_success) then 1 else 0 in
    let status_size := rlp_uint_word_size (status) in
@@ -21264,20 +21643,20 @@ Definition receipt_payload_content_size {ex554907_ : Z} {ex554906_ : Z} {ex55490
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition receipt_encoded_length {ex554922_ : Z} {ex554921_ : Z} {ex554920_ : Z} {ex554919_ : Z}
-{ex554918_ : Z}
-(r : ReceiptFields ex554922_ ex554921_ ex554920_ ex554919_ ex554918_) (cumulative_gas_used : Z)
+Definition receipt_encoded_length {ex585788_ : Z} {ex585787_ : Z} {ex585786_ : Z} {ex585785_ : Z}
+{ex585784_ : Z}
+(r : ReceiptFields ex585788_ ex585787_ ex585786_ ex585785_ ex585784_) (cumulative_gas_used : Z)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554922_) &&
-  ((ex554922_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554921_) &&
-      ((ex554921_ <=? ex554922_) &&
-        ((0 <=? ex554920_) &&
-          ((ex554920_ <=? ex554922_) &&
-            ((0 <=? ex554919_) &&
-              ((ex554919_ <=? ex554921_) &&
-                ((0 <=? ex554918_) &&
-                  ((ex554918_ <=? ex554922_) && (ex554920_ <=? (ex554919_ + ex554918_)))))))))))*)
+(*(0 <=? ex585788_) &&
+  ((ex585788_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585787_) &&
+      ((ex585787_ <=? ex585788_) &&
+        ((0 <=? ex585786_) &&
+          ((ex585786_ <=? ex585788_) &&
+            ((0 <=? ex585785_) &&
+              ((ex585785_ <=? ex585787_) &&
+                ((0 <=? ex585784_) &&
+                  ((ex585784_ <=? ex585788_) && (ex585786_ <=? (ex585785_ + ex585784_)))))))))))*)
 : M (rlp_scratch_length) :=
    (((receipt_payload_content_size (r) (cumulative_gas_used)) >>= fun semanticResult =>
      returnM (semanticResult).(rlp_scratch_length_value)) >>= fun content_len =>
@@ -21293,20 +21672,20 @@ Definition receipt_encoded_length {ex554922_ : Z} {ex554921_ : Z} {ex554920_ : Z
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_rlp_scratch_length (semanticResult)).
 
-Definition receipt_write_encoded {ex554937_ : Z} {ex554936_ : Z} {ex554935_ : Z} {ex554934_ : Z}
-{ex554933_ : Z}
-(r : ReceiptFields ex554937_ ex554936_ ex554935_ ex554934_ ex554933_) (cumulative_gas_used : Z)
+Definition receipt_write_encoded {ex585803_ : Z} {ex585802_ : Z} {ex585801_ : Z} {ex585800_ : Z}
+{ex585799_ : Z}
+(r : ReceiptFields ex585803_ ex585802_ ex585801_ ex585800_ ex585799_) (cumulative_gas_used : Z)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554937_) &&
-  ((ex554937_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554936_) &&
-      ((ex554936_ <=? ex554937_) &&
-        ((0 <=? ex554935_) &&
-          ((ex554935_ <=? ex554937_) &&
-            ((0 <=? ex554934_) &&
-              ((ex554934_ <=? ex554936_) &&
-                ((0 <=? ex554933_) &&
-                  ((ex554933_ <=? ex554937_) && (ex554935_ <=? (ex554934_ + ex554933_)))))))))))*)
+(*(0 <=? ex585803_) &&
+  ((ex585803_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585802_) &&
+      ((ex585802_ <=? ex585803_) &&
+        ((0 <=? ex585801_) &&
+          ((ex585801_ <=? ex585803_) &&
+            ((0 <=? ex585800_) &&
+              ((ex585800_ <=? ex585802_) &&
+                ((0 <=? ex585799_) &&
+                  ((ex585799_ <=? ex585803_) && (ex585801_ <=? (ex585800_ + ex585799_)))))))))))*)
 : M (unit) :=
    let status : Z := if r.(ReceiptFields_success) then 1 else 0 in
    ((receipt_payload_content_size (r) (cumulative_gas_used)) >>= fun semanticResult =>
@@ -21320,20 +21699,20 @@ Definition receipt_write_encoded {ex554937_ : Z} {ex554936_ : Z} {ex554935_ : Z}
    (rlp_write_uint_word (cumulative_gas_used)) >>
    (receipt_write_logs_bloom (r)) >> (rlp_write_logs (r.(ReceiptFields_logs)))  : M (unit).
 
-Definition receipt_encoded {ex554952_ : Z} {ex554951_ : Z} {ex554950_ : Z} {ex554949_ : Z}
-{ex554948_ : Z}
-(r : ReceiptFields ex554952_ ex554951_ ex554950_ ex554949_ ex554948_) (cumulative_gas_used : Z)
+Definition receipt_encoded {ex585818_ : Z} {ex585817_ : Z} {ex585816_ : Z} {ex585815_ : Z}
+{ex585814_ : Z}
+(r : ReceiptFields ex585818_ ex585817_ ex585816_ ex585815_ ex585814_) (cumulative_gas_used : Z)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554952_) &&
-  ((ex554952_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554951_) &&
-      ((ex554951_ <=? ex554952_) &&
-        ((0 <=? ex554950_) &&
-          ((ex554950_ <=? ex554952_) &&
-            ((0 <=? ex554949_) &&
-              ((ex554949_ <=? ex554951_) &&
-                ((0 <=? ex554948_) &&
-                  ((ex554948_ <=? ex554952_) && (ex554950_ <=? (ex554949_ + ex554948_)))))))))))*)
+(*(0 <=? ex585818_) &&
+  ((ex585818_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585817_) &&
+      ((ex585817_ <=? ex585818_) &&
+        ((0 <=? ex585816_) &&
+          ((ex585816_ <=? ex585818_) &&
+            ((0 <=? ex585815_) &&
+              ((ex585815_ <=? ex585817_) &&
+                ((0 <=? ex585814_) &&
+                  ((ex585814_ <=? ex585818_) && (ex585816_ <=? (ex585815_ + ex585814_)))))))))))*)
 : M (ScratchSlice) :=
    ((receipt_encoded_length (r) (cumulative_gas_used)) >>= fun semanticResult =>
     returnM (semanticResult).(rlp_scratch_length_value)) >>= fun encoded_len =>
@@ -21362,20 +21741,20 @@ Definition receipt_record_write_length (value : Z) (*(0 <=? value) && (value <=?
    (scratch_push_byte (byte_7))
     : M (unit).
 
-Definition receipt_record_append {ex554967_ : Z} {ex554966_ : Z} {ex554965_ : Z} {ex554964_ : Z}
-{ex554963_ : Z}
-(r : ReceiptFields ex554967_ ex554966_ ex554965_ ex554964_ ex554963_) (cumulative_gas_used : Z)
+Definition receipt_record_append {ex585833_ : Z} {ex585832_ : Z} {ex585831_ : Z} {ex585830_ : Z}
+{ex585829_ : Z}
+(r : ReceiptFields ex585833_ ex585832_ ex585831_ ex585830_ ex585829_) (cumulative_gas_used : Z)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554967_) &&
-  ((ex554967_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554966_) &&
-      ((ex554966_ <=? ex554967_) &&
-        ((0 <=? ex554965_) &&
-          ((ex554965_ <=? ex554967_) &&
-            ((0 <=? ex554964_) &&
-              ((ex554964_ <=? ex554966_) &&
-                ((0 <=? ex554963_) &&
-                  ((ex554963_ <=? ex554967_) && (ex554965_ <=? (ex554964_ + ex554963_)))))))))))*)
+(*(0 <=? ex585833_) &&
+  ((ex585833_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585832_) &&
+      ((ex585832_ <=? ex585833_) &&
+        ((0 <=? ex585831_) &&
+          ((ex585831_ <=? ex585833_) &&
+            ((0 <=? ex585830_) &&
+              ((ex585830_ <=? ex585832_) &&
+                ((0 <=? ex585829_) &&
+                  ((ex585829_ <=? ex585833_) && (ex585831_ <=? (ex585830_ + ex585829_)))))))))))*)
 : M (unit) :=
    ((receipt_encoded_length (r) (cumulative_gas_used)) >>= fun semanticResult =>
     returnM (semanticResult).(rlp_scratch_length_value)) >>= fun encoded_len =>
@@ -21394,12 +21773,12 @@ Definition receipt_store_begin '(tt : unit) : M (source_pointer) :=
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_source_pointer (semanticResult)).
 
-Definition receipt_record_pop {ex554973_ : Z} {ex554972_ : Z}
-(records : ScratchSliceFields ex554972_ ex554973_)
-(*(0 <=? ex554972_) && ((0 <=? ex554973_) && ((ex554972_ + ex554973_) <=? (2 ^ 32 - 1)))*)
+Definition receipt_record_pop {ex585839_ : Z} {ex585838_ : Z}
+(records : ScratchSliceFields ex585838_ ex585839_)
+(*(0 <=? ex585838_) && ((0 <=? ex585839_) && ((ex585838_ + ex585839_) <=? (2 ^ 32 - 1)))*)
 : M ((ScratchSlice * ScratchSlice)) :=
    (if Z.leb (EIGHT_BYTE_LENGTH) (records.(ScratchSliceFields_len)) then
-      returnM ((@existT _ _ ex554973_ (@existT _ _ ex554972_ ((records : ScratchSliceFields ex554972_ ex554973_)))) : ScratchSliceAtLeast 8)
+      returnM ((@existT _ _ ex585839_ (@existT _ _ ex585838_ ((records : ScratchSliceFields ex585838_ ex585839_)))) : ScratchSliceAtLeast 8)
     else (fatal_error (WitnessDeficient))  : M (ScratchSliceAtLeast 8)) >>= fun '(@existT _ _ __records1 (@existT _ _ __records0 records)) =>
    ((decode_scratch_uint (records) (0)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun value_length =>
@@ -21413,21 +21792,21 @@ Definition receipt_record_pop {ex554973_ : Z} {ex554972_ : Z}
        : M (({__records1 & {__records0 & (ScratchSliceFields __records0 __records1)}}%type * {__records1 & {__records0 & (ScratchSliceFields __records0 __records1)}}%type)))
     : M (({__records1 & {__records0 & (ScratchSliceFields __records0 __records1)}}%type * {__records1 & {__records0 & (ScratchSliceFields __records0 __records1)}}%type)).
 
-Definition receipt_store_append {ex554983_ : Z} {ex554982_ : Z} {ex554981_ : Z} {ex554980_ : Z}
-{ex554979_ : Z}
-(receipt : ReceiptFields ex554983_ ex554982_ ex554981_ ex554980_ ex554979_)
+Definition receipt_store_append {ex585849_ : Z} {ex585848_ : Z} {ex585847_ : Z} {ex585846_ : Z}
+{ex585845_ : Z}
+(receipt : ReceiptFields ex585849_ ex585848_ ex585847_ ex585846_ ex585845_)
 (cumulative_gas_used : Z) (_index : transaction_count)
 (*(0 <=? cumulative_gas_used) && (cumulative_gas_used <=? (2 * (2 ^ 64 - 1)))*)
-(*(0 <=? ex554983_) &&
-  ((ex554983_ <=? (2 ^ 64 - 1)) &&
-    ((0 <=? ex554982_) &&
-      ((ex554982_ <=? ex554983_) &&
-        ((0 <=? ex554981_) &&
-          ((ex554981_ <=? ex554983_) &&
-            ((0 <=? ex554980_) &&
-              ((ex554980_ <=? ex554982_) &&
-                ((0 <=? ex554979_) &&
-                  ((ex554979_ <=? ex554983_) && (ex554981_ <=? (ex554980_ + ex554979_)))))))))))*)
+(*(0 <=? ex585849_) &&
+  ((ex585849_ <=? (2 ^ 64 - 1)) &&
+    ((0 <=? ex585848_) &&
+      ((ex585848_ <=? ex585849_) &&
+        ((0 <=? ex585847_) &&
+          ((ex585847_ <=? ex585849_) &&
+            ((0 <=? ex585846_) &&
+              ((ex585846_ <=? ex585848_) &&
+                ((0 <=? ex585845_) &&
+                  ((ex585845_ <=? ex585849_) && (ex585847_ <=? (ex585846_ + ex585845_)))))))))))*)
 (*(0 <=? _index) && (_index <=? (2 ^ 20))*)
 : M (unit) :=
    let _index := (_index).(transaction_count_value) in
@@ -21604,10 +21983,10 @@ Definition receipt_store_root (records_start : source_pointer) (count : transact
            ReceiptRecordsRef_count := (Build_transaction_count (count)) |}))) >>= fun root =>
    (scratch_rewind (Build_source_pointer ((records_start)))) >> returnM (root).
 
-Definition block_logs_bloom_matches {ex554992_ : Z}
-(logs : LogSeriesRef) (reference : StatelessInputSliceFields ex554992_ 256) (ex554993_ := 256)
-(*(0 <=? ex554992_) && ((0 <=? ex554993_) && ((ex554992_ + ex554993_) <=? (2 ^ 32 - 1))) &&
-  (ex554993_ =? 256)*)
+Definition block_logs_bloom_matches {ex585858_ : Z}
+(logs : LogSeriesRef) (reference : StatelessInputSliceFields ex585858_ 256) (ex585859_ := 256)
+(*(0 <=? ex585858_) && ((0 <=? ex585859_) && ((ex585858_ + ex585859_) <=? (2 ^ 32 - 1))) &&
+  (ex585859_ =? 256)*)
 : M (bool) :=
    (bloom_add_logs (EMPTY_LOGS_BLOOM) (logs)) >>= fun logs_bloom =>
    (logs_bloom_matches_ref (logs_bloom)
@@ -21671,23 +22050,29 @@ Definition DEPOSIT_REQUEST_SIGNATURE : Z := 88.
 #[export] Hint Unfold DEPOSIT_REQUEST_SIGNATURE : sail.
 Definition DEPOSIT_REQUEST_INDEX : Z := 184.
 #[export] Hint Unfold DEPOSIT_REQUEST_INDEX : sail.
-Definition run_system_call_frame {ex554997_ : Z} {ex554996_ : Z}
-(tgt : vec (mword 8) 20) (code : CodeFields ex554996_ ex554997_) (input : CalldataSlice)
+Definition run_system_call_frame {ex585863_ : Z} {ex585862_ : Z}
+(tgt : vec (mword 8) 20) (code : CodeFields ex585862_ ex585863_) (input : CalldataSlice)
 (memory_base : memory_base_typ)
-(*(0 <=? ex554996_) && ((0 <=? ex554997_) && ((ex554996_ + ex554997_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? ex554997_) && ((ex554997_ + 32) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585862_) && ((0 <=? ex585863_) && ((ex585862_ + ex585863_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? ex585863_) && ((ex585863_ + 32) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? memory_base) && (memory_base <=? (2 ^ 32 - 1))*)
 : M ((gas_typ * state_gas_typ * state_gas_spill * gas_refund * FrameStatus * OutputSlice)) :=
    let memory_base := (memory_base).(memory_base_value) in
    ((k_journal_checkpoint (tt)) >>
    (stack_reset (tt)) >>= fun stack_top =>
-   ((interpret (Build_gas_typ ((SYSTEM_CALL_GAS_LIMIT))) (Build_state_gas_typ ((STATE_GAS_ZERO)))
+   read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
+   let protocol := execution_profile.(ExecutionProfileFields_protocol) in
+   let reservoir : Z :=
+     if Z.geb (protocol.(ProtocolProfileFields_fork)) (Amsterdam) then
+       Z.mul (16) ((G_amsterdam_state_storage_set).(state_gas_spill_value))
+     else 0 in
+   ((interpret (Build_gas_typ ((SYSTEM_CALL_GAS_LIMIT))) (Build_state_gas_typ ((reservoir)))
        (Build_state_gas_spill ((STATE_GAS_SPILL_ZERO)))
        (Build_gas_refund (((GAS_REFUND_ZERO).(gas_refund_value)))) (stack_top)
        (Build_memory_base_typ ((memory_base)))
        (Build_memory_length (((MEMORY_HEIGHT_ZERO).(memory_length_value)))) (SYSTEM_ADDRESS) (tgt)
-       (tgt) (Build_word (((ZERO_WORD).(word_value)))) (Build_state_gas_typ ((STATE_GAS_ZERO)))
-       (false) (Build_frame_depth ((0))) (code) (input)) >>= fun semanticResult =>
+       (tgt) (Build_word (((ZERO_WORD).(word_value)))) (Build_state_gas_typ ((reservoir))) (false)
+       (Build_frame_depth ((0))) (code) (input)) >>= fun semanticResult =>
     returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5) := semanticResult in ((semanticValue0).(gas_value), (semanticValue1).(state_gas_value), (semanticValue2).(state_gas_spill_value), (semanticValue3).(gas_refund_value), semanticValue4, semanticValue5)))
     : M ((Z * Z * Z * Z * FrameStatus * {len & {off & (OutputSliceFields off len)}}%type))) >>= fun semanticResult =>
    returnM (let '(semanticValue0, semanticValue1, semanticValue2, semanticValue3, semanticValue4, semanticValue5) := semanticResult in ((Build_gas_typ (semanticValue0)), (Build_state_gas_typ (semanticValue1)), (Build_state_gas_spill (semanticValue2)), (Build_gas_refund (semanticValue3)), semanticValue4, semanticValue5)).
@@ -21777,16 +22162,16 @@ Definition deposit_log_matches (index : log_store_index)
        : M (bool))
     : M (bool).
 
-Definition authenticate_deposit_request {ex555007_ : Z} {ex555006_ : Z} {ex555003_ : Z}
-{ex555002_ : Z}
-(data : LogDataSliceFields ex555002_ ex555003_)
-(expected : StatelessInputSliceFields ex555006_ ex555007_)
-(*(0 <=? ex555002_) && ((0 <=? ex555003_) && ((ex555002_ + ex555003_) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555006_) && ((0 <=? ex555007_) && ((ex555006_ + ex555007_) <=? (2 ^ 32 - 1)))*)
+Definition authenticate_deposit_request {ex585873_ : Z} {ex585872_ : Z} {ex585869_ : Z}
+{ex585868_ : Z}
+(data : LogDataSliceFields ex585868_ ex585869_)
+(expected : StatelessInputSliceFields ex585872_ ex585873_)
+(*(0 <=? ex585868_) && ((0 <=? ex585869_) && ((ex585868_ + ex585869_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex585872_) && ((0 <=? ex585873_) && ((ex585872_ + ex585873_) <=? (2 ^ 32 - 1)))*)
 : M (StatelessInputSlice) :=
    (if Z.eqb (data.(LogDataSliceFields_len)) (DEPOSIT_EVENT_DATA_LENGTH) then
-      returnM ((@existT _ _ ex555002_ ((autocast (T := fun _sz => (LogDataSliceFields _ _sz)%type)
-      data : LogDataSliceFields ex555002_ 576))) : LogDataSliceLength 576)
+      returnM ((@existT _ _ ex585868_ ((autocast (T := fun _sz => (LogDataSliceFields _ _sz)%type)
+      data : LogDataSliceFields ex585868_ 576))) : LogDataSliceLength 576)
     else (fatal_error (InvalidExecutionRequests))  : M (LogDataSliceLength 576)) >>= fun '(@existT _ _ __data data) =>
    ((log_data_slice_load (data) (DEPOSIT_PUBKEY_HEAD)) >>= fun semanticResult =>
     returnM (semanticResult).(word_value)) >>= fun pubkey_head =>
@@ -21869,7 +22254,7 @@ Definition authenticate_deposit_request {ex555007_ : Z} {ex555006_ : Z} {ex55500
       let expected_pubkey :=
         stateless_input_sub_slice (expected) (DEPOSIT_REQUEST_PUBKEY) (DEPOSIT_PUBKEY_LENGTH) in
       (log_input_slices_equal (@existT _ _ _ (@existT _ _ _ (log_pubkey)))
-         (@existT _ _ 48 (@existT _ _ (ex555006_ + 0) ((expected_pubkey : StatelessInputSliceFields (ex555006_ + 0) 48))))) >>= fun pubkey_matches =>
+         (@existT _ _ 48 (@existT _ _ (ex585872_ + 0) ((expected_pubkey : StatelessInputSliceFields (ex585872_ + 0) 48))))) >>= fun pubkey_matches =>
       let pubkey_mismatch := negb (pubkey_matches) in
       let log_withdrawal_credentials :=
         log_data_sub_slice (data) (DEPOSIT_WITHDRAWAL_CREDENTIALS_DATA)
@@ -21878,26 +22263,26 @@ Definition authenticate_deposit_request {ex555007_ : Z} {ex555006_ : Z} {ex55500
         stateless_input_sub_slice (expected) (DEPOSIT_REQUEST_WITHDRAWAL_CREDENTIALS)
           (DEPOSIT_WITHDRAWAL_CREDENTIALS_LENGTH) in
       (log_input_slices_equal (@existT _ _ _ (@existT _ _ _ (log_withdrawal_credentials)))
-         (@existT _ _ 32 (@existT _ _ (ex555006_ + 48) ((expected_withdrawal_credentials : StatelessInputSliceFields (ex555006_ + 48) 32))))) >>= fun withdrawal_credentials_match =>
+         (@existT _ _ 32 (@existT _ _ (ex585872_ + 48) ((expected_withdrawal_credentials : StatelessInputSliceFields (ex585872_ + 48) 32))))) >>= fun withdrawal_credentials_match =>
       let withdrawal_credentials_mismatch := negb (withdrawal_credentials_match) in
       let log_amount := log_data_sub_slice (data) (DEPOSIT_AMOUNT_DATA) (DEPOSIT_AMOUNT_LENGTH) in
       let expected_amount :=
         stateless_input_sub_slice (expected) (DEPOSIT_REQUEST_AMOUNT) (DEPOSIT_AMOUNT_LENGTH) in
       (log_input_slices_equal (@existT _ _ _ (@existT _ _ _ (log_amount)))
-         (@existT _ _ 8 (@existT _ _ (ex555006_ + 80) ((expected_amount : StatelessInputSliceFields (ex555006_ + 80) 8))))) >>= fun amount_matches =>
+         (@existT _ _ 8 (@existT _ _ (ex585872_ + 80) ((expected_amount : StatelessInputSliceFields (ex585872_ + 80) 8))))) >>= fun amount_matches =>
       let amount_mismatch := negb (amount_matches) in
       let log_signature :=
         log_data_sub_slice (data) (DEPOSIT_SIGNATURE_DATA) (DEPOSIT_SIGNATURE_LENGTH) in
       let expected_signature :=
         stateless_input_sub_slice (expected) (DEPOSIT_REQUEST_SIGNATURE) (DEPOSIT_SIGNATURE_LENGTH) in
       (log_input_slices_equal (@existT _ _ _ (@existT _ _ _ (log_signature)))
-         (@existT _ _ 96 (@existT _ _ (ex555006_ + 88) ((expected_signature : StatelessInputSliceFields (ex555006_ + 88) 96))))) >>= fun signature_matches =>
+         (@existT _ _ 96 (@existT _ _ (ex585872_ + 88) ((expected_signature : StatelessInputSliceFields (ex585872_ + 88) 96))))) >>= fun signature_matches =>
       let signature_mismatch := negb (signature_matches) in
       let log_index := log_data_sub_slice (data) (DEPOSIT_INDEX_DATA) (DEPOSIT_INDEX_LENGTH) in
       let expected_index :=
         stateless_input_sub_slice (expected) (DEPOSIT_REQUEST_INDEX) (DEPOSIT_INDEX_LENGTH) in
       (log_input_slices_equal (@existT _ _ _ (@existT _ _ _ (log_index)))
-         (@existT _ _ 8 (@existT _ _ (ex555006_ + 184) ((expected_index : StatelessInputSliceFields (ex555006_ + 184) 8))))) >>= fun index_matches =>
+         (@existT _ _ 8 (@existT _ _ (ex585872_ + 184) ((expected_index : StatelessInputSliceFields (ex585872_ + 184) 8))))) >>= fun index_matches =>
       let index_mismatch := negb (index_matches) in
       (if orb (pubkey_mismatch)
             ((orb (withdrawal_credentials_mismatch)
@@ -21907,20 +22292,20 @@ Definition authenticate_deposit_request {ex555007_ : Z} {ex555006_ : Z} {ex55500
          (fatal_error (InvalidExecutionRequests))
           : M (unit)
        else returnM (tt)) >>
-      returnM ((@existT _ _ (ex555007_ - 192) (@existT _ _ (ex555006_ + 192) ((stateless_input_slice_suffix
+      returnM ((@existT _ _ (ex585873_ - 192) (@existT _ _ (ex585872_ + 192) ((stateless_input_slice_suffix
                                                                                  (expected)
-                                                                                 (DEPOSIT_REQUEST_LENGTH) : StatelessInputSliceFields (ex555006_ + 192) (ex555007_ - 192))))) : {len & {__data & (StatelessInputSliceFields __data len)}}%type)
+                                                                                 (DEPOSIT_REQUEST_LENGTH) : StatelessInputSliceFields (ex585872_ + 192) (ex585873_ - 192))))) : {len & {__data & (StatelessInputSliceFields __data len)}}%type)
     else
       (fatal_error (InvalidExecutionRequests))
        : M ({len & {__data & (StatelessInputSliceFields __data len)}}%type))
     : M ({len & {__data & (StatelessInputSliceFields __data len)}}%type).
 
-Definition authenticate_deposit_logs {ex555011_ : Z} {ex555010_ : Z}
-(logs : LogSeriesRef) (expected : StatelessInputSliceFields ex555010_ ex555011_)
-(*(0 <=? ex555010_) && ((0 <=? ex555011_) && ((ex555010_ + ex555011_) <=? (2 ^ 32 - 1)))*)
+Definition authenticate_deposit_logs {ex585877_ : Z} {ex585876_ : Z}
+(logs : LogSeriesRef) (expected : StatelessInputSliceFields ex585876_ ex585877_)
+(*(0 <=? ex585876_) && ((0 <=? ex585877_) && ((ex585876_ + ex585877_) <=? (2 ^ 32 - 1)))*)
 : M (StatelessInputSlice) :=
    let '(@existT _ _ remaining__'len (@existT _ _ remaining__'off remaining)) :=
-     (@existT _ _ ex555011_ (@existT _ _ ex555010_ ((expected : StatelessInputSliceFields ex555010_ ex555011_))) : StatelessInputSlice) in
+     (@existT _ _ ex585877_ (@existT _ _ ex585876_ ((expected : StatelessInputSliceFields ex585876_ ex585877_))) : StatelessInputSlice) in
    let offset : Z := 0 in
    (whileMT
      (offset, @existT _ _ _ (@existT _ _ _ (remaining)))
@@ -21949,13 +22334,13 @@ Definition authenticate_deposit_logs {ex555011_ : Z} {ex555010_ : Z}
    : (Z * {len & {off & (StatelessInputSliceFields off len)}}%type)) =>
    returnM ((@existT _ _ _ (@existT _ _ _ (remaining))) : {len & {off & (StatelessInputSliceFields off len)}}%type).
 
-Definition validate_request_stream {ex555015_ : Z} {ex555014_ : Z}
-(tgt : vec (mword 8) 20) (expected : StatelessInputSliceFields ex555014_ ex555015_)
-(*(0 <=? ex555014_) && ((0 <=? ex555015_) && ((ex555014_ + ex555015_) <=? (2 ^ 32 - 1)))*)
+Definition validate_request_stream {ex585881_ : Z} {ex585880_ : Z}
+(tgt : vec (mword 8) 20) (expected : StatelessInputSliceFields ex585880_ ex585881_)
+(*(0 <=? ex585880_) && ((0 <=? ex585881_) && ((ex585880_ + ex585881_) <=? (2 ^ 32 - 1)))*)
 : M (unit) :=
    (system_call_checked (tgt)) >>= fun '(@existT _ _ __dequeued1 (@existT _ _ __dequeued0 dequeued)) =>
    (scratch_input_slices_equal (@existT _ _ _ (@existT _ _ _ (dequeued)))
-      (@existT _ _ ex555015_ (@existT _ _ ex555014_ ((expected : StatelessInputSliceFields ex555014_ ex555015_))))) >>= fun matches =>
+      (@existT _ _ ex585881_ (@existT _ _ ex585880_ ((expected : StatelessInputSliceFields ex585880_ ex585881_))))) >>= fun matches =>
    let mismatch := negb (matches) in
    (if mismatch return M (unit) then (fatal_error (InvalidExecutionRequests))  : M (unit)
     else returnM (tt))
@@ -21990,22 +22375,6 @@ Definition validate_execution_requests (input_ref : StatelessInputRef) : M (unit
        : M (unit))
     : M (unit).
 
-Definition bal_ref_cursor {source_off : Z} {source_len : Z} {content_len : Z}
-(f : RlpFieldRef source_off source_len content_len)
-(*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? content_len) && (content_len <=? source_len))*)
-: M (RlpCursor (source_off + (source_len - content_len)) content_len) :=
-   (rlp_ref_framing_canonical (f)) >>= fun framing_canonical =>
-   (if andb (f.(RlpFieldRef_is_list)) (framing_canonical)
-      return
-      M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len) then
-      (rlp_decode_list (f))
-       : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len)
-    else
-      (fatal_error (InvalidBlockAccessList))
-       : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len))
-    : M (StatelessInputSliceFields (source_off + (source_len - content_len)) content_len).
-
 Definition bal_ref_bytes {source_off : Z} {source_len : Z} {content_len : Z}
 (f : RlpFieldRef source_off source_len content_len)
 (*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
@@ -22018,19 +22387,6 @@ Definition bal_ref_bytes {source_off : Z} {source_len : Z} {content_len : Z}
       (fatal_error (InvalidBlockAccessList))
        : M ({len & {off & (StatelessInputSliceFields off len)}}%type))
     : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
-
-Definition bal_ref_word {source_off : Z} {source_len : Z} {content_len : Z}
-(f : RlpFieldRef source_off source_len content_len)
-(*(0 <=? source_off) && ((0 <=? source_len) && ((source_off + source_len) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? content_len) && (content_len <=? source_len))*)
-: M (word) :=
-   ((rlp_item_uint_canonical (f)) >>= fun canonical =>
-   (if andb (canonical) ((Z.leb content_len (32))) return M (Z) then
-      ((rlp_decode_word (f)) >>= fun semanticResult => returnM (semanticResult).(word_value))
-       : M (Z)
-    else (fatal_error (InvalidBlockAccessList))  : M (Z))
-    : M (Z)) >>= fun semanticResult =>
-   returnM (Build_word (semanticResult)).
 
 Definition bal_ref_uint64 {source_off : Z} {source_len : Z} {content_len : Z}
 (f : RlpFieldRef source_off source_len content_len)
@@ -22472,10 +22828,154 @@ Definition bal_validate_accounts {source_off : Z} {source_len : Z}
       (Zwf_guarded _))
     : M (Z).
 
-Definition validate_block_access_list {ex555349_ : Z} {ex555348_ : Z}
-(bytes : StatelessInputSliceFields ex555348_ ex555349_) (block_gas_limit : block_gas_limit)
-(*(0 <=? ex555348_) && ((0 <=? ex555349_) && ((ex555348_ + ex555349_) <=? (2 ^ 32 - 1))) &&
-  ((0 <=? (2 ^ 30)) && (ex555349_ <=? (2 ^ 30)))*)
+Fixpoint _rec_validate_historical_schema_slots {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (previous : word) (have_previous : bool)
+(storage_root : vec (mword 8) 32) (_reclimit : Z)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? previous) && (previous <=? (2 ^ 256 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
+exact (
+   let previous := (previous).(word_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb len (0) then returnM (tt)
+    else
+      (rlp_decode_item (cursor)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 entry)) =>
+      let next :=
+        rlp_cursor_advance (cursor) (entry.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (bal_ref_cursor (entry)) >>= fun fields =>
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 slot_field)) =>
+      let fields :=
+        rlp_cursor_advance (fields)
+          (slot_field.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 markers)) =>
+      (bal_expect_end
+         ((rlp_cursor_advance (fields)
+             (markers.(RlpFieldRef_source).(StatelessInputSliceFields_len))))) >>
+      ((bal_ref_word (slot_field)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun slot =>
+      (if andb (have_previous) ((negb ((word_ult (previous) (slot))))) return M (unit) then
+         (fatal_error (InvalidBlockAccessList))
+          : M (unit)
+       else returnM (tt)) >>
+      (bal_ref_cursor (markers)) >>= fun values =>
+      (rlp_decode_item (values)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 marker)) =>
+      (bal_expect_end
+         ((rlp_cursor_advance (values) (marker.(RlpFieldRef_source).(StatelessInputSliceFields_len))))) >>
+      (bal_compare_index_word (marker) (Build_block_access_index ((0)))
+         (Build_word (((ZERO_WORD).(word_value))))) >>
+      (keccak256_word (Build_word ((slot)))) >>= fun (w__0 : vec (mword 8) 32) =>
+      ((stateless_storage_by_key (storage_root) (w__0)) >>= fun semanticResult =>
+       returnM (semanticResult).(word_value)) >>= fun '(_) =>
+      (_rec_validate_historical_schema_slots _ _ (next) (Build_word ((slot))) (true) (storage_root)
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit))
+    : M (unit)
+).
+Defined.
+
+
+Definition validate_historical_schema_slots {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (previous : word) (have_previous : bool)
+(storage_root : vec (mword 8) 32) (*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? previous) && (previous <=? (2 ^ 256 - 1))*)
+: M (unit) :=
+   let previous := (previous).(word_value) in
+   (_rec_validate_historical_schema_slots (cursor) (Build_word ((previous))) (have_previous)
+      (storage_root) ((cursor.(StatelessInputSliceFields_len)  : Z)) (Zwf_guarded _))
+    : M (unit).
+
+Fixpoint _rec_validate_historical_schema_accounts {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (previous : word) (have_previous : bool)
+(_reclimit : Z) (*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? previous) && (previous <=? (2 ^ 256 - 1))*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (unit).
+exact (
+   let previous := (previous).(word_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb len (0) then returnM (tt)
+    else
+      (rlp_decode_item (cursor)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 entry)) =>
+      let next :=
+        rlp_cursor_advance (cursor) (entry.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (bal_ref_cursor (entry)) >>= fun fields =>
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 address_field)) =>
+      let fields :=
+        rlp_cursor_advance (fields)
+          (address_field.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 slots_field)) =>
+      let fields :=
+        rlp_cursor_advance (fields)
+          (slots_field.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 reads)) =>
+      let fields :=
+        rlp_cursor_advance (fields) (reads.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 balances)) =>
+      let fields :=
+        rlp_cursor_advance (fields) (balances.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 nonces)) =>
+      let fields :=
+        rlp_cursor_advance (fields) (nonces.(RlpFieldRef_source).(StatelessInputSliceFields_len)) in
+      (rlp_decode_item (fields)) >>= fun '(@existT _ _ __entry1 (@existT _ _ __entry0 codes)) =>
+      (bal_expect_end
+         ((rlp_cursor_advance (fields) (codes.(RlpFieldRef_source).(StatelessInputSliceFields_len))))) >>
+      (bal_ref_bytes (address_field)) >>= fun '(@existT _ _ __address_bytes1 (@existT _ _ __address_bytes0 address_bytes)) =>
+      ((rlp_decode_word (address_field)) >>= fun semanticResult =>
+       returnM (semanticResult).(word_value)) >>= fun address =>
+      (if neq_int (address_bytes.(StatelessInputSliceFields_len)) (20) return M (unit) then
+         (fatal_error (InvalidBlockAccessList))
+          : M (unit)
+       else returnM (tt)) >>
+      (if andb (have_previous) ((negb ((word_ult (previous) (address))))) return M (unit) then
+         (fatal_error (InvalidBlockAccessList))
+          : M (unit)
+       else returnM (tt)) >>
+      read_reg k_parent_state_root >>= fun (w__0 : vec (mword 8) 32) =>
+      (keccak256_address ((word_to_address (Build_word ((address)))))) >>= fun (w__1 : vec (mword 8) 32) =>
+      (stateless_account_by_key (w__0) (w__1)) >>= fun account =>
+      let info := account.(Account_info) in
+      (bal_ref_cursor (slots_field)) >>= fun w__2 =>
+      (validate_historical_schema_slots (w__2) (Build_word (((ZERO_WORD).(word_value)))) (false)
+         (info.(AccountInfo_storage_root))) >>
+      (bal_ref_cursor (reads)) >>= fun w__3 =>
+      (bal_expect_end (w__3)) >>
+      (bal_ref_cursor (balances)) >>= fun w__4 =>
+      (bal_expect_end (w__4)) >>
+      (bal_ref_cursor (nonces)) >>= fun w__5 =>
+      (bal_expect_end (w__5)) >>
+      (bal_ref_cursor (codes)) >>= fun w__6 =>
+      (bal_expect_end (w__6)) >>
+      (_rec_validate_historical_schema_accounts _ _ (next) (Build_word ((address))) (true)
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
+       : M (unit))
+    : M (unit)
+).
+Defined.
+
+
+Definition validate_historical_schema_accounts {off : Z} {len : Z}
+(cursor : StatelessInputSliceFields off len) (previous : word) (have_previous : bool)
+(*(0 <=? off) && ((0 <=? len) && ((off + len) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? previous) && (previous <=? (2 ^ 256 - 1))*)
+: M (unit) :=
+   let previous := (previous).(word_value) in
+   (_rec_validate_historical_schema_accounts (cursor) (Build_word ((previous))) (have_previous)
+      ((cursor.(StatelessInputSliceFields_len)
+       : Z)) (Zwf_guarded _))
+    : M (unit).
+
+Definition validate_historical_access_schema {ex586237_ : Z} {ex586236_ : Z}
+(bytes : StatelessInputSliceFields ex586236_ ex586237_)
+(*(0 <=? ex586236_) && ((0 <=? ex586237_) && ((ex586236_ + ex586237_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? (2 ^ 30)) && (ex586237_ <=? (2 ^ 30)))*)
+: M (unit) :=
+   (rlp_single_ref (bytes)) >>= fun '(@existT _ _ __root root) =>
+   (bal_ref_cursor (root)) >>= fun w__0 =>
+   (validate_historical_schema_accounts (w__0) (Build_word (((ZERO_WORD).(word_value)))) (false))
+    : M (unit).
+
+Definition validate_block_access_list {ex586242_ : Z} {ex586241_ : Z}
+(bytes : StatelessInputSliceFields ex586241_ ex586242_) (block_gas_limit : block_gas_limit)
+(*(0 <=? ex586241_) && ((0 <=? ex586242_) && ((ex586241_ + ex586242_) <=? (2 ^ 32 - 1))) &&
+  ((0 <=? (2 ^ 30)) && (ex586242_ <=? (2 ^ 30)))*)
 (*(0 <=? block_gas_limit) && (block_gas_limit <=? (2 ^ 64 - 1))*)
 : M (unit) :=
    let block_gas_limit := (block_gas_limit).(block_gas_limit_value) in
@@ -22538,27 +23038,62 @@ Definition run_block_start_system_calls '(tt : unit) : M (unit) :=
     else returnM (tt))
     : M (unit).
 
-Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_ : Z}
-{ex555413_ : Z}
+Fixpoint _rec_consume_versioned_hashes {ex586311_ : Z} {ex586310_ : Z} {limit : Z}
+(blob_hashes : BlobHashesFields limit) (index : Z)
+(expected : StatelessInputSliceFields ex586310_ ex586311_) (_reclimit : Z)
+(*((limit =? 0) || ((limit =? 6) || (limit =? 9))) && (0 <=? index)*)
+(*(0 <=? ex586310_) && ((0 <=? ex586311_) && ((ex586310_ + ex586311_) <=? (2 ^ 32 - 1)))*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (StatelessInputSlice).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.leb (blob_hashes.(BlobHashesFields_count)) (index) then
+      returnM ((@existT _ _ ex586311_ (@existT _ _ ex586310_ ((expected : StatelessInputSliceFields ex586310_ ex586311_)))) : {len & {off & (StatelessInputSliceFields off len)}}%type)
+    else
+      (if Z.leb (WORD_BYTE_LENGTH) ex586311_ then
+         returnM ((@existT _ _ ex586311_ (@existT _ _ ex586310_ ((expected : StatelessInputSliceFields ex586310_ ex586311_)))) : StatelessInputSliceAtLeast 32)
+       else (fatal_error (InvalidVersionedHashes))  : M (StatelessInputSliceAtLeast 32)) >>= fun '(@existT _ _ __expected_fields1 (@existT _ _ __expected_fields0 expected_fields)) =>
+      let hash_offset : Z := Z.add ((Z.mul (33) (index))) (1) in
+      ((stateless_input_slice_load_n (projT2 (projT2 (blob_hashes.(BlobHashesFields_bytes))))
+          (hash_offset) (WORD_BYTE_LENGTH)) >>= fun semanticResult =>
+       returnM (semanticResult).(word_value)) >>= fun actual =>
+      ((stateless_input_slice_load (expected_fields) (0)) >>= fun semanticResult =>
+       returnM (semanticResult).(word_value)) >>= fun next =>
+      (if neq_int (actual) (next) return M (unit) then
+         (fatal_error (InvalidVersionedHashes))
+          : M (unit)
+       else returnM (tt)) >>
+      (_rec_consume_versioned_hashes _ _ _ (blob_hashes) ((Z.add (index) (1)))
+         ((stateless_input_slice_suffix (expected_fields) (WORD_BYTE_LENGTH)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
+       : M ({__expected_fields1 & {__expected_fields0 & (StatelessInputSliceFields __expected_fields0 __expected_fields1)}}%type))
+    : M ({len & {off & (StatelessInputSliceFields off len)}}%type)
+).
+Defined.
+
+
+Definition consume_versioned_hashes {ex586321_ : Z} {ex586320_ : Z} {limit : Z}
+(blob_hashes : BlobHashesFields limit) (index : Z)
+(expected : StatelessInputSliceFields ex586320_ ex586321_)
+(*((limit =? 0) || ((limit =? 6) || (limit =? 9))) && (0 <=? index)*)
+(*(0 <=? ex586320_) && ((0 <=? ex586321_) && ((ex586320_ + ex586321_) <=? (2 ^ 32 - 1)))*)
+: M (StatelessInputSlice) :=
+   (_rec_consume_versioned_hashes (blob_hashes) (index) (expected)
+      (((Z.sub (blob_hashes.(BlobHashesFields_count)) (index))
+       : Z)) (Zwf_guarded _))
+    : M ({len & {off & (StatelessInputSliceFields off len)}}%type).
+
+Definition execute_block_transactions {ex586333_ : Z} {ex586332_ : Z} {ex586329_ : Z}
+{ex586328_ : Z}
 (transactions : BoundedSszListRef (2 ^ 20))
-(public_keys : StatelessInputSliceFields ex555413_ ex555414_)
-(expected_deposits : StatelessInputSliceFields ex555417_ ex555418_)
-(*(0 <=? ex555413_) && ((0 <=? ex555414_) && ((ex555413_ + ex555414_) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555417_) && ((0 <=? ex555418_) && ((ex555417_ + ex555418_) <=? (2 ^ 32 - 1)))*)
+(expected_deposits : StatelessInputSliceFields ex586328_ ex586329_)
+(expected_versioned_hashes : StatelessInputSliceFields ex586332_ ex586333_)
+(*(0 <=? ex586328_) && ((0 <=? ex586329_) && ((ex586328_ + ex586329_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586332_) && ((0 <=? ex586333_) && ((ex586332_ + ex586333_) <=? (2 ^ 32 - 1)))*)
 : M (BlockExecutionResult) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    let gas_limits := execution_profile.(ExecutionProfileFields_gas) in
-   let public_keys_length := public_keys.(StatelessInputSliceFields_len) in
-   let public_key_length := PUBLIC_KEY_LENGTH in
-   let public_key_count_value := e_div (public_keys_length) (public_key_length) in
-   (if orb ((neq_int (public_key_count_value) (transactions.(BoundedSszListRef_count))))
-         ((neq_int (public_keys_length) ((Z.mul (public_key_count_value) (public_key_length)))))
-      return
-      M (unit) then
-      (fatal_error (WitnessDeficient))
-       : M (unit)
-    else returnM (tt)) >>
    let gas_limit := gas_limits.(GasLimitsFields_block_limit) in
    let '(@existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage))) :=
      (@existT _ _ 0 (@existT _ _ 0 (@existT _ _ 0 ((block_gas_usage_empty (gas_limit) : BlockGasUsageFields gas_limit 0 0 0)))) : BlockGasUsageFor gas_limit) in
@@ -22572,33 +23107,30 @@ Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_
        (Build_log_store_index ((transaction_logs_count)))) >>= fun semanticResult =>
     returnM (semanticResult).(log_store_index_value)) >>= fun logs_start =>
    let '(@existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits)) :=
-     (@existT _ _ ex555418_ (@existT _ _ ex555417_ ((expected_deposits : StatelessInputSliceFields ex555417_ ex555418_))) : StatelessInputSlice) in
+     (@existT _ _ ex586329_ (@existT _ _ ex586328_ ((expected_deposits : StatelessInputSliceFields ex586328_ ex586329_))) : StatelessInputSlice) in
+   let '(@existT _ _ remaining_versioned_hashes__'len (@existT _ _ remaining_versioned_hashes__'off remaining_versioned_hashes)) :=
+     (@existT _ _ ex586333_ (@existT _ _ ex586332_ ((expected_versioned_hashes : StatelessInputSliceFields ex586332_ ex586333_))) : StatelessInputSlice) in
    (ssz_list_cursor (transactions)) >>= fun cursor =>
-   let '(@existT _ _ keys__'len (@existT _ _ keys__'off keys)) :=
-     (@existT _ _ ex555414_ (@existT _ _ ex555413_ ((public_keys : StatelessInputSliceFields ex555413_ ex555414_))) : StatelessInputSlice) in
    let initial_cursor_empty := ssz_list_cursor_empty (cursor) in
    let cursor_has_item : bool := negb (initial_cursor_empty) in
    (whileMT
-     (blob_gas_acc, cursor, cursor_has_item, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (keys)), @existT _ _ _ (@existT _ _ _ (remaining_deposits)), tx0_to)
-     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ keys__'len (@existT _ _ keys__'off keys), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), tx0_to)) =>
+     (blob_gas_acc, cursor, cursor_has_item, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits)), @existT _ _ _ (@existT _ _ _ (remaining_versioned_hashes)), tx0_to)
+     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), @existT _ _ remaining_versioned_hashes__'len (@existT _ _ remaining_versioned_hashes__'off remaining_versioned_hashes), tx0_to)) =>
        Z.sub (cursor.(BoundedSszListCursor_items).(BoundedSszListRef_count))
          (cursor.(BoundedSszListCursor_index)))
-     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ keys__'len (@existT _ _ keys__'off keys), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), tx0_to)) =>
+     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), @existT _ _ remaining_versioned_hashes__'len (@existT _ _ remaining_versioned_hashes__'off remaining_versioned_hashes), tx0_to)) =>
        returnM (cursor_has_item))
-     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ keys__'len (@existT _ _ keys__'off keys), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), tx0_to)) =>
+     (fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ gas_usage__'receipts (@existT _ _ gas_usage__'state (@existT _ _ gas_usage__'execution gas_usage)), @existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits), @existT _ _ remaining_versioned_hashes__'len (@existT _ _ remaining_versioned_hashes__'off remaining_versioned_hashes), tx0_to)) =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         let i := cursor.(BoundedSszListCursor_index) in
         (ssz_list_pop (cursor)) >>= fun '((@existT _ _ len (@existT _ _ off transaction), next)) =>
         let cursor : BoundedSszListCursor (2 ^ 20) := next in
-        let keys_fields := keys in
-        (if Z.leb (public_key_length) (keys_fields.(StatelessInputSliceFields_len)) then
-           returnM ((@existT _ _ _ (@existT _ _ _ (keys_fields))) : StatelessInputSliceAtLeast 65)
-         else (fatal_error (WitnessDeficient))  : M (StatelessInputSliceAtLeast 65)) >>= fun '(@existT _ _ __keys_fields1 (@existT _ _ __keys_fields0 keys_fields)) =>
-        let public_key := stateless_input_sub_slice (keys_fields) (0) (PUBLIC_KEY_LENGTH) in
-        let '(@existT _ _ keys__'len (@existT _ _ keys__'off keys)) :=
-          (@existT _ _ _ (@existT _ _ _ (stateless_input_slice_suffix (keys_fields)
-                                           (public_key_length))) : StatelessInputSlice) in
-        (decode_transaction (transaction) (public_key)) >>= fun '(@existT _ _ __tx tx) =>
+        (decode_transaction (transaction)) >>= fun '(@existT _ _ __tx tx) =>
+        (consume_versioned_hashes (tx.(TransactionFields_blob_hashes)) (0)
+           (remaining_versioned_hashes)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__0)) =>
+        let '(@existT _ _ remaining_versioned_hashes__'len (@existT _ _ remaining_versioned_hashes__'off remaining_versioned_hashes)) :=
+          (@existT _ _ _ (@existT _ _ _ (w__0
+           : StatelessInputSliceFields _ _)) : {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type) in
         write_reg k_current_transaction_epoch (Build_block_access_index (((Z.add (i) (1))))) >>
         let tx0_to : vec (mword 8) 20 :=
           if Z.eqb (i) (0) then tx.(TransactionFields_recipient)
@@ -22611,14 +23143,14 @@ Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_
            (gas_limits.(GasLimitsFields_transaction_regular_limit))) >>= fun '(@existT _ _ __allowance1 (@existT _ _ __allowance0 allowance)) =>
         (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam)
            return
-           M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type))
+           M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type))
          then
            (if orb
                  ((Z.ltb (available_execution_gas)
                      (allowance.(TransactionGasAllowanceFields_regular))))
                  ((Z.ltb (available_state_gas) (allowance.(TransactionGasAllowanceFields_total))))
               return
-              M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type))
+              M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type))
             then
               (fatal_error (GasUsedExceedsLimit)) >>
               returnM ((blob_gas_acc, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits))))
@@ -22636,16 +23168,16 @@ Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_
                 (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (next_usage))) : BlockGasUsageFor gas_limit) in
               (receipt_store_append (receipt) (next_usage.(BlockGasUsageFields_receipts))
                  (Build_transaction_count ((i)))) >>
-              (authenticate_deposit_logs (receipt.(ReceiptFields_logs)) (remaining_deposits)) >>= fun '(@existT _ _ __keys_fields1 (@existT _ _ __keys_fields0 w__1)) =>
+              (authenticate_deposit_logs (receipt.(ReceiptFields_logs)) (remaining_deposits)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 w__1)) =>
               let '(@existT _ _ remaining_deposits__'len (@existT _ _ remaining_deposits__'off remaining_deposits)) :=
                 (@existT _ _ _ (@existT _ _ _ (w__1
-                 : StatelessInputSliceFields _ _)) : {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type) in
+                 : StatelessInputSliceFields _ _)) : {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type) in
               let blob_gas_acc : Z := next_blob_gas in
               returnM ((blob_gas_acc, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits)))))
-            : M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type))
+            : M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type))
          else if Z.ltb (available_execution_gas) (allowance.(TransactionGasAllowanceFields_total))
            return
-           M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type))
+           M ((Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type))
          then
            (fatal_error (GasUsedExceedsLimit)) >>
            returnM ((blob_gas_acc, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits))))
@@ -22667,20 +23199,24 @@ Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_
               (Build_transaction_count ((i)))) >>
            (if Z.geb (profile.(ProtocolProfileFields_fork)) (Prague)
               return
-              M ({__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type)
-            then
+              M ({__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type) then
               (authenticate_deposit_logs (receipt.(ReceiptFields_logs)) (remaining_deposits))
-               : M ({__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type)
+               : M ({__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type)
             else
-              returnM ((@existT _ _ _ (@existT _ _ _ (remaining_deposits))) : {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type)) >>= fun '(@existT _ _ __keys_fields1 (@existT _ _ __keys_fields0 remaining_deposits)) =>
+              returnM ((@existT _ _ _ (@existT _ _ _ (remaining_deposits))) : {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type)) >>= fun '(@existT _ _ __w__01 (@existT _ _ __w__00 remaining_deposits)) =>
            let blob_gas_acc : Z := next_blob_gas in
-           returnM ((blob_gas_acc, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits))))) >>= fun '((blob_gas_acc, @existT _ _ receipts (@existT _ _ state (@existT _ _ execution gas_usage)), @existT _ _ __keys_fields1 (@existT _ _ __keys_fields0 remaining_deposits))
-        : (Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__keys_fields1 & {__keys_fields0 & (StatelessInputSliceFields __keys_fields0 __keys_fields1)}}%type)) =>
+           returnM ((blob_gas_acc, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits))))) >>= fun '((blob_gas_acc, @existT _ _ receipts (@existT _ _ state (@existT _ _ execution gas_usage)), @existT _ _ __w__01 (@existT _ _ __w__00 remaining_deposits))
+        : (Z * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {__w__01 & {__w__00 & (StatelessInputSliceFields __w__00 __w__01)}}%type)) =>
         let cursor_empty := ssz_list_cursor_empty (cursor) in
         let cursor_has_item : bool := negb (cursor_empty) in
-        returnM ((blob_gas_acc, cursor, cursor_has_item, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (keys)), @existT _ _ _ (@existT _ _ _ (remaining_deposits)), tx0_to)))
-        : M ((Z * BoundedSszListCursor (2 ^ 20) * bool * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * vec (mword 8) 20)))) >>= fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ receipts (@existT _ _ state (@existT _ _ execution gas_usage)), @existT _ _ len (@existT _ _ off keys), @existT _ _ len__2 (@existT _ _ off__2 remaining_deposits), tx0_to)
+        returnM ((blob_gas_acc, cursor, cursor_has_item, @existT _ _ _ (@existT _ _ _ (@existT _ _ _ (gas_usage))), @existT _ _ _ (@existT _ _ _ (remaining_deposits)), @existT _ _ _ (@existT _ _ _ (remaining_versioned_hashes)), tx0_to)))
+        : M ((Z * BoundedSszListCursor (2 ^ 20) * bool * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * vec (mword 8) 20)))) >>= fun '((blob_gas_acc, cursor, cursor_has_item, @existT _ _ receipts (@existT _ _ state (@existT _ _ execution gas_usage)), @existT _ _ len (@existT _ _ off remaining_deposits), @existT _ _ len__2 (@existT _ _ off__2 remaining_versioned_hashes), tx0_to)
    : (Z * BoundedSszListCursor (2 ^ 20) * bool * {receipts & {state & {execution & (BlockGasUsageFields gas_limit execution state receipts)}}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * {len & {off & (StatelessInputSliceFields off len)}}%type * vec (mword 8) 20)) =>
+   let remaining_hashes := remaining_versioned_hashes in
+   (if neq_int (remaining_hashes.(StatelessInputSliceFields_len)) (0) return M (unit) then
+      (fatal_error (InvalidVersionedHashes))
+       : M (unit)
+    else returnM (tt)) >>
    let remaining_deposits_length :=
      (stateless_input_slice_length (remaining_deposits)).(source_length_value) in
    (if andb ((Z.geb (profile.(ProtocolProfileFields_fork)) (Prague)))
@@ -22717,7 +23253,7 @@ Definition execute_block_transactions {ex555418_ : Z} {ex555417_ : Z} {ex555414_
                   {| LogSeriesRef_start := (Build_log_store_index (logs_start));
                      LogSeriesRef_count := (Build_log_store_index (logs_count)) |} |})).
 
-Definition apply_withdrawals (withdrawals : BoundedSszListRef (2 ^ 4)) : M (unit) :=
+Definition apply_withdrawals (withdrawals : BoundedSszListRef (2 ^ 20)) : M (unit) :=
    let rest := withdrawals in
    (whileMT
      rest
@@ -22726,12 +23262,12 @@ Definition apply_withdrawals (withdrawals : BoundedSszListRef (2 ^ 4)) : M (unit
      (fun rest =>
        (assert_exp' true "loop dummy assert" >>= fun _ =>
         (ssz_fixed_list_pop (rest) (WD_SIZE)) >>= fun '((@existT _ _ len (@existT _ _ off withdrawal_ref), tail)) =>
-        let rest : BoundedSszListRef (2 ^ 4) := tail in
+        let rest : BoundedSszListRef (2 ^ 20) := tail in
         (decode_withdrawal (withdrawal_ref)) >>= fun withdrawal =>
         let amount_in_wei :=
           Z.mul ((withdrawal.(Withdrawal_amount)).(withdrawal_amount_value)) (1000000000) in
         (k_add_balance (withdrawal.(Withdrawal_address)) (amount_in_wei)) >> returnM (rest))
-        : M (BoundedSszListRef (2 ^ 4)))) >>= fun (rest : BoundedSszListRef (2 ^ 4)) =>
+        : M (BoundedSszListRef (2 ^ 20)))) >>= fun (rest : BoundedSszListRef (2 ^ 20)) =>
    returnM (tt).
 
 Definition apply_block_end_state (body : BlockBody) : M (unit) :=
@@ -22753,15 +23289,18 @@ Definition execute_block_body (body : BlockBody) (input_ref : StatelessInputRef)
 : M (BlockExecutionResult) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
-   (bal_reset (tt)) >>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
+      (bal_reset (tt))
+       : M (unit)
+    else returnM (tt)) >>
    write_reg k_current_transaction_epoch (Build_block_access_index ((0))) >>
    (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
    returnM (semanticResult).(block_access_index_value) >>= fun (w__0 : Z) =>
    (warm_reset (Build_block_access_index ((w__0)))) >>
    (run_block_start_system_calls (tt)) >>
    (execute_block_transactions (body.(BlockBody_transactions))
-      (projT2 (projT2 (input_ref.(StatelessInputRef_public_keys))))
-      (projT2 (projT2 (input_ref.(StatelessInputRef_deposits))))) >>= fun result =>
+      (projT2 (projT2 (input_ref.(StatelessInputRef_deposits))))
+      (projT2 (projT2 (input_ref.(StatelessInputRef_versioned_hashes))))) >>= fun result =>
    let post_tx_index := Z.add (body.(BlockBody_transactions).(BoundedSszListRef_count)) (1) in
    write_reg k_current_transaction_epoch (Build_block_access_index ((post_tx_index))) >>
    (read_reg k_current_transaction_epoch) >>= fun semanticResult =>
@@ -22774,16 +23313,16 @@ Definition execute_block_body (body : BlockBody) (input_ref : StatelessInputRef)
     else returnM (tt)) >>
    returnM (result).
 
-Definition block_header_hash
-(header : BlockHeader) (transactions_root : vec (mword 8) 32) (withdrawals_root : vec (mword 8) 32)
-(requests_hash : vec (mword 8) 32) (block_access_list_hash : vec (mword 8) 32)
-: M (hash) :=
+Definition block_header_rlp_lengths (header : BlockHeader) : M ((Z * Z)) :=
    read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
    let profile := execution_profile.(ExecutionProfileFields_protocol) in
    let word_length := rlp_word_size (tt) in
    let address_length := rlp_addr_size (tt) in
    let bloom_length := Z.add (3) (LOGS_BLOOM_BYTE_LENGTH) in
-   let difficulty_length := rlp_uint_word_size (0) in
+   let difficulty_length :=
+     if Z.ltb (profile.(ProtocolProfileFields_fork)) (Paris) then
+       rlp_uint_word_size ((header.(BlockHeader_prev_randao)).(word_value))
+     else rlp_uint_word_size (0) in
    let number_length := rlp_uint_word_size ((header.(BlockHeader_number)).(block_number_value)) in
    let gas_limit_length :=
      rlp_uint_word_size ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) in
@@ -22863,7 +23402,15 @@ Definition block_header_hash
     else returnM (tt)) >>
    let bounded_content_length : Z := Z.rem (content_length) (750) in
    let content_len := bounded_content_length in
-   (rlp_list_size (content_len)) >>= fun encoded_length =>
+   (rlp_list_size (content_len)) >>= fun encoded_length => returnM ((content_len, encoded_length)).
+
+Definition block_header_hash
+(header : BlockHeader) (transactions_root : vec (mword 8) 32) (withdrawals_root : vec (mword 8) 32)
+(requests_hash : vec (mword 8) 32) (block_access_list_hash : vec (mword 8) 32)
+: M (hash) :=
+   read_reg k_execution_profile >>= fun '(@existT _ _ __execution_profile12 (@existT _ _ __execution_profile11 (@existT _ _ __execution_profile10 (@existT _ _ __execution_profile9 (@existT _ _ __execution_profile8 (@existT _ _ __execution_profile7 (@existT _ _ __execution_profile6 (@existT _ _ __execution_profile5 (@existT _ _ __execution_profile4 (@existT _ _ __execution_profile3 (@existT _ _ __execution_profile2 (@existT _ _ __execution_profile1 (@existT _ _ __execution_profile0 execution_profile))))))))))))) =>
+   let profile := execution_profile.(ExecutionProfileFields_protocol) in
+   (block_header_rlp_lengths (header)) >>= fun '((content_len, encoded_length)) =>
    (rlp_encoder_begin (encoded_length)) >>= fun encoder =>
    (rlp_write_list_prefix (content_len)) >>
    let parent_hash := (hash_to_word (header.(BlockHeader_parent_hash))).(word_value) in
@@ -22881,13 +23428,19 @@ Definition block_header_hash
       (autocast (T := fun _sz => (StatelessInputSliceFields _ _sz)%type)
       (projT2 (projT2 (header.(BlockHeader_logs_bloom)))))) >>= fun logs_bloom =>
    (rlp_write_logs_bloom (logs_bloom)) >>
-   (rlp_write_uint_word (0)) >>
+   (if Z.ltb (profile.(ProtocolProfileFields_fork)) (Paris) return M (unit) then
+      (rlp_write_uint_word ((header.(BlockHeader_prev_randao)).(word_value)))
+       : M (unit)
+    else (rlp_write_uint_word (0))  : M (unit)) >>
    (rlp_write_uint_word ((header.(BlockHeader_number)).(block_number_value))) >>
    (rlp_write_uint_word ((header.(BlockHeader_gas_limit)).(block_gas_limit_value))) >>
    (rlp_write_uint_word ((header.(BlockHeader_gas_used)).(block_gas_value))) >>
    (rlp_write_uint_word ((header.(BlockHeader_timestamp)).(block_timestamp_value))) >>
    (rlp_write_input_slice (projT2 (projT2 (header.(BlockHeader_extra_data))))) >>
-   (rlp_write_word (Build_word (((header.(BlockHeader_prev_randao)).(word_value))))) >>
+   (rlp_write_word
+      (Build_word (((if Z.ltb (profile.(ProtocolProfileFields_fork)) (Paris) then
+                       (ZERO_WORD).(word_value)
+                     else (header.(BlockHeader_prev_randao)).(word_value)))))) >>
    (rlp_write_string_prefix (EIGHT_BYTE_LENGTH) ((Ox"00"))) >>
    (scratch_push_word_be (Build_word (((ZERO_WORD).(word_value)))) (EIGHT_BYTE_LENGTH)) >>
    (if Z.geb (profile.(ProtocolProfileFields_fork)) (London) return M (unit) then
@@ -22927,7 +23480,7 @@ Definition transaction_trie_root (txs : BoundedSszListRef (2 ^ 20)) : M (hash) :
    (indexed_trie_root (source))
     : M (vec (mword 8) 32).
 
-Definition withdrawals_trie_root (wds : BoundedSszListRef (2 ^ 4)) : M (hash) :=
+Definition withdrawals_trie_root (wds : BoundedSszListRef (2 ^ 20)) : M (hash) :=
    let source := IndexedWithdrawals (wds) in
    (indexed_trie_root (source))
     : M (vec (mword 8) 32).
@@ -22941,6 +23494,104 @@ Definition expected_payload_excess_blob_gas (witness : WitnessContext) : M (exce
     returnM (semanticResult).(excess_blob_gas_value))
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_excess_blob_gas_typ (semanticResult)).
+
+Definition expected_payload_base_fee (witness : WitnessContext) : M (Z) :=
+   (if negb (witness.(WitnessContext_parent_has_base_fee)) then returnM (1000000000)
+    else
+      let raw_target :=
+        e_div ((witness.(WitnessContext_parent_gas_limit)).(block_gas_limit_value)) (2) in
+      (if Z.ltb (0) (raw_target) then returnM (raw_target)
+       else (fatal_error (InvalidGasLimit))  : M (Z)) >>= fun (target : Z) =>
+      let used := (witness.(WitnessContext_parent_gas_used)).(block_gas_value) in
+      let fee := (witness.(WitnessContext_parent_base_fee_per_gas)).(word_value) in
+      (if orb ((Z.eqb (target) (0)))
+            (((Z.ltb ((witness.(WitnessContext_parent_gas_limit)).(block_gas_limit_value)) (used))
+             : bool))
+         return
+         M (unit) then
+         (fatal_error (InvalidGasLimit))
+          : M (unit)
+       else returnM (tt)) >>
+      returnM ((if Z.eqb (used) (target) then fee
+                else if Z.ltb (target) (used) then
+                  let change :=
+                    e_div ((e_div ((Z.mul (fee) ((Z.sub (used) (target))))) (target))) (8) in
+                  let candidate := Z.add (fee) ((if Z.ltb (change) (1) then 1 else change)) in
+                  candidate
+                else
+                  let change :=
+                    e_div ((e_div ((Z.mul (fee) ((Z.sub (target) (used))))) (target))) (8) in
+                  Z.sub (fee) (change))))
+    : M (Z).
+
+Definition validate_block_rlp_size
+(header : BlockHeader) (transactions : BoundedSszListRef (2 ^ 20))
+(withdrawals : BoundedSszListRef (2 ^ 20))
+: M (unit) :=
+   let maximum : Z := 8388608 in
+   let tx_bytes : Z := 0 in
+   (ssz_list_cursor (transactions)) >>= fun cursor =>
+   (whileMT
+     (cursor, tx_bytes)
+     (fun '(cursor, tx_bytes) =>
+       Z.sub (cursor.(BoundedSszListCursor_items).(BoundedSszListRef_count))
+         (cursor.(BoundedSszListCursor_index)))
+     (fun '(cursor, tx_bytes) => returnM ((negb ((ssz_list_cursor_empty (cursor))))))
+     (fun '(cursor, tx_bytes) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        (ssz_list_pop (cursor)) >>= fun '((@existT _ _ len (@existT _ _ off tx), next)) =>
+        (if andb ((neq_int (tx.(StatelessInputSliceFields_len)) (0)))
+              ((Z.leb (tx.(StatelessInputSliceFields_len)) ((pow2 (30)))))
+           return
+           M (Z) then
+           (stateless_input_slice_byte (tx) (0)) >>= fun (w__0 : mword 8) =>
+           (if Z.geb ((uint (w__0))) (192) then returnM (tx.(StatelessInputSliceFields_len))
+            else rlp_input_slice_size (tx))
+            : M (Z)
+         else (fatal_error (RlpDecode))  : M (Z)) >>= fun (size : Z) =>
+        let total := Z.add (tx_bytes) (size) in
+        (if Z.leb (total) (maximum) then returnM (total)
+         else (fatal_error (ExecutionInvalid))  : M (Z)) >>= fun (w__5 : Z) =>
+        let tx_bytes := w__5  : Z in
+        let cursor : BoundedSszListCursor (2 ^ 20) := next in
+        returnM ((cursor, tx_bytes)))
+        : M ((BoundedSszListCursor (2 ^ 20) * Z)))) >>= fun '((cursor, tx_bytes)
+   : (BoundedSszListCursor (2 ^ 20) * Z)) =>
+   let withdrawal_bytes : Z := 0 in
+   let rest := withdrawals in
+   (whileMT
+     (rest, withdrawal_bytes)
+     (fun '(rest, withdrawal_bytes) => rest.(BoundedSszListRef_count))
+     (fun '(rest, withdrawal_bytes) => returnM ((neq_int (rest.(BoundedSszListRef_count)) (0))))
+     (fun '(rest, withdrawal_bytes) =>
+       (assert_exp' true "loop dummy assert" >>= fun _ =>
+        (ssz_fixed_list_pop (rest) (WD_SIZE)) >>= fun '((@existT _ _ len (@existT _ _ off withdrawal), next)) =>
+        ((scratch_begin (tt)) >>= fun semanticResult =>
+         returnM (semanticResult).(source_pointer_value)) >>= fun mark =>
+        (withdrawal_rlp
+           (autocast (T := fun _sz => (StatelessInputSliceFields _ _sz)%type)
+           (withdrawal))) >>= fun '(@existT _ _ __encoded1 (@existT _ _ __encoded0 encoded)) =>
+        let size := encoded.(ScratchSliceFields_len) in
+        let total := Z.add (withdrawal_bytes) (size) in
+        (if Z.leb (total) (maximum) then returnM (total)
+         else (fatal_error (ExecutionInvalid))  : M (Z)) >>= fun (w__7 : Z) =>
+        let withdrawal_bytes := w__7  : Z in
+        (scratch_rewind (Build_source_pointer ((mark)))) >>
+        let rest : BoundedSszListRef (2 ^ 20) := next in
+        returnM ((rest, withdrawal_bytes)))
+        : M ((BoundedSszListRef (2 ^ 20) * Z)))) >>= fun '((rest, withdrawal_bytes)
+   : (BoundedSszListRef (2 ^ 20) * Z)) =>
+   (block_header_rlp_lengths (header)) >>= fun '((_, header_size)) =>
+   (rlp_list_size (tx_bytes)) >>= fun transactions_size =>
+   (rlp_list_size (withdrawal_bytes)) >>= fun withdrawals_size =>
+   let body_size :=
+     Z.add ((Z.add ((Z.add (header_size) (transactions_size))) (1))) (withdrawals_size) in
+   (rlp_list_size (body_size)) >>= fun block_size =>
+   (if Z.ltb (maximum) (block_size) return M (unit) then
+      (fatal_error (ExecutionInvalid))
+       : M (unit)
+    else returnM (tt))
+    : M (unit).
 
 Definition execution_requests_hash (input_ref : StatelessInputRef) : M (hash) :=
    let '(@existT _ _ deposits__'len (@existT _ _ deposits__'off deposits)) :=
@@ -23016,6 +23667,30 @@ Definition validate_execution_payload
    let block := payload.(ExecutionPayload_block) in
    let header := block.(Block_header) in
    let body := block.(Block_body) in
+   let parent_limit :=
+     if andb ((Z.eqb (profile.(ProtocolProfileFields_fork)) (London)))
+          ((negb (witness.(WitnessContext_parent_has_base_fee)))) then
+       Z.mul (2) ((witness.(WitnessContext_parent_gas_limit)).(block_gas_limit_value))
+     else (witness.(WitnessContext_parent_gas_limit)).(block_gas_limit_value) in
+   let limit_delta :=
+     if Z.ltb ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) (parent_limit) then
+       Z.sub (parent_limit) ((header.(BlockHeader_gas_limit)).(block_gas_limit_value))
+     else Z.sub ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) (parent_limit) in
+   (if orb ((Z.ltb ((header.(BlockHeader_gas_limit)).(block_gas_limit_value)) (5000)))
+         (((orb ((Z.leb ((pow2 (63))) ((header.(BlockHeader_gas_limit)).(block_gas_limit_value))))
+              ((orb ((Z.ltb (parent_limit) (5000)))
+                  ((Z.leb ((e_div (parent_limit) (1024))) (limit_delta))))))
+          : bool))
+      return
+      M (unit) then
+      (fatal_error (InvalidGasLimit))
+       : M (unit)
+    else returnM (tt)) >>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Osaka) return M (unit) then
+      (validate_block_rlp_size (header) (body.(BlockBody_transactions))
+         (body.(BlockBody_withdrawals)))
+       : M (unit)
+    else returnM (tt)) >>
    (if Z.ltb ((header.(BlockHeader_gas_limit)).(block_gas_limit_value))
          ((header.(BlockHeader_gas_used)).(block_gas_value))
       return
@@ -23029,40 +23704,43 @@ Definition validate_execution_payload
       (fatal_error (InvalidParentHash))
        : M (unit)
     else returnM (tt)) >>
-   ((expected_payload_excess_blob_gas (witness)) >>= fun semanticResult =>
-    returnM (semanticResult).(excess_blob_gas_value)) >>= fun expected_excess_blob_gas =>
-   (if andb ((Z.geb (profile.(ProtocolProfileFields_fork)) (Cancun)))
-         (((neq_int ((header.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))
-              (expected_excess_blob_gas))
-          : bool))
-      return
-      M (unit) then
-      (fatal_error (InvalidExcessBlobGas))
-       : M (unit)
+   (and_boolM (returnM ((Z.geb (profile.(ProtocolProfileFields_fork)) (London))))
+      ((expected_payload_base_fee (witness)) >>= fun (w__0 : Z) =>
+       returnM (((neq_int ((header.(BlockHeader_base_fee)).(word_value)) (w__0))  : bool)))) >>= fun w__1 =>
+   (if w__1 return M (unit) then (fatal_error (ExecutionInvalid))  : M (unit)
     else returnM (tt)) >>
-   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Paris) return M (unit) then
-      (transaction_trie_root (body.(BlockBody_transactions))) >>= fun transactions_root =>
-      (if Z.geb (profile.(ProtocolProfileFields_fork)) (Shanghai) return M (vec (mword 8) 32) then
-         (withdrawals_trie_root (body.(BlockBody_withdrawals)))
-          : M (vec (mword 8) 32)
-       else returnM (EMPTY_TRIE_ROOT)) >>= fun withdrawals_root =>
-      (if Z.geb (profile.(ProtocolProfileFields_fork)) (Prague) return M (vec (mword 8) 32) then
-         (execution_requests_hash (input_ref))
-          : M (vec (mword 8) 32)
-       else returnM (ZERO_HASH)) >>= fun requests_hash =>
-      (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (vec (mword 8) 32) then
-         (stateless_input_keccak256
-            (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (body.(BlockBody_block_access_list)))))))
-          : M (vec (mword 8) 32)
-       else returnM (ZERO_HASH)) >>= fun block_access_list_hash =>
-      (block_header_hash (header) (transactions_root) (withdrawals_root) (requests_hash)
-         (block_access_list_hash)) >>= fun computed_block_hash =>
-      (if generic_neq (computed_block_hash) (payload.(ExecutionPayload_expected_block_hash))
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Cancun) return M (unit) then
+      ((expected_payload_excess_blob_gas (witness)) >>= fun semanticResult =>
+       returnM (semanticResult).(excess_blob_gas_value)) >>= fun expected_excess_blob_gas =>
+      (if neq_int ((header.(BlockHeader_excess_blob_gas)).(excess_blob_gas_value))
+            (expected_excess_blob_gas)
          return
          M (unit) then
-         (fatal_error (InvalidBlockHash))
+         (fatal_error (InvalidExcessBlobGas))
           : M (unit)
        else returnM (tt))
+       : M (unit)
+    else returnM (tt)) >>
+   (transaction_trie_root (body.(BlockBody_transactions))) >>= fun transactions_root =>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Shanghai) return M (vec (mword 8) 32) then
+      (withdrawals_trie_root (body.(BlockBody_withdrawals)))
+       : M (vec (mword 8) 32)
+    else returnM (EMPTY_TRIE_ROOT)) >>= fun withdrawals_root =>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Prague) return M (vec (mword 8) 32) then
+      (execution_requests_hash (input_ref))
+       : M (vec (mword 8) 32)
+    else returnM (ZERO_HASH)) >>= fun requests_hash =>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (vec (mword 8) 32) then
+      (stateless_input_keccak256
+         (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (body.(BlockBody_block_access_list)))))))
+       : M (vec (mword 8) 32)
+    else returnM (ZERO_HASH)) >>= fun block_access_list_hash =>
+   (block_header_hash (header) (transactions_root) (withdrawals_root) (requests_hash)
+      (block_access_list_hash)) >>= fun computed_block_hash =>
+   (if generic_neq (computed_block_hash) (payload.(ExecutionPayload_expected_block_hash))
+      return
+      M (unit) then
+      (fatal_error (InvalidBlockHash))
        : M (unit)
     else returnM (tt))
     : M (unit).
@@ -23094,6 +23772,12 @@ Definition validate_executed_block (block : Block) (result : BlockExecutionResul
       (fatal_error (InvalidBlobGasUsed))
        : M (unit)
     else returnM (tt)) >>
+   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
+      (validate_block_access_list
+         (projT2 (projT2 (block.(Block_body).(BlockBody_block_access_list))))
+         (Build_block_gas_limit ((execution_profile.(ExecutionProfileFields_gas).(GasLimitsFields_block_limit)))))
+       : M (unit)
+    else returnM (tt)) >>
    (compute_state_root (tt)) >>= fun poststate =>
    (if generic_neq (poststate) (header.(BlockHeader_state_root)) return M (unit) then
       (fatal_error (InvalidStateRoot))
@@ -23111,12 +23795,6 @@ Definition validate_executed_block (block : Block) (result : BlockExecutionResul
       (projT2 (projT2 (header.(BlockHeader_logs_bloom)))))) >>= fun logs_bloom_matches =>
    let logs_bloom_mismatch := negb (logs_bloom_matches) in
    (if logs_bloom_mismatch return M (unit) then (fatal_error (InvalidLogsBloom))  : M (unit)
-    else returnM (tt)) >>
-   (if Z.geb (profile.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
-      (validate_block_access_list
-         (projT2 (projT2 (block.(Block_body).(BlockBody_block_access_list))))
-         (Build_block_gas_limit ((execution_profile.(ExecutionProfileFields_gas).(GasLimitsFields_block_limit)))))
-       : M (unit)
     else returnM (tt))
     : M (unit).
 
@@ -23136,6 +23814,13 @@ Definition verify_stateless_payload (input_ref : StatelessInputRef) : M (unit) :
    (index_execution_witness (input_ref)) >>= fun witness =>
    (validate_execution_payload (input) (input_ref) (witness)) >>
    let block := input.(StatelessInput_payload).(ExecutionPayload_block) in
+   let '(@existT _ _ protocol__'refund_divisor (@existT _ _ protocol__'transaction_blob_limit (@existT _ _ protocol__'transaction_regular_gas_limit (@existT _ _ protocol__'transaction_total_gas_limit (@existT _ _ protocol__'initcode_limit (@existT _ _ protocol__'code_limit (@existT _ _ protocol__'denominator (@existT _ _ protocol__'maximum (@existT _ _ protocol__'target (@existT _ _ protocol__'fork protocol)))))))))) :=
+     (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (projT2 (input_ref.(StatelessInputRef_protocol))))))))))))))))))))) : {refund_divisor & {transaction_blob_limit & {transaction_regular_gas_limit & {transaction_total_gas_limit & {initcode_limit & {code_limit & {denominator & {maximum & {target & {fork & (ProtocolProfileFields fork target maximum denominator code_limit initcode_limit transaction_total_gas_limit transaction_regular_gas_limit transaction_blob_limit refund_divisor)}}}}}}}}}}%type) in
+   (if Z.ltb (protocol.(ProtocolProfileFields_fork)) (Amsterdam) return M (unit) then
+      (validate_historical_access_schema
+         (projT2 (projT2 (block.(Block_body).(BlockBody_block_access_list)))))
+       : M (unit)
+    else returnM (tt)) >>
    (execute_block_body (block.(Block_body)) (input_ref)) >>= fun result =>
    (validate_executed_block (block) (result))
     : M (unit).
@@ -23383,6 +24068,74 @@ Definition merkleize {n : Z} (leaves : vec (vec (mword 8) 32) n) (depth : htr_de
     else (fatal_error (WitnessDeficient))  : M (vec (mword 8) 32))
     : M (vec (mword 8) 32).
 
+Definition htr_progressive_next_depth (remaining : htr_leaf_count) (depth : htr_depth)
+(*(0 <=? remaining) && (remaining <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (htr_depth) :=
+   let remaining := (remaining).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   ((if Z.eqb (remaining) (0) then returnM (depth)
+     else if Z.leb ((Z.add (depth) (2))) (25) then returnM ((Z.add (depth) (2)))
+     else (fatal_error (WitnessDeficient))  : M (Z))
+    : M (Z)) >>= fun semanticResult =>
+   returnM (Build_htr_depth (semanticResult)).
+
+Fixpoint _rec_merkleize_progressive_from {n : Z}
+(leaves : vec (vec (mword 8) 32) n) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(_reclimit : Z) (*(1 <=? n) && ((n <=? 32) && (0 <=? start))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (hash).
+exact (
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (count) (0) then returnM (ZERO_HASH)
+    else
+      let capacity := (htr_leaf_capacity (Build_htr_depth ((depth)))).(htr_leaf_count_value) in
+      let take : Z := if Z.ltb (count) (capacity) then count else capacity in
+      let remaining : Z := if Z.ltb (count) (capacity) then 0 else Z.sub (count) (capacity) in
+      ((htr_progressive_next_depth (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((depth)))) >>= fun semanticResult =>
+       returnM (semanticResult).(htr_depth_value)) >>= fun next_depth =>
+      (merkleize_vector_subtree (leaves) (start) (Build_htr_leaf_count ((take)))
+         (Build_htr_depth ((depth)))) >>= fun left_root =>
+      (_rec_merkleize_progressive_from _ (leaves) ((Z.add (start) (take)))
+         (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((next_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
+      (sha256_pair (left_root) (right_root))
+       : M (vec (mword 8) 32))
+    : M (vec (mword 8) 32)
+).
+Defined.
+
+
+Definition merkleize_progressive_from {n : Z}
+(leaves : vec (vec (mword 8) 32) n) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(*(1 <=? n) && ((n <=? 32) && (0 <=? start))*) (*(0 <=? count) && (count <=? 33554432)*)
+(*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (_rec_merkleize_progressive_from (leaves) (start) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((depth))) ((count  : Z)) (Zwf_guarded _))
+    : M (vec (mword 8) 32).
+
+Definition merkleize_progressive {n : Z} (leaves : vec (vec (mword 8) 32) n)
+(*(1 <=? n) && (n <=? 32)*)
+: M (hash) :=
+   let count : Z := vec_length (leaves) in
+   (merkleize_progressive_from (leaves) (0) (Build_htr_leaf_count ((count))) (Build_htr_depth ((0))))
+    : M (vec (mword 8) 32).
+
+Definition HTR_PAYLOAD_ACTIVE_FIELDS : hash :=
+hash_from_bits ((Ox"FFFF070000000000000000000000000000000000000000000000000000000000")).
+#[export] Hint Unfold HTR_PAYLOAD_ACTIVE_FIELDS : sail.
+Definition HTR_REQUESTS_ACTIVE_FIELDS : hash :=
+hash_from_bits ((Ox"1F00000000000000000000000000000000000000000000000000000000000000")).
+#[export] Hint Unfold HTR_REQUESTS_ACTIVE_FIELDS : sail.
+Definition mix_in_active_fields (root : vec (mword 8) 32) (active_fields : vec (mword 8) 32)
+: M (hash) :=
+   (sha256_pair (root) (active_fields))  : M (vec (mword 8) 32).
+
 Definition htr_uint (v : ssz_uint) (*(0 <=? v) && (v <=? (2 ^ 64 - 1))*) : hash :=
    let v := (v).(ssz_uint_value) in
    let bytes := ZERO_HASH in
@@ -23502,9 +24255,9 @@ Definition clog2 (n : htr_leaf_count) (*(0 <=? n) && (n <=? 33554432)*) : M (htr
    returnM (depth)) >>= fun semanticResult =>
    returnM (Build_htr_depth (semanticResult)).
 
-Definition htr_chunk {ex555454_ : Z} {ex555453_ : Z}
-(bytes : StatelessInputSliceFields ex555453_ ex555454_) (chunk_index : Z) (*0 <=? chunk_index*)
-(*(0 <=? ex555453_) && ((0 <=? ex555454_) && ((ex555453_ + ex555454_) <=? (2 ^ 32 - 1)))*)
+Definition htr_chunk {ex586377_ : Z} {ex586376_ : Z}
+(bytes : StatelessInputSliceFields ex586376_ ex586377_) (chunk_index : Z) (*0 <=? chunk_index*)
+(*(0 <=? ex586376_) && ((0 <=? ex586377_) && ((ex586376_ + ex586377_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    (if Z.leb (chunk_index) (33554432) return M (vec (mword 8) 32) then
       let offset : Z := Z.mul (chunk_index) (WORD_BYTE_LENGTH) in
@@ -23521,10 +24274,10 @@ Definition htr_chunk_count (byte_len : Z) (*(0 <=? byte_len) && (byte_len <=? (2
     : M (Z)) >>= fun semanticResult =>
    returnM (Build_htr_leaf_count (semanticResult)).
 
-Fixpoint _rec_htr_bytes_subtree {ex555463_ : Z} {ex555462_ : Z}
-(bytes : StatelessInputSliceFields ex555462_ ex555463_) (start : Z) (count : htr_leaf_count)
+Fixpoint _rec_htr_bytes_subtree {ex586386_ : Z} {ex586385_ : Z}
+(bytes : StatelessInputSliceFields ex586385_ ex586386_) (start : Z) (count : htr_leaf_count)
 (depth : htr_depth) (_reclimit : Z) (*0 <=? start*)
-(*(0 <=? ex555462_) && ((0 <=? ex555463_) && ((ex555462_ + ex555463_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586385_) && ((0 <=? ex586386_) && ((ex586385_ + ex586386_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (hash).
@@ -23557,10 +24310,10 @@ exact (
 Defined.
 
 
-Definition htr_bytes_subtree {ex555470_ : Z} {ex555469_ : Z}
-(bytes : StatelessInputSliceFields ex555469_ ex555470_) (start : Z) (count : htr_leaf_count)
+Definition htr_bytes_subtree {ex586393_ : Z} {ex586392_ : Z}
+(bytes : StatelessInputSliceFields ex586392_ ex586393_) (start : Z) (count : htr_leaf_count)
 (depth : htr_depth) (*0 <=? start*)
-(*(0 <=? ex555469_) && ((0 <=? ex555470_) && ((ex555469_ + ex555470_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586392_) && ((0 <=? ex586393_) && ((ex586392_ + ex586393_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
    let count := (count).(htr_leaf_count_value) in
@@ -23569,9 +24322,9 @@ Definition htr_bytes_subtree {ex555470_ : Z} {ex555469_ : Z}
       (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
     : M (vec (mword 8) 32).
 
-Definition htr_bytes_root {ex555477_ : Z} {ex555476_ : Z}
-(bytes : StatelessInputSliceFields ex555476_ ex555477_) (depth : htr_depth)
-(*(0 <=? ex555476_) && ((0 <=? ex555477_) && ((ex555476_ + ex555477_) <=? (2 ^ 32 - 1)))*)
+Definition htr_bytes_root {ex586400_ : Z} {ex586399_ : Z}
+(bytes : StatelessInputSliceFields ex586399_ ex586400_) (depth : htr_depth)
+(*(0 <=? ex586399_) && ((0 <=? ex586400_) && ((ex586399_ + ex586400_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
    let depth := (depth).(htr_depth_value) in
@@ -23584,9 +24337,50 @@ Definition htr_bytes_root {ex555477_ : Z} {ex555476_ : Z}
     else (fatal_error (WitnessDeficient))  : M (vec (mword 8) 32))
     : M (vec (mword 8) 32).
 
-Definition htr_bytevector {ex555482_ : Z} {ex555481_ : Z}
-(bytes : StatelessInputSliceFields ex555481_ ex555482_)
-(*(0 <=? ex555481_) && ((0 <=? ex555482_) && ((ex555481_ + ex555482_) <=? (2 ^ 32 - 1)))*)
+Fixpoint _rec_htr_bytes_progressive_subtree {ex586405_ : Z} {ex586404_ : Z}
+(bytes : StatelessInputSliceFields ex586404_ ex586405_) (start : Z) (count : htr_leaf_count)
+(depth : htr_depth) (_reclimit : Z) (*0 <=? start*)
+(*(0 <=? ex586404_) && ((0 <=? ex586405_) && ((ex586404_ + ex586405_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (hash).
+exact (
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (count) (0) then returnM (ZERO_HASH)
+    else
+      let capacity := (htr_leaf_capacity (Build_htr_depth ((depth)))).(htr_leaf_count_value) in
+      let take : Z := if Z.ltb (count) (capacity) then count else capacity in
+      let remaining : Z := if Z.ltb (count) (capacity) then 0 else Z.sub (count) (capacity) in
+      ((htr_progressive_next_depth (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((depth)))) >>= fun semanticResult =>
+       returnM (semanticResult).(htr_depth_value)) >>= fun next_depth =>
+      (htr_bytes_subtree (bytes) (start) (Build_htr_leaf_count ((take))) (Build_htr_depth ((depth)))) >>= fun left_root =>
+      (_rec_htr_bytes_progressive_subtree _ _ (bytes) ((Z.add (start) (take)))
+         (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((next_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
+      (sha256_pair (left_root) (right_root))
+       : M (vec (mword 8) 32))
+    : M (vec (mword 8) 32)
+).
+Defined.
+
+
+Definition htr_bytes_progressive_subtree {ex586412_ : Z} {ex586411_ : Z}
+(bytes : StatelessInputSliceFields ex586411_ ex586412_) (start : Z) (count : htr_leaf_count)
+(depth : htr_depth) (*0 <=? start*)
+(*(0 <=? ex586411_) && ((0 <=? ex586412_) && ((ex586411_ + ex586412_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (_rec_htr_bytes_progressive_subtree (bytes) (start) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((depth))) ((count  : Z)) (Zwf_guarded _))
+    : M (vec (mword 8) 32).
+
+Definition htr_bytevector {ex586419_ : Z} {ex586418_ : Z}
+(bytes : StatelessInputSliceFields ex586418_ ex586419_)
+(*(0 <=? ex586418_) && ((0 <=? ex586419_) && ((ex586418_ + ex586419_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((htr_chunk_count (bytes.(StatelessInputSliceFields_len))) >>= fun semanticResult =>
     returnM (semanticResult).(htr_leaf_count_value)) >>= fun chunks =>
@@ -23595,66 +24389,77 @@ Definition htr_bytevector {ex555482_ : Z} {ex555481_ : Z}
    (htr_bytes_root (bytes) (Build_htr_depth ((depth))))
     : M (vec (mword 8) 32).
 
-Definition htr_ssz_uint {ex555492_ : Z} {ex555491_ : Z}
-(bytes : StatelessInputSliceFields ex555491_ ex555492_) (offset : Z)
+Definition htr_ssz_uint {ex586429_ : Z} {ex586428_ : Z}
+(bytes : StatelessInputSliceFields ex586428_ ex586429_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 8) && ((offset + 8) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555491_) && ((0 <=? ex555492_) && ((ex555491_ + ex555492_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586428_) && ((0 <=? ex586429_) && ((ex586428_ + ex586429_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((decode_ssz_uint (bytes) (offset)) >>= fun semanticResult =>
     returnM (semanticResult).(ssz_uint_value)) >>= fun value =>
    returnM ((htr_uint (Build_ssz_uint ((value))))).
 
-Definition htr_ssz_u256 {ex555506_ : Z} {ex555505_ : Z}
-(bytes : StatelessInputSliceFields ex555505_ ex555506_) (offset : Z)
+Definition htr_ssz_u256 {ex586443_ : Z} {ex586442_ : Z}
+(bytes : StatelessInputSliceFields ex586442_ ex586443_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 32) && ((offset + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555505_) && ((0 <=? ex555506_) && ((ex555505_ + ex555506_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586442_) && ((0 <=? ex586443_) && ((ex586442_ + ex586443_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((ssz_u256 (bytes) (offset)) >>= fun semanticResult => returnM (semanticResult).(word_value)) >>= fun value =>
    returnM ((htr_u256 (Build_word ((value))))).
 
-Definition htr_ssz_bytes32 {ex555520_ : Z} {ex555519_ : Z}
-(bytes : StatelessInputSliceFields ex555519_ ex555520_) (offset : Z)
+Definition htr_ssz_bytes32 {ex586457_ : Z} {ex586456_ : Z}
+(bytes : StatelessInputSliceFields ex586456_ ex586457_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 32) && ((offset + 32) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555519_) && ((0 <=? ex555520_) && ((ex555519_ + ex555520_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586456_) && ((0 <=? ex586457_) && ((ex586456_ + ex586457_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    (ssz_bytes32 (bytes) (offset)) >>= fun value => returnM ((htr_bytes32 (value))).
 
-Definition htr_ssz_addr {ex555534_ : Z} {ex555533_ : Z}
-(bytes : StatelessInputSliceFields ex555533_ ex555534_) (offset : Z)
+Definition htr_ssz_addr {ex586471_ : Z} {ex586470_ : Z}
+(bytes : StatelessInputSliceFields ex586470_ ex586471_) (offset : Z)
 (*(0 <=? offset) && ((0 <=? 20) && ((offset + 20) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555533_) && ((0 <=? ex555534_) && ((ex555533_ + ex555534_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586470_) && ((0 <=? ex586471_) && ((ex586470_ + ex586471_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    (ssz_addr (bytes) (offset)) >>= fun value => returnM ((htr_addr (value))).
 
-Definition htr_ssz_bytevector {ex555548_ : Z} {ex555547_ : Z}
-(bytes : StatelessInputSliceFields ex555547_ ex555548_) (offset : Z) (len : Z)
+Definition htr_ssz_bytevector {ex586485_ : Z} {ex586484_ : Z}
+(bytes : StatelessInputSliceFields ex586484_ ex586485_) (offset : Z) (len : Z)
 (*(0 <=? offset) && ((0 <=? len) && ((offset + len) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? ex555547_) && ((0 <=? ex555548_) && ((ex555547_ + ex555548_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586484_) && ((0 <=? ex586485_) && ((ex586484_ + ex586485_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
-   (if Z.leb ((Z.add (offset) (len))) ex555548_ return M (vec (mword 8) 32) then
+   (if Z.leb ((Z.add (offset) (len))) ex586485_ return M (vec (mword 8) 32) then
       let field' := stateless_input_sub_slice (bytes) (offset) (len) in
       (htr_bytevector (field'))
        : M (vec (mword 8) 32)
     else (fatal_error (InvalidConfig))  : M (vec (mword 8) 32))
     : M (vec (mword 8) 32).
 
-Definition htr_bytelist {ex555559_ : Z} {ex555558_ : Z}
-(bytes : StatelessInputSliceFields ex555558_ ex555559_) (limit_bytes : Z)
+Definition htr_bytelist {ex586496_ : Z} {ex586495_ : Z}
+(bytes : StatelessInputSliceFields ex586495_ ex586496_) (limit_bytes : Z)
 (*(0 <=? limit_bytes) && (limit_bytes <=? (2 ^ 32 - 1))*)
-(*(0 <=? ex555558_) && ((0 <=? ex555559_) && ((ex555558_ + ex555559_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586495_) && ((0 <=? ex586496_) && ((ex586495_ + ex586496_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    ((htr_chunk_count (limit_bytes)) >>= fun semanticResult =>
     returnM (semanticResult).(htr_leaf_count_value)) >>= fun capacity =>
    ((clog2 (Build_htr_leaf_count ((capacity)))) >>= fun semanticResult =>
     returnM (semanticResult).(htr_depth_value)) >>= fun depth =>
    (htr_bytes_root (bytes) (Build_htr_depth ((depth)))) >>= fun root =>
-   (mix_in_length (root) ex555559_)
+   (mix_in_length (root) ex586496_)
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal {ex555565_ : Z} (withdrawal : StatelessInputSliceFields ex555565_ 44)
-(ex555566_ := 44)
-(*(0 <=? ex555565_) && ((0 <=? ex555566_) && ((ex555565_ + ex555566_) <=? (2 ^ 32 - 1))) &&
-  (ex555566_ =? 44)*)
+Definition htr_progressive_bytelist {ex586502_ : Z} {ex586501_ : Z}
+(bytes : StatelessInputSliceFields ex586501_ ex586502_)
+(*(0 <=? ex586501_) && ((0 <=? ex586502_) && ((ex586501_ + ex586502_) <=? (2 ^ 32 - 1)))*)
+: M (hash) :=
+   ((htr_chunk_count (bytes.(StatelessInputSliceFields_len))) >>= fun semanticResult =>
+    returnM (semanticResult).(htr_leaf_count_value)) >>= fun count =>
+   (htr_bytes_progressive_subtree (bytes) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
+   (mix_in_length (root) (bytes.(StatelessInputSliceFields_len)))
+    : M (vec (mword 8) 32).
+
+Definition htr_withdrawal {ex586506_ : Z} (withdrawal : StatelessInputSliceFields ex586506_ 44)
+(ex586507_ := 44)
+(*(0 <=? ex586506_) && ((0 <=? ex586507_) && ((ex586506_ + ex586507_) <=? (2 ^ 32 - 1))) &&
+  (ex586507_ =? 44)*)
 : M (hash) :=
    (htr_ssz_uint (withdrawal) (WD_INDEX)) >>= fun index_root =>
    (htr_ssz_uint (withdrawal) (WD_VALIDATOR_INDEX)) >>= fun validator_root =>
@@ -23677,7 +24482,7 @@ exact (
     else if Z.eqb (depth) (0) return M (vec (mword 8) 32) then
       (if Z.eqb (count) (1) return M (vec (mword 8) 32) then
          (ssz_list_at (transactions) (start)) >>= fun '(@existT _ _ __transaction1 (@existT _ _ __transaction0 transaction)) =>
-         (htr_bytelist (transaction) (HTR_BYTE_LIST_LIMIT))
+         (htr_progressive_bytelist (transaction))
           : M (vec (mword 8) 32)
        else (fatal_error (WitnessDeficient))  : M (vec (mword 8) 32))
        : M (vec (mword 8) 32)
@@ -23709,15 +24514,62 @@ Definition htr_transactions_subtree
       (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
     : M (vec (mword 8) 32).
 
+Fixpoint _rec_htr_transactions_progressive
+(transactions : BoundedSszListRef (2 ^ 20)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(_reclimit : Z) (*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*)
+(*(0 <=? depth) && (depth <=? 25)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (hash).
+exact (
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (count) (0) then returnM (ZERO_HASH)
+    else
+      let capacity := (htr_leaf_capacity (Build_htr_depth ((depth)))).(htr_leaf_count_value) in
+      let take : Z := if Z.ltb (count) (capacity) then count else capacity in
+      let remaining : Z := if Z.ltb (count) (capacity) then 0 else Z.sub (count) (capacity) in
+      ((htr_progressive_next_depth (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((depth)))) >>= fun semanticResult =>
+       returnM (semanticResult).(htr_depth_value)) >>= fun next_depth =>
+      (htr_transactions_subtree (transactions) (start) (Build_htr_leaf_count ((take)))
+         (Build_htr_depth ((depth)))) >>= fun left_root =>
+      (_rec_htr_transactions_progressive (transactions) ((Z.add (start) (take)))
+         (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((next_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
+      (sha256_pair (left_root) (right_root))
+       : M (vec (mword 8) 32))
+    : M (vec (mword 8) 32)
+).
+Defined.
+
+
+Definition htr_transactions_progressive
+(transactions : BoundedSszListRef (2 ^ 20)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (_rec_htr_transactions_progressive (transactions) (start) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((depth))) ((count  : Z)) (Zwf_guarded _))
+    : M (vec (mword 8) 32).
+
 Definition htr_transactions (transactions : BoundedSszListRef (2 ^ 20)) : M (hash) :=
    let count : Z := transactions.(BoundedSszListRef_count) in
-   (htr_transactions_subtree (transactions) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((20)))) >>= fun root =>
+   (htr_transactions_progressive (transactions) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (transactions.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
+Definition undefined_HtrRequestKind '(tt : unit) : M (HtrRequestKind) :=
+   (internal_pick
+      ([HtrDeposit;
+      HtrWithdrawalRequest;
+      HtrConsolidationRequest;
+      HtrBuilderDepositRequest;
+      HtrBuilderExitRequest]))
+    : M (HtrRequestKind).
+
 Fixpoint _rec_htr_withdrawals_subtree
-(withdrawals : BoundedSszListRef (2 ^ 4)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(withdrawals : BoundedSszListRef (2 ^ 20)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
 (_reclimit : Z) (*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*)
 (*(0 <=? depth) && (depth <=? 25)*) (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (hash).
@@ -23754,7 +24606,7 @@ Defined.
 
 
 Definition htr_withdrawals_subtree
-(withdrawals : BoundedSszListRef (2 ^ 4)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(withdrawals : BoundedSszListRef (2 ^ 20)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
 (*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
    let count := (count).(htr_leaf_count_value) in
@@ -23763,107 +24615,46 @@ Definition htr_withdrawals_subtree
       (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawals (withdrawals : BoundedSszListRef (2 ^ 4)) : M (hash) :=
-   let count : Z := withdrawals.(BoundedSszListRef_count) in
-   (htr_withdrawals_subtree (withdrawals) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((4)))) >>= fun root =>
-   (mix_in_length (root) (withdrawals.(BoundedSszListRef_count)))
-    : M (vec (mword 8) 32).
-
-Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
-   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
-     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
-   (htr_ssz_bytes32 (payload) (0)) >>= fun parent_hash_root =>
-   (htr_ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun fee_recipient_root =>
-   (htr_ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun state_root =>
-   (htr_ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun receipts_root =>
-   (htr_ssz_bytevector (payload) (PL_LOGS_BLOOM) (LOGS_BLOOM_BYTE_LENGTH)) >>= fun logs_bloom_root =>
-   (htr_ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun prev_randao_root =>
-   (htr_ssz_uint (payload) (PL_BLOCK_NUMBER)) >>= fun block_number_root =>
-   (htr_ssz_uint (payload) (PL_GAS_LIMIT)) >>= fun gas_limit_root =>
-   (htr_ssz_uint (payload) (PL_GAS_USED)) >>= fun gas_used_root =>
-   (htr_ssz_uint (payload) (PL_TIMESTAMP)) >>= fun timestamp_root =>
-   (htr_bytelist (projT2 (projT2 (input_ref.(StatelessInputRef_extra_data)))) (WORD_BYTE_LENGTH)) >>= fun extra_data_root =>
-   (htr_ssz_u256 (payload) (PL_BASE_FEE)) >>= fun base_fee_root =>
-   (htr_ssz_bytes32 (payload) (PL_BLOCK_HASH)) >>= fun block_hash_root =>
-   (htr_transactions (input_ref.(StatelessInputRef_transactions))) >>= fun transactions_root =>
-   (htr_withdrawals (input_ref.(StatelessInputRef_withdrawals))) >>= fun withdrawals_root =>
-   (htr_ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun blob_gas_used_root =>
-   (htr_ssz_uint (payload) (PL_EXCESS_BLOB_GAS)) >>= fun excess_blob_gas_root =>
-   (htr_bytelist (projT2 (projT2 (input_ref.(StatelessInputRef_block_access_list))))
-      (HTR_BYTE_LIST_LIMIT)) >>= fun block_access_list_root =>
-   (htr_ssz_uint (payload) (PL_SLOT_NUMBER)) >>= fun slot_number_root =>
-   (merkleize
-      ((vec_of_list_len [parent_hash_root;fee_recipient_root;state_root;receipts_root;
-                         logs_bloom_root;prev_randao_root;block_number_root;gas_limit_root;
-                         gas_used_root;timestamp_root;extra_data_root;base_fee_root;block_hash_root;
-                         transactions_root;withdrawals_root;blob_gas_used_root;excess_blob_gas_root;
-                         block_access_list_root;slot_number_root])) (Build_htr_depth ((5))))
-    : M (vec (mword 8) 32).
-
-Fixpoint _rec_htr_versioned_hashes_subtree {ex555582_ : Z} {ex555581_ : Z}
-(versioned_hashes : StatelessInputSliceFields ex555581_ ex555582_) (start : Z)
-(count : htr_leaf_count) (depth : htr_depth) (_reclimit : Z) (*0 <=? start*)
-(*(0 <=? ex555581_) && ((0 <=? ex555582_) && ((ex555581_ + ex555582_) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
-(_acc : Acc (Zwf 0) _reclimit)
-{struct _acc} : M (hash).
-exact (
-   let count := (count).(htr_leaf_count_value) in
-   let depth := (depth).(htr_depth_value) in
-   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
-   (if Z.eqb (count) (0) then returnM ((ssz_zero_hash (Build_htr_depth ((depth)))))
-    else if Z.eqb (depth) (0) return M (vec (mword 8) 32) then
-      (if Z.eqb (count) (1) return M (vec (mword 8) 32) then
-         (htr_chunk (versioned_hashes) (start))
-          : M (vec (mword 8) 32)
-       else (fatal_error (WitnessDeficient))  : M (vec (mword 8) 32))
-       : M (vec (mword 8) 32)
-    else
-      let child_depth : Z := Z.sub (depth) (1) in
-      let half := (htr_leaf_capacity (Build_htr_depth ((child_depth)))).(htr_leaf_count_value) in
-      let left_count : Z := if Z.ltb (count) (half) then count else half in
-      let right_count : Z := if Z.ltb (count) (half) then 0 else Z.sub (count) (half) in
-      (_rec_htr_versioned_hashes_subtree _ _ (versioned_hashes) (start)
-         (Build_htr_leaf_count ((left_count))) (Build_htr_depth ((child_depth)))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun left_root =>
-      (_rec_htr_versioned_hashes_subtree _ _ (versioned_hashes) ((Z.add (start) (half)))
-         (Build_htr_leaf_count ((right_count))) (Build_htr_depth ((child_depth)))
-         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
-      (sha256_pair (left_root) (right_root))
-       : M (vec (mword 8) 32))
-    : M (vec (mword 8) 32)
-).
-Defined.
-
-
-Definition htr_versioned_hashes_subtree {ex555589_ : Z} {ex555588_ : Z}
-(versioned_hashes : StatelessInputSliceFields ex555588_ ex555589_) (start : Z)
-(count : htr_leaf_count) (depth : htr_depth) (*0 <=? start*)
-(*(0 <=? ex555588_) && ((0 <=? ex555589_) && ((ex555588_ + ex555589_) <=? (2 ^ 32 - 1)))*)
-(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+Definition htr_builder_deposit_request {ex586533_ : Z}
+(request : StatelessInputSliceFields ex586533_ 184) (ex586534_ := 184)
+(*(0 <=? ex586533_) && ((0 <=? ex586534_) && ((ex586533_ + ex586534_) <=? (2 ^ 32 - 1))) &&
+  (ex586534_ =? 184)*)
 : M (hash) :=
-   let count := (count).(htr_leaf_count_value) in
-   let depth := (depth).(htr_depth_value) in
-   (_rec_htr_versioned_hashes_subtree (versioned_hashes) (start) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
+   (htr_ssz_bytevector (request) (HTR_BUILDER_DEPOSIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun pubkey =>
+   (htr_ssz_bytes32 (request) (HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun withdrawal_credentials =>
+   (htr_ssz_uint (request) (HTR_BUILDER_DEPOSIT_AMOUNT)) >>= fun amount =>
+   (htr_ssz_bytevector (request) (HTR_BUILDER_DEPOSIT_SIGNATURE) (HTR_DEPOSIT_SIGNATURE_LENGTH)) >>= fun signature =>
+   (merkleize ((vec_of_list_len [pubkey;withdrawal_credentials;amount;signature]))
+      (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition htr_versioned_hashes {ex555596_ : Z} {ex555595_ : Z}
-(versioned_hashes : StatelessInputSliceFields ex555595_ ex555596_)
-(*(0 <=? ex555595_) && ((0 <=? ex555596_) && ((ex555595_ + ex555596_) <=? (2 ^ 32 - 1)))*)
+Definition htr_builder_exit_request {ex586538_ : Z}
+(request : StatelessInputSliceFields ex586538_ 68) (ex586539_ := 68)
+(*(0 <=? ex586538_) && ((0 <=? ex586539_) && ((ex586538_ + ex586539_) <=? (2 ^ 32 - 1))) &&
+  (ex586539_ =? 68)*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (versioned_hashes) (WORD_BYTE_LENGTH) ((pow2 (12)))) >>= fun items =>
-   let count : Z := items.(BoundedSszListRef_count) in
-   (htr_versioned_hashes_subtree (versioned_hashes) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((12)))) >>= fun root =>
-   (mix_in_length (root) (items.(BoundedSszListRef_count)))
+   (htr_ssz_addr (request) (HTR_BUILDER_EXIT_SOURCE_ADDRESS)) >>= fun source_address =>
+   (htr_ssz_bytevector (request) (HTR_BUILDER_EXIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun pubkey =>
+   (merkleize ((vec_of_list_len [source_address;pubkey])) (Build_htr_depth ((1))))
     : M (vec (mword 8) 32).
 
-Definition htr_deposit {ex555600_ : Z} (deposit : StatelessInputSliceFields ex555600_ 192)
-(ex555601_ := 192)
-(*(0 <=? ex555600_) && ((0 <=? ex555601_) && ((ex555600_ + ex555601_) <=? (2 ^ 32 - 1))) &&
-  (ex555601_ =? 192)*)
+Definition htr_consolidation_request {ex586543_ : Z}
+(request : StatelessInputSliceFields ex586543_ 116) (ex586544_ := 116)
+(*(0 <=? ex586543_) && ((0 <=? ex586544_) && ((ex586543_ + ex586544_) <=? (2 ^ 32 - 1))) &&
+  (ex586544_ =? 116)*)
+: M (hash) :=
+   (htr_ssz_addr (request) (HTR_REQUEST_SOURCE_ADDRESS)) >>= fun source_address =>
+   (htr_ssz_bytevector (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun source_pubkey =>
+   (htr_ssz_bytevector (request) (HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY)
+      (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun target_pubkey =>
+   (merkleize ((vec_of_list_len [source_address;source_pubkey;target_pubkey]))
+      (Build_htr_depth ((2))))
+    : M (vec (mword 8) 32).
+
+Definition htr_deposit {ex586548_ : Z} (deposit : StatelessInputSliceFields ex586548_ 192)
+(ex586549_ := 192)
+(*(0 <=? ex586548_) && ((0 <=? ex586549_) && ((ex586548_ + ex586549_) <=? (2 ^ 32 - 1))) &&
+  (ex586549_ =? 192)*)
 : M (hash) :=
    (htr_ssz_bytevector (deposit) (HTR_DEPOSIT_PUBKEY) (HTR_DEPOSIT_PUBKEY_LENGTH)) >>= fun pubkey =>
    (htr_ssz_bytes32 (deposit) (HTR_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun withdrawal_credentials =>
@@ -23874,10 +24665,10 @@ Definition htr_deposit {ex555600_ : Z} (deposit : StatelessInputSliceFields ex55
       (Build_htr_depth ((3))))
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal_request {ex555605_ : Z} (request : StatelessInputSliceFields ex555605_ 76)
-(ex555606_ := 76)
-(*(0 <=? ex555605_) && ((0 <=? ex555606_) && ((ex555605_ + ex555606_) <=? (2 ^ 32 - 1))) &&
-  (ex555606_ =? 76)*)
+Definition htr_withdrawal_request {ex586553_ : Z} (request : StatelessInputSliceFields ex586553_ 76)
+(ex586554_ := 76)
+(*(0 <=? ex586553_) && ((0 <=? ex586554_) && ((ex586553_ + ex586554_) <=? (2 ^ 32 - 1))) &&
+  (ex586554_ =? 76)*)
 : M (hash) :=
    (htr_ssz_addr (request) (HTR_REQUEST_SOURCE_ADDRESS)) >>= fun source_address =>
    (htr_ssz_bytevector (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun source_pubkey =>
@@ -23885,60 +24676,15 @@ Definition htr_withdrawal_request {ex555605_ : Z} (request : StatelessInputSlice
    (merkleize ((vec_of_list_len [source_address;source_pubkey;amount])) (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition htr_consolidation_request {ex555610_ : Z}
-(request : StatelessInputSliceFields ex555610_ 116) (ex555611_ := 116)
-(*(0 <=? ex555610_) && ((0 <=? ex555611_) && ((ex555610_ + ex555611_) <=? (2 ^ 32 - 1))) &&
-  (ex555611_ =? 116)*)
-: M (hash) :=
-   (htr_ssz_addr (request) (HTR_REQUEST_SOURCE_ADDRESS)) >>= fun source_address =>
-   (htr_ssz_bytevector (request) (HTR_REQUEST_SOURCE_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun source_pubkey =>
-   (htr_ssz_bytevector (request) (HTR_CONSOLIDATION_REQUEST_TARGET_PUBKEY)
-      (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun target_pubkey =>
-   (merkleize ((vec_of_list_len [source_address;source_pubkey;target_pubkey]))
-      (Build_htr_depth ((2))))
-    : M (vec (mword 8) 32).
-
-Definition htr_builder_deposit_request {ex555615_ : Z}
-(request : StatelessInputSliceFields ex555615_ 184) (ex555616_ := 184)
-(*(0 <=? ex555615_) && ((0 <=? ex555616_) && ((ex555615_ + ex555616_) <=? (2 ^ 32 - 1))) &&
-  (ex555616_ =? 184)*)
-: M (hash) :=
-   (htr_ssz_bytevector (request) (HTR_BUILDER_DEPOSIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun pubkey =>
-   (htr_ssz_bytes32 (request) (HTR_BUILDER_DEPOSIT_WITHDRAWAL_CREDENTIALS)) >>= fun withdrawal_credentials =>
-   (htr_ssz_uint (request) (HTR_BUILDER_DEPOSIT_AMOUNT)) >>= fun amount =>
-   (htr_ssz_bytevector (request) (HTR_BUILDER_DEPOSIT_SIGNATURE) (HTR_DEPOSIT_SIGNATURE_LENGTH)) >>= fun signature =>
-   (merkleize ((vec_of_list_len [pubkey;withdrawal_credentials;amount;signature]))
-      (Build_htr_depth ((2))))
-    : M (vec (mword 8) 32).
-
-Definition htr_builder_exit_request {ex555620_ : Z}
-(request : StatelessInputSliceFields ex555620_ 68) (ex555621_ := 68)
-(*(0 <=? ex555620_) && ((0 <=? ex555621_) && ((ex555620_ + ex555621_) <=? (2 ^ 32 - 1))) &&
-  (ex555621_ =? 68)*)
-: M (hash) :=
-   (htr_ssz_addr (request) (HTR_BUILDER_EXIT_SOURCE_ADDRESS)) >>= fun source_address =>
-   (htr_ssz_bytevector (request) (HTR_BUILDER_EXIT_PUBKEY) (HTR_REQUEST_PUBKEY_LENGTH)) >>= fun pubkey =>
-   (merkleize ((vec_of_list_len [source_address;pubkey])) (Build_htr_depth ((1))))
-    : M (vec (mword 8) 32).
-
-Definition undefined_HtrRequestKind '(tt : unit) : M (HtrRequestKind) :=
-   (internal_pick
-      ([HtrDeposit;
-      HtrWithdrawalRequest;
-      HtrConsolidationRequest;
-      HtrBuilderDepositRequest;
-      HtrBuilderExitRequest]))
-    : M (HtrRequestKind).
-
-Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
-(requests : StatelessInputSliceFields ex555624_ ex555625_) (index : Z) (kind : HtrRequestKind)
+Definition htr_request_leaf {ex586558_ : Z} {ex586557_ : Z}
+(requests : StatelessInputSliceFields ex586557_ ex586558_) (index : Z) (kind : HtrRequestKind)
 (*0 <=? index*)
-(*(0 <=? ex555624_) && ((0 <=? ex555625_) && ((ex555624_ + ex555625_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586557_) && ((0 <=? ex586558_) && ((ex586557_ + ex586558_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
    match kind with
    | HtrDeposit =>
       let offset := Z.mul (index) (HTR_DEPOSIT_LENGTH) in
-      (if Z.leb ((Z.add (offset) (HTR_DEPOSIT_LENGTH))) ex555625_ return M (vec (mword 8) 32) then
+      (if Z.leb ((Z.add (offset) (HTR_DEPOSIT_LENGTH))) ex586558_ return M (vec (mword 8) 32) then
          let deposit := stateless_input_sub_slice (requests) (offset) (HTR_DEPOSIT_LENGTH) in
          (htr_deposit (deposit))
           : M (vec (mword 8) 32)
@@ -23946,7 +24692,7 @@ Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
        : M (vec (mword 8) 32)
    | HtrWithdrawalRequest =>
       let offset := Z.mul (index) (HTR_WITHDRAWAL_REQUEST_LENGTH) in
-      (if Z.leb ((Z.add (offset) (HTR_WITHDRAWAL_REQUEST_LENGTH))) ex555625_
+      (if Z.leb ((Z.add (offset) (HTR_WITHDRAWAL_REQUEST_LENGTH))) ex586558_
          return
          M (vec (mword 8) 32) then
          let request :=
@@ -23957,7 +24703,7 @@ Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
        : M (vec (mword 8) 32)
    | HtrConsolidationRequest =>
       let offset := Z.mul (index) (HTR_CONSOLIDATION_REQUEST_LENGTH) in
-      (if Z.leb ((Z.add (offset) (HTR_CONSOLIDATION_REQUEST_LENGTH))) ex555625_
+      (if Z.leb ((Z.add (offset) (HTR_CONSOLIDATION_REQUEST_LENGTH))) ex586558_
          return
          M (vec (mword 8) 32) then
          let request :=
@@ -23968,7 +24714,7 @@ Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
        : M (vec (mword 8) 32)
    | HtrBuilderDepositRequest =>
       let offset := Z.mul (index) (HTR_BUILDER_DEPOSIT_LENGTH) in
-      (if Z.leb ((Z.add (offset) (HTR_BUILDER_DEPOSIT_LENGTH))) ex555625_
+      (if Z.leb ((Z.add (offset) (HTR_BUILDER_DEPOSIT_LENGTH))) ex586558_
          return
          M (vec (mword 8) 32) then
          let request := stateless_input_sub_slice (requests) (offset) (HTR_BUILDER_DEPOSIT_LENGTH) in
@@ -23978,7 +24724,7 @@ Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
        : M (vec (mword 8) 32)
    | HtrBuilderExitRequest =>
       let offset := Z.mul (index) (HTR_BUILDER_EXIT_LENGTH) in
-      (if Z.leb ((Z.add (offset) (HTR_BUILDER_EXIT_LENGTH))) ex555625_
+      (if Z.leb ((Z.add (offset) (HTR_BUILDER_EXIT_LENGTH))) ex586558_
          return
          M (vec (mword 8) 32) then
          let request := stateless_input_sub_slice (requests) (offset) (HTR_BUILDER_EXIT_LENGTH) in
@@ -23989,10 +24735,10 @@ Definition htr_request_leaf {ex555625_ : Z} {ex555624_ : Z}
    end
     : M (vec (mword 8) 32).
 
-Fixpoint _rec_htr_requests_subtree {ex555629_ : Z} {ex555628_ : Z}
-(requests : StatelessInputSliceFields ex555628_ ex555629_) (kind : HtrRequestKind) (start : Z)
+Fixpoint _rec_htr_requests_subtree {ex586562_ : Z} {ex586561_ : Z}
+(requests : StatelessInputSliceFields ex586561_ ex586562_) (kind : HtrRequestKind) (start : Z)
 (count : htr_leaf_count) (depth : htr_depth) (_reclimit : Z) (*0 <=? start*)
-(*(0 <=? ex555628_) && ((0 <=? ex555629_) && ((ex555628_ + ex555629_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586561_) && ((0 <=? ex586562_) && ((ex586561_ + ex586562_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 (_acc : Acc (Zwf 0) _reclimit)
 {struct _acc} : M (hash).
@@ -24025,10 +24771,10 @@ exact (
 Defined.
 
 
-Definition htr_requests_subtree {ex555636_ : Z} {ex555635_ : Z}
-(requests : StatelessInputSliceFields ex555635_ ex555636_) (kind : HtrRequestKind) (start : Z)
+Definition htr_requests_subtree {ex586569_ : Z} {ex586568_ : Z}
+(requests : StatelessInputSliceFields ex586568_ ex586569_) (kind : HtrRequestKind) (start : Z)
 (count : htr_leaf_count) (depth : htr_depth) (*0 <=? start*)
-(*(0 <=? ex555635_) && ((0 <=? ex555636_) && ((ex555635_ + ex555636_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? ex586568_) && ((0 <=? ex586569_) && ((ex586568_ + ex586569_) <=? (2 ^ 32 - 1)))*)
 (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
    let count := (count).(htr_leaf_count_value) in
@@ -24037,58 +24783,243 @@ Definition htr_requests_subtree {ex555636_ : Z} {ex555635_ : Z}
       (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
     : M (vec (mword 8) 32).
 
-Definition htr_deposits {ex555643_ : Z} {ex555642_ : Z}
-(deposits : StatelessInputSliceFields ex555642_ ex555643_)
-(*(0 <=? ex555642_) && ((0 <=? ex555643_) && ((ex555642_ + ex555643_) <=? (2 ^ 32 - 1)))*)
+Fixpoint _rec_htr_versioned_hashes_subtree {ex586576_ : Z} {ex586575_ : Z}
+(versioned_hashes : StatelessInputSliceFields ex586575_ ex586576_) (start : Z)
+(count : htr_leaf_count) (depth : htr_depth) (_reclimit : Z) (*0 <=? start*)
+(*(0 <=? ex586575_) && ((0 <=? ex586576_) && ((ex586575_ + ex586576_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+(_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (hash).
+exact (
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (count) (0) then returnM ((ssz_zero_hash (Build_htr_depth ((depth)))))
+    else if Z.eqb (depth) (0) return M (vec (mword 8) 32) then
+      (if Z.eqb (count) (1) return M (vec (mword 8) 32) then
+         (htr_chunk (versioned_hashes) (start))
+          : M (vec (mword 8) 32)
+       else (fatal_error (WitnessDeficient))  : M (vec (mword 8) 32))
+       : M (vec (mword 8) 32)
+    else
+      let child_depth : Z := Z.sub (depth) (1) in
+      let half := (htr_leaf_capacity (Build_htr_depth ((child_depth)))).(htr_leaf_count_value) in
+      let left_count : Z := if Z.ltb (count) (half) then count else half in
+      let right_count : Z := if Z.ltb (count) (half) then 0 else Z.sub (count) (half) in
+      (_rec_htr_versioned_hashes_subtree _ _ (versioned_hashes) (start)
+         (Build_htr_leaf_count ((left_count))) (Build_htr_depth ((child_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun left_root =>
+      (_rec_htr_versioned_hashes_subtree _ _ (versioned_hashes) ((Z.add (start) (half)))
+         (Build_htr_leaf_count ((right_count))) (Build_htr_depth ((child_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
+      (sha256_pair (left_root) (right_root))
+       : M (vec (mword 8) 32))
+    : M (vec (mword 8) 32)
+).
+Defined.
+
+
+Definition htr_versioned_hashes_subtree {ex586583_ : Z} {ex586582_ : Z}
+(versioned_hashes : StatelessInputSliceFields ex586582_ ex586583_) (start : Z)
+(count : htr_leaf_count) (depth : htr_depth) (*0 <=? start*)
+(*(0 <=? ex586582_) && ((0 <=? ex586583_) && ((ex586582_ + ex586583_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (deposits) (HTR_DEPOSIT_LENGTH) ((pow2 (13)))) >>= fun items =>
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (_rec_htr_versioned_hashes_subtree (versioned_hashes) (start) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((depth))) ((depth  : Z)) (Zwf_guarded _))
+    : M (vec (mword 8) 32).
+
+Fixpoint _rec_htr_progressive_source
+(source : HtrProgressiveSource) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(_reclimit : Z) (*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*)
+(*(0 <=? depth) && (depth <=? 25)*) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M (hash).
+exact (
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (count) (0) then returnM (ZERO_HASH)
+    else
+      let capacity := (htr_leaf_capacity (Build_htr_depth ((depth)))).(htr_leaf_count_value) in
+      let take : Z := if Z.ltb (count) (capacity) then count else capacity in
+      let remaining : Z := if Z.ltb (count) (capacity) then 0 else Z.sub (count) (capacity) in
+      ((htr_progressive_next_depth (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((depth)))) >>= fun semanticResult =>
+       returnM (semanticResult).(htr_depth_value)) >>= fun next_depth =>
+      match source with
+      | HtrWithdrawalLeaves withdrawals =>
+         (htr_withdrawals_subtree (withdrawals) (start) (Build_htr_leaf_count ((take)))
+            (Build_htr_depth ((depth))))
+          : M (vec (mword 8) 32)
+      | HtrVersionedHashLeaves (@existT _ _ len (@existT _ _ off hashes)) =>
+         (htr_versioned_hashes_subtree (hashes) (start) (Build_htr_leaf_count ((take)))
+            (Build_htr_depth ((depth))))
+          : M (vec (mword 8) 32)
+      | HtrRequestLeaves (@existT _ _ len (@existT _ _ off requests), kind) =>
+         (htr_requests_subtree (requests) (kind) (start) (Build_htr_leaf_count ((take)))
+            (Build_htr_depth ((depth))))
+          : M (vec (mword 8) 32)
+      end >>= fun (left_root : vec (mword 8) 32) =>
+      (_rec_htr_progressive_source (source) ((Z.add (start) (take)))
+         (Build_htr_leaf_count ((remaining))) (Build_htr_depth ((next_depth)))
+         ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption))) >>= fun right_root =>
+      (sha256_pair (left_root) (right_root))
+       : M (vec (mword 8) 32))
+    : M (vec (mword 8) 32)
+).
+Defined.
+
+
+Definition htr_progressive_source
+(source : HtrProgressiveSource) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (_rec_htr_progressive_source (source) (start) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((depth))) ((count  : Z)) (Zwf_guarded _))
+    : M (vec (mword 8) 32).
+
+Definition htr_withdrawals_progressive
+(withdrawals : BoundedSszListRef (2 ^ 20)) (start : Z) (count : htr_leaf_count) (depth : htr_depth)
+(*0 <=? start*) (*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (htr_progressive_source ((HtrWithdrawalLeaves (withdrawals))) (start)
+      (Build_htr_leaf_count ((count))) (Build_htr_depth ((depth))))
+    : M (vec (mword 8) 32).
+
+Definition htr_withdrawals (withdrawals : BoundedSszListRef (2 ^ 20)) : M (hash) :=
+   let count : Z := withdrawals.(BoundedSszListRef_count) in
+   (htr_withdrawals_progressive (withdrawals) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
+   (mix_in_length (root) (withdrawals.(BoundedSszListRef_count)))
+    : M (vec (mword 8) 32).
+
+Definition htr_execution_payload (input_ref : StatelessInputRef) : M (hash) :=
+   let '(@existT _ _ payload__'len (@existT _ _ payload__'off payload)) :=
+     (@existT _ _ _ (@existT _ _ _ (projT2 (projT2 (input_ref.(StatelessInputRef_execution_payload))))) : {len & {off & (StatelessInputSliceFields off len)}}%type) in
+   (htr_ssz_bytes32 (payload) (0)) >>= fun parent_hash_root =>
+   (htr_ssz_addr (payload) (PL_FEE_RECIPIENT)) >>= fun fee_recipient_root =>
+   (htr_ssz_bytes32 (payload) (PL_STATE_ROOT)) >>= fun state_root =>
+   (htr_ssz_bytes32 (payload) (PL_RECEIPTS_ROOT)) >>= fun receipts_root =>
+   (htr_ssz_bytevector (payload) (PL_LOGS_BLOOM) (LOGS_BLOOM_BYTE_LENGTH)) >>= fun logs_bloom_root =>
+   (htr_ssz_bytes32 (payload) (PL_PREV_RANDAO)) >>= fun prev_randao_root =>
+   (htr_ssz_uint (payload) (PL_BLOCK_NUMBER)) >>= fun block_number_root =>
+   (htr_ssz_uint (payload) (PL_GAS_LIMIT)) >>= fun gas_limit_root =>
+   (htr_ssz_uint (payload) (PL_GAS_USED)) >>= fun gas_used_root =>
+   (htr_ssz_uint (payload) (PL_TIMESTAMP)) >>= fun timestamp_root =>
+   (htr_bytelist (projT2 (projT2 (input_ref.(StatelessInputRef_extra_data)))) (WORD_BYTE_LENGTH)) >>= fun extra_data_root =>
+   (htr_ssz_u256 (payload) (PL_BASE_FEE)) >>= fun base_fee_root =>
+   (htr_ssz_bytes32 (payload) (PL_BLOCK_HASH)) >>= fun block_hash_root =>
+   (htr_transactions (input_ref.(StatelessInputRef_transactions))) >>= fun transactions_root =>
+   (htr_withdrawals (input_ref.(StatelessInputRef_withdrawals))) >>= fun withdrawals_root =>
+   (htr_ssz_uint (payload) (PL_BLOB_GAS_USED)) >>= fun blob_gas_used_root =>
+   (htr_ssz_uint (payload) (PL_EXCESS_BLOB_GAS)) >>= fun excess_blob_gas_root =>
+   (htr_progressive_bytelist (projT2 (projT2 (input_ref.(StatelessInputRef_block_access_list))))) >>= fun block_access_list_root =>
+   (htr_ssz_uint (payload) (PL_SLOT_NUMBER)) >>= fun slot_number_root =>
+   (merkleize_progressive
+      ((vec_of_list_len [parent_hash_root;fee_recipient_root;state_root;receipts_root;
+                         logs_bloom_root;prev_randao_root;block_number_root;gas_limit_root;
+                         gas_used_root;timestamp_root;extra_data_root;base_fee_root;block_hash_root;
+                         transactions_root;withdrawals_root;blob_gas_used_root;excess_blob_gas_root;
+                         block_access_list_root;slot_number_root]))) >>= fun fields_root =>
+   (mix_in_active_fields (fields_root) (HTR_PAYLOAD_ACTIVE_FIELDS))
+    : M (vec (mword 8) 32).
+
+Definition htr_versioned_hashes_progressive {ex586598_ : Z} {ex586597_ : Z}
+(versioned_hashes : StatelessInputSliceFields ex586597_ ex586598_) (start : Z)
+(count : htr_leaf_count) (depth : htr_depth) (*0 <=? start*)
+(*(0 <=? ex586597_) && ((0 <=? ex586598_) && ((ex586597_ + ex586598_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
+: M (hash) :=
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (htr_progressive_source
+      ((HtrVersionedHashLeaves
+          (@existT _ _ ex586598_ (@existT _ _ ex586597_ ((versioned_hashes : StatelessInputSliceFields ex586597_ ex586598_))))))
+      (start) (Build_htr_leaf_count ((count))) (Build_htr_depth ((depth))))
+    : M (vec (mword 8) 32).
+
+Definition htr_versioned_hashes {ex586604_ : Z} {ex586603_ : Z}
+(versioned_hashes : StatelessInputSliceFields ex586603_ ex586604_)
+(*(0 <=? ex586603_) && ((0 <=? ex586604_) && ((ex586603_ + ex586604_) <=? (2 ^ 32 - 1)))*)
+: M (hash) :=
+   (ssz_bounded_fixed_list_ref (versioned_hashes) (WORD_BYTE_LENGTH) ((pow2 (25)))) >>= fun items =>
    let count : Z := items.(BoundedSszListRef_count) in
-   (htr_requests_subtree (deposits) (HtrDeposit) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((13)))) >>= fun root =>
+   (htr_versioned_hashes_progressive (versioned_hashes) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (items.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
-Definition htr_withdrawal_requests {ex555647_ : Z} {ex555646_ : Z}
-(requests : StatelessInputSliceFields ex555646_ ex555647_)
-(*(0 <=? ex555646_) && ((0 <=? ex555647_) && ((ex555646_ + ex555647_) <=? (2 ^ 32 - 1)))*)
+Definition htr_requests_progressive {ex586608_ : Z} {ex586607_ : Z}
+(requests : StatelessInputSliceFields ex586607_ ex586608_) (kind : HtrRequestKind) (start : Z)
+(count : htr_leaf_count) (depth : htr_depth) (*0 <=? start*)
+(*(0 <=? ex586607_) && ((0 <=? ex586608_) && ((ex586607_ + ex586608_) <=? (2 ^ 32 - 1)))*)
+(*(0 <=? count) && (count <=? 33554432)*) (*(0 <=? depth) && (depth <=? 25)*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (requests) (HTR_WITHDRAWAL_REQUEST_LENGTH) ((pow2 (4)))) >>= fun items =>
+   let count := (count).(htr_leaf_count_value) in
+   let depth := (depth).(htr_depth_value) in
+   (htr_progressive_source
+      ((HtrRequestLeaves
+          ((@existT _ _ ex586608_ (@existT _ _ ex586607_ ((requests : StatelessInputSliceFields ex586607_ ex586608_))), kind))))
+      (start) (Build_htr_leaf_count ((count))) (Build_htr_depth ((depth))))
+    : M (vec (mword 8) 32).
+
+Definition htr_deposits {ex586614_ : Z} {ex586613_ : Z}
+(deposits : StatelessInputSliceFields ex586613_ ex586614_)
+(*(0 <=? ex586613_) && ((0 <=? ex586614_) && ((ex586613_ + ex586614_) <=? (2 ^ 32 - 1)))*)
+: M (hash) :=
+   (ssz_bounded_fixed_list_ref (deposits) (HTR_DEPOSIT_LENGTH) ((pow2 (25)))) >>= fun items =>
    let count : Z := items.(BoundedSszListRef_count) in
-   (htr_requests_subtree (requests) (HtrWithdrawalRequest) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((4)))) >>= fun root =>
+   (htr_requests_progressive (deposits) (HtrDeposit) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (items.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
-Definition htr_consolidation_requests {ex555651_ : Z} {ex555650_ : Z}
-(requests : StatelessInputSliceFields ex555650_ ex555651_)
-(*(0 <=? ex555650_) && ((0 <=? ex555651_) && ((ex555650_ + ex555651_) <=? (2 ^ 32 - 1)))*)
+Definition htr_withdrawal_requests {ex586618_ : Z} {ex586617_ : Z}
+(requests : StatelessInputSliceFields ex586617_ ex586618_)
+(*(0 <=? ex586617_) && ((0 <=? ex586618_) && ((ex586617_ + ex586618_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (requests) (HTR_CONSOLIDATION_REQUEST_LENGTH) ((pow2 (1)))) >>= fun items =>
+   (ssz_bounded_fixed_list_ref (requests) (HTR_WITHDRAWAL_REQUEST_LENGTH) ((pow2 (25)))) >>= fun items =>
    let count : Z := items.(BoundedSszListRef_count) in
-   (htr_requests_subtree (requests) (HtrConsolidationRequest) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((1)))) >>= fun root =>
+   (htr_requests_progressive (requests) (HtrWithdrawalRequest) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (items.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_deposit_requests {ex555655_ : Z} {ex555654_ : Z}
-(requests : StatelessInputSliceFields ex555654_ ex555655_)
-(*(0 <=? ex555654_) && ((0 <=? ex555655_) && ((ex555654_ + ex555655_) <=? (2 ^ 32 - 1)))*)
+Definition htr_consolidation_requests {ex586622_ : Z} {ex586621_ : Z}
+(requests : StatelessInputSliceFields ex586621_ ex586622_)
+(*(0 <=? ex586621_) && ((0 <=? ex586622_) && ((ex586621_ + ex586622_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_DEPOSIT_LENGTH) ((pow2 (6)))) >>= fun items =>
+   (ssz_bounded_fixed_list_ref (requests) (HTR_CONSOLIDATION_REQUEST_LENGTH) ((pow2 (25)))) >>= fun items =>
    let count : Z := items.(BoundedSszListRef_count) in
-   (htr_requests_subtree (requests) (HtrBuilderDepositRequest) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((6)))) >>= fun root =>
+   (htr_requests_progressive (requests) (HtrConsolidationRequest) (0)
+      (Build_htr_leaf_count ((count))) (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (items.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
-Definition htr_builder_exit_requests {ex555659_ : Z} {ex555658_ : Z}
-(requests : StatelessInputSliceFields ex555658_ ex555659_)
-(*(0 <=? ex555658_) && ((0 <=? ex555659_) && ((ex555658_ + ex555659_) <=? (2 ^ 32 - 1)))*)
+Definition htr_builder_deposit_requests {ex586626_ : Z} {ex586625_ : Z}
+(requests : StatelessInputSliceFields ex586625_ ex586626_)
+(*(0 <=? ex586625_) && ((0 <=? ex586626_) && ((ex586625_ + ex586626_) <=? (2 ^ 32 - 1)))*)
 : M (hash) :=
-   (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_EXIT_LENGTH) ((pow2 (4)))) >>= fun items =>
+   (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_DEPOSIT_LENGTH) ((pow2 (25)))) >>= fun items =>
    let count : Z := items.(BoundedSszListRef_count) in
-   (htr_requests_subtree (requests) (HtrBuilderExitRequest) (0) (Build_htr_leaf_count ((count)))
-      (Build_htr_depth ((4)))) >>= fun root =>
+   (htr_requests_progressive (requests) (HtrBuilderDepositRequest) (0)
+      (Build_htr_leaf_count ((count))) (Build_htr_depth ((0)))) >>= fun root =>
+   (mix_in_length (root) (items.(BoundedSszListRef_count)))
+    : M (vec (mword 8) 32).
+
+Definition htr_builder_exit_requests {ex586630_ : Z} {ex586629_ : Z}
+(requests : StatelessInputSliceFields ex586629_ ex586630_)
+(*(0 <=? ex586629_) && ((0 <=? ex586630_) && ((ex586629_ + ex586630_) <=? (2 ^ 32 - 1)))*)
+: M (hash) :=
+   (ssz_bounded_fixed_list_ref (requests) (HTR_BUILDER_EXIT_LENGTH) ((pow2 (25)))) >>= fun items =>
+   let count : Z := items.(BoundedSszListRef_count) in
+   (htr_requests_progressive (requests) (HtrBuilderExitRequest) (0) (Build_htr_leaf_count ((count)))
+      (Build_htr_depth ((0)))) >>= fun root =>
    (mix_in_length (root) (items.(BoundedSszListRef_count)))
     : M (vec (mword 8) 32).
 
@@ -24101,9 +25032,10 @@ Definition htr_execution_requests (input_ref : StatelessInputRef) : M (hash) :=
       (projT2 (projT2 (input_ref.(StatelessInputRef_builder_deposit_requests))))) >>= fun builder_deposit_requests =>
    (htr_builder_exit_requests
       (projT2 (projT2 (input_ref.(StatelessInputRef_builder_exit_requests))))) >>= fun builder_exit_requests =>
-   (merkleize
+   (merkleize_progressive
       ((vec_of_list_len [deposits;withdrawal_requests;consolidation_requests;
-                         builder_deposit_requests;builder_exit_requests])) (Build_htr_depth ((3))))
+                         builder_deposit_requests;builder_exit_requests]))) >>= fun fields_root =>
+   (mix_in_active_fields (fields_root) (HTR_REQUESTS_ACTIVE_FIELDS))
     : M (vec (mword 8) 32).
 
 Definition htr_new_payload_request (input_ref : StatelessInputRef) : M (hash) :=
@@ -24116,28 +25048,24 @@ Definition htr_new_payload_request (input_ref : StatelessInputRef) : M (hash) :=
       (Build_htr_depth ((2))))
     : M (vec (mword 8) 32).
 
-Definition RESULT_METADATA_LENGTH : Z := 5.
-#[export] Hint Unfold RESULT_METADATA_LENGTH : sail.
-Definition write_prefix (root : vec (mword 8) 32) (success : bool) : M (unit) :=
+Definition RESULT_LENGTH : Z := 43.
+#[export] Hint Unfold RESULT_LENGTH : sail.
+Definition commit_validation_result
+(root : vec (mword 8) 32) (success : bool) (chain_id : chain_identifier) (schema_id : mword 16)
+(*(0 <=? chain_id) && (chain_id <=? (2 ^ 64 - 1))*)
+: M (unit) :=
+   let chain_id := (chain_id).(chain_identifier_value) in
+   ((scratch_reserve (RESULT_LENGTH)) >>= fun semanticResult =>
+    returnM (semanticResult).(source_pointer_value)) >>= fun start =>
    (scratch_push_b256 (root) (WORD_BYTE_LENGTH)) >>
    let success_byte : mword 8 := if success then (Ox"01") else (Ox"00") in
    (scratch_push_byte (success_byte)) >>
-   (scratch_push_byte ((Ox"25"))) >>
-   (scratch_push_byte ((Ox"00"))) >>
-   (scratch_push_byte ((Ox"00"))) >> (scratch_push_byte ((Ox"00")))  : M (unit).
-
-Definition commit_validation_result {ex555665_ : Z} {ex555664_ : Z}
-(root : vec (mword 8) 32) (success : bool)
-(chain_config : StatelessInputSliceFields ex555664_ ex555665_)
-(*(0 <=? ex555664_) && ((0 <=? ex555665_) && ((ex555664_ + ex555665_) <=? (2 ^ 32 - 1)))*)
-: M (unit) :=
-   let fixed_length := Z.add (WORD_BYTE_LENGTH) (RESULT_METADATA_LENGTH) in
-   ((scratch_length_add (fixed_length) (chain_config.(StatelessInputSliceFields_len))) >>= fun semanticResult =>
-    returnM (semanticResult).(source_length_value)) >>= fun output_length =>
-   ((scratch_reserve (output_length)) >>= fun semanticResult =>
-    returnM (semanticResult).(source_pointer_value)) >>= fun start =>
-   (write_prefix (root) (success)) >>
-   (stateless_input_scratch_push_slice (chain_config)) >>
+   let identity := htr_uint (Build_ssz_uint ((chain_id))) in
+   let identity : vec (mword 8) 32 :=
+     vec_update_dec (identity) (8) ((subrange_vec_dec (schema_id) (7) (0))) in
+   let identity : vec (mword 8) 32 :=
+     vec_update_dec (identity) (9) ((subrange_vec_dec (schema_id) (15) (8))) in
+   (scratch_push_b256 (identity) (10)) >>
    (scratch_finish (Build_source_pointer ((start)))) >>= fun '(@existT _ _ __output1 (@existT _ _ __output0 output)) =>
    (public_output_write (@existT _ _ _ (@existT _ _ _ (output)))) >>= fun written =>
    (assert_exp written "public output write")
@@ -24146,32 +25074,12 @@ Definition commit_validation_result {ex555665_ : Z} {ex555664_ : Z}
 Definition write_validation_result (input_ref : StatelessInputRef) (success : bool) : M (unit) :=
    (htr_new_payload_request (input_ref)) >>= fun root =>
    (commit_validation_result (root) (success)
-      (projT2 (projT2 (input_ref.(StatelessInputRef_chain_config)))))
+      (Build_chain_identifier (((input_ref.(StatelessInputRef_chain_id)).(chain_identifier_value))))
+      (input_ref.(StatelessInputRef_schema_id)))
     : M (unit).
 
 Definition write_invalid_result '(tt : unit) : M (unit) :=
-   ((scratch_reserve (24)) >>= fun semanticResult => returnM (semanticResult).(source_pointer_value)) >>= fun start =>
-   let default_chain_config := ZERO_HASH in
-   let default_chain_config : vec (mword 8) 32 :=
-     vec_update_dec (default_chain_config) (8) ((Ox"0C")) in
-   let default_chain_config : vec (mword 8) 32 :=
-     vec_update_dec (default_chain_config) (12) ((Ox"04")) in
-   let default_chain_config : vec (mword 8) 32 :=
-     vec_update_dec (default_chain_config) (16) ((Ox"08")) in
-   let default_chain_config : vec (mword 8) 32 :=
-     vec_update_dec (default_chain_config) (20) ((Ox"08")) in
-   (scratch_push_b256 (default_chain_config) (24)) >>
-   (scratch_finish (Build_source_pointer ((start)))) >>= fun '(@existT _ _ __chain_config1 (@existT _ _ __chain_config0 chain_config)) =>
-   let fixed_length := Z.add (WORD_BYTE_LENGTH) (RESULT_METADATA_LENGTH) in
-   ((scratch_length_add (fixed_length) (chain_config.(ScratchSliceFields_len))) >>= fun semanticResult =>
-    returnM (semanticResult).(source_length_value)) >>= fun output_length =>
-   ((scratch_reserve (output_length)) >>= fun semanticResult =>
-    returnM (semanticResult).(source_pointer_value)) >>= fun output_start =>
-   (write_prefix (ZERO_HASH) (false)) >>
-   (scratch_scratch_push_slice (chain_config)) >>
-   (scratch_finish (Build_source_pointer ((output_start)))) >>= fun '(@existT _ _ __chain_config1 (@existT _ _ __chain_config0 output)) =>
-   (public_output_write (@existT _ _ _ (@existT _ _ _ (output)))) >>= fun written =>
-   (assert_exp written "public output write")
+   (commit_validation_result (ZERO_HASH) (false) (Build_chain_identifier ((0))) ((Ox"0000")))
     : M (unit).
 
 Definition fatal_error_set_input (_input_ref : StatelessInputRef) : M (unit) := returnM (tt).
@@ -24193,6 +25101,9 @@ Definition sail_model_init (_ : unit) : M (unit) :=
      scratch_arena
      (@existT _ _ 0 (@existT _ _ 0 ((EMPTY_SCRATCH_SLICE : ScratchSliceFields 0 0)))) >>
    write_reg k_parent_state_root (ZERO_HASH) >>
+   write_reg
+     k_historical_access_schema
+     (@existT _ _ 0 (@existT _ _ 0 ((EMPTY_STATELESS_INPUT_SLICE : StatelessInputSliceFields 0 0)))) >>
    write_reg k_n_headers (Build_ancestor_hash_count ((0))) >>
    write_reg k_chain_id (Build_chain_identifier ((1))) >>
    write_reg k_execution_profile DEFAULT_EXECUTION_PROFILE >>

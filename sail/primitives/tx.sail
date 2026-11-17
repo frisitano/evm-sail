@@ -98,11 +98,11 @@ type TransactionInputSlice = {
 /*! A collection count whose entries are encoded inside one transaction. */
 type transaction_item_count = range(0, transaction_length_bound)
 
-/*! EIP-7825 bounds a post-Prague transaction to 2^24 regular gas, while
-    Amsterdam's least expensive authorization costs 7,816 execution gas.
-    Successful transaction validity therefore proves that no executable
-    authorization list can contain more entries than this bound. */
-type prepared_authorization_count_bound : Int = div(eip7825_transaction_gas_limit, 7816)
+/*! Prepared entries retain the structural transaction-envelope count bound.
+    Prague predates the regular-gas cap, so Amsterdam's gas-derived bound
+    cannot constrain this shared semantic representation. Each fork's actual
+    intrinsic and transaction gas checks establish execution validity. */
+type prepared_authorization_count_bound : Int = transaction_length_bound
 /*! The number of authorization tuples admitted by one valid transaction. */
 type prepared_authorization_count = range(0, prepared_authorization_count_bound)
 
@@ -169,13 +169,52 @@ type transaction_calldata_floor_cost = range(0, 40 * transaction_length_bound + 
 /*! The greatest EIP-3860 initcode charge admitted by an SSZ transaction. */
 type transaction_initcode_cost = range(0, 2 * div(transaction_length_bound + 31, 32))
 
-/*! A decoded transaction. Covers the EIP-2718 typed envelopes 0–4:
+/*! Structural envelope data. It carries signature material but has no sender
+    and cannot be passed to transaction execution. */
+struct DecodedTransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
+    tx_type : TxType,
+    nonce : word,
+    chain_id : chain_identifier,
+    gas_limit : transaction_gas,
+    is_create : bool,
+    recipient : address,
+    value : word,
+    raw : StatelessInputSlice,
+    input_src : TransactionInputSlice,
+    access_list : AccessListRef,
+    max_fee : word,
+    max_blob_fee : word,
+    max_priority_fee : word,
+    authorizations : AuthorizationListRef,
+    blob_hashes : BlobHashesFields('blob_limit),
+    signing_hash : hash,
+    sig_v : word,
+    sig_r : word,
+    sig_s : word,
+}
+
+/*! A structural envelope retaining the admitted blob-count limit. */
+type DecodedTransaction = {
+    'blob_limit,
+    transaction_blob_limit_value('blob_limit).
+    DecodedTransactionFields('blob_limit)
+}
+
+/*! Packs structural data without creating an executable transaction. */
+function pack_decoded_transaction forall 'blob_limit, transaction_blob_limit_value('blob_limit). (tx :
+    DecodedTransactionFields('blob_limit)) -> (
+    DecodedTransaction
+) =
+    tx
+
+/*! A sender-recovered transaction. Covers the EIP-2718 typed envelopes 0–4:
     legacy, EIP-2930 (access list), EIP-1559 (fee market), EIP-4844
     (blob), and EIP-7702 (set code); the type-specific fields are
     validity-relevant per their EIP. */
 struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_limit) = {
   /* EIP-2718 envelope type (the discriminant) */
   tx_type : TxType,
+  /* the signer recovered from the signature before execution */
   sender : address, nonce : word,
   /* typed-envelope chain id; 0 for legacy txs */
   chain_id : chain_identifier,
@@ -198,9 +237,6 @@ struct TransactionFields('blob_limit : Int), transaction_blob_limit_value('blob_
   authorizations : AuthorizationListRef,
   /* source-backed EIP-4844 BLOBHASH operands */
   blob_hashes : BlobHashesFields('blob_limit),
-  /* witnessed sender public key (0x04 ++ X ++ Y span); NOT trusted -- its
-     derived address must equal the signer recovered at execution */
-  pubkey : StatelessInputSlice,
   /* keccak of the signing preimage (EIP-155 / EIP-2718 domain applied),
      computed structurally at decode */
   signing_hash : hash,

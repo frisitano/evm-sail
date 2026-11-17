@@ -30,6 +30,9 @@ static uint64_t block_header_content_size(const struct BlockHeader *header, uint
                                           uint8_t extra_first, uint64_t fork)
 {
   uint64_t len = (6 * 33) + 21 + 259 + 1 + 9;
+  if (fork < EVMSAIL_FORK_PARIS) {
+    len += rlp_quantity_size_u256(header->prev_randao) - 1;
+  }
   len += rlp_quantity_size_u64(header->number);
   len += rlp_quantity_size_u64(header->gas_limit);
   len += rlp_quantity_size_u64(header->gas_used);
@@ -74,7 +77,11 @@ bytes32 block_header_hash(struct BlockHeader header, bytes32 transactions_root,
     return zero_hash();
   }
   uint8_t prev_randao[32];
-  sail_word_to_be_bytes(prev_randao, header.prev_randao);
+  if (fork < EVMSAIL_FORK_PARIS) {
+    memset(prev_randao, 0, sizeof(prev_randao));
+  } else {
+    sail_word_to_be_bytes(prev_randao, header.prev_randao);
+  }
   uint8_t *cursor = rlp_write_list_prefix(preimage, content_len);
   cursor = write_rlp_fixed(cursor, bytes32_data(&header.parent_hash), 32);
   cursor = write_rlp_fixed(cursor, empty_ommer_hash, 32);
@@ -83,7 +90,8 @@ bytes32 block_header_hash(struct BlockHeader header, bytes32 transactions_root,
   cursor = write_rlp_fixed(cursor, bytes32_data(&transactions_root), 32);
   cursor = write_rlp_fixed(cursor, bytes32_data(&header.receipts_root), 32);
   cursor = write_rlp_fixed(cursor, logs_bloom_bytes, 256);
-  cursor = rlp_write_u64(cursor, 0);
+  cursor = fork < EVMSAIL_FORK_PARIS ? rlp_write_u256(cursor, header.prev_randao)
+                                     : rlp_write_u64(cursor, 0);
   cursor = rlp_write_u64(cursor, header.number);
   cursor = rlp_write_u64(cursor, header.gas_limit);
   cursor = rlp_write_u64(cursor, header.gas_used);

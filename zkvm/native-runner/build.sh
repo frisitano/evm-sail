@@ -232,6 +232,18 @@ case "$EVM_LTO" in
   *) echo "error: EVM_LTO must be off or on" >&2; exit 2 ;;
 esac
 CFLAGS=(-O"$EVM_OPT_LEVEL" -Wno-error=implicit-function-declaration)
+case "${EVM_NATIVE_RESOURCES:-default}" in
+  default) ;;
+  historical) CFLAGS+=(-DEVMSAIL_NATIVE_HISTORICAL_RESOURCES) ;;
+  *) echo "error: EVM_NATIVE_RESOURCES must be default or historical" >&2; exit 2 ;;
+esac
+# The historical workspace exceeds the small x86-64 code model's 2 GiB range.
+# Keep large data separately addressable for both executable and shared links.
+if [ "$EVM_BUILD_MODE" = optimized ] && [ "${EVM_NATIVE_RESOURCES:-default}" = historical ]; then
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64) CFLAGS+=(-mcmodel=medium) ;;
+  esac
+fi
 if [ "$EVM_LTO" = on ]; then CFLAGS+=(-flto); fi
 if [ "${EVM_PIC:-off}" = on ]; then CFLAGS+=(-fPIC); fi
 MODEL_CFLAGS=()

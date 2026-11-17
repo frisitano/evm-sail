@@ -43,6 +43,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -152,14 +153,16 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
             if ((deleted || (curr.storage_cleared && original_storage_retained)) : Bool)
             then (storage_block_clear e.addr)
             else (pure ())
-            if ((curr.info.nonce != e.value.orig.info.nonce) : Bool)
+            if (((profile.fork ≥b Amsterdam) && ((curr.info.nonce != e.value.orig.info.nonce) : Bool)) : Bool)
             then (bal_nonce_change (← readReg k_current_transaction_epoch) e.addr curr.info.nonce)
             else (pure ())
-            if ((curr.info.balance != e.value.orig.info.balance) : Bool)
+            if (((profile.fork ≥b Amsterdam) && ((curr.info.balance != e.value.orig.info.balance) : Bool)) : Bool)
             then
-              (bal_balance_change (← readReg k_current_transaction_epoch) e.addr curr.info.balance)
+              (bal_balance_change (← readReg k_current_transaction_epoch) e.addr
+                e.value.orig.info.balance curr.info.balance)
             else (pure ())
-            if ((bne curr.info.code_hash e.value.orig.info.code_hash) : Bool)
+            if (((profile.fork ≥b Amsterdam) && (bne curr.info.code_hash
+                   e.value.orig.info.code_hash)) : Bool)
             then
               (bal_code_change (← readReg k_current_transaction_epoch) e.addr curr.info.code_hash)
             else (pure ())
@@ -194,8 +197,11 @@ def k_tx_merge (_ : Unit) : SailM Unit := do
                 if ((acc.present && ((e.value.curr != e.value.orig) : Bool)) : Bool)
                 then
                   (do
-                    (bal_storage_change (← readReg k_current_transaction_epoch) e.key.addr
-                      e.key.slot e.value.curr)
+                    if ((profile.fork ≥b Amsterdam) : Bool)
+                    then
+                      (bal_storage_change (← readReg k_current_transaction_epoch) e.key.addr
+                        e.key.slot e.value.orig e.value.curr)
+                    else (pure ())
                     (storage_block_put e))
                 else (pure ()))
             else (pure ())

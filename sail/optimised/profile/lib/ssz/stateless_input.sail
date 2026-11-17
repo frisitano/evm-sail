@@ -11,6 +11,7 @@ function index_execution_witness(input_ref : StatelessInputRef) -> WitnessContex
     cycle_scope_start(40);
     let witness = index_witness_headers(input_ref.witness_headers);
     cycle_scope_end(40);
+    validate_secured_state_root(witness.parent_state_root);
     k_parent_state_root = witness.parent_state_root;
     witness
 }

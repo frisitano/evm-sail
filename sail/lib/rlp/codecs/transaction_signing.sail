@@ -4,9 +4,7 @@
 
 The signature semantics of transactions, between the crypto core
 (secp recovery and the curve constants) and the envelope decoder:
-the signing preimage hashes, the per-envelope `v`-range rule, and sender
-authentication — binding the witnessed public key to a transaction's
-signature, called from transaction validity.
+the signing preimage hashes and the per-envelope `v`-range rule.
 */
 /*! The chain id encoded in a legacy signature with `v >= 35`
     (EIP-155). */
@@ -20,7 +18,6 @@ function legacy_sig_chain_id(v : word) -> word = {
  * preimage; legacy EIP-155 txs append (chain_id, 0, 0), typed txs prepend the
  * type byte as a domain separator. */
 let LEGACY_SIGNATURE_SUFFIX_LENGTH : int(2) = 2
-let PUBLIC_KEY_BODY_LENGTH : int(64) = DOUBLE_WORD_BYTE_LENGTH
 
 /*! The transaction signing-preimage hash. `content_src` spans the RLP of
     the pre-signature fields in the witness and is copied once into the final

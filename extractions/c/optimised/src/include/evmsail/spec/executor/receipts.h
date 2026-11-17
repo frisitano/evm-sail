@@ -17,7 +17,6 @@ bytes32 receipt_store_root(uint32_t count);
 
 bool block_logs_bloom_matches_(Bytes reference);
 
-
 #ifdef __cplusplus
 }
 #endif

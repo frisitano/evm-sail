@@ -129,7 +129,7 @@ void state_logs_workspace_bind(uint32_t record_capacity, uint32_t topic_capacity
                                uint32_t data_capacity);
 void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count);
 void storage_state_workspace_bind(uint32_t storage_count);
-void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count);
+void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count, bool enabled);
 void receipt_records_workspace_bind(uint32_t transaction_count);
 void receipt_bytes_workspace_bind(size_t capacity);
 
@@ -242,7 +242,8 @@ void workspace_seal_witness_nodes(void)
 }
 
 void workspace_prepare_execution(uint32_t account_count, uint32_t storage_count,
-                                 uint32_t expected_bal_entries, uint32_t transaction_count)
+                                 uint32_t expected_bal_entries, uint32_t transaction_count,
+                                 bool record_block_accesses)
 {
   if (stage != WORKSPACE_WITNESS_SUPPORT) {
     GUEST_ABORT();
@@ -250,8 +251,8 @@ void workspace_prepare_execution(uint32_t account_count, uint32_t storage_count,
   stage = WORKSPACE_EXECUTION;
   account_state_workspace_bind(account_count, storage_count);
   storage_state_workspace_bind(storage_count);
-  block_access_list_workspace_bind(account_count, storage_count);
-  bal_input_workspace_bind(expected_bal_entries);
+  block_access_list_workspace_bind(account_count, storage_count, record_block_accesses);
+  bal_input_workspace_bind(record_block_accesses ? expected_bal_entries : 0);
   mpt_workspace_bind(account_count, storage_count);
   receipt_records_workspace_bind(transaction_count);
 

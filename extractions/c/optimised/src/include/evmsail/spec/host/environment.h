@@ -13,7 +13,6 @@ void ancestor_hash_write(uint8_t /* arg_0 */, bytes32 /* arg_1 */);
 
 bytes32 ancestor_hash_read(uint8_t /* arg_0 */);
 
-
 #ifdef __cplusplus
 }
 #endif

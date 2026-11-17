@@ -10,6 +10,8 @@ required = [
   "extract-lean", "build-lean", "publish-lean", "verify-lean",
   "extract-python", "build-python", "publish-python", "verify-python",
   "eest-provision", "eest-verify", "verify-corpus",
+  "historical-suite-test", "historical-regression-test", "memory-regression-test",
+  "sender-regression-test", "stateless-boundary-test",
   "docs-site", "verify-fast", "verify-docs",
 ]
 
@@ -21,4 +23,5 @@ forbidden = [
 help = [
   "extract-rocq", "build-rocq", "publish-rocq",
   "verify-corpus", "eest-provision",
+  "historical-suite-test",
 ]

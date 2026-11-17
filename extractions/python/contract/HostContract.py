@@ -531,6 +531,8 @@ class HostState:
     )
     bal_storage_reads: set[tuple[bytes, int]] = field(default_factory=set)
     bal_balance_changes: dict[bytes, dict[int, int]] = field(default_factory=dict)
+    bal_storage_originals: dict[tuple[bytes, int, int], int] = field(default_factory=dict)
+    bal_balance_originals: dict[tuple[bytes, int], int] = field(default_factory=dict)
     bal_nonce_changes: dict[bytes, dict[int, int]] = field(default_factory=dict)
     bal_code_changes: dict[bytes, dict[int, Any]] = field(default_factory=dict)
     bal_iterator: list[Any] = field(default_factory=list)
@@ -1957,6 +1959,8 @@ def bal_reset() -> None:
     state.bal_storage_changes.clear()
     state.bal_storage_reads.clear()
     state.bal_balance_changes.clear()
+    state.bal_storage_originals.clear()
+    state.bal_balance_originals.clear()
     state.bal_nonce_changes.clear()
     state.bal_code_changes.clear()
     state.bal_iterator.clear()
@@ -1974,10 +1978,16 @@ def bal_account_touch(address: Any) -> None:
     _bal_touch(address)
 
 
-def bal_storage_change(index: int, address: Any, slot: int, value: int) -> None:
+def bal_storage_change(index: int, address: Any, slot: int, before: int, value: int) -> None:
     key = _bal_touch(address)
-    changes = get_state().bal_storage_changes.setdefault((key, int(slot)), {})
-    changes[int(index)] = int(value)
+    state = get_state()
+    changes = state.bal_storage_changes.setdefault((key, int(slot)), {})
+    original = state.bal_storage_originals.setdefault((key, int(slot), int(index)), int(before))
+    if int(value) == original:
+        changes.pop(int(index), None)
+    else:
+        changes[int(index)] = int(value)
+    state.bal_storage_reads.add((key, int(slot)))
 
 
 def bal_storage_read(address: Any, slot: int) -> None:
@@ -1985,9 +1995,15 @@ def bal_storage_read(address: Any, slot: int) -> None:
     get_state().bal_storage_reads.add((key, int(slot)))
 
 
-def bal_balance_change(index: int, address: Any, value: int) -> None:
+def bal_balance_change(index: int, address: Any, before: int, value: int) -> None:
     key = _bal_touch(address)
-    get_state().bal_balance_changes.setdefault(key, {})[int(index)] = int(value)
+    state = get_state()
+    changes = state.bal_balance_changes.setdefault(key, {})
+    original = state.bal_balance_originals.setdefault((key, int(index)), int(before))
+    if int(value) == original:
+        changes.pop(int(index), None)
+    else:
+        changes[int(index)] = int(value)
 
 
 def bal_nonce_change(index: int, address: Any, value: int) -> None:
@@ -2022,7 +2038,7 @@ def bal_prepare_iter() -> None:
         slot_changes = {
             slot: changes
             for (account, slot), changes in state.bal_storage_changes.items()
-            if account == address_key
+            if account == address_key and changes
         }
         for slot in sorted(slot_changes):
             for index in sorted(slot_changes[slot]):

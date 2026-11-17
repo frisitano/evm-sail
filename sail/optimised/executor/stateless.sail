@@ -11,13 +11,11 @@ function verify_stateless_payload(input_ref : StatelessInputRef) -> unit = {
     validate_execution_payload(input, input_ref, witness);
     let block = input.payload.block;
     let execution_profile = k_execution_profile;
-    if execution_profile.protocol.fork >= Amsterdam then {
-        initialize_block_access_list_state(
-            block.body.block_access_list,
-            k_parent_state_root,
-            block.body.transactions.count,
-        )
+    let protocol = execution_profile.protocol;
+    if protocol.fork < Amsterdam then {
+        validate_historical_access_schema(block.body.block_access_list)
     };
+    initialize_block_access_list_state(block.body.block_access_list, k_parent_state_root, block.body.transactions.count);
     let result = execute_block_body(block.body, input_ref);
     validate_executed_block(block, result)
 }

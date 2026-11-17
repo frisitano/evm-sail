@@ -164,7 +164,7 @@ bool storage_range_has_writes(StorageId begin, uint32_t count, StorageGeneration
 
 void account_state_workspace_bind(uint32_t account_count, uint32_t storage_count);
 void storage_state_workspace_bind(uint32_t storage_count);
-void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count);
+void block_access_list_workspace_bind(uint32_t account_count, uint32_t storage_count, bool enabled);
 void bal_account_schema_initialize(AccountId id);
 void bal_storage_schema_initialize(StorageId id);
 

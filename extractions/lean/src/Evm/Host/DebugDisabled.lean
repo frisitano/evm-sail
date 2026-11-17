@@ -40,6 +40,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -79,7 +80,7 @@ def validation_debug_capture_block_gas (_actual : Nat) (_expected : Nat) (_execu
 
 /-- Records the failing validation stage and reason for host
 inspection; a later record overwrites an earlier one. -/
-/- Type quantifiers: k_ex552049_ : Nat, 0 ≤ k_ex552049_ ∧ k_ex552049_ ≤ 255 -/
+/- Type quantifiers: k_ex581579_ : Nat, 0 ≤ k_ex581579_ ∧ k_ex581579_ ≤ 255 -/
 def validation_debug_record (_stage : Nat) (_reason : FatalError) : Unit :=
   ()
 

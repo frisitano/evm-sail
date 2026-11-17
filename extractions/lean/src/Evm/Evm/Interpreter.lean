@@ -59,6 +59,7 @@ open LogData
 open InputTrieNode
 open IndexedTrieSource
 open HtrRequestKind
+open HtrProgressiveSource
 open HaltKind
 open FrameStatus
 open FrameContinuation
@@ -109,12 +110,12 @@ opcodes. This module specifies that machinery in three layers:
 
 /-- Assembles an `n`-byte big-endian PUSH immediate from a local code cursor;
 bytes past the end of code read as zero. -/
-/- Type quantifiers: k_ex550922_ : Nat, k_ex550921_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
+/- Type quantifiers: k_ex580452_ : Nat, k_ex580451_ : Nat, code_dependentWitness1 : Nat, code_dependentWitness0
   : Nat, 0 ≤ code_dependentWitness0 ∧
   0 ≤ code_dependentWitness1 ∧
   (code_dependentWitness0 + code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
-  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550921_
-  ∧ k_ex550921_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550922_ ∧ k_ex550922_ ≤ 32 -/
+  0 ≤ code_dependentWitness1 ∧ (code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤ k_ex580451_
+  ∧ k_ex580451_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580452_ ∧ k_ex580452_ ≤ 32 -/
 def read_push (code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeRegionSliceFields k_off k_len)))) (offset : Nat) (n : Nat) : SailM Nat := do
   let code_dependentWitness0 := (code).1
@@ -126,8 +127,8 @@ def read_push (code : (Sigma fun (k_off : Nat) =>
 opcode bytes remain available here and decode to `INVALID`; this predicate
 contains only fork-dependent availability so every interpreter can share
 the same deployment rules without duplicating them in its dispatch. -/
-/- Type quantifiers: k_ex550924_ : Nat, k_ex550923_ : Nat, 0 ≤ k_ex550923_ ∧ k_ex550923_ ≤ 255, 0
-  ≤ k_ex550924_ ∧ k_ex550924_ ≤ 16 -/
+/- Type quantifiers: k_ex580454_ : Nat, k_ex580453_ : Nat, 0 ≤ k_ex580453_ ∧ k_ex580453_ ≤ 255, 0
+  ≤ k_ex580454_ ∧ k_ex580454_ ≤ 16 -/
 def opcode_available (opcode : Nat) (fork : Nat) : Bool :=
   match opcode with
   | 30 => (fork ≥b Osaka)
@@ -147,12 +148,12 @@ def opcode_available (opcode : Nat) (fork : Nat) : Bool :=
 /-- Decodes one PUSH immediate and returns the semantic program counter after
 all encoded immediate bytes. Missing code bytes contribute zero to the
 value but still belong to the instruction encoding. -/
-/- Type quantifiers: k_ex550933_ : Nat, k_ex550932_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
+/- Type quantifiers: k_ex580463_ : Nat, k_ex580462_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
   : Nat, 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550932_ ∧ k_ex550932_ ≤ (2 ^ 32 - 1 - 32), 0 ≤ k_ex550933_ ∧ k_ex550933_ ≤ 32 -/
+  k_ex580462_ ∧ k_ex580462_ ≤ (2 ^ 32 - 1 - 32), 0 ≤ k_ex580463_ ∧ k_ex580463_ ≤ 32 -/
 def decode_push_immediate (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (immediate_offset : Nat) (width : Nat) : SailM (Nat × Nat) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -166,12 +167,12 @@ def decode_push_immediate (frame_code : (Sigma fun (k_off : Nat) =>
 immediate advances the counter; an invalid immediate remains unconsumed so
 the handler can report `InvalidOpcode` with the canonical instruction
 boundary. Reads beyond code are zero-padded. -/
-/- Type quantifiers: k_ex550941_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
+/- Type quantifiers: k_ex580471_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
   : Nat, 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550941_ ∧ k_ex550941_ ≤ (2 ^ 32 - 1 - 32) -/
+  k_ex580471_ ∧ k_ex580471_ ≤ (2 ^ 32 - 1 - 32) -/
 def decode_deep_immediate (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (immediate_offset : Nat) (operation : DeepStackOperation) : SailM (Nat × (BitVec 8)) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -190,13 +191,13 @@ def decode_deep_immediate (frame_code : (Sigma fun (k_off : Nat) =>
 the shared semantic boundary used by raw-byte interpreters: decoding, PC
 progression, stack validation, gas charging, and the stack effect remain
 generated from Sail. -/
-/- Type quantifiers: k_ex550951_ : Nat, k_ex550950_ : Nat, k_ex550949_ : Nat, frame_code_dependentWitness1
+/- Type quantifiers: k_ex580481_ : Nat, k_ex580480_ : Nat, k_ex580479_ : Nat, frame_code_dependentWitness1
   : Nat, frame_code_dependentWitness0 : Nat, 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550949_ ∧ k_ex550949_ ≤ 255, 0 ≤ k_ex550950_ ∧ k_ex550950_ ≤ (2 ^ 32 - 1 - 32), 0
-  ≤ k_ex550951_ ∧ k_ex550951_ ≤ (2 ^ 64 - 1) -/
+  k_ex580479_ ∧ k_ex580479_ ≤ 255, 0 ≤ k_ex580480_ ∧ k_ex580480_ ≤ (2 ^ 32 - 1 - 32), 0
+  ≤ k_ex580481_ ∧ k_ex580481_ ≤ (2 ^ 64 - 1) -/
 def execute_push_encoded (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (opcode : Nat) (immediate_offset : Nat) (execution_gas : Nat) (sp : StackPointer) : SailM (Nat × Nat × StackPointer × OpcodeOutcome) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -217,8 +218,8 @@ def execute_push_encoded (frame_code : (Sigma fun (k_off : Nat) =>
 /-- Executes one opcode from the `DUP1` through `DUP16` family. The raw-byte
 interpreter routes the family here without reproducing its index
 relationship. -/
-/- Type quantifiers: k_ex550953_ : Nat, k_ex550952_ : Nat, 0 ≤ k_ex550952_ ∧ k_ex550952_ ≤ 255, 0
-  ≤ k_ex550953_ ∧ k_ex550953_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580483_ : Nat, k_ex580482_ : Nat, 0 ≤ k_ex580482_ ∧ k_ex580482_ ≤ 255, 0
+  ≤ k_ex580483_ ∧ k_ex580483_ ≤ (2 ^ 64 - 1) -/
 def execute_dup_encoded (opcode : Nat) (execution_gas : Nat) (sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   if (((128 ≤b opcode) && (opcode ≤b 143)) : Bool)
   then (execute_dup execution_gas sp (opcode - 127))
@@ -227,8 +228,8 @@ def execute_dup_encoded (opcode : Nat) (execution_gas : Nat) (sp : StackPointer)
     (pure (gas_after, sp, status_after)))
 
 /-- Executes one opcode from the `SWAP1` through `SWAP16` family. -/
-/- Type quantifiers: k_ex550955_ : Nat, k_ex550954_ : Nat, 0 ≤ k_ex550954_ ∧ k_ex550954_ ≤ 255, 0
-  ≤ k_ex550955_ ∧ k_ex550955_ ≤ (2 ^ 64 - 1) -/
+/- Type quantifiers: k_ex580485_ : Nat, k_ex580484_ : Nat, 0 ≤ k_ex580484_ ∧ k_ex580484_ ≤ 255, 0
+  ≤ k_ex580485_ ∧ k_ex580485_ ≤ (2 ^ 64 - 1) -/
 def execute_swap_encoded (opcode : Nat) (execution_gas : Nat) (sp : StackPointer) : SailM (Nat × StackPointer × OpcodeOutcome) := do
   if (((144 ≤b opcode) && (opcode ≤b 159)) : Bool)
   then (execute_swap execution_gas sp (opcode - 143))
@@ -237,10 +238,10 @@ def execute_swap_encoded (opcode : Nat) (execution_gas : Nat) (sp : StackPointer
     (pure (gas_after, sp, status_after)))
 
 /-- Executes one opcode from the `LOG0` through `LOG4` family. -/
-/- Type quantifiers: k_ex550960_ : Nat, k_ex550959_ : Nat, k_ex550958_ : Nat, k_ex550957_ : Nat, k_ex550956_
-  : Bool, 0 ≤ k_ex550957_ ∧ k_ex550957_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550958_ ∧
-  k_ex550958_ ≤ 255, 0 ≤ k_ex550959_ ∧ k_ex550959_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550960_ ∧
-  k_ex550960_ ≤ (2 ^ 32 - 1) -/
+/- Type quantifiers: k_ex580490_ : Nat, k_ex580489_ : Nat, k_ex580488_ : Nat, k_ex580487_ : Nat, k_ex580486_
+  : Bool, 0 ≤ k_ex580487_ ∧ k_ex580487_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580488_ ∧
+  k_ex580488_ ≤ 255, 0 ≤ k_ex580489_ ∧ k_ex580489_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580490_ ∧
+  k_ex580490_ ≤ (2 ^ 32 - 1) -/
 def execute_log_encoded (carried_address : (Vector (BitVec 8) 20)) (carried_is_static : Bool) (memory_base : Nat) (opcode : Nat) (execution_gas : Nat) (sp : StackPointer) (memory : Nat) : SailM (Nat × StackPointer × Nat × OpcodeOutcome) := do
   if (((160 ≤b opcode) && (opcode ≤b 164)) : Bool)
   then
@@ -253,13 +254,13 @@ def execute_log_encoded (carried_address : (Vector (BitVec 8) 20)) (carried_is_s
 /-- Executes an encoded Amsterdam deep-stack instruction from its immediate
 cursor. Opcode classification and immediate validity are specification
 semantics; the raw-byte interpreter supplies only the opcode byte. -/
-/- Type quantifiers: k_ex550970_ : Nat, k_ex550969_ : Nat, k_ex550968_ : Nat, frame_code_dependentWitness1
+/- Type quantifiers: k_ex580500_ : Nat, k_ex580499_ : Nat, k_ex580498_ : Nat, frame_code_dependentWitness1
   : Nat, frame_code_dependentWitness0 : Nat, 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550968_ ∧ k_ex550968_ ≤ 255, 0 ≤ k_ex550969_ ∧ k_ex550969_ ≤ (2 ^ 32 - 1 - 32), 0
-  ≤ k_ex550970_ ∧ k_ex550970_ ≤ (2 ^ 64 - 1) -/
+  k_ex580498_ ∧ k_ex580498_ ≤ 255, 0 ≤ k_ex580499_ ∧ k_ex580499_ ≤ (2 ^ 32 - 1 - 32), 0
+  ≤ k_ex580500_ ∧ k_ex580500_ ≤ (2 ^ 64 - 1) -/
 def execute_deep_stack_encoded (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (opcode : Nat) (immediate_offset : Nat) (execution_gas : Nat) (sp : StackPointer) : SailM (Nat × Nat × StackPointer × OpcodeOutcome) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -284,8 +285,8 @@ contiguous families fold to an arity argument — `DUP1`–`DUP16`
 (0x80–0x8f), `SWAP1`–`SWAP16` (0x90–0x9f), `LOG0`–`LOG4` (0xa0–0xa4)
 — and the remainder is a flat table. Any byte with no defined opcode
 decodes to `INVALID`. -/
-/- Type quantifiers: k_ex550972_ : Nat, k_ex550971_ : Nat, 0 ≤ k_ex550971_ ∧ k_ex550971_ ≤ 255, 0
-  ≤ k_ex550972_ ∧ k_ex550972_ ≤ 16 -/
+/- Type quantifiers: k_ex580502_ : Nat, k_ex580501_ : Nat, 0 ≤ k_ex580501_ ∧ k_ex580501_ ≤ 255, 0
+  ≤ k_ex580502_ ∧ k_ex580502_ ≤ 16 -/
 def decode_simple (opcode : Nat) (fork : Nat) : ast :=
   let available := (opcode_available opcode fork)
   if ((! available) : Bool)
@@ -389,12 +390,12 @@ Past the end of code the frame implicitly executes `STOP` (YP).
 `PUSH0`–`PUSH32` (0x5f–0x7f) carry an `n`-byte immediate; Amsterdam's
 `DUPN`/`SWAPN`/`EXCHANGE` carry one byte, zero-padded at end of code.
 Every other byte decodes via [decode_simple][]. -/
-/- Type quantifiers: k_ex550981_ : Nat, k_ex550980_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
+/- Type quantifiers: k_ex580511_ : Nat, k_ex580510_ : Nat, frame_code_dependentWitness1 : Nat, frame_code_dependentWitness0
   : Nat, 0 ≤ frame_code_dependentWitness0 ∧
   0 ≤ frame_code_dependentWitness1 ∧
   (frame_code_dependentWitness0 + frame_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
   0 ≤ frame_code_dependentWitness1 ∧ (frame_code_dependentWitness1 + 32) ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex550980_ ∧ k_ex550980_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550981_ ∧ k_ex550981_ ≤ 16 -/
+  k_ex580510_ ∧ k_ex580510_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580511_ ∧ k_ex580511_ ≤ 16 -/
 def fetch (frame_code : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (current : Nat) (fork : Nat) : SailM (Nat × ast) := do
   let frame_code_dependentWitness0 := (frame_code).1
@@ -468,14 +469,14 @@ def frame_succeeded (frame_status : FrameStatus) : Bool :=
   | .Exceptional _ => false
 
 /-- Restores a message-call parent and applies the child's outcome. -/
-/- Type quantifiers: k_ex550994_ : Int, k_ex550993_ : Nat, k_ex550992_ : Nat, k_ex550991_ : Nat, k_ex550990_
+/- Type quantifiers: k_ex580524_ : Int, k_ex580523_ : Nat, k_ex580522_ : Nat, k_ex580521_ : Nat, k_ex580520_
   : Nat, output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
   output_dependentWitness0 ∧
   0 ≤ output_dependentWitness1 ∧
-  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex550990_ ∧
-  k_ex550990_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex550991_ ∧ k_ex550991_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex550992_ ∧ k_ex550992_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex550993_ ∧ k_ex550993_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
-  ≤ k_ex550994_ ∧ k_ex550994_ ≤ (199 * (2 ^ 64 - 1)) -/
+  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex580520_ ∧
+  k_ex580520_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580521_ ∧ k_ex580521_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580522_ ∧ k_ex580522_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580523_ ∧ k_ex580523_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex580524_ ∧ k_ex580524_ ≤ (199 * (2 ^ 64 - 1)) -/
 def resume_call (continuation : CallContinuation) (output : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (child_memory_base : Nat) (child_gas : Nat) (child_state_gas : Nat) (child_state_spill : Nat) (child_refund : Int) (child_status : FrameStatus) : SailM FrameTransition := do
   let output_dependentWitness0 := (output).1
@@ -501,6 +502,12 @@ def resume_call (continuation : CallContinuation) (output : (Sigma fun (k_off : 
     if (succeeded : Bool)
     then
       (do
+        let (tup__0, tup__1, tup__2) ← do
+          (repay_state_gas_spill parent_gas parent_state_gas parent_state_spill)
+        let parent_gas : Nat := tup__0
+        let parent_state_gas : Nat := tup__1
+        let parent_state_spill : Nat := tup__2
+        (pure ())
         let parent_refund ← (record_refund parent_refund child_refund)
         (k_journal_commit ())
         let parent_sp ← (stack_top_advance parent_sp 1)
@@ -541,15 +548,15 @@ def resume_call (continuation : CallContinuation) (output : (Sigma fun (k_off : 
           returndata := ⟨_, ⟨_, output⟩⟩ })
 
 /-- Restores a create parent and either deploys or rolls back the child. -/
-/- Type quantifiers: k_ex551006_ : Nat, k_ex551005_ : Int, k_ex551004_ : Nat, k_ex551003_ : Nat, k_ex551002_
-  : Nat, k_ex551001_ : Nat, output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
+/- Type quantifiers: k_ex580536_ : Nat, k_ex580535_ : Int, k_ex580534_ : Nat, k_ex580533_ : Nat, k_ex580532_
+  : Nat, k_ex580531_ : Nat, output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
   output_dependentWitness0 ∧
   0 ≤ output_dependentWitness1 ∧
-  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex551001_ ∧
-  k_ex551001_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551002_ ∧ k_ex551002_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551003_ ∧ k_ex551003_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551004_ ∧ k_ex551004_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
-  ≤ k_ex551005_ ∧ k_ex551005_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551006_ ∧
-  k_ex551006_ ≤ (2 ^ 64 - 1) -/
+  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex580531_ ∧
+  k_ex580531_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580532_ ∧ k_ex580532_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580533_ ∧ k_ex580533_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580534_ ∧ k_ex580534_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex580535_ ∧ k_ex580535_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580536_ ∧
+  k_ex580536_ ≤ (2 ^ 64 - 1) -/
 def resume_create (continuation : CreateContinuation) (output : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (child_memory_base : Nat) (child_gas : Nat) (child_state_gas : Nat) (child_state_spill : Nat) (child_refund : Int) (child_status : FrameStatus) (child_state_gas_reservoir : Nat) : SailM FrameTransition := do
   let output_dependentWitness0 := (output).1
@@ -667,6 +674,12 @@ def resume_create (continuation : CreateContinuation) (output : (Sigma fun (k_of
     if (deploy_succeeds : Bool)
     then
       (do
+        let (tup__0, tup__1, tup__2) ← do
+          (repay_state_gas_spill parent_gas parent_state_gas parent_state_spill)
+        let parent_gas : Nat := tup__0
+        let parent_state_gas : Nat := tup__1
+        let parent_state_spill : Nat := tup__2
+        (pure ())
         let parent_refund ← (record_refund parent_refund child_refund)
         let ⟨_, ⟨_, deployed_bytes⟩⟩ : (Sigma fun (output_dependentWitness0 : Nat) =>
           (Sigma fun (output_dependentWitness1 : Nat) =>
@@ -742,15 +755,15 @@ def resume_create (continuation : CreateContinuation) (output : (Sigma fun (k_of
           returndata := ⟨_, ⟨_, parent_returndata⟩⟩ })
 
 /-- Applies the pending operation for one completed child frame. -/
-/- Type quantifiers: k_ex551018_ : Nat, k_ex551017_ : Int, k_ex551016_ : Nat, k_ex551015_ : Nat, k_ex551014_
-  : Nat, k_ex551013_ : Nat, output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
+/- Type quantifiers: k_ex580548_ : Nat, k_ex580547_ : Int, k_ex580546_ : Nat, k_ex580545_ : Nat, k_ex580544_
+  : Nat, k_ex580543_ : Nat, output_dependentWitness1 : Nat, output_dependentWitness0 : Nat, 0 ≤
   output_dependentWitness0 ∧
   0 ≤ output_dependentWitness1 ∧
-  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex551013_ ∧
-  k_ex551013_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551014_ ∧ k_ex551014_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551015_ ∧ k_ex551015_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551016_ ∧ k_ex551016_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1))))
-  ≤ k_ex551017_ ∧ k_ex551017_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551018_ ∧
-  k_ex551018_ ≤ (2 ^ 64 - 1) -/
+  (output_dependentWitness0 + output_dependentWitness1) ≤ (2 ^ 32 - 1), 0 ≤ k_ex580543_ ∧
+  k_ex580543_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580544_ ∧ k_ex580544_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580545_ ∧ k_ex580545_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580546_ ∧ k_ex580546_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1))))
+  ≤ k_ex580547_ ∧ k_ex580547_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580548_ ∧
+  k_ex580548_ ≤ (2 ^ 64 - 1) -/
 def resume_frame (continuation : FrameContinuation) (output : (Sigma fun (k_off : Nat) =>
   (Sigma fun (k_len : Nat) => (OutputSliceFields k_off k_len)))) (child_memory_base : Nat) (child_gas : Nat) (child_state_gas : Nat) (child_state_spill : Nat) (child_refund : Int) (child_status : FrameStatus) (child_state_gas_reservoir : Nat) : SailM FrameTransition := do
   let output_dependentWitness0 := (output).1
@@ -821,7 +834,7 @@ def call_stack_inputs (kind : CallKind) : Nat :=
 account runs the code at its delegation target, following exactly one
 hop; a delegation whose target is a precompile (or has no code)
 executes as empty code. An undelegated account runs its own code. -/
-/- Type quantifiers: k_ex551022_ : Bool -/
+/- Type quantifiers: k_ex580552_ : Bool -/
 def executable_code (target : (Vector (BitVec 8) 20)) (dele : Bool) (dtgt : (Vector (BitVec 8) 20)) : SailM (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len))) := do
   if _sailIf0 : (dele : Bool) = true
@@ -847,15 +860,15 @@ def executable_code (target : (Vector (BitVec 8) 20)) (dele : Bool) (dtgt : (Vec
 /-- Executes a message-call instruction through its non-entering failure paths
 or installs the child frame and returns its initial carried machine state. -/
 /- Type quantifiers: carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
-  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex551038_ :
-  Nat, k_ex551037_ : Bool, k_ex551036_ : Nat, k_ex551035_ : Nat, k_ex551034_ : Nat, k_ex551033_ :
-  Nat, k_ex551032_ : Int, k_ex551031_ : Nat, k_ex551030_ : Nat, k_ex551029_ : Nat, k_ex551028_ : Nat, 0
-  ≤ k_ex551028_ ∧ k_ex551028_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551029_ ∧
-  k_ex551029_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551030_ ∧ k_ex551030_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551031_ ∧ k_ex551031_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex551032_ ∧
-  k_ex551032_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551033_ ∧ k_ex551033_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex551034_ ∧ k_ex551034_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551035_ ∧ k_ex551035_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex551036_ ∧ k_ex551036_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551038_ ∧ k_ex551038_ ≤ 1024, 0
+  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex580568_ :
+  Nat, k_ex580567_ : Bool, k_ex580566_ : Nat, k_ex580565_ : Nat, k_ex580564_ : Nat, k_ex580563_ :
+  Nat, k_ex580562_ : Int, k_ex580561_ : Nat, k_ex580560_ : Nat, k_ex580559_ : Nat, k_ex580558_ : Nat, 0
+  ≤ k_ex580558_ ∧ k_ex580558_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580559_ ∧
+  k_ex580559_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580560_ ∧ k_ex580560_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580561_ ∧ k_ex580561_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex580562_ ∧
+  k_ex580562_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580563_ ∧ k_ex580563_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex580564_ ∧ k_ex580564_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580565_ ∧ k_ex580565_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex580566_ ∧ k_ex580566_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580568_ ∧ k_ex580568_ ≤ 1024, 0
   ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
@@ -1116,7 +1129,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                                     if (state_gas_halt : Bool)
                                     then
                                       (do
-                                        let a__303 ← (( do
+                                        let a__332 ← (( do
                                           let gas_after : Nat := GAS_ZERO
                                           let exceptional ← do
                                             (exceptional_state state_gas_after state_spill_after
@@ -1140,7 +1153,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                                                   calldata := carried_calldata,
                                                   returndata := returndata_after }) ) : SailME
                                           FrameTransition FrameTransition )
-                                        SailME.throw a__303)
+                                        SailME.throw a__332)
                                     else
                                       (pure (gas_after, state_gas_after, state_spill_after, status_after))
                                     ) : SailME FrameTransition (Nat × Nat × Nat × FrameStatus) )
@@ -1153,7 +1166,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                               if ((gas_after <b base_child) : Bool)
                               then
                                 (do
-                                  let a__302 ← (( do
+                                  let a__331 ← (( do
                                     let gas_after : Nat := GAS_ZERO
                                     let exceptional ← do
                                       (exceptional_state state_gas_after state_spill_after
@@ -1175,7 +1188,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                                             calldata := carried_calldata,
                                             returndata := returndata_after }) ) : SailME
                                     FrameTransition FrameTransition )
-                                  SailME.throw a__302)
+                                  SailME.throw a__331)
                               else
                                 (let gas_after : Nat := (gas_sub gas_after base_child)
                                 (pure (gas_after, state_gas_after, state_spill_after, status_after)))
@@ -1188,7 +1201,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                               if ((gas_after <b base_child) : Bool)
                               then
                                 (do
-                                  let a__304 ← (( do
+                                  let a__333 ← (( do
                                     let gas_after : Nat := GAS_ZERO
                                     let exceptional ← do
                                       (exceptional_state state_gas_after state_spill_after
@@ -1210,7 +1223,7 @@ def run_call (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (c
                                             calldata := carried_calldata,
                                             returndata := returndata_after }) ) : SailME
                                     FrameTransition FrameTransition )
-                                  SailME.throw a__304)
+                                  SailME.throw a__333)
                               else
                                 (let gas_after : Nat := (gas_sub gas_after base_child)
                                 (pure (gas_after, state_gas_after, state_spill_after, status_after)))
@@ -1508,15 +1521,15 @@ def create_stack_inputs (kind : CreateKind) : Nat :=
 /-- Executes a contract-creation instruction through its non-entering failure
 paths or installs the initcode child frame and returns its initial state. -/
 /- Type quantifiers: carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
-  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex551062_ :
-  Nat, k_ex551061_ : Bool, k_ex551060_ : Nat, k_ex551059_ : Nat, k_ex551058_ : Nat, k_ex551057_ :
-  Nat, k_ex551056_ : Int, k_ex551055_ : Nat, k_ex551054_ : Nat, k_ex551053_ : Nat, k_ex551052_ : Nat, 0
-  ≤ k_ex551052_ ∧ k_ex551052_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551053_ ∧
-  k_ex551053_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551054_ ∧ k_ex551054_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551055_ ∧ k_ex551055_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex551056_ ∧
-  k_ex551056_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551057_ ∧ k_ex551057_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex551058_ ∧ k_ex551058_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551059_ ∧ k_ex551059_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex551060_ ∧ k_ex551060_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551062_ ∧ k_ex551062_ ≤ 1024, 0
+  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex580592_ :
+  Nat, k_ex580591_ : Bool, k_ex580590_ : Nat, k_ex580589_ : Nat, k_ex580588_ : Nat, k_ex580587_ :
+  Nat, k_ex580586_ : Int, k_ex580585_ : Nat, k_ex580584_ : Nat, k_ex580583_ : Nat, k_ex580582_ : Nat, 0
+  ≤ k_ex580582_ ∧ k_ex580582_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580583_ ∧
+  k_ex580583_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580584_ ∧ k_ex580584_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580585_ ∧ k_ex580585_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex580586_ ∧
+  k_ex580586_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580587_ ∧ k_ex580587_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex580588_ ∧ k_ex580588_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580589_ ∧ k_ex580589_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex580590_ ∧ k_ex580590_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580592_ ∧ k_ex580592_ ≤ 1024, 0
   ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
@@ -1709,7 +1722,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                           if ((! initcode_cost.affordable) : Bool)
                           then
                             (do
-                              let a__290 ← (( do
+                              let a__319 ← (( do
                                 let memory_after : Nat := mem1
                                 let gas_after : Nat := GAS_ZERO
                                 let exceptional ← do
@@ -1732,7 +1745,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                                         calldata := carried_calldata,
                                         returndata := returndata_after }) ) : SailME FrameTransition
                                 FrameTransition )
-                              SailME.throw a__290)
+                              SailME.throw a__319)
                           else
                             (let gas_after : Nat := (gas_sub gas_after initcode_cost.cost)
                             (pure (gas_after, memory_after, state_gas_after, state_spill_after, status_after)))
@@ -1751,7 +1764,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                           if ((! hashing_cost.affordable) : Bool)
                           then
                             (do
-                              let a__289 ← (( do
+                              let a__318 ← (( do
                                 let memory_after : Nat := mem1
                                 let gas_after : Nat := GAS_ZERO
                                 let exceptional ← do
@@ -1774,7 +1787,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                                         calldata := carried_calldata,
                                         returndata := returndata_after }) ) : SailME FrameTransition
                                 FrameTransition )
-                              SailME.throw a__289)
+                              SailME.throw a__318)
                           else
                             (let gas_after : Nat := (gas_sub gas_after hashing_cost.cost)
                             (pure (gas_after, memory_after, state_gas_after, state_spill_after, status_after)))
@@ -1893,7 +1906,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                                   if (state_gas_halt : Bool)
                                   then
                                     (do
-                                      let a__288 ← (( do
+                                      let a__317 ← (( do
                                         let memory_after : Nat := mem1
                                         let gas_after : Nat := GAS_ZERO
                                         let exceptional ← do
@@ -1916,7 +1929,7 @@ def run_create (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) 
                                                 calldata := carried_calldata,
                                                 returndata := returndata_after }) ) : SailME
                                         FrameTransition FrameTransition )
-                                      SailME.throw a__288)
+                                      SailME.throw a__317)
                                   else
                                     (pure (gas_after, memory_after, state_gas_after, state_spill_after, status_after))
                                   ) : SailME FrameTransition
@@ -2031,14 +2044,14 @@ registers and its returned state is assigned back; the handlers
 themselves never touch the registers. `STOP`, `SELFDESTRUCT`, and
 exceptional halts return the empty slice; `RETURN` and `REVERT` carry
 their frozen memory slice in the halt value. -/
-/- Type quantifiers: initial_code_dependentWitness1 : Nat, initial_code_dependentWitness0 : Nat, k_ex551085_
-  : Nat, k_ex551084_ : Bool, k_ex551083_ : Nat, k_ex551082_ : Nat, k_ex551081_ : Nat, k_ex551080_ :
-  Nat, k_ex551079_ : Int, k_ex551078_ : Nat, k_ex551077_ : Nat, k_ex551076_ : Nat, 0 ≤ k_ex551076_
-  ∧ k_ex551076_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551077_ ∧ k_ex551077_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551078_ ∧ k_ex551078_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex551079_ ∧
-  k_ex551079_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551080_ ∧ k_ex551080_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex551081_ ∧ k_ex551081_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551082_ ∧ k_ex551082_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex551083_ ∧ k_ex551083_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551085_ ∧ k_ex551085_ ≤ 1024, 0
+/- Type quantifiers: initial_code_dependentWitness1 : Nat, initial_code_dependentWitness0 : Nat, k_ex580615_
+  : Nat, k_ex580614_ : Bool, k_ex580613_ : Nat, k_ex580612_ : Nat, k_ex580611_ : Nat, k_ex580610_ :
+  Nat, k_ex580609_ : Int, k_ex580608_ : Nat, k_ex580607_ : Nat, k_ex580606_ : Nat, 0 ≤ k_ex580606_
+  ∧ k_ex580606_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580607_ ∧ k_ex580607_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580608_ ∧ k_ex580608_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex580609_ ∧
+  k_ex580609_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580610_ ∧ k_ex580610_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex580611_ ∧ k_ex580611_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580612_ ∧ k_ex580612_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex580613_ ∧ k_ex580613_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580615_ ∧ k_ex580615_ ≤ 1024, 0
   ≤ initial_code_dependentWitness0 ∧
   0 ≤ initial_code_dependentWitness1 ∧
   (initial_code_dependentWitness0 + initial_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
@@ -2056,8 +2069,11 @@ def interpret (initial_gas : Nat) (initial_state_gas : Nat) (initial_state_spill
   let profile := execution_profile.protocol
   let fork := profile.fork
   let blob_fee ← do
-    (blob_base_fee fork profile.blob_schedule profile.excess_blob_gas_limit
-      (← readReg k_header).excess_blob_gas)
+    if ((fork ≥b Cancun) : Bool)
+    then
+      (blob_base_fee fork profile.blob_schedule profile.excess_blob_gas_limit
+        (← readReg k_header).excess_blob_gas)
+    else (pure ZERO_WORD)
   (frame_stack_reset ())
   let interpreting : Bool := true
   let result : (Sigma fun (initial_code_dependentWitness0 : Nat) =>
@@ -3182,16 +3198,16 @@ def undefined_CreateSemantics (_ : Unit) : SailM CreateSemantics := do
 /-- Selects the canonical frame-entering operation from its encoded opcode.
 The optimized threaded dispatcher therefore owns only label routing; CALL
 and CREATE classification remains part of the executable specification. -/
-/- Type quantifiers: k_ex551114_ : Nat, carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
-  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex551105_ :
-  Nat, k_ex551104_ : Bool, k_ex551103_ : Nat, k_ex551102_ : Nat, k_ex551101_ : Nat, k_ex551100_ :
-  Nat, k_ex551099_ : Int, k_ex551098_ : Nat, k_ex551097_ : Nat, k_ex551096_ : Nat, k_ex551095_ : Nat, 0
-  ≤ k_ex551095_ ∧ k_ex551095_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551096_ ∧
-  k_ex551096_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551097_ ∧ k_ex551097_ ≤ (2 ^ 64 - 1), 0 ≤
-  k_ex551098_ ∧ k_ex551098_ ≤ (2 ^ 24), ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex551099_ ∧
-  k_ex551099_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex551100_ ∧ k_ex551100_ ≤ (2 ^ 32 - 1), 0 ≤
-  k_ex551101_ ∧ k_ex551101_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex551102_ ∧ k_ex551102_ ≤ (2 ^ 256 - 1), 0
-  ≤ k_ex551103_ ∧ k_ex551103_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex551105_ ∧ k_ex551105_ ≤ 1024, 0
+/- Type quantifiers: k_ex580644_ : Nat, carried_returndata_dependentWitness1 : Nat, carried_returndata_dependentWitness0
+  : Nat, carried_code_dependentWitness1 : Nat, carried_code_dependentWitness0 : Nat, k_ex580635_ :
+  Nat, k_ex580634_ : Bool, k_ex580633_ : Nat, k_ex580632_ : Nat, k_ex580631_ : Nat, k_ex580630_ :
+  Nat, k_ex580629_ : Int, k_ex580628_ : Nat, k_ex580627_ : Nat, k_ex580626_ : Nat, k_ex580625_ : Nat, 0
+  ≤ k_ex580625_ ∧ k_ex580625_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580626_ ∧
+  k_ex580626_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580627_ ∧ k_ex580627_ ≤ (2 ^ 64 - 1), 0 ≤
+  k_ex580628_ ∧ k_ex580628_ ≤ 30000000, ((- (199 * (2 ^ 64 - 1)))) ≤ k_ex580629_ ∧
+  k_ex580629_ ≤ (199 * (2 ^ 64 - 1)), 0 ≤ k_ex580630_ ∧ k_ex580630_ ≤ (2 ^ 32 - 1), 0 ≤
+  k_ex580631_ ∧ k_ex580631_ ≤ (2 ^ 32 - 1), 0 ≤ k_ex580632_ ∧ k_ex580632_ ≤ (2 ^ 256 - 1), 0
+  ≤ k_ex580633_ ∧ k_ex580633_ ≤ (2 ^ 64 - 1), 0 ≤ k_ex580635_ ∧ k_ex580635_ ≤ 1024, 0
   ≤ carried_code_dependentWitness0 ∧
   0 ≤ carried_code_dependentWitness1 ∧
   (carried_code_dependentWitness0 + carried_code_dependentWitness1) ≤ (2 ^ 32 - 1) ∧
@@ -3199,7 +3215,7 @@ and CREATE classification remains part of the executable specification. -/
   ≤ carried_returndata_dependentWitness0 ∧
   0 ≤ carried_returndata_dependentWitness1 ∧
   (carried_returndata_dependentWitness0 + carried_returndata_dependentWitness1) ≤ (2 ^ 32 - 1), 0
-  ≤ k_ex551114_ ∧ k_ex551114_ ≤ 255 -/
+  ≤ k_ex580644_ ∧ k_ex580644_ ≤ 255 -/
 def run_frame_entry_encoded (carried_pc : Nat) (carried_gas : Nat) (carried_state_gas : Nat) (carried_state_spill : Nat) (carried_refund : Int) (carried_sp : StackPointer) (carried_memory_base : Nat) (carried_memory_height : Nat) (carried_caller : (Vector (BitVec 8) 20)) (carried_address : (Vector (BitVec 8) 20)) (carried_code_address : (Vector (BitVec 8) 20)) (carried_value : Nat) (carried_state_gas_reservoir : Nat) (carried_is_static : Bool) (carried_depth : Nat) (carried_code : (Sigma
   fun (k_off : Nat) => (Sigma fun (k_len : Nat) => (CodeFields k_off k_len)))) (carried_calldata : CalldataSlice) (carried_returndata : (Sigma
   fun (carried_code_dependentWitness0 : Nat) =>

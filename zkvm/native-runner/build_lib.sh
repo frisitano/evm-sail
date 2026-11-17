@@ -38,6 +38,12 @@ CC="${CC:-cc}"
 ZKVM="$ROOT/zkvm"; RT="$ROOT/zkvm/runtime"; FFI="$ROOT/extractions/c"
 ACCEL_LIB="$ROOT/zkvm/accel-host/target/release"
 OPT_FLAGS=(-O"$EVM_OPT_LEVEL" -fPIC)
+# Match build.sh's code model when linking its large historical workspace.
+if [ "${EVM_BUILD_MODE:-optimized}" = optimized ] && [ "${EVM_NATIVE_RESOURCES:-default}" = historical ]; then
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64) OPT_FLAGS+=(-mcmodel=medium) ;;
+  esac
+fi
 if [ "$EVM_LTO" = on ]; then OPT_FLAGS+=(-flto); fi
 CFLAGS=("${OPT_FLAGS[@]}" -Wno-error=implicit-function-declaration)
 if [ -n "${SANITIZE:-}" ]; then CFLAGS+=(-g -fsanitize=address,undefined -fno-omit-frame-pointer); fi

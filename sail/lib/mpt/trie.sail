@@ -341,6 +341,80 @@ function overlay_extension_subtree(
 }
 termination_measure overlay_extension_subtree(childref, child_prefix, updates, prefix, cursor) = 64 - cursor
 
+/*! Check every decoded descendant of a secured trie, including untouched
+    branches. Unwitnessed hashes remain opaque commitments; execution still
+    fails closed if it later needs their contents. */
+val validate_secured_witness_node : (StatelessInputSlice, range(0, 64)) -> unit
+function validate_secured_witness_node(node, remaining) = {
+    if node.len == 0 then {
+        return ()
+    };
+    let decoded = decode_input_trie_node(node);
+    match decoded {
+        InputLeafNode(path, _) => {
+            if path_len(path) != remaining then {
+                fatal_error(WitnessDeficient)
+            }
+        },
+        InputExtensionNode(path, childref) => {
+            let length = path_len(path);
+            let next_remaining : range(0, 64) =
+                if (0 < length) & (length < remaining) then remaining - length else fatal_error(WitnessDeficient);
+            let child : StatelessInputSlice = match childref {
+                EmptyRef() => fatal_error(WitnessDeficient),
+                InputInlineRef(bytes) => bytes,
+                ScratchInlineRef(_) => fatal_error(WitnessDeficient),
+                HashRef(h) => node_db_lookup(h),
+            };
+            if child.len != 0 then {
+                match decode_input_trie_node(child) {
+                    InputBranchNode(_, _) => (),
+                    _ => fatal_error(WitnessDeficient),
+                }
+            };
+            validate_secured_witness_node(child, next_remaining)
+        },
+        InputBranchNode(children, value) => {
+            let next_remaining : range(0, 64) =
+                if (0 < remaining) & (value.len == 0) then remaining - 1 else fatal_error(WitnessDeficient);
+            var occupied : range(0, 16) = 0;
+            foreach (i from 0 to 15) {
+                match children[i] {
+                    EmptyRef() => (),
+                    _ => {
+                        let count = occupied;
+                        if count < 16 then {
+                            occupied = count + 1
+                        }
+                    },
+                };
+                let child : StatelessInputSlice = match children[i] {
+                    EmptyRef() => EMPTY_STATELESS_INPUT_SLICE,
+                    InputInlineRef(bytes) => bytes,
+                    ScratchInlineRef(_) => fatal_error(WitnessDeficient),
+                    HashRef(h) => node_db_lookup(h),
+                };
+                validate_secured_witness_node(child, next_remaining)
+            };
+            if occupied < 2 then {
+                fatal_error(WitnessDeficient)
+            }
+        },
+    }
+}
+termination_measure validate_secured_witness_node(node, remaining) = remaining
+
+/*! Authenticate the root before validating all available secured paths. */
+function validate_secured_state_root(root : hash) -> unit = {
+    if root != EMPTY_TRIE_ROOT then {
+        let node = node_db_lookup(root);
+        if node.len == 0 then {
+            fatal_error(WitnessDeficient)
+        };
+        validate_secured_witness_node(node, 64)
+    }
+}
+
 /*! Walks a touched witness subtree and recursively returns its canonical
     post-update structural item. */
 function witness_subtree(node, prefix, updates, cursor) = {

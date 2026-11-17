@@ -15,20 +15,34 @@ enum kind_TrieUpdateSource { Kind_ChangedAccountTrieUpdates, Kind_StorageTrieUpd
 struct TrieUpdateSource {
   enum kind_TrieUpdateSource kind;
   union {
-    struct { unit ChangedAccountTrieUpdates; };
-    struct { bytes20 StorageTrieUpdates; };
+    struct {
+      unit ChangedAccountTrieUpdates;
+    };
+    struct {
+      bytes20 StorageTrieUpdates;
+    };
   } variants;
 };
 
 // union TrieUpdateRelation
-enum kind_TrieUpdateRelation { Kind_UpdateBeyondPrefix, Kind_UpdateSourceExhausted, Kind_UpdateUnderPrefix };
+enum kind_TrieUpdateRelation {
+  Kind_UpdateBeyondPrefix,
+  Kind_UpdateSourceExhausted,
+  Kind_UpdateUnderPrefix
+};
 
 struct TrieUpdateRelation {
   enum kind_TrieUpdateRelation kind;
   union {
-    struct { uint8_t UpdateBeyondPrefix; };
-    struct { unit UpdateSourceExhausted; };
-    struct { struct TriePath UpdateUnderPrefix; };
+    struct {
+      uint8_t UpdateBeyondPrefix;
+    };
+    struct {
+      unit UpdateSourceExhausted;
+    };
+    struct {
+      struct TriePath UpdateUnderPrefix;
+    };
   } variants;
 };
 
@@ -38,8 +52,12 @@ enum kind_TrieChange { Kind_TrieDelete, Kind_TriePut };
 struct TrieChange {
   enum kind_TrieChange kind;
   union {
-    struct { unit TrieDelete; };
-    struct { Bytes TriePut; };
+    struct {
+      unit TrieDelete;
+    };
+    struct {
+      Bytes TriePut;
+    };
   } variants;
 };
 
@@ -68,10 +86,18 @@ enum kind_TrieItemValue { Kind_BranchItem, Kind_EmptySubtree, Kind_LeafItem, Kin
 struct TrieItemValue {
   enum kind_TrieItemValue kind;
   union {
-    struct { struct NodeRef BranchItem; };
-    struct { unit EmptySubtree; };
-    struct { struct TrieLeafValue LeafItem; };
-    struct { struct NodeRef SubtreeItem; };
+    struct {
+      struct NodeRef BranchItem;
+    };
+    struct {
+      unit EmptySubtree;
+    };
+    struct {
+      struct TrieLeafValue LeafItem;
+    };
+    struct {
+      struct NodeRef SubtreeItem;
+    };
   } variants;
 };
 
@@ -107,15 +133,15 @@ struct tuple_TrieUpdate_bool {
   bool tup1;
 };
 
-void create_letbind_208(void);
-void kill_letbind_208(void);
-
+void create_letbind_205(void);
+void kill_letbind_205(void);
 
 bytes32 trie_subtree_root(struct TrieItem subtree);
 
 bool updates_empty(struct TrieUpdateCursor updates);
 
-struct TrieChildren trie_children_add(struct TrieChildren children, struct TriePath prefix, uint64_t index, struct TrieItem child);
+struct TrieChildren trie_children_add(struct TrieChildren children, struct TriePath prefix,
+                                      uint64_t index, struct TrieItem child);
 
 struct TrieItem trie_empty_subtree(void);
 
@@ -131,25 +157,28 @@ struct TrieItem trie_scratch_leaf(struct TriePath path, Bytes value);
 
 struct TrieUpdateCursor trie_updates_descend(struct TrieUpdateCursor updates);
 
-struct TrieUpdateCursor trie_updates_rebase(struct TrieUpdateCursor updates, struct TriePath prefix);
+struct TrieUpdateCursor trie_updates_rebase(struct TrieUpdateCursor updates,
+                                            struct TriePath prefix);
 
 struct TrieItem trie_input_leaf(struct TriePath path, Bytes value);
 
 struct TrieItem trie_subtree(struct TriePath path, struct NodeRef childref);
 
-struct TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates, struct TrieUpdate *restrict trieupdate_8_1499);
+struct TrieUpdateCursor trie_updates_pop(struct TrieUpdateCursor updates,
+                                         struct TrieUpdate *restrict trieupdate_8_1556);
 
 struct TrieUpdateCursor trie_updates_begin(struct TrieUpdateSource source);
 
 struct TrieUpdateFetch trie_update_source_next(struct TrieUpdateSource source);
 
-struct NodeRef trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef(struct TrieItem it, uint8_t depth);
+struct NodeRef trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef(struct TrieItem it,
+                                                                        uint8_t depth);
 
-struct NodeRef trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef_variant_2(struct TrieItem it, uint8_t depth);
+struct NodeRef
+trie_child_ref_struct_TrieItem_uint8_t_to_struct_NodeRef_variant_2(struct TrieItem it,
+                                                                   uint8_t depth);
 
 extern struct TrieUpdate EMPTY_TRIE_UPDATE;
-
-
 
 #ifdef __cplusplus
 }

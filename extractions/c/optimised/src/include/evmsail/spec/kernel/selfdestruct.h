@@ -19,7 +19,6 @@ bool k_was_created(bytes20 a);
 
 void k_zero_balance(bytes20 a);
 
-
 #ifdef __cplusplus
 }
 #endif

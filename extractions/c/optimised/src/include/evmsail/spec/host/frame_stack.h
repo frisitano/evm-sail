@@ -11,7 +11,6 @@ extern "C" {
 
 void frame_stack_push(struct FrameContinuation /* arg_0 */);
 
-
 #ifdef __cplusplus
 }
 #endif

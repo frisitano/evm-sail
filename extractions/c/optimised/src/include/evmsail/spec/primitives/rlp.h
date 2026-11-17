@@ -23,7 +23,6 @@ struct RlpFieldRef {
   Bytes source;
 };
 
-
 #ifdef __cplusplus
 }
 #endif

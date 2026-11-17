@@ -115,7 +115,10 @@ function interpret(
     let execution_profile = k_execution_profile;
     let profile = execution_profile.protocol;
     let fork = profile.fork;
-    let blob_fee = blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas);
+    let blob_fee =
+        if fork >= Cancun
+        then blob_base_fee(fork, profile.blob_schedule, profile.excess_blob_gas_limit, k_header.excess_blob_gas)
+        else ZERO_WORD;
     let completion = threaded_interpret_host(
         initial_gas,
         initial_state_gas,

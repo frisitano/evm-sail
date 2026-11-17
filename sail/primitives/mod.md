@@ -12,8 +12,8 @@ chain parameters that select it:
 
 - [Protocol forks](fork.md) — the ordered fork enumeration and its
   comparisons.
-- [Chain configuration](chain_config.md) — the activation schedule and
-  chain identity a block is validated against.
+- [Chain configuration](chain_config.md) — the fixed Amsterdam protocol
+  profile and the chain identity a block is validated against.
 
 The protocol containers follow (YP §4): [accounts and
 storage](account.md), [transactions, logs, and receipts](tx.md), and

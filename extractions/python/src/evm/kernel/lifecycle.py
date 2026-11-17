@@ -112,11 +112,11 @@ def k_tx_merge() -> None:
                 original_storage_retained = (not (e.value.orig.storage_cleared))
                 if ((deleted) | (((curr.storage_cleared) & (original_storage_retained)))):
                     _host_storage_block_clear(e.addr)
-                if ((curr.info.nonce) != (e.value.orig.info.nonce)):
+                if (((int(profile.fork) >= int(Amsterdam))) & (((curr.info.nonce) != (e.value.orig.info.nonce)))):
                     _host_bal_nonce_change(environment.k_current_transaction_epoch, e.addr, curr.info.nonce)
-                if ((curr.info.balance) != (e.value.orig.info.balance)):
-                    _host_bal_balance_change(environment.k_current_transaction_epoch, e.addr, curr.info.balance)
-                if ((curr.info.code_hash) != (e.value.orig.info.code_hash)):
+                if (((int(profile.fork) >= int(Amsterdam))) & (((curr.info.balance) != (e.value.orig.info.balance)))):
+                    _host_bal_balance_change(environment.k_current_transaction_epoch, e.addr, e.value.orig.info.balance, curr.info.balance)
+                if (((int(profile.fork) >= int(Amsterdam))) & (((curr.info.code_hash) != (e.value.orig.info.code_hash)))):
                     _host_bal_code_change(environment.k_current_transaction_epoch, e.addr, curr.info.code_hash)
                 curr = replace(deepcopy(curr), created=False, selfdestructed=False)
                 changed = account_changed(curr, e.value.orig)
@@ -137,7 +137,8 @@ def k_tx_merge() -> None:
                 if account.found:
                     acc = account.account
                     if ((acc.present) & (((e.value.curr) != (e.value.orig)))):
-                        _host_bal_storage_change(environment.k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.curr)
+                        if (int(profile.fork) >= int(Amsterdam)):
+                            _host_bal_storage_change(environment.k_current_transaction_epoch, e.key.addr, e.key.slot, e.value.orig, e.value.curr)
                         _host_storage_block_put(e)
             case StorageTxPopExhausted(_):
                 more = False

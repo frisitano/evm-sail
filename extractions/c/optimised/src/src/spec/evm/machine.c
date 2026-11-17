@@ -3,16 +3,17 @@
 
 const uint16_t STACK_LIMIT = UINT16_C(1024);
 
-
 const uint32_t MEMORY_HEIGHT_ZERO = UINT32_C(0);
-
 
 const uint32_t MEMORY_BASE_ZERO = UINT32_C(0);
 
-
 __int128 validated_refund_add(__int128 left, __int128 right)
 {
-  if ((!((left + right) < (-((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551416))) - 1))) && (!(((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551417))) < (left + right)))) {
+  if ((!((left + right) < (-((__int128)((((unsigned __int128)UINT64_C(198)) << 64) |
+                                        UINT64_C(18446744073709551416))) -
+                           1))) &&
+      (!(((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551417))) <
+         (left + right)))) {
     return (left + right);
   }
   fatal_error(ExecutionInvalid);
@@ -41,35 +42,44 @@ uint64_t conserved_gas_add(uint64_t available, uint64_t credit)
   fatal_error(ExecutionInvalid);
 }
 
-__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining, uint32_t state_gas_spilled)
+__int128 frame_state_gas_used(uint64_t state_gas_reservoir, uint64_t state_gas_remaining,
+                              uint32_t state_gas_spilled)
 {
-  return (((__int128)state_gas_reservoir - (__int128)state_gas_remaining) + (__int128)state_gas_spilled);
+  return (((__int128)state_gas_reservoir - (__int128)state_gas_remaining) +
+          (__int128)state_gas_spilled);
 }
 
-__attribute__((__always_inline__)) struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining, uint32_t state_gas_spilled, uint64_t state_gas_reservoir, enum ExceptionKind k)
+struct ExceptionalStateTransition exceptional_state(uint64_t state_gas_remaining,
+                                                    uint32_t state_gas_spilled,
+                                                    uint64_t state_gas_reservoir,
+                                                    enum ExceptionKind k)
 {
   if (k_execution_profile.protocol.fork >= Amsterdam) {
-    return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_reservoir, .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO, .status = (Exceptional(k))});
+    return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_reservoir,
+                                                .state_gas_spilled = (uint32_t)STATE_GAS_SPILL_ZERO,
+                                                .status = (Exceptional(k))});
   }
-  return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = (Exceptional(k))});
+  return ((struct ExceptionalStateTransition){.state_gas_remaining = state_gas_remaining,
+                                              .state_gas_spilled = state_gas_spilled,
+                                              .status = (Exceptional(k))});
 }
 
-__attribute__((__always_inline__)) uint16_t stack_height(StackPointer top)
+uint16_t stack_height(StackPointer top)
 {
   return stack_top_height_(top);
 }
 
-__attribute__((__always_inline__)) u256 read_stack_word(StackPointer sp)
+u256 read_stack_word(StackPointer sp)
 {
   return stack_slot_read_StackPointer_uint8_t_to_u256(sp, UINT8_C(0));
 }
 
-__attribute__((__always_inline__)) void write_stack_word(StackPointer sp, u256 value)
+void write_stack_word(StackPointer sp, u256 value)
 {
   stack_slot_write_StackPointer_uint8_t_u256_to_unit(sp, UINT8_C(0), value);
 }
 
-__attribute__((__always_inline__)) void stack_set(StackPointer top, uint16_t n, u256 w)
+void stack_set(StackPointer top, uint16_t n, u256 w)
 {
   stack_slot_write_(top, n, w);
 }
@@ -93,7 +103,8 @@ void returndata_copy_prefix(Bytes returndata, uint32_t dst, uint32_t want)
 {
   uint32_t available = returndata_size(returndata);
   uint32_t copy_length = want < available ? want : available;
-  output_slice_copy_Bytes_uint32_t_uint8_t_uint32_t_to_unit(returndata, dst, UINT8_C(0), copy_length);
+  output_slice_copy_Bytes_uint32_t_uint8_t_uint32_t_to_unit(returndata, dst, UINT8_C(0),
+                                                            copy_length);
 }
 
 uint32_t returndata_remaining(uint32_t available, uint32_t offset)
@@ -122,7 +133,7 @@ uint32_t memory_parent_base(uint32_t child_base, uint32_t parent_height)
   fatal_error(ExecutionInvalid);
 }
 
-__attribute__((__always_inline__)) uint32_t expand_memory(uint32_t base, uint32_t height, uint32_t requested_height)
+uint32_t expand_memory(uint32_t base, uint32_t height, uint32_t requested_height)
 {
   if (requested_height <= (UINT32_C(4294967295) - base)) {
     if (height < requested_height) {
@@ -211,71 +222,104 @@ __int128 record_refund___int128_uint16_t_to___int128(__int128 refund, uint16_t d
   return validated_refund_add___int128_uint16_t_to___int128(refund, delta);
 }
 
-__attribute__((__always_inline__)) void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w)
+void stack_set_StackPointer_uint8_t_u256_to_unit(StackPointer top, uint8_t n, u256 w)
 {
   stack_slot_write_StackPointer_uint8_t_u256_to_unit(top, n, w);
 }
 
-uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top, uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining, uint32_t state_gas_spilled, __int128 frame_refund, struct FrameStatus frame_status, struct Message message, struct CodeFields frame_code, struct CalldataSlice calldata, struct FrameCheckpoint *restrict framecheckpoint_8_1553, StackPointer *restrict stackpointer_8_1554, uint32_t *restrict field_2_8_1555)
+uint32_t suspend_frame(uint32_t pc, uint64_t gas_remaining, StackPointer stack_top,
+                       uint32_t memory_base, uint32_t memory_height, uint8_t state_gas_remaining,
+                       uint32_t state_gas_spilled, __int128 frame_refund,
+                       struct FrameStatus frame_status, struct Message message,
+                       struct CodeFields frame_code, struct CalldataSlice calldata,
+                       struct FrameCheckpoint *restrict framecheckpoint_8_1614,
+                       StackPointer *restrict stackpointer_8_1615,
+                       uint32_t *restrict field_2_8_1616)
 {
   k_journal_checkpoint();
-  (*stackpointer_8_1554) = operand_stack_push_empty_frame();
-  (*field_2_8_1555) = memory_absolute(memory_base, memory_height);
-  (*framecheckpoint_8_1553) = ((struct FrameCheckpoint){.calldata = calldata, .code = frame_code, .gas_remaining = gas_remaining, .memory_height = memory_height, .message = message, .pc = pc, .refund = frame_refund, .stack_top = stack_top, .state_gas_remaining = (uint64_t)state_gas_remaining, .state_gas_spilled = state_gas_spilled, .status = frame_status});
+  (*stackpointer_8_1615) = operand_stack_push_empty_frame();
+  (*field_2_8_1616) = memory_absolute(memory_base, memory_height);
+  (*framecheckpoint_8_1614) =
+      ((struct FrameCheckpoint){.calldata = calldata,
+                                .code = frame_code,
+                                .gas_remaining = gas_remaining,
+                                .memory_height = memory_height,
+                                .message = message,
+                                .pc = pc,
+                                .refund = frame_refund,
+                                .stack_top = stack_top,
+                                .state_gas_remaining = (uint64_t)state_gas_remaining,
+                                .state_gas_spilled = state_gas_spilled,
+                                .status = frame_status});
   return MEMORY_HEIGHT_ZERO;
 }
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint16_t outputs)
+enum StackValidation validate_stack_StackPointer_uint16_t_uint16_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint16_t outputs)
 {
   uint16_t height = stack_height(top);
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  if (STACK_LIMIT <
+      (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) +
+                           (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
 }
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(StackPointer top, uint16_t inputs, uint8_t outputs)
+enum StackValidation validate_stack_StackPointer_uint16_t_uint8_t_to_enum_StackValidation(
+    StackPointer top, uint16_t inputs, uint8_t outputs)
 {
   uint16_t height = stack_height(top);
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  if (STACK_LIMIT <
+      (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)inputs)) +
+                           (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
 }
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(StackPointer top, uint8_t inputs, uint8_t outputs)
+enum StackValidation
+validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation(StackPointer top,
+                                                                    uint8_t inputs, uint8_t outputs)
 {
   uint16_t height = stack_height(top);
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  if (STACK_LIMIT < ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
+  if (STACK_LIMIT <
+      ((uint16_t)(((uint32_t)height - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
 }
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(StackPointer top, uint8_t inputs, uint8_t outputs)
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_2(
+    StackPointer top, uint8_t inputs, uint8_t outputs)
 {
   uint16_t height = stack_height(top);
   if (height < inputs) {
     return StackUnderflowFailure;
   }
-  if (STACK_LIMIT < (uint16_t)((int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)(uint16_t)inputs)) + (int32_t)(int16_t)outputs))) {
+  if (STACK_LIMIT <
+      (uint16_t)((
+          int16_t)((int32_t)(int16_t)((uint16_t)((uint32_t)height - (uint32_t)(uint16_t)inputs)) +
+                   (int32_t)(int16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
 }
 
-__attribute__((__always_inline__)) enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(StackPointer top, uint8_t inputs, uint8_t outputs)
+enum StackValidation validate_stack_StackPointer_uint8_t_uint8_t_to_enum_StackValidation_variant_3(
+    StackPointer top, uint8_t inputs, uint8_t outputs)
 {
-  if (STACK_LIMIT < ((uint16_t)(((uint32_t)(stack_height(top)) - (uint32_t)(uint16_t)inputs) + (uint32_t)(uint16_t)outputs))) {
+  if (STACK_LIMIT < ((uint16_t)(((uint32_t)(stack_height(top)) - (uint32_t)(uint16_t)inputs) +
+                                (uint32_t)(uint16_t)outputs))) {
     return StackOverflowFailure;
   }
   return StackValid;
@@ -283,9 +327,12 @@ __attribute__((__always_inline__)) enum StackValidation validate_stack_StackPoin
 
 __int128 validated_refund_add___int128_uint16_t_to___int128(__int128 left, uint16_t right)
 {
-  if ((!((left + (__int128)right) < (-((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551416))) - 1))) && (!(((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551417))) < (left + (__int128)right)))) {
+  if ((!((left + (__int128)right) < (-((__int128)((((unsigned __int128)UINT64_C(198)) << 64) |
+                                                  UINT64_C(18446744073709551416))) -
+                                     1))) &&
+      (!(((__int128)((((unsigned __int128)UINT64_C(198)) << 64) | UINT64_C(18446744073709551417))) <
+         (left + (__int128)right)))) {
     return (left + (__int128)right);
   }
   fatal_error(ExecutionInvalid);
 }
-

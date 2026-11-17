@@ -1,0 +1,79 @@
+{
+  "eels_revision": "59c1473ddfba341babaeca1c97a50e996f639a0b",
+  "main": {
+    "source_cases": 72542,
+    "conversion_limits": [
+      {
+        "file": "blockhash_zero_out_of_window.json",
+        "case": "test_blockhash_zero_out_of_window[fork_Amsterdam-state_test-far_out_of_window]|Amsterdam|d0g0v0",
+        "reason": "missing-contiguous-ancestor-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L44"
+      },
+      {
+        "file": "blockhash_zero_out_of_window.json",
+        "case": "test_blockhash_zero_out_of_window[fork_Amsterdam-state_test-fuzzer_discovered_number]|Amsterdam|d0g0v0",
+        "reason": "missing-contiguous-ancestor-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L44"
+      },
+      {
+        "file": "blockhash_zero_out_of_window.json",
+        "case": "test_blockhash_zero_out_of_window[fork_Amsterdam-state_test-just_past_256_window]|Amsterdam|d0g0v0",
+        "reason": "missing-contiguous-ancestor-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L44"
+      },
+      {
+        "file": "blockhash_zero_out_of_window.json",
+        "case": "test_blockhash_zero_out_of_window[fork_Amsterdam-state_test-just_past_8191_window]|Amsterdam|d0g0v0",
+        "reason": "missing-contiguous-ancestor-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L44"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_Berlin-state_test]|Berlin|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_Cancun-state_test]|Cancun|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_London-state_test]|London|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_Paris-state_test]|Paris|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_Shanghai-state_test]|Shanghai|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      }
+    ]
+  },
+  "extra": {
+    "source_cases": 36990,
+    "conversion_limits": [
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_ArrowGlacier-state_test]|ArrowGlacier|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      },
+      {
+        "file": "blockhash_zero_in_window_control.json",
+        "case": "test_blockhash_zero_in_window_control[fork_GrayGlacier-state_test]|GrayGlacier|d0g0v0",
+        "reason": "synthetic-in-window-history",
+        "upstream_source": "https://github.com/ethereum/execution-specs/blob/tests-zkevm@v21.0.6/tests/frontier/opcodes/test_blockhash_state_test_recency.py#L105"
+      }
+    ]
+  }
+}
