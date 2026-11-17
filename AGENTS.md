@@ -246,6 +246,11 @@ duplicating instructions elsewhere.
   the eleven explicit conversion limits may lack exports. EIP-7928 recording
   and its optimized history allocations are disabled before Amsterdam;
   authenticated historical account/slot reservations remain required.
+  CI runs the full suite and all focused native gates on every PR/main push.
+  Reference caches exclude native model libraries and virtualenvs; cache hits
+  still require hashes/audits, both native rebuilds and all replays. Cache keys
+  include reference pins, selection, harness/audit sources and dependencies,
+  so model-only changes can reuse inputs without reusing a stale executable.
   `make sender-regression-test` runs the pinned signature and chain-ID cases
   on both native backends, requiring every case to pass.
   Fixtures that already carry

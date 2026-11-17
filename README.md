@@ -362,6 +362,16 @@ failure fail the target. These are conversion limits, not allowed model failures
 Successful fixture generation is cached by source identity and verified
 content hashes; model replay always runs. Failed attempts remain inspectable.
 
+CI runs this full suite on every pull request and main-branch push, followed
+by the memory, signature, fork/transition and stateless-boundary targets on
+both native backends. The separate corpus job runs all 67,685 pinned cases.
+Historical reference data is cached by platform, EELS pin, selection, harness
+and audit sources, and dependency declarations. Restored data is hash-checked
+and audited; both native libraries are rebuilt and every export is replayed
+even on a cache hit. Virtual environments and native model libraries are not
+stored in that reference cache. Existing toolchain, solver, uv and Cargo
+caches also apply; Cargo rechecks the accelerator build before native reuse.
+
 The equivalent individual steps, useful for diagnosis, are:
 
 ```sh

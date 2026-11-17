@@ -133,9 +133,11 @@ jobs:
           version="$(z3 --version | awk '{print $3}')"
           test "${version%%.*}" = "$SOLVER_Z3_SUPPORTED_MAJOR"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "CLANG=clang-${LLVM_MAJOR}" >> "$GITHUB_ENV"
-          echo "CLANG_FORMAT=clang-format-${LLVM_MAJOR}" >> "$GITHUB_ENV"
-          echo "CLANG_TIDY=clang-tidy-${LLVM_MAJOR}" >> "$GITHUB_ENV"
+          {
+            echo "CLANG=clang-${LLVM_MAJOR}"
+            echo "CLANG_FORMAT=clang-format-${LLVM_MAJOR}"
+            echo "CLANG_TIDY=clang-tidy-${LLVM_MAJOR}"
+          } >> "$GITHUB_ENV"
           z3 --version
           "clang-${LLVM_MAJOR}" --version
           "clang-format-${LLVM_MAJOR}" --version
@@ -259,8 +261,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             zkvm/accel-host/target
-          key: cargo-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zkvm/accel-host/Cargo.lock', 'zkvm/accel-host/Cargo.toml') }}
+          key: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zkvm/accel-host/Cargo.lock', 'zkvm/accel-host/Cargo.toml', 'zkvm/accel-host/src/**') }}
+          restore-keys: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-
       - run: cargo fetch --locked --manifest-path zkvm/accel-host/Cargo.toml
+      # Recheck sources/toolchain after restoring the accelerator library.
+      - run: cargo build --locked --release --offline --manifest-path zkvm/accel-host/Cargo.toml
       - uses: ./.github/actions/setup-sail
       - run: make verify-corpus
       - name: Upload corpus failure log
@@ -269,4 +274,76 @@ jobs:
         with:
           name: corpus-failure-log
           path: build/logs/corpus.log
+          if-no-files-found: warn
+
+  historical:
+    needs: sail-compiler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      EVM_NATIVE_RESOURCES: historical
+      EXECSPECS_ROOT: ${{ github.workspace }}/.agent-tmp/historical-suite/execution-specs
+      EXECSPECS_PY: ${{ github.workspace }}/.agent-tmp/historical-suite/execution-specs/.venv/bin/python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-python-tools
+      - name: Install and identify Z3
+        id: z3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends z3 libgmp-dev pkg-config
+          version="$(z3 --version | awk '{print $3}')"
+          test "${version%%.*}" = "$SOLVER_Z3_SUPPORTED_MAJOR"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          z3 --version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: sail_smt_cache
+          key: z3-${{ steps.z3.outputs.version }}-memo${{ env.SOLVER_Z3_MEMO_SCHEMA }}-${{ runner.os }}-${{ github.job }}-${{ hashFiles('config/toolchains.toml', 'sail/**/*.sail', 'sail/evm.sail_project') }}
+      - name: Restore native runner dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            zkvm/accel-host/target
+          key: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zkvm/accel-host/Cargo.lock', 'zkvm/accel-host/Cargo.toml', 'zkvm/accel-host/src/**') }}
+          restore-keys: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-
+      - run: cargo fetch --locked --manifest-path zkvm/accel-host/Cargo.toml
+      - run: cargo build --locked --release --offline --manifest-path zkvm/accel-host/Cargo.toml
+      - uses: ./.github/actions/setup-sail
+      # Cache reference data, never native model libraries or virtualenvs.
+      # Exact keys avoid mixing generation identities. Model-only changes
+      # reuse fixtures but still rebuild, audit and replay both backends.
+      - name: Restore historical reference fixtures
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .agent-tmp/historical-suite/filled-*.json
+            .agent-tmp/historical-suite/*/main.json
+            .agent-tmp/historical-suite/*/extra.json
+            .agent-tmp/historical-suite/*/*/source
+            .agent-tmp/historical-suite/*/*/ssz
+            .agent-tmp/historical-suite/*/*/export.log
+          key: historical-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/corpora/historical-conversion-limits.json', 'devtools/harness/**/*.py', 'devtools/tests/historical_suite.py', 'devtools/tests/full_fork_selection.py', 'devtools/tests/audit_synthesized.py', 'pyproject.toml', 'uv.lock') }}
+      - name: Full historical suite on both native backends
+        run: make historical-suite-test
+      - name: Focused native regressions on both backends
+        shell: bash
+        run: |
+          mkdir -p build/logs
+          make memory-regression-test sender-regression-test historical-regression-test \
+            stateless-boundary-test MEMORY_REGRESSION_ARGS=--no-rebuild \
+            2>&1 | tee build/logs/historical-focused.log
+      - name: Upload historical failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: historical-failure-evidence
+          path: |
+            .agent-tmp/historical-suite/**/*.log
+            .agent-tmp/historical-suite/**/audit.json
+            .agent-tmp/historical-suite/filled-*.json
+            build/logs/historical-focused.log
+          include-hidden-files: true
           if-no-files-found: warn
