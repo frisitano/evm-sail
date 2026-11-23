@@ -150,8 +150,8 @@ PROFILE_OBJ=""
 # Both guests use the standard LP64 soft-float ABI. Spike models RV64IM with
 # transparent misaligned accesses; ZisK's Rust target additionally enables A.
 if [ "$PLATFORM" = zisk ]; then
-  # ZisK's built-in linker script gathers .rodata.* and .bss.*, but not the
-  # RISC-V small-data .srodata.* / .sbss.* families.  Keeping small-data
+  # ZisK's upstream linker gathers .rodata.* and .bss.* / .sbss.*, but not
+  # RISC-V small-data .srodata.*. Keeping small-data
   # emission disabled ensures every C section lands in a linker-owned output
   # section that the emulator can load without overlapping orphan sections.
   ARCH=(-march=rv64ima -mabi=lp64 -mcmodel=medany -msmall-data-limit=0)

@@ -5,22 +5,17 @@
 
 #include "htif.h"
 
-#ifndef EVMSAIL_ZISK_HEAP_SIZE
-#define EVMSAIL_ZISK_HEAP_SIZE (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
-#endif
-
-extern void *sys_alloc_aligned(size_t bytes, size_t align);
+/* The isolated ziskos staticlib owns an 8 MiB scratch heap in BSS and
+ * rewinds it at each ABI call. Persistent model allocations must instead
+ * use the upstream linker's remaining RAM, beyond all static storage. */
+extern char _heap_start[];
+extern char _heap_end[];
 extern void sys_write(uint32_t fd, const uint8_t *data, size_t size);
 
 void heap_region(char **start, char **end)
 {
-    static char *heap_start;
-
-    if (heap_start == NULL) {
-        heap_start = sys_alloc_aligned((size_t)EVMSAIL_ZISK_HEAP_SIZE, 16);
-    }
-    *start = heap_start;
-    *end = heap_start + (size_t)EVMSAIL_ZISK_HEAP_SIZE;
+    *start = _heap_start;
+    *end = _heap_end;
 }
 
 void htif_putchar(char c)

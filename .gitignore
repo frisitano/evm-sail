@@ -11,6 +11,7 @@ sail_smt_cache
 # zkVM RISC-V guest build artifacts
 zkvm/build/
 zkvm/build-zisk/
+zkvm/.deps/
 /devtools/benchmarks/zisk-guests/*.elf
 /devtools/benchmarks/zisk-guests/*.elf.build.json
 /devtools/benchmarks/zisk-guests/SHA256SUMS

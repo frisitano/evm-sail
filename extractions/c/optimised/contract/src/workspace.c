@@ -38,12 +38,12 @@ GUEST_NORETURN void guest_finish(void)
 #endif
 }
 
-#ifdef EVMSAIL_PLATFORM_ZISK
-extern void *sys_alloc_aligned(size_t bytes, size_t alignment);
-#elif defined(__riscv)
+#if defined(__riscv) && !defined(EVMSAIL_PLATFORM_ZISK)
 extern unsigned char __workspace_start[];
 extern unsigned char __workspace_end[];
 #else
+/* ZisK's isolated runtime resets its scratch heap at every ABI call.
+ * Reserve persistent model storage in BSS, outside that private heap. */
 static _Alignas(16) unsigned char native_workspace[GUEST_WORKSPACE_BYTES];
 #endif
 
@@ -164,12 +164,7 @@ static void workspace_open(void)
     return;
   }
 
-#ifdef EVMSAIL_PLATFORM_ZISK
-  cursor = sys_alloc_aligned(GUEST_WORKSPACE_BYTES, 16);
-  if (cursor == NULL)
-    GUEST_ABORT();
-  limit = cursor + GUEST_WORKSPACE_BYTES;
-#elif defined(__riscv)
+#if defined(__riscv) && !defined(EVMSAIL_PLATFORM_ZISK)
   cursor = __workspace_start;
   limit = __workspace_end;
 #else
