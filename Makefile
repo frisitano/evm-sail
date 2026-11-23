@@ -271,6 +271,8 @@ help:
 	@echo "  make historical-suite-test - provision, fill, audit and replay all historical state tests on both backends"
 	@echo "  make docs-site      - build the literate specification book"
 	@echo "  make zisk-guest     - build the production ZisK guest ELF"
+	@echo "  make zisk-deps      - prepare the pinned upstream ZisK library and linker"
+	@echo "  make zisk-smoke     - build and execute the six-case ZisK fixture smoke"
 	@echo "  make extract        - run all maintained model extractions"
 	@echo "  make all            - check + lint + fmt-check"
 
@@ -303,8 +305,22 @@ check-optimized-ffi-manifest:
 check-optimized-ffi:
 	$(PYTHON) -m devtools.optimised_c.ffi
 
+ZISK_SOURCE       ?= $(CURDIR)/zkvm/.deps/zisk/source
+ZISK_DEPENDENCIES ?= $(CURDIR)/zkvm/.deps/zisk/artifacts.json
+export ZISK_DEPENDENCIES
+
+.PHONY: zisk-deps
+zisk-deps:
+	$(PYTHON_CONFIG) zkvm/zisk/dependencies.py source "$(ZISK_SOURCE)"
+	$(MAKE) -C "$(ZISK_SOURCE)" libziskos FEATURES=
+	$(PYTHON_CONFIG) zkvm/zisk/dependencies.py record "$(ZISK_SOURCE)" "$(ZISK_DEPENDENCIES)" --make "$(MAKE)"
+
 zisk-guest:
 	bash zkvm/zisk/build.sh guest
+
+.PHONY: zisk-smoke
+zisk-smoke: eest-provision
+	$(PYTHON) -m devtools.harness.cli --zisk --timeout 3600 --quiet $(EEST_SMOKE)
 
 eest-smoke: eest-provision
 	@$(PYTHON) -m devtools.harness.cli --build optimized $(EEST_SMOKE) --limit 1 --quiet

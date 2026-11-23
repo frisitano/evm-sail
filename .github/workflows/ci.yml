@@ -228,6 +228,59 @@ jobs:
       - uses: ./.github/actions/setup-sail
       - run: make verify-python
 
+  zisk-smoke:
+    needs: sail-compiler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-python-tools
+      - name: Install host and RISC-V build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            z3 libgmp-dev pkg-config "clang-${LLVM_MAJOR}" \
+            gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf \
+            libomp5 libopenmpi3t64 libsodium23
+          test "$(z3 --version | cut -d ' ' -f 3 | cut -d . -f 1)" = "$SOLVER_Z3_SUPPORTED_MAJOR"
+          echo "CLANG=clang-${LLVM_MAJOR}" >> "$GITHUB_ENV"
+          riscv64-unknown-elf-gcc --version
+      - name: Restore pinned ZisK release downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/zisk-downloads
+          key: zisk-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/toolchains.toml') }}
+      - name: Set up the pinned ZisK compiler and CPU emulator
+        run: bash .github/scripts/setup-zisk.sh
+      - uses: ./.github/actions/setup-sail
+      - name: Test dependency verification
+        run: uv run --frozen python -m unittest discover -s zkvm/zisk -p test_dependencies.py
+      - name: Prepare the upstream isolated runtime
+        run: make zisk-deps
+      - name: Compute exact corpus cache key
+        id: corpus-key
+        run: uv run --frozen python -m devtools.corpus cache-key --github-output >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: zkvm/.fixtures/current-v2106-full
+          key: ${{ runner.os }}-${{ steps.corpus-key.outputs.key }}
+      # The harness builds one input-agnostic ELF, executes all six embedded
+      # PUSH0 cases and checks expected bytes plus the output's zero suffix.
+      - name: Build and execute the ZisK fixture smoke
+        run: |
+          set -o pipefail
+          mkdir -p build/logs
+          make zisk-smoke 2>&1 | tee build/logs/zisk-smoke.log
+      - name: Upload smoke failure evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zisk-smoke-failure
+          path: |
+            build/logs/zisk-smoke.log
+            zkvm/.deps/zisk/artifacts.json
+          if-no-files-found: warn
+
   corpus:
     needs: sail-compiler
     runs-on: ubuntu-24.04

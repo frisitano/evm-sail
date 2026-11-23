@@ -26,3 +26,10 @@ z3_memo_schema = 1
 
 [llvm]
 major = 18
+
+# Linux x86_64 CPU smoke: hashes pin release bytes, not mutable tags.
+[zisk_ci]
+rust_url = "https://github.com/0xPolygonHermez/rust/releases/download/zisk-4.1.0/rust-toolchain-x86_64-unknown-linux-gnu.tar.gz"
+rust_sha256 = "9a9921a558ca652dfc46e5043a92aa70a8ef8ec1be1bbb0f3c392dd7c0b5cfe1"
+runtime_url = "https://github.com/0xPolygonHermez/zisk/releases/download/v1.4.0-alpha/cargo_zisk_linux_amd64.tar.gz"
+runtime_sha256 = "10ebf127e7cb40d46f9c4c5b380cf7a36c6970b4b22ade1118078047ffc97433"

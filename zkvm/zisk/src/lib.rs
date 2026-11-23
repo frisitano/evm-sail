@@ -1,4 +1,4 @@
-//! Version-pin stub: this package exists solely so `cargo metadata` resolves
-//! the pinned ziskos checkout (via Cargo.lock) for the C-direct guest link.
-//! No Rust is built into the guest; see build.sh.
+//! Version-pin stub: dependency preparation reads the source revision here
+//! and the harness checks the emulator against the locked ziskos version.
+//! This stub is not linked into the guest; the upstream staticlib is.
 #![no_std]

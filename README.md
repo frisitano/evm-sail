@@ -449,6 +449,10 @@ same fixtures through `ziskemu`. The emulator version must match the `ziskos`
 version locked in `zkvm/zisk/Cargo.lock`; set `ZISKEMU` when the matching
 binary is not at `~/.zisk/bin/ziskemu`:
 
+The maintained guest uses **ZisK v1.4.0-alpha** and its upstream linker and
+isolated runtime archive. See [ZisK build prerequisites and provenance](zkvm/zisk/README.md)
+before building; the compatible custom Rust release is `zisk-4.1.0`.
+
 ```sh
 ZISKEMU=/path/to/ziskemu uv run --frozen python -m devtools.harness.cli --zisk --limit 1 --quiet \
   zkvm/.fixtures/current-v2106-full/blockchain_tests/for_amsterdam/shanghai/eip3855_push0/push0/push0_contracts.json

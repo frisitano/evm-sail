@@ -5,35 +5,21 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 BUILD="${ZKVM_BUILD:-$ROOT/zkvm/build-zisk}"
 COMMAND="${1:-guest}"
-TARGET="riscv64ima-zisk-zkvm-elf"
-TOOLCHAIN="${ZISK_TOOLCHAIN:-zisk}"
+DEPENDENCIES="${ZISK_DEPENDENCIES:-$ROOT/zkvm/.deps/zisk/artifacts.json}"
 
 # The ZisK guest is linked directly by the C toolchain: gcc links the C entry
-# (main.c), the evmsail archive, and the prebuilt ziskos static library
-# through link_main.ld. There is no Rust-driven final link. Cargo.toml and
-# Cargo.lock remain solely as the pinned ziskos version source; the harness
-# checks the ziskemu version against that lock.
+# (main.c), the evmsail archive, and the upstream isolated ziskos static library
+# through the release's own linker. Dependency preparation is a separate step;
+# this build consumes only its verified artifact paths.
 build_guest() {
+    local ziskos_lib linker_script
+    ziskos_lib="$(cd "$ROOT" && uv run --frozen python "$HERE/dependencies.py" path "$DEPENDENCIES" staticlib)"
+    linker_script="$(cd "$ROOT" && uv run --frozen python "$HERE/dependencies.py" path "$DEPENDENCIES" linker)"
     mkdir -p "$BUILD"
     BUILD="$(cd "$BUILD" && pwd)"
 
     ZKVM_PLATFORM=zisk ZKVM_BUILD="$BUILD" \
         bash "$ROOT/zkvm/build.sh" zisk-lib
-
-    # ziskos as a plain static library: entry point, io, DMA memory ops, and
-    # the accelerator crypto, linkable without any Rust bin crate. Built once
-    # from the pinned checkout and cached beside the other build artifacts.
-    local ziskos_lib="$BUILD/libziskos.a"
-    if [ ! -f "$ziskos_lib" ]; then
-        local checkout
-        checkout="$(cargo metadata --manifest-path "$HERE/Cargo.toml" --format-version 1 2>/dev/null \
-            | (cd "$ROOT" && uv run --frozen python -c 'import json, pathlib, sys; m=json.load(sys.stdin); p=next((p for p in m["packages"] if p["name"] == "ziskos"), None); p is not None or sys.exit("ziskos package missing from cargo metadata"); print(pathlib.Path(p["manifest_path"]).parents[2])'))"
-        RUSTUP_TOOLCHAIN="$TOOLCHAIN" cargo build --release \
-            --manifest-path "$checkout/ziskos-staticlib/Cargo.toml" \
-            --target "$TARGET" \
-            --target-dir "$BUILD/ziskos-staticlib"
-        cp "$BUILD/ziskos-staticlib/$TARGET/release/libziskos_staticlib.a" "$ziskos_lib"
-    fi
 
     local gcc="${GCC:-riscv64-unknown-elf-gcc}"
     # EVM_LTO=full performs whole-program LTO at this link; the machine-code
@@ -58,7 +44,7 @@ build_guest() {
     fi
     "$gcc" -march=rv64ima -mabi=lp64 -mcmodel=medany -mno-relax \
         "${opt_flags[@]}" \
-        -nostdlib -static -T "$HERE/link_main.ld" \
+        -nostdlib -static -T "$linker_script" \
         ${lto_flags[@]+"${lto_flags[@]}"} \
         -Wl,--no-relax -Wl,--gc-sections \
         "${unity_roots[@]}" \
