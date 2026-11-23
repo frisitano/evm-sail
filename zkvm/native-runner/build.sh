@@ -200,14 +200,10 @@ if [ "$EVM_BUILD_MODE" != optimized ] || [ "$EVM_PROFILE" = on ]; then
   done
 fi
 
-# --- 1. accel-host crypto cdylib (idempotent) ------------------------------
+# --- 1. accel-host crypto cdylib (Cargo checks source and lock freshness) ---
 ACCEL="$ROOT/zkvm/accel-host"
 ACCEL_LIB="$ACCEL/target/release"
-if [ ! -f "$ACCEL_LIB/libzkvm_accel_host.dylib" ] && \
-   [ ! -f "$ACCEL_LIB/libzkvm_accel_host.so" ]; then
-  echo "# building accel-host cdylib (one-time)..."
-  ( cd "$ACCEL" && cargo build --release --offline --target-dir target )
-fi
+( cd "$ACCEL" && cargo build --locked --release --offline --target-dir target )
 ACCEL_FLAGS=(-L"$ACCEL_LIB" -lzkvm_accel_host -Wl,-rpath,"$ACCEL_LIB")
 
 # --- big main-thread stack (recursive Sail list ops over multi-MB inputs) ---

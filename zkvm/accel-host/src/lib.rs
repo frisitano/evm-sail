@@ -206,7 +206,6 @@ pub unsafe extern "C" fn zkvm_secp256r1_verify(
     verified: *mut bool,
 ) -> i32 {
     use p256::ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
-    use p256::EncodedPoint;
     let msg = slice(msg, 32);
     let signature = match Signature::from_slice(slice(sig, 64)) {
         Ok(s) => s,
@@ -217,11 +216,7 @@ pub unsafe extern "C" fn zkvm_secp256r1_verify(
     let mut enc = [0u8; 65];
     enc[0] = 0x04;
     enc[1..].copy_from_slice(pk);
-    let point = match EncodedPoint::from_bytes(enc) {
-        Ok(p) => p,
-        Err(_) => return ZKVM_EFAIL,
-    };
-    let vk = match VerifyingKey::from_encoded_point(&point) {
+    let vk = match VerifyingKey::from_sec1_bytes(&enc) {
         Ok(v) => v,
         Err(_) => return ZKVM_EFAIL,
     };
@@ -749,6 +744,35 @@ mod tests {
         let mut out = [0u8; 1];
         unsafe { zkvm_modexp([3].as_ptr(), 1, [2].as_ptr(), 1, [5].as_ptr(), 1, out.as_mut_ptr()); }
         assert_eq!(out[0], 4);
+    }
+
+    #[test]
+    fn p256_prehash_and_high_s() {
+        // Independent RFC6979 vector generated with PyCryptodome, private key 1.
+        let msg = hex("42e6ad3c79c1ce75110c0c459d9a89dfde4d5efea3f29fa365da30d1bff43849");
+        let pk = hex(concat!(
+            "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
+            "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+        ));
+        let mut sig = hex(concat!(
+            "2a69665649034ee95c12a98b27b2cf6abb2d623317671733d670ac5172bc8472",
+            "86d109760cc4a795d1bae0b36aa502b5f8d9233cd1c0b781ed37a79ef6e717bb"
+        ));
+        let verify = |msg: &[u8], sig: &[u8], pk: &[u8]| {
+            let mut verified = false;
+            let rc = unsafe {
+                zkvm_secp256r1_verify(msg.as_ptr(), sig.as_ptr(), pk.as_ptr(), &mut verified)
+            };
+            (rc, verified)
+        };
+        assert_eq!(verify(&msg, &sig, &pk), (ZKVM_EOK, true));
+        sig[32..].copy_from_slice(&hex("792ef688f33b586b2e451f4c955afd49c40dd770d556e70306822324057c0d96"));
+        assert_eq!(verify(&msg, &sig, &pk), (ZKVM_EOK, true));
+        let mut wrong_msg = msg.clone();
+        wrong_msg[0] ^= 1;
+        assert_eq!(verify(&wrong_msg, &sig, &pk), (ZKVM_EOK, false));
+        assert_eq!(verify(&msg, &sig, &[0; 64]).0, ZKVM_EFAIL);
+        assert_eq!(verify(&msg, &[0; 64], &pk).0, ZKVM_EFAIL);
     }
 
     #[test]
