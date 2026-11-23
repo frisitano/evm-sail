@@ -263,9 +263,14 @@ jobs:
             zkvm/accel-host/target
           key: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zkvm/accel-host/Cargo.lock', 'zkvm/accel-host/Cargo.toml', 'zkvm/accel-host/src/**') }}
           restore-keys: cargo-native-v2-${{ runner.os }}-${{ runner.arch }}-
+      - name: Identify native Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
       - run: cargo fetch --locked --manifest-path zkvm/accel-host/Cargo.toml
       # Recheck sources/toolchain after restoring the accelerator library.
       - run: cargo build --locked --release --offline --manifest-path zkvm/accel-host/Cargo.toml
+      - run: cargo test --locked --offline --manifest-path zkvm/accel-host/Cargo.toml
       - uses: ./.github/actions/setup-sail
       - run: make verify-corpus
       - name: Upload corpus failure log
